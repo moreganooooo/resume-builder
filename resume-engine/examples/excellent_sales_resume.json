@@ -1,0 +1,8 @@
+{
+  "bullet": "Identified over $3M in untapped pipeline opportunities through a Salesforce audit.",
+  "accuracy": 100,
+  "believability": 98,
+  "specificity": 95,
+  "manager_test": "PASS",
+  "ai_risk": "LOW"
+}

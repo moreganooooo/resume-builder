@@ -1,0 +1,312 @@
+# Career-Ops Profile Configuration
+# Morgan Escott — updated 2026-06-04
+
+candidate:
+  full_name: "Morgan Escott"
+  email: "escott.morgan@gmail.com"
+  phone: "+1-716-352-9050"
+  location: "Getzville, NY (Buffalo Area)"
+  linkedin: "linkedin.com/in/morganescott"
+  portfolio_url: "https://escottmorgan.myportfolio.com"
+  process_map_url: "https://escottmorgan.wixsite.com/processmap"
+
+target_roles:
+  primary:
+    - "Marketing Manager"
+    - "Customer Marketing Manager"
+    - "Content Marketing Manager"
+    - "Email Marketing Specialist"
+    - "Lifecycle Marketing Specialist"
+    - "Sales Enablement Specialist"
+    - "Onboarding Specialist"
+    - "Implementation Specialist"
+  secondary:
+    - "Customer Education Specialist"
+    - "Customer Adoption Specialist"
+    - "Content Operations Specialist"
+    - "Revenue Enablement Specialist"
+    - "B2B Content Strategist"
+    - "Campaign Specialist"
+    - "Campaign Manager"
+    - "CRM Marketing Specialist"
+    - "Marketing Operations Specialist"
+    - "Content Writer"
+    - "Copywriter"
+    - "Marketing Communications Specialist"
+
+archetypes:
+  archetypes:
+  - name: "Customer Marketing Manager"
+    level: "Mid-Senior"
+    fit: "primary"
+    notes: "Customer engagement, onboarding, retention campaigns, advocacy, adoption programs, customer communications, and lifecycle journey design."
+
+  - name: "Lifecycle Marketing Specialist"
+    level: "Mid-Senior"
+    fit: "primary"
+    notes: "Multi-touch campaigns, segmentation, and CRM-integrated ESP ops. 8 years of campaign execution in Outreach.io. Focus: Engagement, Retention, and Nurture."
+
+  - name: "Sales Enablement Specialist"
+    level: "Mid-Senior"
+    fit: "primary"
+    notes: "Playbook writing, voice/tone governance, and cross-functional training. Expert at bridging the gap between Sales needs and Marketing output."
+
+  - name: "Customer Onboarding & Implementation Specialist"
+    level: "Mid-Senior"
+    fit: "primary"
+    notes: "Translating SaaS complexity into adoption-focused workflows. Expert at driving technical migration, training design, and internal process documentation."
+
+  - name: "B2B Content Strategist"
+    level: "Mid-Senior"
+    fit: "primary"
+    notes: "Messaging frameworks, campaign copy, and brand voice. Journalism-founded, agency-trained. Focus: Clarity, authority, and conversion."
+
+narrative:
+  headline: "Creative marketing and systems leader who writes campaigns that perform, builds infrastructure that lasts, and drives user adoption"
+
+  exit_story: >
+    After 8 years building the sales development and content infrastructure at Treering Yearbooks
+    from one of the first two outbound hires to Senior SDR Manager and head of the Content Committee,
+    I took intentional time in 2024-25 to support a loved one's health and invest in professional growth.
+    I'm returning with clarity: I want a remote IC role where human-first messaging, campaign systems,
+    and the blend of creative + strategic thinking are the job, not a side note.
+
+superpowers:
+  - "Human-first writing that earns opens, replies, and trust, not just clicks. Campaigns went viral internally; reps borrowed niche sequences for audiences they weren't designed for because the writing was that good."
+  - "Building content systems that last: Content Committee, sequence library of 100+ assets, voice/tone guidelines, and SDR process map all still in use years after creation."
+  - "CRM fluency: Salesforce + Outreach.io operations, data hygiene, segmentation, reporting. Recovered $3M+ in stale pipeline through systematic account audits."
+  - "Translating strategy into campaigns: segment, write, A/B test, iterate, report to leadership. Full loop."
+  - "Training design that actually transfers: live workshops + async documentation + process maps for 20+ employees across remote teams."
+  - "Empathy-driven personalization at scale: Vidyard video prospecting, Thnks gifting (coffee, tree donations), Facebook group outreach for hard-to-reach PTA audiences."
+  - "Translating complex platform mechanics into digestible user workflows: Guided a remote team through a massive Salesforce Person Accounts migration via 1:1 troubleshooting and rebuilt system views, and mapped a massive technical process into a user-friendly internal help-site."
+
+background_context: >
+  Morgan came up through three converging tracks that merged fully at Treering:
+  (1) Journalism/writing, KCKCC editor-in-chief, KU Journalism BS, Callahan Creek, VML;
+  (2) Visual design, UDP intern, Element 8 → Strategy LLC Lead Designer, JCCC Graphic Design;
+  (3) Sales/outreach, IST BDR, Treering SDR Manager.
+  This combination is rare: most email marketers can write OR operate the stack; Morgan does both.
+  Most enablement specialists come from sales OR content; Morgan comes from both simultaneously.
+
+industries_of_genuine_fit:
+  - "EdTech / K-12 education"
+  - "Mission-driven SaaS"
+  - "Animal welfare and pet care"
+  - "Nonprofit and cause-driven organizations"
+  - "Mental health and wellness"
+  - "B2B SaaS with strong writing/campaign culture"
+
+companies_previously_applied:
+  # Use to avoid duplicates and learn from pattern
+  - "Mozilla / Thunderbird"
+  - "Khan Academy"
+  - "MagicSchool AI"
+  - "Teaching Strategies"
+  - "Headway"
+  - "Ipsy"
+  - "Under Armour"
+  - "GE"
+  - "Sierra Club"
+  - "Ollie"
+  - "Yahoo"
+  - "Terrabis"
+  - "Ceros"
+  - "KlientBoost"
+  - "Walz Tetrick"
+  - "FindLaw"
+  - "Guild"
+  - "Buffalo Solar"
+  - "CoreTrust"
+  - "Instacart"
+  - "Rula"
+  - "Colibri"
+  - "Receptive"
+  - "Spectraforce"
+
+deal_breakers:
+  - "Managing a team of 5+ as primary responsibility, wants to do the work, not just oversee it"
+  - "On-site or hybrid required, vehicle limitations, remote-only availability"
+  - "Phone-heavy outbound / cold-calling as primary activity, introvert, success came from writing not phone volume"
+  - "Salesforce certification as hard prerequisite, willing to pursue Trailhead, not yet certified"
+  - "Front-end HTML/CSS coding required for email templates, familiar with HTML but not production-ready"
+  - "Roles requiring deep production-level HTML/CSS coding for custom email template development"
+  - "Full graphic design role, skills present but not current-industry-competitive"
+...
+
+proof_points:
+  # Campaign performance (Morgan-only, cold outbound unless noted)
+  - name: "PTA Council Campaign"
+    context: "Treering Yearbooks, hardest-to-reach audience in the portfolio"
+    hero_metric: "74% open rate / 22% reply rate / 0 opt-outs"
+    notes: "Notoriously difficult audience. Paired with Thnks gifting and Facebook group research."
+
+  - name: "HZ Spring 1st Touch"
+    context: "Treering Yearbooks, Hot Zone district outreach"
+    hero_metric: "85% open / 39% reply (89 contacts)"
+
+  - name: "January 2022 Sequence Suite"
+    context: "Treering Yearbooks, 6-sequence rollout"
+    hero_metric: "63% avg open rate (all 6 sequences above 50%), 8.7% reply, 4.3% click, 3,337 prospects added"
+
+  - name: "Private School / Title 1 Sequences"
+    context: "Treering Yearbooks, SalesLoft attribution: morgan@treering.com (43 prospects)"
+    hero_metric: "95% open / 54% reply rate"
+    notes: "Strongest engagement metrics in archive. Slight caveat: reps added non-niche prospects, may inflate numbers slightly."
+
+  - name: "In-Contract Sequence"
+    context: "Treering Yearbooks, warm re-engagement"
+    hero_metric: "34% reply rate"
+
+  - name: "18-19 ENGAGED: Feb Clean-Up"
+    context: "Treering Yearbooks, SalesLoft, 2019"
+    hero_metric: "87% open / 27% reply; step-level 33% reply rates; attributed to morgan@treering.com"
+
+  - name: "HZ Intro 1st Touch (17-18)"
+    context: "Treering Yearbooks, early era Hot Zone"
+    hero_metric: "88 sent, 82% open, 23% reply at step 1"
+
+  - name: "Pod Performance vs. Team"
+    context: "Treering Yearbooks, Nov 2022 benchmarks (Morgan's pod)"
+    hero_metric: "Reply rate 2.8% vs 2.6% team avg; call connect 14% vs 8% team avg; meetings-held 91.7% vs 88.4% team avg"
+
+  # Revenue
+  - name: "Year 1 Revenue Target"
+    context: "Treering Yearbooks"
+    hero_metric: "Exceeded Year 1 target by 17%; first outbound hire to surpass $1M in sourced revenue"
+
+  - name: "All-Time Revenue"
+    context: "Treering Yearbooks, 8-year arc"
+    hero_metric: "$874,622.63 all-time sourced revenue; 113% increase Year 1 → Year 3"
+    notes: "Year 3: $382K vs. peer's $187K (2x). Source: Year to Year spreadsheet."
+
+  - name: "Demo Close Rate"
+    context: "Treering Yearbooks, demos Morgan ran solo"
+    hero_metric: "100% close rate on demos Morgan ran (3 corroborating sources)"
+
+  # Pipeline / CRM
+  - name: "Pipeline Recovery"
+    context: "Treering Yearbooks, Salesforce data hygiene audit"
+    hero_metric: "$3M+ in stale accounts identified and recovered"
+    notes: "Partially verified claim, use with appropriate qualifier."
+
+  - name: "Portfolio Scale"
+    context: "Treering Yearbooks"
+    hero_metric: "Managed 2,000+ account portfolio; 1,578 Hot Zone schools across 50 states + Canada analyzed"
+
+  # Enablement / Training
+  - name: "New Hire Training Library"
+    context: "Treering Yearbooks, training infrastructure"
+    hero_metric: "129 Outreach sequences + 55 SDR Persona sequences available for new hire onboarding"
+
+  - name: "SDR Process Map"
+    url: "https://escottmorgan.wixsite.com/processmap"
+    context: "Treering Yearbooks, official training infrastructure, still in use"
+    hero_metric: "8-step SDR workflow website built as official new-hire training; referenced in official SDR training deck"
+
+  - name: "Monthly Training Program"
+    context: "Treering Yearbooks"
+    hero_metric: "Led monthly SDR training workshops for 20+ employees; built live + async sessions"
+
+  # Onboarding & Implementation
+  - name: "Enterprise System Migration & Adoption"
+    context: "Treering Yearbooks, Salesforce Person Accounts transition"
+    hero_metric: "Maintained team operational continuity during a highly disruptive CRM infrastructure overhaul"
+    notes: "Led change management by providing daily 1:1 remote screen-share troubleshooting, rebuilding deprecated contact views, and translating complex technical changes into clear user workflows."
+
+  - name: "Workflow Architecture & Knowledge Base"
+    url: "https://escottmorgan.wixsite.com/processmap"
+    context: "Treering Yearbooks, official training infrastructure"
+    hero_metric: "Built an interactive 8-step internal process website that became the official training infrastructure for a 20+ member remote team"
+    notes: "Utilized MindNode to map the entire technical workflow, creating a central hub for tool navigation, process breakdown, and troubleshooting resources."
+
+  - name: "Platform Rollout & Integration"
+    context: "Treering Yearbooks, Outreach.io implementation"
+    hero_metric: "Championed the selection, CRM integration, and team-wide adoption of a new enterprise sales engagement platform"
+    notes: "Managed complex variable mapping from Salesforce, developed best practices, and delivered comprehensive user training to ensure immediate platform ROI."
+
+  - name: "Role-Specific Onboarding & KPI Design"
+    context: "Treering Yearbooks, new specialized research role"
+    hero_metric: "Designed custom workflows, Salesforce dashboards, and training protocols that led to $3M+ in recovered pipeline"
+    notes: "Built a net-new role from scratch, defining the end-to-end process, training the user on complex CRM merging tasks, and building real-time progress dashboards."
+
+  # Content / Voice
+  - name: "Content Committee"
+    context: "Treering Yearbooks, founded Jan 2021"
+    hero_metric: "Cross-department body unifying Sales + Marketing; owned brand voice, QA processes, and content library for full org"
+
+  - name: "Sequence Writing Attribution"
+    context: "Treering Yearbooks, confirmed via Summer '20 Sequence List (DF-0124)"
+    hero_metric: "Personally authored 21/39 niche sequences; proofed all 39 including peers'; wrote 4.5-year sequence library"
+
+  # Agency / pre-Treering
+  - name: "VML — Carlson Hotels"
+    context: "VML agency internship, 2010"
+    hero_metric: "200+ page digital strategy report; pitch deck praised by CEO as looking like client made it (smuggled laptop to build it)"
+
+  - name: "Callahan Creek — Freelance Extension"
+    context: "Callahan Creek copywriting internship → freelance, 2009-2010"
+    hero_metric: "2 campaigns selected for client rollout; extended to long-term freelance role based on quality"
+
+  - name: "Strategy LLC Brand Identity"
+    context: "Element 8 → Strategy LLC Lead Designer, 2011"
+    hero_metric: "Built entire brand identity from scratch, visual system still in use 15+ years later"
+
+  - name: "Inside Sales Team Performance"
+    context: "IST (now Alleyoop) BDR, 2015-2016"
+    hero_metric: "Top Seller of hiring class; Top 10 Performer first 2 months; promoted to sole manager of 12 within 6 months"
+
+key_recommendations:
+  # Endorsers who can speak to Morgan's work
+  - name: "Ray Mina"
+    title: "VP Marketing & Interim VP Product, Treering Yearbooks"
+    quote: "I truly appreciated Morgan's thorough and thoughtful approach to sales development. She was on point with our brand focus of always trying to help new prospects first and had tremendous results in driving engagement with target customers."
+
+  - name: "Ed Roche"
+    title: "Founding Partner, Strategy LLC"
+    quote: "She's succeeded whether it was writing to win customers, designing to elicit a 'wow' experience, or pulling a team together in a discovery process; Morgan got it done."
+
+  - name: "Ferry Keizer"
+    title: "VP Creative Director, Callahan Creek"
+    quote: "Morgan offered strong conceptual and writing skills. She will make an excellent copywriter and employee."
+
+  - name: "Robin Rowland"
+    title: "VP Fund Development, Humane Society of Greater Kansas City"
+    quote: "I could always rely on Morgan to create quality and creative work."
+
+management_evidence:
+  # Direct quotes confirming de facto management role at Treering
+  - source: "Bobby (VP Sales), private post-meeting, 2023"
+    quote: "You'll just need to sort of manage Tevez's time as you normally would"
+
+  - source: "Bobby (VP Sales), on-record group meeting, 2022"
+    quote: "Morgan has a responsibility... those are all things that she has the responsibility to manage you all on"
+
+  - source: "Jen (SDR peer), Content Committee meeting, 2021"
+    quote: "I'm putting everyone in free reduced PTA first catch sequences because I know that Morgan wrote those"
+
+  - source: "Stacey (SDR peer), Content Committee meeting, 2021"
+    quote: "\"On brand\" (validating Morgan's sequence writing)"
+
+compensation:
+  target_range: "$60K-$100K"
+  currency: "USD"
+  minimum: "$45K"
+  location_flexibility: "Remote only"
+  notes: >
+    Open to contract or part-time as bridge employment; full-time preferred.
+    Benefits matter, especially health insurance. At minimum, will accept $45K for a credible remote role
+    that is realistically attainable and reasonably aligned. Mission, culture, and long-term growth are
+    positive factors, but they should not outweigh screen survival, remote compatibility, compensation,
+    or near-term stability during an urgent job search.
+
+location:
+  country: "United States"
+  city: "Getzville (Buffalo area), NY"
+  timezone: "EST"
+  visa_status: "No sponsorship needed"
+  remote_required: true
+  notes: "Vehicle limitations make on-site/hybrid essentially impossible at this time."
+
+cv:
+  output_format: "html"
+  page_size: "letter"

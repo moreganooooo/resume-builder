@@ -1,0 +1,3010 @@
+# Portal Scanner Configuration — Morgan Escott
+# Target: Email/Lifecycle Marketing · Sales Support/Enablement · Copywriting/Content Strategy · Onboarding/Implementation
+# Updated: 2026-06-05
+# Requirements: Remote only, US-based, IC roles.
+
+# -- Location filter --
+location_filter:
+  # always_allow wins over block — remote signals guaranteed through regardless of other text
+    - "Remote"
+    - "Virtual"
+    - "Anywhere"
+    - "WFH"
+    - "WFA"
+    - "Work from home"
+    - "Work from anywhere"
+    - "Telecommute"
+    - "Telecommuting"
+    - "Telework"
+    - "Teleworking"
+    - "Location Independent"
+    - "Location agnostic"
+    - "Remote-First"
+    - "Fully Remote"
+    - "Remote OK"
+    - "Remote-friendly"
+    - "Off-site"
+    - "Offsite"
+    - "Nationwide"
+    - "Home"
+    - "Distributed"
+    - "Flexible"
+    - "North America"
+    - "US"
+    - "U.S."
+    - "USA"
+    - "U.S.A."
+    - "United States"
+
+block:
+  # Explicitly on-site/hybrid/local signals
+    - "HQ"
+    - "Onsite"
+    - "On-Site"
+    - "On Site"
+    - "In-office"
+    - "In office"
+    - "In the office"
+    - "In-Person"
+    - "In Person"
+    - "Office-Based"
+    - "Office Based"
+    - "Hybrid"
+    - "Commutable"
+    - "Commuting distance"
+    - "Commute to"
+    - "Local"
+    - "Local candidates"
+    - "Relocation"
+    - "Relocate"
+    - "Must reside in"
+    - "Must live in"
+    - "Must be located in"
+    - "Return to Office"
+    - "RTO"
+    - "Back to office"
+    - "On-premises"
+    - "On-prem"
+    - "Colocated"
+    - "Co-located"
+    - "Physical presence"
+    # Travel / Field constraints
+    - "Travel"
+    - "Travel required"
+    - "Willingness to travel"
+    - "Percent travel"
+    - "% travel"
+    - "Field"
+    - "Road warrior"
+    - "Driver's license"
+    - "Days Per"
+    - "Days per"
+    - "Days a week"
+    - "Days/week"
+    - "Days in office"
+    - "Days in the office"
+    - "OpenAI"
+    - "Notion"
+    # International — countries
+    - "Canada"
+    - "CAN"
+    - "Ontario"
+    - "British Columbia"
+    - "Alberta"
+    - "Quebec"
+    - "Ireland"
+    - "United Kingdom"
+    - "UK"
+    - "England"
+    - "Scotland"
+    - "Wales"
+    - "Japan"
+    - "South Korea"
+    - "Korea"
+    - "Australia"
+    - "India"
+    - "Bengaluru"
+    - "Hyderabad"
+    - "France"
+    - "Germany"
+    - "Poland"
+    - "Singapore"
+    - "Mexico"
+    - "Brazil"
+    - "Netherlands"
+    - "Spain"
+    - "Italy"
+    - "Sweden"
+    - "Denmark"
+    - "Norway"
+    - "Switzerland"
+    - "Belgium"
+    - "China"
+    - "Philippines"
+    - "Taiwan"
+    - "Vietnam"
+    - "Thailand"
+    - "Indonesia"
+    - "Malaysia"
+    - "Pakistan"
+    - "Nigeria"
+    - "South Africa"
+    - "Kenya"
+    - "Egypt"
+    - "Israel"
+    - "Turkey"
+    - "UAE"
+    - "Dubai"
+    - "Dublin"
+    - "Tokyo"
+    - "Seoul"
+    - "Sydney"
+    - "Melbourne"
+    - "Paris"
+    - "Munich"
+    - "Berlin"
+    - "London"
+    - "Amsterdam"
+    - "Toronto"
+    - "Vancouver"
+    - "Lithuania"
+    - "Greece"
+    - "Kazakhstan"
+    - "Croatia"
+    - "Slovenia"
+    - "Slovakia"
+    - "Colombia"
+    - "Austria"
+    - "Australia"
+    - "Singapore"
+    - "Bangalore"
+    - "Bulgaria"
+    - "Arabia"
+    - "NY, SF, Chicago"
+    - "NY or SF"
+    - "Luxembourg"
+    - "Frankfurt"
+    - "Serbia"
+    - "Brasil"
+    - "Spain"
+    - "Melbourne"
+    # Regions
+    - "EMEA"
+    - "APAC"
+    - "LATAM"
+
+# -- Title filter --
+# PHILOSOPHY: Positive list uses broad root keywords matched as substrings.
+# "Email" catches Email Marketing, Email Specialist, Email Programs Manager, etc.
+# Negative list does the precision work — blocking what we definitely don't want.
+# Updated 2026-06-05: +Social Media, Sales Support, Automation, Operations, Growth (positive);
+#   removed Field Marketing, Event Marketing, SEO Specialist, Sales Development Representative (negative);
+#   narrowed Engineer → " Engineer" (leading space) to avoid blocking GTM Engineer (Marketing);
+#   SEO Manager retained in negative.
+# Updated 2026-06-05 (audit): +Coordinator, Specialist, Brand, Program, Partner (positive);
+#   +Test Automation, QA (negative); +workday-sweep to alert_on_zero_sources.
+title_filter:
+  positive:
+    # Core disciplines
+    - "Marketing"      # catches ~40+ variants on its own
+    - "Email"          # Email Marketing, Email Specialist, Email Programs, Email Experience
+    - "Lifecycle"      # exact discipline name; lifecycle marketing, lifecycle specialist
+    - "CRM"            # CRM Marketing, CRM Specialist, CRM Coordinator, CRM Admin
+    - "Campaign"       # Campaign Manager, Campaign Specialist, Campaign Ops, Campaign Coordinator
+    - "GTM"            # GTM Enablement, GTM Coordinator, GTM Readiness, Go-to-Market
+    - "Sales Support"  # Sales Support Specialist, Sales Support Coordinator
+    - "Automation"     # Marketing Automation, CRM Automation, Automation Specialist
+    - "Operations"     # Marketing Operations, Revenue Operations, Campaign Operations
+    - "Growth"         # Growth Marketing, Growth Manager, Growth Strategist
+
+    # Role-level catch-alls
+    - "Coordinator"    # Marketing Coordinator, Onboarding Coordinator, Campaign Coordinator
+    - "Specialist"     # Email Specialist, Engagement Specialist, Implementation Specialist
+    - "Program"        # Email Programs Manager, Customer Programs Lead, Program Manager
+    - "Brand"          # Brand Strategist, Brand Copywriter, Brand Storyteller, Brand Manager
+    - "Partner"        # Partner Marketing Manager, Partner Enablement, Partner Success
+    - "Consultant"     # Education Consultant, Solutions Consultant
+    - "Advisor"        # Communications Advisor, Learning Advisor
+    - "Strategist"     # Learning Strategist, Content Strategist
+
+    # Content & copy
+    - "Content"        # Content Strategist, Content Writer, Content Coordinator, Content Specialist
+    - "Copywriter"     # Copywriter, Copywriting, Copy Strategist
+    - "Writer"         # Marketing Writer, Staff Writer, Editorial Writer, Proposal Writer
+    - "Editorial"      # Editorial Manager, Editorial Strategist (media + nonprofit orgs)
+    - "Narrative"      # Brand Narrative Lead, Narrative Strategist
+    - "Messaging"      # Messaging Strategist, Messaging & Positioning Specialist
+    - "Storytell"      # Storyteller, Digital Storytelling (nonprofit-specific)
+    - "Instructional"  # Instructional Designer
+    - "Knowledge"      # Knowledge Manager, Knowledge Base Specialist
+
+    # Communications & outreach
+    - "Communications" # Communications Specialist, Donor Comms, Member Comms, Constituent Comms
+    - "Outreach"       # Community Outreach Coordinator, Digital Outreach Specialist
+    - "Donor"          # Donor Communications, Donor Relations (nonprofit)
+    - "Community"      # Community Manager, Community Programs
+    - "Audience"       # Audience Manager, Audience Engagement
+    - "Member"         # Member Engagement, Member Success
+
+    # Enablement & sales support
+    - "Enablement"     # Sales, GTM, Field, Revenue, Partner, Customer Success Enablement
+    - "Readiness"      # Sales Readiness, GTM Readiness Manager
+    - "Training"       # Training Specialist, Sales Trainer, Customer Trainer
+    - "Learning"       # Learning Experience Designer, Learning Manager
+    - "Education"      # Customer Education, Education Specialist
+
+    # Onboarding / implementation / CX
+    - "Onboarding"     # Customer, Client, User, Product Onboarding
+    - "Implementation" # Implementation Specialist, Manager, Coordinator, Analyst
+    - "Adoption"       # Adoption Specialist, Platform Adoption
+    - "Launch"         # Launch Specialist, Customer Launch Manager (SaaS-common)
+    - "Activation"     # User Activation Specialist (PLG companies)
+    - "Success"        # Customer Success Manager, Specialist, Associate
+    - "Experience"     # Customer Experience, Member Experience, Patient Experience
+    - "Relationship"   # Relationship Manager, Client Relationship Specialist
+    - "Change Management" # Change Management Specialist
+    - "Curriculum"     # Curriculum Specialist
+    - "Engagement"
+    - "Customer Strategy"
+
+    # Added from Targets
+    - "Lifecycle Marketing"
+    - "Email Marketing"
+    - "Campaign Manager"
+    - "Campaign Specialist"
+    - "Marketing Manager"
+    - "Marketing Specialist"
+    - "Content Marketing"
+    - "Content Strateg"
+    - "Content Writer"
+    - "Sales Enablement"
+    - "Revenue Enablement"
+    - "Customer Marketing"
+    - "Customer Onboarding"
+    - "Onboarding Specialist"
+    - "Implementation Specialist"
+    - "Marketing Operations"
+    - "CRM Marketing"
+    - "Customer Education"
+    - "Customer Adoption"
+    - "B2B Content"
+    - "Lifecycle Manager"
+    - "Lifecycle Specialist"
+    - "Enablement Manager"
+    - "Enablement Specialist"
+    - "Product Marketing"
+    - "Field Marketing"
+    - "Event Marketing"
+    - "Marketing Analytics"
+    - "Marketing Strategy"
+    - "Go-To-Market"
+    - "GTM Strategy"
+    - "Sales Strategy"
+    - "Sales Operations"
+    - "Strategic Partnerships"
+    - "Customer Strategy"
+    - "Customer Lifecycle"
+    - "Customer Engagement"
+    - "Creative Strategist"
+    - "Media Strategist"
+    - "Web Strategy"
+    - "Digital Experience"
+    - "Sales Specialist"
+    - "Marketing Proposal"
+    - "Digital Experience"
+    - "Web Strategy"
+    - "Media Strategist"
+    - "Creative Strategist"
+    - "Partnerships"
+    - "Sales Operation"
+    - "Sales Strategy"
+    - "RevOps"
+    - "Revenue Operations"
+    - "GTM Strategy"
+    - "Go-To-Market"
+
+  negative:
+    - " Engineer"      # leading space: blocks Software Engineer, Data Engineer, etc. but NOT GTM Engineer (Marketing)
+    - "Developer"
+    - "Software"
+    - "Full Stack"
+    - "Frontend"
+    - "Front End"
+    - "Backend"
+    - "Data Scientist"
+    - "Data Engineer"
+    - "Analytics Engineer"
+    - "Business Intelligence"
+    - "Product Manager"
+    - "Product Designer"
+    - "Vice President"
+    - "VP "
+    - "Chief "
+    - "CMO"
+    - "Director of"
+    - "Java "
+    - "Python Developer"
+    - "iOS"
+    - "Android"
+    - "Blockchain"
+    - "Crypto"
+    - "Recruiter"
+    - "HR Manager"
+    - "Salesforce Admin" # Customer Service / Support false positives
+    - "Customer Support"
+    - "Support Specialist"
+    - "Support Associate"
+    - "Technical Support"
+    - "Customer Care"
+    - "Help Center"
+
+    # Customer Service / Support false positives
+    - "Customer Service Representative"
+    - "CSR"
+    - "Call Center"
+    - "Help Desk"
+    - "Tier 1 Support"
+    - "Technical Support Representative"
+    - "Inbound Calls" 
+
+    # Sales / outbound false positives
+    - "Account Executive"
+    - "Inside Sales"
+    - "Sales Representative"
+    - "Business Development"
+    - "Account Manager"
+    - "Cold Calling"
+    - "Sales Development Representative" # Use full term to avoid blocking SDR Enablement
+    - "BDR"
+
+    # Non-US geographic qualifiers in title
+    - "EMEA"
+    - "APAC"
+    - "LATAM"
+    - "MENA"
+    - "UK"
+    - "Canada"
+    - "Brazil"
+    - "Africa"
+    - "Turkey"
+    - "India"
+    - "Australia"
+    - "Germany"
+    - "France"
+    - "Singapore"
+
+    # HR/employee lifecycle false positives
+    - "Employee Relations"
+    - "Time and Attendance"
+    - "Time & Attendance"
+    - "Payroll"
+    - "People Operations"
+    - "HR Business Partner"
+    - "Contract Management"
+
+    # Tech / data / analytics false positives
+    - "Machine Learning"
+    - "Data Analyst"
+    - "BI Analyst"
+    - "Growth Hacker"
+    - "Tableau"
+    - "Looker"
+    - "dbt "
+    - "SQL "
+
+    # Performance marketing roles
+    - "Paid Media"
+    - "Paid Search"
+    - "SEM"
+    - "PPC"
+    - "SEO Manager"
+
+    # Senior leadership / over-senior roles
+    # Note: 'Senior' and 'Principal' intentionally omitted — Senior/Principal IC roles are in scope.
+    - "Head of "
+    - "SVP"
+
+    # On-site / travel / language-requirement signals that appear in the TITLE
+    # itself (location_filter only checks the `location` field, so these slip
+    # through when a posting's location is "N/A" or just a city name).
+    - "Hybrid"
+    - "Bilingual"
+    - "Travel Based"
+    - "Travel-Based"
+    - "Field-Based"
+
+    # HR / people ops false positives
+    - "Benefits "
+    - "L&D Business Partner"
+    - "Compensation"
+
+    # Deep technical CRM / Salesforce roles
+    - "Developer"
+    - "Database"
+    - "Marketo"
+
+    # Functional noise (facilities, finance, legal, IT)
+    - "Facilities"
+    - "IT Support"
+    - "Legal "
+    - "Finance "
+    - "Accounting"
+    - "Procurement"
+
+    # QA / test automation false positives
+    - "Test Automation"
+    - "QA "
+
+    # Added from Hard Stops
+    - "Scientist"
+    - "Designer"
+    - "Researcher"
+    - "Social Media"
+    - "DevOps"
+    - "Site Reliability"
+    - "Hardware"
+    - "Accountant"
+    - "Bookkeeper"
+    - "Attorney"
+    - "Paralegal"
+    - "Financial"
+    - "Talent"
+    - "People"
+    - "Human Resources"
+    - "HR"
+    - "Cold Call"
+    - "Clinical"
+    - "Medical"
+    - "Patient"
+    - "Psychiatric"
+    - "Psychiatrist"
+    - "Therapist"
+    - "Credentialing"
+    - "Pharmaceutical"
+    - "Compounding"
+    - "Billing"
+    - "Administrative"
+    - "Data Entry"
+    - "Supply Chain"
+    - "Quality Control"
+    - "Philippines"
+    - "Director"
+    - "Dental"
+    - "Dentist"
+    - "German"
+    - "Italian"
+    - "Portuguese"
+    - "Relocation"
+    - "Tutor"
+    - "Tax"
+    - "CPU"
+    - "Cyber"
+    - "Security"
+    - "Infosys"
+    - "Supplier"
+    - "P2P"
+    - "Early Access"
+    - "Workplace Business Partner"
+    - "India"
+    - "AWS"
+    - "Cloud"
+    - "Counsel"
+    - "Technical Program Manager"
+    - "Employee Experience"
+    - "Jornada"
+    - "IT Specialist"
+    - "Agriculture"
+    - "Treering"
+    - "Program Worker"
+    - "Spanish"
+    - "Food Operations"
+    - "Risk Management"
+    - "IT Operations"
+    - "Environmental Monitoring"
+    - "Days"
+    - "Nights"
+    - "OpenAI"
+    - "Notion"
+    
+    # Added to eliminate physical operations, logistics, and manufacturing
+    - "Data Center"
+    - "CNC "
+    - "Manufacturing"
+    - "Warehouse"
+    - "Logistics"
+    - "Inventory"
+    - "Machining"
+    - "Maintenance"
+    - "Astronaut" 
+    - "Distribution"
+    - "Supply "
+
+    # Added to eliminate clinical and hard healthcare
+    - "Phlebotomist"
+    - "Organ " # Catches Organ Health Specialist
+    - "Autism"
+    - "Crisis Intervention"
+    - "Pathology"
+    - "Aesthetic"
+
+    # Added to eliminate hard finance, billing, and compliance
+    - "Accounts Payable"
+    - "Accounts Receivable"
+    - "Underwriter"
+    - "Collections "
+    - "Fraud "
+    - "Compliance "
+    - "AML "
+    - "Treasury"
+
+    # Added to eliminate retail, food, and hospitality
+    - "Culinary"
+    - "Food Safety"
+    - "Store Operations"
+    - "Real Estate"
+    - "Retail "
+
+    # Added to eliminate heavy account management/sales
+    - "Success Manager" # Nuke CSMs, Enterprise Success Managers, etc.
+    - "Sales Consultant"
+    - "Channel Partner"
+    - "Sales Executive"
+
+    # Added to eliminate Ad Sales & Monetization
+    - "Client Partner"
+    - "Measurement Partner"
+    - "Programmatic"
+
+    # Added to eliminate EdTech & Academic
+    - "Assessment"
+    - "Curriculum"
+
+    # Added to eliminate Auto, Fleet & Property
+    - "Hospitality"
+    - "Resident Experience"
+    - "Vehicle "
+    - "Fleet "
+    - "Move-Out"
+    - "Parts Advisor"
+    - "Service Advisor"
+    - "Delivery Advisor"
+    - "Brand Ambassador"
+    - "Trade Specialist"
+    - "Construction"
+    - "Eviction"
+    - "Delinquency"
+    - "QuintoAndar"
+
+    # Added to eliminate Executive Admin & Recruiting
+    - "Executive Business Partner"
+    - "Confidential Assistant"
+    - "Candidate Experience"
+    - "Recruiting"
+    - "TA Operations"
+    - "Chief-of-Staff"
+
+    # Added to eliminate Government & Military
+    - "Army"
+    - "Air Force"
+    - "Marine Corps"
+    - "NF-03"
+    - "NE-04"
+    - "NF3"
+    - "Military"
+
+    # Added to eliminate Trust, Safety & Gaming
+    - "Trust & Safety"
+    - "Law Enforcement"
+    - "Critical Harms"
+    - "Safeguarding"
+    - "Incident"
+    - "Investigation"
+    - "Programmer"
+    - "Technical Artist"
+
+    # Added to eliminate Customer Success, Support & Implementation noise
+    - "Success Advocate"
+    - "Implementation Manager"
+    - "Delivery Consultant"
+    - "Guest Relations"
+    - "Field Implementation"
+    - "Field Support"
+    - "Renewals"
+
+    # Added granular operations & tech noise
+    - "Operations Specialist"
+    - "Tech-Operations"
+    - "Delivery Operations"
+    - "Field Operations"
+    - "Payment Operations"
+    - "Kitchen Operations"
+    - "Operations Admin"
+    - "Order Management"
+    - "Data Specialist"
+    - "IT Service"
+    - "IT Systems"
+    - "NetSuite"
+    - "Data Warehousing"
+    - "Data & Analytics"
+    - "Data Science"
+    - "Quality Assurance"
+    - "Quality Specialist"
+    - "Test Specialist"
+    - "Technical Writer"
+    - "Equipment"
+    - "Mechanical"
+    - "Technician"
+
+    # Added granular medical & clinical noise
+    - "Peer Specialist"
+    - "Provider Experience"
+    - "Rare Disease"
+    - "Oncology"
+    - "Dietitian"
+    - "Mental Health"
+    - "Release of Information"
+    - "Disability"
+
+    # Added granular finance & legal noise
+    - "Underwriting"
+    - "Loans"
+    - "Risk "
+    - "Regulatory"
+    - "Immigration"
+    - "Reconciliation"
+    - "Recovery"
+    - "Deal Desk"
+    - "Equity"
+    - "Claims"
+    - "Cash Posting"
+
+    # Added granular logistics & physical labor
+    - "Lathe"
+    - "Shipping"
+    - "Receiving"
+    - "Fulfillment"
+    - "Subcontracts"
+    - "Tooling"
+    - "Metrology"
+    - "Cooling Specialist"
+    - "On-the-Ground"
+
+    # Added granular international/language noise
+    - "Arabic"
+    - "French"
+    - "Netherlands"
+    - "México"
+    - "Mexico"
+    - "MEX"
+    - "Berlin"
+    - "Zhengzhou"
+    - "Prague"
+    - "Czechia"
+    - "Dubai"
+    - "Africa"
+    - "Karnataka"
+
+    # Added random miscellaneous noise
+    - "UX"
+    - "CX"
+    - "SEO"
+    - "Intern"
+    - "Freelance"
+    - "Data Labeling"
+    - "Travel "
+    - "Field Enablement"
+    - "Ministry"
+    - "History Program"
+    - "TikTok"
+    - "Geospatial"
+    - "Policy Advisor"
+    - "Sign up for the"
+    - "Data Governance"
+    - "Religion"
+
+seniority_boost:
+  - "Senior"
+  - "II"
+  - "III"
+
+# =========================================================
+# -- Reporting --
+# =========================================================
+reporting:
+  track_source_counts: true
+  track_source_category_counts: true
+  min_results_to_report: 1
+  output_source_column: true
+  alert_on_zero_sources:
+    - greenhouse-sweep
+    - ashby-sweep
+    - lever-sweep
+    - workday-sweep
+
+# =========================================================
+# -- Search queries --
+# PHILOSOPHY: Wide categorical net. title_filter handles precision.
+# To avoid the 32-term limit, heavy job boards are split into two parallel sweeps.
+# Updated 2026-06-04: synced all keyword groups to full positive title filter.
+#   Marketing & Enablement sweep: +10 terms
+#     (writer, editorial, narrative, messaging, storytell, instructional,
+#      outreach, donor, GTM, readiness)
+#   Onboarding & Success sweep: +6 terms
+#     (nurture, journey, launch, activation, experience, relationship)
+# Updated 2026-06-05: +source_tag, +source_category on every entry
+# Updated 2026-06-05 (audit): removed -engineer -developer from all ATS sweep queries
+# =========================================================
+search_queries:
+
+  # ATS Platform Sweeps
+  - name: "Greenhouse — Onboarding & Implementation Sweep"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (onboarding OR implementation OR \"customer success\" OR \"client services\" OR \"solutions consultant\" OR training OR education OR enablement OR engagement OR adoption OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+  
+  - name: "Greenhouse — Marketing & Enablement remote"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+
+  - name: "Greenhouse — Onboarding & Success remote"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+
+  - name: "Ashby — Marketing & Enablement remote"
+    query: "site:jobs.ashbyhq.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: ashby-sweep
+    source_category: ats_sweep
+
+  - name: "Ashby — Onboarding & Success remote"
+    query: "site:jobs.ashbyhq.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: ashby-sweep
+    source_category: ats_sweep
+
+  - name: "Lever — Marketing & Enablement remote"
+    query: "site:jobs.lever.co (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: lever-sweep
+    source_category: ats_sweep
+
+  - name: "Lever — Onboarding & Success remote"
+    query: "site:jobs.lever.co (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: lever-sweep
+    source_category: ats_sweep
+
+  - name: "Workable — Marketing & Enablement remote"
+    query: "site:apply.workable.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: workable-sweep
+    source_category: ats_sweep
+
+  - name: "Workable — Onboarding & Success remote"
+    query: "site:apply.workable.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: workable-sweep
+    source_category: ats_sweep
+
+  - name: "Workday — Marketing & Enablement remote"
+    query: "site:myworkdayjobs.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: workday-sweep
+    source_category: ats_sweep
+
+  - name: "Workday — Onboarding & Success remote"
+    query: "site:myworkdayjobs.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: workday-sweep
+    source_category: ats_sweep
+
+  # -- Expanded Role discovery Sweeps --
+  - name: "Greenhouse — Marketing Management Universe"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (\"marketing manager\" OR \"campaign manager\" OR \"content marketing manager\" OR \"customer marketing manager\") remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+
+  - name: "Ashby — Marketing Management Universe"
+    query: "site:jobs.ashbyhq.com (\"marketing manager\" OR \"campaign manager\" OR \"content marketing manager\" OR \"customer marketing manager\") remote -recruiter"
+    enabled: true
+    source_tag: ashby-sweep
+    source_category: ats_sweep
+
+  - name: "Greenhouse — Customer Marketing & Advocacy"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (\"customer marketing\" OR \"customer engagement\" OR \"customer advocacy\" OR \"retention marketing\") remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+
+  - name: "Ashby — Customer Marketing & Advocacy"
+    query: "site:jobs.ashbyhq.com (\"customer marketing\" OR \"customer engagement\" OR \"customer advocacy\" OR \"retention marketing\") remote -recruiter"
+    enabled: true
+    source_tag: ashby-sweep
+    source_category: ats_sweep
+
+  - name: "Greenhouse — Customer Education & Adoption"
+    query: "(site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (\"customer education\" OR \"product education\" OR \"learning experience\" OR \"training specialist\" OR \"instructional design\") remote -recruiter"
+    enabled: true
+    source_tag: greenhouse-sweep
+    source_category: ats_sweep
+
+  - name: "Ashby — Customer Education & Adoption"
+    query: "site:jobs.ashbyhq.com (\"customer education\" OR \"product education\" OR \"learning experience\" OR \"training specialist\" OR \"instructional design\") remote -recruiter"
+    enabled: true
+    source_tag: ashby-sweep
+    source_category: ats_sweep
+
+  # Remote-First Job Boards
+  - name: "We Work Remotely — Marketing & Enablement"
+    query: "site:weworkremotely.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter"
+    enabled: true
+    source_tag: weworkremotely
+    source_category: remote_board
+
+  - name: "We Work Remotely — Onboarding & Success"
+    query: "site:weworkremotely.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) -recruiter"
+    enabled: true
+    source_tag: weworkremotely
+    source_category: remote_board
+
+  - name: "Remote OK — Marketing & Enablement"
+    query: "site:remoteok.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter"
+    enabled: true
+    source_tag: remoteok
+    source_category: remote_board
+
+  - name: "Remote OK — Onboarding & Success"
+    query: "site:remoteok.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) -recruiter"
+    enabled: true
+    source_tag: remoteok
+    source_category: remote_board
+
+  - name: "Himalayas — Marketing & Enablement remote"
+    query: "site:himalayas.app (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: himalayas
+    source_category: remote_board
+
+  - name: "Himalayas — Onboarding & Success remote"
+    query: "site:himalayas.app (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: himalayas
+    source_category: remote_board
+
+  - name: "Remote.co — Marketing & Enablement"
+    query: "site:remote.co/remote-jobs (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter"
+    enabled: true
+    source_tag: remoteco
+    source_category: remote_board
+
+  - name: "Remote.co — Onboarding & Success"
+    query: "site:remote.co/remote-jobs (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) -recruiter"
+    enabled: true
+    source_tag: remoteco
+    source_category: remote_board
+
+  - name: "Remotive — Marketing & Enablement"
+    query: "site:remotive.com/remote-jobs/marketing (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter"
+    enabled: true
+    source_tag: remotive
+    source_category: remote_board
+
+  - name: "Remotive — Onboarding & Success"
+    query: "site:remotive.com/remote-jobs/marketing (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) -recruiter"
+    enabled: true
+    source_tag: remotive
+    source_category: remote_board
+
+  - name: "Just Remote — Marketing & Enablement"
+    query: "site:justremote.co (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter"
+    enabled: true
+    source_tag: justremote
+    source_category: remote_board
+
+  - name: "Just Remote — Onboarding & Success"
+    query: "site:justremote.co (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) -recruiter"
+    enabled: true
+    source_tag: justremote
+    source_category: remote_board
+
+  - name: "Working Nomads — Marketing & Enablement remote"
+    query: "site:workingnomads.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote"
+    enabled: true
+    source_tag: workingnomads
+    source_category: remote_board
+
+  - name: "Working Nomads — Onboarding & Success remote"
+    query: "site:workingnomads.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote"
+    enabled: true
+    source_tag: workingnomads
+    source_category: remote_board
+
+  - name: "NoDesk — marketing + enablement + implementation"
+    query: "site:nodesk.co/remote-jobs/marketing (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM)"
+    enabled: true
+    source_tag: nodesk
+    source_category: remote_board
+
+  - name: "RemoteFront — marketing + enablement remote"
+    query: "site:remotefront.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: remotefront
+    source_category: remote_board
+
+  # Startup & Tech-Focused Boards
+  - name: "Wellfound — Marketing & Enablement remote"
+    query: "site:wellfound.com/jobs (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: wellfound
+    source_category: niche_board
+
+  - name: "Wellfound — Onboarding & Success remote"
+    query: "site:wellfound.com/jobs (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: wellfound
+    source_category: niche_board
+
+  - name: "YC / Work at a Startup — Marketing & Enablement remote"
+    query: "site:workatastartup.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: workatastartup
+    source_category: niche_board
+
+  - name: "YC / Work at a Startup — Onboarding & Success remote"
+    query: "site:workatastartup.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: workatastartup
+    source_category: niche_board
+
+  - name: "MKT1 — B2B startup marketing broad sweep"
+    query: "site:jobs.mkt1.co (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM)"
+    enabled: true
+    source_tag: mkt1
+    source_category: niche_board
+
+  - name: "Startup.jobs — marketing + enablement + implementation remote"
+    query: "site:startup.jobs (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: startupjobs
+    source_category: niche_board
+
+  - name: "Hey Marketers — startup marketing broad sweep"
+    query: "site:heymarketers.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness OR \"customer success\")"
+    enabled: true
+    source_tag: heymarketers
+    source_category: niche_board
+
+  - name: "Midwest Startups — marketing + enablement"
+    query: "site:jobs.midweststartups.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM)"
+    enabled: true
+    source_tag: midweststartups
+    source_category: niche_board
+
+  # Mainstream Aggregators
+  - name: "Built In — Marketing & Enablement remote"
+    query: "site:builtin.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: builtin
+    source_category: mainstream_aggregator
+    notes: "Also surfaces company list pages (Top EdTech Companies Hiring Remote, etc.)."
+
+  - name: "Built In — Onboarding & Success remote"
+    query: "site:builtin.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: builtin
+    source_category: mainstream_aggregator
+
+  - name: "ZipRecruiter — Marketing & Enablement remote"
+    query: "site:ziprecruiter.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter"
+    enabled: true
+    source_tag: ziprecruiter
+    source_category: mainstream_aggregator
+
+  - name: "ZipRecruiter — Onboarding & Success remote"
+    query: "site:ziprecruiter.com (implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter"
+    enabled: true
+    source_tag: ziprecruiter
+    source_category: mainstream_aggregator
+
+  - name: "FlexJobs — marketing + enablement + implementation remote"
+    query: "site:flexjobs.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: flexjobs
+    source_category: mainstream_aggregator
+
+  - name: "MarketingHire — marketing + enablement broad sweep"
+    query: "site:marketinghire.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness OR \"customer success\") remote"
+    enabled: true
+    source_tag: marketinghire
+    source_category: mainstream_aggregator
+
+  - name: "AMA Job Board — marketing + comms + enablement remote"
+    query: "site:jobs.ama.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: ama-job-board
+    source_category: mainstream_aggregator
+
+  - name: "Authentic Jobs — content + marketing + enablement remote"
+    query: "site:authenticjobs.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: authenticjobs
+    source_category: mainstream_aggregator
+
+  - name: "Jobspresso — marketing + enablement + implementation remote"
+    query: "site:jobspresso.co (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: jobspresso
+    source_category: mainstream_aggregator
+
+  # Diversity & Mission-Adjacent Platforms
+  - name: "The Mom Project — marketing + enablement + implementation remote"
+    query: "site:themomproject.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: themomproject
+    source_category: niche_board
+
+  - name: "PowerToFly — marketing + enablement + implementation remote"
+    query: "site:powertofly.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: powertofly
+    source_category: niche_board
+
+  # Nonprofit / Cause-Driven Boards
+  - name: "Idealist — marketing + comms + enablement + implementation remote"
+    query: "site:idealist.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: idealist
+    source_category: niche_board
+
+  - name: "NonprofitJobs — marketing + communications + implementation remote"
+    query: "site:nonprofitjobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR fundraising) remote"
+    enabled: true
+    source_tag: nonprofitjobs
+    source_category: niche_board
+
+  - name: "GreaterGoodJobs — marketing + comms remote"
+    query: "site:greatergoodjobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR community) remote"
+    enabled: true
+    source_tag: greatergoodjobs
+    source_category: niche_board
+
+  - name: "WorkForGood — marketing + comms + implementation remote"
+    query: "site:work4good.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: workforgood
+    source_category: niche_board
+
+  - name: "ExecSearches — nonprofit marketing + comms remote"
+    query: "site:execsearches.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote"
+    enabled: true
+    source_tag: execsearches
+    source_category: niche_board
+
+  - name: "Tech Jobs for Good — social impact marketing + enablement + implementation"
+    query: "site:techjobsforgood.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: techjobsforgood
+    source_category: niche_board
+
+  # Progressive / Democracy / Civic Tech
+  - name: "GAIN Power — progressive campaigns + nonprofit marketing"
+    query: "site:gainpower.org/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote"
+    enabled: true
+    source_tag: gainpower
+    source_category: niche_board
+
+  - name: "Matt's List — progressive digital + marketing"
+    query: "site:mattslist.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: mattslist
+    source_category: niche_board
+
+  - name: "Progressive Data Jobs — data-driven organizing + marketing"
+    query: "site:progressivedatajobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote"
+    enabled: true
+    source_tag: progressivedatajobs
+    source_category: niche_board
+
+  # EdTech / Education Sector
+  - name: "EdSurge Jobs — marketing + enablement + implementation remote"
+    query: "site:edsurge.com/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR education) remote"
+    enabled: true
+    source_tag: edsurge
+    source_category: niche_board
+
+  - name: "EdTechJobs.io — marketing + enablement + implementation"
+    query: "site:edtechjobs.io (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR education) remote"
+    enabled: true
+    source_tag: edtechjobs
+    source_category: niche_board
+
+  - name: "Himalayas — Remote K-12 / EdTech companies list"
+    query: "site:himalayas.app/companies \"Top remote K 12 Education companies\""
+    enabled: true
+    source_tag: himalayas
+    source_category: remote_board
+
+  - name: "Built In — EdTech companies hiring remote (collection)"
+    query: "site:builtin.com \"Top Edtech Companies Hiring Remote\" OR \"Edtech Companies Hiring Remote\""
+    enabled: true
+    source_tag: builtin
+    source_category: mainstream_aggregator
+
+  # Animal Welfare / Pet Industry Boards
+  - name: "HumanePro — animal welfare marketing + comms + implementation"
+    query: "site:humanepro.org/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: humanepro
+    source_category: niche_board
+
+  - name: "NACA — animal care marketing + community + implementation"
+    query: "site:nacanet.org/career-center-job-board (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR \"community engagement\") remote"
+    enabled: true
+    source_tag: naca
+    source_category: niche_board
+
+  - name: "Vangst — cannabis industry marketing + enablement"
+    query: "site:vangst.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR enablement OR implementation OR onboarding OR \"customer success\" OR adoption OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote"
+    enabled: true
+    source_tag: vangst
+    source_category: niche_board
+tracked_companies:
+
+# =========================================================
+# EdTech / K-12 Education (Morgan's native ecosystem)
+# =========================================================
+
+- name: Duolingo
+  careers_url: https://boards.greenhouse.io/duolingo
+  api: https://boards-api.greenhouse.io/v1/boards/duolingo/jobs
+  enabled: true
+
+- name: Khan Academy
+  careers_url: https://boards.greenhouse.io/khanacademy
+  api: https://boards-api.greenhouse.io/v1/boards/khanacademy/jobs
+  enabled: true
+
+- name: Coursera
+  careers_url: https://boards.greenhouse.io/coursera
+  api: https://boards-api.greenhouse.io/v1/boards/coursera/jobs
+  enabled: true
+
+- name: Teaching Strategies
+  careers_url: https://boards.greenhouse.io/teachingstrategies
+  scan_method: websearch
+  scan_query: '"teaching strategies" "marketing" OR "content" OR "email" OR "enablement" remote jobs'
+  enabled: false
+
+- name: IXL Learning
+  careers_url: https://www.ixl.com/company/jobs
+  api: https://boards-api.greenhouse.io/v1/boards/ixllearning/jobs
+  enabled: true
+
+- name: Newsela
+  careers_url: https://boards.greenhouse.io/newsela
+  api: https://boards-api.greenhouse.io/v1/boards/newsela/jobs
+  enabled: true
+
+- name: Renaissance Learning
+  careers_url: https://www.renaissance.com/careers/
+  api: https://boards-api.greenhouse.io/v1/boards/newsela/jobs
+  enabled: true
+
+- name: Seesaw
+  careers_url: https://boards.greenhouse.io/seesaw
+  api: https://boards-api.greenhouse.io/v1/boards/seesaw/jobs
+  enabled: true
+
+- name: Instructure (Canvas LMS)
+  careers_url: https://www.instructure.com/about/careers
+  api: https://boards-api.greenhouse.io/v1/boards/seesaw/jobs
+  enabled: true
+
+- name: ClassDojo
+  careers_url: https://jobs.ashbyhq.com/classdojo
+  api: https://api.ashbyhq.com/posting-api/job-board/classdojo
+  enabled: true
+
+- name: Age of Learning (ABCmouse)
+  careers_url: https://jobs.lever.co/aofl
+  enabled: true
+
+- name: MagicSchool AI
+  careers_url: https://jobs.ashbyhq.com/magicschool
+  api: https://api.ashbyhq.com/posting-api/job-board/magicschool
+  notes: "Morgan applied previously. AI-powered teacher tools."
+  enabled: true
+
+- name: Quizlet
+  careers_url: https://jobs.ashbyhq.com/quizlet
+  api: https://api.ashbyhq.com/posting-api/job-board/quizlet
+  enabled: false  # 2026-06-08: HTTP 404 — board appears to have moved/closed
+
+- name: GoGuardian
+  careers_url: https://boards.greenhouse.io/goguardian
+  api: https://boards-api.greenhouse.io/v1/boards/goguardian/jobs
+  enabled: true
+
+- name: Amplify
+  careers_url: https://amplify.com/careers/
+  api: https://boards-api.greenhouse.io/v1/boards/goguardian/jobs
+  enabled: true
+
+- name: PowerSchool
+  careers_url: https://careers-powerschool.icims.com/jobs/search
+  scan_method: websearch
+  scan_query: site:careers-powerschool.icims.com marketing OR email OR enablement OR content remote
+  enabled: false
+
+- name: Turnitin
+  careers_url: https://careers.smartrecruiters.com/turnitinllc
+  scan_method: websearch
+  scan_query: 'site:careers.smartrecruiters.com/turnitinllc "marketing" OR "email" OR "content" OR "communications" remote'
+  enabled: false
+
+- name: Panorama Education
+  careers_url: https://apply.workable.com/panorama-education
+  enabled: true
+
+- name: Curriculum Associates (i-Ready)
+  careers_url: https://curriculumassociates.wd5.myworkdayjobs.com/External
+  scan_method: websearch
+  scan_query: site:curriculumassociates.wd5.myworkdayjobs.com marketing OR email OR content OR enablement remote
+  enabled: false
+
+- name: Waterford.org
+  careers_url: https://www.paycomonline.net/v4/ats/web.php/portal/331B479E8FD113A8751AEE3AC103ABFD/career-page
+  scan_method: websearch
+  scan_query: waterford.org OR waterford education marketing OR email OR content OR communications remote jobs
+  notes: Paycom has no public API. Websearch only.
+  enabled: false
+
+- name: Imagine Learning
+  careers_url: https://jobs.jobvite.com/imagine-learning
+  scan_method: websearch
+  scan_query: site:jobs.jobvite.com/imagine-learning marketing OR email OR content OR enablement remote
+  enabled: false
+
+- name: Nearpod
+  careers_url: https://job-boards.greenhouse.io/renaissancelearning-nam
+  api: https://boards-api.greenhouse.io/v1/boards/renaissancelearning-nam/jobs
+  notes: Acquired by Renaissance Learning. Add keyword filter — board covers full org.
+  enabled: true
+
+- name: Discovery Education
+  careers_url: https://jobs.dayforcehcm.com/en-US/discoveryed/CANDIDATEPORTAL
+  scan_method: websearch
+  scan_query: site:jobs.dayforcehcm.com/en-US/discoveryed marketing OR email OR content OR enablement remote
+  enabled: false
+
+- name: SchoolStatus
+  careers_url: https://www.schoolstatus.com/careers
+  api: https://boards-api.greenhouse.io/v1/boards/schoolstatus/jobs
+  enabled: true
+
+- name: Brainly
+  careers_url: https://jobs.ashbyhq.com/brainly
+  api: https://api.ashbyhq.com/posting-api/job-board/brainly
+  enabled: true
+
+- name: Achieve3000
+  careers_url: https://careers-mheducation.icims.com/jobs
+  scan_method: websearch
+  scan_query: site:careers-mheducation.icims.com achieve3000 OR "achieve 3000" marketing OR email OR content remote
+  notes: Acquired by McGraw-Hill. Keyword filter essential.
+  enabled: false
+
+- name: Varsity Tutors / Nerdy
+  careers_url: https://www.nerdy.com/careers
+  api: https://boards-api.greenhouse.io/v1/boards/nerdy/jobs
+  enabled: true
+
+- name: SchooLinks
+  careers_url: https://apply.workable.com/schoolinks
+  enabled: true
+
+- name: Literati
+  careers_url: https://jobs.ashbyhq.com/literati
+  api: https://api.ashbyhq.com/posting-api/job-board/literati
+  notes: "Children's book subscription with mission-driven brand."
+  enabled: true
+
+# =========================================================
+# Animal Welfare / Humane Society / Pet Care
+# =========================================================
+
+- name: ASPCA
+  careers_url: https://aspca.wd1.myworkdayjobs.com/ASPCAWebsite
+  enabled: true
+
+- name: Humane Society of the United States
+  careers_url: https://www.humanesociety.org/careers
+  scan_method: websearch
+  scan_query: '"humane society of the united states" "marketing" OR "communications" OR "email" OR "content" remote jobs'
+  enabled: false
+
+- name: Best Friends Animal Society
+  careers_url: https://bestfriends.wd1.myworkdayjobs.com/bestfriendscareers
+  enabled: true
+
+- name: American Humane
+  careers_url: https://americanhumane.org/about/careers/
+  scan_method: websearch
+  scan_query: '"american humane" "marketing" OR "communications" OR "email" OR "content" remote jobs'
+  enabled: false
+
+- name: North Shore Animal League
+  careers_url: https://www.animalleague.org/who-we-are/careers/
+  scan_method: websearch
+  scan_query: 'site:animalleague.org/who-we-are/careers "marketing" OR "communications" OR "email" remote'
+  enabled: false
+
+- name: Chewy
+  careers_url: https://careers.chewy.com/us/en/corporate-careers
+  scan_method: websearch
+  scan_query: 'site:careers.chewy.com/us/en/corporate-careers "marketing" OR "email" OR "content" OR "communications" remote'
+  notes: "Large pet e-commerce. Has email marketing and content roles."
+  enabled: false
+
+- name: Rover
+  careers_url: https://jobs.lever.co/rover
+  notes: "Pet care marketplace."
+  enabled: true
+
+- name: The Farmer's Dog
+  careers_url: https://boards.greenhouse.io/thefarmersdog
+  api: https://boards-api.greenhouse.io/v1/boards/thefarmersdog/jobs
+  notes: "Fresh pet food startup with mission-driven brand."
+  enabled: true
+
+- name: Ollie
+  careers_url: https://jobs.lever.co/myollie
+  notes: "Mission-driven fresh pet food brand. Morgan applied previously."
+  enabled: true
+
+- name: Hill's Pet Nutrition
+  careers_url: https://www.hillspet.com/careers
+  scan_method: websearch
+  scan_query: '"hill''s pet nutrition" "marketing" OR "email" OR "content" OR "enablement" remote jobs'
+  notes: "Morgan's Callahan Creek client. Brand familiarity is an asset."
+  enabled: false
+
+- name: Petco
+  careers_url: https://petco.wd1.myworkdayjobs.com/External
+  enabled: false  # 2026-06-08: workday XHR intercept times out — tenant slow/bot-gated
+
+- name: BarkBox / BARK
+  careers_url: https://boards.greenhouse.io/bark
+  api: https://boards-api.greenhouse.io/v1/boards/bark/jobs
+  enabled: true
+
+- name: Trupanion
+  careers_url: https://careers.smartrecruiters.com/Trupanion1
+  scan_method: websearch
+  scan_query: 'site:smartrecruiters.com/Trupanion1 OR site:flexjobs.com "Trupanion" "marketing" OR "content" OR "lifecycle" OR "CRM" remote'
+  notes: "Pet insurance; recurring revenue model maps well to lifecycle marketing."
+  enabled: false
+
+- name: Embark Veterinary
+  careers_url: https://embarkvet.com
+  scan_method: websearch
+  scan_query: 'site:embarkvet.com "careers" OR "jobs" "marketing" OR "content" OR "lifecycle" remote'
+  notes: "Dog genetics + wellness; strong story for email/content roles."
+  enabled: false
+
+- name: Fi Smart Dog Collar
+  careers_url: https://jobs.lever.co/fi
+  notes: "Dog tech; crossover between CX enablement and content."
+  enabled: true
+
+# =========================================================
+# Nonprofit / Mission-Driven / Cause Organizations
+# =========================================================
+
+- name: ACLU
+  careers_url: https://boards.greenhouse.io/aclu
+  api: https://boards-api.greenhouse.io/v1/boards/aclu/jobs
+  enabled: true
+
+- name: Planned Parenthood
+  careers_url: https://jobs.lever.co/ppfa
+  enabled: true
+
+- name: Environmental Defense Fund
+  careers_url: https://osv-edf.wd5.myworkdayjobs.com/en-US/EDF_External_Careers
+  enabled: true
+
+- name: National Audubon Society
+  careers_url: https://audubon.wd503.myworkdayjobs.com/Audubon
+  enabled: true
+
+- name: World Wildlife Fund
+  careers_url: https://careers-wwfus.icims.com/jobs
+  scan_method: websearch
+  scan_query: site:careers-wwfus.icims.com marketing OR email OR communications OR content remote
+  enabled: false
+
+- name: The Nature Conservancy
+  careers_url: https://nature.wd108.myworkdayjobs.com/ExternalCareers
+  notes: Phenom-powered board, JS-heavy. Websearch only.
+  enabled: true
+
+- name: Feeding America
+  careers_url: https://jobs.jobvite.com/feedingamerica
+  scan_method: websearch
+  scan_query: site:jobs.jobvite.com/feedingamerica marketing OR email OR communications OR content remote
+  enabled: false
+
+- name: American Cancer Society
+  careers_url: https://acs.wd5.myworkdayjobs.com/ACSCareers
+  enabled: true
+
+- name: Wikimedia Foundation
+  careers_url: https://boards.greenhouse.io/wikimedia
+  api: https://boards-api.greenhouse.io/v1/boards/wikimedia/jobs
+  enabled: true
+
+- name: Mozilla
+  careers_url: https://boards.greenhouse.io/mozilla
+  api: https://boards-api.greenhouse.io/v1/boards/mozilla/jobs
+  notes: "Privacy-first mission. Morgan applied previously, strong brand/mission fit."
+  enabled: true
+
+- name: NPR / National Public Media
+  careers_url: https://boards.greenhouse.io/npr
+  api: https://boards-api.greenhouse.io/v1/boards/wikimedia/jobs
+  enabled: true
+
+- name: PBS
+  careers_url: https://vhr-pbs.wd115.myworkdayjobs.com/PBSCareers
+  enabled: true
+
+# =========================================================
+# Mental Health / Wellness
+# =========================================================
+
+- name: Headway
+  careers_url: https://boards.greenhouse.io/headway
+  api: https://boards-api.greenhouse.io/v1/boards/headway/jobs
+  notes: "Mental health marketplace. Morgan applied previously. Strong mission fit."
+  enabled: true
+
+- name: Calm
+  careers_url: https://boards.greenhouse.io/calm
+  api: https://boards-api.greenhouse.io/v1/boards/calm/jobs
+  enabled: true
+
+- name: Headspace
+  careers_url: https://job-boards.greenhouse.io/hs
+  enabled: true
+
+- name: Lyra Health
+  careers_url: https://jobs.ashbyhq.com/lyrahealth
+  api: https://api.ashbyhq.com/posting-api/job-board/lyrahealth
+  notes: "Mental health marketplace. Morgan applied previously. Strong mission fit."
+  enabled: true
+
+- name: Spring Health
+  careers_url: https://www.springhealth.com/careers
+  scan_method: websearch
+  scan_query: 'site:springhealth.com/careers OR site:job-boards.greenhouse.io/springhealth66 "marketing" OR "member growth marketing" OR "content" remote'
+  enabled: false
+
+- name: Modern Health
+  careers_url: https://boards.greenhouse.io/modernhealth
+  api: https://boards-api.greenhouse.io/v1/boards/modernhealth/jobs
+  enabled: true
+
+- name: Noom
+  careers_url: https://www.noom.com/careers/job-listings/
+  api: https://boards-api.greenhouse.io/v1/boards/modernhealth/jobs
+  enabled: true
+
+- name: Talkspace
+  careers_url: https://www.talkspace.com/careers
+  api: https://boards-api.greenhouse.io/v1/boards/talkspace/jobs
+  notes: "Virtual therapy platform; fully remote org, strong mission around access to care."
+  enabled: true
+
+- name: BetterHelp
+  careers_url: https://job-boards.greenhouse.io/betterhelpcom
+  notes: "World's largest online therapy service; frequent remote marketing roles."
+  enabled: true
+
+- name: Brightside Health
+  careers_url: https://www.brightside.com
+  scan_method: websearch
+  scan_query: 'site:brightside.com OR "Brightside Health" "careers" OR "jobs" "marketing" OR "content" OR "growth" remote'
+  notes: "Virtual mental health care for depression and anxiety; strong telehealth focus."
+  enabled: false
+
+- name: Alma
+  careers_url: https://job-boards.greenhouse.io/alma
+  notes: "Provider-first mental health marketplace; lifecycle and provider marketing roles."
+  enabled: true
+
+- name: SonderMind
+  careers_url: https://jobs.ashbyhq.com/sondermind
+  api: https://api.ashbyhq.com/posting-api/job-board/sondermind
+  notes: "Behavioral health marketplace; mix of tech and provider ecosystem."
+  enabled: true
+
+- name: Rula
+  careers_url: https://jobs.ashbyhq.com/rula
+  api: https://api.ashbyhq.com/posting-api/job-board/rula
+  notes: "Virtual mental health company. Morgan applied previously. Noted for social/brand marketing roles."
+  enabled: true
+
+- name: Grow Therapy
+  careers_url: https://jobs.ashbyhq.com/grow-therapy
+  api: https://api.ashbyhq.com/posting-api/job-board/grow-therapy
+  notes: "Insurance-integrated therapy marketplace; lifecycle and provider marketing roles."
+  enabled: true
+
+- name: Two Chairs
+  careers_url: https://job-boards.greenhouse.io/twochairs
+  notes: "Hybrid and virtual therapy clinics; fewer roles but high mission alignment."
+  enabled: true
+
+- name: ADHD Coaching Network
+  careers_url: https://adhdcoaching.com
+  scan_method: websearch
+  scan_query: 'site:adhdcoaching.com "jobs" OR "hiring" OR "marketing" "remote"'
+  notes: "ADHD coaching network; niche/long-shot but relevant to neurodivergence-focused mission spaces."
+  enabled: false
+
+# =========================================================
+# Cannabis / Cannabis Tech
+# =========================================================
+
+- name: Leafly
+  careers_url: https://www.leafly.com/info/jobs
+  scan_method: websearch
+  scan_query: 'site:leafly.com/info/jobs "remote" "marketing" OR "email" OR "content" OR "brand"'
+  notes: "Morgan applied previously. Cannabis marketplace with B2B + B2C marketing needs."
+  enabled: false
+
+- name: Weedmaps
+  careers_url: https://job-boards.greenhouse.io/weedmaps77
+  enabled: true
+
+- name: Jane Technologies
+  careers_url: https://jobs.ashbyhq.com/jane
+  api: https://api.ashbyhq.com/posting-api/job-board/jane
+  notes: "Cannabis e-commerce platform."
+  enabled: true
+
+- name: Dutchie
+  careers_url: https://job-boards.greenhouse.io/thedutchie
+  notes: "Morgan applied previously. Cannabis POS and commerce platform."
+  enabled: true
+
+- name: Wurk
+  careers_url: https://enjoywurk.com
+  scan_method: websearch
+  scan_query: 'site:enjoywurk.com "careers" OR "jobs" "marketing" OR "customer marketing" OR "content" remote'
+  notes: "HR/HCM platform purpose-built for the cannabis industry."
+  enabled: false
+
+- name: CannaSite
+  careers_url: https://cannasite.com/careers/
+  scan_method: websearch
+  scan_query: 'site:cannasite.com/careers "remote" "marketing" OR "content"'
+  notes: "Remote digital marketing agency serving cannabis brands."
+  enabled: false
+
+- name: Nabis
+  careers_url: https://job-boards.greenhouse.io/nabis
+  notes: "Cannabis wholesale platform."
+  enabled: true
+
+# =========================================================
+# Email / Marketing Platform companies
+# =========================================================
+
+- name: HubSpot
+  careers_url: https://boards.greenhouse.io/hubspot
+  api: https://boards-api.greenhouse.io/v1/boards/hubspot/jobs
+  enabled: true
+
+- name: Klaviyo
+  careers_url: https://boards.greenhouse.io/klaviyo
+  api: https://boards-api.greenhouse.io/v1/boards/klaviyo/jobs
+  enabled: true
+
+- name: ActiveCampaign
+  careers_url: https://jobs.lever.co/activecampaign
+  enabled: true
+
+- name: Outreach
+  careers_url: https://jobs.lever.co/outreach
+  api: https://api.lever.co/v0/postings/outreach?mode=json
+  notes: "Morgan used Outreach.io for ~8 years, strong product familiarity."
+  enabled: true
+
+- name: Salesloft
+  careers_url: https://boards.greenhouse.io/salesloft
+  api: https://boards-api.greenhouse.io/v1/boards/salesloft/jobs
+  enabled: true
+
+- name: Mailchimp / Intuit
+  careers_url: https://jobs.intuit.com
+  scan_method: websearch
+  scan_query: 'site:jobs.intuit.com "email marketing" OR "content" OR "enablement" remote'
+  enabled: false
+
+- name: Constant Contact
+  careers_url: https://boards.greenhouse.io/constantcontact
+  api: https://boards-api.greenhouse.io/v1/boards/constantcontact/jobs
+  enabled: true
+
+- name: Brevo (Sendinblue)
+  careers_url: https://jobs.lever.co/brevo
+  enabled: true
+
+# =========================================================
+# Sales Enablement Platforms
+# =========================================================
+
+- name: Highspot
+  careers_url: https://jobs.lever.co/highspot
+  notes: "Sales enablement platform, deep product alignment with Morgan's work."
+  enabled: true
+
+- name: Seismic
+  careers_url: https://www.seismic.com/careers/job-listings/
+  scan_method: websearch
+  scan_query: 'site:seismic.com/careers/job-listings "marketing" OR "content" OR "enablement" OR "communications" remote'
+  enabled: false
+
+- name: Gong
+  careers_url: https://job-boards.greenhouse.io/gongio
+  enabled: true
+
+- name: Showpad
+  careers_url: https://boards.greenhouse.io/showpad
+  api: https://boards-api.greenhouse.io/v1/boards/showpad/jobs
+  enabled: true
+
+- name: Mindtickle
+  careers_url: https://jobs.lever.co/mindtickle
+  api: https://api.lever.co/v0/postings/mindtickle?mode=json
+  enabled: true
+
+# =========================================================
+# Fully Remote / Async-First Companies
+# =========================================================
+
+- name: Buffer
+  careers_url: https://jobs.ashbyhq.com/buffer
+  api: https://api.ashbyhq.com/posting-api/job-board/buffer
+  notes: "Fully remote. Strong writing culture."
+  enabled: true
+
+- name: Zapier
+  careers_url: https://jobs.ashbyhq.com/zapier
+  api: https://api.ashbyhq.com/posting-api/job-board/zapier
+  notes: "Fully async remote. Marketing and enablement roles."
+  enabled: true
+
+- name: Automattic (WordPress / Tumblr)
+  careers_url: https://job-boards.greenhouse.io/automattic
+  notes: "Fully distributed. Writer culture is deeply embedded."
+  enabled: false  # 2026-06-08: HTTP 404 "Job not found" — board appears to have moved/closed
+
+- name: Doist (Todoist / Twist)
+  careers_url: https://doist.workable.com
+  notes: "Async-first culture."
+  enabled: true
+
+- name: GitLab
+  careers_url: https://boards.greenhouse.io/gitlab
+  api: https://boards-api.greenhouse.io/v1/boards/gitlab/jobs
+  notes: "Fully remote. Has enablement and marketing roles."
+  enabled: true
+
+- name: Help Scout
+  careers_url: https://jobs.ashbyhq.com/helpscout
+  api: https://api.ashbyhq.com/posting-api/job-board/helpscout
+  notes: "Fully remote. Customer-first culture, strong writing culture."
+  enabled: true
+
+- name: Remote.com
+  careers_url: https://boards.greenhouse.io/remotecom
+  api: https://boards-api.greenhouse.io/v1/boards/remotecom/jobs
+  notes: "Fully remote company, sells remote work to other companies."
+  enabled: true
+
+- name: Basecamp / 37signals
+  careers_url: https://37signals.com/jobs
+  scan_method: websearch
+  scan_query: 'site:37signals.com/jobs "marketing" OR "content" OR "writing" remote'
+  notes: "Opinionated async culture. Exceptional writing valued highly."
+  enabled: false
+
+# =========================================================
+# Staffing / Flexible Work Platforms
+# =========================================================
+
+- name: The Mom Project
+  careers_url: https://themomproject.com/careers
+  scan_method: websearch
+  scan_query: 'site:themomproject.com/careers "email marketing" OR "lifecycle" OR "content" OR "sales enablement" remote'
+  notes: "Morgan placed through here previously."
+  enabled: false
+
+- name: PowerToFly
+  careers_url: https://powertofly.com/jobs/
+  scan_method: websearch
+  scan_query: 'site:powertofly.com "email marketing" OR "content" OR "sales enablement" OR "marketing specialist" remote'
+  enabled: false
+
+# =========================================================
+# B2B SaaS (Remote-friendly, Mission-adjacent)
+# =========================================================
+
+- name: Ceros
+  careers_url: https://job-boards.greenhouse.io/ceros
+  notes: "Morgan applied previously."
+  enabled: true
+
+- name: Airtable
+  careers_url: https://boards.greenhouse.io/airtable
+  api: https://boards-api.greenhouse.io/v1/boards/airtable/jobs
+  enabled: true
+
+- name: Miro
+  careers_url: https://miro.com/careers/open-positions/
+  scan_method: websearch
+  scan_query: 'site:miro.com/careers/open-positions "marketing" OR "content" OR "email" OR "enablement" remote'
+  enabled: false
+
+- name: Loom (Atlassian)
+  careers_url: https://jobs.ashbyhq.com/loom
+  api: https://api.ashbyhq.com/posting-api/job-board/loom
+  enabled: true
+
+- name: Asana
+  careers_url: https://boards.greenhouse.io/asana
+  api: https://boards-api.greenhouse.io/v1/boards/asana/jobs
+  enabled: true
+
+- name: Monday.com
+  careers_url: https://boards.greenhouse.io/mondaydotcom
+  scan_method: websearch
+  scan_query: 'site:boards.greenhouse.io/mondaydotcom "marketing" OR "email" OR "enablement" OR "content" remote'
+  enabled: false
+
+- name: Guild Education
+  careers_url: https://boards.greenhouse.io/guild
+  api: https://boards-api.greenhouse.io/v1/boards/guild/jobs
+  notes: "Morgan applied previously. Education + workforce development mission."
+  enabled: true
+
+- name: Ipsy / BFA Industries
+  careers_url: https://job-boards.greenhouse.io/personalizedbeautydiscoveryincdbaipsy
+  notes: "Morgan applied previously."
+  enabled: true
+
+- name: Hims & Hers
+  careers_url: https://jobs.ashbyhq.com/hims-and-hers
+  api: https://api.ashbyhq.com/posting-api/job-board/hims-and-hers
+  enabled: true
+
+# =========================================================
+# Workday Enterprise
+# Notes: These companies use myworkdayjobs.com. Handled by
+# the Workday provider (Playwright-based XHR intercept).
+# Tenant URLs verified as of 2026-06-06.
+# =========================================================
+
+- name: Chegg
+  careers_url: https://osv-chegg.wd5.myworkdayjobs.com/en-US/Chegg
+  notes: "EdTech / homework help platform. Strong content and lifecycle marketing history."
+  enabled: true
+
+- name: Pearson
+  careers_url: https://pearson.jobs
+  scan_method: websearch
+  scan_query: site:pearson.wd5.myworkdayjobs.com OR site:pearson.jobs marketing OR email OR content OR enablement remote
+  notes: "Global EdTech and publishing giant. Frequent remote marketing and communications roles."
+  enabled: false
+
+- name: Scholastic
+  careers_url: https://scholastic.wd5.myworkdayjobs.com/en-US/External
+  notes: "Children's publishing and EdTech. Strong content and email marketing roles historically."
+  enabled: true
+
+- name: Nielsen
+  careers_url: https://nielsen.wd1.myworkdayjobs.com/en-US/NielsenCareers
+  scan_method: websearch
+  scan_query: site:nielsen.wd1.myworkdayjobs.com marketing OR email OR content OR communications OR enablement remote
+  notes: "Media measurement and data analytics. B2B content and sales enablement roles."
+  enabled: false
+
+- name: College Board
+  careers_url: https://collegeboard.wd1.myworkdayjobs.com
+  notes: "Nonprofit EdTech org (SAT, AP programs). Mission-driven with strong comms and marketing needs."
+  enabled: false  # 2026-06-08: workday XHR intercept times out — tenant slow/bot-gated
+
+# New job-board search providers — added 2026-06-07 (ever-jobs catalog merge, Part A)
+# Each entry hits a board's own structured JSON/RSS API directly via an explicit `provider:` field.
+# `search_term` draws from the marketing/sales-enablement vocabulary; two entries per board are added ("marketing" and "enablement").
+
+- name: "RemoteOK — Marketing"
+  provider: remoteok
+  search_term: "marketing"
+  enabled: true
+
+- name: "RemoteOK — Enablement"
+  provider: remoteok
+  search_term: "enablement"
+  enabled: true
+
+- name: "We Work Remotely — Marketing"
+  provider: weworkremotely
+  search_term: "marketing"
+  enabled: true
+
+- name: "We Work Remotely — Enablement"
+  provider: weworkremotely
+  search_term: "enablement"
+  enabled: true
+
+- name: "Remotive — Marketing"
+  provider: remotive
+  search_term: "marketing"
+  enabled: true
+
+- name: "Remotive — Enablement"
+  provider: remotive
+  search_term: "enablement"
+  enabled: true
+
+- name: "Himalayas — Marketing"
+  provider: himalayas
+  search_term: "marketing"
+  enabled: true
+
+- name: "Himalayas — Enablement"
+  provider: himalayas
+  search_term: "enablement"
+  enabled: true
+
+- name: "Jobicy — Marketing"
+  provider: jobicy
+  search_term: "marketing"
+  enabled: true
+
+- name: "Jobicy — Enablement"
+  provider: jobicy
+  search_term: "enablement"
+  enabled: true
+
+- name: "The Muse — Marketing"
+  provider: themuse
+  search_term: "marketing"
+  enabled: true
+
+- name: "The Muse — Enablement"
+  provider: themuse
+  search_term: "enablement"
+  enabled: true
+
+- name: "Working Nomads — Marketing"
+  provider: workingnomads
+  search_term: "marketing"
+  enabled: true
+
+- name: "Working Nomads — Enablement"
+  provider: workingnomads
+  search_term: "enablement"
+  enabled: true
+
+- name: "NoDesk — Marketing"
+  provider: nodesk
+  search_term: "marketing"
+  enabled: true
+
+- name: "NoDesk — Enablement"
+  provider: nodesk
+  search_term: "enablement"
+  enabled: true
+
+- name: "Real Work From Anywhere — Marketing"
+  provider: realworkfromanywhere
+  search_term: "marketing"
+  enabled: true
+
+- name: "Real Work From Anywhere — Enablement"
+  provider: realworkfromanywhere
+  search_term: "enablement"
+  enabled: true
+
+- name: "Hacker News Who's Hiring — Marketing"
+  provider: hackernews
+  search_term: "marketing"
+  enabled: true
+
+- name: "Hacker News Who's Hiring — Enablement"
+  provider: hackernews
+  search_term: "enablement"
+  enabled: true
+
+- name: "4 Day Week — Marketing"
+  provider: fourdayweek
+  search_term: "marketing"
+  enabled: true
+
+- name: "4 Day Week — Enablement"
+  provider: fourdayweek
+  search_term: "enablement"
+  enabled: true
+
+- name: "PowerToFly — Marketing"
+  provider: powertofly
+  search_term: "marketing"
+  enabled: true
+
+- name: "PowerToFly — Enablement"
+  provider: powertofly
+  search_term: "enablement"
+  enabled: true
+
+- name: "Crunchboard — Marketing"
+  provider: crunchboard
+  search_term: "marketing"
+  enabled: true
+
+- name: "Crunchboard — Enablement"
+  provider: crunchboard
+  search_term: "enablement"
+  enabled: true
+
+- name: "Jobspresso — Marketing"
+  provider: jobspresso
+  search_term: "marketing"
+  enabled: true
+
+- name: "Jobspresso — Enablement"
+  provider: jobspresso
+  search_term: "enablement"
+  enabled: true
+
+- name: "Adzuna — Marketing"
+  provider: adzuna
+  search_term: "marketing"
+  enabled: true
+
+- name: "Adzuna — Enablement"
+  provider: adzuna
+  search_term: "enablement"
+  enabled: true
+
+- name: "Authentic Jobs — Marketing"
+  provider: authenticjobs
+  search_term: "marketing"
+  enabled: true
+
+- name: "Authentic Jobs — Enablement"
+  provider: authenticjobs
+  search_term: "enablement"
+  enabled: true
+
+- name: "USAJobs — Marketing"
+  provider: usajobs
+  search_term: "marketing"
+  enabled: true
+
+- name: "USAJobs — Enablement"
+  provider: usajobs
+  search_term: "enablement"
+  enabled: true
+
+# Imported from ever-jobs catalog — 2026-06-08
+- name: Abnormal Security
+  careers_url: https://boards.greenhouse.io/abnormalsecurity
+  api: https://boards-api.greenhouse.io/v1/boards/abnormalsecurity/jobs
+  enabled: true
+- name: AccuWeather
+  careers_url: https://boards.greenhouse.io/accuweather
+  api: https://boards-api.greenhouse.io/v1/boards/accuweather/jobs
+  enabled: true
+- name: Acrisure Innovation
+  careers_url: https://boards.greenhouse.io/acrisureinnovation
+  api: https://boards-api.greenhouse.io/v1/boards/acrisureinnovation/jobs
+  enabled: true
+- name: Acryl Data
+  careers_url: https://boards.greenhouse.io/acryldata
+  api: https://boards-api.greenhouse.io/v1/boards/acryldata/jobs
+  enabled: true
+- name: Acurus Solutions
+  careers_url: https://boards.greenhouse.io/acurussolutions
+  api: https://boards-api.greenhouse.io/v1/boards/acurussolutions/jobs
+  enabled: true
+- name: Adaptive Biotechnologies
+  careers_url: https://boards.greenhouse.io/adaptivebiotechnologies
+  api: https://boards-api.greenhouse.io/v1/boards/adaptivebiotechnologies/jobs
+  enabled: true
+- name: Adaptive Financial Consulting
+  careers_url: https://boards.greenhouse.io/adaptivefinancialconsulting
+  api: https://boards-api.greenhouse.io/v1/boards/adaptivefinancialconsulting/jobs
+  enabled: true
+- name: Advanced Technology Services
+  careers_url: https://boards.greenhouse.io/advancedtechnologyservices
+  api: https://boards-api.greenhouse.io/v1/boards/advancedtechnologyservices/jobs
+  enabled: true
+- name: Advocate Construction
+  careers_url: https://boards.greenhouse.io/advocateconstruction
+  api: https://boards-api.greenhouse.io/v1/boards/advocateconstruction/jobs
+  enabled: true
+- name: AE Studio
+  careers_url: https://boards.greenhouse.io/aestudio
+  api: https://boards-api.greenhouse.io/v1/boards/aestudio/jobs
+  enabled: true
+- name: Aechelon Technology
+  careers_url: https://boards.greenhouse.io/aechelontechnology
+  api: https://boards-api.greenhouse.io/v1/boards/aechelontechnology/jobs
+  enabled: true
+- name: Aegis Ventures
+  careers_url: https://boards.greenhouse.io/aegisventures
+  api: https://boards-api.greenhouse.io/v1/boards/aegisventures/jobs
+  enabled: true
+- name: Affinity.co
+  careers_url: https://boards.greenhouse.io/affinity
+  api: https://boards-api.greenhouse.io/v1/boards/affinity/jobs
+  enabled: true
+- name: AfterShip
+  careers_url: https://boards.greenhouse.io/aftership
+  api: https://boards-api.greenhouse.io/v1/boards/aftership/jobs
+  enabled: true
+- name: AgWest Farm Credit
+  careers_url: https://boards.greenhouse.io/agwestfarmcredit
+  api: https://boards-api.greenhouse.io/v1/boards/agwestfarmcredit/jobs
+  enabled: true
+- name: AIFT
+  careers_url: https://boards.greenhouse.io/aift
+  api: https://boards-api.greenhouse.io/v1/boards/aift/jobs
+  enabled: true
+- name: Air North
+  careers_url: https://boards.greenhouse.io/airnorth
+  api: https://boards-api.greenhouse.io/v1/boards/airnorth/jobs
+  enabled: true
+- name: AirSculpt
+  careers_url: https://boards.greenhouse.io/airsculpt
+  api: https://boards-api.greenhouse.io/v1/boards/airsculpt/jobs
+  enabled: true
+- name: AirTrunk
+  careers_url: https://boards.greenhouse.io/airtrunk
+  api: https://boards-api.greenhouse.io/v1/boards/airtrunk/jobs
+  enabled: true
+- name: Aktos
+  careers_url: https://boards.greenhouse.io/applytoaktos
+  api: https://boards-api.greenhouse.io/v1/boards/applytoaktos/jobs
+  enabled: true
+- name: Akuity
+  careers_url: https://boards.greenhouse.io/akuity
+  api: https://boards-api.greenhouse.io/v1/boards/akuity/jobs
+  enabled: true
+- name: AlertMedia
+  careers_url: https://boards.greenhouse.io/alertmedia
+  api: https://boards-api.greenhouse.io/v1/boards/alertmedia/jobs
+  enabled: true
+- name: Allen Control Systems
+  careers_url: https://boards.greenhouse.io/allencontrolsystems
+  api: https://boards-api.greenhouse.io/v1/boards/allencontrolsystems/jobs
+  enabled: true
+- name: Allen Integrated Solutions
+  careers_url: https://boards.greenhouse.io/allenintegratedsolutions
+  api: https://boards-api.greenhouse.io/v1/boards/allenintegratedsolutions/jobs
+  enabled: true
+- name: Ally Behavior Centers
+  careers_url: https://boards.greenhouse.io/allybehaviorcenters
+  api: https://boards-api.greenhouse.io/v1/boards/allybehaviorcenters/jobs
+  enabled: true
+- name: AlphaGrep Securities
+  careers_url: https://boards.greenhouse.io/alphagrepsecurities
+  api: https://boards-api.greenhouse.io/v1/boards/alphagrepsecurities/jobs
+  enabled: true
+- name: Alt
+  careers_url: https://boards.greenhouse.io/alt
+  api: https://boards-api.greenhouse.io/v1/boards/alt/jobs
+  enabled: true
+- name: 'Altana '
+  careers_url: https://boards.greenhouse.io/altanaai
+  api: https://boards-api.greenhouse.io/v1/boards/altanaai/jobs
+  enabled: true
+- name: ALTEN Technology USA
+  careers_url: https://boards.greenhouse.io/altentechnologyusa
+  api: https://boards-api.greenhouse.io/v1/boards/altentechnologyusa/jobs
+  enabled: true
+- name: Altium
+  careers_url: https://boards.greenhouse.io/altium
+  api: https://boards-api.greenhouse.io/v1/boards/altium/jobs
+  enabled: true
+- name: Altos Labs
+  careers_url: https://boards.greenhouse.io/altoslabs
+  api: https://boards-api.greenhouse.io/v1/boards/altoslabs/jobs
+  enabled: true
+- name: Altruist
+  careers_url: https://boards.greenhouse.io/altruist
+  api: https://boards-api.greenhouse.io/v1/boards/altruist/jobs
+  enabled: true
+- name: AltScore
+  careers_url: https://boards.greenhouse.io/altscore
+  api: https://boards-api.greenhouse.io/v1/boards/altscore/jobs
+  enabled: true
+- name: Alumni Ventures
+  careers_url: https://boards.greenhouse.io/alumniventures
+  api: https://boards-api.greenhouse.io/v1/boards/alumniventures/jobs
+  enabled: true
+- name: Amae Health
+  careers_url: https://boards.greenhouse.io/amaehealth
+  api: https://boards-api.greenhouse.io/v1/boards/amaehealth/jobs
+  enabled: true
+- name: Ambient Enterprises
+  careers_url: https://boards.greenhouse.io/ambiententerprises
+  api: https://boards-api.greenhouse.io/v1/boards/ambiententerprises/jobs
+  enabled: true
+- name: AMEND Consulting
+  careers_url: https://boards.greenhouse.io/amendconsulting
+  api: https://boards-api.greenhouse.io/v1/boards/amendconsulting/jobs
+  enabled: true
+- name: American Capital Group
+  careers_url: https://boards.greenhouse.io/americancapitalgroup
+  api: https://boards-api.greenhouse.io/v1/boards/americancapitalgroup/jobs
+  enabled: true
+- name: American Institute
+  careers_url: https://boards.greenhouse.io/americaninstitute
+  api: https://boards-api.greenhouse.io/v1/boards/americaninstitute/jobs
+  enabled: true
+- name: American Institutes for Research
+  careers_url: https://boards.greenhouse.io/americaninstitutesforresearch
+  api: https://boards-api.greenhouse.io/v1/boards/americaninstitutesforresearch/jobs
+  enabled: true
+- name: Amperity
+  careers_url: https://boards.greenhouse.io/amperity
+  api: https://boards-api.greenhouse.io/v1/boards/amperity/jobs
+  enabled: true
+- name: Amplitude
+  careers_url: https://boards.greenhouse.io/amplitude
+  api: https://boards-api.greenhouse.io/v1/boards/amplitude/jobs
+  enabled: true
+- name: Amtech Software
+  careers_url: https://boards.greenhouse.io/amtechsoftware
+  api: https://boards-api.greenhouse.io/v1/boards/amtechsoftware/jobs
+  enabled: true
+- name: Anchanto
+  careers_url: https://boards.greenhouse.io/anchanto
+  api: https://boards-api.greenhouse.io/v1/boards/anchanto/jobs
+  enabled: true
+- name: Antenna
+  careers_url: https://boards.greenhouse.io/antenna
+  api: https://boards-api.greenhouse.io/v1/boards/antenna/jobs
+  enabled: true
+- name: 'Anteriad '
+  careers_url: https://boards.greenhouse.io/anteriad
+  api: https://boards-api.greenhouse.io/v1/boards/anteriad/jobs
+  enabled: true
+- name: Anteris Technologies
+  careers_url: https://boards.greenhouse.io/anteristech
+  api: https://boards-api.greenhouse.io/v1/boards/anteristech/jobs
+  enabled: true
+- name: Anthropic
+  careers_url: https://boards.greenhouse.io/anthropic
+  api: https://boards-api.greenhouse.io/v1/boards/anthropic/jobs
+  enabled: true
+- name: Antora Energy
+  careers_url: https://boards.greenhouse.io/antora
+  api: https://boards-api.greenhouse.io/v1/boards/antora/jobs
+  enabled: true
+- name: AOTI
+  careers_url: https://boards.greenhouse.io/aoti
+  api: https://boards-api.greenhouse.io/v1/boards/aoti/jobs
+  enabled: true
+- name: Apartment Life
+  careers_url: https://boards.greenhouse.io/apartmentlife
+  api: https://boards-api.greenhouse.io/v1/boards/apartmentlife/jobs
+  enabled: true
+- name: Aperia
+  careers_url: https://boards.greenhouse.io/aperiasolutions
+  api: https://boards-api.greenhouse.io/v1/boards/aperiasolutions/jobs
+  enabled: true
+- name: Apogee Therapeutics
+  careers_url: https://boards.greenhouse.io/apogeetherapeutics
+  api: https://boards-api.greenhouse.io/v1/boards/apogeetherapeutics/jobs
+  enabled: true
+- name: APPARATUS
+  careers_url: https://boards.greenhouse.io/apparatus
+  api: https://boards-api.greenhouse.io/v1/boards/apparatus/jobs
+  enabled: true
+- name: AppDirect
+  careers_url: https://boards.greenhouse.io/appdirect
+  api: https://boards-api.greenhouse.io/v1/boards/appdirect/jobs
+  enabled: true
+- name: AppleTree Prep
+  careers_url: https://boards.greenhouse.io/appletreeprep
+  api: https://boards-api.greenhouse.io/v1/boards/appletreeprep/jobs
+  enabled: true
+- name: Apptronik
+  careers_url: https://boards.greenhouse.io/apptronik
+  api: https://boards-api.greenhouse.io/v1/boards/apptronik/jobs
+  enabled: true
+- name: Atoms Tech
+  careers_url: https://boards.greenhouse.io/atoms
+  api: https://boards-api.greenhouse.io/v1/boards/atoms/jobs
+  enabled: true
+- name: Attentive
+  careers_url: https://boards.greenhouse.io/attentive
+  api: https://boards-api.greenhouse.io/v1/boards/attentive/jobs
+  enabled: true
+- name: Bandwidth
+  careers_url: https://boards.greenhouse.io/bandwidth
+  api: https://boards-api.greenhouse.io/v1/boards/bandwidth/jobs
+  enabled: true
+- name: Banyan Infrastructure
+  careers_url: https://boards.greenhouse.io/banyaninfrastructure
+  api: https://boards-api.greenhouse.io/v1/boards/banyaninfrastructure/jobs
+  enabled: true
+- name: Benevity
+  careers_url: https://boards.greenhouse.io/benevity
+  api: https://boards-api.greenhouse.io/v1/boards/benevity/jobs
+  enabled: false  # 2026-06-08: HTTP 404 "Job not found" — board appears to have moved/closed
+- name: Betterment
+  careers_url: https://boards.greenhouse.io/betterment
+  api: https://boards-api.greenhouse.io/v1/boards/betterment/jobs
+  enabled: true
+- name: Bicycle Health
+  careers_url: https://boards.greenhouse.io/bicyclehealth
+  api: https://boards-api.greenhouse.io/v1/boards/bicyclehealth/jobs
+  enabled: true
+- name: BitGo
+  careers_url: https://boards.greenhouse.io/bitgo
+  api: https://boards-api.greenhouse.io/v1/boards/bitgo/jobs
+  enabled: true
+- name: Bitpanda
+  careers_url: https://boards.greenhouse.io/bitpanda
+  api: https://boards-api.greenhouse.io/v1/boards/bitpanda/jobs
+  enabled: true
+- name: Bitso
+  careers_url: https://boards.greenhouse.io/bitso
+  api: https://boards-api.greenhouse.io/v1/boards/bitso/jobs
+  enabled: true
+- name: Bitwarden
+  careers_url: https://boards.greenhouse.io/bitwarden
+  api: https://boards-api.greenhouse.io/v1/boards/bitwarden/jobs
+  enabled: true
+- name: Block
+  careers_url: https://boards.greenhouse.io/block
+  api: https://boards-api.greenhouse.io/v1/boards/block/jobs
+  enabled: true
+- name: Brex
+  careers_url: https://boards.greenhouse.io/brex
+  api: https://boards-api.greenhouse.io/v1/boards/brex/jobs
+  enabled: true
+- name: Buildkite
+  careers_url: https://boards.greenhouse.io/buildkite
+  api: https://boards-api.greenhouse.io/v1/boards/buildkite/jobs
+  enabled: true
+- name: Carrot Fertility
+  careers_url: https://boards.greenhouse.io/carrotfertility
+  api: https://boards-api.greenhouse.io/v1/boards/carrotfertility/jobs
+  enabled: true
+- name: Carta
+  careers_url: https://boards.greenhouse.io/carta
+  api: https://boards-api.greenhouse.io/v1/boards/carta/jobs
+  enabled: true
+- name: ChargePoint
+  careers_url: https://boards.greenhouse.io/chargepoint
+  api: https://boards-api.greenhouse.io/v1/boards/chargepoint/jobs
+  enabled: true
+- name: Charlie Health
+  careers_url: https://boards.greenhouse.io/charliehealth
+  api: https://boards-api.greenhouse.io/v1/boards/charliehealth/jobs
+  enabled: true
+- name: CircleCI
+  careers_url: https://boards.greenhouse.io/circleci
+  api: https://boards-api.greenhouse.io/v1/boards/circleci/jobs
+  enabled: true
+- name: Clover Health
+  careers_url: https://boards.greenhouse.io/cloverhealth
+  api: https://boards-api.greenhouse.io/v1/boards/cloverhealth/jobs
+  enabled: true
+- name: Clutch
+  careers_url: https://boards.greenhouse.io/clutch
+  api: https://boards-api.greenhouse.io/v1/boards/clutch/jobs
+  enabled: true
+- name: Coalition
+  careers_url: https://boards.greenhouse.io/coalition
+  api: https://boards-api.greenhouse.io/v1/boards/coalition/jobs
+  enabled: true
+- name: Collective Health
+  careers_url: https://boards.greenhouse.io/collectivehealth
+  api: https://boards-api.greenhouse.io/v1/boards/collectivehealth/jobs
+  enabled: true
+- name: Comet
+  careers_url: https://boards.greenhouse.io/comet
+  api: https://boards-api.greenhouse.io/v1/boards/comet/jobs
+  enabled: true
+- name: ComplyAdvantage
+  careers_url: https://boards.greenhouse.io/complyadvantage
+  api: https://boards-api.greenhouse.io/v1/boards/complyadvantage/jobs
+  enabled: true
+- name: Contentful
+  careers_url: https://boards.greenhouse.io/contentful
+  api: https://boards-api.greenhouse.io/v1/boards/contentful/jobs
+  enabled: true
+- name: CookUnity
+  careers_url: https://boards.greenhouse.io/cookunity
+  api: https://boards-api.greenhouse.io/v1/boards/cookunity/jobs
+  enabled: true
+- name: Counterpart
+  careers_url: https://boards.greenhouse.io/counterpart
+  api: https://boards-api.greenhouse.io/v1/boards/counterpart/jobs
+  enabled: true
+- name: Cresta
+  careers_url: https://boards.greenhouse.io/cresta
+  api: https://boards-api.greenhouse.io/v1/boards/cresta/jobs
+  enabled: true
+- name: Culture Amp
+  careers_url: https://boards.greenhouse.io/cultureamp
+  api: https://boards-api.greenhouse.io/v1/boards/cultureamp/jobs
+  enabled: true
+- name: Current
+  careers_url: https://boards.greenhouse.io/current
+  api: https://boards-api.greenhouse.io/v1/boards/current/jobs
+  enabled: true
+- name: Databricks
+  careers_url: https://boards.greenhouse.io/databricks
+  api: https://boards-api.greenhouse.io/v1/boards/databricks/jobs
+  enabled: true
+- name: DataCamp
+  careers_url: https://boards.greenhouse.io/datacamp
+  api: https://boards-api.greenhouse.io/v1/boards/datacamp/jobs
+  enabled: true
+- name: Datadog
+  careers_url: https://boards.greenhouse.io/datadog
+  api: https://boards-api.greenhouse.io/v1/boards/datadog/jobs
+  enabled: true
+- name: Descript
+  careers_url: https://boards.greenhouse.io/descript
+  api: https://boards-api.greenhouse.io/v1/boards/descript/jobs
+  enabled: true
+- name: Diligent Robotics
+  careers_url: https://boards.greenhouse.io/diligentrobotics
+  api: https://boards-api.greenhouse.io/v1/boards/diligentrobotics/jobs
+  enabled: true
+- name: Divergent
+  careers_url: https://boards.greenhouse.io/divergent
+  api: https://boards-api.greenhouse.io/v1/boards/divergent/jobs
+  enabled: true
+- name: Doximity
+  careers_url: https://boards.greenhouse.io/doximity
+  api: https://boards-api.greenhouse.io/v1/boards/doximity/jobs
+  enabled: true
+- name: DriveWealth
+  careers_url: https://boards.greenhouse.io/drivewealth
+  api: https://boards-api.greenhouse.io/v1/boards/drivewealth/jobs
+  enabled: true
+- name: Dropbox
+  careers_url: https://boards.greenhouse.io/dropbox
+  api: https://boards-api.greenhouse.io/v1/boards/dropbox/jobs
+  enabled: true
+- name: Earnest
+  careers_url: https://boards.greenhouse.io/earnest
+  api: https://boards-api.greenhouse.io/v1/boards/earnest/jobs
+  enabled: true
+- name: Elastic
+  careers_url: https://boards.greenhouse.io/elastic
+  api: https://boards-api.greenhouse.io/v1/boards/elastic/jobs
+  enabled: true
+- name: Ethos
+  careers_url: https://boards.greenhouse.io/ethos
+  api: https://boards-api.greenhouse.io/v1/boards/ethos/jobs
+  enabled: true
+- name: Ethos Life
+  careers_url: https://boards.greenhouse.io/ethoslife
+  api: https://boards-api.greenhouse.io/v1/boards/ethoslife/jobs
+  enabled: true
+- name: Extend
+  careers_url: https://boards.greenhouse.io/extend
+  api: https://boards-api.greenhouse.io/v1/boards/extend/jobs
+  enabled: true
+- name: Factorial Energy
+  careers_url: https://boards.greenhouse.io/factorialenergy
+  api: https://boards-api.greenhouse.io/v1/boards/factorialenergy/jobs
+  enabled: true
+- name: Fairmarkit
+  careers_url: https://boards.greenhouse.io/fairmarkit
+  api: https://boards-api.greenhouse.io/v1/boards/fairmarkit/jobs
+  enabled: true
+- name: Fastly
+  careers_url: https://boards.greenhouse.io/fastly
+  api: https://boards-api.greenhouse.io/v1/boards/fastly/jobs
+  enabled: true
+- name: Fetch
+  careers_url: https://boards.greenhouse.io/fetch
+  api: https://boards-api.greenhouse.io/v1/boards/fetch/jobs
+  enabled: true
+- name: Fingerprint
+  careers_url: https://boards.greenhouse.io/fingerprint
+  api: https://boards-api.greenhouse.io/v1/boards/fingerprint/jobs
+  enabled: true
+- name: firsthand Health
+  careers_url: https://boards.greenhouse.io/firsthand
+  api: https://boards-api.greenhouse.io/v1/boards/firsthand/jobs
+  enabled: true
+- name: FIS® Amount™
+  careers_url: https://boards.greenhouse.io/amount
+  api: https://boards-api.greenhouse.io/v1/boards/amount/jobs
+  enabled: true
+- name: Fivetran
+  careers_url: https://boards.greenhouse.io/fivetran
+  api: https://boards-api.greenhouse.io/v1/boards/fivetran/jobs
+  enabled: true
+- name: Flexport
+  careers_url: https://boards.greenhouse.io/flexport
+  api: https://boards-api.greenhouse.io/v1/boards/flexport/jobs
+  enabled: true
+- name: Flo Health
+  careers_url: https://boards.greenhouse.io/flohealth
+  api: https://boards-api.greenhouse.io/v1/boards/flohealth/jobs
+  enabled: true
+- name: Form Health
+  careers_url: https://boards.greenhouse.io/formhealth
+  api: https://boards-api.greenhouse.io/v1/boards/formhealth/jobs
+  enabled: true
+- name: Formation Bio
+  careers_url: https://boards.greenhouse.io/formationbio
+  api: https://boards-api.greenhouse.io/v1/boards/formationbio/jobs
+  enabled: true
+- name: FourKites
+  careers_url: https://boards.greenhouse.io/fourkites
+  api: https://boards-api.greenhouse.io/v1/boards/fourkites/jobs
+  enabled: true
+- name: fuboTV
+  careers_url: https://boards.greenhouse.io/fubotv
+  api: https://boards-api.greenhouse.io/v1/boards/fubotv/jobs
+  enabled: true
+- name: Future
+  careers_url: https://boards.greenhouse.io/future
+  api: https://boards-api.greenhouse.io/v1/boards/future/jobs
+  enabled: true
+- name: Generate Biomedicines
+  careers_url: https://boards.greenhouse.io/generatebiomedicines
+  api: https://boards-api.greenhouse.io/v1/boards/generatebiomedicines/jobs
+  enabled: true
+- name: Ghost
+  careers_url: https://boards.greenhouse.io/ghost
+  api: https://boards-api.greenhouse.io/v1/boards/ghost/jobs
+  enabled: true
+- name: Grove Collaborative
+  careers_url: https://boards.greenhouse.io/grovecollaborative
+  api: https://boards-api.greenhouse.io/v1/boards/grovecollaborative/jobs
+  enabled: true
+- name: Gusto
+  careers_url: https://boards.greenhouse.io/gusto
+  api: https://boards-api.greenhouse.io/v1/boards/gusto/jobs
+  enabled: true
+- name: HealthJoy
+  careers_url: https://boards.greenhouse.io/healthjoy
+  api: https://boards-api.greenhouse.io/v1/boards/healthjoy/jobs
+  enabled: true
+- name: Highnote
+  careers_url: https://boards.greenhouse.io/highnote
+  api: https://boards-api.greenhouse.io/v1/boards/highnote/jobs
+  enabled: true
+- name: Hightouch
+  careers_url: https://boards.greenhouse.io/hightouch
+  api: https://boards-api.greenhouse.io/v1/boards/hightouch/jobs
+  enabled: true
+- name: HomeLight
+  careers_url: https://boards.greenhouse.io/homelight
+  api: https://boards-api.greenhouse.io/v1/boards/homelight/jobs
+  enabled: true
+- name: Hungryroot
+  careers_url: https://boards.greenhouse.io/hungryroot
+  api: https://boards-api.greenhouse.io/v1/boards/hungryroot/jobs
+  enabled: true
+- name: Huntress
+  careers_url: https://boards.greenhouse.io/huntress
+  api: https://boards-api.greenhouse.io/v1/boards/huntress/jobs
+  enabled: true
+- name: Inceptive
+  careers_url: https://boards.greenhouse.io/inceptive
+  api: https://boards-api.greenhouse.io/v1/boards/inceptive/jobs
+  enabled: true
+- name: Inflection AI
+  careers_url: https://boards.greenhouse.io/inflectionai
+  api: https://boards-api.greenhouse.io/v1/boards/inflectionai/jobs
+  enabled: true
+- name: Instabase
+  careers_url: https://boards.greenhouse.io/instabase
+  api: https://boards-api.greenhouse.io/v1/boards/instabase/jobs
+  enabled: true
+- name: Instacart
+  careers_url: https://boards.greenhouse.io/instacart
+  api: https://boards-api.greenhouse.io/v1/boards/instacart/jobs
+  enabled: true
+- name: Intercom
+  careers_url: https://boards.greenhouse.io/intercom
+  api: https://boards-api.greenhouse.io/v1/boards/intercom/jobs
+  enabled: true
+- name: Iterable
+  careers_url: https://boards.greenhouse.io/iterable
+  api: https://boards-api.greenhouse.io/v1/boards/iterable/jobs
+  enabled: true
+- name: Justworks
+  careers_url: https://boards.greenhouse.io/justworks
+  api: https://boards-api.greenhouse.io/v1/boards/justworks/jobs
+  enabled: true
+- name: Karat
+  careers_url: https://boards.greenhouse.io/karat
+  api: https://boards-api.greenhouse.io/v1/boards/karat/jobs
+  enabled: true
+- name: Keeper Security
+  careers_url: https://boards.greenhouse.io/keepersecurity
+  api: https://boards-api.greenhouse.io/v1/boards/keepersecurity/jobs
+  enabled: true
+- name: Lattice
+  careers_url: https://boards.greenhouse.io/lattice
+  api: https://boards-api.greenhouse.io/v1/boards/lattice/jobs
+  enabled: true
+- name: LetsGetChecked
+  careers_url: https://boards.greenhouse.io/letsgetchecked
+  api: https://boards-api.greenhouse.io/v1/boards/letsgetchecked/jobs
+  enabled: true
+- name: Lithic
+  careers_url: https://boards.greenhouse.io/lithic
+  api: https://boards-api.greenhouse.io/v1/boards/lithic/jobs
+  enabled: true
+- name: Lookout
+  careers_url: https://boards.greenhouse.io/lookout
+  api: https://boards-api.greenhouse.io/v1/boards/lookout/jobs
+  enabled: true
+- name: Lucid Motors
+  careers_url: https://boards.greenhouse.io/lucidmotors
+  api: https://boards-api.greenhouse.io/v1/boards/lucidmotors/jobs
+  enabled: true
+- name: Lyft
+  careers_url: https://boards.greenhouse.io/lyft
+  api: https://boards-api.greenhouse.io/v1/boards/lyft/jobs
+  enabled: true
+- name: Marqeta
+  careers_url: https://boards.greenhouse.io/marqeta
+  api: https://boards-api.greenhouse.io/v1/boards/marqeta/jobs
+  enabled: true
+- name: MasterClass
+  careers_url: https://boards.greenhouse.io/masterclass
+  api: https://boards-api.greenhouse.io/v1/boards/masterclass/jobs
+  enabled: true
+- name: Materialize
+  careers_url: https://boards.greenhouse.io/materialize
+  api: https://boards-api.greenhouse.io/v1/boards/materialize/jobs
+  enabled: false  # 2026-06-08: HTTP 404 "Job not found" — board appears to have moved/closed
+- name: Misfits Market
+  careers_url: https://boards.greenhouse.io/misfitsmarket
+  api: https://boards-api.greenhouse.io/v1/boards/misfitsmarket/jobs
+  enabled: true
+- name: Mochi Health
+  careers_url: https://boards.greenhouse.io/mochihealth
+  api: https://boards-api.greenhouse.io/v1/boards/mochihealth/jobs
+  enabled: true
+- name: Momentous
+  careers_url: https://boards.greenhouse.io/momentous
+  api: https://boards-api.greenhouse.io/v1/boards/momentous/jobs
+  enabled: true
+- name: Moniepoint
+  careers_url: https://boards.greenhouse.io/moniepoint
+  api: https://boards-api.greenhouse.io/v1/boards/moniepoint/jobs
+  enabled: true
+- name: Motive
+  careers_url: https://boards.greenhouse.io/motive
+  api: https://boards-api.greenhouse.io/v1/boards/motive/jobs
+  enabled: true
+- name: Nanit
+  careers_url: https://boards.greenhouse.io/nanit
+  api: https://boards-api.greenhouse.io/v1/boards/nanit/jobs
+  enabled: true
+- name: Natera
+  careers_url: https://boards.greenhouse.io/natera
+  api: https://boards-api.greenhouse.io/v1/boards/natera/jobs
+  enabled: true
+- name: Navan
+  careers_url: https://boards.greenhouse.io/tripactions
+  api: https://boards-api.greenhouse.io/v1/boards/tripactions/jobs
+  enabled: true
+- name: Netlify
+  careers_url: https://boards.greenhouse.io/netlify
+  api: https://boards-api.greenhouse.io/v1/boards/netlify/jobs
+  enabled: true
+- name: Netskope
+  careers_url: https://boards.greenhouse.io/netskope
+  api: https://boards-api.greenhouse.io/v1/boards/netskope/jobs
+  enabled: true
+- name: NewLimit
+  careers_url: https://boards.greenhouse.io/newlimit
+  api: https://boards-api.greenhouse.io/v1/boards/newlimit/jobs
+  enabled: true
+- name: Nextdoor
+  careers_url: https://boards.greenhouse.io/nextdoor
+  api: https://boards-api.greenhouse.io/v1/boards/nextdoor/jobs
+  enabled: true
+- name: Nutrafol
+  careers_url: https://boards.greenhouse.io/nutrafol
+  api: https://boards-api.greenhouse.io/v1/boards/nutrafol/jobs
+  enabled: true
+- name: Octave
+  careers_url: https://boards.greenhouse.io/octave
+  api: https://boards-api.greenhouse.io/v1/boards/octave/jobs
+  enabled: true
+- name: Okta
+  careers_url: https://boards.greenhouse.io/okta
+  api: https://boards-api.greenhouse.io/v1/boards/okta/jobs
+  enabled: true
+- name: Omada Health
+  careers_url: https://boards.greenhouse.io/omadahealth
+  api: https://boards-api.greenhouse.io/v1/boards/omadahealth/jobs
+  enabled: true
+- name: Otter
+  careers_url: https://boards.greenhouse.io/otter
+  api: https://boards-api.greenhouse.io/v1/boards/otter/jobs
+  enabled: true
+- name: Otter.ai
+  careers_url: https://boards.greenhouse.io/otterai
+  api: https://boards-api.greenhouse.io/v1/boards/otterai/jobs
+  enabled: true
+- name: Outschool
+  careers_url: https://boards.greenhouse.io/outschool
+  api: https://boards-api.greenhouse.io/v1/boards/outschool/jobs
+  enabled: true
+- name: Overstory
+  careers_url: https://boards.greenhouse.io/overstory
+  api: https://boards-api.greenhouse.io/v1/boards/overstory/jobs
+  enabled: true
+- name: PagerDuty
+  careers_url: https://boards.greenhouse.io/pagerduty
+  api: https://boards-api.greenhouse.io/v1/boards/pagerduty/jobs
+  enabled: true
+- name: Parachute Home
+  careers_url: https://boards.greenhouse.io/parachutehome
+  api: https://boards-api.greenhouse.io/v1/boards/parachutehome/jobs
+  enabled: true
+- name: Parsley Health
+  careers_url: https://boards.greenhouse.io/parsleyhealth
+  api: https://boards-api.greenhouse.io/v1/boards/parsleyhealth/jobs
+  enabled: true
+- name: Patch Caregiving
+  careers_url: https://boards.greenhouse.io/patch
+  api: https://boards-api.greenhouse.io/v1/boards/patch/jobs
+  enabled: true
+- name: PathAI
+  careers_url: https://boards.greenhouse.io/pathai
+  api: https://boards-api.greenhouse.io/v1/boards/pathai/jobs
+  enabled: true
+- name: Paystack
+  careers_url: https://boards.greenhouse.io/paystack
+  api: https://boards-api.greenhouse.io/v1/boards/paystack/jobs
+  enabled: true
+- name: Peloton
+  careers_url: https://boards.greenhouse.io/peloton
+  api: https://boards-api.greenhouse.io/v1/boards/peloton/jobs
+  enabled: true
+- name: Pinterest
+  careers_url: https://boards.greenhouse.io/pinterest
+  api: https://boards-api.greenhouse.io/v1/boards/pinterest/jobs
+  enabled: true
+- name: PlanetScale
+  careers_url: https://boards.greenhouse.io/planetscale
+  api: https://boards-api.greenhouse.io/v1/boards/planetscale/jobs
+  enabled: true
+- name: Postman
+  careers_url: https://boards.greenhouse.io/postman
+  api: https://boards-api.greenhouse.io/v1/boards/postman/jobs
+  enabled: true
+- name: Postscript
+  careers_url: https://boards.greenhouse.io/postscript
+  api: https://boards-api.greenhouse.io/v1/boards/postscript/jobs
+  enabled: true
+- name: Profluent
+  careers_url: https://boards.greenhouse.io/profluent
+  api: https://boards-api.greenhouse.io/v1/boards/profluent/jobs
+  enabled: true
+- name: project44
+  careers_url: https://boards.greenhouse.io/project44
+  api: https://boards-api.greenhouse.io/v1/boards/project44/jobs
+  enabled: true
+- name: Proton
+  careers_url: https://boards.greenhouse.io/proton
+  api: https://boards-api.greenhouse.io/v1/boards/proton/jobs
+  enabled: true
+- name: Quanata
+  careers_url: https://boards.greenhouse.io/quanata
+  api: https://boards-api.greenhouse.io/v1/boards/quanata/jobs
+  enabled: true
+- name: QuintoAndar
+  careers_url: https://boards.greenhouse.io/quintoandar
+  api: https://boards-api.greenhouse.io/v1/boards/quintoandar/jobs
+  enabled: true
+- name: Ramp Network
+  careers_url: https://boards.greenhouse.io/rampnetwork
+  api: https://boards-api.greenhouse.io/v1/boards/rampnetwork/jobs
+  enabled: true
+- name: Recursion
+  careers_url: https://boards.greenhouse.io/recursionpharmaceuticals
+  api: https://boards-api.greenhouse.io/v1/boards/recursionpharmaceuticals/jobs
+  enabled: true
+- name: Reddit
+  careers_url: https://boards.greenhouse.io/reddit
+  api: https://boards-api.greenhouse.io/v1/boards/reddit/jobs
+  enabled: true
+- name: Redwood Materials
+  careers_url: https://boards.greenhouse.io/redwoodmaterials
+  api: https://boards-api.greenhouse.io/v1/boards/redwoodmaterials/jobs
+  enabled: true
+- name: Reformation
+  careers_url: https://boards.greenhouse.io/reformation
+  api: https://boards-api.greenhouse.io/v1/boards/reformation/jobs
+  enabled: true
+- name: Relativity Space
+  careers_url: https://boards.greenhouse.io/relativity
+  api: https://boards-api.greenhouse.io/v1/boards/relativity/jobs
+  enabled: true
+- name: Relay Therapeutics
+  careers_url: https://boards.greenhouse.io/relaytherapeutics
+  api: https://boards-api.greenhouse.io/v1/boards/relaytherapeutics/jobs
+  enabled: true
+- name: Riot Games
+  careers_url: https://boards.greenhouse.io/riotgames
+  api: https://boards-api.greenhouse.io/v1/boards/riotgames/jobs
+  enabled: true
+- name: Ritual
+  careers_url: https://boards.greenhouse.io/ritual
+  api: https://boards-api.greenhouse.io/v1/boards/ritual/jobs
+  enabled: true
+- name: Roblox
+  careers_url: https://boards.greenhouse.io/roblox
+  api: https://boards-api.greenhouse.io/v1/boards/roblox/jobs
+  enabled: true
+- name: Rocket Lab
+  careers_url: https://boards.greenhouse.io/rocketlab
+  api: https://boards-api.greenhouse.io/v1/boards/rocketlab/jobs
+  enabled: true
+- name: Rocket Money
+  careers_url: https://boards.greenhouse.io/truebill
+  api: https://boards-api.greenhouse.io/v1/boards/truebill/jobs
+  enabled: true
+- name: Rockstar Games
+  careers_url: https://boards.greenhouse.io/rockstargames
+  api: https://boards-api.greenhouse.io/v1/boards/rockstargames/jobs
+  enabled: true
+- name: Roofstock
+  careers_url: https://boards.greenhouse.io/roofstock
+  api: https://boards-api.greenhouse.io/v1/boards/roofstock/jobs
+  enabled: true
+- name: Saatva
+  careers_url: https://boards.greenhouse.io/saatva
+  api: https://boards-api.greenhouse.io/v1/boards/saatva/jobs
+  enabled: true
+- name: Schwarzman Animal Medical Center
+  careers_url: https://boards.greenhouse.io/animalmedicalcenter
+  api: https://boards-api.greenhouse.io/v1/boards/animalmedicalcenter/jobs
+  enabled: true
+- name: Seurat Technologies
+  careers_url: https://boards.greenhouse.io/seurat
+  api: https://boards-api.greenhouse.io/v1/boards/seurat/jobs
+  enabled: true
+- name: Sidecar Health
+  careers_url: https://boards.greenhouse.io/sidecarhealth
+  api: https://boards-api.greenhouse.io/v1/boards/sidecarhealth/jobs
+  enabled: true
+- name: SingleStore
+  careers_url: https://boards.greenhouse.io/singlestore
+  api: https://boards-api.greenhouse.io/v1/boards/singlestore/jobs
+  enabled: true
+- name: Speechmatics
+  careers_url: https://boards.greenhouse.io/speechmatics
+  api: https://boards-api.greenhouse.io/v1/boards/speechmatics/jobs
+  enabled: true
+- name: Stability AI
+  careers_url: https://boards.greenhouse.io/stabilityai
+  api: https://boards-api.greenhouse.io/v1/boards/stabilityai/jobs
+  enabled: true
+- name: StackBlitz
+  careers_url: https://boards.greenhouse.io/stackblitz
+  api: https://boards-api.greenhouse.io/v1/boards/stackblitz/jobs
+  enabled: true
+- name: Stackline
+  careers_url: https://boards.greenhouse.io/stackline
+  api: https://boards-api.greenhouse.io/v1/boards/stackline/jobs
+  enabled: true
+- name: Starburst
+  careers_url: https://boards.greenhouse.io/starburst
+  api: https://boards-api.greenhouse.io/v1/boards/starburst/jobs
+  enabled: true
+- name: Stitch Fix
+  careers_url: https://boards.greenhouse.io/stitchfix
+  api: https://boards-api.greenhouse.io/v1/boards/stitchfix/jobs
+  enabled: true
+- name: StockX
+  careers_url: https://boards.greenhouse.io/stockx
+  api: https://boards-api.greenhouse.io/v1/boards/stockx/jobs
+  enabled: true
+- name: Storyblok
+  careers_url: https://boards.greenhouse.io/storyblok
+  api: https://boards-api.greenhouse.io/v1/boards/storyblok/jobs
+  enabled: true
+- name: Stripe
+  careers_url: https://boards.greenhouse.io/stripe
+  api: https://boards-api.greenhouse.io/v1/boards/stripe/jobs
+  enabled: true
+- name: Strive Health
+  careers_url: https://boards.greenhouse.io/strivehealth
+  api: https://boards-api.greenhouse.io/v1/boards/strivehealth/jobs
+  enabled: true
+- name: Suitsupply
+  careers_url: https://boards.greenhouse.io/suitsupply
+  api: https://boards-api.greenhouse.io/v1/boards/suitsupply/jobs
+  enabled: true
+- name: sweetgreen
+  careers_url: https://boards.greenhouse.io/sweetgreen
+  api: https://boards-api.greenhouse.io/v1/boards/sweetgreen/jobs
+  enabled: true
+- name: TabaPay
+  careers_url: https://boards.greenhouse.io/tabapay
+  api: https://boards-api.greenhouse.io/v1/boards/tabapay/jobs
+  enabled: true
+- name: Tailscale
+  careers_url: https://boards.greenhouse.io/tailscale
+  api: https://boards-api.greenhouse.io/v1/boards/tailscale/jobs
+  enabled: true
+- name: Tamara
+  careers_url: https://boards.greenhouse.io/tamara
+  api: https://boards-api.greenhouse.io/v1/boards/tamara/jobs
+  enabled: true
+- name: Tanium
+  careers_url: https://boards.greenhouse.io/tanium
+  api: https://boards-api.greenhouse.io/v1/boards/tanium/jobs
+  enabled: true
+- name: Tatari
+  careers_url: https://boards.greenhouse.io/tatari
+  api: https://boards-api.greenhouse.io/v1/boards/tatari/jobs
+  enabled: true
+- name: TaxBit
+  careers_url: https://boards.greenhouse.io/taxbit
+  api: https://boards-api.greenhouse.io/v1/boards/taxbit/jobs
+  enabled: true
+- name: Tenstorrent
+  careers_url: https://boards.greenhouse.io/tenstorrent
+  api: https://boards-api.greenhouse.io/v1/boards/tenstorrent/jobs
+  enabled: true
+- name: Textio
+  careers_url: https://boards.greenhouse.io/textio
+  api: https://boards-api.greenhouse.io/v1/boards/textio/jobs
+  enabled: true
+- name: ThirdLove
+  careers_url: https://boards.greenhouse.io/thirdlove
+  api: https://boards-api.greenhouse.io/v1/boards/thirdlove/jobs
+  enabled: true
+- name: Thoropass
+  careers_url: https://boards.greenhouse.io/thoropass
+  api: https://boards-api.greenhouse.io/v1/boards/thoropass/jobs
+  enabled: true
+- name: Thrive Market
+  careers_url: https://boards.greenhouse.io/thrivemarket
+  api: https://boards-api.greenhouse.io/v1/boards/thrivemarket/jobs
+  enabled: true
+- name: Thunes
+  careers_url: https://boards.greenhouse.io/thunes
+  api: https://boards-api.greenhouse.io/v1/boards/thunes/jobs
+  enabled: true
+- name: Tia
+  careers_url: https://boards.greenhouse.io/tia
+  api: https://boards-api.greenhouse.io/v1/boards/tia/jobs
+  enabled: true
+- name: Tide
+  careers_url: https://boards.greenhouse.io/tide
+  api: https://boards-api.greenhouse.io/v1/boards/tide/jobs
+  enabled: true
+- name: Toast
+  careers_url: https://boards.greenhouse.io/toast
+  api: https://boards-api.greenhouse.io/v1/boards/toast/jobs
+  enabled: true
+- name: Together AI
+  careers_url: https://boards.greenhouse.io/togetherai
+  api: https://boards-api.greenhouse.io/v1/boards/togetherai/jobs
+  enabled: true
+- name: Transcarent
+  careers_url: https://boards.greenhouse.io/transcarent
+  api: https://boards-api.greenhouse.io/v1/boards/transcarent/jobs
+  enabled: true
+- name: TrueLayer
+  careers_url: https://boards.greenhouse.io/truelayer
+  api: https://boards-api.greenhouse.io/v1/boards/truelayer/jobs
+  enabled: true
+- name: Turing
+  careers_url: https://boards.greenhouse.io/turing
+  api: https://boards-api.greenhouse.io/v1/boards/turing/jobs
+  enabled: true
+- name: Twilio
+  careers_url: https://boards.greenhouse.io/twilio
+  api: https://boards-api.greenhouse.io/v1/boards/twilio/jobs
+  enabled: true
+- name: Twitch
+  careers_url: https://boards.greenhouse.io/twitch
+  api: https://boards-api.greenhouse.io/v1/boards/twitch/jobs
+  enabled: true
+- name: Two Chairs
+  careers_url: https://boards.greenhouse.io/twochairs
+  api: https://boards-api.greenhouse.io/v1/boards/twochairs/jobs
+  enabled: true
+- name: Typeface
+  careers_url: https://boards.greenhouse.io/typeface
+  api: https://boards-api.greenhouse.io/v1/boards/typeface/jobs
+  enabled: true
+- name: Typeform
+  careers_url: https://boards.greenhouse.io/typeform
+  api: https://boards-api.greenhouse.io/v1/boards/typeform/jobs
+  enabled: true
+- name: UJET
+  careers_url: https://boards.greenhouse.io/ujet
+  api: https://boards-api.greenhouse.io/v1/boards/ujet/jobs
+  enabled: true
+- name: Underdog
+  careers_url: https://boards.greenhouse.io/underdogfantasy
+  api: https://boards-api.greenhouse.io/v1/boards/underdogfantasy/jobs
+  enabled: true
+- name: Unite Us
+  careers_url: https://boards.greenhouse.io/uniteus
+  api: https://boards-api.greenhouse.io/v1/boards/uniteus/jobs
+  enabled: true
+- name: Upstart
+  careers_url: https://boards.greenhouse.io/upstart
+  api: https://boards-api.greenhouse.io/v1/boards/upstart/jobs
+  enabled: true
+- name: Valo Health
+  careers_url: https://boards.greenhouse.io/valohealth
+  api: https://boards-api.greenhouse.io/v1/boards/valohealth/jobs
+  enabled: true
+- name: Vast
+  careers_url: https://boards.greenhouse.io/vast
+  api: https://boards-api.greenhouse.io/v1/boards/vast/jobs
+  enabled: true
+- name: Watershed Informatics
+  careers_url: https://boards.greenhouse.io/watershed
+  api: https://boards-api.greenhouse.io/v1/boards/watershed/jobs
+  enabled: true
+- name: WITHIN
+  careers_url: https://boards.greenhouse.io/agencywithin
+  api: https://boards-api.greenhouse.io/v1/boards/agencywithin/jobs
+  enabled: true
+- name: Wolt
+  careers_url: https://boards.greenhouse.io/wolt
+  api: https://boards-api.greenhouse.io/v1/boards/wolt/jobs
+  enabled: true
+- name: Yotpo
+  careers_url: https://boards.greenhouse.io/yotpo
+  api: https://boards-api.greenhouse.io/v1/boards/yotpo/jobs
+  enabled: true
+- name: YugabyteDB
+  careers_url: https://boards.greenhouse.io/yugabyte
+  api: https://boards-api.greenhouse.io/v1/boards/yugabyte/jobs
+  enabled: true
+- name: Zenni Optical
+  careers_url: https://boards.greenhouse.io/zennioptical
+  api: https://boards-api.greenhouse.io/v1/boards/zennioptical/jobs
+  enabled: true
+- name: ZoomInfo
+  careers_url: https://boards.greenhouse.io/zoominfo
+  api: https://boards-api.greenhouse.io/v1/boards/zoominfo/jobs
+  enabled: true
+- name: Zwift
+  careers_url: https://boards.greenhouse.io/zwift
+  api: https://boards-api.greenhouse.io/v1/boards/zwift/jobs
+  enabled: true

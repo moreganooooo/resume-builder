@@ -1,0 +1,21 @@
+# scoring/ats_match.yaml
+# Defines the mathematical weights for comparing candidate resume vs. target job description.
+
+match_weights:
+  exact_match: 1.0    # e.g., JD asks for "Python", resume says "Python"
+  semantic_match: 0.7 # e.g., JD asks for "Data Visualization", resume says "Tableau"
+  partial_match: 0.4  # e.g., JD asks for "Salesforce Administration", resume says "Salesforce User"
+
+section_multipliers:
+  recent_experience: 1.2 # Skills used in the last 3 years carry more weight
+  older_experience: 0.8  # Skills used 4+ years ago
+  skills_section: 1.0    # Baseline weight
+  summary_section: 0.5   # Lowest weight; telling, not showing
+
+thresholds:
+  excellent_match: 85 # Ready to apply
+  good_match: 70      # Needs tailoring
+  weak_match: 50      # Missing core competencies
+
+hard_requirements:
+  penalty: -25 # Point deduction if a skill marked "Required" in JD is entirely missing

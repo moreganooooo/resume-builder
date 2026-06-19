@@ -1,0 +1,30 @@
+version: 1.0
+
+section_headers:
+
+  preferred:
+
+    - Summary
+    - Experience
+    - Skills
+    - Education
+    - Certifications
+
+keyword_rules:
+
+  exact_match_weight: 1.0
+
+  synonym_match_weight: 0.8
+
+  semantic_match_weight: 0.6
+
+keyword_stuffing_threshold:
+
+  max_repetitions_per_keyword: 5
+
+placement_weights:
+
+  summary: 1.25
+  current_role: 1.5
+  skills: 1.0
+  older_roles: 0.75

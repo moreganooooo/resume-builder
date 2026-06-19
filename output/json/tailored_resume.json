@@ -1,0 +1,26 @@
+{
+  "name": "Dominick Colosimo",
+  "role": "Lead Machine Learning Architect",
+  "location": "Getzville, NY",
+  "skills": [
+    "Python",
+    "SQL",
+    "Machine Learning",
+    "Data Visualization",
+    "Machine Learning Architecture",
+    "Cross-functional Data Pipelines",
+    "Team Leadership"
+  ],
+  "experience": [
+    {
+      "title": "Data Scientist",
+      "company": "TechCorp",
+      "period": "Aug 2023 - Present",
+      "achievements": [
+        "Led an advanced analytics team of 3 analysts to drive technical strategy and project delivery.",
+        "Architected machine learning models that drove a measurable 12% increase in business revenue.",
+        "Developed cross-functional data pipelines to bridge engineering and business units, optimizing data synergy and integration."
+      ]
+    }
+  ]
+}

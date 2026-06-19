@@ -1,0 +1,15 @@
+version: 1.0
+principles:
+  - preserve_candidate_facts
+  - preserve_candidate_scope
+  - preserve_candidate_seniority
+
+truthfulness_tests:
+  metric_test:
+    question: "Can this number be explained?"
+  ownership_test:
+    question: "Did the candidate own this?"
+  leadership_test:
+    question: "Did the candidate lead this?"
+  software_test:
+    question: "Did the candidate actually use this?"

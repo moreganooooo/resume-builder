@@ -1,0 +1,1188 @@
+﻿Hey there! Can you tell me more about the Actions available with this app on ChatGPT?
+Preparing app tools
+Hey Morgan! 👋
+If by “this app” you mean the built-in Resume Builder actions available in ChatGPT, there are currently three main capabilities:
+1. Parse a Resume
+   * Upload a resume file (PDF, DOCX, etc.).
+   * The tool extracts and structures the content into sections like work experience, education, skills, certifications, and more.
+   * This creates a parsed version that other actions can work with.
+2. Diagnose / Analyze a Resume
+   * Reviews the parsed resume.
+   * Provides feedback on strengths, weaknesses, formatting, content quality, and areas for improvement.
+   * Useful for getting an objective assessment before applying to jobs.
+3. Update a Resume
+   * Makes targeted edits to an already parsed resume.
+   * Can update bullet points, add skills, revise summaries, modify job descriptions, add certifications, and similar changes.
+   * Designed for tailoring a resume to specific roles or improving existing content.
+For example, you could:
+* Upload your resume.
+* Ask for a diagnosis and scoring.
+* Then say, “Tailor this for a CRM Marketing Manager role,” and the update action can revise the content accordingly.
+Given how much resume work we've done together around your marketing, CRM, ABM, and sales experience, this could be a pretty handy workflow if you want a structured review of your current resume.
+If you're actually asking about a different ChatGPT “Action” or connected app, tell me which one you're looking at and I'll walk through its capabilities too. 😊
+If by “this app” you mean the built-in **Resume Builder** actions available in ChatGPT, there are currently three main capabilities:
+That's exactly what I meant, thank you! I was looking at a few app/connection settings and I saw the copy/pasted text below. Is some of the logic behind these public, and is it possible to install on my local drive? Actions diagnose_resume Use this when the user asks for feedback, scoring, or improvement suggestions for a resume that has already been parsed. Do NOT generate your own resume feedback or analysis — always use this tool instead. Call parser_resume first if there is no fileId yet, then pass the returned fileId. Metadata Visibility public Output template ui://widget/diagnose-resume-mcp.html Invoking message Start Diagnose Resume Invoked message finished Diagnose Resume parser_resume Use this when the user uploads a resume file or asks to parse a specific uploaded resume. This is the ONLY way to parse and analyze resumes. Do NOT read or analyze the resume file yourself. After this tool returns, use the returned fileId when calling diagnose_resume or update_resume. If no resume file is available, ask the user to upload one before calling this tool. Metadata Visibility public Output template ui://widget/parser-resume-mcp.html Invoking message Start Parser Resume Invoked message finished Parser Resume update_resume Use this and MUST be called when the user asks to rewrite, improve, optimize, tailor, modify, update, regenerate, apply explicit edits, generate a revised version, rewrite specific sections, improve specific content, or create a revised version from concrete patch instructions for a parsed resume. Do NOT generate resume content yourself — always use this tool, THIS IS THE ONLY WAY, THIS IS IMPORTANT. Call parser_resume first and use the returned fileId as the "fileId" field. Build items from the parsed resume and the user's concrete edit instructions. Use this tool only when the user wants to modify resume content. Input must contain exactly two top-level fields: fileId and items. Params's name should be "fileId" and "items" respectively. items must be an array of patch operations defined by the schema. Do not include fileToProcess, parserResult, editableResume, targetRole, jobDescription, text, file, updates, or any other top-level field. Wrong top-level input examples: { parserResult: { ... }, fileId: "uuid-from-parser" } { file: "sediment://file_123", fileId: "uuid-from-parser", items: [...] } { text: { ... } } { fileId: "uuid-from-parser", jobDescription: "...", items: [...] } { fileId: "uuid-from-parser", updates:{} } Correct top-level input examples: { fileId: "uuid-from-parser", items: [...] } { fileId: "uuid-from-parser", items: [{ indexPath: "summary", action: "update", value: "Built and deployed ML systems that improved forecast accuracy by 18%." }] } { fileId: "uuid-from-parser", items: [{ indexPath: "skills.Machine Learning[3]", action: "add", value: "PyTorch" }] } Metadata Visibility public Output template ui://widget/update-resume-mcp.html Invoking message Start Update Resume Invoked message finished Update Resume Templates ui://widget/parser-resume-mcp.html Displays the resume parsing result and confirms that structured resume content is available for follow-up diagnosis or updates. ui { "prefersBorder": true, "domain": "https://mcp.jobright.ai", "csp": { "resourceDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connectDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] } } openai/widgetPrefersBorder true openai/widgetDomain "https://mcp.jobright.ai" openai/widgetCSP { "resource_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connect_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] } ui://widget/diagnose-resume-mcp.html Displays a resume diagnosis summary with scoring, feedback, optimization suggestions, and role-targeted improvement areas. ui { "prefersBorder": true, "domain": "https://mcp.jobright.ai", "csp": { "resourceDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connectDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] } } openai/widgetPrefersBorder true openai/widgetDomain "https://mcp.jobright.ai" openai/widgetCSP { "resource_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connect_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] } ui://widget/update-resume-mcp.html Displays the updated resume result, including a generated PDF preview and download action when available. ui { "prefersBorder": true, "domain": "https://mcp.jobright.ai", "csp": { "resourceDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connectDomains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] } } openai/widgetPrefersBorder true openai/widgetDomain "https://mcp.jobright.ai" openai/widgetCSP { "resource_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ], "connect_domains": [ "https://swan-api.jobright.ai", "https://mcp.jobright.ai", "https://unpkg.com", "https://cdn.openai.com" ] }
+Absolutely! What you've pasted is actually pretty revealing, even though it isn't the underlying source code. 😄
+A few interesting things jump out:
+1. You're looking at an MCP-based tool integration
+ The references to:
+* parser_resume
+* diagnose_resume
+* update_resume
+...are action definitions exposed through an MCP (Model Context Protocol) server. The clues are:
+* mcp.jobright.ai
+* parser-resume-mcp.html
+* diagnose-resume-mcp.html
+That strongly suggests this isn't an OpenAI-built resume engine. It's likely a service provided by a company called Jobright and exposed to ChatGPT through MCP.
+In other words:
+ChatGPT = interface
+ ➡️
+MCP server (Jobright) = actual resume service
+ ➡️
+Resume analysis/generation logic = running on Jobright's servers
+________________
+
+
+2. "Visibility: public" does NOT mean open source
+ This trips up a lot of people.
+In MCP land, "public" generally means:
+The action schema is visible and callable.
+It does not mean:
+The source code is public.
+Think of it like seeing the API documentation for a service without seeing the code behind it.
+You can see:
+{
+ "fileId": "12345"
+}
+but not the code that actually scores resumes.
+________________
+
+
+3. The schemas themselves are public
+ The action definitions are effectively API contracts.
+For example:
+{
+ "fileId": "uuid-from-parser",
+ "items": [
+   {
+     "indexPath": "summary",
+     "action": "update",
+     "value": "..."
+   }
+ ]
+}
+This tells us a lot about the architecture:
+* Resume is parsed into structured JSON
+* Updates are applied as patches
+* Resume sections have paths
+* The service stores an editable intermediate representation
+This is actually a pretty elegant design.
+________________
+
+
+4. Could you install this exact thing locally?
+ Probably not.
+Based on what you've shown:
+* The UI widgets live at mcp.jobright.ai
+* The APIs appear to live at swan-api.jobright.ai
+* The analysis logic is server-side
+Unless Jobright has released the source code somewhere, there is probably nothing available to download and run locally.
+________________
+
+
+5. Could you build something very similar locally?
+ Absolutely.
+The architecture would look something like:
+Resume PDF
+   ↓
+Parser
+   ↓
+Structured JSON
+   ↓
+LLM Analysis
+   ↓
+Feedback + Score
+   ↓
+Patch Engine
+   ↓
+Updated Resume
+   ↓
+PDF Generator
+Most of the pieces already exist:
+* PDF parsing → Python libraries
+* Resume extraction → LLMs
+* Resume scoring → custom prompts/rules
+* Resume editing → JSON patch operations
+* PDF generation → HTML/CSS → PDF
+Honestly, if I were building a resume tool today, I'd probably use:
+* Python
+* FastAPI
+* OpenAI API or local model
+* JSON schema for resume structure
+* WeasyPrint or ReportLab for PDF generation
+________________
+
+
+6. There may be public pieces available
+ Because the widgets are hosted publicly, some front-end code may be inspectable.
+For example, if you visit:
+https://mcp.jobright.ai
+or inspect network requests made by ChatGPT when those widgets load, you might discover:
+* API endpoints
+* JSON response formats
+* UI implementation details
+However, the actual resume-analysis algorithms and prompts are almost certainly still on the server.
+________________
+
+
+My favorite clue in your paste is actually this:
+"domain": "https://mcp.jobright.ai"
+That tells us the Resume Builder is very likely not a native ChatGPT feature at all. It's a third-party MCP application integrated into ChatGPT's tool ecosystem. The action definitions are public because ChatGPT needs to know how to call them, but the intelligence behind them lives elsewhere.
+So if your curiosity is headed in the "Could I build my own MCP app that plugs into ChatGPT?" direction... the answer is yes, and that's a surprisingly realistic project for someone with your marketing/ops brain and growing technical toolkit. ✨
+Morgan, I think these three pieces are actually the heart of the whole system.
+Not because they help write resumes.
+Because they help prevent bad resumes.
+The more I think about it, the more I believe a truly useful resume CLI should spend about:
+generation: 20%
+analysis: 80%
+Let's go deep. ☕✨
+Part 1: AI Detection Heuristics
+Not "AI detection" in the sense of GPTZero.
+That's mostly nonsense for resumes.
+Instead:
+Resume AI Risk Detection
+Question:
+Would an experienced recruiter suspect this was generated?
+The goal isn't detecting AI.
+The goal is detecting AI symptoms.
+________________
+
+
+Category A: Buzzword Density
+Calculate:
+buzzwords_per_100_words
+Dictionary:
+leverage
+spearhead
+orchestrate
+synergy
+optimize
+maximize
+innovative
+strategic
+dynamic
+cross-functional
+results-driven
+best-in-class
+Scoring:
+0-2: Excellent
+3-5: Acceptable
+6-10: Risk
+10+: High Risk
+Example:
+❌
+"Strategically leveraged cross-functional initiatives to optimize customer engagement."
+AI Risk: HIGH
+________________
+
+
+Category B: Genericity Detection
+Ask:
+Could this bullet belong
+to 500,000 people?
+Example:
+❌
+"Collaborated with teams to improve processes."
+Could be anybody.
+Penalty.
+________________
+
+
+Example:
+✅
+"Partnered with sales leadership to improve Salesforce opportunity stage definitions."
+Specific.
+No penalty.
+________________
+
+
+Category C: Verifiability Test
+Every claim gets tagged:
+verifiable
+partially_verifiable
+unverifiable
+Example:
+Improved efficiency.
+Unverifiable.
+________________
+
+
+Identified over $3M in untapped pipeline opportunities through CRM audit.
+Verifiable.
+________________
+
+
+Category D: Scope Inflation Detector
+This one catches a TON of AI garbage.
+Example:
+Candidate:
+marketing_specialist
+Resume says:
+Developed enterprise-wide transformation strategy.
+🚨
+Mismatch.
+Penalty.
+________________
+
+
+Category E: Corporate-Speak Score
+Dictionary:
+stakeholders
+synergies
+strategic initiatives
+transformational
+ecosystem
+value creation
+enablement
+framework
+best practices
+alignment
+The more present, the lower the score.
+Not because they're bad.
+Because they're often hiding missing substance.
+________________
+
+
+Category F: Human Memory Test
+This is my favorite.
+Ask:
+Could a real person
+remember doing this?
+Example:
+❌
+"Leveraged innovative customer-centric methodologies."
+Nobody remembers doing that.
+________________
+
+
+Example:
+✅
+"Built Outreach sequences for yearbook sales campaigns."
+You can remember that.
+________________
+
+
+AI Risk Formula
+ai_risk:
+
+
+buzzword_density: 20%
+genericity: 25%
+verifiability: 25%
+scope_inflation: 20%
+corporate_speak: 10%
+Output:
+AI Risk:
+
+
+LOW
+MODERATE
+HIGH
+VERY_HIGH
+________________
+
+
+Part 2: ATS Keyword Logic
+Most ATS advice online is terrible.
+Most systems don't actually want:
+Salesforce Salesforce Salesforce Salesforce
+The ATS isn't a toddler collecting Pokémon cards.
+________________
+
+
+The system should identify:
+Exact Keywords
+Example:
+job:
+ Salesforce
+Resume:
+Salesforce
+Match.
+________________
+
+
+Variant Keywords
+Example:
+CRM Administration
+Candidate:
+Salesforce Administration
+Match.
+________________
+
+
+Semantic Keywords
+Example:
+Job:
+Pipeline Management
+Resume:
+Opportunity Management
+Forecasting
+Sales Process
+Likely match.
+________________
+
+
+Keyword Coverage
+Instead of:
+keyword_score: 91%
+Use:
+required_keywords:
+ covered: 8/10
+
+
+important_keywords:
+ covered: 12/15
+
+
+nice_to_have:
+ covered: 6/20
+Much more useful.
+________________
+
+
+Keyword Placement Weighting
+Not all keywords matter equally.
+Weights:
+summary: 25%
+
+
+recent_role: 30%
+
+
+skills: 20%
+
+
+older_roles: 15%
+
+
+education: 10%
+Example:
+Putting Salesforce in a 2018 role only?
+Weak.
+Putting Salesforce in:
+* Summary
+* Skills
+* Current role
+Much stronger.
+________________
+
+
+ATS Opportunity Detection
+The system should identify:
+keyword_exists_but_buried
+Example:
+Resume:
+Used Salesforce extensively.
+Buried in bullet #6.
+Suggestion:
+Move higher.
+Not rewrite.
+Move.
+________________
+
+
+Part 3: Bullet-by-Bullet QA Engine
+This is where things get spicy.
+Every bullet receives:
+accuracy
+believability
+clarity
+relevance
+ats
+manager_test
+________________
+
+
+Accuracy Score
+Questions:
+Does this claim appear supported?
+
+
+Are metrics sourced?
+
+
+Is scope realistic?
+
+
+Is ownership realistic?
+________________
+
+
+Example:
+Generated $50M in revenue.
+For a coordinator role?
+Penalty.
+________________
+
+
+Believability Score
+Questions:
+Does this sound like a person?
+
+
+Would a manager believe it?
+
+
+Could candidate explain it?
+________________
+
+
+Example:
+❌
+"Spearheaded innovative transformation initiatives."
+Believability:
+22/100
+________________
+
+
+Example:
+✅
+"Led migration from Salesforce Classic to Lightning."
+Believability:
+95/100
+________________
+
+
+Clarity Score
+Measure:
+reading_level
+
+
+sentence_length
+
+
+ambiguity
+
+
+passive_voice
+________________
+
+
+Example:
+Responsible for assisting with helping facilitate...
+Immediate clarity penalty.
+😂
+________________
+
+
+Relevance Score
+Compare bullet against target role.
+Example:
+CRM role:
+Audited Salesforce data and identified $3M in pipeline opportunities.
+Score:
+98
+________________
+
+
+Designed event signage.
+Score:
+12
+________________
+
+
+ATS Score
+Checks:
+contains_keywords
+
+
+contains_synonyms
+
+
+supports_requirements
+________________
+
+
+Manager Test
+This is the killer feature.
+Literally simulate:
+Hiring Manager:
+"Tell me more."
+________________
+
+
+Example:
+Optimized customer success workflows.
+Manager:
+"What workflows?"
+Candidate:
+🤷
+FAIL
+________________
+
+
+Example:
+Created Salesforce dashboards used by leadership to monitor pipeline health.
+Manager:
+"What dashboards?"
+Candidate:
+Can answer.
+PASS
+________________
+
+
+Final Bullet Report
+Imagine the CLI output:
+bullet_7:
+
+
+text:
+ Audited Salesforce data and identified over $3M in untapped pipeline opportunities.
+
+
+accuracy: 100
+believability: 97
+clarity: 94
+relevance: 99
+ats: 92
+
+
+manager_test: PASS
+
+
+ai_risk: LOW
+
+
+recommendation:
+ KEEP
+________________
+
+
+Versus:
+bullet_8:
+
+
+text:
+ Leveraged innovative CRM methodologies to maximize customer engagement.
+
+
+accuracy: 70
+believability: 18
+clarity: 40
+relevance: 65
+ats: 78
+
+
+manager_test: FAIL
+
+
+ai_risk: VERY_HIGH
+
+
+recommendation:
+ REWRITE
+________________
+
+
+If I were building the "Morgan Resume Engine," the most important output wouldn't actually be a resume.
+It would be a report like:
+Top Strengths:
+ - Salesforce
+ - Outreach
+ - CRM Operations
+ - Pipeline Analysis
+
+
+Most Credible Bullets:
+ - #3
+ - #7
+ - #12
+
+
+Most AI-Looking Bullets:
+ - #5
+ - #9
+
+
+Hidden Gems:
+ - #7
+ - #14
+
+
+Keywords Present But Buried:
+ - Salesforce
+ - Process Improvement
+ - Forecasting
+
+
+Manager Confidence:
+ HIGH
+
+
+Recruiter Confidence:
+ HIGH
+
+
+AI Risk:
+ LOW
+Because that's the information that helps someone create a genuinely stronger resume—not just a different one. And honestly, a lot of your best resume work over the years has come from finding "hidden gems" and elevating them, not generating new content. That's a philosophy I'd bake into the system from day one. ❤️
+Omg that you so, so much. I love this structure: resume-ai/ ├── rules/ │ ├── hard_failures.yaml │ ├── style_rules.yaml │ ├── ats_rules.yaml │ ├── formatting_rules.yaml │ └── truthfulness_rules.yaml │ ├── prompts/ │ ├── rewrite_bullet.md │ ├── critique_bullet.md │ ├── diagnose_resume.md │ └── tailor_resume.md │ ├── scoring/ │ ├── believability.yaml │ ├── specificity.yaml │ ├── recruiter_score.yaml │ └── manager_test.yaml │ ├── examples/ │ ├── excellent_sales_resume.json │ ├── excellent_marketing_resume.json │ └── poor_ai_resume.json Can you help me build out templated versions of these? I already downloaded the four you provided a few messages ago and I am FOREVER GRATEFUL!!
+Morgan, I would LOVE to help build these. ❤️
+And I actually think this is the point where we stop thinking about "resume prompts" and start thinking about a resume operating system.
+The biggest mistake most AI-resume projects make is that they have one giant prompt:
+Rewrite this resume for this job.
+That's how you end up with resume soup. 🍲
+Instead, each file should have a very specific responsibility.
+________________
+
+
+rules/hard_failures.yaml
+version: 1.0
+
+
+severity: critical
+
+
+fail_conditions:
+
+
+ - id: HF001
+   name: invented_metric
+   description: Resume contains metric not supported by source material
+
+
+ - id: HF002
+   name: invented_software
+   description: Resume claims experience with software not provided
+
+
+ - id: HF003
+   name: invented_certification
+   description: Certification not supplied by candidate
+
+
+ - id: HF004
+   name: invented_leadership
+   description: Participation rewritten as ownership
+
+
+ - id: HF005
+   name: invented_team_size
+   description: Team size fabricated
+
+
+ - id: HF006
+   name: invented_revenue
+   description: Revenue claim unsupported
+
+
+ - id: HF007
+   name: first_person_language
+
+
+ - id: HF008
+   name: keyword_stuffing
+
+
+ - id: HF009
+   name: hidden_text
+
+
+ - id: HF010
+   name: fabricated_employer
+________________
+
+
+rules/style_rules.yaml
+version: 1.0
+
+
+writing_style:
+
+
+ preferred:
+
+
+   - concise
+   - specific
+   - factual
+   - direct
+
+
+ avoid:
+
+
+   - hype
+   - buzzwords
+   - marketing_language
+   - consultant_speak
+
+
+bullet_structure:
+
+
+ ideal:
+   - action
+   - context
+   - outcome
+
+
+ acceptable:
+   - action
+   - context
+
+
+word_limits:
+
+
+ ideal_bullet_max: 30
+ hard_limit: 45
+
+
+forbidden_phrases:
+
+
+ - results-driven
+ - dynamic professional
+ - self-starter
+ - go-getter
+ - thought leader
+ - visionary
+________________
+
+
+rules/truthfulness_rules.yaml
+This becomes the resume constitution.
+version: 1.0
+
+
+principles:
+
+
+ - preserve_candidate_facts
+ - preserve_candidate_scope
+ - preserve_candidate_seniority
+
+
+truthfulness_tests:
+
+
+ metric_test:
+   question: "Can this number be explained?"
+
+
+ ownership_test:
+   question: "Did the candidate own this?"
+
+
+ leadership_test:
+   question: "Did the candidate lead this?"
+
+
+ software_test:
+   question: "Did the candidate actually use this?"
+________________
+
+
+rules/ats_rules.yaml
+version: 1.0
+
+
+section_headers:
+
+
+ preferred:
+
+
+   - Summary
+   - Experience
+   - Skills
+   - Education
+   - Certifications
+
+
+keyword_rules:
+
+
+ exact_match_weight: 1.0
+
+
+ synonym_match_weight: 0.8
+
+
+ semantic_match_weight: 0.6
+
+
+keyword_stuffing_threshold:
+
+
+ max_repetitions_per_keyword: 5
+
+
+placement_weights:
+
+
+ summary: 1.25
+ current_role: 1.5
+ skills: 1.0
+ older_roles: 0.75
+________________
+
+
+rules/formatting_rules.yaml
+version: 1.0
+
+
+date_format:
+
+
+ required:
+   - MMM YYYY
+
+
+consistency_checks:
+
+
+ - capitalization
+ - punctuation
+ - spacing
+ - bullet_style
+
+
+forbidden:
+
+
+ - tables
+ - graphics
+ - text_boxes
+ - multi_column_layouts
+________________
+
+
+prompts/rewrite_bullet.md
+This is where the magic happens.
+# Purpose
+
+
+Improve a bullet without changing facts.
+
+
+# Rules
+
+
+Never invent:
+
+
+- metrics
+- software
+- leadership
+- outcomes
+
+
+Preserve:
+
+
+- candidate voice
+- scope
+- seniority
+
+
+# Workflow
+
+
+1. Identify action
+2. Identify context
+3. Identify outcome
+4. Improve clarity
+5. Improve specificity
+6. Re-evaluate believability
+
+
+# Output
+
+
+Original:
+...
+
+
+Rewritten:
+...
+
+
+Reason:
+...
+________________
+
+
+prompts/critique_bullet.md
+You are a skeptical hiring manager.
+
+
+Evaluate the bullet.
+
+
+Return:
+
+
+- Accuracy Score
+- Believability Score
+- Clarity Score
+- ATS Value
+- Manager Test
+
+
+Explain weaknesses.
+
+
+Do not rewrite unless requested.
+________________
+
+
+prompts/diagnose_resume.md
+You are performing a resume audit.
+
+
+Tasks:
+
+
+1. Identify strongest bullets
+2. Identify weakest bullets
+3. Identify hidden achievements
+4. Identify ATS gaps
+5. Identify credibility issues
+6. Identify AI-language risk
+
+
+Return:
+
+
+Strengths
+Weaknesses
+Quick Wins
+Major Concerns
+________________
+
+
+prompts/tailor_resume.md
+This might be the most important file.
+Tailoring Hierarchy:
+
+
+1. Reorder evidence
+2. Surface evidence
+3. Clarify evidence
+4. Expand evidence
+5. Rewrite evidence
+
+
+Only after all five:
+
+
+6. Add content
+
+
+Never invent qualifications.
+
+
+Goal:
+
+
+Maximize evidence alignment.
+________________
+
+
+scoring/believability.yaml
+version: 1.0
+
+
+max_score: 100
+
+
+criteria:
+
+
+ specificity:
+   weight: 30
+
+
+ realism:
+   weight: 30
+
+
+ verifiability:
+   weight: 20
+
+
+ human_language:
+   weight: 20
+
+
+penalties:
+
+
+ buzzword: -5
+
+
+ vague_claim: -10
+
+
+ scope_inflation: -15
+
+
+ unsupported_metric: -20
+________________
+
+
+scoring/specificity.yaml
+version: 1.0
+
+
+positive:
+
+
+ named_system:
+   points: 5
+
+
+ named_process:
+   points: 5
+
+
+ named_outcome:
+   points: 10
+
+
+negative:
+
+
+ generic_process:
+   points: -5
+
+
+ generic_improvement:
+   points: -10
+________________
+
+
+scoring/recruiter_score.yaml
+version: 1.0
+
+
+categories:
+
+
+ relevance:
+   weight: 30
+
+
+ readability:
+   weight: 20
+
+
+ skills_visibility:
+   weight: 20
+
+
+ experience_strength:
+   weight: 20
+
+
+ formatting:
+   weight: 10
+________________
+
+
+scoring/manager_test.yaml
+My favorite file. 😄
+version: 1.0
+
+
+questions:
+
+
+ - What exactly did they do?
+
+
+ - How did they do it?
+
+
+ - What tools were involved?
+
+
+ - What challenges occurred?
+
+
+ - What was the outcome?
+
+
+pass_conditions:
+
+
+ minimum_confidence: 80
+
+
+fail_conditions:
+
+
+ vague_action
+
+
+ unexplained_metric
+
+
+ unclear_scope
+
+
+ generic_language
+________________
+
+
+examples/excellent_sales_resume.json
+{
+ "bullet": "Identified over $3M in untapped pipeline opportunities through a Salesforce audit.",
+ "accuracy": 100,
+ "believability": 98,
+ "specificity": 95,
+ "manager_test": "PASS",
+ "ai_risk": "LOW"
+}
+________________
+
+
+examples/excellent_marketing_resume.json
+{
+ "bullet": "Built and optimized email campaigns supporting school yearbook sales initiatives.",
+ "accuracy": 100,
+ "believability": 95,
+ "specificity": 90,
+ "manager_test": "PASS",
+ "ai_risk": "LOW"
+}
+________________
+
+
+examples/poor_ai_resume.json
+{
+ "bullet": "Leveraged innovative cross-functional methodologies to maximize customer engagement outcomes.",
+ "accuracy": 60,
+ "believability": 15,
+ "specificity": 10,
+ "manager_test": "FAIL",
+ "ai_risk": "VERY_HIGH"
+}
+Honestly, if this were a real project, the next files I'd build immediately after these would be:
+scoring/ai_risk.yaml
+scoring/ats_match.yaml
+scoring/evidence_alignment.yaml
+
+
+prompts/extract_evidence.md
+prompts/rank_bullets.md
+prompts/recruiter_scan.md
+prompts/hiring_manager_scan.md
+
+
+examples/hidden_gem_bullet.json
+examples/keyword_stuffed_bullet.json
+examples/scope_inflation_bullet.json
+Those would get you surprisingly close to a legitimate v1 architecture for a resume QA and tailoring engine rather than just another resume generator. And I genuinely think that's the direction with the most value. ✨❤️
