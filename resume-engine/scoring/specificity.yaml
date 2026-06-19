@@ -1,0 +1,20 @@
+version: 1.0
+
+positive:
+
+  named_system:
+    points: 5
+
+  named_process:
+    points: 5
+
+  named_outcome:
+    points: 10
+
+negative:
+
+  generic_process:
+    points: -5
+
+  generic_improvement:
+    points: -10

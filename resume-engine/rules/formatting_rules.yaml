@@ -1,0 +1,20 @@
+version: 1.0
+
+date_format:
+
+  required:
+    - MMM YYYY
+
+consistency_checks:
+
+  - capitalization
+  - punctuation
+  - spacing
+  - bullet_style
+
+forbidden:
+
+  - tables
+  - graphics
+  - text_boxes
+  - multi_column_layouts

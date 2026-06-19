@@ -1,0 +1,18 @@
+version: 1.0
+
+categories:
+
+  relevance:
+    weight: 30
+
+  readability:
+    weight: 20
+
+  skills_visibility:
+    weight: 20
+
+  experience_strength:
+    weight: 20
+
+  formatting:
+    weight: 10

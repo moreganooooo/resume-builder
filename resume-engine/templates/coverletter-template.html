@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{DOCUMENT_TITLE}}</title>
+<style>
+  @font-face {
+    font-family: 'DM Serif Display';
+    src: url('./fonts/dm-serif-display-latin.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+
+  @font-face {
+    font-family: 'DM Serif Display';
+    src: url('./fonts/dm-serif-display-latin-ext.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+
+  @font-face {
+    font-family: 'Space Grotesk';
+    src: url('./fonts/space-grotesk-latin.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+
+  @font-face {
+    font-family: 'Space Grotesk';
+    src: url('./fonts/space-grotesk-latin.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+
+  @font-face {
+    font-family: 'Space Grotesk';
+    src: url('./fonts/space-grotesk-latin-ext.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+
+  @font-face {
+    font-family: 'Space Grotesk';
+    src: url('./fonts/space-grotesk-latin-ext.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10.5pt;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #000000;
+    background: #ffffff;
+    padding: 0;
+    margin: 0;
+  }
+
+  .page { width: 100%; max-width: {{PAGE_WIDTH}}; margin: 0 auto; padding: 0; }
+
+  /* === HEADER === */
+  .header { margin-bottom: 0; }
+
+  .header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32pt;
+    font-weight: 400;
+    color: #000000;
+    line-height: 0.5in;
+    margin-bottom: 0;
+  }
+
+  .header-tagline {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14pt;
+    font-weight: 400;
+    color: #000000;
+    line-height: 0.25in;
+    margin-bottom: 4px;
+  }
+
+  .contact-row {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10pt;
+    font-weight: 400;
+    line-height: 1;
+    color: #000000;
+  }
+
+  .contact-row .separator { color: #000000; padding: 0 3px; }
+
+  .header-rule {
+    border: none;
+    border-top: 0.018cm solid #9aa3af;
+    margin-top: 6px;
+    margin-bottom: 0;
+  }
+
+  /* === LETTER BODY === */
+  .letter-date {
+    margin-top: 28px;
+    font-size: 10.5pt;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .letter-address {
+    margin-top: 14px;
+    font-size: 10.5pt;
+    font-weight: 400;
+    line-height: 1.3;
+  }
+
+  .letter-greeting {
+    margin-top: 14px;
+    font-size: 10.5pt;
+    font-weight: 400;
+  }
+
+  .letter-body {
+    margin-top: 8px;
+    font-size: 10.5pt;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .letter-body p {
+    margin-bottom: 10px;
+  }
+
+  .letter-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  .letter-signoff {
+    margin-top: 14px;
+    font-size: 10.5pt;
+    font-weight: 400;
+  }
+
+  /* === SIGNATURE === */
+  .letter-signature {
+    margin-top: 2px;
+  }
+
+  .signature-img {
+    height: 80px;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .letter-typed-name {
+    font-size: 10.5pt;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* === PRINT === */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>{{NAME}}</h1>
+    <div class="header-tagline">{{TAGLINE}}</div>
+    <div class="contact-row">
+      <span>{{PHONE}}</span>
+      <span class="separator">|</span>
+      <span>{{EMAIL}}</span>
+      <span class="separator">|</span>
+      <span>{{LINKEDIN_DISPLAY}}</span>
+      <span class="separator">|</span>
+      <span>{{LOCATION}}</span>
+    </div>
+    <hr class="header-rule">
+  </div>
+
+  <!-- DATE -->
+  <div class="letter-date">{{DATE}}</div>
+
+  <!-- RECIPIENT BLOCK -->
+  {{RECIPIENT_BLOCK}}
+
+  <!-- GREETING -->
+  <div class="letter-greeting">{{GREETING}}</div>
+
+  <!-- BODY PARAGRAPHS -->
+  <div class="letter-body">
+    {{BODY_PARAGRAPHS}}
+  </div>
+
+  <!-- SIGN-OFF -->
+  <div class="letter-signoff">{{SIGN_OFF}}</div>
+
+  <!-- SIGNATURE IMAGE + TYPED NAME -->
+  <div class="letter-signature">
+    <img class="signature-img" src="./docs/MorganEscottSignature2025.png" alt="">
+    <div class="letter-typed-name">{{TYPED_NAME}}<br>{{TYPED_CONTACT}}</div>
+  </div>
+
+</div>
+</body>
+</html>

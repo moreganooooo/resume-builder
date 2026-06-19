@@ -1,0 +1,25 @@
+version: 1.1
+severity: critical
+
+fail_conditions:
+  - id: HF001
+    name: invent_metrics
+    description: Resume contains metric not supported by source material.
+  - id: HF002
+    name: invent_experience
+    description: Resume claims experience, software, or certification not provided.
+  - id: HF003
+    name: invented_leadership
+    description: Participation rewritten as ownership.
+  - id: HF004
+    name: first_person_language
+    description: Use of "I", "me", "my", or "we" outside of the Why section.
+  - id: HF005
+    name: keyword_stuffing
+    description: Unnatural repetition of skills without context.
+  - id: HF006
+    name: unsupported_claims
+    description: Claims that cannot be verified by the source data.
+  - id: HF007
+    name: hidden_text
+    description: White text or hidden font sizes used to trick ATS.

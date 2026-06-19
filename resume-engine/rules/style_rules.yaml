@@ -1,0 +1,37 @@
+version: 1.1
+
+writing_style:
+  preferred:
+    - concise
+    - specific
+    - factual
+    - direct
+    - use_concise_business_language
+    - prefer_specificity_over_hype
+    - preserve_candidate_voice
+  avoid:
+    - hype
+    - buzzwords
+    - marketing_language
+    - consultant_speak
+    - avoid_cliches
+
+bullet_structure:
+  preferred: "Action + Context + Outcome"
+  fallback: "Action + Context"
+
+word_limits:
+  ideal_bullet_max: 30
+  hard_limit: 45
+
+forbidden_phrases:
+  - results-driven
+  - dynamic professional
+  - self-starter
+  - go-getter
+  - thought leader
+  - visionary
+  - spearheaded
+  - synergized
+  - leveraged
+  - passionate professional
