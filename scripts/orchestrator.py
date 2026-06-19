@@ -136,52 +136,75 @@ class ResumeEngine:
         return master_context
 
     def audit_and_refine_bullets(self, raw_bullets: List[str]):
-        """Passes bullets through the Critique and Rewrite prompts."""
-        print("🛡️ Starting the Skeptical Editor Audit Loop...")
-        
-        critique_prompt = self._load_prompt("critique_bullet.md")
-        rewrite_prompt = self._load_prompt("rewrite_bullet.md")
-        manager_test_rules = json.dumps(self._load_yaml(self.scoring_dir, "manager_test.yaml"))
-        style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
-        
-        refined_bullets = []
-        
-        for i, bullet in enumerate(raw_bullets):
-            print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
+            """Passes bullets through the Critique and Rewrite prompts."""
+            print("🛡️ Starting the Skeptical Editor Audit Loop...")
             
-            # STEP 1: CRITIQUE
-            critique_config = types.GenerateContentConfig(
-                system_instruction=f"{critique_prompt}\n\nRULES:\n{manager_test_rules}",
-                response_mime_type="application/json",
-                response_schema=CritiqueSchema,
-                temperature=0.1
-            )
-            critique_res = client.models.generate_content(
-                model='gemma-4-26b-a4b-it', contents=bullet, config=critique_config
-            )
-            critique_data = json.loads(critique_res.text)
+            critique_prompt = self._load_prompt("critique_bullet.md")
+            rewrite_prompt = self._load_prompt("rewrite_bullet.md")
+            manager_test_rules = json.dumps(self._load_yaml(self.scoring_dir, "manager_test.yaml"))
+            style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
             
-            # STEP 2: REWRITE (If it fails the test or scores low)
-            if critique_data['manager_test'] == 'FAIL' or critique_data['believability_score'] < 80:
-                print(f"      ⚠️ Bullet failed Manager Test (Score: {critique_data['believability_score']}). Rewriting...")
+            refined_bullets = []
+            
+            for i, bullet in enumerate(raw_bullets):
+                print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
                 
-                rewrite_config = types.GenerateContentConfig(
-                    system_instruction=f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\nWEAKNESSES TO FIX:\n{critique_data['weaknesses']}",
-                    response_mime_type="application/json",
-                    response_schema=RewriteSchema,
-                    temperature=0.2
-                )
-                rewrite_res = client.models.generate_content(
-                    model='gemma-4-26b-a4b-it', contents=bullet, config=rewrite_config
-                )
-                rewrite_data = json.loads(rewrite_res.text)
-                refined_bullets.append(rewrite_data['rewritten'])
-            else:
-                # If it passes perfectly, keep it as is
-                refined_bullets.append(bullet)
-                
-        print("✅ Audit complete. All bullets verified and polished.")
-        return "\n".join([f"- {b}" for b in refined_bullets])
+                try:
+                    # STEP 1: CRITIQUE
+                    critique_config = types.GenerateContentConfig(
+                        system_instruction=f"{critique_prompt}\n\nRULES:\n{manager_test_rules}\n\nSTRICT INSTRUCTION: Return ONLY pure JSON.",
+                        response_mime_type="application/json",
+                        response_schema=CritiqueSchema,
+                        temperature=0.0
+                    )
+                    
+                    critique_res = client.models.generate_content(
+                        model='gemma-4-26b-a4b-it', contents=bullet, config=critique_config
+                    )
+                    
+                    if not critique_res.text:
+                        refined_bullets.append(bullet)
+                        continue
+
+                    # Clean the response string safely
+                    clean_text = critique_res.text.strip()
+                    clean_text = clean_text.replace("```json", "")
+                    clean_text = clean_text.replace("```", "")
+                    
+                    critique_data = json.loads(clean_text)
+                    
+                    # STEP 2: REWRITE
+                    if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
+                        print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
+                        
+                        rewrite_config = types.GenerateContentConfig(
+                            system_instruction=f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\nWEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}",
+                            response_mime_type="application/json",
+                            response_schema=RewriteSchema,
+                            temperature=0.0
+                        )
+                        rewrite_res = client.models.generate_content(
+                            model='gemma-4-26b-a4b-it', contents=bullet, config=rewrite_config
+                        )
+                        
+                        if rewrite_res.text:
+                            rewrite_text = rewrite_res.text.strip()
+                            rewrite_text = rewrite_text.replace("```json", "")
+                            rewrite_text = rewrite_text.replace("```", "")
+                            
+                            rewrite_data = json.loads(rewrite_text)
+                            refined_bullets.append(rewrite_data.get('rewritten', bullet))
+                        else:
+                            refined_bullets.append(bullet)
+                    else:
+                        refined_bullets.append(bullet)
+                        
+                except Exception as e:
+                    print(f"      ⚠️ AI Error: {e}. Skipping.")
+                    refined_bullets.append(bullet)
+                    
+            print("✅ Audit complete.")
+            return "\n".join([f"- {b}" for b in refined_bullets])
 
     # --- PHASE 2: PANDAS DATA EXTRACTION ---
     def extract_jd_keywords(self, jd_text: str):
