@@ -219,7 +219,7 @@ class ResumeEngine:
         )
         
         response = client.models.generate_content(
-            model='gemma-4-26b-a4b-it',
+            model='gemini-3.1-flash-lite',
             contents=jd_text,
             config=config
         )
@@ -262,11 +262,11 @@ class ResumeEngine:
             # 6. Extract the top matches
             top_matches = df_sorted.head(top_k)
             
-            # 7. Return as a list of dictionaries for the audit loop
             extracted_bullets = []
             for _, row in top_matches.iterrows():
                 clean_row = row.drop('match_score').to_dict()
-                bullet_string = row.get('bullet', str(clean_row.drop('match_score').to_dict()))
+                bullet_string = str(row.get('bullet') or row.get('achievement') or clean_row)
+                extracted_bullets.append(bullet_string)
                 
             print(f"🎯 Extracted {len(extracted_bullets)} highly relevant bullets based on {len(weighted_kws)} unique JD keywords.")
             return extracted_bullets
@@ -346,7 +346,7 @@ class ResumeEngine:
         
         # 6. Use the config in the call
         response = client.models.generate_content(
-            model='gemma-4-26b-a4b-it',
+            model='gemini-3.1-flash-lite',
             contents=combined_contents,
             config=generation_config
         )
