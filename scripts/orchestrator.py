@@ -13,7 +13,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-client = genai.Client()
+client = genai.Client(http_options={"timeout": 60})
 
 # ==========================================
 # PYDANTIC SCHEMAS
@@ -159,7 +159,7 @@ class ResumeEngine:
                     )
                     
                     critique_res = client.models.generate_content(
-                        model='gemma-4-26b-a4b-it', contents=bullet, config=critique_config
+                        model='gemini-3.1-flash-lite', contents=bullet, config=critique_config
                     )
                     
                     if not critique_res.text:
@@ -184,7 +184,7 @@ class ResumeEngine:
                             temperature=0.0
                         )
                         rewrite_res = client.models.generate_content(
-                            model='gemma-4-26b-a4b-it', contents=bullet, config=rewrite_config
+                            model='gemini-3.1-flash-lite', contents=bullet, config=rewrite_config
                         )
                         
                         if rewrite_res.text:
@@ -266,8 +266,7 @@ class ResumeEngine:
             extracted_bullets = []
             for _, row in top_matches.iterrows():
                 clean_row = row.drop('match_score').to_dict()
-                bullet_string = str(clean_row) 
-                extracted_bullets.append(bullet_string)
+                bullet_string = row.get('bullet', str(clean_row.drop('match_score').to_dict()))
                 
             print(f"🎯 Extracted {len(extracted_bullets)} highly relevant bullets based on {len(weighted_kws)} unique JD keywords.")
             return extracted_bullets
