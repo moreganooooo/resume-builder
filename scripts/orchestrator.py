@@ -165,7 +165,7 @@ class ResumeEngine:
                     )
                     
                     critique_res = client.models.generate_content(
-                        model='gemini-3.1-flash-lite', contents=bullet, config=critique_config
+                        model='gemini-2.5-flash-lite', contents=bullet, config=critique_config
                     )
                     
                     if not critique_res.text:
@@ -190,7 +190,7 @@ class ResumeEngine:
                             temperature=0.0
                         )
                         rewrite_res = client.models.generate_content(
-                            model='gemini-3.1-flash-lite', contents=bullet, config=rewrite_config
+                            model='gemini-2.5-flash-lite', contents=bullet, config=rewrite_config
                         )
                         
                         if rewrite_res.text:
@@ -225,7 +225,7 @@ class ResumeEngine:
         )
         
         response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
+            model='gemini-2.5-flash-lite',
             contents=jd_text,
             config=config
         )
@@ -297,7 +297,7 @@ class ResumeEngine:
         )
         
         response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
+            model='gemini-2.5-flash-lite',
             contents=bullet_text,
             config=config
         )
@@ -356,7 +356,7 @@ class ResumeEngine:
         
         # 6. Use the config in the call
         response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
+            model='gemini-2.5-flash',
             contents=combined_contents,
             config=generation_config
         )
