@@ -138,10 +138,16 @@ class ResumeEngine:
     def audit_and_refine_bullets(self, raw_bullets: List[str]):
             """Passes bullets through the Critique and Rewrite prompts."""
             print("🛡️ Starting the Skeptical Editor Audit Loop...")
+
+            # Guard: ensure we have a real list of bullets before firing any API calls
+            if not isinstance(raw_bullets, list) or len(raw_bullets) == 0:
+                print("⚠️ No bullets to audit (empty or invalid input). Skipping audit loop.")
+                return ""
             
             critique_prompt = self._load_prompt("critique_bullet.md")
             rewrite_prompt = self._load_prompt("rewrite_bullet.md")
             manager_test_rules = json.dumps(self._load_yaml(self.scoring_dir, "manager_test.yaml"))
+            believability_rules = json.dumps(self._load_yaml(self.scoring_dir, "believability.yaml"))
             style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
             
             refined_bullets = []
@@ -152,7 +158,7 @@ class ResumeEngine:
                 try:
                     # STEP 1: CRITIQUE
                     critique_config = types.GenerateContentConfig(
-                        system_instruction=f"{critique_prompt}\n\nRULES:\n{manager_test_rules}\n\nSTRICT INSTRUCTION: Return ONLY pure JSON.",
+                        system_instruction=f"{critique_prompt}\n\nRULES:\n{manager_test_rules}\n\nBELIEVABILITY RULES:\n{believability_rules}\n\nSTRICT INSTRUCTION: Return ONLY pure JSON.",
                         response_mime_type="application/json",
                         response_schema=CritiqueSchema,
                         temperature=0.0
@@ -242,7 +248,7 @@ class ResumeEngine:
         csv_path = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
         if not os.path.exists(csv_path):
             print(f"⚠️ Warning: {csv_path} not found in knowledge_base/. Skipping extraction.")
-            return "No CSV database found."
+            return []
             
         try:
             df = pd.read_csv(csv_path)
@@ -273,7 +279,7 @@ class ResumeEngine:
             
         except Exception as e:
             print(f"⚠️ Error reading CSV: {e}")
-            return "Error reading CSV database."
+            return []
 
     # --- AUDIT ENGINE ---
     def extract_evidence(self, bullet_text):
@@ -315,7 +321,11 @@ class ResumeEngine:
         raw_mined_bullets = self.mine_bullet_bank(job_description)
             
         # 2. Trigger Phase C Audit Loop (Critique & Rewrite)
-        polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets)
+        if not isinstance(raw_mined_bullets, list) or len(raw_mined_bullets) == 0:
+            print("⚠️ No bullets mined. Skipping audit loop.")
+            polished_bullets = ""
+        else:
+            polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets)
             
         # 3. Load Tailoring prompt and Rules
         prompt_template = self._load_prompt("tailor_resume.md")
