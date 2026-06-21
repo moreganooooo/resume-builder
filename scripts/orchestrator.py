@@ -37,8 +37,8 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
-CRITIQUE_MODEL = "gemini-2.5-flash"        # TEST: was "gemini-2.5-flash-lite" — swap back after diagnosis
-BUILDER_MODEL  = "gemini-2.5-flash"
+CRITIQUE_MODEL = "gemini-3.1-flash-lite"        # TEST: was "gemini-2.5-flash-lite" — swap back after diagnosis
+BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
 
