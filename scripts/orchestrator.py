@@ -23,8 +23,10 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique + rewrite (high-frequency, simple task).
-#   gemini-2.5-flash-lite has a higher free-tier TPM allowance and is more than
-#   capable of structured JSON scoring tasks.
+#   *** DIAGNOSTIC TEST: temporarily using gemini-2.5-flash (same model that
+#   successfully handles JD extraction) to isolate whether Flash Lite has a
+#   quota/access issue. If bullets now succeed, Flash Lite is the culprit.
+#   Swap back to "gemini-2.5-flash-lite" once confirmed working. ***
 #
 # BUILDER_MODEL: handles JD keyword extraction and the final resume assembly call.
 #   gemini-2.5-flash — established free-tier allowance (10-15 RPM / 1500 RPD).
@@ -35,7 +37,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
-CRITIQUE_MODEL = "gemini-2.5-flash-lite"
+CRITIQUE_MODEL = "gemini-2.5-flash"        # TEST: was "gemini-2.5-flash-lite" — swap back after diagnosis
 BUILDER_MODEL  = "gemini-2.5-flash"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
@@ -113,6 +115,12 @@ class GeminiClient:
         for attempt in range(max_retries):
             resp = requests.post(url, json=body, timeout=self.timeout)
             if resp.status_code == 429:
+                print("\n===== 429 EMBED RESPONSE BODY =====")
+                try:
+                    print(json.dumps(resp.json(), indent=2))
+                except Exception:
+                    print(resp.text)
+                print("===================================\n")
                 wait = 5 * (2 ** attempt)
                 print(f"         ⏳ Embed rate limited. Waiting {wait}s (attempt {attempt+1}/{max_retries})...")
                 time.sleep(wait)
@@ -151,6 +159,12 @@ class GeminiClient:
             resp = requests.post(url, json=body, timeout=self.timeout)
 
             if resp.status_code == 429:
+                print("\n===== 429 RESPONSE BODY =====")
+                try:
+                    print(json.dumps(resp.json(), indent=2))
+                except Exception:
+                    print(resp.text)
+                print("=============================\n")
                 wait = 5 * (2 ** attempt)
                 print(f"         ⏳ Rate limited. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
                 time.sleep(wait)
@@ -158,6 +172,13 @@ class GeminiClient:
 
             resp.raise_for_status()
             data = resp.json()
+
+            # --- DIAGNOSTIC: log token usage on every successful response ---
+            usage = data.get("usageMetadata", {})
+            if usage:
+                print(f"         📊 tokens — prompt: {usage.get('promptTokenCount', '?')} | "
+                      f"output: {usage.get('candidatesTokenCount', '?')} | "
+                      f"total: {usage.get('totalTokenCount', '?')}")
 
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
@@ -316,11 +337,13 @@ class ResumeEngine:
     def audit_and_refine_bullets(self, raw_bullets: List[str], static_prefix: str):
         """Passes bullets through the Critique and Rewrite prompts.
 
-        Uses CRITIQUE_MODEL (gemini-2.5-flash-lite) — higher free-tier TPM,
-        perfectly capable for structured JSON scoring tasks.
+        Uses CRITIQUE_MODEL — see model strategy comment at top of file.
         """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
+
+        # --- DIAGNOSTIC: log prompt sizes before the first API call ---
+        print(f"   📏 static_prefix size: {len(static_prefix):,} chars (~{len(static_prefix) // 4:,} tokens)")
 
         if not isinstance(raw_bullets, list) or len(raw_bullets) == 0:
             print("⚠️ No bullets to audit (empty or invalid input). Skipping audit loop.")
@@ -343,6 +366,9 @@ class ResumeEngine:
             f"\n\n{rewrite_prompt}"
             f"\n\nSTYLE RULES:\n{style_rules}"
         )
+
+        # --- DIAGNOSTIC: log full critique system prompt size ---
+        print(f"   📏 critique_system size: {len(critique_system):,} chars (~{len(critique_system) // 4:,} tokens)")
 
         refined_bullets = []
 
