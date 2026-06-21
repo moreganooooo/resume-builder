@@ -22,22 +22,18 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 # --- MODEL STRATEGY ---
-# CRITIQUE_MODEL: handles bullet critique + rewrite (high-frequency, simple task).
-#   *** DIAGNOSTIC TEST: temporarily using gemini-2.5-flash (same model that
-#   successfully handles JD extraction) to isolate whether Flash Lite has a
-#   quota/access issue. If bullets now succeed, Flash Lite is the culprit.
-#   Swap back to "gemini-2.5-flash-lite" once confirmed working. ***
+# CRITIQUE_MODEL: handles bullet critique + rewrite (high-frequency) and the
+#   post-build holistic resume critique. gemini-3.1-flash-lite gives the best
+#   free-tier headroom (15 RPM / 500 RPD) while reliably following JSON instructions.
 #
 # BUILDER_MODEL: handles JD keyword extraction and the final resume assembly call.
-#   gemini-2.5-flash — established free-tier allowance (10-15 RPM / 1500 RPD).
-#   gemini-3.5-flash launched May 19 2026 and has much tighter free-tier limits;
-#   it caused immediate 429s on the very first call of the run.
+#   Also gemini-3.1-flash-lite for the same quota reasons.
 #
 # EMBED_MODEL: gemini-embedding-2 (GA April 2026) — multimodal, 8k token input.
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
-CRITIQUE_MODEL = "gemini-3.1-flash-lite"        # TEST: was "gemini-2.5-flash-lite" — swap back after diagnosis
+CRITIQUE_MODEL = "gemini-3.1-flash-lite"
 BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
@@ -243,6 +239,14 @@ class RewriteSchema(BaseModel):
     original: str
     rewritten: str
     reason: str
+
+
+class ResumeCritiqueSchema(BaseModel):
+    summary_alignment_score: int = Field(description="0-100: does the Summary match the JD role and tone?")
+    skills_relevance_score: int = Field(description="0-100: are Skills and Competencies JD-relevant?")
+    overall_fit_score: int = Field(description="0-100: holistic resume-to-JD fit")
+    flags: List[str] = Field(description="Specific issues found, e.g. 'Summary mentions X but JD requires Y'")
+    recommendations: List[str] = Field(description="Actionable fixes, one per flag")
 
 
 class TemplateSchema(BaseModel):
@@ -458,7 +462,7 @@ class ResumeEngine:
 
         Stage 2 — Keyword re-rank (pandas, zero API calls):
             Score the Stage 1 candidates by weighted JD keyword overlap.
-            Tools keywords weight 2×, hard skills and core functions weight 1×.
+            Tools keywords weight 2x, hard skills and core functions weight 1x.
             Return the top top_k highest-scoring bullets.
         """
         print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
@@ -562,6 +566,44 @@ class ResumeEngine:
         )
         return GeminiClient.parse_json(response_text)
 
+    # --- POST-BUILD HOLISTIC CRITIQUE ---
+    def critique_assembled_resume(self, resume_json: dict, job_description: str) -> dict:
+        """Holistic post-build review of the assembled resume against the JD.
+
+        Runs after the resume JSON is saved. Checks Summary alignment, Skills
+        relevance, and overall fit — sections the bullet audit loop never touches.
+        Results are printed and returned; they do not trigger a re-run.
+        """
+        print("\n🔎 Running post-build holistic resume critique...")
+
+        critique_prompt = self._load_prompt("critique_resume.md")
+
+        contents = f"""# ASSEMBLED RESUME
+{json.dumps(resume_json, indent=2)}
+
+# TARGET JD
+{job_description}
+"""
+        response_text = client.generate(
+            model=CRITIQUE_MODEL,
+            system_instruction=critique_prompt,
+            contents=contents,
+            response_schema=ResumeCritiqueSchema,
+            temperature=0.0
+        )
+        result = GeminiClient.parse_json(response_text)
+        print(f"   Summary alignment : {result.get('summary_alignment_score')}/100")
+        print(f"   Skills relevance  : {result.get('skills_relevance_score')}/100")
+        print(f"   Overall fit       : {result.get('overall_fit_score')}/100")
+        flags = result.get('flags', [])
+        if flags:
+            print(f"   Flags ({len(flags)}):")
+            for flag in flags:
+                print(f"      ⚠️  {flag}")
+        else:
+            print("   ✅ No flags raised.")
+        return result
+
     # --- BUILDER ENGINE ---
     def build_tailored_resume(self, parsed_json_filename, jd_filename, output_filename="tailored_resume.json"):
         print(f"\n⚙️ INITIALIZING TAILORING ENGINE")
@@ -613,9 +655,16 @@ class ResumeEngine:
             temperature=0.2
         )
 
+        resume_json = GeminiClient.parse_json(response_text)
         with open(output_path, "w") as f:
-            json.dump(GeminiClient.parse_json(response_text), f, indent=2)
+            json.dump(resume_json, f, indent=2)
         print(f"✅ Success! Tailored resume saved to {output_path}")
+
+        # Post-build holistic critique — checks Summary, Skills, Competencies against JD
+        try:
+            self.critique_assembled_resume(resume_json, job_description)
+        except Exception as e:
+            print(f"   ⚠️ Holistic critique failed (non-fatal): {e}")
 
     # --- PHASE 4: THE RENDER PIPELINE ---
     def render_pdf(self, json_filename="tailored_resume.json", output_pdf_name="final_resume.pdf"):
