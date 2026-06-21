@@ -2,6 +2,7 @@ import os
 import time
 import yaml
 import json
+import re
 import requests
 import pandas as pd
 from dotenv import load_dotenv
@@ -29,6 +30,52 @@ DEFAULT_MODEL = "gemma-4-26b-a4b-it"
 # ==========================================
 
 
+# Few-shot examples keyed by schema name.
+# Gemma 4 ignores schema/instruction-style directives and narrates them back.
+# Showing one concrete input->output example is far more reliable.
+FEW_SHOT_EXAMPLES = {
+    "JDKeywordSchema": (
+        # example input
+        "We are looking for a Content Strategist proficient in Contentful and HubSpot. "
+        "Must have experience with SEO, A/B Testing, and editorial calendars.",
+        # expected output
+        json.dumps({
+            "tools": ["Contentful", "HubSpot"],
+            "hard_skills": ["SEO", "A/B Testing"],
+            "core_functions": ["Content Strategy", "Editorial Calendar Management"]
+        })
+    ),
+    "CritiqueSchema": (
+        "Led cross-functional teams to drive impactful synergies across the organisation.",
+        json.dumps({
+            "accuracy_score": 30,
+            "believability_score": 25,
+            "clarity_score": 40,
+            "ats_value": 20,
+            "manager_test": "FAIL",
+            "weaknesses": "No metrics, vague verbs, buzzword-heavy with no concrete outcome."
+        })
+    ),
+    "RewriteSchema": (
+        "Improved team communication and drove results.",
+        json.dumps({
+            "original": "Improved team communication and drove results.",
+            "rewritten": "Reduced cross-team response time by 30% by implementing a weekly async standup cadence for a 12-person team.",
+            "reason": "Added specificity, a metric, and a concrete method."
+        })
+    ),
+    "BulletAuditSchema": (
+        "Managed Salesforce CRM to increase pipeline visibility by 40% across 3 sales regions.",
+        json.dumps({
+            "action_taken": "Managed Salesforce CRM to increase pipeline visibility",
+            "tools_used": ["Salesforce CRM"],
+            "metrics_claimed": "40% increase across 3 sales regions",
+            "unsupported_claims": []
+        })
+    ),
+}
+
+
 class GeminiClient:
     """Minimal REST wrapper around the Gemini generateContent endpoint."""
 
@@ -38,7 +85,7 @@ class GeminiClient:
 
     @staticmethod
     def parse_json(text: str) -> dict:
-        """Strip markdown fencing and parse JSON. Raises with a helpful preview on failure."""
+        """Strip markdown fencing and parse JSON. Falls back to regex extraction."""
         if not text or not text.strip():
             raise ValueError("parse_json received an empty string — the model returned no content.")
 
@@ -51,11 +98,22 @@ class GeminiClient:
 
         cleaned = cleaned.strip()
 
+        # First attempt: direct parse
         try:
             return json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            preview = cleaned[:300].replace("\n", " ")
-            raise ValueError(f"JSON parse failed: {e}\nRaw preview: {preview!r}")
+        except json.JSONDecodeError:
+            pass
+
+        # Fallback: extract the first {...} block from the response
+        match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+        preview = cleaned[:300].replace("\n", " ")
+        raise ValueError(f"JSON parse failed — could not extract valid JSON.\nRaw preview: {preview!r}")
 
     def generate(self, model: str, system_instruction: str, contents: str,
                  response_schema: type = None, temperature: float = 0.1,
@@ -64,35 +122,32 @@ class GeminiClient:
         Retries with exponential backoff on 429 rate-limit errors.
 
         GEMMA COMPATIBILITY NOTES:
-        - responseSchema is NOT sent — Gemma hangs indefinitely if present.
-        - responseMimeType is NOT sent — Gemma returns empty candidates if present.
-        - Schema instructions are injected into the USER message (not system_instruction)
-          because Gemma treats system_instruction as role framing and ignores output
-          directives placed there.
+        - responseSchema and responseMimeType are NOT sent (causes hangs/empty responses).
+        - Instruction-style JSON directives are also ignored — Gemma narrates them back.
+        - Instead, a few-shot example is injected via a model/user turn pair so Gemma
+          sees a concrete input→output example immediately before the real request.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
-        # Wrap the user message with schema instructions so they appear
-        # immediately before and after the content Gemma needs to act on.
+        contents_turns = []
+
+        # Inject a few-shot example as a prior model/user exchange if one exists
         if response_schema is not None:
-            schema_json = json.dumps(response_schema.model_json_schema(), indent=2)
-            user_text = (
-                f"OUTPUT INSTRUCTIONS: You MUST respond with a single valid JSON object."
-                f" No markdown, no code fences, no explanation, no preamble — raw JSON only."
-                f"\n\nRequired schema:\n{schema_json}"
-                f"\n\n--- INPUT ---\n{contents}\n--- END INPUT ---"
-                f"\n\nRespond with the JSON object now:"
-            )
-        else:
-            user_text = contents
+            schema_name = response_schema.__name__
+            if schema_name in FEW_SHOT_EXAMPLES:
+                example_input, example_output = FEW_SHOT_EXAMPLES[schema_name]
+                contents_turns.append({"role": "user",  "parts": [{"text": example_input}]})
+                contents_turns.append({"role": "model", "parts": [{"text": example_output}]})
+
+        contents_turns.append({"role": "user", "parts": [{"text": contents}]})
 
         body = {
             "system_instruction": {"parts": [{"text": system_instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+            "contents": contents_turns,
             "generationConfig": {
                 "temperature": temperature,
-                # NOTE: responseMimeType and responseSchema intentionally omitted.
-                # Both cause Gemma to either hang or return empty candidates.
+                # responseMimeType and responseSchema intentionally omitted —
+                # both cause Gemma to return empty candidates or hang.
             }
         }
 
@@ -108,15 +163,14 @@ class GeminiClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # Debug: surface finish reason + any safety blocks
+            # Debug: surface unexpected finish reasons (safety blocks, errors, etc.)
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
             if finish_reason not in ("STOP", "MAX_TOKENS"):
                 print(f"         ⚠️  Unexpected finishReason: {finish_reason}")
                 print(f"         Raw API response: {json.dumps(data, indent=2)[:600]}")
 
-            text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
-            return text
+            return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
 
         # Final attempt after all retries exhausted
         resp = requests.post(url, json=body, timeout=self.timeout)
