@@ -1,4 +1,5 @@
 import os
+import time
 import yaml
 import json
 import requests
@@ -28,8 +29,10 @@ class GeminiClient:
         self.timeout = timeout
 
     def generate(self, model: str, system_instruction: str, contents: str,
-                 response_schema: type = None, temperature: float = 0.1) -> str:
-        """Call generateContent and return the response text."""
+                 response_schema: type = None, temperature: float = 0.1,
+                 max_retries: int = 4) -> str:
+        """Call generateContent and return the response text.
+        Retries with exponential backoff on 429 rate-limit errors."""
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
         body = {
@@ -41,13 +44,25 @@ class GeminiClient:
             }
         }
 
-        # If a Pydantic schema is supplied, inject it as a JSON schema hint
         if response_schema is not None:
             body["generationConfig"]["responseSchema"] = response_schema.model_json_schema()
 
+        for attempt in range(max_retries):
+            resp = requests.post(url, json=body, timeout=self.timeout)
+
+            if resp.status_code == 429:
+                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s, 40s
+                print(f"         ⏳ Rate limited. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(wait)
+                continue
+
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Final attempt after all retries exhausted
         resp = requests.post(url, json=body, timeout=self.timeout)
         resp.raise_for_status()
-
         data = resp.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
@@ -191,6 +206,10 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
+            # Polite pause between bullets to stay under the free-tier RPM limit
+            if i > 0:
+                time.sleep(3)
+
             try:
                 # STEP 1: CRITIQUE
                 critique_system = (
@@ -216,6 +235,8 @@ class ResumeEngine:
                 # STEP 2: REWRITE if needed
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
+
+                    time.sleep(2)  # extra pause before the second call on this bullet
 
                     rewrite_system = (
                         f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
@@ -359,8 +380,9 @@ class ResumeEngine:
         {polished_bullets}
         """
 
+        # gemini-2.0-flash: stable, fast, free-tier friendly, no special config needed
         response_text = client.generate(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             system_instruction=system_instruction,
             contents=combined_contents,
             response_schema=TemplateSchema,
