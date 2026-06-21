@@ -44,11 +44,11 @@ EMBED_DIM      = 768
 # (60s / 6s = 10 requests/min), giving comfortable headroom.
 # If a bullet also triggers a rewrite, two calls happen back-to-back with the same
 # sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
-BULLET_SLEEP = 12
+BULLET_SLEEP = 20
 
 # Audit loop processes this many top-scored bullets. 20 gives a strong candidate
 # pool for a resume while keeping TPM usage reasonable.
-TOP_K_BULLETS = 20
+TOP_K_BULLETS = 12
 
 # Semantic pre-filter pool size: top-N bullets by cosine similarity passed to the
 # keyword re-ranker. 30 gives a wide enough net without keyword scoring noise.
