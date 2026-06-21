@@ -40,14 +40,15 @@ BUILDER_MODEL  = "gemini-2.5-flash"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
 
-# Free tier limit is 15 RPM. At BULLET_SLEEP=6s between calls, we run at ~10 RPM
-# (60s / 6s = 10 requests/min), giving comfortable headroom.
-# If a bullet also triggers a rewrite, two calls happen back-to-back with the same
-# sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
-BULLET_SLEEP = 20
+# BULLET_SLEEP: pause between audit-loop calls (seconds).
+# A critique+rewrite pair fires two back-to-back calls on the same bullet,
+# momentarily doubling effective RPM. 25s keeps worst-case rate at ~2.4 RPM
+# even when every bullet triggers a rewrite — well under the free-tier ceiling.
+BULLET_SLEEP = 25
 
-# Audit loop processes this many top-scored bullets. 20 gives a strong candidate
-# pool for a resume while keeping TPM usage reasonable.
+# TOP_K_BULLETS: candidate pool sent into the audit loop.
+# The builder selects ~10 bullets for the final resume from this pool.
+# 12 is enough headroom without blowing the free-tier RPD budget.
 TOP_K_BULLETS = 12
 
 # Semantic pre-filter pool size: top-N bullets by cosine similarity passed to the
@@ -125,9 +126,13 @@ class GeminiClient:
 
     def generate(self, model: str, system_instruction: str, contents: str,
                  response_schema: type = None, temperature: float = 0.1,
-                 max_retries: int = 4) -> str:
+                 max_retries: int = 6) -> str:
         """Call generateContent and return the response text.
+
         Retries with exponential backoff on 429 rate-limit errors.
+        max_retries=6 gives a backoff window of up to 315s
+        (5+10+20+40+80+160) so transient quota spikes recover
+        instead of dropping bullets.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
