@@ -20,15 +20,26 @@ API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-# gemini-2.5-flash: stable, free tier, supports native JSON mode via responseMimeType.
-# gemini-2.0-flash was shut down June 2026 — do not use.
-DEFAULT_MODEL = "gemini-2.5-flash"
+# --- MODEL STRATEGY ---
+# CRITIQUE_MODEL: handles bullet critique + rewrite (high-frequency, simple task).
+#   gemini-2.5-flash-lite has a higher free-tier TPM allowance and is more than
+#   capable of structured JSON scoring. Saves quota for where it matters.
+#
+# BUILDER_MODEL: handles JD keyword extraction and the final resume assembly.
+#   gemini-3.5-flash is the newest stable model — best quality for the output
+#   that actually gets sent to recruiters.
+CRITIQUE_MODEL = "gemini-2.5-flash-lite"
+BUILDER_MODEL  = "gemini-3.5-flash"
 
 # Free tier limit is 15 RPM. At BULLET_SLEEP=6s between calls, we run at ~10 RPM
 # (60s / 6s = 10 requests/min), giving comfortable headroom.
 # If a bullet also triggers a rewrite, two calls happen back-to-back with the same
 # sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
 BULLET_SLEEP = 6
+
+# Audit loop processes this many top-scored bullets. 12 gives a strong candidate
+# pool for a resume while keeping TPM usage ~40% lower than the previous 20.
+TOP_K_BULLETS = 12
 
 
 # ==========================================
@@ -82,15 +93,14 @@ class GeminiClient:
         """Call generateContent and return the response text.
         Retries with exponential backoff on 429 rate-limit errors.
 
-        For gemini-2.5-flash and other Gemini models, responseMimeType
-        'application/json' activates native constrained decoding — the model
-        is guaranteed to return valid JSON.
+        For all Gemini models, responseMimeType 'application/json' activates
+        native constrained decoding — the model is guaranteed to return valid JSON.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
         generation_config = {"temperature": temperature}
 
-        # Enable native JSON mode for Gemini models.
+        # Enable native JSON mode.
         # This is the only reliable way to get structured JSON output.
         if response_schema is not None:
             generation_config["responseMimeType"] = "application/json"
@@ -248,20 +258,39 @@ class ResumeEngine:
             return "Fallback prompt: Process the text."
 
     def _load_knowledge_base(self):
-        """Stitches all text/markdown files in knowledge_base/ into a single context string."""
-        master_context = "\n=== SYSTEM KNOWLEDGE BASE ===\n\n"
+        """Stitches all KB files into a single static context string.
+
+        IMPLICIT CACHING: Files are loaded in sorted() order so the output is
+        byte-for-byte identical across every run. Google's infrastructure caches
+        prompt prefixes that match exactly — a single character difference breaks
+        the cache hit. Sorted order guarantees the prefix never drifts.
+
+        This context block is placed at the TOP of every payload so it forms
+        the cacheable prefix. The variable content (JD, bullets) is always
+        appended AFTER it.
+        """
+        master_context = "=== SYSTEM KNOWLEDGE BASE ===\n\n"
 
         if os.path.exists(self.kb_dir):
-            for filename in os.listdir(self.kb_dir):
+            for filename in sorted(os.listdir(self.kb_dir)):  # sorted = deterministic = cache hits
                 if filename.endswith(('.md', '.yml', '.yaml', '.txt')):
                     filepath = os.path.join(self.kb_dir, filename)
                     with open(filepath, "r", encoding="utf-8") as f:
                         master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
         return master_context
 
-    def audit_and_refine_bullets(self, raw_bullets: List[str]):
-        """Passes bullets through the Critique and Rewrite prompts."""
+    def audit_and_refine_bullets(self, raw_bullets: List[str], static_prefix: str):
+        """Passes bullets through the Critique and Rewrite prompts.
+
+        Uses CRITIQUE_MODEL (gemini-2.5-flash-lite) — higher free-tier TPM,
+        perfectly capable for structured JSON scoring tasks.
+
+        static_prefix is the pre-loaded knowledge base string. It is passed in
+        (not reloaded) so the exact same bytes are used on every call, maximising
+        implicit cache hits on the system_instruction prefix.
+        """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
+        print(f"   Model: {CRITIQUE_MODEL}")
 
         if not isinstance(raw_bullets, list) or len(raw_bullets) == 0:
             print("⚠️ No bullets to audit (empty or invalid input). Skipping audit loop.")
@@ -272,6 +301,20 @@ class ResumeEngine:
         manager_test_rules = json.dumps(self._load_yaml(self.scoring_dir, "manager_test.yaml"))
         believability_rules = json.dumps(self._load_yaml(self.scoring_dir, "believability.yaml"))
         style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
+
+        # Static prefix FIRST so it forms the cacheable token prefix.
+        # The per-bullet variable content is in `contents`, not here.
+        critique_system = (
+            f"{static_prefix}"
+            f"\n\n{critique_prompt}"
+            f"\n\nRULES:\n{manager_test_rules}"
+            f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
+        )
+        rewrite_system = (
+            f"{static_prefix}"
+            f"\n\n{rewrite_prompt}"
+            f"\n\nSTYLE RULES:\n{style_rules}"
+        )
 
         refined_bullets = []
 
@@ -285,12 +328,8 @@ class ResumeEngine:
 
             try:
                 # STEP 1: CRITIQUE
-                critique_system = (
-                    f"{critique_prompt}\n\nRULES:\n{manager_test_rules}\n\n"
-                    f"BELIEVABILITY RULES:\n{believability_rules}"
-                )
                 critique_text = client.generate(
-                    model=DEFAULT_MODEL,
+                    model=CRITIQUE_MODEL,
                     system_instruction=critique_system,
                     contents=bullet,
                     response_schema=CritiqueSchema,
@@ -309,14 +348,16 @@ class ResumeEngine:
 
                     time.sleep(BULLET_SLEEP)
 
-                    rewrite_system = (
-                        f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
-                        f"WEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
+                    # Append weaknesses to the rewrite contents (variable part),
+                    # not the system_instruction, so the static prefix stays identical.
+                    rewrite_contents = (
+                        f"{bullet}"
+                        f"\n\nWEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
                     )
                     rewrite_text = client.generate(
-                        model=DEFAULT_MODEL,
+                        model=CRITIQUE_MODEL,
                         system_instruction=rewrite_system,
-                        contents=bullet,
+                        contents=rewrite_contents,
                         response_schema=RewriteSchema,
                         temperature=0.0
                     )
@@ -342,7 +383,7 @@ class ResumeEngine:
         print("🔍 Analyzing JD to extract core tools and functional requirements...")
 
         response_text = client.generate(
-            model=DEFAULT_MODEL,
+            model=BUILDER_MODEL,
             system_instruction="You are an expert technical recruiter. Extract tools, hard skills, and core functions from the provided job description.",
             contents=jd_text,
             response_schema=JDKeywordSchema,
@@ -350,8 +391,8 @@ class ResumeEngine:
         )
         return GeminiClient.parse_json(response_text)
 
-    def mine_bullet_bank(self, jd_text: str, top_k: int = 20):
-        """Scores and extracts the top 20 most relevant bullets from the CSV."""
+    def mine_bullet_bank(self, jd_text: str, top_k: int = TOP_K_BULLETS):
+        """Scores and extracts the top-K most relevant bullets from the CSV."""
         print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
 
         keywords_dict = self.extract_jd_keywords(jd_text)
@@ -401,7 +442,7 @@ class ResumeEngine:
         )
 
         response_text = client.generate(
-            model=DEFAULT_MODEL,
+            model=CRITIQUE_MODEL,
             system_instruction=system_instruction,
             contents=bullet_text,
             response_schema=BulletAuditSchema,
@@ -412,6 +453,8 @@ class ResumeEngine:
     # --- BUILDER ENGINE ---
     def build_tailored_resume(self, parsed_json_filename, jd_filename, output_filename="tailored_resume.json"):
         print(f"\n⚙️ INITIALIZING TAILORING ENGINE")
+        print(f"   Critique model : {CRITIQUE_MODEL}")
+        print(f"   Builder model  : {BUILDER_MODEL}")
 
         parsed_json_path = os.path.join(self.output_json_dir, parsed_json_filename)
         jd_path = os.path.join(self.jds_dir, jd_filename)
@@ -422,18 +465,29 @@ class ResumeEngine:
         with open(jd_path, "r") as f:
             job_description = f.read()
 
+        # Load the knowledge base ONCE. The same bytes are reused across all
+        # audit loop calls and the final builder call so the implicit cache
+        # prefix never drifts between requests.
+        knowledge_context = self._load_knowledge_base()
+
         raw_mined_bullets = self.mine_bullet_bank(job_description)
 
         if not isinstance(raw_mined_bullets, list) or len(raw_mined_bullets) == 0:
             print("⚠️ No bullets mined. Skipping audit loop.")
             polished_bullets = ""
         else:
-            polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets)
+            polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets, static_prefix=knowledge_context)
 
         prompt_template = self._load_prompt("tailor_resume.md")
-        knowledge_context = self._load_knowledge_base()
 
-        system_instruction = f"{prompt_template}\n{knowledge_context}"
+        # IMPLICIT CACHING STRUCTURE:
+        # system_instruction = [static KB prefix] + [static prompt template]
+        # contents           = [variable: candidate data + JD + bullets]
+        #
+        # The system_instruction prefix is identical on every run (KB files
+        # haven't changed, sorted order is deterministic). Google caches it.
+        # Only the contents section changes per job application.
+        system_instruction = f"{knowledge_context}\n\n{prompt_template}"
 
         combined_contents = f"""\
 # CANDIDATE DATA
@@ -447,7 +501,7 @@ class ResumeEngine:
 """
 
         response_text = client.generate(
-            model=DEFAULT_MODEL,
+            model=BUILDER_MODEL,
             system_instruction=system_instruction,
             contents=combined_contents,
             response_schema=TemplateSchema,
