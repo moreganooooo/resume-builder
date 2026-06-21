@@ -20,60 +20,15 @@ API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-# gemma-4-26b-a4b-it: unlimited RPD, 15 RPM on the free tier
-DEFAULT_MODEL = "gemma-4-26b-a4b-it"
+# gemini-2.0-flash: 1500 RPD / 15 RPM on free tier. Supports native JSON mode.
+# Gemma models do NOT reliably support structured output — swap back only if needed.
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
-# Needed because SDK 2.9.0 doesn't support AQ. key format
+# Needed because SDK 2.9.0 doesn't support AQ key format
 # ==========================================
-
-
-# Few-shot examples keyed by schema name.
-# Gemma 4 ignores schema/instruction-style directives and narrates them back.
-# Showing one concrete input->output example is far more reliable.
-FEW_SHOT_EXAMPLES = {
-    "JDKeywordSchema": (
-        # example input
-        "We are looking for a Content Strategist proficient in Contentful and HubSpot. "
-        "Must have experience with SEO, A/B Testing, and editorial calendars.",
-        # expected output
-        json.dumps({
-            "tools": ["Contentful", "HubSpot"],
-            "hard_skills": ["SEO", "A/B Testing"],
-            "core_functions": ["Content Strategy", "Editorial Calendar Management"]
-        })
-    ),
-    "CritiqueSchema": (
-        "Led cross-functional teams to drive impactful synergies across the organisation.",
-        json.dumps({
-            "accuracy_score": 30,
-            "believability_score": 25,
-            "clarity_score": 40,
-            "ats_value": 20,
-            "manager_test": "FAIL",
-            "weaknesses": "No metrics, vague verbs, buzzword-heavy with no concrete outcome."
-        })
-    ),
-    "RewriteSchema": (
-        "Improved team communication and drove results.",
-        json.dumps({
-            "original": "Improved team communication and drove results.",
-            "rewritten": "Reduced cross-team response time by 30% by implementing a weekly async standup cadence for a 12-person team.",
-            "reason": "Added specificity, a metric, and a concrete method."
-        })
-    ),
-    "BulletAuditSchema": (
-        "Managed Salesforce CRM to increase pipeline visibility by 40% across 3 sales regions.",
-        json.dumps({
-            "action_taken": "Managed Salesforce CRM to increase pipeline visibility",
-            "tools_used": ["Salesforce CRM"],
-            "metrics_claimed": "40% increase across 3 sales regions",
-            "unsupported_claims": []
-        })
-    ),
-}
 
 
 class GeminiClient:
@@ -121,34 +76,23 @@ class GeminiClient:
         """Call generateContent and return the response text.
         Retries with exponential backoff on 429 rate-limit errors.
 
-        GEMMA COMPATIBILITY NOTES:
-        - responseSchema and responseMimeType are NOT sent (causes hangs/empty responses).
-        - Instruction-style JSON directives are also ignored — Gemma narrates them back.
-        - Instead, a few-shot example is injected via a model/user turn pair so Gemma
-          sees a concrete input→output example immediately before the real request.
+        For gemini-2.0-flash and other Gemini models, responseMimeType
+        'application/json' activates native constrained decoding — the model
+        is guaranteed to return valid JSON.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
-        contents_turns = []
+        generation_config = {"temperature": temperature}
 
-        # Inject a few-shot example as a prior model/user exchange if one exists
+        # Enable native JSON mode for Gemini models.
+        # This is the only reliable way to get structured JSON output.
         if response_schema is not None:
-            schema_name = response_schema.__name__
-            if schema_name in FEW_SHOT_EXAMPLES:
-                example_input, example_output = FEW_SHOT_EXAMPLES[schema_name]
-                contents_turns.append({"role": "user",  "parts": [{"text": example_input}]})
-                contents_turns.append({"role": "model", "parts": [{"text": example_output}]})
-
-        contents_turns.append({"role": "user", "parts": [{"text": contents}]})
+            generation_config["responseMimeType"] = "application/json"
 
         body = {
             "system_instruction": {"parts": [{"text": system_instruction}]},
-            "contents": contents_turns,
-            "generationConfig": {
-                "temperature": temperature,
-                # responseMimeType and responseSchema intentionally omitted —
-                # both cause Gemma to return empty candidates or hang.
-            }
+            "contents": [{"role": "user", "parts": [{"text": contents}]}],
+            "generationConfig": generation_config,
         }
 
         for attempt in range(max_retries):
@@ -328,9 +272,9 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
-            # Brief pause between bullets — Gemma has unlimited RPD, 15 RPM
+            # Brief pause between bullets — free tier is 15 RPM
             if i > 0:
-                time.sleep(2)
+                time.sleep(4)
 
             try:
                 # STEP 1: CRITIQUE
@@ -356,7 +300,7 @@ class ResumeEngine:
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
 
-                    time.sleep(2)
+                    time.sleep(4)
 
                     rewrite_system = (
                         f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
@@ -392,7 +336,7 @@ class ResumeEngine:
 
         response_text = client.generate(
             model=DEFAULT_MODEL,
-            system_instruction="You are an expert technical recruiter who extracts structured data from job descriptions.",
+            system_instruction="You are an expert technical recruiter. Extract tools, hard skills, and core functions from the provided job description.",
             contents=jd_text,
             response_schema=JDKeywordSchema,
             temperature=0.1
