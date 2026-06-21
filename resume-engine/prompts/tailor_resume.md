@@ -19,5 +19,26 @@ NEVER invent qualifications, fabricate metrics, or add companies/titles the cand
 5. **Rewrite Evidence:** Adjust the phrasing and verbs to mirror the exact vocabulary of the JD to optimize for ATS (Applicant Tracking Systems). 
 6. **Add Content (Absolute Last Resort):** You may only generate new summary statements or bridge transitions. Do not add new hard evidence.
 
-# Output Instructions
-Return the fully tailored resume as a valid JSON object matching the exact schema requested by the system.
+# Output Schema Requirements
+Your JSON output MUST use these exact uppercase field names. Any other field names will break the render pipeline.
+
+Required top-level fields:
+- NAME (string) — candidate full name
+- TAGLINE (string) — max 80 chars, role-focused
+- PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, PORTFOLIO_URL, PORTFOLIO_DISPLAY, LOCATION
+- SUMMARY_TEXT (string) — max 5 lines, first sentence bolded with <strong> tags, no generic filler
+- COMPETENCIES (array of 6-8 strings) — exact keywords from the JD
+- EXPERIENCE (array of objects with keys: title, company, period, achievements)
+- PROJECTS (array of 3-4 strings)
+- EDUCATION (array of strings)
+- CERTIFICATIONS (array of exactly 3 strings)
+- SKILLS (array of strings)
+
+Section header fields (use these exact values):
+- SECTION_SUMMARY = "Professional Summary"
+- SECTION_COMPETENCIES = "Core Competencies"
+- SECTION_EXPERIENCE = "Work Experience"
+- SECTION_PROJECTS = "Projects"
+- SECTION_EDUCATION = "Education"
+- SECTION_CERTIFICATIONS = "Training & Certifications"
+- SECTION_SKILLS = "Skills"
