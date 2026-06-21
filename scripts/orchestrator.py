@@ -8,21 +8,26 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List
 
+
 # --- PATH RESOLUTION & ENV SETUP ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
+
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
+
 # gemma-4-26b-a4b-it: unlimited RPD, 15 RPM on the free tier
 DEFAULT_MODEL = "gemma-4-26b-a4b-it"
+
 
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
 # Needed because SDK 2.9.0 doesn't support AQ. key format
 # ==========================================
+
 
 class GeminiClient:
     """Minimal REST wrapper around the Gemini generateContent endpoint."""
@@ -31,24 +36,45 @@ class GeminiClient:
         self.api_key = api_key
         self.timeout = timeout
 
+    @staticmethod
+    def parse_json(text: str) -> dict:
+        """Strip any markdown fencing and parse JSON robustly."""
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1]  # drop opening fence line
+            cleaned = cleaned.rsplit("```", 1)[0]  # drop closing fence
+        return json.loads(cleaned.strip())
+
     def generate(self, model: str, system_instruction: str, contents: str,
                  response_schema: type = None, temperature: float = 0.1,
                  max_retries: int = 4) -> str:
         """Call generateContent and return the response text.
-        Retries with exponential backoff on 429 rate-limit errors."""
+        Retries with exponential backoff on 429 rate-limit errors.
+
+        NOTE: responseSchema is intentionally NOT sent in generationConfig —
+        Gemma models do not support constrained schema output at the API level
+        and will hang indefinitely if it is present. Instead, the schema is
+        injected into the system instruction as a prompt directive.
+        """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
+        # Inject schema as a prompt directive instead of a generationConfig constraint
+        schema_hint = ""
+        if response_schema is not None:
+            schema_hint = (
+                "\n\nYou MUST return a single valid JSON object matching this exact schema. "
+                "No markdown, no code fences, no explanation — raw JSON only.\n"
+                f"Schema:\n{json.dumps(response_schema.model_json_schema(), indent=2)}"
+            )
+
         body = {
-            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "system_instruction": {"parts": [{"text": system_instruction + schema_hint}]},
             "contents": [{"role": "user", "parts": [{"text": contents}]}],
             "generationConfig": {
                 "temperature": temperature,
                 "responseMimeType": "application/json",
             }
         }
-
-        if response_schema is not None:
-            body["generationConfig"]["responseSchema"] = response_schema.model_json_schema()
 
         for attempt in range(max_retries):
             resp = requests.post(url, json=body, timeout=self.timeout)
@@ -72,9 +98,11 @@ class GeminiClient:
 
 client = GeminiClient(api_key=API_KEY, timeout=120)
 
+
 # ==========================================
 # PYDANTIC SCHEMAS
 # ==========================================
+
 
 class BulletAuditSchema(BaseModel):
     action_taken: str = Field(description="The core objective action or task performed.")
@@ -82,11 +110,13 @@ class BulletAuditSchema(BaseModel):
     metrics_claimed: str = Field(description="Any specific quantities, percentages, or numbers. Use 'None' if missing.")
     unsupported_claims: List[str] = Field(description="List of generic fluff phrases, buzzwords, or unmeasurable claims.")
 
+
 class WorkExperience(BaseModel):
     title: str
     company: str
     period: str
     achievements: List[str]
+
 
 class ResumeSchema(BaseModel):
     name: str
@@ -95,10 +125,12 @@ class ResumeSchema(BaseModel):
     skills: List[str]
     experience: List[WorkExperience]
 
+
 class JDKeywordSchema(BaseModel):
     tools: List[str] = Field(description="Specific software, platforms, and tech stack (e.g., Salesforce, Outreach.io, Figma).")
     hard_skills: List[str] = Field(description="Specific methodologies, metrics, and frameworks (e.g., Lifecycle Marketing, A/B Testing, Pipeline Generation).")
     core_functions: List[str] = Field(description="Primary responsibilities and domain areas (e.g., Content Governance, Enablement Training).")
+
 
 class CritiqueSchema(BaseModel):
     accuracy_score: int = Field(description="0-100 score")
@@ -108,10 +140,12 @@ class CritiqueSchema(BaseModel):
     manager_test: str = Field(description="Strictly 'PASS' or 'FAIL'")
     weaknesses: str = Field(description="Explanation of flaws")
 
+
 class RewriteSchema(BaseModel):
     original: str
     rewritten: str
     reason: str
+
 
 class TemplateSchema(BaseModel):
     NAME: str = Field(description="Must match candidate name.")
@@ -145,9 +179,11 @@ class TemplateSchema(BaseModel):
     SECTION_SKILLS: str = "Skills"
     SKILLS: List[str] = Field(description="Technical skills mapped to JD.")
 
+
 # ==========================================
 # RESUME OPERATING SYSTEM ENGINE
 # ==========================================
+
 
 class ResumeEngine:
     def __init__(self):
@@ -232,8 +268,7 @@ class ResumeEngine:
                     refined_bullets.append(bullet)
                     continue
 
-                clean_text = critique_text.strip().replace("```json", "").replace("```", "")
-                critique_data = json.loads(clean_text)
+                critique_data = GeminiClient.parse_json(critique_text)
 
                 # STEP 2: REWRITE if needed
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
@@ -254,8 +289,7 @@ class ResumeEngine:
                     )
 
                     if rewrite_text:
-                        rewrite_text = rewrite_text.strip().replace("```json", "").replace("```", "")
-                        rewrite_data = json.loads(rewrite_text)
+                        rewrite_data = GeminiClient.parse_json(rewrite_text)
                         refined_bullets.append(rewrite_data.get('rewritten', bullet))
                     else:
                         refined_bullets.append(bullet)
@@ -281,7 +315,7 @@ class ResumeEngine:
             response_schema=JDKeywordSchema,
             temperature=0.1
         )
-        return json.loads(response_text)
+        return GeminiClient.parse_json(response_text)
 
     def mine_bullet_bank(self, jd_text: str, top_k: int = 20):
         """Scores and extracts the top 20 most relevant bullets from the CSV."""
@@ -340,7 +374,7 @@ class ResumeEngine:
             response_schema=BulletAuditSchema,
             temperature=0.1
         )
-        return json.loads(response_text)
+        return GeminiClient.parse_json(response_text)
 
     # --- BUILDER ENGINE ---
     def build_tailored_resume(self, parsed_json_filename, jd_filename, output_filename="tailored_resume.json"):
@@ -392,7 +426,7 @@ class ResumeEngine:
         )
 
         with open(output_path, "w") as f:
-            json.dump(json.loads(response_text), f, indent=2)
+            json.dump(GeminiClient.parse_json(response_text), f, indent=2)
         print(f"✅ Success! Tailored resume saved to {output_path}")
 
     # --- PHASE 4: THE RENDER PIPELINE ---
