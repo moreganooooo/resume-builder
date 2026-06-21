@@ -31,6 +31,16 @@ df = pd.read_csv(csv_path)
 
 out_path = os.path.join(engine.kb_dir, "bullet-bank-audited.csv")
 
+# Column name candidates for the bullet text field (handles variations across files)
+BULLET_COL_CANDIDATES = ["bullet", "achievement", "Bullet Point"]
+
+def detect_bullet_col(columns):
+    """Return the first matching bullet column name, or None if not found."""
+    for c in BULLET_COL_CANDIDATES:
+        if c in columns:
+            return c
+    return None
+
 # --- RESUME FROM CHECKPOINT ---
 # If a partial output file already exists, load already-scored bullets and
 # skip them so a restart picks up exactly where it left off.
@@ -40,8 +50,9 @@ results = []
 if os.path.exists(out_path):
     try:
         existing = pd.read_csv(out_path)
-        # Identify the bullet column name (support both 'bullet' and 'achievement')
-        bullet_col = "bullet" if "bullet" in existing.columns else "achievement"
+        bullet_col = detect_bullet_col(existing.columns)
+        if bullet_col is None:
+            raise ValueError(f"No known bullet column found in checkpoint. Columns: {list(existing.columns)}")
         already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
         results = existing.to_dict("records")
         print(f"♻️  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
@@ -52,7 +63,7 @@ total = len(df)
 skipped = 0
 
 for i, row in df.iterrows():
-    bullet = str(row.get("bullet") or row.get("achievement") or row.to_dict())
+    bullet = str(row.get("Bullet Point") or row.get("bullet") or row.get("achievement") or row.to_dict())
 
     # Skip if already scored in a previous run
     if bullet in already_scored_bullets:
