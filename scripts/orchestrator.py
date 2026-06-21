@@ -16,8 +16,8 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Model used for all calls — gemini-2.0-flash is free-tier friendly (15 RPM)
-DEFAULT_MODEL = "gemini-2.0-flash"
+# gemma-4-26b-a4b-it: unlimited RPD, 15 RPM on the free tier
+DEFAULT_MODEL = "gemma-4-26b-a4b-it"
 
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
@@ -209,9 +209,9 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
-            # Polite pause between bullets to stay under the free-tier 15 RPM limit
+            # Brief pause between bullets — Gemma has unlimited RPD, 15 RPM
             if i > 0:
-                time.sleep(5)
+                time.sleep(2)
 
             try:
                 # STEP 1: CRITIQUE
@@ -239,7 +239,7 @@ class ResumeEngine:
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
 
-                    time.sleep(4)  # extra pause before the second call on this bullet
+                    time.sleep(2)
 
                     rewrite_system = (
                         f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
