@@ -575,19 +575,13 @@ class ResumeEngine:
         with open(jd_path, "r") as f:
             job_description = f.read()
 
-        knowledge_context = self._load_knowledge_base()
+        knowledge_context = self._load_knowledge_base()       # full KB — still used by the builder
+        audit_context = self._load_audit_context()            # NEW: tiny context just for the audit loop
 
         raw_mined_bullets = self.mine_bullet_bank(job_description)
+        polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets, static_prefix="")
 
-        if not isinstance(raw_mined_bullets, list) or len(raw_mined_bullets) == 0:
-            print("⚠️ No bullets mined. Skipping audit loop.")
-            polished_bullets = ""
-        else:
-            polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets, static_prefix=knowledge_context)
-
-        prompt_template = self._load_prompt("tailor_resume.md")
-
-        system_instruction = f"{knowledge_context}\n\n{prompt_template}"
+        system_instruction = f"{knowledge_context}\n\n{prompt_template}"  # builder keeps full KB — that's fine
 
         combined_contents = f"""\
 # CANDIDATE DATA
