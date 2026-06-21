@@ -29,11 +29,38 @@ critique_system = (
 csv_path = os.path.join(engine.kb_dir, "bullet-bank-clean.csv")
 df = pd.read_csv(csv_path)
 
+out_path = os.path.join(engine.kb_dir, "bullet-bank-audited.csv")
+
+# --- RESUME FROM CHECKPOINT ---
+# If a partial output file already exists, load already-scored bullets and
+# skip them so a restart picks up exactly where it left off.
+already_scored_bullets = set()
 results = []
+
+if os.path.exists(out_path):
+    try:
+        existing = pd.read_csv(out_path)
+        # Identify the bullet column name (support both 'bullet' and 'achievement')
+        bullet_col = "bullet" if "bullet" in existing.columns else "achievement"
+        already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
+        results = existing.to_dict("records")
+        print(f"♻️  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
+    except Exception as e:
+        print(f"⚠️  Could not read existing checkpoint ({e}). Starting fresh.")
+
+total = len(df)
+skipped = 0
 
 for i, row in df.iterrows():
     bullet = str(row.get("bullet") or row.get("achievement") or row.to_dict())
-    print(f"Auditing bullet {i+1}/{len(df)}: {bullet[:60]}...")
+
+    # Skip if already scored in a previous run
+    if bullet in already_scored_bullets:
+        skipped += 1
+        continue
+
+    processed = len(results) - skipped + 1
+    print(f"Auditing bullet {i+1}/{total} (scored {len(results)+1} total): {bullet[:60]}...")
 
     try:
         critique_text = client.generate(
@@ -57,11 +84,14 @@ for i, row in df.iterrows():
         print(f"  ⚠️ Error: {e}")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": str(e)})
 
-    if i < len(df) - 1:
+    # --- CHECKPOINT SAVE after every bullet ---
+    pd.DataFrame(results).to_csv(out_path, index=False)
+    print(f"   💾 Checkpoint saved ({len(results)} bullets scored)")
+
+    if i < total - 1:
         time.sleep(SLEEP)
 
-out_path = os.path.join(engine.kb_dir, "bullet-bank-audited.csv")
-pd.DataFrame(results).to_csv(out_path, index=False)
 print(f"\n✅ Done. Results saved to {out_path}")
-print(f"   PASS: {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
-print(f"   FAIL: {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
+print(f"   PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
+print(f"   FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
+print(f"   ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
