@@ -66,26 +66,33 @@ class GeminiClient:
         GEMMA COMPATIBILITY NOTES:
         - responseSchema is NOT sent — Gemma hangs indefinitely if present.
         - responseMimeType is NOT sent — Gemma returns empty candidates if present.
-        - Schema is injected as a plain-text prompt directive instead.
+        - Schema instructions are injected into the USER message (not system_instruction)
+          because Gemma treats system_instruction as role framing and ignores output
+          directives placed there.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
-        # Inject schema as a prompt directive instead of a generationConfig constraint
-        schema_hint = ""
+        # Wrap the user message with schema instructions so they appear
+        # immediately before and after the content Gemma needs to act on.
         if response_schema is not None:
-            schema_hint = (
-                "\n\nYou MUST return a single valid JSON object matching this exact schema. "
-                "No markdown, no code fences, no explanation — raw JSON only.\n"
-                f"Schema:\n{json.dumps(response_schema.model_json_schema(), indent=2)}"
+            schema_json = json.dumps(response_schema.model_json_schema(), indent=2)
+            user_text = (
+                f"OUTPUT INSTRUCTIONS: You MUST respond with a single valid JSON object."
+                f" No markdown, no code fences, no explanation, no preamble — raw JSON only."
+                f"\n\nRequired schema:\n{schema_json}"
+                f"\n\n--- INPUT ---\n{contents}\n--- END INPUT ---"
+                f"\n\nRespond with the JSON object now:"
             )
+        else:
+            user_text = contents
 
         body = {
-            "system_instruction": {"parts": [{"text": system_instruction + schema_hint}]},
-            "contents": [{"role": "user", "parts": [{"text": contents}]}],
+            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "contents": [{"role": "user", "parts": [{"text": user_text}]}],
             "generationConfig": {
                 "temperature": temperature,
-                # NOTE: responseMimeType intentionally omitted.
-                # Gemma ignores it but returns empty candidates, causing JSONDecodeError downstream.
+                # NOTE: responseMimeType and responseSchema intentionally omitted.
+                # Both cause Gemma to either hang or return empty candidates.
             }
         }
 
@@ -275,8 +282,7 @@ class ResumeEngine:
                 # STEP 1: CRITIQUE
                 critique_system = (
                     f"{critique_prompt}\n\nRULES:\n{manager_test_rules}\n\n"
-                    f"BELIEVABILITY RULES:\n{believability_rules}\n\n"
-                    f"STRICT INSTRUCTION: Return ONLY pure JSON."
+                    f"BELIEVABILITY RULES:\n{believability_rules}"
                 )
                 critique_text = client.generate(
                     model=DEFAULT_MODEL,
@@ -332,7 +338,7 @@ class ResumeEngine:
 
         response_text = client.generate(
             model=DEFAULT_MODEL,
-            system_instruction="You are an expert technical recruiter. Extract the tools, hard skills, and core functions from this job description. Return ONLY valid JSON — no markdown, no fences.",
+            system_instruction="You are an expert technical recruiter who extracts structured data from job descriptions.",
             contents=jd_text,
             response_schema=JDKeywordSchema,
             temperature=0.1
@@ -421,23 +427,19 @@ class ResumeEngine:
 
         prompt_template = self._load_prompt("tailor_resume.md")
         knowledge_context = self._load_knowledge_base()
-        schema_rules = json.dumps(TemplateSchema.model_json_schema(), indent=2)
 
-        system_instruction = (
-            f"{prompt_template}\n{knowledge_context}\n\n"
-            f"OUTPUT FORMAT: Return ONLY valid JSON adhering to this schema:\n{schema_rules}"
-        )
+        system_instruction = f"{prompt_template}\n{knowledge_context}"
 
-        combined_contents = f"""
-        # CANDIDATE DATA
-        {master_resume}
+        combined_contents = f"""\
+# CANDIDATE DATA
+{master_resume}
 
-        # TARGET JD
-        {job_description}
+# TARGET JD
+{job_description}
 
-        ### POLISHED BULLETS (Audited & Refined)
-        {polished_bullets}
-        """
+### POLISHED BULLETS (Audited & Refined)
+{polished_bullets}
+"""
 
         response_text = client.generate(
             model=DEFAULT_MODEL,
