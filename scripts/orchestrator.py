@@ -38,12 +38,24 @@ class GeminiClient:
 
     @staticmethod
     def parse_json(text: str) -> dict:
-        """Strip any markdown fencing and parse JSON robustly."""
+        """Strip markdown fencing and parse JSON. Raises with a helpful preview on failure."""
+        if not text or not text.strip():
+            raise ValueError("parse_json received an empty string — the model returned no content.")
+
         cleaned = text.strip()
+
+        # Strip opening fence (```json or ``` alone)
         if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[-1]  # drop opening fence line
-            cleaned = cleaned.rsplit("```", 1)[0]  # drop closing fence
-        return json.loads(cleaned.strip())
+            cleaned = cleaned.split("\n", 1)[-1]
+            cleaned = cleaned.rsplit("```", 1)[0]
+
+        cleaned = cleaned.strip()
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            preview = cleaned[:300].replace("\n", " ")
+            raise ValueError(f"JSON parse failed: {e}\nRaw preview: {preview!r}")
 
     def generate(self, model: str, system_instruction: str, contents: str,
                  response_schema: type = None, temperature: float = 0.1,
@@ -51,10 +63,10 @@ class GeminiClient:
         """Call generateContent and return the response text.
         Retries with exponential backoff on 429 rate-limit errors.
 
-        NOTE: responseSchema is intentionally NOT sent in generationConfig —
-        Gemma models do not support constrained schema output at the API level
-        and will hang indefinitely if it is present. Instead, the schema is
-        injected into the system instruction as a prompt directive.
+        GEMMA COMPATIBILITY NOTES:
+        - responseSchema is NOT sent — Gemma hangs indefinitely if present.
+        - responseMimeType is NOT sent — Gemma returns empty candidates if present.
+        - Schema is injected as a plain-text prompt directive instead.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
@@ -72,7 +84,8 @@ class GeminiClient:
             "contents": [{"role": "user", "parts": [{"text": contents}]}],
             "generationConfig": {
                 "temperature": temperature,
-                "responseMimeType": "application/json",
+                # NOTE: responseMimeType intentionally omitted.
+                # Gemma ignores it but returns empty candidates, causing JSONDecodeError downstream.
             }
         }
 
@@ -87,7 +100,16 @@ class GeminiClient:
 
             resp.raise_for_status()
             data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+            # Debug: surface finish reason + any safety blocks
+            candidate = data.get("candidates", [{}])[0]
+            finish_reason = candidate.get("finishReason", "UNKNOWN")
+            if finish_reason not in ("STOP", "MAX_TOKENS"):
+                print(f"         ⚠️  Unexpected finishReason: {finish_reason}")
+                print(f"         Raw API response: {json.dumps(data, indent=2)[:600]}")
+
+            text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+            return text
 
         # Final attempt after all retries exhausted
         resp = requests.post(url, json=body, timeout=self.timeout)
@@ -310,7 +332,7 @@ class ResumeEngine:
 
         response_text = client.generate(
             model=DEFAULT_MODEL,
-            system_instruction="You are an expert technical recruiter. Extract the tools, hard skills, and core functions from this job description. Return ONLY valid JSON.",
+            system_instruction="You are an expert technical recruiter. Extract the tools, hard skills, and core functions from this job description. Return ONLY valid JSON — no markdown, no fences.",
             contents=jd_text,
             response_schema=JDKeywordSchema,
             temperature=0.1
