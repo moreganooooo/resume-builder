@@ -1,26 +1,192 @@
 {
-  "name": "Dominick Colosimo",
-  "role": "Lead Machine Learning Architect",
-  "location": "Getzville, NY",
+  "name": "Morgan L. Escott",
+  "label": "Content Strategist & AI-Assisted Marketing Leader | B2B SaaS Campaign & Narrative Expert",
+  "email": "escott.morgan@gmail.com",
+  "phone": "716-352-9050",
+  "url": "linkedin.com/in/morganescott",
+  "location": "Getzville, NY (Buffalo Area)",
+  "summary": "Creative and strategic marketing leader with 10+ years of experience in B2B SaaS, EdTech, and agency environments, specializing in content strategy, campaign execution, and narrative development. I excel at transforming raw inputs into cohesive, activation-ready content across diverse channels, leveraging AI-assisted workflows for ideation, distillation, and repurposing. My expertise spans building scalable content systems, developing human-first messaging that performs, and driving cross-functional alignment between marketing and sales. I bring a journalist's precision to every word, a systems thinker's rigor to every process, and a collaborative mindset to every project.\n\nAfter a fulfilling 8-year tenure at Treering Yearbooks, I took intentional time in 2024\u201325 to support a loved one's health and invest in professional growth. I'm excited to return with renewed focus on individual contributor roles where writing, strategic thinking, and campaign execution converge in mission-driven, remote environments.",
   "skills": [
-    "Python",
-    "SQL",
-    "Machine Learning",
-    "Data Visualization",
-    "Machine Learning Architecture",
-    "Cross-functional Data Pipelines",
-    "Team Leadership"
+    {
+      "name": "Content Strategy & Creation",
+      "keywords": [
+        "Copywriting",
+        "Content Strategy",
+        "Brand Voice Development",
+        "Campaign Messaging",
+        "Narrative Development",
+        "Derivative Content Creation",
+        "AI-Assisted Content Workflows",
+        "Copy Editing",
+        "Pitch Deck Design",
+        "Brand Identity"
+      ]
+    },
+    {
+      "name": "Campaign Execution & Operations",
+      "keywords": [
+        "Multi-Touch Sequencing",
+        "Audience Segmentation",
+        "A/B Testing",
+        "Campaign QA",
+        "Personalization at Scale",
+        "Performance Reporting",
+        "Email & Lifecycle Marketing",
+        "Sales Enablement",
+        "Cross-Functional Content Programs",
+        "CRM Systems Administration",
+        "Process Documentation",
+        "Data Hygiene",
+        "Data Scrubbing & Import Operations"
+      ]
+    },
+    {
+      "name": "AI & Marketing Tools",
+      "keywords": [
+        "ChatGPT",
+        "Claude",
+        "Gemini",
+        "Perplexity",
+        "Notion AI",
+        "Outreach.io",
+        "Salesforce",
+        "HubSpot",
+        "Mailchimp",
+        "PersistIQ",
+        "Drift",
+        "Tout",
+        "Google Analytics",
+        "Google Ads",
+        "Facebook Ads",
+        "Vidyard",
+        "Thnks",
+        "Adobe Creative Suite (Illustrator, Photoshop, InDesign)",
+        "Canva",
+        "Figma (Basic)",
+        "Slack",
+        "Zoom",
+        "Trello",
+        "Notion"
+      ]
+    }
   ],
   "experience": [
     {
-      "title": "Data Scientist",
-      "company": "TechCorp",
-      "period": "Aug 2023 - Present",
-      "achievements": [
-        "Led an advanced analytics team of 3 analysts to drive technical strategy and project delivery.",
-        "Architected machine learning models that drove a measurable 12% increase in business revenue.",
-        "Developed cross-functional data pipelines to bridge engineering and business units, optimizing data synergy and integration."
+      "title": "Sales/Marketing Strategy + QA Expert (AI Training)",
+      "company": "Mercor",
+      "location": "Remote",
+      "dates": "Aug 2025 \u2013 Aug 2025",
+      "description": [
+        "QA'd AI-generated marketing campaign builds and performance outputs, aligning evaluation criteria with best practices in HubSpot and Salesforce execution.",
+        "Evaluated AI-generated sales and marketing content for accuracy and alignment with industry standards, annotating conversational data to improve content quality."
       ]
+    },
+    {
+      "title": "Creative Strategy Lead & Senior Sales Development Manager",
+      "company": "Treering Yearbooks",
+      "location": "Remote",
+      "dates": "Aug 2016 \u2013 Aug 2024",
+      "description": [
+        "Founded and chaired a Content Committee to unify brand voice and content governance; built a scalable library of 129 Outreach sequences and 55 SDR personas, accelerating onboarding and ensuring consistent messaging.",
+        "Authored 100+ email campaigns across niche audience segments, translating raw inputs from market research and customer stories into cohesive, activation-ready content.",
+        "Set the voice benchmark for the entire SDR team \u2014 authored voice/tone guidelines adopted team-wide; rep-written sequences were QA'd against my standard.",
+        "Developed and delivered monthly live + async SDR training for 20+ employees on messaging, campaign strategy, QA, and Outreach.io best practices, fostering a collaborative learning environment.",
+        "Created Treering's SDR Process Map (escottmorgan.wixsite.com/processmap), an 8-step workflow website used as the primary new-hire training resource and referenced in the official SDR training deck.",
+        "Drove 74% open rate and 22% reply rate on PTA Council campaigns with zero opt-outs \u2014 Treering's hardest-to-reach audience segment, paired with Thnks gifting and Facebook group research.",
+        "Achieved 85% open rate and 39% reply rate on Hot Zone Spring 1st Touch sequence (89 contacts), demonstrating precision in campaign messaging.",
+        "Launched January 2022 sequence suite of 6 campaigns \u2014 63% average open rate (every sequence above 50%), 8.7% reply rate, 4.3% click rate, 3,337 prospects added.",
+        "Introduced AI (ChatGPT/Grammarly) into the campaign workflow to scale personalization and accelerate content development, applying editorial judgment to refine outputs.",
+        "Led selection and full implementation of Outreach.io as the team's primary sequencing platform \u2014 managed CRM integration, data migration, and team-wide adoption training."
+      ]
+    },
+    {
+      "title": "Business Development Representative",
+      "company": "Inside Sales Team (Now Alleyoop)",
+      "location": "Buffalo, NY",
+      "dates": "Oct 2015 \u2013 Aug 2016",
+      "description": [
+        "Developed ABM pilot messaging for Adobe eSign \u2014 4-persona sequence architecture targeting IT buyers by existing tech stack; work earned nomination for two senior-level promotions.",
+        "Represented two enterprise clients simultaneously (Treering Yearbooks and Adobe eSign) \u2014 adapted messaging, voice, and sales approach to each product's buyer persona and competitive landscape."
+      ]
+    },
+    {
+      "title": "Lead Graphic Designer / Design Assistant",
+      "company": "Element 8 + Strategy, LLC",
+      "location": "Lenexa, KS",
+      "dates": "Jan 2011 \u2013 Oct 2011",
+      "description": [
+        "Built Strategy LLC's complete brand identity from scratch \u2014 visual system, logo, typography, and guidelines still in use 15+ years later, demonstrating long-term content impact.",
+        "Designed across all brand touchpoints, including signage, apparel, web assets, and social media (Twitter, Facebook, YouTube), translating brand narrative into diverse formats."
+      ]
+    },
+    {
+      "title": "Copywriting Intern",
+      "company": "VML",
+      "location": "Kansas City, MO",
+      "dates": "May\u2013Aug 2010",
+      "description": [
+        "Handpicked to write a 6-email B2B nurture campaign for SAP \u2014 enterprise-level copy for a technical audience, selected over more senior candidates.",
+        "Authored a 200+ page digital strategy report for Carlson Hotels, transforming extensive research into a cohesive narrative; CEO praised the final deliverable as looking like the client had produced it in-house.",
+        "Designed and presented a pitch deck to VML's CEO and Executive Creative Director, receiving exceptional praise for content transformation and presentation skills."
+      ]
+    },
+    {
+      "title": "Copywriting Intern + Freelance Creative",
+      "company": "Callahan Creek (Now Callahan)",
+      "location": "Lawrence, KS",
+      "dates": "May 2009 \u2013 May 2010",
+      "description": [
+        "Selected from a competitive field; two campaigns chosen for full client rollout out of the intern cohort, demonstrating strong conceptual and writing skills.",
+        "Extended to a long-term freelance relationship based on creative execution and reliability, producing conceptual and copy-ready work across multiple agency clients."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "University of Kansas",
+      "studyType": "Bachelor of Science",
+      "area": "Journalism & Strategic Communications",
+      "location": "Lawrence, KS",
+      "dates": "2006\u20132008",
+      "description": [
+        "3.56 GPA | Phi Theta Kappa Scholarship recipient.",
+        "Marketing Intern, Lied Center of Performing Arts \u2014 managed promotional campaigns and digital channels, growing social media following by 800%."
+      ]
+    },
+    {
+      "institution": "Kansas City Kansas Community College",
+      "studyType": "Associate of Arts",
+      "area": "Journalism",
+      "location": "Kansas City, KS",
+      "dates": "2004\u20132006",
+      "description": [
+        "3.75 GPA | Full academic scholarship | Graduated with honors.",
+        "Editor-in-Chief, student newspaper for 1.5 years \u2014 assigned coverage, led editorial team, and managed weekly publication from story conception through print."
+      ]
+    },
+    {
+      "institution": "Johnson County Community College",
+      "studyType": "Associate of Arts (Partial)",
+      "area": "Graphic Design",
+      "location": "Overland Park, KS",
+      "dates": "2010\u20132011",
+      "description": [
+        "3.86 GPA / Studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography."
+      ]
+    }
+  ],
+  "awards": [
+    {
+      "title": "Video for Sales Certification",
+      "awarder": "Vidyard",
+      "date": "2021",
+      "summary": "Certified in personalized video prospecting; integrated video into multi-step outreach sequences to humanize cold outreach and improve reply rates."
+    },
+    {
+      "title": "Camp Portfolio \u2014 Creative Advertising",
+      "awarder": "Bernstein Rein, Kansas City",
+      "date": "Summer 2008",
+      "summary": "Selected for a concept-first portfolio bootcamp emphasizing strategy, storytelling, and cross-channel campaign development under executive creative leadership."
     }
   ]
 }
