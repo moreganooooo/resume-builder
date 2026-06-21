@@ -20,9 +20,9 @@ API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-# gemini-2.0-flash: 1500 RPD / 15 RPM on free tier. Supports native JSON mode.
-# Gemma models do NOT reliably support structured output — swap back only if needed.
-DEFAULT_MODEL = "gemini-2.0-flash"
+# gemini-2.5-flash: stable, free tier, supports native JSON mode via responseMimeType.
+# gemini-2.0-flash was shut down June 2026 — do not use.
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 
 # ==========================================
@@ -76,7 +76,7 @@ class GeminiClient:
         """Call generateContent and return the response text.
         Retries with exponential backoff on 429 rate-limit errors.
 
-        For gemini-2.0-flash and other Gemini models, responseMimeType
+        For gemini-2.5-flash and other Gemini models, responseMimeType
         'application/json' activates native constrained decoding — the model
         is guaranteed to return valid JSON.
         """
