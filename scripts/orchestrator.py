@@ -16,6 +16,9 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
+# Model used for all calls — gemini-2.0-flash is free-tier friendly (15 RPM)
+DEFAULT_MODEL = "gemini-2.0-flash"
+
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
 # Needed because SDK 2.9.0 doesn't support AQ. key format
@@ -206,9 +209,9 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
-            # Polite pause between bullets to stay under the free-tier RPM limit
+            # Polite pause between bullets to stay under the free-tier 15 RPM limit
             if i > 0:
-                time.sleep(3)
+                time.sleep(5)
 
             try:
                 # STEP 1: CRITIQUE
@@ -218,7 +221,7 @@ class ResumeEngine:
                     f"STRICT INSTRUCTION: Return ONLY pure JSON."
                 )
                 critique_text = client.generate(
-                    model='gemini-2.5-flash-lite',
+                    model=DEFAULT_MODEL,
                     system_instruction=critique_system,
                     contents=bullet,
                     response_schema=CritiqueSchema,
@@ -236,14 +239,14 @@ class ResumeEngine:
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
 
-                    time.sleep(2)  # extra pause before the second call on this bullet
+                    time.sleep(4)  # extra pause before the second call on this bullet
 
                     rewrite_system = (
                         f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
                         f"WEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
                     )
                     rewrite_text = client.generate(
-                        model='gemini-2.5-flash-lite',
+                        model=DEFAULT_MODEL,
                         system_instruction=rewrite_system,
                         contents=bullet,
                         response_schema=RewriteSchema,
@@ -272,7 +275,7 @@ class ResumeEngine:
         print("🔍 Analyzing JD to extract core tools and functional requirements...")
 
         response_text = client.generate(
-            model='gemini-2.5-flash-lite',
+            model=DEFAULT_MODEL,
             system_instruction="You are an expert technical recruiter. Extract the tools, hard skills, and core functions from this job description. Return ONLY valid JSON.",
             contents=jd_text,
             response_schema=JDKeywordSchema,
@@ -331,7 +334,7 @@ class ResumeEngine:
         )
 
         response_text = client.generate(
-            model='gemini-2.5-flash-lite',
+            model=DEFAULT_MODEL,
             system_instruction=system_instruction,
             contents=bullet_text,
             response_schema=BulletAuditSchema,
@@ -380,9 +383,8 @@ class ResumeEngine:
         {polished_bullets}
         """
 
-        # gemini-2.0-flash: stable, fast, free-tier friendly, no special config needed
         response_text = client.generate(
-            model='gemini-2.0-flash',
+            model=DEFAULT_MODEL,
             system_instruction=system_instruction,
             contents=combined_contents,
             response_schema=TemplateSchema,
