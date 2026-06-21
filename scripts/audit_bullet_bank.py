@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, SCRIPT_DIR)
 from orchestrator import client, CritiqueSchema, GeminiClient, ResumeEngine
 
-SLEEP = 5  # seconds between calls — generous since this is a one-time offline task
+SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
 
 engine = ResumeEngine()
 critique_prompt = engine._load_prompt("critique_bullet.md")
