@@ -24,6 +24,12 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 # gemini-2.0-flash was shut down June 2026 — do not use.
 DEFAULT_MODEL = "gemini-2.5-flash"
 
+# Free tier limit is 15 RPM. At BULLET_SLEEP=6s between calls, we run at ~10 RPM
+# (60s / 6s = 10 requests/min), giving comfortable headroom.
+# If a bullet also triggers a rewrite, two calls happen back-to-back with the same
+# sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
+BULLET_SLEEP = 6
+
 
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
@@ -272,9 +278,10 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
-            # Brief pause between bullets — free tier is 15 RPM
+            # Pace requests to stay under the 15 RPM free tier limit.
+            # BULLET_SLEEP=6s → ~10 RPM baseline. See constant definition above.
             if i > 0:
-                time.sleep(4)
+                time.sleep(BULLET_SLEEP)
 
             try:
                 # STEP 1: CRITIQUE
@@ -300,7 +307,7 @@ class ResumeEngine:
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
 
-                    time.sleep(4)
+                    time.sleep(BULLET_SLEEP)
 
                     rewrite_system = (
                         f"{rewrite_prompt}\n\nSTYLE RULES:\n{style_rules}\n\n"
