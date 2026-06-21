@@ -41,17 +41,13 @@ EMBED_DIM      = 768
 
 # Free tier limit is 15 RPM. At BULLET_SLEEP=6s between calls, we run at ~10 RPM
 # (60s / 6s = 10 requests/min), giving comfortable headroom.
-BULLET_SLEEP = 6
+# If a bullet also triggers a rewrite, two calls happen back-to-back with the same
+# sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
+BULLET_SLEEP = 12
 
 # Audit loop processes this many top-scored bullets. 12 gives a strong candidate
-# pool while keeping TPM usage ~40% lower than the previous 20.
-TOP_K_BULLETS = 12
-
-# Semantic pre-filter: cosine-rank ALL bullets against the JD embedding, then
-# pass the top SEMANTIC_POOL candidates to the keyword re-ranker. This ensures
-# the keyword scorer operates on a semantically relevant shortlist rather than
-# the full CSV — fixes the "content strategy" vs "editorial planning" gap.
-SEMANTIC_POOL = 30
+# pool for a resume while keeping TPM usage ~40% lower than the previous 20.
+TOP_K_BULLETS = 20
 
 
 # ==========================================
