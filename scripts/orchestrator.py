@@ -4,6 +4,7 @@ import yaml
 import json
 import re
 import requests
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -23,23 +24,34 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique + rewrite (high-frequency, simple task).
 #   gemini-2.5-flash-lite has a higher free-tier TPM allowance and is more than
-#   capable of structured JSON scoring. Saves quota for where it matters.
+#   capable of structured JSON scoring tasks.
 #
-# BUILDER_MODEL: handles JD keyword extraction and the final resume assembly.
-#   gemini-3.5-flash is the newest stable model — best quality for the output
-#   that actually gets sent to recruiters.
+# BUILDER_MODEL: handles the final resume assembly call.
+#   gemini-3.5-flash — newest stable model, best quality for the output that
+#   actually gets sent to recruiters.
+#
+# EMBED_MODEL: gemini-embedding-2 (GA April 2026) — multimodal, 8k token input.
+#   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
+#   and for the single JD embedding at runtime in mine_bullet_bank().
+#   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
 CRITIQUE_MODEL = "gemini-2.5-flash-lite"
 BUILDER_MODEL  = "gemini-3.5-flash"
+EMBED_MODEL    = "gemini-embedding-2"
+EMBED_DIM      = 768
 
 # Free tier limit is 15 RPM. At BULLET_SLEEP=6s between calls, we run at ~10 RPM
 # (60s / 6s = 10 requests/min), giving comfortable headroom.
-# If a bullet also triggers a rewrite, two calls happen back-to-back with the same
-# sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
 BULLET_SLEEP = 6
 
 # Audit loop processes this many top-scored bullets. 12 gives a strong candidate
-# pool for a resume while keeping TPM usage ~40% lower than the previous 20.
+# pool while keeping TPM usage ~40% lower than the previous 20.
 TOP_K_BULLETS = 12
+
+# Semantic pre-filter: cosine-rank ALL bullets against the JD embedding, then
+# pass the top SEMANTIC_POOL candidates to the keyword re-ranker. This ensures
+# the keyword scorer operates on a semantically relevant shortlist rather than
+# the full CSV — fixes the "content strategy" vs "editorial planning" gap.
+SEMANTIC_POOL = 30
 
 
 # ==========================================
@@ -49,7 +61,7 @@ TOP_K_BULLETS = 12
 
 
 class GeminiClient:
-    """Minimal REST wrapper around the Gemini generateContent endpoint."""
+    """Minimal REST wrapper around the Gemini generateContent and embedContent endpoints."""
 
     def __init__(self, api_key: str, timeout: int = 120):
         self.api_key = api_key
@@ -63,20 +75,17 @@ class GeminiClient:
 
         cleaned = text.strip()
 
-        # Strip opening fence (```json or ``` alone)
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1]
             cleaned = cleaned.rsplit("```", 1)[0]
 
         cleaned = cleaned.strip()
 
-        # First attempt: direct parse
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
             pass
 
-        # Fallback: extract the first {...} block from the response
         match = re.search(r'\{.*\}', cleaned, re.DOTALL)
         if match:
             try:
@@ -87,21 +96,42 @@ class GeminiClient:
         preview = cleaned[:300].replace("\n", " ")
         raise ValueError(f"JSON parse failed — could not extract valid JSON.\nRaw preview: {preview!r}")
 
+    def embed(self, text: str, max_retries: int = 4) -> list:
+        """Call gemini-embedding-2 embedContent. Returns a flat list of floats.
+
+        Uses EMBED_DIM=768 — the sweet spot for text-only semantic search.
+        Retries with exponential backoff on 429s, same pattern as generate().
+        """
+        url = f"{BASE_URL}/{EMBED_MODEL}:embedContent?key={self.api_key}"
+        body = {
+            "model": f"models/{EMBED_MODEL}",
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": EMBED_DIM,
+        }
+        for attempt in range(max_retries):
+            resp = requests.post(url, json=body, timeout=self.timeout)
+            if resp.status_code == 429:
+                wait = 5 * (2 ** attempt)
+                print(f"         ⏳ Embed rate limited. Waiting {wait}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.json()["embedding"]["values"]
+        # Final attempt
+        resp = requests.post(url, json=body, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()["embedding"]["values"]
+
     def generate(self, model: str, system_instruction: str, contents: str,
                  response_schema: type = None, temperature: float = 0.1,
                  max_retries: int = 4) -> str:
         """Call generateContent and return the response text.
         Retries with exponential backoff on 429 rate-limit errors.
-
-        For all Gemini models, responseMimeType 'application/json' activates
-        native constrained decoding — the model is guaranteed to return valid JSON.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
         generation_config = {"temperature": temperature}
 
-        # Enable native JSON mode.
-        # This is the only reliable way to get structured JSON output.
         if response_schema is not None:
             generation_config["responseMimeType"] = "application/json"
 
@@ -115,7 +145,7 @@ class GeminiClient:
             resp = requests.post(url, json=body, timeout=self.timeout)
 
             if resp.status_code == 429:
-                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s, 40s
+                wait = 5 * (2 ** attempt)
                 print(f"         ⏳ Rate limited. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
                 time.sleep(wait)
                 continue
@@ -123,7 +153,6 @@ class GeminiClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # Debug: surface unexpected finish reasons (safety blocks, errors, etc.)
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
             if finish_reason not in ("STOP", "MAX_TOKENS"):
@@ -132,7 +161,6 @@ class GeminiClient:
 
             return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
 
-        # Final attempt after all retries exhausted
         resp = requests.post(url, json=body, timeout=self.timeout)
         resp.raise_for_status()
         data = resp.json()
@@ -272,7 +300,7 @@ class ResumeEngine:
         master_context = "=== SYSTEM KNOWLEDGE BASE ===\n\n"
 
         if os.path.exists(self.kb_dir):
-            for filename in sorted(os.listdir(self.kb_dir)):  # sorted = deterministic = cache hits
+            for filename in sorted(os.listdir(self.kb_dir)):
                 if filename.endswith(('.md', '.yml', '.yaml', '.txt')):
                     filepath = os.path.join(self.kb_dir, filename)
                     with open(filepath, "r", encoding="utf-8") as f:
@@ -284,10 +312,6 @@ class ResumeEngine:
 
         Uses CRITIQUE_MODEL (gemini-2.5-flash-lite) — higher free-tier TPM,
         perfectly capable for structured JSON scoring tasks.
-
-        static_prefix is the pre-loaded knowledge base string. It is passed in
-        (not reloaded) so the exact same bytes are used on every call, maximising
-        implicit cache hits on the system_instruction prefix.
         """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
@@ -302,8 +326,6 @@ class ResumeEngine:
         believability_rules = json.dumps(self._load_yaml(self.scoring_dir, "believability.yaml"))
         style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
 
-        # Static prefix FIRST so it forms the cacheable token prefix.
-        # The per-bullet variable content is in `contents`, not here.
         critique_system = (
             f"{static_prefix}"
             f"\n\n{critique_prompt}"
@@ -321,13 +343,10 @@ class ResumeEngine:
         for i, bullet in enumerate(raw_bullets):
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
-            # Pace requests to stay under the 15 RPM free tier limit.
-            # BULLET_SLEEP=6s → ~10 RPM baseline. See constant definition above.
             if i > 0:
                 time.sleep(BULLET_SLEEP)
 
             try:
-                # STEP 1: CRITIQUE
                 critique_text = client.generate(
                     model=CRITIQUE_MODEL,
                     system_instruction=critique_system,
@@ -342,14 +361,11 @@ class ResumeEngine:
 
                 critique_data = GeminiClient.parse_json(critique_text)
 
-                # STEP 2: REWRITE if needed
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
 
                     time.sleep(BULLET_SLEEP)
 
-                    # Append weaknesses to the rewrite contents (variable part),
-                    # not the system_instruction, so the static prefix stays identical.
                     rewrite_contents = (
                         f"{bullet}"
                         f"\n\nWEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
@@ -392,43 +408,105 @@ class ResumeEngine:
         return GeminiClient.parse_json(response_text)
 
     def mine_bullet_bank(self, jd_text: str, top_k: int = TOP_K_BULLETS):
-        """Scores and extracts the top-K most relevant bullets from the CSV."""
+        """Returns the top-K most relevant bullets from the CSV.
+
+        TWO-STAGE PIPELINE:
+
+        Stage 1 — Semantic pre-filter (gemini-embedding-2):
+            Embed the JD text, cosine-rank every bullet in bullet_vectors_ge2_d768.npy,
+            keep the top SEMANTIC_POOL (30) candidates. This fixes the vocabulary gap
+            problem — e.g. 'content strategy' now matches 'editorial planning' because
+            they land close in embedding space.
+
+            Falls back gracefully to Stage 2 alone if the .npy file doesn't exist
+            (i.e. embed_bullet_bank.py hasn't been run yet).
+
+        Stage 2 — Keyword re-rank (pandas, zero API calls):
+            Score the Stage 1 candidates by weighted JD keyword overlap.
+            Tools keywords weight 2×, hard skills and core functions weight 1×.
+            Return the top top_k (12) highest-scoring bullets.
+        """
         print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
 
+        csv_path = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
+        if not os.path.exists(csv_path):
+            print(f"⚠️ Warning: {csv_path} not found. Skipping extraction.")
+            return []
+
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception as e:
+            print(f"⚠️ Error reading CSV: {e}")
+            return []
+
+        # --- STAGE 1: SEMANTIC PRE-FILTER ---
+        npy_path = os.path.join(self.kb_dir, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
+        semantic_indices = None
+
+        if os.path.exists(npy_path):
+            try:
+                print(f"   🧠 Semantic pre-filter: embedding JD via {EMBED_MODEL}...")
+                jd_vec = np.array(client.embed(jd_text), dtype=np.float32)  # (768,)
+                bullet_matrix = np.load(npy_path)                           # (N, 768)
+
+                if bullet_matrix.shape[0] != len(df):
+                    print(f"   ⚠️ Vector count ({bullet_matrix.shape[0]}) != CSV rows ({len(df)}). "
+                          f"Re-run embed_bullet_bank.py. Falling back to keyword-only.")
+                else:
+                    # Cosine similarity: normalise both sides, then dot product.
+                    # np.linalg.norm is fine here — bullet bank is at most a few hundred rows.
+                    norms = np.linalg.norm(bullet_matrix, axis=1, keepdims=True)
+                    norms = np.where(norms == 0, 1e-9, norms)  # avoid div-by-zero
+                    normed_matrix = bullet_matrix / norms
+
+                    jd_norm = np.linalg.norm(jd_vec)
+                    if jd_norm == 0:
+                        jd_norm = 1e-9
+                    normed_jd = jd_vec / jd_norm
+
+                    cosine_scores = normed_matrix @ normed_jd  # (N,)
+                    pool_size = min(SEMANTIC_POOL, len(df))
+                    semantic_indices = np.argsort(cosine_scores)[::-1][:pool_size]
+                    print(f"   ✅ Semantic pool: top {pool_size} candidates by cosine similarity.")
+
+            except Exception as e:
+                print(f"   ⚠️ Semantic pre-filter error: {e}. Falling back to keyword-only.")
+                semantic_indices = None
+        else:
+            print(f"   ℹ️  No vector cache found ({npy_path}).")
+            print(f"      Run scripts/embed_bullet_bank.py to enable semantic pre-filtering.")
+
+        # Narrow the DataFrame to the semantic pool (or use all rows as fallback)
+        if semantic_indices is not None:
+            df_pool = df.iloc[semantic_indices].reset_index(drop=True)
+        else:
+            df_pool = df
+
+        # --- STAGE 2: KEYWORD RE-RANK ---
         keywords_dict = self.extract_jd_keywords(jd_text)
 
         weighted_kws = {kw.lower(): 2 for kw in keywords_dict.get('tools', [])}
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get('hard_skills', [])})
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get('core_functions', [])})
 
-        csv_path = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
-        if not os.path.exists(csv_path):
-            print(f"⚠️ Warning: {csv_path} not found in knowledge_base/. Skipping extraction.")
-            return []
+        def score_row(row):
+            row_str = " ".join(str(val).lower() for val in row.values)
+            return sum(weight for kw, weight in weighted_kws.items() if kw in row_str)
 
-        try:
-            df = pd.read_csv(csv_path)
+        df_pool = df_pool.copy()
+        df_pool['match_score'] = df_pool.apply(score_row, axis=1)
+        df_sorted = df_pool.sort_values(by='match_score', ascending=False)
+        top_matches = df_sorted.head(top_k)
 
-            def score_row(row):
-                row_str = " ".join(str(val).lower() for val in row.values)
-                return sum(weight for kw, weight in weighted_kws.items() if kw in row_str)
+        extracted_bullets = []
+        for _, row in top_matches.iterrows():
+            clean_row = row.drop('match_score').to_dict()
+            bullet_string = str(row.get('bullet') or row.get('achievement') or clean_row)
+            extracted_bullets.append(bullet_string)
 
-            df['match_score'] = df.apply(score_row, axis=1)
-            df_sorted = df.sort_values(by='match_score', ascending=False)
-            top_matches = df_sorted.head(top_k)
-
-            extracted_bullets = []
-            for _, row in top_matches.iterrows():
-                clean_row = row.drop('match_score').to_dict()
-                bullet_string = str(row.get('bullet') or row.get('achievement') or clean_row)
-                extracted_bullets.append(bullet_string)
-
-            print(f"🎯 Extracted {len(extracted_bullets)} highly relevant bullets based on {len(weighted_kws)} unique JD keywords.")
-            return extracted_bullets
-
-        except Exception as e:
-            print(f"⚠️ Error reading CSV: {e}")
-            return []
+        print(f"🎯 Extracted {len(extracted_bullets)} bullets "
+              f"({'semantic→keyword' if semantic_indices is not None else 'keyword-only'} pipeline).")
+        return extracted_bullets
 
     # --- AUDIT ENGINE ---
     def extract_evidence(self, bullet_text):
@@ -455,6 +533,7 @@ class ResumeEngine:
         print(f"\n⚙️ INITIALIZING TAILORING ENGINE")
         print(f"   Critique model : {CRITIQUE_MODEL}")
         print(f"   Builder model  : {BUILDER_MODEL}")
+        print(f"   Embed model    : {EMBED_MODEL} @ {EMBED_DIM}d (pre-filter)")
 
         parsed_json_path = os.path.join(self.output_json_dir, parsed_json_filename)
         jd_path = os.path.join(self.jds_dir, jd_filename)
@@ -465,9 +544,6 @@ class ResumeEngine:
         with open(jd_path, "r") as f:
             job_description = f.read()
 
-        # Load the knowledge base ONCE. The same bytes are reused across all
-        # audit loop calls and the final builder call so the implicit cache
-        # prefix never drifts between requests.
         knowledge_context = self._load_knowledge_base()
 
         raw_mined_bullets = self.mine_bullet_bank(job_description)
@@ -480,13 +556,6 @@ class ResumeEngine:
 
         prompt_template = self._load_prompt("tailor_resume.md")
 
-        # IMPLICIT CACHING STRUCTURE:
-        # system_instruction = [static KB prefix] + [static prompt template]
-        # contents           = [variable: candidate data + JD + bullets]
-        #
-        # The system_instruction prefix is identical on every run (KB files
-        # haven't changed, sorted order is deterministic). Google caches it.
-        # Only the contents section changes per job application.
         system_instruction = f"{knowledge_context}\n\n{prompt_template}"
 
         combined_contents = f"""\
