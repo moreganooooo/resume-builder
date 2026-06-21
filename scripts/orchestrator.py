@@ -26,16 +26,17 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   gemini-2.5-flash-lite has a higher free-tier TPM allowance and is more than
 #   capable of structured JSON scoring tasks.
 #
-# BUILDER_MODEL: handles the final resume assembly call.
-#   gemini-3.5-flash — newest stable model, best quality for the output that
-#   actually gets sent to recruiters.
+# BUILDER_MODEL: handles JD keyword extraction and the final resume assembly call.
+#   gemini-2.5-flash — established free-tier allowance (10-15 RPM / 1500 RPD).
+#   gemini-3.5-flash launched May 19 2026 and has much tighter free-tier limits;
+#   it caused immediate 429s on the very first call of the run.
 #
 # EMBED_MODEL: gemini-embedding-2 (GA April 2026) — multimodal, 8k token input.
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
 CRITIQUE_MODEL = "gemini-2.5-flash-lite"
-BUILDER_MODEL  = "gemini-3.5-flash"
+BUILDER_MODEL  = "gemini-2.5-flash"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
 
@@ -45,9 +46,13 @@ EMBED_DIM      = 768
 # sleep in between, which temporarily pushes to ~12 RPM — still safely under 15.
 BULLET_SLEEP = 12
 
-# Audit loop processes this many top-scored bullets. 12 gives a strong candidate
-# pool for a resume while keeping TPM usage ~40% lower than the previous 20.
+# Audit loop processes this many top-scored bullets. 20 gives a strong candidate
+# pool for a resume while keeping TPM usage reasonable.
 TOP_K_BULLETS = 20
+
+# Semantic pre-filter pool size: top-N bullets by cosine similarity passed to the
+# keyword re-ranker. 30 gives a wide enough net without keyword scoring noise.
+SEMANTIC_POOL = 30
 
 
 # ==========================================
@@ -420,7 +425,7 @@ class ResumeEngine:
         Stage 2 — Keyword re-rank (pandas, zero API calls):
             Score the Stage 1 candidates by weighted JD keyword overlap.
             Tools keywords weight 2×, hard skills and core functions weight 1×.
-            Return the top top_k (12) highest-scoring bullets.
+            Return the top top_k highest-scoring bullets.
         """
         print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
 
@@ -450,7 +455,6 @@ class ResumeEngine:
                           f"Re-run embed_bullet_bank.py. Falling back to keyword-only.")
                 else:
                     # Cosine similarity: normalise both sides, then dot product.
-                    # np.linalg.norm is fine here — bullet bank is at most a few hundred rows.
                     norms = np.linalg.norm(bullet_matrix, axis=1, keepdims=True)
                     norms = np.where(norms == 0, 1e-9, norms)  # avoid div-by-zero
                     normed_matrix = bullet_matrix / norms
