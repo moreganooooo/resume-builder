@@ -35,43 +35,11 @@ Apply all rules from the provided BELIEVABILITY_RULES when scoring believability
 ## Manager Test Rules
 Apply all rules from the provided RULES when making the PASS/FAIL decision.
 
-## Hidden Gem Scoring
-After all other scores are set, calculate a `hidden_gem_score` (0–100) that answers one question:
-
-**"Is this bullet unusually strong evidence of rare or high-value skill — the kind a hiring manager would circle and remember?"**
-
-This is NOT the same as ATS value or believability. A bullet can be accurate, believable, and ATS-friendly but still be ordinary. Hidden gem score measures *memorability* and *evidence rarity*.
-
-Apply these bonuses when calculating hidden_gem_score (start at 50, adjust up or down):
-
-**Bonuses (add to score):**
-- +15 — Named dollar metric with clear context (e.g., "$3M in untapped pipeline")
-- +15 — Sole ownership of a named platform or system (e.g., "sole Outreach.io admin")
-- +15 — References a verifiable artifact that provably exists (e.g., a named website, doc, process, or program)
-- +10 — Demonstrates an outcome that most people at this level would not have (above-scope achievement)
-- +10 — Combines two distinct skill domains in one bullet in a way that is rare (e.g., ops + content, data + copywriting)
-- +10 — Matches a protected bullet (exact or near-match to: $3M pipeline, Outreach.io ownership, 2900+ account CRM scrub, Content Committee, SDR Process Map)
-
-**Penalties (subtract from score):**
-- -20 — Generic enough to appear on any marketing resume with zero modification
-- -15 — Outcome is vague or implied rather than named
-- -10 — Could describe a junior-level task despite seniority context
-- -10 — Relies entirely on a soft skill with no system or metric
-
-Cap at 100. Floor at 0.
-
-A hidden_gem_score >= 90 means: **recommend for top-5 placement.**
-A hidden_gem_score >= 75 means: **strong bullet, prioritize over generic alternatives.**
-A hidden_gem_score < 50 means: **ordinary bullet; deprioritize if space is tight.**
-
 # Output
 Return a JSON object with exactly these fields:
 - accuracy_score (int 0–100)
 - believability_score (int 0–100)
 - clarity_score (int 0–100)
 - ats_value (int 0–100)
-- hidden_gem_score (int 0–100)
-- hidden_gem_flag (bool: true if hidden_gem_score >= 90)
 - manager_test (string: exactly "PASS" or "FAIL")
 - weaknesses (string: specific explanation of any flaws; "None" if PASS with high scores)
-- hidden_gem_reason (string: one sentence explaining the hidden_gem_score — what makes it a gem, or what holds it back)

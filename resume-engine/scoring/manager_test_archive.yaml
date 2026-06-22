@@ -1,0 +1,20 @@
+version: 1.1
+
+questions:
+  - What exactly did they do?
+  - How did they do it?
+  - What tools were involved?
+  - What challenges occurred?
+  - What was the outcome?
+
+pass_conditions:
+  minimum_confidence: 80
+
+reject_if:
+  score_below: 60
+
+fail_conditions:
+  - vague_action
+  - unexplained_metric
+  - unclear_scope
+  - generic_language

@@ -1,0 +1,22 @@
+version: 1.1
+max_score: 100
+reject_if: 
+  score_below: 60
+
+criteria:
+  specificity:
+    weight: 30
+  realism:
+    weight: 30
+  verifiability:
+    weight: 20
+  human_language:
+    weight: 20
+
+penalties:
+  vague_verb: -10
+  buzzword: -15
+  excessive_adjectives: -10
+  generic_claim: -15
+  scope_inflation: -15
+  unexplained_metric: -20
