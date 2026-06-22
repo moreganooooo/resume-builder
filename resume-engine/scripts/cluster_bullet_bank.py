@@ -35,10 +35,10 @@ DEFAULT_MAP_OUTPUT = os.path.join(OUTPUT_DIR, "bullet-bank-cluster-map.csv")
 
 # The column in your CSV that holds bullet text.
 # If unsure, run: python -c "import pandas as pd; print(pd.read_csv('bullet-bank-clean.csv').columns.tolist())"
-BULLET_COL = "bullet"
-FALLBACK_COLS = ["achievement", "text", "Bullet", "Achievement"]
+BULLET_COL = "Bullet Point"
+FALLBACK_COLS = ["Bullet"]
 
-DEFAULT_THRESHOLD = 0.82  # 0.82 = aggressive dedup; 0.88 = conservative
+DEFAULT_THRESHOLD = 0.75  # 0.82 = aggressive dedup; 0.88 = conservative
 
 
 def detect_bullet_col(df: pd.DataFrame) -> str:
