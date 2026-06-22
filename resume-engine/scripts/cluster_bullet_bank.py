@@ -52,6 +52,17 @@ def drop_script_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=[c for c in SCRIPT_COLS + [MERGE_KEY] if c in df.columns])
 
 
+def dedup_col_order(cols: list) -> list:
+    """Return cols with duplicates removed, preserving first-occurrence order."""
+    seen = set()
+    out  = []
+    for c in cols:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
 def detect_col(df: pd.DataFrame, preferred: str, fallbacks: list) -> str:
     if preferred in df.columns:
         return preferred
@@ -186,14 +197,15 @@ def decide_action(row: pd.Series) -> str:
     return "KEEP"
 
 
-def build_col_order(df: pd.DataFrame, bullet_col: str) -> list:
-    pinned_front  = ["cluster_id", "cluster_size", "next_action", bullet_col]
+def build_col_order(df: pd.DataFrame, bullet_col: str, extra_front: list = None) -> list:
+    """Return a deduplicated column order with pinned columns first."""
+    front         = (extra_front or []) + ["cluster_id", "cluster_size", "next_action", bullet_col]
     pinned_meta   = [c for c in META_COLS  if c in df.columns]
     pinned_scores = [c for c in SCORE_COLS if c in df.columns]
     pinned_weak   = [WEAKNESS_COL] if WEAKNESS_COL in df.columns else []
-    already       = set(pinned_front + pinned_meta + pinned_scores + pinned_weak)
+    already       = set(front + pinned_meta + pinned_scores + pinned_weak)
     remainder     = [c for c in df.columns if c not in already]
-    return pinned_front + pinned_meta + pinned_scores + pinned_weak + remainder
+    return dedup_col_order(front + pinned_meta + pinned_scores + pinned_weak + remainder)
 
 
 # ---------------------------------------------------------------------------
@@ -223,11 +235,11 @@ def main():
     else:
         df = df.reset_index(drop=True)
 
-    # Refresh bullets list in case rows shifted after join
     bullets = df[bullet_col].fillna("").tolist()
 
     assigned, clusters = cluster_bullets(bullets, args.threshold)
     rep_indices = [pick_representative(c, bullets, df) for c in clusters]
+    rep_set     = set(rep_indices)
 
     n_original  = len(bullets)
     n_clusters  = len(clusters)
@@ -266,14 +278,17 @@ def main():
     df_map = drop_script_cols(df.copy()).reset_index(drop=True)
     df_map["cluster_id"]        = pd.array(assigned)
     df_map["cluster_size"]      = pd.array([len(clusters[cid]) for cid in assigned])
-    df_map["is_representative"] = pd.array([i in set(rep_indices) for i in range(len(bullets))])
+    df_map["is_representative"] = pd.array([i in rep_set for i in range(len(bullets))])
     df_map["next_action"]       = df_map.apply(decide_action, axis=1)
 
-    map_col_order = ["cluster_id", "cluster_size", "is_representative"] + \
-                    [c for c in build_col_order(df_map, bullet_col)
-                     if c not in ("cluster_id", "cluster_size")]
-    df_map = df_map[[c for c in map_col_order if c in df_map.columns]] \
-                .sort_values(["cluster_id", "is_representative"], ascending=[True, False])
+    map_col_order = dedup_col_order(
+        ["cluster_id", "cluster_size", "is_representative"] +
+        build_col_order(df_map, bullet_col)
+    )
+    map_col_order = [c for c in map_col_order if c in df_map.columns]
+    df_map = df_map[map_col_order].sort_values(
+        ["cluster_id", "is_representative"], ascending=[True, False]
+    )
     df_map.to_csv(args.map, index=False)
     print(f"📋 Full cluster map saved: {args.map}\n")
 
