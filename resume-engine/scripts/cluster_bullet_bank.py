@@ -37,9 +37,8 @@ BULLET_COL    = "Bullet Point"
 FALLBACK_COLS = ["bullet", "achievement", "text", "Bullet", "Achievement"]
 
 # Columns that drive scoring logic (used for ordering + decide_action)
-# Everything else from the audit file is pulled in automatically.
 SCORE_COLS   = ["accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test"]
-META_COLS    = ["Role / Company", "Tags"]   # appear right after bullet in output
+META_COLS    = ["Role / Company", "Tags"]
 WEAKNESS_COL = "weaknesses"
 
 DEFAULT_THRESHOLD = 0.75
@@ -76,10 +75,8 @@ def load_audit(audit_path: str):
 def normalize_manager_test(value) -> str:
     """
     Normalize manager_test to always return 'PASS' or 'FAIL'.
-
-    Two historical formats exist in the audit CSV:
-      - Old: numeric score (e.g. 85) = pass, 'fail' text = failure
-      - New: 'pass' or 'fail' text
+    Handles both old format (numeric score = pass, 'fail' text = fail)
+    and new format ('pass' / 'fail' text).
     """
     if pd.isna(value) or str(value).strip() == "":
         return ""
@@ -90,7 +87,7 @@ def normalize_manager_test(value) -> str:
         return "FAIL"
     try:
         float(raw)
-        return "PASS"  # any numeric score in old format = passed
+        return "PASS"  # numeric score in old format = passed
     except ValueError:
         return raw     # unexpected value — pass through as-is
 
@@ -99,16 +96,21 @@ def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
     """
     Left-join ALL columns from the audit CSV onto the main bullet dataframe.
-    Matches on normalised bullet text (stripped + lowercased) to handle
-    minor whitespace differences between the two files.
+    Matches on normalised bullet text (stripped + lowercased).
+    Defensively drops any stale '_join_key' columns before merging.
     """
-    # Normalise join keys
     df_main  = df_main.copy()
     df_audit = df_audit.copy()
+
+    # Drop any stale _join_key columns left over from a previous run
+    df_main.drop(columns=[c for c in df_main.columns if c == "_join_key"], inplace=True)
+    df_audit.drop(columns=[c for c in df_audit.columns if c == "_join_key"], inplace=True)
+
+    # Build normalised join keys
     df_main["_join_key"]  = df_main[main_col].fillna("").str.strip().str.lower()
     df_audit["_join_key"] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
 
-    # Drop the audit's bullet column itself (we already have it from df_main)
+    # Bring everything from audit except its own bullet column (already in df_main)
     audit_cols_to_bring = [c for c in df_audit.columns if c != BULLET_COL]
 
     df_merged = df_main.merge(
@@ -117,7 +119,7 @@ def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
         how="left"
     ).drop(columns=["_join_key"])
 
-    # Normalize manager_test regardless of which format was used
+    # Normalize manager_test
     if "manager_test" in df_merged.columns:
         df_merged["manager_test"] = df_merged["manager_test"].apply(normalize_manager_test)
         pass_count = (df_merged["manager_test"] == "PASS").sum()
@@ -184,12 +186,12 @@ def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
     for cluster_id, members in multi[:top_n]:
         print(f"  Cluster {cluster_id} — {len(members)} bullets:")
         for idx in members:
-            preview    = bullets[idx][:95] + ("..." if len(bullets[idx]) > 95 else "")
-            score_str  = ""
+            preview   = bullets[idx][:95] + ("..." if len(bullets[idx]) > 95 else "")
+            score_str = ""
             if has_scores:
-                acc       = df.iloc[idx].get("accuracy_score", "")
-                mgr       = df.iloc[idx].get("manager_test", "")
-                company   = df.iloc[idx].get("Role / Company", "")
+                acc     = df.iloc[idx].get("accuracy_score", "")
+                mgr     = df.iloc[idx].get("manager_test", "")
+                company = df.iloc[idx].get("Role / Company", "")
                 score_str = f" [acc={acc} mgr={mgr} co={company}]"
             print(f"    • [{idx}]{score_str} {preview}")
         print()
@@ -216,21 +218,19 @@ def decide_action(row: pd.Series) -> str:
 
 def build_col_order(df: pd.DataFrame, bullet_col: str) -> list:
     """
-    Build the final column order for the output CSVs:
+    Fixed column order for output CSVs:
       cluster_id | cluster_size | next_action | Bullet Point
       | Role / Company | Tags
       | accuracy_score | believability_score | clarity_score | ats_value | manager_test
       | weaknesses
-      | everything else from the audit file
+      | everything else
     """
     pinned_front  = ["cluster_id", "cluster_size", "next_action", bullet_col]
     pinned_meta   = [c for c in META_COLS  if c in df.columns]
     pinned_scores = [c for c in SCORE_COLS if c in df.columns]
     pinned_weak   = [WEAKNESS_COL] if WEAKNESS_COL in df.columns else []
-
-    already_placed = set(pinned_front + pinned_meta + pinned_scores + pinned_weak)
-    remainder      = [c for c in df.columns if c not in already_placed]
-
+    already       = set(pinned_front + pinned_meta + pinned_scores + pinned_weak)
+    remainder     = [c for c in df.columns if c not in already]
     return pinned_front + pinned_meta + pinned_scores + pinned_weak + remainder
 
 
