@@ -1,0 +1,128 @@
+version: 1.0
+# Role DNA Library — maps role archetypes to their core evidence signals
+# Used by tailor_resume.md and the evidence ranker to match bullets to roles
+# by evidence type, not just keyword matching.
+#
+# Each archetype lists:
+#   core_signals   — must-have evidence; missing these is a red flag
+#   strong_signals — high-value supporting evidence
+#   weak_signals   — nice-to-have; use only if space allows
+#   lead_skills    — Skills section category ordering for this archetype
+#   summary_frame  — the identity sentence pattern for Summary opening
+
+archetypes:
+
+  email_lifecycle:
+    label: "Email Lifecycle & CRM"
+    jd_keywords: [lifecycle, retention, nurture, drip, onboarding, re-engagement, segmentation, automation, sequences, open rate, click rate, reply rate, deliverability]
+    core_signals:
+      - Outreach.io platform ownership (vendor eval, integration, adoption)
+      - Campaign metrics (open rate, reply rate, sequence performance)
+      - Segmentation and audience logic
+      - Multi-touch journey design
+    strong_signals:
+      - A/B testing methodology
+      - CRM data hygiene and imports
+      - Content Committee and asset library scale
+      - Salesforce integration work
+    weak_signals:
+      - General copywriting
+      - Brand voice work
+      - Agency background
+    lead_skills:
+      - Lifecycle & Retention Marketing
+      - CRM & Revenue Operations
+      - Content & Enablement
+      - Creative & Design
+    summary_frame: "[X]-year lifecycle marketing and CRM strategist specializing in [Y]"
+
+  sales_enablement:
+    label: "Sales Enablement & Content Systems"
+    jd_keywords: [enablement, playbook, onboarding, training, SDR, sales content, library, governance, LMS, facilitation, curriculum]
+    core_signals:
+      - Content Committee (founded, chaired, 100+ assets, 129 sequences)
+      - SDR Process Map (8-step website, official onboarding asset)
+      - Live and async training for ~20 SDRs
+      - Content governance and QA process
+    strong_signals:
+      - Voice and tone guidelines
+      - Outreach.io sequence library as enablement asset
+      - CRM hygiene as ops foundation for enablement
+      - Cross-functional stakeholder management
+    weak_signals:
+      - General campaign copywriting
+      - Consumer brand work
+    lead_skills:
+      - Sales Enablement & Training
+      - Content Systems & Governance
+      - CRM & Revenue Operations
+      - Writing & Editing
+    summary_frame: "[X]-year sales enablement and content systems specialist who builds [Y]"
+
+  b2b_content_copywriter:
+    label: "B2B Content & Copywriting"
+    jd_keywords: [copywriter, content strategist, brand voice, editorial, campaign, storytelling, messaging, copy, B2B, demand generation, content marketing]
+    core_signals:
+      - Agency training (VML, Callahan Creek)
+      - Regulated industry copy (CACU: mortgages, insurance, PPC)
+      - Journalism foundation (KU BS, strategic communication)
+      - Brand voice development and documentation
+    strong_signals:
+      - Multi-channel campaign experience (PPC, DM, TV, radio, web, long-form)
+      - K-12 and education sector audience depth
+      - Content Committee as editorial governance proof
+      - Client selection and account ownership
+    weak_signals:
+      - Outreach.io implementation details
+      - CRM hygiene specifics
+    lead_skills:
+      - Content & Communications Strategy
+      - Writing & Editing
+      - Brand Voice & Campaign Development
+      - CRM & Marketing Automation
+    summary_frame: "[X]-year B2B copywriter and content strategist with deep expertise in [Y]"
+
+  marketing_ops_crm:
+    label: "Marketing Operations & CRM"
+    jd_keywords: [marketing ops, CRM, Salesforce, HubSpot, data hygiene, reporting, attribution, automation, segmentation, territory, pipeline, revenue operations]
+    core_signals:
+      - Salesforce territory as a product (national Hot Zone analysis)
+      - CRM scrub ($3M pipeline recovery, 2,900+ accounts)
+      - Data imports, deduplication, and hygiene at scale
+      - Competitive intelligence training and territory reporting
+    strong_signals:
+      - Outreach.io Salesforce integration and data migration
+      - QA process design for content and data
+      - Process documentation and SOPs
+      - Reporting and analytics work
+    weak_signals:
+      - Consumer copywriting
+      - Brand voice work
+    lead_skills:
+      - CRM & Revenue Operations
+      - Marketing Automation & Platforms
+      - Reporting & Analytics
+      - Content & Process Documentation
+    summary_frame: "[X]-year marketing operations and CRM specialist with proven expertise in [Y]"
+
+  generalist_coordinator:
+    label: "Generalist Marketing / Coordinator"
+    jd_keywords: [marketing coordinator, marketing specialist, content coordinator, campaign coordinator, digital marketing, multi-channel, cross-functional]
+    core_signals:
+      - Range across campaigns, CRM, content, and design
+      - Multi-hat IC execution without director-level management claims
+      - Practical execution across channels
+    strong_signals:
+      - Outreach.io and Salesforce as proof of tool depth
+      - Content Committee as cross-functional proof
+      - Agency background as breadth signal
+      - K-12 and education sector audience depth
+    weak_signals:
+      - Deep CRM hygiene specifics (may overwhelm for coordinator roles)
+      - Heavy technical Salesforce administration detail
+    lead_skills:
+      - Campaign Strategy & Lifecycle Marketing
+      - Content & Communications
+      - CRM & Marketing Tools
+      - Creative & Design
+    summary_frame: "[X]-year marketing professional with hands-on experience across [Y]"

@@ -1,4 +1,105 @@
-indicators:
-- synergize
-- leveraged
-- streamlined
+version: 2.0
+# Full AI risk indicator list — sourced from style_rules.yaml and Morgan Escott Design System
+# Any bullet triggering 2+ indicators should be flagged for rewrite.
+
+thresholds:
+  warn_at: 1       # flag for review
+  reject_at: 2     # auto-fail and rewrite
+
+# Buzzwords and corporate-speak
+buzzwords:
+  - synergize
+  - synergized
+  - synergy
+  - leveraged
+  - leverage
+  - streamlined
+  - best-in-class
+  - best in class
+  - thought leader
+  - visionary
+  - innovative
+  - cutting-edge
+  - cutting edge
+  - game-changing
+  - game changer
+  - world-class
+  - world class
+  - dynamic
+  - transformative
+  - disruptive
+  - next-level
+  - holistic
+  - robust
+  - scalable
+  - impactful
+  - actionable
+  - ideated
+  - ideation
+
+# Filler adjectives with no evidential value
+adjective_padding:
+  - excellent
+  - outstanding
+  - exceptional
+  - remarkable
+  - significant
+  - successful
+  - effective
+  - efficient
+  - seamless
+  - comprehensive
+  - passionate
+  - driven
+  - dedicated
+  - committed
+
+# Banned opener phrases
+banned_openers:
+  - responsible for
+  - helped with
+  - worked on
+  - assisted with
+  - participated in
+  - involved in
+  - tasked with
+  - part of a team
+  - member of
+
+# Banned summary/bio phrases
+banned_phrases:
+  - results-driven
+  - results-oriented
+  - self-starter
+  - go-getter
+  - proven track record
+  - detail-oriented
+  - team player
+  - seeking opportunities
+  - dynamic professional
+  - passionate professional
+  - strong communicator
+  - excellent communicator
+  - highly motivated
+  - fast learner
+
+# Vague action verbs that fail the Manager Test
+# (acceptable only when explicit scope is provided)
+vague_verbs:
+  - handled
+  - ran
+  - did
+  - supported
+  - contributed
+  - worked
+  - helped
+
+# Structural red flags
+structural_flags:
+  ends_with_period: true          # bullets must not end with periods
+  contains_parentheses: true      # no parentheses in bullets or summary
+  prose_dash: true                # no em/en dashes in body prose (date ranges excepted)
+  bold_inside_bullet: true        # no <strong> tags inside bullet content
+  pronoun_outside_why: true       # no I/my/me/we/our outside Why section
+  metric_repeated: true           # same number must not appear twice in the CV
+  tool_mentions_exceed_3: true    # 3+ tool mentions in one bullet reads as a list
