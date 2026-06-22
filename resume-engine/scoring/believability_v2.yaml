@@ -1,0 +1,70 @@
+version: 2.0
+# DRAFT — not active. Rename to believability.yaml to activate.
+# Expanded from v1.1 to align with the Morgan Escott Design System and style_rules.yaml.
+
+# Believability measures whether a human recruiter or hiring manager would
+# instinctively trust a bullet — not just whether it is technically accurate.
+# A bullet can be true and still fail believability if it reads like AI wrote it.
+
+max_score: 100
+
+reject_if:
+  score_below: 70    # raised from 60 — higher bar matches design system standards
+
+# Scoring criteria
+criteria:
+  specificity:
+    weight: 30
+    description: "Does the bullet name specific tools, numbers, systems, or contexts?"
+    examples:
+      good: "Migrated 2,900+ accounts into Salesforce after Outreach.io integration"
+      bad: "Managed CRM data migration project"
+
+  realism:
+    weight: 25
+    description: "Does the scope feel proportionate to the role level and company size?"
+    examples:
+      good: "Owned Outreach.io as the sole admin for a 20-person SDR team"
+      bad: "Led enterprise-wide digital transformation initiative"
+
+  human_language:
+    weight: 25
+    description: "Does it sound like something a real person would say or write?"
+    examples:
+      good: "Built the SDR Process Map from scratch; it became the official onboarding doc"
+      bad: "Spearheaded the ideation and implementation of a scalable enablement framework"
+
+  verifiability:
+    weight: 20
+    description: "Could a reference confirm this on a call without hesitation?"
+    examples:
+      good: "Presented Hot Zone findings to VP of Sales in weekly pipeline reviews"
+      bad: "Drove significant improvements across all key performance indicators"
+
+# Penalties — applied on top of criteria scoring
+penalties:
+  # From ai_risk.yaml buzzword list
+  buzzword_hit: -15           # any single match in the buzzwords list
+  adjective_padding_hit: -10  # any match in adjective_padding list
+  banned_phrase_hit: -20      # any match in banned_phrases list (summary)
+
+  # Structural
+  vague_verb: -10             # matches vague_verbs list in ai_risk.yaml
+  generic_claim: -15          # could describe any candidate; zero specificity
+  scope_inflation: -20        # claims ownership or scale not supported by evidence
+  unexplained_metric: -20     # number present but no context for what it represents
+  excessive_adjectives: -10   # 2+ filler adjectives in one bullet
+  passive_construction: -10   # "was responsible for" / "helped to" style
+  parenthetical_aside: -10    # contains parentheses (banned by design system)
+  ends_with_period: -5        # minor flag; bullets must not end with periods
+
+# Bonus scores — applied when bullet demonstrates unusually strong evidence
+bonuses:
+  named_metric_with_context: +10    # e.g., "$3M pipeline" with the audit named
+  named_tool_with_ownership: +10    # e.g., "sole Outreach.io admin"
+  verifiable_artifact: +10          # references something that provably exists (a website, doc, process)
+  protected_bullet_match: +15       # matches a protected bullet from manager_test_v2.yaml
+
+# Hidden gem threshold
+# Bullets scoring >= 90 after bonuses are flagged as candidates for top-5 placement
+hidden_gem_threshold: 90
