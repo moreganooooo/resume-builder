@@ -1,4 +1,24 @@
-version: 1.1
+version: 2.0
+
+# Morgan Escott Resume Design System — Style Rules
+# Source: Morgan-Escott-Complete-Resume-Design-System.md
+
+philosophy:
+  - Decide professional identity before writing; every element must support that identity
+  - Build around the future role, not the past career
+  - Every bullet must pass the Who Cares test; if the hiring manager reason is not obvious, rewrite
+  - Show systems not tasks; use frameworks/infrastructure/programs language not ran/wrote/handled
+  - Metrics are king; adjectives are noise; replace excellent/outstanding with specific numbers
+  - Strongest material first within each role; order by (1) JD-relevance (2) impressiveness (3) uniqueness
+  - Mirror employer language for ATS; use exact JD phrasing across Summary Skills and bullets
+  - Do not waste space on assumed soft skills; use space for scale technical depth and strategic ownership
+  - Repeat real differentiators deliberately; K-12 depth, Salesforce admin, Outreach implementation, lifecycle systems, CRM ops
+  - Summary is positioning not biography; who she is, what she specializes in, what value she creates
+  - Skills reinforce identity; lead with the archetype-relevant category not a tool dumping ground
+  - Think like the hiring manager; dissolve their core anxieties through content selection
+  - Bullet bank is LEGO not prose inspiration; start from curated verified bullets not net-new text
+  - Relevance beats impressiveness; cut impressive-but-irrelevant before relevant-but-modest
+  - Optimize for one reaction: She is exactly the kind of person we need
 
 writing_style:
   preferred:
@@ -6,32 +26,137 @@ writing_style:
     - specific
     - factual
     - direct
-    - use_concise_business_language
-    - prefer_specificity_over_hype
+    - systems_language_over_task_language
+    - mirror_jd_vocabulary_for_ats
     - preserve_candidate_voice
   avoid:
     - hype
     - buzzwords
     - marketing_language
     - consultant_speak
-    - avoid_cliches
+    - adjective_padding
+    - soft_skill_filler
+    - passive_voice
 
 bullet_structure:
-  preferred: "Action + Context + Outcome"
-  fallback: "Action + Context"
+  pattern: "Strong past-tense action verb → task/responsibility → result/outcome (with metric if verified)"
+  fallback: "Action verb → task/responsibility"
+  one_liner_target_chars: 110
+  one_liner_max_chars: 120
+  two_liner_max_chars: 220
+  mix: "~70% one-liners, ~30% two-liners"
+  max_printed_lines: 2
+  widow_rule: "Never wrap to a second line with fewer than 5 words"
 
-word_limits:
-  ideal_bullet_max: 30
-  hard_limit: 45
+verb_rules:
+  - Open every bullet with a strong specific past-tense action verb
+  - Present tense only for actively held roles
+  - Each opening verb must be UNIQUE across the entire CV; no verb may open more than one bullet
+  - Recommended verbs: Architected, Authored, Launched, Recovered, Systematized, Audited, Spearheaded,
+      Negotiated, Synthesized, Produced, Streamlined, Championed, Deployed, Developed, Expanded,
+      Coordinated, Mentored, Built, Implemented, Founded, Delivered, Drove, Engineered, Established,
+      Executed, Generated, Identified, Led, Managed, Orchestrated, Overhauled, Piloted, Redesigned,
+      Reduced, Secured, Trained, Unified
+
+forbidden_openers:
+  - responsible for
+  - helped with
+  - worked on
+  - assisted with
+  - participated in
 
 forbidden_phrases:
   - results-driven
+  - results-oriented
   - dynamic professional
   - self-starter
   - go-getter
   - thought leader
   - visionary
-  - spearheaded
   - synergized
-  - leveraged
-  - passionate professional
+  - synergy
+  - best-in-class
+  - passionate
+  - driven professional
+  - seeking opportunities
+  - proven track record
+  - detail-oriented
+  - team player
+
+punctuation_rules:
+  - Bullets never end with periods or any trailing punctuation
+  - No parentheses in bullets or Summary; replace with commas or semicolons
+  - No dashes in prose; dashes allowed only in date ranges or hyphenated modifiers
+  - No bold text inside bullet content
+  - Use en-dash for date ranges (08/2016 – 08/2024)
+  - Dates always numeric (08/2016 not August 2016)
+  - Ampersand usage: use & in headings/labels/tagline/category names; use and in body prose and bullets
+
+metrics_rules:
+  - Every numeric metric appears at most ONCE across the entire CV
+  - If a metric is in the Summary it must not repeat in bullets
+  - No unsourced metrics; every number must be traceable to verified-claims.csv or extracted-screenshot-metrics.csv
+  - Cautious language for marginally noisy metrics: among our highest-performing sequences not absolute superlatives
+  - Number formatting:
+      spell_out_under_10: true  # except when tied to a unit/metric
+      always_numeral: [percentages, dollar figures, decimals, quantities over 10, date ranges]
+      dollar_format: "$3M, $1.1M" # not $3,000,000
+
+pronoun_rules:
+  allowed_in: [why_section_only]
+  forbidden_in: [summary, skills, work_experience, training, education]
+
+tool_mention_rules:
+  per_bullet_ideal: 1
+  per_bullet_max: 2
+  per_bullet_hard_limit: 3  # 3+ reads as a list not a narrative
+
+skills_section:
+  position: immediately_after_summary
+  importance: highest_ats_signal
+  line_max_chars: 110  # including category label and commas; widow prevention
+  separator: ", "  # comma + space; no bullets or pipes inside a category
+  label_style: bold  # via .skill-category class
+  archetype_ordering:
+    lifecycle: [Lifecycle/Retention Marketing, CRM/Revenue Operations, Content/Enablement/Training, Creative/Design]
+    copywriter: [Content & Communications Strategy, Writing & Editing, CRM/Analytics, Creative]
+    enablement: [Sales Enablement, Content Systems, CRM/Revenue Operations, Training/Facilitation]
+    marketing_ops: [CRM/Revenue Operations, Marketing Automation, Reporting/Analytics, Content/Strategy]
+  category_name_upgrades:
+    - Use "Salesforce Administration" not "Salesforce" to signal admin-level depth
+    - Use "Revenue Operations" not "Marketing Operations" where appropriate
+    - Use "Lifecycle Strategy" not "Lifecycle Campaign Design"
+
+ats_rules:
+  - Single column only; no sidebars or multi-column layout
+  - Standard section headers only: Professional Summary, Skills, Work Experience, Training & Certifications, Education
+  - No text inside images or SVGs
+  - No critical content in PDF headers or footers
+  - No nested tables
+  - UTF-8 text only with ATS-safe punctuation; no exotic symbols
+
+layout_rules:
+  page_count: exactly 2 pages
+  page_size: Letter (8.5 x 11 in) for US/Canada; A4 for explicitly international roles
+  margins: 0.5in all sides
+  content_width: 7.5in
+  page_1: [Header, Professional Summary, Skills, Work Experience (Mercor if present, Treering, IST)]
+  page_2: [Work Experience continued (Element 8/Strategy LLC VML Callahan Creek), Training & Certifications, Education, Why section if present]
+  trimming_priority:
+    1: Trim Summary to 5-line limit; trim Why to 8-line limit
+    2: Tighten bullets (trim adjectives, front-load keywords, collapse redundant clauses)
+    3: Remove least-relevant bullets (protect Outreach implementation and CRM hygiene)
+    4: Remove Why section entirely
+
+typography:
+  name_font: DM Serif Display 400 32pt
+  section_headers_font: DM Serif Display 400 16pt
+  body_font: Space Grotesk 400/600
+  tagline_size: 14pt
+  body_size: 10.5pt
+  contact_size: 10pt
+  prohibited_fonts: [Inter]  # Chromium/Playwright reversed-text bug
+  color_text: "#000000"
+  color_rules: "#9aa3af"  # horizontal rules and separators only; no gradients or accent colors
+  color_background: "#ffffff"
+  tagline_case: HARD-CODED UPPERCASE in HTML string (not CSS text-transform)
