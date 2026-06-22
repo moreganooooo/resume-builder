@@ -49,6 +49,7 @@ yarn-error.log*
 # === OS ===
 .DS_Store
 **/.DS_Store
+<<<<<<< HEAD
 Thumbs.db
 
 # === EDITORS ===
@@ -56,3 +57,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+=======
+**/bullet-bank-audited.csv
+>>>>>>> 5a54326 (add audit csv to gitignore)
