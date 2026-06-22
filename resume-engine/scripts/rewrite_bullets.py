@@ -7,12 +7,19 @@ Agentic rewrite loop for resume bullets.
 Pipeline per bullet:
   1. Pull is_representative=True rows where next_action in (REWRITE, REVIEW)
      from bullet-bank-cluster-map.csv
-  2. Rewrite using Gemini, guided by weaknesses + Tags persona
+  2. Rewrite using Gemini, guided by weaknesses + Tags persona + knowledge base context
   3. Re-score using the same rubric as bullet-bank-audited.py
   4. If next_action=KEEP AND manager_test=PASS  →  write to keeper CSV + update cluster map
      Else pick best version (original vs rewrite) and loop with updated notes
   5. Max 3 attempts per bullet. On failure → status=MANUAL
   6. KEEP bullets already in the cluster map are seeded into the keeper CSV at startup
+
+Knowledge base context injected at startup:
+  - cv.md                        → full career narrative (all bullets)
+  - morgan-background-guide.md   → deep role context (all bullets)
+  - profile.yml                  → target roles, superpowers, deal-breakers (trimmed; all bullets)
+  - verified-claims.csv          → role-matched verified metrics (Treering bullets only)
+  - extracted-screenshot-metrics.csv → screenshot-sourced metrics (Treering bullets only)
 
 Usage:
   python rewrite_bullets.py                  # process all REWRITE + REVIEW reps
@@ -45,6 +52,12 @@ CLUSTER_MAP_IN  = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
 KEEPERS_OUT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 
+KB_CV              = os.path.join(KB_DIR, "cv.md")
+KB_BACKGROUND      = os.path.join(KB_DIR, "morgan-background-guide.md")
+KB_PROFILE         = os.path.join(KB_DIR, "profile.yml")
+KB_VERIFIED_CLAIMS = os.path.join(KB_DIR, "verified-claims.csv")
+KB_SCREENSHOT_METRICS = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv")
+
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
@@ -60,6 +73,9 @@ SLEEP_ON_RATE_LIMIT    = 60   # pause when we hit a 429
 
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
               "ats_value", "manager_test"]
+
+# Keyword patterns that indicate a Treering bullet (case-insensitive)
+TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
 
 # ---------------------------------------------------------------------------
 # PERSONA TAG MAP  (Tags column values → plain-English role context)
@@ -84,6 +100,157 @@ api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise EnvironmentError("GEMINI_API_KEY not found in .env file.")
 genai.configure(api_key=api_key)
+
+
+# ---------------------------------------------------------------------------
+# KNOWLEDGE BASE LOADING
+# ---------------------------------------------------------------------------
+
+def load_text_file(path: str, label: str) -> str:
+    """Load a text file and return its contents, or empty string on failure."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        print(f"  ✅ Loaded {label} ({len(content):,} chars)")
+        return content
+    except Exception as e:
+        print(f"  ⚠️  Could not load {label}: {e}")
+        return ""
+
+
+def trim_profile_yml(raw: str) -> str:
+    """
+    Keep only the sections of profile.yml that are useful for rewriting:
+    target_roles, archetypes, narrative, superpowers, background_context, deal_breakers.
+    Strips companies_previously_applied, compensation, location, proof_points, etc.
+    """
+    KEEP_SECTIONS = [
+        "target_roles:", "archetypes:", "narrative:", "superpowers:",
+        "background_context:", "deal_breakers:"
+    ]
+    STOP_SECTIONS = [
+        "industries_of_genuine_fit:", "companies_previously_applied:",
+        "compensation:", "location:", "cv:", "proof_points:",
+        "key_recommendations:", "management_evidence:"
+    ]
+
+    lines = raw.splitlines()
+    result = []
+    capturing = False
+
+    for line in lines:
+        stripped = line.strip()
+        # Check if we're entering a keep section
+        if any(stripped.startswith(s) for s in KEEP_SECTIONS):
+            capturing = True
+        # Check if we're entering a stop section
+        elif any(stripped.startswith(s) for s in STOP_SECTIONS):
+            capturing = False
+
+        if capturing:
+            result.append(line)
+
+    return "\n".join(result).strip()
+
+
+def load_verified_claims(path: str) -> pd.DataFrame:
+    """Load verified-claims.csv, keeping only Use in Resume? = Yes rows."""
+    try:
+        df = pd.read_csv(path)
+        # Keep only rows where Use in Resume? is Yes (or yes/YES)
+        if "Use in Resume?" in df.columns:
+            df = df[df["Use in Resume?"].str.strip().str.lower().str.startswith("yes")]
+        print(f"  ✅ Loaded verified-claims ({len(df)} resume-usable rows)")
+        return df
+    except Exception as e:
+        print(f"  ⚠️  Could not load verified-claims: {e}")
+        return pd.DataFrame()
+
+
+def load_screenshot_metrics(path: str) -> str:
+    """Load extracted-screenshot-metrics.csv as a compact string."""
+    try:
+        df = pd.read_csv(path)
+        content = df.to_csv(index=False)
+        print(f"  ✅ Loaded screenshot metrics ({len(df)} rows)")
+        return content
+    except Exception as e:
+        print(f"  ⚠️  Could not load screenshot metrics: {e}")
+        return ""
+
+
+def get_verified_claims_for_role(df_claims: pd.DataFrame, role_company: str) -> str:
+    """
+    Filter verified claims to rows relevant to the bullet's role/company.
+    Since verified-claims is Treering-specific, this just returns all rows
+    as a compact CSV string when called for a Treering bullet.
+    """
+    if df_claims.empty:
+        return ""
+    # Return the most useful columns only to keep tokens lean
+    cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
+    available = [c for c in cols if c in df_claims.columns]
+    return df_claims[available].to_csv(index=False)
+
+
+def is_treering_bullet(role_company: str) -> bool:
+    """Return True if the bullet is from a Treering role."""
+    if not isinstance(role_company, str):
+        return False
+    rc = role_company.lower()
+    return any(kw in rc for kw in TREERING_KEYWORDS)
+
+
+class KnowledgeBase:
+    """Container for all knowledge base context loaded at startup."""
+
+    def __init__(self):
+        print("\n📚 Loading knowledge base context...")
+        self.cv            = load_text_file(KB_CV,         "cv.md")
+        self.background    = load_text_file(KB_BACKGROUND, "morgan-background-guide.md")
+        raw_profile        = load_text_file(KB_PROFILE,    "profile.yml")
+        self.profile       = trim_profile_yml(raw_profile)
+        self.df_claims     = load_verified_claims(KB_VERIFIED_CLAIMS)
+        self.screenshot_metrics = load_screenshot_metrics(KB_SCREENSHOT_METRICS)
+        print(f"  📝 profile.yml trimmed to {len(self.profile):,} chars\n")
+
+    def context_block_for_bullet(self, role_company: str) -> str:
+        """
+        Build the knowledge base context block for a single bullet.
+        All bullets get cv + background + profile.
+        Treering bullets additionally get verified claims + screenshot metrics.
+        """
+        sections = []
+
+        if self.cv:
+            sections.append(f"=== CAREER OVERVIEW (cv.md) ===\n{self.cv}")
+
+        if self.background:
+            sections.append(f"=== BACKGROUND GUIDE ===\n{self.background}")
+
+        if self.profile:
+            sections.append(
+                f"=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
+                f"Use these to understand what roles this bullet needs to appeal to "
+                f"and what to avoid.\n{self.profile}"
+            )
+
+        if is_treering_bullet(role_company):
+            claims_text = get_verified_claims_for_role(self.df_claims, role_company)
+            if claims_text:
+                sections.append(
+                    f"=== VERIFIED CLAIMS & METRICS (Treering — resume-usable) ===\n"
+                    f"Use these to inject real, verified metrics into the bullet where appropriate. "
+                    f"Do NOT use any metric marked Medium or Low confidence as a hard fact.\n"
+                    f"{claims_text}"
+                )
+            if self.screenshot_metrics:
+                sections.append(
+                    f"=== SCREENSHOT-SOURCED METRICS ===\n"
+                    f"{self.screenshot_metrics}"
+                )
+
+        return "\n\n".join(sections)
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +325,9 @@ Your job is to rewrite a single resume bullet point so it:
   - Fixes every weakness listed
   - Stays under 30 words where possible; never exceeds 40 words
   - Starts with a strong past-tense action verb
-  - Includes a concrete metric or outcome if one can be reasonably inferred from context
-    (do NOT invent numbers that weren't implied)
+  - Includes a concrete metric or outcome if one can be reasonably inferred
+    from the knowledge base context provided — use ONLY verified metrics from
+    the Verified Claims section; do NOT invent numbers
 
 If you genuinely lack enough context to fix a specific weakness (e.g. exact methodology
 or missing metrics), note this honestly in your reasoning — do not fabricate details.
@@ -174,7 +342,8 @@ Respond ONLY with valid JSON, no markdown fences, in this exact shape:
 
 
 def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str,
-                         attempt: int, prev_scores: dict = None) -> str:
+                         kb_context: str, attempt: int,
+                         prev_scores: dict = None) -> str:
     persona = persona_context(tags)
     prev_block = ""
     if prev_scores and attempt > 1:
@@ -190,6 +359,16 @@ Your last rewrite scored:
 
 Use these scores and notes to improve your rewrite.
 """
+    kb_block = ""
+    if kb_context:
+        kb_block = f"""
+--- KNOWLEDGE BASE CONTEXT ---
+Use the following background information to inform your rewrite.
+Draw on verified metrics where they strengthen the bullet.
+Do NOT use metrics marked Low confidence as hard facts.
+
+{kb_context}
+"""
     return f"""{REWRITE_SYSTEM}
 
 --- BULLET TO REWRITE ---
@@ -200,7 +379,7 @@ This bullet should resonate for: {persona}
 
 --- KNOWN WEAKNESSES (fix these) ---
 {weaknesses if weaknesses and weaknesses.strip() else 'None noted — improve clarity and manager-test score generally.'}
-{prev_block}
+{prev_block}{kb_block}
 Now rewrite the bullet. Respond with JSON only.
 """
 
@@ -320,7 +499,6 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
     if os.path.exists(path):
         print(f"  📂 Loading existing keepers: {path}")
         df = pd.read_csv(path)
-        # ensure all expected columns present
         for col in KEEPER_COLS:
             if col not in df.columns:
                 df[col] = ""
@@ -358,7 +536,7 @@ def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFram
 # MAIN LOOP
 # ---------------------------------------------------------------------------
 
-def process_bullet(row: pd.Series, dry_run: bool) -> dict:
+def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
     """
     Run the rewrite loop for a single bullet.
     Returns a result dict with final bullet text, scores, status, and metadata.
@@ -366,7 +544,11 @@ def process_bullet(row: pd.Series, dry_run: bool) -> dict:
     original_bullet  = str(row["Bullet Point"]).strip()
     tags             = str(row.get("Tags", ""))
     weaknesses       = str(row.get("weaknesses", ""))
+    role_company     = str(row.get("Role / Company", ""))
     original_scores  = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
+
+    # Build knowledge base context block for this bullet (role-aware)
+    kb_context = kb.context_block_for_bullet(role_company)
 
     current_bullet = original_bullet
     current_scores = original_scores
@@ -379,7 +561,9 @@ def process_bullet(row: pd.Series, dry_run: bool) -> dict:
 
         # --- REWRITE ---
         rw_prompt = build_rewrite_prompt(
-            current_bullet, tags, str(current_scores.get("weaknesses", weaknesses)),
+            current_bullet, tags,
+            str(current_scores.get("weaknesses", weaknesses)),
+            kb_context,
             attempt=attempt,
             prev_scores=current_scores if attempt > 1 else None
         )
@@ -479,6 +663,9 @@ def main():
         if col not in df_map.columns:
             df_map[col] = ""
 
+    # Load knowledge base context once at startup
+    kb = KnowledgeBase()
+
     # Load or seed keepers
     df_keepers = load_or_init_keepers(args.keepers, df_map)
 
@@ -504,8 +691,10 @@ def main():
         print(f"\n[{i}/{total}] {bullet_preview}...")
         print(f"  Company: {row.get('Role / Company', '')}  |  Tags: {row.get('Tags', '')}")
         print(f"  Current action: {row['next_action']}  |  Weaknesses: {str(row.get('weaknesses',''))[:80]}")
+        treering_flag = "🌳 Treering bullet — verified claims injected" if is_treering_bullet(str(row.get("Role / Company", ""))) else "📄 Non-Treering bullet — career context injected"
+        print(f"  {treering_flag}")
 
-        result = process_bullet(row, dry_run=args.dry_run)
+        result = process_bullet(row, kb, dry_run=args.dry_run)
 
         # Write result back into cluster map
         df_map.at[idx, "final_bullet"]      = result["final_bullet"]
