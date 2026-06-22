@@ -44,12 +44,20 @@ WEAKNESS_COL = "weaknesses"
 # Internal merge key — double-underscored to guarantee no collision with real column names
 MERGE_KEY = "__merge_key__"
 
+# Columns written by this script — always drop before reassigning to prevent duplicates
+SCRIPT_COLS = ["cluster_id", "cluster_size", "is_representative", "next_action"]
+
 DEFAULT_THRESHOLD = 0.75
 
 
 # ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
+
+def drop_script_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop any columns this script writes, so they can be freshly assigned each run."""
+    return df.drop(columns=[c for c in SCRIPT_COLS + [MERGE_KEY] if c in df.columns])
+
 
 def detect_col(df: pd.DataFrame, preferred: str, fallbacks: list) -> str:
     if preferred in df.columns:
@@ -99,36 +107,27 @@ def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
     """
     Left-join ALL columns from the audit CSV onto the main bullet dataframe.
-
-    Uses MERGE_KEY ('__merge_key__') as the join column name — double-underscored
-    so it can never collide with real column names like 'Role / Company' or 'Tags'
-    that appear in both source files.
+    Uses __merge_key__ to avoid collision with real column names.
+    Drops shared columns from the audit side to prevent _x/_y duplicates.
     """
-    df_main  = df_main.copy()
-    df_audit = df_audit.copy()
-
-    # Strip any stale merge key columns from previous runs
-    df_main.drop(columns=[c for c in df_main.columns if c == MERGE_KEY], inplace=True)
-    df_audit.drop(columns=[c for c in df_audit.columns if c == MERGE_KEY], inplace=True)
+    df_main  = drop_script_cols(df_main.copy())
+    df_audit = drop_script_cols(df_audit.copy())
 
     # Build normalised join keys
     df_main[MERGE_KEY]  = df_main[main_col].fillna("").str.strip().str.lower()
     df_audit[MERGE_KEY] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
 
     # Drop shared non-bullet columns from audit to avoid _x/_y duplicates
-    # (e.g. both files have 'Role / Company' and 'Tags')
     shared_cols = [c for c in df_audit.columns
                    if c in df_main.columns and c not in (BULLET_COL, MERGE_KEY)]
     if shared_cols:
         print(f"  ℹ️  Dropping shared columns from audit to avoid duplicates: {shared_cols}")
         df_audit.drop(columns=shared_cols, inplace=True)
 
-    # Bring everything from audit except its own bullet column
-    audit_cols_to_bring = [c for c in df_audit.columns if c != BULLET_COL]
+    audit_cols_to_bring = [c for c in df_audit.columns if c not in (BULLET_COL, MERGE_KEY)]
 
     df_merged = df_main.merge(
-        df_audit[[MERGE_KEY] + [c for c in audit_cols_to_bring if c != MERGE_KEY]]
-            .drop_duplicates(subset=MERGE_KEY),
+        df_audit[[MERGE_KEY] + audit_cols_to_bring].drop_duplicates(subset=MERGE_KEY),
         on=MERGE_KEY,
         how="left"
     ).drop(columns=[MERGE_KEY])
@@ -171,12 +170,6 @@ def cluster_bullets(bullets: list, threshold: float):
 
 
 def pick_representative(cluster: list, bullets: list, df: pd.DataFrame) -> int:
-    """
-    Priority:
-    1. Highest accuracy_score (if audit data present)
-    2. Highest hidden_gem_score (if present)
-    3. Longest bullet text
-    """
     if "accuracy_score" in df.columns:
         scored = [(i, pd.to_numeric(df.iloc[i].get("accuracy_score", 0), errors="coerce") or 0)
                   for i in cluster]
@@ -212,10 +205,6 @@ def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
 
 
 def decide_action(row: pd.Series) -> str:
-    """
-    Recommended next action per bullet. manager_test is already
-    normalized to PASS/FAIL by the time this runs.
-    """
     mgr           = str(row.get("manager_test",      "")).strip().upper()
     believability = pd.to_numeric(row.get("believability_score", None), errors="coerce")
     accuracy      = pd.to_numeric(row.get("accuracy_score",      None), errors="coerce")
@@ -231,14 +220,6 @@ def decide_action(row: pd.Series) -> str:
 
 
 def build_col_order(df: pd.DataFrame, bullet_col: str) -> list:
-    """
-    Fixed column order for output CSVs:
-      cluster_id | cluster_size | next_action | Bullet Point
-      | Role / Company | Tags
-      | accuracy_score | believability_score | clarity_score | ats_value | manager_test
-      | weaknesses
-      | everything else
-    """
     pinned_front  = ["cluster_id", "cluster_size", "next_action", bullet_col]
     pinned_meta   = [c for c in META_COLS  if c in df.columns]
     pinned_scores = [c for c in SCORE_COLS if c in df.columns]
@@ -297,7 +278,7 @@ def main():
         return
 
     # --- DEDUPLICATED OUTPUT (one rep per cluster) ---
-    df_dedup = df.iloc[rep_indices].copy()
+    df_dedup = drop_script_cols(df.iloc[rep_indices].copy())
     df_dedup.insert(0, "cluster_id",   [assigned[i]               for i in rep_indices])
     df_dedup.insert(1, "cluster_size", [len(clusters[assigned[i]]) for i in rep_indices])
     df_dedup["next_action"] = df_dedup.apply(decide_action, axis=1)
@@ -314,16 +295,17 @@ def main():
         print(f"     {action:<15} {count}")
 
     # --- FULL CLUSTER MAP (every bullet, all columns) ---
-    df["cluster_id"]        = assigned
-    df["cluster_size"]      = [len(clusters[cid]) for cid in assigned]
-    df["is_representative"] = [i in set(rep_indices) for i in range(len(bullets))]
-    df["next_action"]       = df.apply(decide_action, axis=1)
+    df_map = drop_script_cols(df.copy())
+    df_map["cluster_id"]        = assigned
+    df_map["cluster_size"]      = [len(clusters[cid]) for cid in assigned]
+    df_map["is_representative"] = [i in set(rep_indices) for i in range(len(bullets))]
+    df_map["next_action"]       = df_map.apply(decide_action, axis=1)
 
     map_col_order = ["cluster_id", "cluster_size", "is_representative"] + \
-                    [c for c in build_col_order(df, bullet_col)
+                    [c for c in build_col_order(df_map, bullet_col)
                      if c not in ("cluster_id", "cluster_size")]
-    df_map = df[[c for c in map_col_order if c in df.columns]] \
-               .sort_values(["cluster_id", "is_representative"], ascending=[True, False])
+    df_map = df_map[[c for c in map_col_order if c in df_map.columns]] \
+                .sort_values(["cluster_id", "is_representative"], ascending=[True, False])
     df_map.to_csv(args.map, index=False)
     print(f"📋 Full cluster map saved: {args.map}\n")
 
