@@ -3,17 +3,17 @@
 cluster_bullet_bank.py
 
 Groups near-duplicate bullets in bullet-bank-clean.csv using TF-IDF + cosine
-similarity, then joins audit scores from bullet-bank-audited.csv so every
-output row has cluster info AND scores in one place.
+similarity, then joins ALL columns from bullet-bank-audited.csv so every
+output row has cluster info, scores, company, tags, and weaknesses in one place.
 
 Usage:
   python cluster_bullet_bank.py                   # uses defaults
   python cluster_bullet_bank.py --threshold 0.88  # stricter grouping
   python cluster_bullet_bank.py --report-only     # preview clusters, no files written
 
-Outputs (all written to resume-engine/knowledge_base/):
-  bullet-bank-deduplicated.csv   — one rep per cluster + audit scores, feed to rewrite script
-  bullet-bank-cluster-map.csv    — every bullet mapped to its cluster + audit scores
+Outputs (written to resume-engine/knowledge_base/):
+  bullet-bank-deduplicated.csv   — one rep per cluster + all audit data, feed to rewrite script
+  bullet-bank-cluster-map.csv    — every bullet mapped to its cluster + all audit data
 """
 
 import argparse
@@ -23,33 +23,24 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # --- PATH RESOLUTION ---
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-KB_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 
-DEFAULT_INPUT      = os.path.join(KB_DIR, "bullet-bank-clean.csv")
-DEFAULT_AUDIT      = os.path.join(KB_DIR, "bullet-bank-audited.csv")
-DEFAULT_DEDUP_OUT  = os.path.join(KB_DIR, "bullet-bank-deduplicated.csv")
-DEFAULT_MAP_OUT    = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
+DEFAULT_INPUT     = os.path.join(KB_DIR, "bullet-bank-clean.csv")
+DEFAULT_AUDIT     = os.path.join(KB_DIR, "bullet-bank-audited.csv")
+DEFAULT_DEDUP_OUT = os.path.join(KB_DIR, "bullet-bank-deduplicated.csv")
+DEFAULT_MAP_OUT   = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 
-# Column that holds bullet text in bullet-bank-clean.csv
-BULLET_COL = "Bullet Point"
+# Column that holds bullet text in BOTH CSVs
+BULLET_COL    = "Bullet Point"
 FALLBACK_COLS = ["bullet", "achievement", "text", "Bullet", "Achievement"]
 
-# Column that holds bullet text in bullet-bank-audited.csv
-AUDIT_BULLET_COL = "Bullet Point"
-
-# Audit score columns to pull in
-AUDIT_COLS = [
-    "Role / Company",
-    "Tags",
-    "accuracy_score",
-    "believability_score",
-    "clarity_score",
-    "ats_value",
-    "manager_test",
-    "weaknesses",
-]
+# Columns that drive scoring logic (used for ordering + decide_action)
+# Everything else from the audit file is pulled in automatically.
+SCORE_COLS   = ["accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test"]
+META_COLS    = ["Role / Company", "Tags"]   # appear right after bullet in output
+WEAKNESS_COL = "weaknesses"
 
 DEFAULT_THRESHOLD = 0.75
 
@@ -71,77 +62,62 @@ def detect_col(df: pd.DataFrame, preferred: str, fallbacks: list) -> str:
 
 
 def load_audit(audit_path: str):
-    """Load audit CSV. Returns None (with a warning) if file doesn't exist yet."""
+    """Load audit CSV. Returns None with a warning if the file doesn't exist yet."""
     if not os.path.exists(audit_path):
         print(f"  ⚠️  Audit file not found at {audit_path} — skipping score join.")
         print(f"      Run the audit script first, then re-run this to get the unified report.")
         return None
     df = pd.read_csv(audit_path)
-    print(f"  ✅ Audit file loaded: {len(df)} scored bullets.")
+    print(f"  ✅ Audit file loaded: {len(df)} scored bullets | {len(df.columns)} columns.")
+    print(f"     Columns: {df.columns.tolist()}")
     return df
 
 
 def normalize_manager_test(value) -> str:
     """
-    Normalize the manager_test column to always return 'PASS' or 'FAIL'.
+    Normalize manager_test to always return 'PASS' or 'FAIL'.
 
-    The audit CSV has two historical formats:
-      - Old format: numeric score (e.g. 85) for passes, 'fail' text for failures
-      - New format: 'pass' or 'fail' text
-
-    This function handles both so decide_action always sees a clean PASS/FAIL.
+    Two historical formats exist in the audit CSV:
+      - Old: numeric score (e.g. 85) = pass, 'fail' text = failure
+      - New: 'pass' or 'fail' text
     """
     if pd.isna(value) or str(value).strip() == "":
         return ""
-
     raw = str(value).strip().upper()
-
-    # Explicit text values
     if raw == "PASS":
         return "PASS"
     if raw == "FAIL":
         return "FAIL"
-
-    # Numeric value — old format used a score for passes, 'fail' for failures.
-    # Any numeric value in this column means the bullet passed.
     try:
         float(raw)
-        return "PASS"
+        return "PASS"  # any numeric score in old format = passed
     except ValueError:
-        pass
-
-    # Unexpected value — treat conservatively as unknown
-    return raw
+        return raw     # unexpected value — pass through as-is
 
 
 def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
     """
-    Left-join audit scores onto the main bullet dataframe.
-    Matches on normalised bullet text (stripped, lowercased) to handle
-    minor whitespace differences between the two CSVs.
-    Also normalizes manager_test column after joining.
+    Left-join ALL columns from the audit CSV onto the main bullet dataframe.
+    Matches on normalised bullet text (stripped + lowercased) to handle
+    minor whitespace differences between the two files.
     """
-    present_audit_cols = [c for c in AUDIT_COLS if c in df_audit.columns]
-    missing = [c for c in AUDIT_COLS if c not in df_audit.columns]
-    if missing:
-        print(f"  ⚠️  Audit columns not found (will be blank): {missing}")
-
     # Normalise join keys
-    df_main = df_main.copy()
-    df_main["_join_key"] = df_main[main_col].fillna("").str.strip().str.lower()
-
+    df_main  = df_main.copy()
     df_audit = df_audit.copy()
-    df_audit["_join_key"] = df_audit[AUDIT_BULLET_COL].fillna("").str.strip().str.lower()
+    df_main["_join_key"]  = df_main[main_col].fillna("").str.strip().str.lower()
+    df_audit["_join_key"] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
 
-    cols_to_merge = ["_join_key"] + present_audit_cols
+    # Drop the audit's bullet column itself (we already have it from df_main)
+    audit_cols_to_bring = [c for c in df_audit.columns if c != BULLET_COL]
+
     df_merged = df_main.merge(
-        df_audit[cols_to_merge].drop_duplicates(subset="_join_key"),
+        df_audit[["_join_key"] + audit_cols_to_bring].drop_duplicates(subset="_join_key"),
         on="_join_key",
         how="left"
     ).drop(columns=["_join_key"])
 
-    # Normalize manager_test to clean PASS/FAIL regardless of which format was used
+    # Normalize manager_test regardless of which format was used
     if "manager_test" in df_merged.columns:
         df_merged["manager_test"] = df_merged["manager_test"].apply(normalize_manager_test)
         pass_count = (df_merged["manager_test"] == "PASS").sum()
@@ -149,14 +125,14 @@ def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
         print(f"  📋 manager_test normalized: {pass_count} PASS / {fail_count} FAIL")
 
     matched = df_merged["accuracy_score"].notna().sum() if "accuracy_score" in df_merged.columns else "?"
-    print(f"  🔗 Audit scores joined: {matched}/{len(df_main)} bullets matched.")
+    print(f"  🔗 Audit join complete: {matched}/{len(df_main)} bullets matched.")
     return df_merged
 
 
 def cluster_bullets(bullets: list, threshold: float):
     print(f"  🔢 Vectorizing {len(bullets)} bullets with TF-IDF (ngrams 1–2)...")
     vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words="english", min_df=1)
-    matrix = vectorizer.fit_transform(bullets)
+    matrix     = vectorizer.fit_transform(bullets)
 
     print(f"  🔗 Computing pairwise cosine similarity...")
     sim_matrix = cosine_similarity(matrix)
@@ -180,21 +156,19 @@ def cluster_bullets(bullets: list, threshold: float):
 
 def pick_representative(cluster: list, bullets: list, df: pd.DataFrame) -> int:
     """
-    Priority order for picking the cluster rep:
-    1. Highest accuracy_score from audit (if available)
-    2. hidden_gem_score (if available)
-    3. Longest bullet text (most specific)
+    Priority:
+    1. Highest accuracy_score (if audit data present)
+    2. Highest hidden_gem_score (if present)
+    3. Longest bullet text
     """
     if "accuracy_score" in df.columns:
         scored = [(i, pd.to_numeric(df.iloc[i].get("accuracy_score", 0), errors="coerce") or 0)
                   for i in cluster]
-        best = max(scored, key=lambda x: (x[1], len(bullets[x[0]])))
-        return best[0]
+        return max(scored, key=lambda x: (x[1], len(bullets[x[0]])))[0]
     if "hidden_gem_score" in df.columns:
         scored = [(i, pd.to_numeric(df.iloc[i].get("hidden_gem_score", 0), errors="coerce") or 0)
                   for i in cluster]
-        best = max(scored, key=lambda x: (x[1], len(bullets[x[0]])))
-        return best[0]
+        return max(scored, key=lambda x: (x[1], len(bullets[x[0]])))[0]
     return max(cluster, key=lambda i: len(bullets[i]))
 
 
@@ -210,41 +184,54 @@ def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
     for cluster_id, members in multi[:top_n]:
         print(f"  Cluster {cluster_id} — {len(members)} bullets:")
         for idx in members:
-            preview = bullets[idx][:95] + ("..." if len(bullets[idx]) > 95 else "")
-            score_str = ""
+            preview    = bullets[idx][:95] + ("..." if len(bullets[idx]) > 95 else "")
+            score_str  = ""
             if has_scores:
-                acc = df.iloc[idx].get("accuracy_score", "")
-                mgr = df.iloc[idx].get("manager_test", "")
-                score_str = f" [acc={acc} mgr={mgr}]"
+                acc       = df.iloc[idx].get("accuracy_score", "")
+                mgr       = df.iloc[idx].get("manager_test", "")
+                company   = df.iloc[idx].get("Role / Company", "")
+                score_str = f" [acc={acc} mgr={mgr} co={company}]"
             print(f"    • [{idx}]{score_str} {preview}")
         print()
 
 
 def decide_action(row: pd.Series) -> str:
     """
-    Compute a recommended next action for each rep bullet based on audit scores.
-    manager_test is already normalized to PASS/FAIL by this point.
+    Recommended next action per bullet. manager_test is already
+    normalized to PASS/FAIL by the time this runs.
     """
-    mgr          = str(row.get("manager_test", "")).strip().upper()
+    mgr           = str(row.get("manager_test",      "")).strip().upper()
     believability = pd.to_numeric(row.get("believability_score", None), errors="coerce")
-    accuracy      = pd.to_numeric(row.get("accuracy_score", None), errors="coerce")
+    accuracy      = pd.to_numeric(row.get("accuracy_score",      None), errors="coerce")
     weaknesses    = str(row.get("weaknesses", "")).strip()
 
-    # Not yet audited
     if pd.isna(accuracy) and pd.isna(believability):
         return "NEEDS_AUDIT"
-
-    # Hard fail
     if mgr == "FAIL" or (pd.notna(believability) and believability < 80):
         return "REWRITE"
-
-    # Has noted weaknesses
     if weaknesses and weaknesses.lower() not in ("", "none", "nan", "n/a"):
-        if pd.notna(accuracy) and accuracy >= 85:
-            return "REVIEW"  # good score but weaknesses flagged — human call
-        return "REWRITE"
-
+        return "REVIEW" if (pd.notna(accuracy) and accuracy >= 85) else "REWRITE"
     return "KEEP"
+
+
+def build_col_order(df: pd.DataFrame, bullet_col: str) -> list:
+    """
+    Build the final column order for the output CSVs:
+      cluster_id | cluster_size | next_action | Bullet Point
+      | Role / Company | Tags
+      | accuracy_score | believability_score | clarity_score | ats_value | manager_test
+      | weaknesses
+      | everything else from the audit file
+    """
+    pinned_front  = ["cluster_id", "cluster_size", "next_action", bullet_col]
+    pinned_meta   = [c for c in META_COLS  if c in df.columns]
+    pinned_scores = [c for c in SCORE_COLS if c in df.columns]
+    pinned_weak   = [WEAKNESS_COL] if WEAKNESS_COL in df.columns else []
+
+    already_placed = set(pinned_front + pinned_meta + pinned_scores + pinned_weak)
+    remainder      = [c for c in df.columns if c not in already_placed]
+
+    return pinned_front + pinned_meta + pinned_scores + pinned_weak + remainder
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +240,7 @@ def decide_action(row: pd.Series) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Cluster + deduplicate bullets, joined with audit scores."
+        description="Cluster + deduplicate bullets with full audit data in one unified report."
     )
     parser.add_argument("--input",       default=DEFAULT_INPUT,     help="Path to bullet-bank-clean.csv")
     parser.add_argument("--audit",       default=DEFAULT_AUDIT,     help="Path to bullet-bank-audited.csv")
@@ -262,13 +249,13 @@ def main():
     parser.add_argument("--threshold",   type=float, default=DEFAULT_THRESHOLD,
                         help="Cosine similarity threshold (default 0.75). Higher = stricter.")
     parser.add_argument("--report-only", action="store_true",
-                        help="Print preview without writing files.")
+                        help="Print cluster preview without writing any files.")
     args = parser.parse_args()
 
     print(f"\n📥 Loading bullet bank: {args.input}")
-    df = pd.read_csv(args.input)
+    df         = pd.read_csv(args.input)
     bullet_col = detect_col(df, BULLET_COL, FALLBACK_COLS)
-    bullets = df[bullet_col].fillna("").tolist()
+    bullets    = df[bullet_col].fillna("").tolist()
     print(f"  ✅ {len(bullets)} bullets loaded.")
     print(f"  🎯 Similarity threshold: {args.threshold}")
 
@@ -295,38 +282,34 @@ def main():
         print("🔍 Report-only mode — no files written.")
         return
 
-    # --- DEDUPLICATED OUTPUT (reps only) ---
+    # --- DEDUPLICATED OUTPUT (one rep per cluster) ---
     df_dedup = df.iloc[rep_indices].copy()
     df_dedup.insert(0, "cluster_id",   [assigned[i]               for i in rep_indices])
     df_dedup.insert(1, "cluster_size", [len(clusters[assigned[i]]) for i in rep_indices])
     df_dedup["next_action"] = df_dedup.apply(decide_action, axis=1)
 
-    score_cols = [c for c in ["accuracy_score", "believability_score",
-                               "clarity_score", "ats_value", "manager_test"] if c in df_dedup.columns]
-    other_cols = [c for c in df_dedup.columns
-                  if c not in ["cluster_id", "cluster_size", "next_action",
-                               bullet_col, "weaknesses"] + score_cols]
-    col_order  = (["cluster_id", "cluster_size", "next_action", bullet_col]
-                  + score_cols + ["weaknesses"] + other_cols)
-    col_order  = [c for c in col_order if c in df_dedup.columns]
-    df_dedup   = df_dedup[col_order]
-
+    col_order = build_col_order(df_dedup, bullet_col)
+    df_dedup  = df_dedup[[c for c in col_order if c in df_dedup.columns]]
     df_dedup.to_csv(args.output, index=False)
     print(f"\n✅ Deduplicated report saved: {args.output}")
+    print(f"   Columns: {df_dedup.columns.tolist()}")
 
     action_counts = df_dedup["next_action"].value_counts().to_dict()
     print(f"   next_action breakdown:")
     for action, count in sorted(action_counts.items()):
         print(f"     {action:<15} {count}")
 
-    # --- FULL CLUSTER MAP ---
+    # --- FULL CLUSTER MAP (every bullet, all columns) ---
     df["cluster_id"]        = assigned
     df["cluster_size"]      = [len(clusters[cid]) for cid in assigned]
     df["is_representative"] = [i in set(rep_indices) for i in range(len(bullets))]
-    map_cols = (["cluster_id", "cluster_size", "is_representative", bullet_col]
-                + [c for c in score_cols + ["weaknesses"] if c in df.columns])
-    df_map   = df[map_cols].sort_values(["cluster_id", "is_representative"],
-                                         ascending=[True, False])
+    df["next_action"]       = df.apply(decide_action, axis=1)
+
+    map_col_order = ["cluster_id", "cluster_size", "is_representative"] + \
+                    [c for c in build_col_order(df, bullet_col)
+                     if c not in ("cluster_id", "cluster_size")]
+    df_map = df[[c for c in map_col_order if c in df.columns]] \
+               .sort_values(["cluster_id", "is_representative"], ascending=[True, False])
     df_map.to_csv(args.map, index=False)
     print(f"📋 Full cluster map saved: {args.map}\n")
 
