@@ -70,7 +70,7 @@ def detect_col(df: pd.DataFrame, preferred: str, fallbacks: list) -> str:
     )
 
 
-def load_audit(audit_path: str) -> pd.DataFrame | None:
+def load_audit(audit_path: str):
     """Load audit CSV. Returns None (with a warning) if file doesn't exist yet."""
     if not os.path.exists(audit_path):
         print(f"  ⚠️  Audit file not found at {audit_path} — skipping score join.")
@@ -81,12 +81,46 @@ def load_audit(audit_path: str) -> pd.DataFrame | None:
     return df
 
 
+def normalize_manager_test(value) -> str:
+    """
+    Normalize the manager_test column to always return 'PASS' or 'FAIL'.
+
+    The audit CSV has two historical formats:
+      - Old format: numeric score (e.g. 85) for passes, 'fail' text for failures
+      - New format: 'pass' or 'fail' text
+
+    This function handles both so decide_action always sees a clean PASS/FAIL.
+    """
+    if pd.isna(value) or str(value).strip() == "":
+        return ""
+
+    raw = str(value).strip().upper()
+
+    # Explicit text values
+    if raw == "PASS":
+        return "PASS"
+    if raw == "FAIL":
+        return "FAIL"
+
+    # Numeric value — old format used a score for passes, 'fail' for failures.
+    # Any numeric value in this column means the bullet passed.
+    try:
+        float(raw)
+        return "PASS"
+    except ValueError:
+        pass
+
+    # Unexpected value — treat conservatively as unknown
+    return raw
+
+
 def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
     """
     Left-join audit scores onto the main bullet dataframe.
     Matches on normalised bullet text (stripped, lowercased) to handle
     minor whitespace differences between the two CSVs.
+    Also normalizes manager_test column after joining.
     """
     present_audit_cols = [c for c in AUDIT_COLS if c in df_audit.columns]
     missing = [c for c in AUDIT_COLS if c not in df_audit.columns]
@@ -106,6 +140,13 @@ def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
         on="_join_key",
         how="left"
     ).drop(columns=["_join_key"])
+
+    # Normalize manager_test to clean PASS/FAIL regardless of which format was used
+    if "manager_test" in df_merged.columns:
+        df_merged["manager_test"] = df_merged["manager_test"].apply(normalize_manager_test)
+        pass_count = (df_merged["manager_test"] == "PASS").sum()
+        fail_count = (df_merged["manager_test"] == "FAIL").sum()
+        print(f"  📋 manager_test normalized: {pass_count} PASS / {fail_count} FAIL")
 
     matched = df_merged["accuracy_score"].notna().sum() if "accuracy_score" in df_merged.columns else "?"
     print(f"  🔗 Audit scores joined: {matched}/{len(df_main)} bullets matched.")
@@ -182,28 +223,27 @@ def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
 def decide_action(row: pd.Series) -> str:
     """
     Compute a recommended next action for each rep bullet based on audit scores.
-    This becomes the 'next_action' column in the output — your single decision point.
+    manager_test is already normalized to PASS/FAIL by this point.
     """
-    mgr = str(row.get("manager_test", "")).strip().upper()
+    mgr          = str(row.get("manager_test", "")).strip().upper()
     believability = pd.to_numeric(row.get("believability_score", None), errors="coerce")
-    accuracy = pd.to_numeric(row.get("accuracy_score", None), errors="coerce")
-    weaknesses = str(row.get("weaknesses", "")).strip()
+    accuracy      = pd.to_numeric(row.get("accuracy_score", None), errors="coerce")
+    weaknesses    = str(row.get("weaknesses", "")).strip()
 
-    # Not yet audited — no scores present
+    # Not yet audited
     if pd.isna(accuracy) and pd.isna(believability):
         return "NEEDS_AUDIT"
 
-    # Failed manager test or low believability — send to rewrite
-    if mgr == "FAIL" or (believability is not None and believability < 80):
+    # Hard fail
+    if mgr == "FAIL" or (pd.notna(believability) and believability < 80):
         return "REWRITE"
 
-    # Borderline — has weaknesses noted but not a hard fail
+    # Has noted weaknesses
     if weaknesses and weaknesses.lower() not in ("", "none", "nan", "n/a"):
-        if accuracy is not None and accuracy >= 85:
-            return "REVIEW"   # good score but has noted weaknesses — human call
+        if pd.notna(accuracy) and accuracy >= 85:
+            return "REVIEW"  # good score but weaknesses flagged — human call
         return "REWRITE"
 
-    # Passing bullet
     return "KEEP"
 
 
@@ -215,11 +255,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Cluster + deduplicate bullets, joined with audit scores."
     )
-    parser.add_argument("--input",     default=DEFAULT_INPUT,     help="Path to bullet-bank-clean.csv")
-    parser.add_argument("--audit",     default=DEFAULT_AUDIT,     help="Path to bullet-bank-audited.csv")
-    parser.add_argument("--output",    default=DEFAULT_DEDUP_OUT, help="Path for deduplicated output CSV")
-    parser.add_argument("--map",       default=DEFAULT_MAP_OUT,   help="Path for full cluster map CSV")
-    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
+    parser.add_argument("--input",       default=DEFAULT_INPUT,     help="Path to bullet-bank-clean.csv")
+    parser.add_argument("--audit",       default=DEFAULT_AUDIT,     help="Path to bullet-bank-audited.csv")
+    parser.add_argument("--output",      default=DEFAULT_DEDUP_OUT, help="Path for deduplicated output CSV")
+    parser.add_argument("--map",         default=DEFAULT_MAP_OUT,   help="Path for full cluster map CSV")
+    parser.add_argument("--threshold",   type=float, default=DEFAULT_THRESHOLD,
                         help="Cosine similarity threshold (default 0.75). Higher = stricter.")
     parser.add_argument("--report-only", action="store_true",
                         help="Print preview without writing files.")
@@ -232,7 +272,6 @@ def main():
     print(f"  ✅ {len(bullets)} bullets loaded.")
     print(f"  🎯 Similarity threshold: {args.threshold}")
 
-    # Join audit scores before clustering so rep-picker can use them
     df_audit = load_audit(args.audit)
     if df_audit is not None:
         df = join_audit_scores(df, df_audit, bullet_col)
@@ -258,20 +297,19 @@ def main():
 
     # --- DEDUPLICATED OUTPUT (reps only) ---
     df_dedup = df.iloc[rep_indices].copy()
-    df_dedup.insert(0, "cluster_id",   [assigned[i]              for i in rep_indices])
+    df_dedup.insert(0, "cluster_id",   [assigned[i]               for i in rep_indices])
     df_dedup.insert(1, "cluster_size", [len(clusters[assigned[i]]) for i in rep_indices])
     df_dedup["next_action"] = df_dedup.apply(decide_action, axis=1)
 
-    # Reorder: decision columns first, then bullet, then scores, then weaknesses
-    score_cols  = [c for c in ["accuracy_score", "believability_score",
+    score_cols = [c for c in ["accuracy_score", "believability_score",
                                "clarity_score", "ats_value", "manager_test"] if c in df_dedup.columns]
-    other_cols  = [c for c in df_dedup.columns
-                   if c not in ["cluster_id", "cluster_size", "next_action",
-                                bullet_col, "weaknesses"] + score_cols]
-    col_order   = (["cluster_id", "cluster_size", "next_action", bullet_col]
-                   + score_cols + ["weaknesses"] + other_cols)
-    col_order   = [c for c in col_order if c in df_dedup.columns]  # safety filter
-    df_dedup    = df_dedup[col_order]
+    other_cols = [c for c in df_dedup.columns
+                  if c not in ["cluster_id", "cluster_size", "next_action",
+                               bullet_col, "weaknesses"] + score_cols]
+    col_order  = (["cluster_id", "cluster_size", "next_action", bullet_col]
+                  + score_cols + ["weaknesses"] + other_cols)
+    col_order  = [c for c in col_order if c in df_dedup.columns]
+    df_dedup   = df_dedup[col_order]
 
     df_dedup.to_csv(args.output, index=False)
     print(f"\n✅ Deduplicated report saved: {args.output}")
@@ -282,12 +320,12 @@ def main():
         print(f"     {action:<15} {count}")
 
     # --- FULL CLUSTER MAP ---
-    df["cluster_id"]       = assigned
-    df["cluster_size"]     = [len(clusters[cid]) for cid in assigned]
+    df["cluster_id"]        = assigned
+    df["cluster_size"]      = [len(clusters[cid]) for cid in assigned]
     df["is_representative"] = [i in set(rep_indices) for i in range(len(bullets))]
-    map_cols  = (["cluster_id", "cluster_size", "is_representative", bullet_col]
-                 + [c for c in score_cols + ["weaknesses"] if c in df.columns])
-    df_map    = df[map_cols].sort_values(["cluster_id", "is_representative"],
+    map_cols = (["cluster_id", "cluster_size", "is_representative", bullet_col]
+                + [c for c in score_cols + ["weaknesses"] if c in df.columns])
+    df_map   = df[map_cols].sort_values(["cluster_id", "is_representative"],
                                          ascending=[True, False])
     df_map.to_csv(args.map, index=False)
     print(f"📋 Full cluster map saved: {args.map}\n")
