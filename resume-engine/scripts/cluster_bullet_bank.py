@@ -32,20 +32,14 @@ DEFAULT_AUDIT     = os.path.join(KB_DIR, "bullet-bank-audited.csv")
 DEFAULT_DEDUP_OUT = os.path.join(KB_DIR, "bullet-bank-deduplicated.csv")
 DEFAULT_MAP_OUT   = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 
-# Column that holds bullet text in BOTH CSVs
 BULLET_COL    = "Bullet Point"
 FALLBACK_COLS = ["bullet", "achievement", "text", "Bullet", "Achievement"]
 
-# Columns that drive scoring logic (used for ordering + decide_action)
 SCORE_COLS   = ["accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test"]
 META_COLS    = ["Role / Company", "Tags"]
 WEAKNESS_COL = "weaknesses"
-
-# Internal merge key — double-underscored to guarantee no collision with real column names
-MERGE_KEY = "__merge_key__"
-
-# Columns written by this script — always drop before reassigning to prevent duplicates
-SCRIPT_COLS = ["cluster_id", "cluster_size", "is_representative", "next_action"]
+MERGE_KEY    = "__merge_key__"
+SCRIPT_COLS  = ["cluster_id", "cluster_size", "is_representative", "next_action"]
 
 DEFAULT_THRESHOLD = 0.75
 
@@ -55,7 +49,6 @@ DEFAULT_THRESHOLD = 0.75
 # ---------------------------------------------------------------------------
 
 def drop_script_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop any columns this script writes, so they can be freshly assigned each run."""
     return df.drop(columns=[c for c in SCRIPT_COLS + [MERGE_KEY] if c in df.columns])
 
 
@@ -66,16 +59,12 @@ def detect_col(df: pd.DataFrame, preferred: str, fallbacks: list) -> str:
         if col in df.columns:
             print(f"  ⚠️  '{preferred}' not found — using '{col}' instead.")
             return col
-    raise ValueError(
-        f"Could not find bullet text column. Columns available: {df.columns.tolist()}"
-    )
+    raise ValueError(f"Could not find bullet text column. Available: {df.columns.tolist()}")
 
 
 def load_audit(audit_path: str):
-    """Load audit CSV. Returns None with a warning if the file doesn't exist yet."""
     if not os.path.exists(audit_path):
         print(f"  ⚠️  Audit file not found at {audit_path} — skipping score join.")
-        print(f"      Run the audit script first, then re-run this to get the unified report.")
         return None
     df = pd.read_csv(audit_path)
     print(f"  ✅ Audit file loaded: {len(df)} scored bullets | {len(df.columns)} columns.")
@@ -84,18 +73,11 @@ def load_audit(audit_path: str):
 
 
 def normalize_manager_test(value) -> str:
-    """
-    Normalize manager_test to always return 'PASS' or 'FAIL'.
-    Handles both old format (numeric score = pass, 'fail' text = fail)
-    and new format ('pass' / 'fail' text).
-    """
     if pd.isna(value) or str(value).strip() == "":
         return ""
     raw = str(value).strip().upper()
-    if raw == "PASS":
-        return "PASS"
-    if raw == "FAIL":
-        return "FAIL"
+    if raw in ("PASS", "FAIL"):
+        return raw
     try:
         float(raw)
         return "PASS"
@@ -105,34 +87,26 @@ def normalize_manager_test(value) -> str:
 
 def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
-    """
-    Left-join ALL columns from the audit CSV onto the main bullet dataframe.
-    Uses __merge_key__ to avoid collision with real column names.
-    Drops shared columns from the audit side to prevent _x/_y duplicates.
-    """
-    df_main  = drop_script_cols(df_main.copy())
-    df_audit = drop_script_cols(df_audit.copy())
+    df_main  = drop_script_cols(df_main.copy()).reset_index(drop=True)
+    df_audit = drop_script_cols(df_audit.copy()).reset_index(drop=True)
 
-    # Build normalised join keys
     df_main[MERGE_KEY]  = df_main[main_col].fillna("").str.strip().str.lower()
     df_audit[MERGE_KEY] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
 
-    # Drop shared non-bullet columns from audit to avoid _x/_y duplicates
     shared_cols = [c for c in df_audit.columns
                    if c in df_main.columns and c not in (BULLET_COL, MERGE_KEY)]
     if shared_cols:
         print(f"  ℹ️  Dropping shared columns from audit to avoid duplicates: {shared_cols}")
         df_audit.drop(columns=shared_cols, inplace=True)
 
-    audit_cols_to_bring = [c for c in df_audit.columns if c not in (BULLET_COL, MERGE_KEY)]
+    audit_cols = [c for c in df_audit.columns if c not in (BULLET_COL, MERGE_KEY)]
 
     df_merged = df_main.merge(
-        df_audit[[MERGE_KEY] + audit_cols_to_bring].drop_duplicates(subset=MERGE_KEY),
+        df_audit[[MERGE_KEY] + audit_cols].drop_duplicates(subset=MERGE_KEY),
         on=MERGE_KEY,
         how="left"
-    ).drop(columns=[MERGE_KEY])
+    ).drop(columns=[MERGE_KEY]).reset_index(drop=True)
 
-    # Normalize manager_test
     if "manager_test" in df_merged.columns:
         df_merged["manager_test"] = df_merged["manager_test"].apply(normalize_manager_test)
         pass_count = (df_merged["manager_test"] == "PASS").sum()
@@ -148,13 +122,11 @@ def cluster_bullets(bullets: list, threshold: float):
     print(f"  🔢 Vectorizing {len(bullets)} bullets with TF-IDF (ngrams 1–2)...")
     vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words="english", min_df=1)
     matrix     = vectorizer.fit_transform(bullets)
-
     print(f"  🔗 Computing pairwise cosine similarity...")
     sim_matrix = cosine_similarity(matrix)
 
     assigned = [-1] * len(bullets)
     clusters = []
-
     for i in range(len(bullets)):
         if assigned[i] != -1:
             continue
@@ -165,7 +137,6 @@ def cluster_bullets(bullets: list, threshold: float):
             if assigned[j] == -1 and sim_matrix[i][j] >= threshold:
                 assigned[j] = cluster_id
                 clusters[cluster_id].append(j)
-
     return assigned, clusters
 
 
@@ -183,12 +154,9 @@ def pick_representative(cluster: list, bullets: list, df: pd.DataFrame) -> int:
 
 def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
                           top_n: int = 10) -> None:
-    multi = sorted(
-        [(i, c) for i, c in enumerate(clusters) if len(c) > 1],
-        key=lambda x: len(x[1]), reverse=True
-    )
+    multi = sorted([(i, c) for i, c in enumerate(clusters) if len(c) > 1],
+                   key=lambda x: len(x[1]), reverse=True)
     has_scores = "accuracy_score" in df.columns
-
     print(f"\n🔍 Cluster preview (top {min(top_n, len(multi))} largest groups):\n")
     for cluster_id, members in multi[:top_n]:
         print(f"  Cluster {cluster_id} — {len(members)} bullets:")
@@ -196,9 +164,9 @@ def print_cluster_preview(clusters: list, bullets: list, df: pd.DataFrame,
             preview   = bullets[idx][:95] + ("..." if len(bullets[idx]) > 95 else "")
             score_str = ""
             if has_scores:
-                acc     = df.iloc[idx].get("accuracy_score", "")
-                mgr     = df.iloc[idx].get("manager_test", "")
-                company = df.iloc[idx].get("Role / Company", "")
+                acc       = df.iloc[idx].get("accuracy_score", "")
+                mgr       = df.iloc[idx].get("manager_test", "")
+                company   = df.iloc[idx].get("Role / Company", "")
                 score_str = f" [acc={acc} mgr={mgr} co={company}]"
             print(f"    • [{idx}]{score_str} {preview}")
         print()
@@ -209,7 +177,6 @@ def decide_action(row: pd.Series) -> str:
     believability = pd.to_numeric(row.get("believability_score", None), errors="coerce")
     accuracy      = pd.to_numeric(row.get("accuracy_score",      None), errors="coerce")
     weaknesses    = str(row.get("weaknesses", "")).strip()
-
     if pd.isna(accuracy) and pd.isna(believability):
         return "NEEDS_AUDIT"
     if mgr == "FAIL" or (pd.notna(believability) and believability < 80):
@@ -234,17 +201,13 @@ def build_col_order(df: pd.DataFrame, bullet_col: str) -> list:
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Cluster + deduplicate bullets with full audit data in one unified report."
-    )
-    parser.add_argument("--input",       default=DEFAULT_INPUT,     help="Path to bullet-bank-clean.csv")
-    parser.add_argument("--audit",       default=DEFAULT_AUDIT,     help="Path to bullet-bank-audited.csv")
-    parser.add_argument("--output",      default=DEFAULT_DEDUP_OUT, help="Path for deduplicated output CSV")
-    parser.add_argument("--map",         default=DEFAULT_MAP_OUT,   help="Path for full cluster map CSV")
-    parser.add_argument("--threshold",   type=float, default=DEFAULT_THRESHOLD,
-                        help="Cosine similarity threshold (default 0.75). Higher = stricter.")
-    parser.add_argument("--report-only", action="store_true",
-                        help="Print cluster preview without writing any files.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input",       default=DEFAULT_INPUT)
+    parser.add_argument("--audit",       default=DEFAULT_AUDIT)
+    parser.add_argument("--output",      default=DEFAULT_DEDUP_OUT)
+    parser.add_argument("--map",         default=DEFAULT_MAP_OUT)
+    parser.add_argument("--threshold",   type=float, default=DEFAULT_THRESHOLD)
+    parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
 
     print(f"\n📥 Loading bullet bank: {args.input}")
@@ -257,6 +220,11 @@ def main():
     df_audit = load_audit(args.audit)
     if df_audit is not None:
         df = join_audit_scores(df, df_audit, bullet_col)
+    else:
+        df = df.reset_index(drop=True)
+
+    # Refresh bullets list in case rows shifted after join
+    bullets = df[bullet_col].fillna("").tolist()
 
     assigned, clusters = cluster_bullets(bullets, args.threshold)
     rep_indices = [pick_representative(c, bullets, df) for c in clusters]
@@ -277,8 +245,9 @@ def main():
         print("🔍 Report-only mode — no files written.")
         return
 
-    # --- DEDUPLICATED OUTPUT (one rep per cluster) ---
-    df_dedup = drop_script_cols(df.iloc[rep_indices].copy())
+    # --- DEDUPLICATED OUTPUT ---
+    df_dedup = df.iloc[rep_indices].copy().reset_index(drop=True)
+    df_dedup = drop_script_cols(df_dedup)
     df_dedup.insert(0, "cluster_id",   [assigned[i]               for i in rep_indices])
     df_dedup.insert(1, "cluster_size", [len(clusters[assigned[i]]) for i in rep_indices])
     df_dedup["next_action"] = df_dedup.apply(decide_action, axis=1)
@@ -288,17 +257,16 @@ def main():
     df_dedup.to_csv(args.output, index=False)
     print(f"\n✅ Deduplicated report saved: {args.output}")
     print(f"   Columns: {df_dedup.columns.tolist()}")
-
     action_counts = df_dedup["next_action"].value_counts().to_dict()
     print(f"   next_action breakdown:")
     for action, count in sorted(action_counts.items()):
         print(f"     {action:<15} {count}")
 
-    # --- FULL CLUSTER MAP (every bullet, all columns) ---
-    df_map = drop_script_cols(df.copy())
-    df_map["cluster_id"]        = assigned
-    df_map["cluster_size"]      = [len(clusters[cid]) for cid in assigned]
-    df_map["is_representative"] = [i in set(rep_indices) for i in range(len(bullets))]
+    # --- FULL CLUSTER MAP ---
+    df_map = drop_script_cols(df.copy()).reset_index(drop=True)
+    df_map["cluster_id"]        = pd.array(assigned)
+    df_map["cluster_size"]      = pd.array([len(clusters[cid]) for cid in assigned])
+    df_map["is_representative"] = pd.array([i in set(rep_indices) for i in range(len(bullets))])
     df_map["next_action"]       = df_map.apply(decide_action, axis=1)
 
     map_col_order = ["cluster_id", "cluster_size", "is_representative"] + \
