@@ -41,6 +41,9 @@ SCORE_COLS   = ["accuracy_score", "believability_score", "clarity_score", "ats_v
 META_COLS    = ["Role / Company", "Tags"]
 WEAKNESS_COL = "weaknesses"
 
+# Internal merge key — double-underscored to guarantee no collision with real column names
+MERGE_KEY = "__merge_key__"
+
 DEFAULT_THRESHOLD = 0.75
 
 
@@ -87,37 +90,48 @@ def normalize_manager_test(value) -> str:
         return "FAIL"
     try:
         float(raw)
-        return "PASS"  # numeric score in old format = passed
+        return "PASS"
     except ValueError:
-        return raw     # unexpected value — pass through as-is
+        return raw
 
 
 def join_audit_scores(df_main: pd.DataFrame, df_audit: pd.DataFrame,
                       main_col: str) -> pd.DataFrame:
     """
     Left-join ALL columns from the audit CSV onto the main bullet dataframe.
-    Matches on normalised bullet text (stripped + lowercased).
-    Defensively drops any stale '_join_key' columns before merging.
+
+    Uses MERGE_KEY ('__merge_key__') as the join column name — double-underscored
+    so it can never collide with real column names like 'Role / Company' or 'Tags'
+    that appear in both source files.
     """
     df_main  = df_main.copy()
     df_audit = df_audit.copy()
 
-    # Drop any stale _join_key columns left over from a previous run
-    df_main.drop(columns=[c for c in df_main.columns if c == "_join_key"], inplace=True)
-    df_audit.drop(columns=[c for c in df_audit.columns if c == "_join_key"], inplace=True)
+    # Strip any stale merge key columns from previous runs
+    df_main.drop(columns=[c for c in df_main.columns if c == MERGE_KEY], inplace=True)
+    df_audit.drop(columns=[c for c in df_audit.columns if c == MERGE_KEY], inplace=True)
 
     # Build normalised join keys
-    df_main["_join_key"]  = df_main[main_col].fillna("").str.strip().str.lower()
-    df_audit["_join_key"] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
+    df_main[MERGE_KEY]  = df_main[main_col].fillna("").str.strip().str.lower()
+    df_audit[MERGE_KEY] = df_audit[BULLET_COL].fillna("").str.strip().str.lower()
 
-    # Bring everything from audit except its own bullet column (already in df_main)
+    # Drop shared non-bullet columns from audit to avoid _x/_y duplicates
+    # (e.g. both files have 'Role / Company' and 'Tags')
+    shared_cols = [c for c in df_audit.columns
+                   if c in df_main.columns and c not in (BULLET_COL, MERGE_KEY)]
+    if shared_cols:
+        print(f"  ℹ️  Dropping shared columns from audit to avoid duplicates: {shared_cols}")
+        df_audit.drop(columns=shared_cols, inplace=True)
+
+    # Bring everything from audit except its own bullet column
     audit_cols_to_bring = [c for c in df_audit.columns if c != BULLET_COL]
 
     df_merged = df_main.merge(
-        df_audit[["_join_key"] + audit_cols_to_bring].drop_duplicates(subset="_join_key"),
-        on="_join_key",
+        df_audit[[MERGE_KEY] + [c for c in audit_cols_to_bring if c != MERGE_KEY]]
+            .drop_duplicates(subset=MERGE_KEY),
+        on=MERGE_KEY,
         how="left"
-    ).drop(columns=["_join_key"])
+    ).drop(columns=[MERGE_KEY])
 
     # Normalize manager_test
     if "manager_test" in df_merged.columns:
