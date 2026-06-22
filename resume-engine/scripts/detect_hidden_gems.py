@@ -6,8 +6,11 @@ Reads a scored bullets JSON file (output of audit_and_refine_bullets),
 identifies hidden gems, and reorders bullets within each job entry so
 high-scoring gems appear in the top 5 positions.
 
-Usage:
+Usage (standalone):
   python detect_hidden_gems.py --input tailored_resume.json --output tailored_resume_gems.json
+
+Usage (imported by orchestrator — preferred):
+  from scripts.detect_hidden_gems import process_resume, print_gem_report, save_json
 
 Expects bullets to have a `hidden_gem_score` field (added by critique_bullet_v2.md).
 Falls back gracefully if the field is absent (treats missing score as 0).
@@ -40,7 +43,7 @@ def get_gem_score(bullet: dict) -> int:
     return bullet.get("hidden_gem_score", 0)
 
 
-def promote_gems(bullets: list[dict]) -> tuple[list[dict], list[dict]]:
+def promote_gems(bullets: list) -> tuple:
     """
     Sort bullets so hidden gems appear in the top N positions.
     Returns (reordered_bullets, gems_found).
@@ -62,7 +65,7 @@ def promote_gems(bullets: list[dict]) -> tuple[list[dict], list[dict]]:
     return reordered, gems_sorted
 
 
-def process_resume(resume: dict) -> tuple[dict, list[dict]]:
+def process_resume(resume: dict) -> tuple:
     """
     Walk the resume structure, promote gems per job entry,
     and collect a global list of all gems found.
@@ -70,38 +73,44 @@ def process_resume(resume: dict) -> tuple[dict, list[dict]]:
     result = copy.deepcopy(resume)
     all_gems = []
 
-    experience = result.get("experience", [])
+    experience = result.get("experience", []) or result.get("EXPERIENCE", [])
     for job in experience:
-        bullets = job.get("bullets", [])
+        bullets = job.get("bullets", []) or job.get("achievements", [])
         if not bullets:
             continue
 
         reordered, gems = promote_gems(bullets)
-        job["bullets"] = reordered
+
+        # Write back to whichever key was present
+        if "bullets" in job:
+            job["bullets"] = reordered
+        else:
+            job["achievements"] = reordered
 
         # Tag the job entry with a gem count for visibility
         job["hidden_gems_promoted"] = len(gems)
 
         for gem in gems:
+            bullet_text = gem if isinstance(gem, str) else gem.get("text", str(gem))
             all_gems.append({
-                "company": job.get("company", "Unknown"),
-                "role": job.get("role", "Unknown"),
-                "bullet": gem.get("text", gem),
-                "hidden_gem_score": get_gem_score(gem),
-                "hidden_gem_reason": gem.get("hidden_gem_reason", "")
+                "company": job.get("company", job.get("title", "Unknown")),
+                "role": job.get("role", job.get("title", "Unknown")),
+                "bullet": bullet_text,
+                "hidden_gem_score": get_gem_score(gem) if isinstance(gem, dict) else 0,
+                "hidden_gem_reason": gem.get("hidden_gem_reason", "") if isinstance(gem, dict) else ""
             })
 
     return result, all_gems
 
 
-def print_gem_report(gems: list[dict]) -> None:
+def print_gem_report(gems: list) -> None:
     """Print a human-readable summary of all hidden gems found."""
     if not gems:
-        print("\n\u1f48e No hidden gems found (no bullets scored >= 90).")
+        print("\n\U0001f48e No hidden gems found (no bullets scored >= 90).")
         print("Tip: run with critique_bullet_v2.md to generate hidden_gem_score fields.")
         return
 
-    print(f"\n\u2728 HIDDEN GEM REPORT — {len(gems)} gem(s) found and promoted\n")
+    print(f"\n\u2728 HIDDEN GEM REPORT \u2014 {len(gems)} gem(s) found and promoted\n")
     print("-" * 60)
     for i, gem in enumerate(gems, 1):
         bullet_text = gem['bullet'] if isinstance(gem['bullet'], str) else gem['bullet'].get('text', str(gem['bullet']))
@@ -110,6 +119,27 @@ def print_gem_report(gems: list[dict]) -> None:
         if gem.get('hidden_gem_reason'):
             print(f"     Reason: {gem['hidden_gem_reason']}")
         print()
+
+
+def run_on_file(input_path: str, output_path: str, report_only: bool = False) -> list:
+    """
+    Convenience wrapper — load a JSON file, run detection, optionally save output.
+    Returns the list of gems found (so callers can inspect or log them).
+    """
+    print(f"\U0001f50e Loading: {input_path}")
+    resume = load_json(input_path)
+    promoted_resume, gems = process_resume(resume)
+    print_gem_report(gems)
+
+    if not report_only:
+        save_json(promoted_resume, output_path)
+
+    if gems:
+        report_path = Path(output_path).with_suffix(".gems_report.json")
+        save_json({"total_gems": len(gems), "gems": gems}, str(report_path))
+        print(f"\U0001f4cb Gems report saved: {report_path}")
+
+    return gems
 
 
 def main():
@@ -129,21 +159,7 @@ def main():
         help="Print gem report without writing output file"
     )
     args = parser.parse_args()
-
-    print(f"\u1f50e Loading: {args.input}")
-    resume = load_json(args.input)
-
-    promoted_resume, gems = process_resume(resume)
-    print_gem_report(gems)
-
-    if not args.report_only:
-        save_json(promoted_resume, args.output)
-
-    # Also save a standalone gems report
-    if gems:
-        report_path = Path(args.output).with_suffix(".gems_report.json")
-        save_json({"total_gems": len(gems), "gems": gems}, str(report_path))
-        print(f"\u1f4cb Gems report saved: {report_path}")
+    run_on_file(args.input, args.output, report_only=args.report_only)
 
 
 if __name__ == "__main__":
