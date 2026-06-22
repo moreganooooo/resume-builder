@@ -94,13 +94,14 @@
     margin-bottom: 0;
   }
 
+  /* Tagline: Space Grotesk 14pt, hard-coded uppercase in the data string */
   .header-tagline {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 11pt;
+    font-size: 14pt;
     font-weight: 400;
     color: #000000;
     line-height: 0.25in;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     letter-spacing: 0.01em;
   }
 
@@ -131,19 +132,18 @@
 
   /* === SECTIONS === */
   .section {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
 
+  /* Section titles: DM Serif Display 16pt — matches design system spec */
   .section-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10pt;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
+    font-family: 'DM Serif Display', serif;
+    font-size: 16pt;
+    font-weight: 400;
     color: #000000;
     border-bottom: 0.018cm solid #9aa3af;
-    padding-bottom: 3px;
-    margin-bottom: 10px;
+    padding-bottom: 2px;
+    margin-bottom: 8px;
     line-height: 1.2;
   }
 
@@ -158,11 +158,27 @@
     font-weight: 600;
   }
 
+  /* === SKILLS === */
+  /* Each line is one category rendered as:
+     <span class="skill-category">Label:</span> Item, Item, Item */
+  .skills-text {
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #000000;
+  }
+
+  .skill-category {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #000000;
+  }
+
   /* === CORE COMPETENCIES === */
   .competencies-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 0;
+    gap: 4px 0;
   }
 
   .competency-tag {
@@ -209,12 +225,23 @@
     white-space: nowrap;
   }
 
+  /* Job title: italic, per design system */
   .job-role {
     font-size: 10.5pt;
     font-weight: 400;
     font-style: italic;
     color: #000000;
     margin-bottom: 5px;
+  }
+
+  /* Career note: optional one-sentence italic note (Treering only) */
+  .career-note {
+    font-size: 10pt;
+    font-style: italic;
+    color: #000000;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    line-height: 1.5;
   }
 
   .job ul {
@@ -229,15 +256,39 @@
     margin-bottom: 4px;
   }
 
-  .job li strong {
-    font-weight: 600;
+  /* No bold inside bullets per design system */
+  .job li strong { font-weight: 400; }
+
+  /* === CERTIFICATIONS === */
+  /* Only cert-title is bold; org and year are regular weight */
+  .cert-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(90px, max-content) 44px;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 5px;
   }
 
-  /* === SKILLS === */
-  .skills-text {
+  .cert-title {
     font-size: 10.5pt;
-    line-height: 1.6;
+    font-weight: 600;
     color: #000000;
+    min-width: 0;
+  }
+
+  .cert-org {
+    font-size: 10pt;
+    font-weight: 400;
+    color: #000000;
+    white-space: nowrap;
+  }
+
+  .cert-year {
+    font-size: 10pt;
+    font-weight: 400;
+    color: #000000;
+    white-space: nowrap;
+    text-align: right;
   }
 
   /* === EDUCATION === */
@@ -260,6 +311,7 @@
 
   .edu-year {
     font-size: 10pt;
+    font-weight: 400;
     color: #000000;
     white-space: nowrap;
   }
@@ -271,34 +323,34 @@
     line-height: 1.5;
   }
 
-  /* === CERTIFICATIONS === */
-  .cert-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(90px, max-content) 44px;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 5px;
+  /* Education bullets */
+  .edu-item ul {
+    padding-left: 16px;
+    margin-top: 3px;
   }
 
-  .cert-title {
+  .edu-item li {
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #000000;
+    margin-bottom: 2px;
+  }
+
+  /* === WHY SECTION === */
+  /* First and last sentences italicized via <em> in the data;
+     body text is plain; first-person pronouns allowed here only */
+  .why-text {
     font-size: 10.5pt;
-    font-weight: 400;
+    line-height: 1.6;
     color: #000000;
-    min-width: 0;
   }
 
-  .cert-org {
-    font-size: 10pt;
-    font-weight: 400;
-    color: #000000;
-    white-space: nowrap;
+  .why-text p {
+    margin-bottom: 8px;
   }
 
-  .cert-year {
-    font-size: 10pt;
-    color: #000000;
-    white-space: nowrap;
-    text-align: right;
+  .why-text p:last-child {
+    margin-bottom: 0;
   }
 
   /* Links never break across lines */
@@ -341,13 +393,19 @@
     <hr class="header-rule">
   </div>
 
-  <!-- PROFESSIONAL SUMMARY -->
+  <!-- PAGE 1: PROFESSIONAL SUMMARY -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_SUMMARY}}</div>
     <div class="summary-text">{{SUMMARY_TEXT}}</div>
   </div>
 
-  <!-- CORE COMPETENCIES -->
+  <!-- PAGE 1: SKILLS (immediately after Summary — highest ATS signal) -->
+  <div class="section avoid-break">
+    <div class="section-title">{{SECTION_SKILLS}}</div>
+    <div class="skills-text">{{SKILLS}}</div>
+  </div>
+
+  <!-- PAGE 1: CORE COMPETENCIES -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_COMPETENCIES}}</div>
     <div class="competencies-grid">
@@ -355,35 +413,31 @@
     </div>
   </div>
 
-  <!-- WORK EXPERIENCE -->
+  <!-- PAGE 1 → PAGE 2: WORK EXPERIENCE -->
   <div class="section">
     <div class="section-title">{{SECTION_EXPERIENCE}}</div>
     {{EXPERIENCE}}
   </div>
 
-  <!-- PROJECTS -->
-  <div class="section avoid-break">
-    <div class="section-title">{{SECTION_PROJECTS}}</div>
-    {{PROJECTS}}
-  </div>
-
-  <!-- EDUCATION -->
-  <div class="section avoid-break">
-    <div class="section-title">{{SECTION_EDUCATION}}</div>
-    {{EDUCATION}}
-  </div>
-
-  <!-- CERTIFICATIONS -->
+  <!-- PAGE 2: TRAINING & CERTIFICATIONS -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_CERTIFICATIONS}}</div>
     {{CERTIFICATIONS}}
   </div>
 
-  <!-- SKILLS -->
+  <!-- PAGE 2: EDUCATION -->
   <div class="section avoid-break">
-    <div class="section-title">{{SECTION_SKILLS}}</div>
-    <div class="skills-text">{{SKILLS}}</div>
+    <div class="section-title">{{SECTION_EDUCATION}}</div>
+    {{EDUCATION}}
   </div>
+
+  <!-- PAGE 2: WHY [COMPANY]? (optional — omit if not in data or if it causes 3rd page) -->
+  {{#if WHY_TEXT}}
+  <div class="section avoid-break">
+    <div class="section-title">{{SECTION_WHY}}</div>
+    <div class="why-text">{{WHY_TEXT}}</div>
+  </div>
+  {{/if}}
 
 </div>
 </body>
