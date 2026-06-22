@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+"""
+rewrite_bullets.py
+
+Agentic rewrite loop for resume bullets.
+
+Pipeline per bullet:
+  1. Pull is_representative=True rows where next_action in (REWRITE, REVIEW)
+     from bullet-bank-cluster-map.csv
+  2. Rewrite using Gemini, guided by weaknesses + Tags persona
+  3. Re-score using the same rubric as bullet-bank-audited.py
+  4. If next_action=KEEP AND manager_test=PASS  →  write to keeper CSV + update cluster map
+     Else pick best version (original vs rewrite) and loop with updated notes
+  5. Max 3 attempts per bullet. On failure → status=MANUAL
+  6. KEEP bullets already in the cluster map are seeded into the keeper CSV at startup
+
+Usage:
+  python rewrite_bullets.py                  # process all REWRITE + REVIEW reps
+  python rewrite_bullets.py --limit 20       # cap for testing
+  python rewrite_bullets.py --dry-run        # print prompts, no API calls
+
+Outputs (resume-engine/knowledge_base/):
+  bullet-bank-cluster-map-updated.csv   updated cluster map with rewrite results
+  bullet-bank-keepers.csv               bullets that achieved KEEP + PASS
+"""
+
+import argparse
+import os
+import time
+import json
+from datetime import datetime
+
+import pandas as pd
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# ---------------------------------------------------------------------------
+# PATHS
+# ---------------------------------------------------------------------------
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+CLUSTER_MAP_IN  = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
+CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
+KEEPERS_OUT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
+
+# ---------------------------------------------------------------------------
+# CONFIG
+# ---------------------------------------------------------------------------
+REWRITE_MODEL  = "gemini-2.0-flash-lite"          # swap to gemini-2.5-flash etc. as needed
+SCORE_MODEL    = "gemini-2.0-flash-lite"
+MAX_ATTEMPTS   = 3
+
+# Seconds to sleep between API calls (keeps us inside free-tier rate limits)
+SLEEP_BETWEEN_BULLETS  = 4    # between each bullet's rewrite call
+SLEEP_BETWEEN_SCORES   = 2    # between each scoring call
+SLEEP_ON_RETRY         = 10   # extra pause before a retry attempt
+SLEEP_ON_RATE_LIMIT    = 60   # pause when we hit a 429
+
+SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
+              "ats_value", "manager_test"]
+
+# ---------------------------------------------------------------------------
+# PERSONA TAG MAP  (Tags column values → plain-English role context)
+# ---------------------------------------------------------------------------
+TAG_CONTEXT = {
+    "[content]":  "content marketing, editorial strategy, brand voice, or copywriting roles",
+    "[ops]":      "marketing operations, RevOps, CRM, automation, or analytics roles",
+    "[email]":    "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
+    "[demand]":   "demand generation, paid media, or growth marketing roles",
+    "[product]":  "product marketing or go-to-market strategy roles",
+    "[sales]":    "B2B sales, SDR/AE, or account management roles",
+    "[brand]":    "brand marketing, creative direction, or agency roles",
+    "[design]":   "graphic design, visual identity, or UX/UI roles",
+    "[general]":  "general marketing or cross-functional roles",
+}
+
+# ---------------------------------------------------------------------------
+# ENV + GEMINI INIT
+# ---------------------------------------------------------------------------
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise EnvironmentError("GEMINI_API_KEY not found in .env file.")
+genai.configure(api_key=api_key)
+
+
+# ---------------------------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------------------------
+
+def persona_context(tags: str) -> str:
+    """Convert Tags cell into a readable persona hint for the prompt."""
+    if not isinstance(tags, str) or not tags.strip():
+        return "general marketing roles"
+    parts = []
+    for tag, desc in TAG_CONTEXT.items():
+        if tag in tags.lower():
+            parts.append(desc)
+    return ", ".join(parts) if parts else "general marketing roles"
+
+
+def call_gemini(prompt: str, model_name: str, dry_run: bool = False) -> str:
+    """Call Gemini with retry on rate-limit. Returns raw text response."""
+    if dry_run:
+        return "{\"dry_run\": true}"
+    model = genai.GenerativeModel(model_name)
+    for attempt in range(3):
+        try:
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "quota" in err.lower() or "rate" in err.lower():
+                print(f"    ⏳ Rate limit hit — sleeping {SLEEP_ON_RATE_LIMIT}s...")
+                time.sleep(SLEEP_ON_RATE_LIMIT)
+            else:
+                print(f"    ⚠️  Gemini error (attempt {attempt+1}): {err}")
+                if attempt == 2:
+                    raise
+                time.sleep(5)
+    return ""
+
+
+def extract_json(raw: str) -> dict:
+    """Strip markdown fences and parse JSON from a Gemini response."""
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text  = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Try to salvage a partial JSON object
+        start = text.find("{")
+        end   = text.rfind("}")
+        if start != -1 and end != -1:
+            try:
+                return json.loads(text[start:end+1])
+            except Exception:
+                pass
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# REWRITE PROMPT
+# ---------------------------------------------------------------------------
+
+REWRITE_SYSTEM = """
+You are an expert resume writer specialising in B2B SaaS and marketing careers.
+Your job is to rewrite a single resume bullet point so it:
+  - Passes the "manager test" (a hiring manager reading fast can immediately grasp
+    WHAT you did, HOW you did it, and WHY it mattered / what the result was)
+  - Scores 85+ on accuracy (factually grounded, no inflation)
+  - Scores 85+ on believability (sounds like a real human did this, not AI hype)
+  - Is strong for the target persona/role context provided
+  - Fixes every weakness listed
+  - Stays under 30 words where possible; never exceeds 40 words
+  - Starts with a strong past-tense action verb
+  - Includes a concrete metric or outcome if one can be reasonably inferred from context
+    (do NOT invent numbers that weren't implied)
+
+If you genuinely lack enough context to fix a specific weakness (e.g. exact methodology
+or missing metrics), note this honestly in your reasoning — do not fabricate details.
+
+Respond ONLY with valid JSON, no markdown fences, in this exact shape:
+{
+  "rewritten_bullet": "<the new bullet text>",
+  "reasoning": "<1-2 sentences explaining what you changed and why>",
+  "context_gaps": "<any details you couldn't fill in due to missing context, or empty string>"
+}
+"""
+
+
+def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str,
+                         attempt: int, prev_scores: dict = None) -> str:
+    persona = persona_context(tags)
+    prev_block = ""
+    if prev_scores and attempt > 1:
+        prev_block = f"""
+--- PREVIOUS ATTEMPT FEEDBACK ---
+Your last rewrite scored:
+  accuracy_score:      {prev_scores.get('accuracy_score', 'n/a')}
+  believability_score: {prev_scores.get('believability_score', 'n/a')}
+  clarity_score:       {prev_scores.get('clarity_score', 'n/a')}
+  ats_value:           {prev_scores.get('ats_value', 'n/a')}
+  manager_test:        {prev_scores.get('manager_test', 'n/a')}
+  score_notes:         {prev_scores.get('score_notes', '')}
+
+Use these scores and notes to improve your rewrite.
+"""
+    return f"""{REWRITE_SYSTEM}
+
+--- BULLET TO REWRITE ---
+{bullet}
+
+--- TARGET PERSONA ---
+This bullet should resonate for: {persona}
+
+--- KNOWN WEAKNESSES (fix these) ---
+{weaknesses if weaknesses and weaknesses.strip() else 'None noted — improve clarity and manager-test score generally.'}
+{prev_block}
+Now rewrite the bullet. Respond with JSON only.
+"""
+
+
+# ---------------------------------------------------------------------------
+# SCORING PROMPT  (mirrors bullet-bank-audited.py rubric)
+# ---------------------------------------------------------------------------
+
+SCORE_SYSTEM = """
+You are a resume quality auditor. Score the following resume bullet on five dimensions.
+Respond ONLY with valid JSON, no markdown fences:
+{
+  "accuracy_score":      <0-100 int, is the claim factually plausible and grounded?>,
+  "believability_score": <0-100 int, does it sound like a real human achievement?>,
+  "clarity_score":       <0-100 int, is it immediately clear what was done and why it mattered?>,
+  "ats_value":           <0-100 int, does it contain strong keywords for the target role?>,
+  "manager_test":        <"PASS" if a hiring manager skimming for 3 seconds would be impressed, else "FAIL">,
+  "weaknesses":          "<comma-separated list of specific issues, or empty string if none>",
+  "score_notes":         "<1-2 sentences of overall feedback>"
+}
+"""
+
+
+def build_score_prompt(bullet: str, tags: str) -> str:
+    persona = persona_context(tags)
+    return f"""{SCORE_SYSTEM}
+
+--- BULLET ---
+{bullet}
+
+--- TARGET PERSONA ---
+{persona}
+
+Score this bullet. Respond with JSON only.
+"""
+
+
+def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
+    """Score a bullet and return a dict of score fields."""
+    prompt = build_score_prompt(bullet, tags)
+    raw    = call_gemini(prompt, SCORE_MODEL, dry_run=dry_run)
+    data   = extract_json(raw)
+    time.sleep(SLEEP_BETWEEN_SCORES)
+
+    if dry_run:
+        return {
+            "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
+            "ats_value": 90, "manager_test": "PASS", "weaknesses": "", "score_notes": "dry-run"
+        }
+
+    # Normalise manager_test
+    mgr = str(data.get("manager_test", "")).strip().upper()
+    if mgr not in ("PASS", "FAIL"):
+        mgr = "PASS" if mgr else "FAIL"
+    data["manager_test"] = mgr
+
+    for col in ["accuracy_score", "believability_score", "clarity_score", "ats_value"]:
+        data[col] = pd.to_numeric(data.get(col, 0), errors="coerce")
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# ACTION LOGIC  (mirrors cluster_bullet_bank.py decide_action)
+# ---------------------------------------------------------------------------
+
+def decide_action(scores: dict) -> str:
+    mgr           = str(scores.get("manager_test", "")).strip().upper()
+    believability = pd.to_numeric(scores.get("believability_score"), errors="coerce")
+    accuracy      = pd.to_numeric(scores.get("accuracy_score"),      errors="coerce")
+    weaknesses    = str(scores.get("weaknesses", "")).strip()
+
+    if pd.isna(accuracy) and pd.isna(believability):
+        return "NEEDS_AUDIT"
+    if mgr == "FAIL" or (pd.notna(believability) and believability < 80):
+        return "REWRITE"
+    if weaknesses and weaknesses.lower() not in ("", "none", "nan", "n/a"):
+        return "REVIEW" if (pd.notna(accuracy) and accuracy >= 85) else "REWRITE"
+    return "KEEP"
+
+
+def is_keeper(scores: dict) -> bool:
+    return decide_action(scores) == "KEEP" and \
+           str(scores.get("manager_test", "")).strip().upper() == "PASS"
+
+
+def best_version(original_bullet: str, original_scores: dict,
+                 rewritten_bullet: str, rewritten_scores: dict) -> tuple:
+    """Return (bullet_text, scores) for whichever version scores higher overall."""
+    def composite(s):
+        vals = [pd.to_numeric(s.get(c, 0), errors="coerce") or 0
+                for c in ["accuracy_score", "believability_score", "clarity_score", "ats_value"]]
+        mgr_bonus = 10 if str(s.get("manager_test", "")).upper() == "PASS" else 0
+        return sum(vals) + mgr_bonus
+
+    if composite(rewritten_scores) >= composite(original_scores):
+        return rewritten_bullet, rewritten_scores
+    return original_bullet, original_scores
+
+
+# ---------------------------------------------------------------------------
+# KEEPER CSV HELPERS
+# ---------------------------------------------------------------------------
+
+KEEPER_COLS = [
+    "Bullet Point", "Role / Company", "Tags",
+    "accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test",
+    "weaknesses", "source", "rewrite_attempts", "rewrite_reasoning", "context_gaps"
+]
+
+
+def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
+    """
+    Load existing keepers CSV or create a fresh one seeded with
+    all rows from the cluster map where next_action=KEEP AND manager_test=PASS.
+    """
+    if os.path.exists(path):
+        print(f"  📂 Loading existing keepers: {path}")
+        df = pd.read_csv(path)
+        # ensure all expected columns present
+        for col in KEEPER_COLS:
+            if col not in df.columns:
+                df[col] = ""
+        return df
+
+    print("  🌱 Seeding keeper CSV from existing KEEP+PASS bullets in cluster map...")
+    mask = (
+        (df_map["next_action"].str.strip().str.upper() == "KEEP") &
+        (df_map["manager_test"].str.strip().str.upper() == "PASS")
+    )
+    df_seed = df_map[mask].copy()
+    df_seed["source"]           = "original"
+    df_seed["rewrite_attempts"] = 0
+    df_seed["rewrite_reasoning"]= ""
+    df_seed["context_gaps"]     = ""
+
+    for col in KEEPER_COLS:
+        if col not in df_seed.columns:
+            df_seed[col] = ""
+
+    df_keepers = df_seed[KEEPER_COLS].copy()
+    df_keepers.to_csv(path, index=False)
+    print(f"  ✅ Keeper CSV created with {len(df_keepers)} seed bullets: {path}")
+    return df_keepers
+
+
+def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFrame:
+    new_row = {col: row.get(col, "") for col in KEEPER_COLS}
+    df_keepers = pd.concat([df_keepers, pd.DataFrame([new_row])], ignore_index=True)
+    df_keepers.to_csv(path, index=False)
+    return df_keepers
+
+
+# ---------------------------------------------------------------------------
+# MAIN LOOP
+# ---------------------------------------------------------------------------
+
+def process_bullet(row: pd.Series, dry_run: bool) -> dict:
+    """
+    Run the rewrite loop for a single bullet.
+    Returns a result dict with final bullet text, scores, status, and metadata.
+    """
+    original_bullet  = str(row["Bullet Point"]).strip()
+    tags             = str(row.get("Tags", ""))
+    weaknesses       = str(row.get("weaknesses", ""))
+    original_scores  = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
+
+    current_bullet = original_bullet
+    current_scores = original_scores
+    last_rewrite   = ""
+    last_reasoning = ""
+    last_gaps      = ""
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        print(f"    ✏️  Attempt {attempt}/{MAX_ATTEMPTS}...")
+
+        # --- REWRITE ---
+        rw_prompt = build_rewrite_prompt(
+            current_bullet, tags, str(current_scores.get("weaknesses", weaknesses)),
+            attempt=attempt,
+            prev_scores=current_scores if attempt > 1 else None
+        )
+        rw_raw  = call_gemini(rw_prompt, REWRITE_MODEL, dry_run=dry_run)
+        rw_data = extract_json(rw_raw)
+
+        rewritten = rw_data.get("rewritten_bullet", "").strip()
+        last_reasoning = rw_data.get("reasoning", "")
+        last_gaps      = rw_data.get("context_gaps", "")
+
+        if not rewritten:
+            print(f"    ⚠️  Empty rewrite on attempt {attempt} — skipping to next attempt.")
+            time.sleep(SLEEP_ON_RETRY)
+            continue
+
+        time.sleep(SLEEP_BETWEEN_BULLETS)
+
+        # --- SCORE ---
+        print(f"    📊 Scoring rewrite...")
+        new_scores = score_bullet(rewritten, tags, dry_run=dry_run)
+        new_action = decide_action(new_scores)
+
+        print(f"       acc={new_scores.get('accuracy_score')} "
+              f"bel={new_scores.get('believability_score')} "
+              f"mgr={new_scores.get('manager_test')} "
+              f"→ {new_action}")
+
+        last_rewrite = rewritten
+
+        if is_keeper(new_scores):
+            return {
+                "final_bullet":      rewritten,
+                "final_scores":      new_scores,
+                "status":            "KEEP",
+                "rewrite_attempts":  attempt,
+                "rewrite_reasoning": last_reasoning,
+                "context_gaps":      last_gaps,
+                "source":            "rewritten",
+            }
+
+        # Pick best version as starting point for next attempt
+        current_bullet, current_scores = best_version(
+            original_bullet, original_scores, rewritten, new_scores
+        )
+        current_scores["weaknesses"] = new_scores.get("weaknesses", "")
+
+        if attempt < MAX_ATTEMPTS:
+            print(f"    🔄 Not a keeper yet — retrying in {SLEEP_ON_RETRY}s...")
+            time.sleep(SLEEP_ON_RETRY)
+
+    # All attempts exhausted — use best version found
+    print(f"    🚩 Max attempts reached — marking MANUAL.")
+    final_bullet, final_scores = best_version(
+        original_bullet, original_scores,
+        last_rewrite if last_rewrite else original_bullet,
+        current_scores
+    )
+    return {
+        "final_bullet":      final_bullet,
+        "final_scores":      final_scores,
+        "status":            "MANUAL",
+        "rewrite_attempts":  MAX_ATTEMPTS,
+        "rewrite_reasoning": last_reasoning,
+        "context_gaps":      last_gaps,
+        "source":            "manual_review",
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Agentic rewrite loop for resume bullets using Gemini."
+    )
+    parser.add_argument("--map",      default=CLUSTER_MAP_IN,  help="Input cluster map CSV")
+    parser.add_argument("--output",   default=CLUSTER_MAP_OUT, help="Updated cluster map output")
+    parser.add_argument("--keepers",  default=KEEPERS_OUT,     help="Keeper bullets CSV")
+    parser.add_argument("--limit",    type=int, default=None,  help="Cap number of bullets to process (for testing)")
+    parser.add_argument("--dry-run",  action="store_true",     help="Skip API calls, use dummy responses")
+    args = parser.parse_args()
+
+    print(f"\n📥 Loading cluster map: {args.map}")
+    df_map = pd.read_csv(args.map)
+    print(f"  ✅ {len(df_map)} rows loaded.")
+
+    # Ensure required columns exist
+    for col in ["next_action", "manager_test", "is_representative", "Bullet Point"]:
+        if col not in df_map.columns:
+            raise ValueError(f"Missing required column '{col}' in cluster map.")
+
+    # Normalise booleans (CSV may store True/False as strings)
+    df_map["is_representative"] = df_map["is_representative"].astype(str).str.strip().str.upper() == "TRUE"
+    df_map["next_action"]       = df_map["next_action"].fillna("").str.strip().str.upper()
+    df_map["manager_test"]      = df_map["manager_test"].fillna("").str.strip().str.upper()
+
+    # Add output columns if not present
+    for col in ["final_bullet", "rewrite_status", "rewrite_attempts",
+                "rewrite_reasoning", "context_gaps"]:
+        if col not in df_map.columns:
+            df_map[col] = ""
+
+    # Load or seed keepers
+    df_keepers = load_or_init_keepers(args.keepers, df_map)
+
+    # Select target rows: representative + REWRITE or REVIEW
+    mask = (
+        df_map["is_representative"] &
+        df_map["next_action"].isin(["REWRITE", "REVIEW"])
+    )
+    targets = df_map[mask].copy()
+    if args.limit:
+        targets = targets.head(args.limit)
+
+    total = len(targets)
+    print(f"\n🎯 Bullets to process: {total}")
+    if args.dry_run:
+        print("  🧪 DRY RUN — no real API calls will be made.")
+
+    kept = 0
+    manual = 0
+
+    for i, (idx, row) in enumerate(targets.iterrows(), 1):
+        bullet_preview = str(row["Bullet Point"])[:80]
+        print(f"\n[{i}/{total}] {bullet_preview}...")
+        print(f"  Company: {row.get('Role / Company', '')}  |  Tags: {row.get('Tags', '')}")
+        print(f"  Current action: {row['next_action']}  |  Weaknesses: {str(row.get('weaknesses',''))[:80]}")
+
+        result = process_bullet(row, dry_run=args.dry_run)
+
+        # Write result back into cluster map
+        df_map.at[idx, "final_bullet"]      = result["final_bullet"]
+        df_map.at[idx, "rewrite_status"]    = result["status"]
+        df_map.at[idx, "rewrite_attempts"]  = result["rewrite_attempts"]
+        df_map.at[idx, "rewrite_reasoning"] = result["rewrite_reasoning"]
+        df_map.at[idx, "context_gaps"]      = result["context_gaps"]
+
+        # Update scores in cluster map
+        for col in SCORE_COLS + ["weaknesses"]:
+            df_map.at[idx, col] = result["final_scores"].get(col, "")
+
+        # Update next_action
+        df_map.at[idx, "next_action"] = result["status"]
+
+        if result["status"] == "KEEP":
+            kept += 1
+            keeper_row = {
+                "Bullet Point":      result["final_bullet"],
+                "Role / Company":    row.get("Role / Company", ""),
+                "Tags":              row.get("Tags", ""),
+                "source":            result["source"],
+                "rewrite_attempts":  result["rewrite_attempts"],
+                "rewrite_reasoning": result["rewrite_reasoning"],
+                "context_gaps":      result["context_gaps"],
+                **{col: result["final_scores"].get(col, "") for col in SCORE_COLS + ["weaknesses"]}
+            }
+            df_keepers = append_keeper(df_keepers, keeper_row, args.keepers)
+            print(f"  ✅ KEEPER! Saved to {args.keepers}")
+        else:
+            manual += 1
+            print(f"  🚩 MANUAL — best version kept in cluster map.")
+
+        # Save cluster map checkpoint after every bullet
+        df_map.to_csv(args.output, index=False)
+
+        # Breathing room between bullets
+        if i < total:
+            time.sleep(SLEEP_BETWEEN_BULLETS)
+
+    print(f"\n{'='*60}")
+    print(f"✨ Done! Processed {total} bullets.")
+    print(f"   ✅ Keepers: {kept}")
+    print(f"   🚩 Manual review needed: {manual}")
+    print(f"   📄 Updated cluster map: {args.output}")
+    print(f"   💎 Keeper CSV: {args.keepers}")
+    print(f"   Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+
+if __name__ == "__main__":
+    main()
