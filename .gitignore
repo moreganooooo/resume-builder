@@ -1,3 +1,58 @@
+# === SECRETS & KEYS ===
 .env
+.env.*
+*.env
+secrets.yaml
+secrets.json
+api_keys.txt
+config.local.*
+
+# === AUDIT & OUTPUT FILES (may contain keys or PII) ===
+*audit*.csv
+*audit*.json
+*_log.csv
+*_log.json
+output/
+outputs/
+logs/
+*.log
+
+# === RESUME OUTPUT FILES ===
+# Tailored JSONs and PDFs are local outputs, not source files
+tailored_resume*.json
+*_tailored.json
+*_resume.json
+*.gems_report.json
+MorganEscott_*.pdf
+*_Resume.pdf
+*_resume.pdf
+
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# === NODE ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === OS ===
 .DS_Store
 **/.DS_Store
+Thumbs.db
+
+# === EDITORS ===
+.vscode/
+.idea/
+*.swp
+*.swo
