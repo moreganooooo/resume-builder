@@ -48,14 +48,14 @@ KEEPERS_OUT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-REWRITE_MODEL  = "gemini-2.0-flash-lite"          # swap to gemini-2.5-flash etc. as needed
-SCORE_MODEL    = "gemini-2.0-flash-lite"
+REWRITE_MODEL  = "gemini-3.1-flash-lite"
+SCORE_MODEL    = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS   = 3
 
 # Seconds to sleep between API calls (keeps us inside free-tier rate limits)
-SLEEP_BETWEEN_BULLETS  = 4    # between each bullet's rewrite call
+SLEEP_BETWEEN_BULLETS  = 8    # between each bullet's rewrite call
 SLEEP_BETWEEN_SCORES   = 2    # between each scoring call
-SLEEP_ON_RETRY         = 10   # extra pause before a retry attempt
+SLEEP_ON_RETRY         = 12   # extra pause before a retry attempt
 SLEEP_ON_RATE_LIMIT    = 60   # pause when we hit a 429
 
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
