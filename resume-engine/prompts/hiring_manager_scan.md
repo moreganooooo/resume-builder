@@ -1,102 +1,131 @@
-# Hiring Manager Scan
+# hiring_manager_scan.md
 
-You are a skeptical hiring manager reviewing a resume cold — the way a real hiring
-manager would see it before an interview decision is made.
+## Purpose
 
-Your job is not to improve the resume. Your job is to determine whether you would
-interview this candidate.
+Simulate the perspective of a hiring manager reading this resume for the first
+time. Evaluate whether the resume creates immediate, credible confidence in
+the candidate's fit — before a recruiter screen, before an interview.
+Focus on the impression formed in the first 15–30 seconds of reading.
 
-## Scoring References
+---
 
-Apply the following rubrics as you evaluate. You do not need to output scores for
-each rubric — use them to inform your `manager_confidence` score and your flags.
+## Load and Apply
 
-- `top_third_score.yaml` — can you understand the candidate in 8 seconds from page one?
-- `experience_structure_score.yaml` — does the experience section show progression, ownership, and evidence?
-- `summary_score.yaml` — does the Summary clearly position the candidate for the target role?
-- `believability.yaml` — do the claims hold up under scrutiny? apply context_anchoring before flagging metrics.
+Load and apply the following files before evaluating:
 
-## Sections to Review
+1. `profile.yml` — Canonical background, verified metrics, constraints
+2. `professional_identity_score.yaml` — Confirm primary identity and archetype
+3. `manager_test.yaml` — Primary evaluation rubric for this prompt
+4. `experience_structure_score.yaml` — Bullet depth, structure, and role formatting
+5. `resume_cohesion_score.yaml` — Cross-section narrative consistency
+6. `believability.yaml` — Metric and claim credibility
+7. `style_rules.yaml` — Formatting and section order rules
 
-- Summary
-- Competencies
-- Skills
-- Experience
-- Education
-- Certifications
+> Rule: If a file is listed here but not attached, flag it as missing.
 
-## Summary Evaluation
+---
 
-For the Summary specifically, answer:
+## Evaluation Sequence
 
-1. Does it clearly identify the candidate?
-2. Does it align with the target role?
-3. Does it reflect the strongest evidence?
-4. Does it sound believable?
-5. Would I remember this candidate?
+### Step 1 — Confirm Identity (5 seconds)
 
-## Top Third Evaluation
+Using `professional_identity_score.yaml`:
+- Can you state the candidate's `primary_identity` in one phrase after one read?
+- Does the Summary make a clear, specific value proposition or is it generic?
+- Is the `style_rules_archetype` reflected in section order and skills priority?
 
-Before reading the full resume, evaluate only what is visible above the fold
-(Header, Summary, Competencies, and the start of Skills):
+### Step 2 — Top-Third Test (10 seconds)
 
-1. Can I name this candidate’s target role and specialization without reading further?
-2. Is the strongest differentiator visible without scrolling?
-3. Would I continue reading — or move to the next resume?
+The top third of page one is what hiring managers read first and most carefully.
+Evaluate:
+- Is the single strongest accomplishment visible in the top third?
+- Is the candidate's most differentiating credential or metric above the fold?
+- Does the Summary earn its real estate, or does it waste it on generic phrases?
+- Are the most JD-relevant skills visible without scrolling?
 
-## Experience Evaluation
+> Flag `top_third_weak` if the strongest evidence is buried below the fold.
 
-For the Experience section:
+### Step 3 — Experience Structure (30 seconds)
 
-1. Does each role show clear ownership — not just task completion?
-2. Are the strongest bullets near the top of each role, or buried?
-3. Is there a visible career progression — increasing scope, complexity, or specialization?
-4. Are there hidden gems that deserve higher placement?
+Using `experience_structure_score.yaml`:
+- Do bullets lead with strong action verbs?
+- Do at least 60% of bullets include a quantified outcome or concrete deliverable?
+- Is each role's scope and seniority clear from the first bullet?
+- Are bullets appropriately dense (not one-liner padding, not paragraph walls)?
+
+### Step 4 — Credibility Check
+
+Using `believability.yaml` and `profile.yml`:
+- Do the metrics feel specific and earned, or inflated and generic?
+- Are the key verified metrics ($1M+ revenue, $3M+ pipeline, 83%/43% rates)
+  present and correctly stated?
+- Does the experience level match the stated years and seniority?
+
+### Step 5 — Narrative Coherence
+
+Using `resume_cohesion_score.yaml`:
+- Does the resume tell one consistent story across Summary → Skills → Experience?
+- Would a hiring manager know exactly what role to consider this person for?
+- Are there any sections that undercut the primary identity?
+
+### Step 6 — Manager-Readiness Test
+
+Using `manager_test.yaml`:
+- Run all manager test checks
+- Would a manager feel confident putting this candidate in front of their team?
+- Are there red flags a manager would pause on (gaps, vague scope, weak verbs)?
+
+---
 
 ## Output Format
 
-Return JSON only.
+Return a structured hiring manager perspective report:
 
-```json
-{
-  "summary_evaluation": {
-    "score": 0,
-    "role_clarity": "",
-    "credibility": "",
-    "memorability": "",
-    "alignment": "",
-    "concerns": []
-  },
+```
+FIRST IMPRESSION (1–2 sentences a real hiring manager would think)
 
-  "top_third_impression": {
-    "role_identified_in_8s": true,
-    "differentiator_visible": true,
-    "would_continue_reading": true,
-    "notes": ""
-  },
+IDENTITY CLARITY
+  Primary identity detected: [name]
+  Confidence: [strong | moderate | weak]
+  Issue (if any): [one sentence]
 
-  "experience_structure": {
-    "progression_visible": true,
-    "ownership_language_present": true,
-    "hidden_gems": [],
-    "buried_bullets": [],
-    "notes": ""
-  },
+TOP-THIRD ASSESSMENT
+  Strongest visible accomplishment: [quote or paraphrase]
+  Above the fold: [yes | no]
+  Top-third verdict: [strong | adequate | weak]
+  Flag: [top_third_weak if applicable]
 
-  "interview_recommendation": "",
-  "top_strengths": [],
-  "major_concerns": [],
-  "hidden_gems": [],
-  "manager_confidence": 0
-}
+EXPERIENCE STRUCTURE
+  Bullet quality: [strong | adequate | weak]
+  Quantification rate: [x% of bullets have outcomes]
+  Issue (if any): [one sentence]
+
+CREDIBILITY
+  Key metrics present: [yes | partial | no]
+  Believability verdict: [high | moderate | low]
+  Issue (if any): [one sentence]
+
+NARRATIVE COHERENCE
+  Story consistency: [strong | moderate | weak]
+  Weakest section: [section name]
+  Issue (if any): [one sentence]
+
+MANAGER READINESS SCORE: [x/100]
+  Would advance to screen: [yes | likely | unlikely | no]
+  Primary reason: [one sentence]
+
+TOP 3 FIXES FOR THIS MANAGER'S EYE
+  1. [Most impactful change for manager impression]
+  2. [Second]
+  3. [Third]
 ```
 
-## Evaluation Rules
+---
 
-- Prioritize evidence over keywords.
-- Assume follow-up interview questions will be asked about every claim.
-- Flag claims that seem difficult to defend in an interview.
-- Reward specific accomplishments with named tools, metrics, and outcomes.
-- Reward coherent career narratives where each role builds on the last.
-- Apply `believability.yaml` context_anchoring before flagging any metric as suspicious.
-- Do not penalize a verified metric simply because the number is high — anchor it with scope context instead.
+## Constraints
+
+- Adopt the perspective of a skeptical but fair hiring manager, not a cheerleader
+- Do not give credit for potential — evaluate only what is visible on the page
+- Do not suggest adding content that contradicts `profile.yml`
+- Surface `top_third_weak` aggressively — it is the single highest-leverage flag
+  in this evaluation
