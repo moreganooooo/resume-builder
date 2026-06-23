@@ -1,0 +1,507 @@
+version: 1.0
+
+section: verb_intent_mapping
+
+description: >
+  Maps accomplishment intent to preferred action verb families.
+  Used during bullet generation, rewrites, scoring, and QA.
+
+intent_categories:
+
+# --------------------------------------------------
+# CREATION
+# --------------------------------------------------
+
+  creation:
+
+    description:
+      Candidate built something new.
+
+    signals:
+
+      - created
+      - developed
+      - built
+      - designed
+      - produced
+      - generated
+      - launched
+
+    preferred_verbs:
+
+      elite:
+
+        - built
+        - developed
+        - created
+        - launched
+
+      strong:
+
+        - designed
+        - produced
+        - generated
+
+    examples:
+
+      weak:
+        Made a dashboard.
+
+      strong:
+        Built executive reporting dashboard.
+
+# --------------------------------------------------
+# IMPLEMENTATION
+# --------------------------------------------------
+
+  implementation:
+
+    description:
+      Candidate introduced or deployed a solution.
+
+    signals:
+
+      - rollout
+      - deployment
+      - launch
+      - implementation
+      - adoption
+
+    preferred_verbs:
+
+      elite:
+
+        - implemented
+        - deployed
+        - launched
+        - integrated
+
+      strong:
+
+        - introduced
+        - configured
+        - enabled
+
+    examples:
+
+      weak:
+        Worked on Outreach rollout.
+
+      strong:
+        Implemented Outreach across sales organization.
+
+# --------------------------------------------------
+# OPTIMIZATION
+# --------------------------------------------------
+
+  optimization:
+
+    description:
+      Candidate improved an existing process.
+
+    signals:
+
+      - improvement
+      - efficiency
+      - workflow
+      - productivity
+      - reduction
+
+    preferred_verbs:
+
+      elite:
+
+        - optimized
+        - streamlined
+        - automated
+
+      strong:
+
+        - refined
+        - improved
+        - enhanced
+
+    examples:
+
+      weak:
+        Helped improve lead routing.
+
+      strong:
+        Optimized lead routing workflows.
+
+# --------------------------------------------------
+# AUTOMATION
+# --------------------------------------------------
+
+  automation:
+
+    description:
+      Candidate eliminated manual effort.
+
+    signals:
+
+      - automation
+      - workflow
+      - process
+      - manual
+      - repetitive
+
+    preferred_verbs:
+
+      elite:
+
+        - automated
+        - streamlined
+
+      strong:
+
+        - simplified
+        - standardized
+
+    examples:
+
+      weak:
+        Helped with reporting.
+
+      strong:
+        Automated executive reporting process.
+
+# --------------------------------------------------
+# ANALYSIS
+# --------------------------------------------------
+
+  analysis:
+
+    description:
+      Candidate investigated data or identified findings.
+
+    signals:
+
+      - reporting
+      - analytics
+      - audit
+      - investigation
+      - review
+
+    preferred_verbs:
+
+      elite:
+
+        - analyzed
+        - audited
+        - identified
+
+      strong:
+
+        - evaluated
+        - assessed
+        - reviewed
+
+    examples:
+
+      weak:
+        Looked at CRM records.
+
+      strong:
+        Audited CRM records and identified data quality gaps.
+
+# --------------------------------------------------
+# REVENUE GENERATION
+# --------------------------------------------------
+
+  revenue_generation:
+
+    description:
+      Candidate generated pipeline or revenue.
+
+    signals:
+
+      - sales
+      - bookings
+      - revenue
+      - quota
+      - pipeline
+
+    preferred_verbs:
+
+      elite:
+
+        - generated
+        - secured
+        - closed
+        - exceeded
+
+      strong:
+
+        - achieved
+        - expanded
+        - increased
+
+    examples:
+
+      weak:
+        Worked with customers.
+
+      strong:
+        Generated $1M+ in closed-won revenue.
+
+# --------------------------------------------------
+# CUSTOMER SUCCESS
+# --------------------------------------------------
+
+  customer_success:
+
+    description:
+      Candidate supported customer outcomes.
+
+    signals:
+
+      - onboarding
+      - adoption
+      - retention
+      - satisfaction
+
+    preferred_verbs:
+
+      elite:
+
+        - onboarded
+        - retained
+        - enabled
+
+      strong:
+
+        - supported
+        - guided
+        - facilitated
+
+# --------------------------------------------------
+# TRAINING
+# --------------------------------------------------
+
+  training:
+
+    description:
+      Candidate taught or enabled others.
+
+    signals:
+
+      - coaching
+      - onboarding
+      - training
+      - enablement
+
+    preferred_verbs:
+
+      elite:
+
+        - trained
+        - coached
+        - mentored
+
+      strong:
+
+        - guided
+        - educated
+        - facilitated
+
+# --------------------------------------------------
+# LEADERSHIP
+# --------------------------------------------------
+
+  leadership:
+
+    description:
+      Candidate directed people or initiatives.
+
+    signals:
+
+      - leadership
+      - management
+      - ownership
+
+    preferred_verbs:
+
+      elite:
+
+        - led
+        - directed
+        - championed
+
+      strong:
+
+        - supervised
+        - coordinated
+        - guided
+
+# --------------------------------------------------
+# COLLABORATION
+# --------------------------------------------------
+
+  collaboration:
+
+    description:
+      Candidate worked across teams.
+
+    signals:
+
+      - partnership
+      - stakeholder
+      - collaboration
+
+    preferred_verbs:
+
+      elite:
+
+        - partnered
+        - aligned
+        - collaborated
+
+      strong:
+
+        - coordinated
+        - facilitated
+
+# --------------------------------------------------
+# CRM ADMINISTRATION
+# --------------------------------------------------
+
+  crm_administration:
+
+    description:
+      Candidate managed CRM systems.
+
+    signals:
+
+      - salesforce
+      - crm
+      - database
+      - records
+
+    preferred_verbs:
+
+      elite:
+
+        - administered
+        - configured
+        - optimized
+
+      strong:
+
+        - maintained
+        - governed
+        - monitored
+
+# --------------------------------------------------
+# REPORTING
+# --------------------------------------------------
+
+  reporting:
+
+    description:
+      Candidate built or maintained reporting systems.
+
+    signals:
+
+      - dashboard
+      - reporting
+      - metrics
+      - kpis
+
+    preferred_verbs:
+
+      elite:
+
+        - built
+        - developed
+        - automated
+
+      strong:
+
+        - maintained
+        - generated
+        - monitored
+
+# --------------------------------------------------
+# CONTENT CREATION
+# --------------------------------------------------
+
+  content_creation:
+
+    description:
+      Candidate produced content assets.
+
+    signals:
+
+      - copywriting
+      - content
+      - messaging
+      - campaigns
+
+    preferred_verbs:
+
+      elite:
+
+        - created
+        - developed
+        - authored
+
+      strong:
+
+        - wrote
+        - edited
+        - refined
+
+# --------------------------------------------------
+# DECISION RULES
+# --------------------------------------------------
+
+selection_rules:
+
+  prefer_specific_over_generic: true
+
+  prefer_action_over_participation: true
+
+  prefer_implementation_over_support: true
+
+  prefer_evidence_supported_verbs: true
+
+# --------------------------------------------------
+# AUTO-DOWNGRADES
+# --------------------------------------------------
+
+verb_replacements:
+
+  helped:
+    review_required: true
+
+  worked_on:
+    review_required: true
+
+  participated_in:
+    review_required: true
+
+  responsible_for:
+    review_required: true
+
+  handled:
+    review_required: true
+
+# --------------------------------------------------
+# HIRING MANAGER TEST
+# --------------------------------------------------
+
+manager_test:
+
+  question:
+    Does the chosen verb accurately describe what happened?
+
+  pass:
+    Candidate can explain action in detail.
+
+  fail:
+    Verb sounds impressive but overstates involvement.
+
+final_principle: >
+  The strongest verb is not the most impressive verb.
+  The strongest verb is the most accurate verb.

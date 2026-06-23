@@ -1,0 +1,463 @@
+version: 1.0
+
+section: language_quality
+
+description: >
+  Evaluates language quality, action verbs, buzzwords,
+  AI-generated phrasing, specificity, and evidence-driven writing.
+
+# --------------------------------------------------
+# WEAK VERBS
+# --------------------------------------------------
+
+weak_verbs:
+
+  helped:
+    severity: medium
+
+    preferred:
+
+      - supported
+      - facilitated
+      - coordinated
+      - executed
+      - enabled
+      - improved
+      - implemented
+      - streamlined
+      - optimized
+
+  worked_on:
+    severity: medium
+
+    preferred:
+
+      - developed
+      - created
+      - designed
+      - built
+      - launched
+      - executed
+      - implemented
+
+  responsible_for:
+    severity: high
+
+    preferred:
+
+      - managed
+      - administered
+      - directed
+      - coordinated
+      - owned
+      - oversaw
+
+  handled:
+    severity: medium
+
+    preferred:
+
+      - managed
+      - resolved
+      - executed
+      - administered
+      - coordinated
+
+  assisted:
+    severity: medium
+
+    preferred:
+
+      - supported
+      - facilitated
+      - contributed_to
+      - coordinated
+
+  participated_in:
+    severity: medium
+
+    preferred:
+
+      - contributed_to
+      - collaborated_on
+      - executed
+      - supported
+
+  used:
+    severity: medium
+
+    preferred:
+
+      - administered
+      - configured
+      - applied
+      - implemented
+      - optimized
+
+  made:
+    severity: low
+
+    preferred:
+
+      - created
+      - developed
+      - generated
+      - produced
+      - designed
+
+  did:
+    severity: high
+
+    preferred:
+
+      - rewrite_required
+
+# --------------------------------------------------
+# ELITE VERBS
+# --------------------------------------------------
+
+elite_verbs:
+
+  - built
+  - created
+  - developed
+  - designed
+  - launched
+  - implemented
+  - executed
+  - optimized
+  - improved
+  - streamlined
+  - automated
+  - configured
+  - administered
+  - integrated
+  - analyzed
+  - audited
+  - identified
+  - generated
+  - increased
+  - reduced
+  - accelerated
+  - led
+  - coordinated
+  - enabled
+  - delivered
+
+# --------------------------------------------------
+# SALES / REVOPS
+# --------------------------------------------------
+
+sales_operations_verbs:
+
+  - optimized
+  - automated
+  - implemented
+  - configured
+  - administered
+  - streamlined
+  - standardized
+  - improved
+  - audited
+  - analyzed
+  - identified
+  - integrated
+  - migrated
+  - enabled
+  - orchestrated
+
+crm_verbs:
+
+  - administered
+  - configured
+  - optimized
+  - customized
+  - audited
+  - integrated
+  - governed
+  - automated
+  - standardized
+  - improved
+
+# --------------------------------------------------
+# MARKETING
+# --------------------------------------------------
+
+marketing_verbs:
+
+  - launched
+  - executed
+  - optimized
+  - segmented
+  - developed
+  - created
+  - analyzed
+  - refined
+  - expanded
+  - improved
+
+email_marketing_verbs:
+
+  - developed
+  - launched
+  - optimized
+  - segmented
+  - automated
+  - personalized
+  - tested
+  - analyzed
+  - refined
+  - improved
+
+# --------------------------------------------------
+# LEADERSHIP
+# --------------------------------------------------
+
+leadership_verbs:
+
+  - led
+  - directed
+  - mentored
+  - coached
+  - guided
+  - supervised
+  - influenced
+  - managed
+  - coordinated
+
+# --------------------------------------------------
+# ANALYSIS
+# --------------------------------------------------
+
+analysis_verbs:
+
+  - analyzed
+  - evaluated
+  - assessed
+  - identified
+  - investigated
+  - audited
+  - reviewed
+  - examined
+  - diagnosed
+
+# --------------------------------------------------
+# IMPLEMENTATION
+# --------------------------------------------------
+
+implementation_verbs:
+
+  - implemented
+  - deployed
+  - launched
+  - executed
+  - configured
+  - integrated
+  - introduced
+  - rolled_out
+
+# --------------------------------------------------
+# AUTOMATION
+# --------------------------------------------------
+
+automation_verbs:
+
+  - automated
+  - streamlined
+  - optimized
+  - simplified
+  - standardized
+  - accelerated
+  - reduced
+
+# --------------------------------------------------
+# HIGH-RISK BUZZWORDS
+# --------------------------------------------------
+
+buzzwords:
+
+  high_risk:
+
+    - results-driven
+    - dynamic professional
+    - highly motivated
+    - seasoned professional
+    - passionate professional
+    - proven track record
+    - innovative thinker
+    - strategic thinker
+    - self-starter
+    - go-getter
+    - team player
+    - hard worker
+    - fast learner
+    - detail-oriented professional
+    - excellent communication skills
+    - demonstrated success
+    - thrives in fast-paced environments
+    - world-class
+    - best-in-class
+    - cutting-edge
+    - thought leader
+    - synergy
+    - synergies
+
+  medium_risk:
+
+    - leverage
+    - utilized
+    - various
+    - several
+    - multiple
+    - numerous
+    - stakeholders
+    - cross-functional
+    - end-to-end ownership
+
+# --------------------------------------------------
+# GENERIC CLAIMS
+# --------------------------------------------------
+
+generic_claims:
+
+  - strong communication skills
+  - excellent interpersonal skills
+  - problem solver
+  - proven leader
+  - strategic mindset
+  - innovative professional
+  - customer-focused professional
+  - highly organized
+  - dedicated professional
+  - driven individual
+
+# --------------------------------------------------
+# REPLACEMENT RULES
+# --------------------------------------------------
+
+replacement_rules:
+
+  results_driven:
+
+    reject:
+      - results-driven
+
+    require:
+      - actual_result
+      - actual_metric
+
+  strategic_thinker:
+
+    reject:
+      - strategic thinker
+
+    require:
+      - strategy_description
+
+  innovative:
+
+    reject:
+      - innovative
+
+    require:
+      - innovation_example
+
+  team_player:
+
+    reject:
+      - team player
+
+    require:
+      - collaboration_example
+
+# --------------------------------------------------
+# AI LANGUAGE DETECTION
+# --------------------------------------------------
+
+ai_language_patterns:
+
+  severe:
+
+    - results-driven professional
+    - highly motivated professional
+    - seasoned professional
+    - dynamic professional
+    - proven track record
+    - passionate professional
+
+  moderate:
+
+    - cross-functional collaboration
+    - stakeholder engagement
+    - end-to-end ownership
+    - strategic initiatives
+    - business objectives
+    - leverage technology
+
+  low:
+
+    - utilized
+    - various
+    - multiple
+    - several
+
+# --------------------------------------------------
+# SPECIFICITY CHECKS
+# --------------------------------------------------
+
+specificity_checks:
+
+  flag_if_contains:
+
+    - various
+    - several
+    - many
+    - multiple
+    - numerous
+
+  recommendation:
+    Replace vague quantities with specific counts,
+    metrics, projects, teams, or outcomes.
+
+# --------------------------------------------------
+# VERB SCORING
+# --------------------------------------------------
+
+verb_scoring:
+
+  elite:
+    score: 100
+
+  strong:
+    score: 85
+
+  acceptable:
+    score: 70
+
+  weak:
+    score: 40
+
+  generic:
+    score: 20
+
+# --------------------------------------------------
+# FINAL LANGUAGE TEST
+# --------------------------------------------------
+
+manager_test:
+
+  question:
+    Could a hiring manager ask "How exactly did you do this?"
+    and receive a believable answer?
+
+  pass:
+    Specific action + evidence + outcome
+
+  fail:
+    Generic claim + buzzword + no proof
+
+final_principle:
+
+  Evidence beats adjectives.
+  Specificity beats sophistication.
+  Proof beats personality.

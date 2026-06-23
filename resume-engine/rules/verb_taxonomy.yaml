@@ -1,0 +1,618 @@
+version: 1.0
+
+section: verb_taxonomy
+
+description: >
+  Categorized action verb library used for resume generation,
+  resume critique, bullet rewrites, language scoring,
+  and action verb recommendations.
+
+# --------------------------------------------------
+# UNIVERSAL HIGH-VALUE VERBS
+# --------------------------------------------------
+
+universal:
+
+  - built
+  - created
+  - developed
+  - designed
+  - launched
+  - implemented
+  - executed
+  - delivered
+  - improved
+  - optimized
+  - streamlined
+  - transformed
+  - enhanced
+  - generated
+  - increased
+  - reduced
+  - accelerated
+  - expanded
+  - achieved
+  - produced
+
+# --------------------------------------------------
+# SALES
+# --------------------------------------------------
+
+sales:
+
+  - prospected
+  - qualified
+  - generated
+  - secured
+  - acquired
+  - converted
+  - negotiated
+  - closed
+  - retained
+  - expanded
+  - upsold
+  - cross_sold
+  - renewed
+  - cultivated
+  - developed
+  - grew
+  - advanced
+  - accelerated
+  - exceeded
+  - achieved
+  - surpassed
+
+# --------------------------------------------------
+# BUSINESS DEVELOPMENT
+# --------------------------------------------------
+
+business_development:
+
+  - identified
+  - sourced
+  - targeted
+  - developed
+  - expanded
+  - cultivated
+  - established
+  - generated
+  - initiated
+  - opened
+  - secured
+  - pursued
+  - strengthened
+  - negotiated
+  - advanced
+
+# --------------------------------------------------
+# ACCOUNT MANAGEMENT
+# --------------------------------------------------
+
+account_management:
+
+  - managed
+  - maintained
+  - expanded
+  - retained
+  - renewed
+  - strengthened
+  - developed
+  - supported
+  - advised
+  - consulted
+  - coordinated
+  - resolved
+  - improved
+  - facilitated
+
+# --------------------------------------------------
+# CRM
+# --------------------------------------------------
+
+crm:
+
+  - administered
+  - configured
+  - customized
+  - optimized
+  - maintained
+  - governed
+  - integrated
+  - audited
+  - standardized
+  - monitored
+  - automated
+  - documented
+  - improved
+  - migrated
+  - implemented
+  - consolidated
+
+# --------------------------------------------------
+# REVENUE OPERATIONS
+# --------------------------------------------------
+
+revenue_operations:
+
+  - optimized
+  - automated
+  - standardized
+  - streamlined
+  - improved
+  - integrated
+  - audited
+  - analyzed
+  - identified
+  - enabled
+  - orchestrated
+  - implemented
+  - migrated
+  - consolidated
+  - governed
+  - monitored
+  - refined
+  - aligned
+
+# --------------------------------------------------
+# SALES ENABLEMENT
+# --------------------------------------------------
+
+sales_enablement:
+
+  - enabled
+  - trained
+  - coached
+  - guided
+  - supported
+  - developed
+  - standardized
+  - documented
+  - facilitated
+  - improved
+  - optimized
+  - implemented
+  - streamlined
+  - launched
+
+# --------------------------------------------------
+# CUSTOMER SUCCESS
+# --------------------------------------------------
+
+customer_success:
+
+  - onboarded
+  - retained
+  - supported
+  - advised
+  - consulted
+  - guided
+  - resolved
+  - improved
+  - facilitated
+  - expanded
+  - strengthened
+  - educated
+  - trained
+  - monitored
+
+# --------------------------------------------------
+# IMPLEMENTATION
+# --------------------------------------------------
+
+implementation:
+
+  - implemented
+  - deployed
+  - launched
+  - introduced
+  - configured
+  - integrated
+  - rolled_out
+  - executed
+  - migrated
+  - installed
+  - enabled
+  - standardized
+
+# --------------------------------------------------
+# PROJECT MANAGEMENT
+# --------------------------------------------------
+
+project_management:
+
+  - managed
+  - coordinated
+  - organized
+  - directed
+  - facilitated
+  - executed
+  - planned
+  - delivered
+  - prioritized
+  - monitored
+  - tracked
+  - completed
+  - aligned
+  - supervised
+
+# --------------------------------------------------
+# PROCESS IMPROVEMENT
+# --------------------------------------------------
+
+process_improvement:
+
+  - optimized
+  - streamlined
+  - automated
+  - simplified
+  - standardized
+  - improved
+  - accelerated
+  - reduced
+  - consolidated
+  - refined
+  - enhanced
+  - modernized
+  - transformed
+
+# --------------------------------------------------
+# ANALYTICS
+# --------------------------------------------------
+
+analytics:
+
+  - analyzed
+  - evaluated
+  - assessed
+  - reviewed
+  - examined
+  - audited
+  - identified
+  - investigated
+  - measured
+  - monitored
+  - tracked
+  - diagnosed
+  - quantified
+  - validated
+
+# --------------------------------------------------
+# REPORTING
+# --------------------------------------------------
+
+reporting:
+
+  - developed
+  - created
+  - generated
+  - built
+  - maintained
+  - automated
+  - monitored
+  - analyzed
+  - tracked
+  - visualized
+  - delivered
+  - presented
+
+# --------------------------------------------------
+# DATA MANAGEMENT
+# --------------------------------------------------
+
+data_management:
+
+  - maintained
+  - cleansed
+  - standardized
+  - validated
+  - audited
+  - migrated
+  - organized
+  - consolidated
+  - governed
+  - improved
+  - enriched
+
+# --------------------------------------------------
+# AUTOMATION
+# --------------------------------------------------
+
+automation:
+
+  - automated
+  - streamlined
+  - optimized
+  - accelerated
+  - reduced
+  - simplified
+  - standardized
+  - integrated
+  - improved
+  - enabled
+
+# --------------------------------------------------
+# MARKETING
+# --------------------------------------------------
+
+marketing:
+
+  - launched
+  - executed
+  - optimized
+  - refined
+  - segmented
+  - developed
+  - created
+  - expanded
+  - improved
+  - measured
+  - tested
+  - analyzed
+  - promoted
+  - positioned
+
+# --------------------------------------------------
+# EMAIL MARKETING
+# --------------------------------------------------
+
+email_marketing:
+
+  - developed
+  - launched
+  - executed
+  - optimized
+  - segmented
+  - automated
+  - personalized
+  - tested
+  - refined
+  - analyzed
+  - improved
+  - measured
+
+# --------------------------------------------------
+# LIFECYCLE MARKETING
+# --------------------------------------------------
+
+lifecycle_marketing:
+
+  - nurtured
+  - segmented
+  - personalized
+  - optimized
+  - automated
+  - retained
+  - engaged
+  - activated
+  - converted
+  - expanded
+  - measured
+  - analyzed
+
+# --------------------------------------------------
+# CONTENT STRATEGY
+# --------------------------------------------------
+
+content_strategy:
+
+  - developed
+  - planned
+  - created
+  - authored
+  - edited
+  - produced
+  - optimized
+  - positioned
+  - aligned
+  - expanded
+  - refined
+  - published
+
+# --------------------------------------------------
+# COPYWRITING
+# --------------------------------------------------
+
+copywriting:
+
+  - wrote
+  - authored
+  - drafted
+  - developed
+  - created
+  - edited
+  - revised
+  - optimized
+  - refined
+  - produced
+  - published
+
+# --------------------------------------------------
+# GRAPHIC DESIGN
+# --------------------------------------------------
+
+graphic_design:
+
+  - designed
+  - created
+  - developed
+  - produced
+  - illustrated
+  - branded
+  - conceptualized
+  - refined
+  - modernized
+  - enhanced
+
+# --------------------------------------------------
+# TRAINING
+# --------------------------------------------------
+
+training:
+
+  - trained
+  - coached
+  - mentored
+  - educated
+  - instructed
+  - guided
+  - facilitated
+  - onboarded
+  - developed
+  - supported
+
+# --------------------------------------------------
+# LEADERSHIP
+# --------------------------------------------------
+
+leadership:
+
+  - led
+  - directed
+  - managed
+  - supervised
+  - coached
+  - mentored
+  - guided
+  - influenced
+  - aligned
+  - facilitated
+  - championed
+  - drove
+
+# --------------------------------------------------
+# COLLABORATION
+# --------------------------------------------------
+
+collaboration:
+
+  - collaborated
+  - partnered
+  - coordinated
+  - aligned
+  - facilitated
+  - supported
+  - communicated
+  - worked_with
+  - engaged
+
+# --------------------------------------------------
+# STRATEGY
+# --------------------------------------------------
+
+strategy:
+
+  - developed
+  - defined
+  - established
+  - planned
+  - positioned
+  - aligned
+  - evaluated
+  - guided
+  - directed
+  - influenced
+
+# --------------------------------------------------
+# OPERATIONS
+# --------------------------------------------------
+
+operations:
+
+  - managed
+  - administered
+  - coordinated
+  - optimized
+  - streamlined
+  - standardized
+  - monitored
+  - improved
+  - executed
+  - maintained
+
+# --------------------------------------------------
+# HIRING
+# --------------------------------------------------
+
+recruiting:
+
+  - sourced
+  - screened
+  - interviewed
+  - recruited
+  - hired
+  - onboarded
+  - evaluated
+  - selected
+  - developed
+
+# --------------------------------------------------
+# CUSTOMER SUPPORT
+# --------------------------------------------------
+
+support:
+
+  - resolved
+  - addressed
+  - investigated
+  - supported
+  - assisted
+  - guided
+  - educated
+  - facilitated
+  - improved
+
+# --------------------------------------------------
+# PREFERRED VERB PRIORITY
+# --------------------------------------------------
+
+priority_tiers:
+
+  elite:
+
+    - built
+    - launched
+    - implemented
+    - optimized
+    - automated
+    - integrated
+    - generated
+    - increased
+    - reduced
+    - accelerated
+    - identified
+    - created
+    - developed
+    - led
+    - delivered
+
+  strong:
+
+    - managed
+    - coordinated
+    - executed
+    - facilitated
+    - improved
+    - analyzed
+    - configured
+    - administered
+    - standardized
+
+  acceptable:
+
+    - supported
+    - collaborated
+    - assisted
+    - maintained
+
+# --------------------------------------------------
+# VERBS TO AVOID
+# --------------------------------------------------
+
+avoid:
+
+  - helped
+  - worked_on
+  - responsible_for
+  - participated_in
+  - did
+  - handled
