@@ -11,6 +11,7 @@ config.local.*
 *audit*.csv
 *audit*.json
 *_log.csv
+bullet-bank-cluster-map-updated.csv
 *_log.json
 output/
 outputs/
@@ -49,14 +50,4 @@ yarn-error.log*
 # === OS ===
 .DS_Store
 **/.DS_Store
-<<<<<<< HEAD
-Thumbs.db
-
-# === EDITORS ===
-.vscode/
-.idea/
-*.swp
-*.swo
-=======
 **/bullet-bank-audited.csv
->>>>>>> 5a54326 (add audit csv to gitignore)
