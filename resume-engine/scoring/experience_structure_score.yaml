@@ -1,0 +1,112 @@
+version: 1.0
+
+section: experience_structure
+
+max_score: 100
+
+weights:
+
+  chronology: 25
+  progression: 25
+  evidence_density: 25
+  relevance_ordering: 25
+
+chronology:
+
+  excellent:
+
+    - reverse_chronological_order
+    - clear_dates
+    - no_confusing_gaps
+
+  penalties:
+
+    missing_dates: -15
+    unclear_timeline: -20
+
+progression:
+
+  excellent:
+
+    - increasing_scope
+    - increasing_complexity
+    - increasing_ownership
+
+  positive_signals:
+
+    - promotion
+    - expanded_responsibility
+    - specialization_growth
+
+  penalties:
+
+    - unexplained_regression
+    - unclear_progression
+
+evidence_density:
+
+  excellent:
+
+    minimum_strong_bullets_per_role: 3
+
+  preferred_content:
+
+    - accomplishments
+    - measurable_results
+    - platform_usage
+    - process_ownership
+
+  penalties:
+
+    responsibility_only_bullets: -10
+    vague_bullets: -10
+
+relevance_ordering:
+
+  excellent:
+
+    - strongest_bullets_first
+    - target_role_evidence_highly_visible
+
+  penalties:
+
+    hidden_gems_buried
+    strongest_bullets_last
+
+hidden_gem_detection:
+
+  criteria:
+
+    - significant_metric
+    - rare_skill
+    - unique_achievement
+    - revenue_impact
+    - process_ownership
+
+  recommendation:
+
+    promote_to_top_third
+
+role_quality_check:
+
+  score_each_role:
+
+    visibility:
+      weight: 25
+
+    evidence:
+      weight: 35
+
+    relevance:
+      weight: 25
+
+    differentiation:
+      weight: 15
+
+flags:
+
+  weak_recent_role
+  buried_accomplishments
+  responsibility_heavy
+  progression_unclear
+  timeline_confusion

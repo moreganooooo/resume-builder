@@ -1,0 +1,114 @@
+version: 1.0
+
+section: summary_patterns
+
+high_scoring_patterns:
+
+  role_first:
+
+    description:
+      Target role or specialization appears in first sentence.
+
+    examples:
+
+      - CRM & Sales Operations professional with experience administering Salesforce and optimizing revenue workflows.
+
+      - Marketing Operations specialist focused on lifecycle automation, reporting, and campaign performance.
+
+    bonus: 15
+
+  specialization_first:
+
+    description:
+      Clear expertise stated before soft skills.
+
+    bonus: 10
+
+  evidence_present:
+
+    description:
+      Summary references measurable or verifiable accomplishments.
+
+    bonus: 15
+
+  platform_specificity:
+
+    description:
+      Named tools, systems, or technologies.
+
+    bonus: 10
+
+  concise_length:
+
+    description:
+      40-80 words.
+
+    bonus: 10
+
+  role_alignment:
+
+    description:
+      Summary strongly matches target role.
+
+    bonus: 20
+
+low_scoring_patterns:
+
+  adjective_first:
+
+    examples:
+
+      - Results-driven professional...
+      - Dynamic leader...
+      - Highly motivated self-starter...
+
+    penalty: -20
+
+  personality_first:
+
+    examples:
+
+      - Passionate marketer...
+      - Creative thinker...
+
+    penalty: -10
+
+  generic_strengths:
+
+    examples:
+
+      - Strong communication skills
+      - Team player
+      - Problem solver
+
+    penalty: -10
+
+  unsupported_seniority:
+
+    penalty: -20
+
+  buzzword_stacking:
+
+    penalty: -15
+
+  keyword_stuffing:
+
+    penalty: -20
+
+recommended_order:
+
+  1: target_role
+  2: specialization
+  3: strongest_evidence
+  4: supporting_skills
+
+ideal_length:
+
+  minimum_words: 40
+  maximum_words: 80
+
+hard_failures:
+
+  - first_person_language
+  - unsupported_claims
+  - generic_professional_summary
