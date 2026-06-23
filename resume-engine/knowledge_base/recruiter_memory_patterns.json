@@ -1,23 +1,93 @@
 {
+  "_meta": {
+    "source": "profile.yml, evidence-guide.csv, verified-claims.csv, treering-archive-readme.csv",
+    "last_updated": "2026-06-23",
+    "description": "What recruiters and hiring managers remember (or forget) about Morgan after reviewing her materials. Use to sharpen positioning and headline choices."
+  },
   "memorable_strengths": [
     {
-      "item": "$3M pipeline discovery",
-      "memorability_score": 98
+      "id": "mem_001",
+      "pattern": "The campaign numbers are unusually high",
+      "detail": "74–95% open rates and 22–70% reply rates immediately signal 'this person can write.' Most candidates list tools; Morgan lists outcomes. Recruiters pause on these.",
+      "supporting_metrics": ["metric_001", "metric_003", "metric_004", "metric_005"],
+      "where_to_lead": "Resume headline, first bullet of Treering role, any email marketing / lifecycle marketing application"
     },
     {
-      "item": "$1M closed-won achievement",
-      "memorability_score": 95
+      "id": "mem_002",
+      "pattern": "She built the training infrastructure, not just used it",
+      "detail": "The SDR Process Map website, the variable training deck, the new hire sequence guide — these signal a 'systems builder' who makes organizations smarter, not just someone who hit quota.",
+      "supporting_facts": ["fact_003", "fact_010", "fact_011"],
+      "where_to_lead": "Sales enablement, customer onboarding, revenue enablement, content ops roles"
+    },
+    {
+      "id": "mem_003",
+      "pattern": "She founded the Content Committee — which is a real thing with receipts",
+      "detail": "Most candidates say they 'collaborated cross-functionally.' Morgan can say she built the structure that made collaboration possible, has the founding doc, survey responses, and Bobby's authorization on record.",
+      "supporting_facts": ["fact_001"],
+      "supporting_projects": ["proj_001"],
+      "where_to_lead": "Content strategy, marketing ops, B2B content roles"
+    },
+    {
+      "id": "mem_004",
+      "pattern": "The journalism + design + sales trifecta is genuinely rare",
+      "detail": "Most email marketers can write OR operate the stack. Most enablement specialists come from sales OR content. Morgan comes from both simultaneously — and has the agency + newsroom + sales floor background to prove all three.",
+      "supporting_context": "KU Journalism BS → Callahan Creek copywriter → VML digital strategy → Element 8 designer → IST BDR → Treering SDR → SDR Manager",
+      "where_to_lead": "Any cover letter opening, LinkedIn summary, any role that values strategic + creative + operational"
+    },
+    {
+      "id": "mem_005",
+      "pattern": "$874K in sourced revenue with a 113% growth arc is a real number",
+      "detail": "Not a team number, not a rounded estimate — a precise figure from a workbook with year-by-year breakdown and peer comparison. Precision signals accuracy and accountability.",
+      "supporting_metrics": ["metric_011", "metric_012"],
+      "where_to_lead": "Revenue-focused roles, any JD that asks for 'proven track record'"
+    },
+    {
+      "id": "mem_006",
+      "pattern": "The 2-year employment gap has a real story, and she owns it",
+      "detail": "Took intentional time in 2024-25 to support a loved one's health and invest in professional growth. Returning with clarity. The resume-builder project itself is evidence of that investment.",
+      "supporting_context": "profile.yml exit_story",
+      "where_to_lead": "Cover letter acknowledgment, recruiter screen response — frame proactively rather than waiting to be asked"
+    },
+    {
+      "id": "mem_007",
+      "pattern": "Peers borrowed her sequences for audiences they weren't designed for",
+      "detail": "This is one of the most memorable proof-of-quality stories in the archive. Reps manually adjusted niche sequence verbiage to use it for non-niche audiences because the writing was that compelling — and Morgan confirmed it herself.",
+      "supporting_facts": ["fact_002"],
+      "where_to_lead": "Interview stories, cover letter for writing-heavy roles, anywhere the question is 'how do you know your writing is good'"
+    },
+    {
+      "id": "mem_008",
+      "pattern": "The Process Map website is live and you can click it right now",
+      "detail": "Live portfolio proof is rare. Most candidates describe past work; Morgan can send a URL. The site is professional, still active, and was official company training infrastructure.",
+      "url": "https://escottmorgan.wixsite.com/processmap",
+      "supporting_projects": ["proj_002"],
+      "where_to_lead": "Portfolio section of resume, LinkedIn, cover letter P.S., any email to a recruiter"
     }
   ],
-
-  "forgettable_content": [
+  "forgettable_or_risky": [
     {
-      "item": "Strong communication skills",
-      "memorability_score": 5
+      "id": "forget_001",
+      "pattern": "Generic tool lists without outcomes",
+      "detail": "'Proficient in Salesforce, HubSpot, Outreach' reads the same as 1,000 other resumes. Morgan's differentiation is always outcomes + scale + authorship, not tool names alone.",
+      "mitigation": "Always pair tools with what she built or achieved using them."
     },
     {
-      "item": "Results-driven professional",
-      "memorability_score": 2
+      "id": "forget_002",
+      "pattern": "Team metrics framed as individual",
+      "detail": "The 480K emails / 77% lead conversion numbers are SDR team-level. Framing them as Morgan's individual output is both inaccurate and risky — recruiters ask follow-up questions.",
+      "mitigation": "Always attribute as 'SDR team I was part of' or 'team I helped lead.'"
+    },
+    {
+      "id": "forget_003",
+      "pattern": "'100% demo close rate' without qualification",
+      "detail": "Not yet verified strongly enough for external use. Volume is small. If challenged, there's no clean source to point to.",
+      "mitigation": "Do not use this claim until a clean source is identified. Use revenue and open/reply metrics instead."
+    },
+    {
+      "id": "forget_004",
+      "pattern": "Buried employment gap without framing",
+      "detail": "A gap from 2024 to 2026 will be noticed. Trying to hide it or minimize it reads as evasive. Owning it confidently is far more effective.",
+      "mitigation": "Lead with the story: intentional caregiver time + active professional development (this project is evidence). Framed right, it becomes a strength."
     }
   ]
 }

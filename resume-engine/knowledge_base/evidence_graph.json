@@ -1,35 +1,70 @@
 {
+  "_meta": {
+    "source": "evidence-guide.csv, verified-claims.csv, verified_metrics.json, verified_facts.json, verified_projects.json",
+    "last_updated": "2026-06-23",
+    "description": "Relationship graph connecting metrics, facts, projects, tools, and archetypes. Use to find supporting evidence chains for any resume claim.",
+    "node_types": ["metric", "fact", "project", "tool", "archetype"]
+  },
   "nodes": [
-    {
-      "id": "crm_audit"
-    },
-    {
-      "id": "salesforce"
-    },
-    {
-      "id": "pipeline_analysis"
-    }
+    { "id": "metric_001", "type": "metric", "label": "95% open / 54% reply — Private Mid/High/K-12" },
+    { "id": "metric_003", "type": "metric", "label": "85% open / 39% reply — HZ Spring 1st Touch" },
+    { "id": "metric_004", "type": "metric", "label": "74% open / 22% reply / 0 opt-outs — PTA Councils" },
+    { "id": "metric_005", "type": "metric", "label": "34% reply — In Contract Sequence" },
+    { "id": "metric_008", "type": "metric", "label": "63% avg open / 3,337 prospects — Jan 2022 Suite" },
+    { "id": "metric_009", "type": "metric", "label": "77-83% open / 14-38% reply — 20-21 Persona Sequences" },
+    { "id": "metric_011", "type": "metric", "label": "$874,622.63 all-time sourced revenue" },
+    { "id": "metric_012", "type": "metric", "label": "113% revenue growth Y1→Y3" },
+    { "id": "metric_013", "type": "metric", "label": "$3M+ pipeline recovery" },
+    { "id": "metric_015", "type": "metric", "label": "Pod outperformed team benchmarks Nov 2022" },
+    { "id": "metric_016", "type": "metric", "label": "$15.1M portfolio / 2,263 accounts" },
+    { "id": "metric_017", "type": "metric", "label": "1,578 HZ schools managed" },
+    { "id": "metric_018", "type": "metric", "label": "129 sequences + 55 persona sequences in library" },
+    { "id": "fact_001", "type": "fact", "label": "Content Committee — Founded Jan 2021" },
+    { "id": "fact_002", "type": "fact", "label": "21/39 niche sequences authored; proofed all 39" },
+    { "id": "fact_003", "type": "fact", "label": "SDR Process Map website — official training infra" },
+    { "id": "fact_006", "type": "fact", "label": "De facto SDR pod manager — confirmed by VP Sales" },
+    { "id": "fact_008", "type": "fact", "label": "Invented 'Sample Sent No Demo' + 'Time-Specific Follow-Up' sequence types" },
+    { "id": "proj_001", "type": "project", "label": "Content Committee" },
+      { "id": "proj_002", "type": "project", "label": "SDR Process Map Website" },
+    { "id": "proj_006", "type": "project", "label": "Hot Zone Territory Management System" },
+    { "id": "proj_009", "type": "project", "label": "PTA Council Top-Down Outreach Program" },
+    { "id": "tool_001", "type": "tool", "label": "Outreach.io" },
+    { "id": "tool_002", "type": "tool", "label": "Salesforce CRM" },
+    { "id": "archetype_campaign", "type": "archetype", "label": "Lifecycle Marketing Specialist" },
+    { "id": "archetype_enablement", "type": "archetype", "label": "Sales Enablement Specialist" },
+    { "id": "archetype_onboarding", "type": "archetype", "label": "Customer Onboarding & Implementation Specialist" },
+    { "id": "archetype_content", "type": "archetype", "label": "B2B Content Strategist" },
+    { "id": "archetype_customer_mktg", "type": "archetype", "label": "Customer Marketing Manager" }
   ],
-
   "relationships": [
-    {
-      "source": "crm_audit",
-      "supports": "salesforce"
-    },
-    {
-      "source": "crm_audit",
-      "supports": "pipeline_analysis"
-    }
-  ],
-
-  "evidence": [
-    {
-      "claim": "Identified $3M in untapped pipeline",
-      "sources": [
-        "metric_002",
-        "fact_002"
-      ],
-      "confidence": 100
-    }
+    { "from": "metric_001", "to": "proj_009", "rel": "proves_outcome_of" },
+    { "from": "metric_003", "to": "proj_006", "rel": "proves_outcome_of" },
+    { "from": "metric_004", "to": "proj_009", "rel": "proves_outcome_of" },
+    { "from": "metric_005", "to": "proj_001", "rel": "proves_outcome_of" },
+    { "from": "metric_008", "to": "tool_001", "rel": "executed_via" },
+    { "from": "metric_009", "to": "tool_001", "rel": "executed_via" },
+    { "from": "metric_011", "to": "proj_006", "rel": "attributable_to" },
+    { "from": "metric_013", "to": "tool_002", "rel": "executed_via" },
+    { "from": "metric_015", "to": "fact_006", "rel": "corroborates" },
+    { "from": "metric_016", "to": "proj_006", "rel": "quantifies_scope_of" },
+    { "from": "metric_017", "to": "proj_006", "rel": "quantifies_scope_of" },
+    { "from": "metric_018", "to": "proj_002", "rel": "quantifies_scope_of" },
+    { "from": "fact_001", "to": "proj_001", "rel": "describes" },
+    { "from": "fact_002", "to": "proj_001", "rel": "corroborates" },
+    { "from": "fact_003", "to": "proj_002", "rel": "describes" },
+    { "from": "fact_006", "to": "metric_015", "rel": "evidenced_by" },
+    { "from": "fact_008", "to": "tool_001", "rel": "demonstrated_via" },
+    { "from": "proj_001", "to": "archetype_enablement", "rel": "supports_archetype" },
+    { "from": "proj_001", "to": "archetype_content", "rel": "supports_archetype" },
+    { "from": "proj_002", "to": "archetype_onboarding", "rel": "supports_archetype" },
+    { "from": "proj_002", "to": "archetype_enablement", "rel": "supports_archetype" },
+    { "from": "proj_006", "to": "archetype_campaign", "rel": "supports_archetype" },
+    { "from": "proj_009", "to": "archetype_customer_mktg", "rel": "supports_archetype" },
+    { "from": "proj_009", "to": "archetype_campaign", "rel": "supports_archetype" },
+    { "from": "tool_001", "to": "archetype_campaign", "rel": "tool_for_archetype" },
+    { "from": "tool_002", "to": "archetype_campaign", "rel": "tool_for_archetype" },
+    { "from": "metric_011", "to": "archetype_campaign", "rel": "headline_proof_for" },
+    { "from": "metric_004", "to": "archetype_customer_mktg", "rel": "headline_proof_for" },
+    { "from": "metric_018", "to": "archetype_enablement", "rel": "headline_proof_for" }
   ]
 }

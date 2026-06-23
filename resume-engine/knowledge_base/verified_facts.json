@@ -1,34 +1,174 @@
 {
-  "candidate_id": "morgan",
-  "verified_facts": [
+  "_meta": {
+    "source": "profile.yml, evidence-guide.csv, verified-claims.csv, treering-archive-readme.csv",
+    "last_updated": "2026-06-23",
+    "total_entries": 18,
+    "note": "Facts are distinct from metrics — these are verified claims about what Morgan built, did, or led. Check Detective Findings Use Caveat column before external use."
+  },
+  "facts": [
     {
       "id": "fact_001",
-      "category": "achievement",
-      "fact": "First outbound representative to exceed $1M closed-won revenue",
-      "confidence": 100,
-      "source": [
-        "resume_v5",
-        "interview_notes"
-      ]
+      "label": "Content Committee — Founded and Chaired",
+      "claim": "Morgan founded the Content Committee in January 2021, grew it from 0 to 9 members over 15 months, and held three operational roles: Surveys & Feedback, Final Formatting, and Sequence Stats.",
+      "source": "TR-0373 — First Content Meeting.docx; TR-0436; TR-0378; TR-0379; TR-0380",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "content_leadership"
     },
     {
       "id": "fact_002",
-      "category": "crm",
-      "fact": "Identified more than $3M in untapped pipeline opportunities through CRM audit",
-      "confidence": 100,
-      "source": [
-        "resume_v5",
-        "career_history"
-      ]
+      "label": "Sequence Authorship — Niche Library",
+      "claim": "Morgan personally authored 21 of 39 niche sequences in the Summer 2020 archive and proofread all 39 including peers' work — establishing editorial authority over the full sequence library.",
+      "source": "TR-0208 — Summer '20 Sequence List; TR-0209 — Summer '20 Proofreading tracker",
+      "confidence": "High",
+      "use_in_resume": true,
+      "caveat": "Kristina (VP Marketing) wrote daily-driver sequences; Morgan wrote niche segments (Private, Title 1, HZ-adjacent). Be specific about the split.",
+      "category": "content_authorship"
     },
     {
       "id": "fact_003",
-      "category": "technology",
-      "fact": "Led Outreach implementation and adoption",
-      "confidence": 100,
-      "source": [
-        "resume_v5"
-      ]
+      "label": "SDR Process Map Website — Built and Maintained",
+      "claim": "Morgan built and maintains a live 8-step SDR onboarding website (escottmorgan.wixsite.com/processmap) used as official team training infrastructure — referenced by name in the company SDR training deck alongside the SDR Playbook and Outreach Tag List.",
+      "source": "DF-0075 — Training_ Research, Contacts, Prospects, & Sequenc.pptx; confirmed live 2026-05-02",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "enablement"
+    },
+    {
+      "id": "fact_004",
+      "label": "Outreach.io Platform — Championed Adoption",
+      "claim": "Morgan championed the selection, CRM integration, and team-wide adoption of Outreach.io — managed complex Salesforce variable mapping, developed best practices, and delivered comprehensive user training.",
+      "source": "TR-0381 — Drift Feedback.docx (requirements authored Dec 2017); profile.yml proof_points",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "platform_ops"
+    },
+    {
+      "id": "fact_005",
+      "label": "Salesforce Person Accounts Migration — Change Management",
+      "claim": "Led change management during a highly disruptive Salesforce Person Accounts CRM infrastructure overhaul — provided daily 1:1 remote screen-share troubleshooting, rebuilt deprecated contact views, and translated complex technical changes into clear user workflows.",
+      "source": "profile.yml — Enterprise System Migration & Adoption proof point",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "platform_ops"
+    },
+    {
+      "id": "fact_006",
+      "label": "People Management — De Facto SDR Manager",
+      "claim": "Morgan held de facto management responsibilities over an SDR pod, with on-record confirmation from VP Sales Bobby in both a 2022 group meeting ('Morgan has a responsibility... to manage you all on those things') and a 2023 private meeting ('You'll just need to sort of manage Tevez's time as you normally would').",
+      "source": "profile.yml — management_evidence; TR-0651",
+      "confidence": "High",
+      "use_in_resume": "yes_with_framing",
+      "caveat": "De facto management, not formal title. Frame as 'led pod' and cite direct quotes from Bobby if pressed in interviews.",
+      "category": "people_leadership"
+    },
+    {
+      "id": "fact_007",
+      "label": "Smart Spreadsheet — Self-Built CRM Prioritization System",
+      "claim": "Morgan built a Salesforce-synced account prioritization and CRM-error monitoring workbook (Smart Spreadsheet) covering Hot Zones, Private, Green, Title 1, and Public accounts — still in use as territory strategy infrastructure.",
+      "source": "TR-0284 — Morgan_s Smart Spreadsheet.xlsx",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "crm_ops"
+    },
+    {
+      "id": "fact_008",
+      "label": "Sequence Type Innovation — New Categories Invented",
+      "claim": "Morgan invented at least two new sequence type categories — 'Sample Sent, No Demo' and 'Time-Specific Follow-Up' — expanding Outreach beyond cold prospecting into post-sample nurture and seasonal trigger flows. Source files from Sept 2019 directly corroborate authorship.",
+      "source": "TR-0480 — For Outreach, Sept 2019_ Sent Sample, Follow Up.docx; TR-0698 — Time-Specific Follow-Up.docx; TR-0419 claim memo",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "content_authorship"
+    },
+    {
+      "id": "fact_009",
+      "label": "VOC Research Loop — Instrument Design to Action",
+      "claim": "Morgan designed and executed multiple VOC research instruments including the Content Feedback Survey May 2022, collecting 181 pages of responses that directly informed the 22-23 sequence rebuild.",
+      "source": "DF-0048; DF-0073 — Responses_All_220608.pdf; DF-0063",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "content_ops"
+    },
+    {
+      "id": "fact_010",
+      "label": "New Hire Training — Outreach/Salesforce Workflow",
+      "claim": "Morgan authored comprehensive new hire sequence training covering Outreach, Salesforce, 129 sequences, smart views, SDR Persona collections, 1st Touch/Re-Approach, bulk sequencing, CC strategy, and workflow judgment.",
+      "source": "TR-0007 — SEQUENCE TRAINING FOR NEW HIRES.docx",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "enablement"
+    },
+    {
+      "id": "fact_011",
+      "label": "Advanced Outreach Variable Training — Built and Delivered",
+      "claim": "Morgan built and delivered SDR Variable Training covering prospect/account/sender variables, Personal Notes, date-based variables, if/else statements, and nested fallback conditional personalization logic.",
+      "source": "SDR Variable Training.pptx",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "technical_training"
+    },
+    {
+      "id": "fact_012",
+      "label": "District ABM / PTA Council Strategy — Designed and Trained",
+      "claim": "Morgan designed a 14-step district/channel-style outreach sequence and trained the team on PTA structures, Salesforce setup, customization, and overlap rules — combining top-down ABM thinking with grassroots PTA mapping.",
+      "source": "DISTRICT_ 1st TOUCH - Morgan Copy.docx; PTA Councils.pptx",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "campaign_strategy"
+    },
+    {
+      "id": "fact_013",
+      "label": "Proactive Data Stewardship — #customerquotes Preservation",
+      "claim": "During Treering's Slack→Google Chat migration, Morgan proactively preserved the entire #customerquotes channel by copy/pasting it when she noticed it wasn't being saved anywhere — including in Salesforce.",
+      "source": "TR-0353 — Slack customerquotes export",
+      "confidence": "High",
+      "use_in_resume": "interview_story",
+      "category": "initiative"
+    },
+    {
+      "id": "fact_014",
+      "label": "HZ Territory Management at Scale",
+      "claim": "Morgan managed a Hot Zone territory of 1,578 schools across 100+ districts using a self-built 40+ column multi-stakeholder district tracking system with Salesforce-generated performance reports and Google Earth geographic mapping.",
+      "source": "DF-0070 — ALL HZ Schools-2021.xlsx; DF-0065; DF-0064; DF-0071",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "territory_management"
+    },
+    {
+      "id": "fact_015",
+      "label": "Content Committee Snippet Output",
+      "claim": "The Content Committee under Morgan produced 52 snippets in February 2021 alone, with 22 (35%) made public to the full team.",
+      "source": "TR-0290",
+      "confidence": "High",
+      "use_in_resume": "supporting_detail",
+      "category": "content_ops"
+    },
+    {
+      "id": "fact_016",
+      "label": "Platform Evaluation — Drift Requirements Authored",
+      "claim": "In December 2017 Morgan authored a 12-requirement platform evaluation of Drift documenting exact gaps (open rate tracking, A/B testing, enrollment deduplication, per-campaign filtering) that Outreach.io later filled — proving RevOps instincts years before the migration.",
+      "source": "TR-0381 — Drift Feedback.docx",
+      "confidence": "High",
+      "use_in_resume": "interview_story",
+      "category": "platform_ops"
+    },
+    {
+      "id": "fact_017",
+      "label": "Hiring Involvement — SDR Candidate Assessment",
+      "claim": "Morgan participated in interviewing and wrote comparative written assessments of SDR candidates in Jan–Feb 2020, evaluating Salesforce/Outreach technical comfort, cultural fit, teaching background, PTA experience, and CRM familiarity.",
+      "source": "TR-0441 — Untitled document(50).docx + (53).docx",
+      "confidence": "Medium-High",
+      "use_in_resume": "supporting_detail",
+      "category": "people_leadership"
+    },
+    {
+      "id": "fact_018",
+      "label": "Year 1 Revenue Milestone — First to $1M Sourced",
+      "claim": "Morgan exceeded her Year 1 revenue target by 17% and was the first outbound hire to surpass $1M in sourced revenue at Treering.",
+      "source": "profile.yml proof_points — Year 1 Revenue Target",
+      "confidence": "High",
+      "use_in_resume": true,
+      "category": "revenue"
     }
   ]
 }
