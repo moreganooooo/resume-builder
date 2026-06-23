@@ -274,8 +274,10 @@ def load_already_processed(output_path: str) -> set:
     Return a set of already-processed bullet texts by reading the updated
     cluster map output from a prior run (if it exists).
 
-    A bullet is considered done if its rewrite_status is KEEP or MANUAL,
-    meaning it completed the full pipeline in a previous run.
+    A bullet is considered done if its rewrite_status is KEEP or MANUAL.
+    Matches on BOTH the original Bullet Point text AND the final_bullet text
+    to handle cases where the rewritten text differs from the original,
+    preventing re-processing due to text transformation mismatches.
     """
     if not os.path.exists(output_path):
         return set()
@@ -284,7 +286,11 @@ def load_already_processed(output_path: str) -> set:
         if "rewrite_status" not in df.columns or "Bullet Point" not in df.columns:
             return set()
         done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
+        # Match on original bullet text
         done_bullets = set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
+        # Also match on final_bullet text (the rewritten version) for safety
+        if "final_bullet" in df.columns:
+            done_bullets |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
         return done_bullets
     except Exception as e:
         print(f"  ⚠️  Could not read prior output for resume check: {e}")
@@ -621,8 +627,16 @@ def main():
     parser.add_argument("--dry-run", action="store_true",     help="Skip API calls, use dummy responses")
     args = parser.parse_args()
 
-    print(f"\n📥 Loading cluster map: {args.map}")
-    df_map = pd.read_csv(args.map)
+    # ------------------------------------------------------------------
+    # SOURCE OF TRUTH: if an updated map already exists from a prior run,
+    # load that instead of the original — its next_action values reflect
+    # completed work (KEEP/MANUAL), so those bullets won't re-enter the queue.
+    # ------------------------------------------------------------------
+    source_map = args.output if os.path.exists(args.output) else args.map
+    print(f"\n📥 Loading cluster map: {source_map}")
+    if source_map == args.output:
+        print(f"  ℹ️  Resuming from prior run — using updated map as source of truth.")
+    df_map = pd.read_csv(source_map)
     print(f"  ✅ {len(df_map)} rows loaded.")
 
     for col in ["next_action", "manager_test", "is_representative", "Bullet Point"]:
@@ -638,11 +652,13 @@ def main():
             df_map[col] = ""
 
     # ------------------------------------------------------------------
-    # RESUME SUPPORT: find bullets already fully processed in a prior run
+    # RESUME SUPPORT: secondary safety net — skip any bullets whose text
+    # already appears in the output file as KEEP or MANUAL, even if the
+    # source map somehow still has them marked REWRITE/REVIEW.
     # ------------------------------------------------------------------
     already_done = load_already_processed(args.output)
     if already_done:
-        print(f"  ⏭️  Resume mode: {len(already_done)} bullets already processed — will skip.")
+        print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set — will skip if encountered.")
 
     kb         = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
@@ -653,13 +669,13 @@ def main():
     )
     targets = df_map[mask].copy()
 
-    # Filter out already-processed bullets
+    # Secondary filter: skip any bullets whose text is in the done set
     if already_done:
         before = len(targets)
         targets = targets[~targets["Bullet Point"].str.strip().isin(already_done)]
         skipped = before - len(targets)
         if skipped:
-            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s).")
+            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s) (text-match safety net).")
 
     if args.limit:
         targets = targets.head(args.limit)
