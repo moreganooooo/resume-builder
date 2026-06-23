@@ -148,8 +148,9 @@ class GeminiClient:
         for attempt in range(max_retries):
             resp = requests.post(url, json=body, timeout=self.timeout)
 
-            if resp.status_code == 429:
-                print("\n===== 429 RESPONSE BODY =====")
+            RETRYABLE = (429, 500, 502, 503, 504)
+            if resp.status_code in RETRYABLE:
+                print(f"\n===== HTTP {resp.status_code} RESPONSE BODY =====")
                 try:
                     print(json.dumps(resp.json(), indent=2))
                 except Exception:
