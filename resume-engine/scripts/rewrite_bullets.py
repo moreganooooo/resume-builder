@@ -66,9 +66,9 @@ REWRITE_MODEL = "gemini-3.1-flash-lite"
 SCORE_MODEL   = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS  = 3
 
-SLEEP_BETWEEN_BULLETS = 8
-SLEEP_BETWEEN_SCORES  = 2
-SLEEP_ON_RETRY        = 12
+SLEEP_BETWEEN_BULLETS = 4.5
+SLEEP_BETWEEN_SCORES  = 4.5
+SLEEP_ON_RETRY        = 4.5
 
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
               "ats_value", "manager_test"]
