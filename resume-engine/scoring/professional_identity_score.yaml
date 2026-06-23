@@ -1,4 +1,4 @@
-version: 1.0
+version: 1.1
 
 section: professional_identity_score
 
@@ -16,6 +16,69 @@ weights:
   experience_alignment: 35
   tool_alignment: 10
   achievement_alignment: 10
+
+# Maps each identity key in this file to its equivalent archetype key in
+# style_rules.yaml (archetype_ordering) so both files share one vocabulary.
+# Rule: whenever this file names an identity, the model must look up its
+# style_rules_archetype to determine skills section ordering and summary emphasis.
+
+archetype_aliases:
+
+  crm_revops_associate:
+    style_rules_archetype: marketing_ops
+    display_name: "CRM & Revenue Operations"
+    notes: >
+      Primary target archetype. Skills lead with CRM/Revenue Operations.
+      Summary leads with Salesforce administration and pipeline ownership.
+
+  sales_enablement:
+    style_rules_archetype: enablement
+    display_name: "Sales Enablement"
+    notes: >
+      Strong secondary archetype. Skills lead with Sales Enablement.
+      Summary leads with process design, rep productivity, and tool implementation.
+
+  lifecycle_marketing:
+    style_rules_archetype: lifecycle
+    display_name: "Lifecycle & Retention Marketing"
+    notes: >
+      Tertiary archetype. Skills lead with Lifecycle/Retention Marketing.
+      Summary leads with customer journey, nurture programs, and engagement metrics.
+
+  b2b_content_strategist:
+    style_rules_archetype: copywriter
+    display_name: "B2B Content & Communications"
+    notes: >
+      Supporting archetype. Skills lead with Content & Communications Strategy.
+      Use when targeting content, copywriting, or communications-forward roles.
+
+  email_marketing:
+    style_rules_archetype: lifecycle
+    display_name: "Email Marketing"
+    notes: >
+      Shares lifecycle archetype ordering. Skills lead with Lifecycle/Retention
+      Marketing. Differentiated from lifecycle by emphasis on deliverability,
+      open/click rates, and campaign execution over journey design.
+
+  customer_onboarding_implementation:
+    style_rules_archetype: enablement
+    display_name: "Customer Onboarding & Implementation"
+    notes: >
+      Shares enablement archetype ordering. Skills lead with Sales Enablement
+      or CRM/Revenue Operations depending on whether the role is internally
+      or externally facing.
+
+# Skills section ordering per identity.
+# Values reference the archetype_ordering keys in style_rules.yaml.
+
+skills_section_ordering:
+
+  crm_revops_associate:            marketing_ops
+  sales_enablement:                enablement
+  lifecycle_marketing:             lifecycle
+  b2b_content_strategist:          copywriter
+  email_marketing:                 lifecycle
+  customer_onboarding_implementation: enablement
 
 supported_identities:
 
@@ -270,140 +333,107 @@ identity_conflicts:
     - onboarding_vs_revops
     - lifecycle_marketer_vs_content_strategist
 
+# Alignment checks are intentionally minimal here.
+# Full passing/failing examples with rubrics live in resume_cohesion_score.yaml.
+# This file uses the same pass_threshold values for consistency.
+# Rule: when both files are loaded, defer to resume_cohesion_score.yaml
+# for detailed alignment evaluation; use this file for identity detection only.
+
 alignment_checks:
 
   summary_to_skills:
-
-    question:
-      Does the summary describe capabilities visible in the skills section?
-
+    question: Does the summary describe capabilities visible in the skills section?
     pass_threshold: 75
+    see_also: resume_cohesion_score.yaml > alignment_checks > summary_to_skills
 
   skills_to_experience:
-
-    question:
-      Are listed skills supported by accomplishments and work history?
-
+    question: Are listed skills supported by accomplishments and work history?
     pass_threshold: 75
+    see_also: resume_cohesion_score.yaml > alignment_checks > skills_to_experience
 
   experience_to_jd:
-
-    question:
-      Does experience support target role requirements?
-
+    question: Does experience support target role requirements?
     pass_threshold: 80
+    see_also: resume_cohesion_score.yaml > alignment_checks > experience_to_jd
 
   narrative_alignment:
-
-    question:
-      Does the resume present one coherent professional identity?
-
+    question: Does the resume present one coherent professional identity?
     pass_threshold: 80
+    see_also: resume_cohesion_score.yaml > alignment_checks > narrative_alignment
 
 identity_confidence_thresholds:
 
   strong:
-
     minimum_score: 85
-
-    interpretation:
-      Resume clearly presents this professional identity.
+    interpretation: Resume clearly presents this professional identity.
 
   moderate:
-
     minimum_score: 70
-
-    interpretation:
-      Identity is present but could be strengthened.
+    interpretation: Identity is present but could be strengthened.
 
   weak:
-
     minimum_score: 50
-
-    interpretation:
-      Some supporting evidence exists, but positioning is unclear.
+    interpretation: Some supporting evidence exists, but positioning is unclear.
 
   unsupported:
-
     minimum_score: 0
-
-    interpretation:
-      Resume lacks sufficient evidence for this identity.
+    interpretation: Resume lacks sufficient evidence for this identity.
 
 output_schema:
 
   primary_identity:
-
     name: string
-
+    style_rules_archetype: string   # maps to style_rules.yaml archetype_ordering key
     confidence: integer
-
     evidence_count: integer
 
   secondary_identity:
-
     name: string
-
+    style_rules_archetype: string
     confidence: integer
-
     evidence_count: integer
 
   tertiary_identity:
-
     name: string
-
+    style_rules_archetype: string
     confidence: integer
-
     evidence_count: integer
 
   weak_identities:
-
     - identity_name
 
   conflicts:
-
     - conflict_name
 
   recommendations:
-
     - recommendation
 
 example_output:
 
   primary_identity:
-
     name: CRM & Revenue Operations Associate
-
+    style_rules_archetype: marketing_ops
     confidence: 95
-
     evidence_count: 27
 
   secondary_identity:
-
     name: Sales Enablement
-
+    style_rules_archetype: enablement
     confidence: 90
-
     evidence_count: 20
 
   tertiary_identity:
-
     name: Customer Onboarding & Implementation
-
+    style_rules_archetype: enablement
     confidence: 78
-
     evidence_count: 12
 
   weak_identities:
-
     - B2B Content Strategist
 
-  conflicts:
-
-    none
+  conflicts: none
 
   recommendations:
-
     - Promote CRM accomplishments higher in resume
     - Increase visibility of Salesforce expertise
     - Reduce generic marketing language
