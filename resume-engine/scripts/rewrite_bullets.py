@@ -17,10 +17,10 @@ Pipeline per bullet:
      are skipped automatically (resumable runs).
 
 Knowledge base context injected at startup:
-  - cv.md                        → full career narrative (all bullets)
-  - morgan-background-guide.md   → deep role context (all bullets)
+  - cv.md                        → role section matching bullet's company only
+  - morgan-background-guide.md   → tag-keyed summary (no interview coaching / timeline noise)
   - profile.yml                  → target roles, superpowers, deal-breakers (trimmed; all bullets)
-  - verified-claims.csv          → role-matched verified metrics (Treering bullets only)
+  - verified-claims.csv          → tag-filtered rows (Treering bullets only, max 15 rows)
   - extracted-screenshot-metrics.csv → screenshot-sourced metrics (Treering bullets only)
 
 Usage:
@@ -35,6 +35,7 @@ Outputs (resume-engine/knowledge_base/):
 
 import argparse
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -44,17 +45,15 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
 # ---------------------------------------------------------------------------
-# resume-engine/scripts/ → resume-engine/ → project root
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 
-# Add the top-level scripts/ dir to the path so we can import from orchestrator.py
 TOP_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 if TOP_SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, TOP_SCRIPTS_DIR)
 
-from orchestrator import client, GeminiClient  # noqa: E402  (import after path setup)
+from orchestrator import client, GeminiClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # FILE PATHS
@@ -76,26 +75,23 @@ REWRITE_MODEL = "gemini-3.1-flash-lite"
 SCORE_MODEL   = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS  = 3
 
-# Seconds to sleep between API calls (keeps us inside free-tier rate limits)
-SLEEP_BETWEEN_BULLETS = 8    # between each bullet's rewrite call
-SLEEP_BETWEEN_SCORES  = 2    # between each scoring call
-SLEEP_ON_RETRY        = 12   # extra pause before a retry attempt
+SLEEP_BETWEEN_BULLETS = 8
+SLEEP_BETWEEN_SCORES  = 2
+SLEEP_ON_RETRY        = 12
 
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
               "ats_value", "manager_test"]
-
-# Score columns that are numeric (float64 in the CSV) vs string
 NUMERIC_SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score", "ats_value"]
 STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
 
-# Statuses that mean a bullet was fully processed in a prior run
 DONE_STATUSES = {"KEEP", "MANUAL"}
-
-# Keyword patterns that indicate a Treering bullet (case-insensitive)
 TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
 
+# Max verified-claims rows to inject per bullet (Level 2 cap)
+MAX_CLAIMS_ROWS = 15
+
 # ---------------------------------------------------------------------------
-# PERSONA TAG MAP  (Tags column values → plain-English role context)
+# PERSONA TAG MAP
 # ---------------------------------------------------------------------------
 TAG_CONTEXT = {
     "[content]":  "content marketing, editorial strategy, brand voice, or copywriting roles",
@@ -109,13 +105,106 @@ TAG_CONTEXT = {
     "[general]":  "general marketing or cross-functional roles",
 }
 
+# ---------------------------------------------------------------------------
+# LEVEL 3 — TAG-KEYED BACKGROUND GUIDE SECTIONS
+# Each key maps to a compact context block injected only when that tag is present.
+# Interview coaching, why-I-left, full timeline, and retail jobs are never sent.
+# ---------------------------------------------------------------------------
+BACKGROUND_IDENTITY = """
+Morgan is a creative and strategic marketer with 10+ years of experience spanning journalism,
+design, agency work, sales, CRM, and lifecycle content. She is the rare combination: writes
+campaigns that perform AND operates the stack (Salesforce + Outreach.io). She brings structure
+to creative work and energy to technical systems. She is seeking fully remote IC roles — not
+management. She has consistently been the person companies come back to: Callahan Creek extended
+her from intern to freelance; Element 8's CEO recruited her to lead Strategy LLC branding;
+Treering headhunted her directly from IST.
+""".strip()
+
+BACKGROUND_TAGS = {
+    "[email]": """
+Email / Lifecycle context:
+- Owned Outreach.io as primary admin: evaluated vendors, led integration with Salesforce, drove
+  team-wide adoption for a 20+ person SDR org.
+- Built 62+ sequences across 4 major categories (PTA, Hot Zone, Private School, Title 1).
+- PTA Council: 74% open / 22% reply / 0 opt-outs. HZ Spring 1st Touch: 85% open / 39% reply.
+- Jan 2022 run: 63% avg open across 6 sequences, 8.7% reply, 3,337 prospects added.
+- Personalization at scale: variable logic, behavioral triggers, segmentation by district type.
+- A/B tested subject lines, CTAs, and send windows systematically.
+""".strip(),
+
+    "[ops]": """
+Ops / CRM context:
+- Salesforce Classic & Lightning: territory management, pipeline reporting, data hygiene at scale.
+- Uncovered $3M+ in stale pipeline via systematic CRM scrub; defined KPIs, dashboards, scope.
+- National Hot Zone analysis: identified high-propensity districts using Salesforce data;
+  trained team on strategy; the program scaled into a dedicated research function.
+- Managed 2,000+ accounts simultaneously while also managing a 4-6 person SDR team.
+- Led Outreach.io/Salesforce integration: data migration, deduplication, field mapping.
+""".strip(),
+
+    "[content]": """
+Content / Enablement context:
+- Founded and chaired the Content Committee: cross-department body owning brand voice,
+  sequence library (100+ assets), campaign QA, and content governance.
+- Built voice/tone guidelines adopted team-wide; peers held to Morgan's standard as benchmark.
+- Created SDR Process Map (escottmorgan.wixsite.com/processmap) — official new-hire training.
+- 100+ email campaigns across niche audiences, each with unique messaging and multi-touch logic.
+- Designed branded slide decks for all monthly team trainings (20+ employees); consistently
+  received outstanding feedback on quality and engagement.
+""".strip(),
+
+    "[enablement]": """
+Enablement / Training context:
+- Developed and delivered live + async training for 20+ employees on messaging, QA, platforms.
+- Created the SDR Process Map website used as official onboarding infrastructure.
+- Produced onboarding playbooks, interview guides, and campaign frameworks.
+- Coached a remote pod of 4-6 SDRs on sequencing strategy, CRM hygiene, and territory work.
+- Content Committee governed all sales content: 100+ assets, 129 sequences, QA checklists.
+""".strip(),
+
+    "[sales]": """
+Sales / SDR context:
+- First outbound hire to surpass $1M in sourced revenue at Treering; exceeded Year 1 target by 17%.
+- 2x Top Seller at Inside Sales Team (now Alleyoop); Top 10 company-wide in first 2 months.
+- Promoted within 6 months at IST to sole manager of a 12-person SDR team.
+- Treering recruited Morgan directly from IST based on exceptional performance.
+- Managed 2,000+ accounts; coached a pod of 4-6 SDRs on prospecting and outreach.
+""".strip(),
+
+    "[brand]": """
+Brand / Agency context:
+- VML (global ad agency): campaigns for Gatorade, SAP, HughesNet; pitch deck praised by CEO;
+  wrote 200+ page digital strategy report for Carlson Hotels.
+- Callahan Creek: worked in a real creative pod (copywriter, art director, designer); 2 campaigns
+  selected for client rollout; extended to long-term freelance.
+- Built Treering's voice/tone guidelines and Content Committee governance from scratch.
+""".strip(),
+
+    "[design]": """
+Design context:
+- Adobe Illustrator, Photoshop, InDesign: conference flyers, brand decks, COVID response flyer
+  (posted on Treering homepage), monthly training decks, Georgia PTA council presentation.
+- Element 8 / Strategy LLC: designed complete brand identity from scratch; still in use 15+ years later.
+- Lead Graphic Designer title at Strategy LLC; recruited specifically by the CEO for the role.
+- Canva, Figma (basic), CMS/WYSIWYG editors also in toolkit.
+""".strip(),
+
+    "[generalist]": """
+Generalist / cross-functional context:
+- Range: journalism foundation (KU BS), agency copywriting (VML, Callahan Creek), graphic design
+  (Element 8/Strategy LLC), B2B SaaS sales + CRM (Treering 8 years), AI data work (Mercor).
+- Comfortable moving between writing, ops, design, and strategy without losing quality in any lane.
+- Non-Treering experience spans EdTech, regulated financial copy (CACU), K-12/education audiences,
+  nonprofit (Humane Society of KC), print/publishing.
+""".strip(),
+}
+
 
 # ---------------------------------------------------------------------------
 # KNOWLEDGE BASE LOADING
 # ---------------------------------------------------------------------------
 
 def load_text_file(path: str, label: str) -> str:
-    """Load a text file and return its contents, or empty string on failure."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
@@ -127,11 +216,6 @@ def load_text_file(path: str, label: str) -> str:
 
 
 def trim_profile_yml(raw: str) -> str:
-    """
-    Keep only the sections of profile.yml useful for rewriting:
-    target_roles, archetypes, narrative, superpowers, background_context, deal_breakers.
-    Strips companies_previously_applied, compensation, location, proof_points, etc.
-    """
     KEEP_SECTIONS = [
         "target_roles:", "archetypes:", "narrative:", "superpowers:",
         "background_context:", "deal_breakers:"
@@ -156,7 +240,6 @@ def trim_profile_yml(raw: str) -> str:
 
 
 def load_verified_claims(path: str) -> pd.DataFrame:
-    """Load verified-claims.csv, keeping only Use in Resume? = Yes rows."""
     try:
         df = pd.read_csv(path)
         if "Use in Resume?" in df.columns:
@@ -169,7 +252,6 @@ def load_verified_claims(path: str) -> pd.DataFrame:
 
 
 def load_screenshot_metrics(path: str) -> str:
-    """Load extracted-screenshot-metrics.csv as a compact string."""
     try:
         df = pd.read_csv(path)
         content = df.to_csv(index=False)
@@ -181,7 +263,6 @@ def load_screenshot_metrics(path: str) -> str:
 
 
 def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
-    """Return verified claims as a compact CSV string (most useful columns only)."""
     if df_claims.empty:
         return ""
     cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
@@ -190,11 +271,136 @@ def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
 
 
 def is_treering_bullet(role_company: str) -> bool:
-    """Return True if the bullet is from a Treering role."""
     if not isinstance(role_company, str):
         return False
     rc = role_company.lower()
     return any(kw in rc for kw in TREERING_KEYWORDS)
+
+
+# ---------------------------------------------------------------------------
+# LEVEL 1 — Extract only the matching role section from cv.md
+# ---------------------------------------------------------------------------
+
+# Map of company name keywords → the H3 heading text used in cv.md
+CV_SECTION_KEYWORDS = [
+    (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
+    (["inside sales", "alleyoop", "ist"],   "Inside Sales Team"),
+    (["usitek"],                             "USitek"),
+    (["element 8", "strategy llc"],         "Element 8"),
+    (["vml"],                               "VML"),
+    (["callahan"],                          "Callahan Creek"),
+    (["unisource", "udp"],                  "Unisource"),
+    (["humane society"],                    "Humane Society"),
+    (["mercor"],                            "Mercor"),
+]
+
+
+def extract_cv_section(cv_text: str, role_company: str) -> str:
+    """
+    Return only the H3 section of cv.md that matches role_company.
+    Falls back to full cv.md if no match is found.
+    """
+    if not cv_text or not role_company:
+        return cv_text
+
+    rc_lower = role_company.lower()
+    matched_heading = None
+    for keywords, heading in CV_SECTION_KEYWORDS:
+        if any(kw in rc_lower for kw in keywords):
+            matched_heading = heading
+            break
+
+    if not matched_heading:
+        return cv_text  # fallback: return full cv
+
+    # Split on H3 headings (### ...)
+    sections = re.split(r"(?=^### )", cv_text, flags=re.MULTILINE)
+    for section in sections:
+        if matched_heading.lower() in section[:60].lower():
+            return section.strip()
+
+    return cv_text  # fallback: section heading not found
+
+
+# ---------------------------------------------------------------------------
+# LEVEL 2 — Filter verified-claims rows by tag relevance
+# ---------------------------------------------------------------------------
+
+# Map tags to keywords that should appear in claim text to be considered relevant
+CLAIM_TAG_KEYWORDS = {
+    "[email]":      ["email", "open rate", "reply rate", "sequence", "outreach", "campaign",
+                     "pta", "hot zone", "mailchimp", "persistiq"],
+    "[ops]":        ["salesforce", "crm", "pipeline", "territory", "hygiene", "data",
+                     "hot zone", "import", "outreach", "integration"],
+    "[content]":    ["content", "committee", "asset", "library", "governance", "voice",
+                     "sequence", "playbook", "onboarding", "training"],
+    "[enablement]": ["training", "onboarding", "playbook", "sdr", "enablement", "committee",
+                     "process map", "coaching"],
+    "[sales]":      ["revenue", "pipeline", "quota", "close rate", "sourced", "sdr",
+                     "outbound", "meeting", "deal"],
+    "[brand]":      ["brand", "voice", "tone", "agency", "campaign", "creative"],
+    "[design]":     ["design", "deck", "slide", "flyer", "illustrator", "canva"],
+    "[generalist]": [],  # generalist = no filter, return all (up to cap)
+    "[mgmt]":       ["team", "coach", "manage", "sdr", "direct report", "training"],
+    "[writing]":    ["copy", "writing", "email", "sequence", "campaign", "authored"],
+}
+
+
+def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
+    """
+    Return only claims rows relevant to the bullet's tags, capped at MAX_CLAIMS_ROWS.
+    Falls back to all rows (capped) if no tags match or tags are empty.
+    """
+    if df_claims.empty:
+        return df_claims
+
+    tags_lower = tags.lower() if isinstance(tags, str) else ""
+
+    # Collect all keyword filters for the bullet's tags
+    keywords = []
+    include_all = False
+    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+        if tag in tags_lower:
+            if not kws:  # [generalist] means no filter
+                include_all = True
+                break
+            keywords.extend(kws)
+
+    if include_all or not keywords:
+        return df_claims.head(MAX_CLAIMS_ROWS)
+
+    # Build a mask: row is relevant if ANY keyword appears in ANY text column
+    text_cols = [c for c in df_claims.columns if df_claims[c].dtype == object]
+    pattern = "|".join(re.escape(k) for k in keywords)
+    mask = df_claims[text_cols].apply(
+        lambda col: col.str.contains(pattern, case=False, na=False)
+    ).any(axis=1)
+
+    filtered = df_claims[mask]
+    # Always include at least a few rows even if filter is too aggressive
+    if len(filtered) < 3:
+        filtered = df_claims.head(MAX_CLAIMS_ROWS)
+
+    return filtered.head(MAX_CLAIMS_ROWS)
+
+
+# ---------------------------------------------------------------------------
+# LEVEL 3 — Build tag-keyed background summary
+# ---------------------------------------------------------------------------
+
+def build_background_summary(tags: str) -> str:
+    """
+    Return a compact background context string composed of:
+    - Always: BACKGROUND_IDENTITY (professional identity paragraph)
+    - Conditionally: only the BACKGROUND_TAGS sections whose tag appears in the bullet's tags
+    No interview coaching, why-I-left, full timeline, or retail jobs are ever included.
+    """
+    tags_lower = tags.lower() if isinstance(tags, str) else ""
+    sections = [BACKGROUND_IDENTITY]
+    for tag, content in BACKGROUND_TAGS.items():
+        if tag in tags_lower:
+            sections.append(content)
+    return "\n\n".join(sections)
 
 
 class KnowledgeBase:
@@ -202,36 +408,55 @@ class KnowledgeBase:
 
     def __init__(self):
         print("\n📚 Loading knowledge base context...")
-        self.cv          = load_text_file(KB_CV,         "cv.md")
-        self.background  = load_text_file(KB_BACKGROUND, "morgan-background-guide.md")
+        self.cv_full     = load_text_file(KB_CV,         "cv.md")
+        self.bg_raw      = load_text_file(KB_BACKGROUND, "morgan-background-guide.md")  # kept for reference; not injected raw
         raw_profile      = load_text_file(KB_PROFILE,    "profile.yml")
         self.profile     = trim_profile_yml(raw_profile)
         self.df_claims   = load_verified_claims(KB_VERIFIED_CLAIMS)
         self.screenshot_metrics = load_screenshot_metrics(KB_SCREENSHOT_METRICS)
-        print(f"  📝 profile.yml trimmed to {len(self.profile):,} chars\n")
+        print(f"  📝 profile.yml trimmed to {len(self.profile):,} chars")
+        print(f"  ℹ️  Context slimming active: cv section-only | tag-filtered claims | tag-keyed background\n")
 
-    def context_block_for_bullet(self, role_company: str) -> str:
+    def context_block_for_bullet(self, role_company: str, tags: str) -> str:
         """
-        Build the knowledge base context string for a single bullet.
-        All bullets get cv + background + profile.
-        Treering bullets additionally get verified claims + screenshot metrics.
+        Build a lean, targeted context block for a single bullet.
+
+        Level 1: Only the cv.md section matching this bullet's company.
+        Level 2: Only verified-claims rows relevant to this bullet's tags.
+        Level 3: Only background guide sections relevant to this bullet's tags.
         """
         sections = []
-        if self.cv:
-            sections.append(f"=== CAREER OVERVIEW (cv.md) ===\n{self.cv}")
-        if self.background:
-            sections.append(f"=== BACKGROUND GUIDE ===\n{self.background}")
+
+        # Level 1 — role-specific cv section
+        cv_section = extract_cv_section(self.cv_full, role_company)
+        if cv_section:
+            label = (
+                "ROLE CONTEXT (cv.md excerpt)"
+                if cv_section != self.cv_full
+                else "CAREER OVERVIEW (cv.md)"
+            )
+            sections.append(f"=== {label} ===\n{cv_section}")
+
+        # Level 3 — tag-keyed background summary (replaces full background guide)
+        bg_summary = build_background_summary(tags)
+        if bg_summary:
+            sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
+        # profile.yml — already trimmed at load time, inject as-is
         if self.profile:
             sections.append(
                 f"=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                 f"Use these to understand what roles this bullet needs to appeal to "
                 f"and what to avoid.\n{self.profile}"
             )
+
+        # Treering-only: Level 2 — tag-filtered verified claims + screenshot metrics
         if is_treering_bullet(role_company):
-            claims_text = get_verified_claims_text(self.df_claims)
+            filtered_claims = filter_claims_by_tags(self.df_claims, tags)
+            claims_text = get_verified_claims_text(filtered_claims)
             if claims_text:
                 sections.append(
-                    f"=== VERIFIED CLAIMS & METRICS (Treering — resume-usable) ===\n"
+                    f"=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
                     f"Use these to inject real, verified metrics where appropriate. "
                     f"Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
                     f"{claims_text}"
@@ -240,6 +465,7 @@ class KnowledgeBase:
                 sections.append(
                     f"=== SCREENSHOT-SOURCED METRICS ===\n{self.screenshot_metrics}"
                 )
+
         return "\n\n".join(sections)
 
 
@@ -248,7 +474,6 @@ class KnowledgeBase:
 # ---------------------------------------------------------------------------
 
 def persona_context(tags: str) -> str:
-    """Convert Tags cell into a readable persona hint for the prompt."""
     if not isinstance(tags, str) or not tags.strip():
         return "general marketing roles"
     parts = [TAG_CONTEXT[tag] for tag in TAG_CONTEXT if tag in tags.lower()]
@@ -256,7 +481,6 @@ def persona_context(tags: str) -> str:
 
 
 def _safe_str(v) -> str:
-    """Convert any value to str, treating None/NaN as empty string."""
     if v is None:
         return ""
     if isinstance(v, float) and pd.isna(v):
@@ -265,19 +489,14 @@ def _safe_str(v) -> str:
 
 
 def _safe_numeric(v):
-    """Convert a value to float (or NaN), for writing into float64 columns."""
     return pd.to_numeric(v, errors="coerce")
 
 
 def load_already_processed(output_path: str) -> set:
     """
-    Return a set of already-processed bullet texts by reading the updated
-    cluster map output from a prior run (if it exists).
-
-    A bullet is considered done if its rewrite_status is KEEP or MANUAL.
-    Matches on BOTH the original Bullet Point text AND the final_bullet text
-    to handle cases where the rewritten text differs from the original,
-    preventing re-processing due to text transformation mismatches.
+    Return a set of already-processed bullet texts.
+    Matches on BOTH the original Bullet Point text AND final_bullet text
+    to prevent re-processing due to text transformation mismatches.
     """
     if not os.path.exists(output_path):
         return set()
@@ -286,9 +505,7 @@ def load_already_processed(output_path: str) -> set:
         if "rewrite_status" not in df.columns or "Bullet Point" not in df.columns:
             return set()
         done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
-        # Match on original bullet text
         done_bullets = set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
-        # Also match on final_bullet text (the rewritten version) for safety
         if "final_bullet" in df.columns:
             done_bullets |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
         return done_bullets
@@ -371,7 +588,7 @@ Do NOT use metrics marked Low confidence as hard facts.
 
 
 # ---------------------------------------------------------------------------
-# SCORING PROMPT  (mirrors bullet-bank-audited.py rubric)
+# SCORING PROMPT
 # ---------------------------------------------------------------------------
 
 SCORE_SYSTEM = """
@@ -400,14 +617,13 @@ def build_score_prompt(bullet: str, tags: str) -> str:
 
 
 def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
-    """Score a bullet and return a dict of score fields."""
     if dry_run:
         return {
             "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
             "ats_value": 90, "manager_test": "PASS", "weaknesses": "", "score_notes": "dry-run"
         }
 
-    raw  = client.generate(
+    raw = client.generate(
         model=SCORE_MODEL,
         system_instruction=SCORE_SYSTEM,
         contents=f"--- BULLET ---\n{bullet}\n\n--- TARGET PERSONA ---\n{persona_context(tags)}\n\nScore this bullet. Respond with JSON only.",
@@ -426,7 +642,7 @@ def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# ACTION LOGIC  (mirrors cluster_bullet_bank.py decide_action)
+# ACTION LOGIC
 # ---------------------------------------------------------------------------
 
 def decide_action(scores: dict) -> str:
@@ -453,7 +669,6 @@ def is_keeper(scores: dict) -> bool:
 
 def best_version(original_bullet: str, original_scores: dict,
                  rewritten_bullet: str, rewritten_scores: dict) -> tuple:
-    """Return (bullet_text, scores) for whichever version scores higher overall."""
     def composite(s):
         vals = [pd.to_numeric(s.get(c, 0), errors="coerce") or 0
                 for c in ["accuracy_score", "believability_score", "clarity_score", "ats_value"]]
@@ -521,7 +736,8 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
     role_company    = str(row.get("Role / Company", ""))
     original_scores = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
 
-    kb_context     = kb.context_block_for_bullet(role_company)
+    # Pass tags to context builder so all three levels can filter
+    kb_context     = kb.context_block_for_bullet(role_company, tags)
     current_bullet = original_bullet
     current_scores = original_scores
     last_rewrite   = ""
@@ -531,7 +747,6 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
     for attempt in range(1, MAX_ATTEMPTS + 1):
         print(f"    ✏️  Attempt {attempt}/{MAX_ATTEMPTS}...")
 
-        # --- REWRITE ---
         rw_prompt = build_rewrite_prompt(
             current_bullet, tags,
             str(current_scores.get("weaknesses", weaknesses)),
@@ -566,7 +781,6 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
 
         time.sleep(SLEEP_BETWEEN_BULLETS)
 
-        # --- SCORE ---
         print(f"    📊 Scoring rewrite...")
         new_scores = score_bullet(rewritten, tags, dry_run=dry_run)
         new_action = decide_action(new_scores)
@@ -598,7 +812,6 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
             print(f"    🔄 Not a keeper yet — retrying in {SLEEP_ON_RETRY}s...")
             time.sleep(SLEEP_ON_RETRY)
 
-    # All attempts exhausted — keep best version found
     print(f"    🚩 Max attempts reached — marking MANUAL.")
     final_bullet, final_scores = best_version(
         original_bullet, original_scores,
@@ -627,11 +840,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true",     help="Skip API calls, use dummy responses")
     args = parser.parse_args()
 
-    # ------------------------------------------------------------------
-    # SOURCE OF TRUTH: if an updated map already exists from a prior run,
-    # load that instead of the original — its next_action values reflect
-    # completed work (KEEP/MANUAL), so those bullets won't re-enter the queue.
-    # ------------------------------------------------------------------
+    # Use updated map as source of truth if a prior run exists
     source_map = args.output if os.path.exists(args.output) else args.map
     print(f"\n📥 Loading cluster map: {source_map}")
     if source_map == args.output:
@@ -651,11 +860,7 @@ def main():
         if col not in df_map.columns:
             df_map[col] = ""
 
-    # ------------------------------------------------------------------
-    # RESUME SUPPORT: secondary safety net — skip any bullets whose text
-    # already appears in the output file as KEEP or MANUAL, even if the
-    # source map somehow still has them marked REWRITE/REVIEW.
-    # ------------------------------------------------------------------
+    # Secondary safety net: text-match skip for any stragglers
     already_done = load_already_processed(args.output)
     if already_done:
         print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set — will skip if encountered.")
@@ -669,7 +874,6 @@ def main():
     )
     targets = df_map[mask].copy()
 
-    # Secondary filter: skip any bullets whose text is in the done set
     if already_done:
         before = len(targets)
         targets = targets[~targets["Bullet Point"].str.strip().isin(already_done)]
@@ -695,11 +899,12 @@ def main():
     for i, (idx, row) in enumerate(targets.iterrows(), 1):
         bullet_preview = str(row["Bullet Point"])[:80]
         role_company   = str(row.get("Role / Company", ""))
+        tags           = str(row.get("Tags", ""))
         print(f"\n[{i}/{total}] {bullet_preview}...")
-        print(f"  Company: {role_company}  |  Tags: {row.get('Tags', '')}")
+        print(f"  Company: {role_company}  |  Tags: {tags}")
         print(f"  Action: {row['next_action']}  |  Weaknesses: {str(row.get('weaknesses', ''))[:80]}")
         treering_label = (
-            "🌳 Treering — verified claims injected"
+            "🌳 Treering — verified claims injected (tag-filtered)"
             if is_treering_bullet(role_company)
             else "📄 Non-Treering — career context injected"
         )
@@ -707,7 +912,6 @@ def main():
 
         result = process_bullet(row, kb, dry_run=args.dry_run)
 
-        # String columns: use _safe_str() to handle StringDtype gracefully
         df_map.at[idx, "final_bullet"]      = _safe_str(result["final_bullet"])
         df_map.at[idx, "rewrite_status"]    = _safe_str(result["status"])
         df_map.at[idx, "rewrite_attempts"]  = _safe_str(result["rewrite_attempts"])
@@ -715,11 +919,9 @@ def main():
         df_map.at[idx, "context_gaps"]      = _safe_str(result["context_gaps"])
         df_map.at[idx, "next_action"]        = _safe_str(result["status"])
 
-        # Numeric score columns: write as float so float64 columns accept the value
         for col in NUMERIC_SCORE_COLS:
             df_map.at[idx, col] = _safe_numeric(result["final_scores"].get(col))
 
-        # String score columns: write as str
         for col in STRING_SCORE_COLS:
             df_map.at[idx, col] = _safe_str(result["final_scores"].get(col, ""))
 
@@ -728,7 +930,7 @@ def main():
             keeper_row = {
                 "Bullet Point":      result["final_bullet"],
                 "Role / Company":    row.get("Role / Company", ""),
-                "Tags":              row.get("Tags", ""),
+                "Tags":              tags,
                 "source":            result["source"],
                 "rewrite_attempts":  result["rewrite_attempts"],
                 "rewrite_reasoning": result["rewrite_reasoning"],
