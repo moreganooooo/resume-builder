@@ -110,15 +110,9 @@ class GeminiClient:
         }
         for attempt in range(max_retries):
             resp = requests.post(url, json=body, timeout=self.timeout)
-            if resp.status_code == 429:
-                print("\n===== 429 EMBED RESPONSE BODY =====")
-                try:
-                    print(json.dumps(resp.json(), indent=2))
-                except Exception:
-                    print(resp.text)
-                print("===================================\n")
+            if resp.status_code in (429, 500, 502, 503, 504):
                 wait = 5 * (2 ** attempt)
-                print(f"         ⏳ Embed rate limited. Waiting {wait}s (attempt {attempt+1}/{max_retries})...")
+                print(f"         ⏳ Transient API error {resp.status_code}. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
