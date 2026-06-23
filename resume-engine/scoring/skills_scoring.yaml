@@ -1,4 +1,4 @@
-version: 1.0
+version: 2.0
 
 section: skills
 
@@ -17,24 +17,481 @@ required_rules:
   - skills_must_be_relevant
   - skills_should_be_supported_by_experience
 
+# Each group includes an archetype_relevance field that maps to the identity keys
+# in professional_identity_score.yaml. Skills in a group earn higher relevance
+# scores when the resume's primary_identity matches the group's archetype_relevance.
+
 preferred_groupings:
 
-  crm_sales_operations:
-    - salesforce
-    - outreach
-    - hubspot
-    - pipeline_management
-    - forecasting
+  crm_revenue_operations:
+    archetype_relevance:
+      - crm_revops_associate
+      - sales_enablement
+    skills:
+      - Salesforce
+      - Salesforce Lightning
+      - Salesforce Dashboards
+      - Salesforce Marketing Cloud
+      - Outreach
+      - Outreach.io
+      - HubSpot
+      - CRM Management
+      - CRM Strategy
+      - CRM Data Hygiene
+      - CRM Data Analysis
+      - CRM Integration
+      - CRM Workflows
+      - CRM Reporting
+      - CRM Hygiene
+      - Pipeline Management
+      - Pipeline Management & Forecasting
+      - Pipeline Acceleration
+      - Pipeline Coverage
+      - Pipeline Forecasting Tools
+      - Revenue Operations
+      - Marketing Operations
+      - Lead Scoring
+      - Lead Management & Routing
+      - Lead Lifecycle Stages
+      - Data Hygiene
+      - Data Governance & Hygiene
+      - Data Loader Operations
+      - Duplicate Cleanup
+      - Workflow Configuration & Automation
+      - Workflow Optimization
+      - SOQL Logic
+      - Custom Field Mappings
+      - Sequence Management
+      - Sequence Governance
+      - Forecast Hygiene
 
-  marketing_technology:
-    - mailchimp
-    - google_analytics
-    - campaign_automation
+  email_marketing_execution:
+    archetype_relevance:
+      - lifecycle_marketing
+      - email_marketing
+      - crm_revops_associate
+    skills:
+      - Email Marketing
+      - Email Campaigns
+      - Email Automation
+      - Email Deliverability
+      - Deliverability Optimization
+      - Email Template Design
+      - Email & SMS Template Design
+      - Email Design & Structure
+      - Email Analytics
+      - Email Performance Audits
+      - Email Performance Dashboards
+      - Email Calendar Management
+      - Email Calendar Planning
+      - Email Journeys
+      - Email & CRM Automation
+      - Email & SMS Campaigns
+      - Technical Email Template Development
+      - Mobile-Responsive Design
+      - Dark Mode Testing
+      - Cross-Device Testing
+      - Cross-Device Optimization
+      - Send Time Optimization
+      - Subject Line Testing
+      - Subject Line Ideation
+      - Open/Click/Conversion Tracking
+      - Open/Click/Conversion Analysis
+      - CAN-SPAM/GDPR Compliance
+      - List Hygiene
+      - List Management
+      - Drip Campaigns
+      - Drip Sequences
+      - Welcome Series
+      - Welcome/Win-Back Series
+      - Onboarding Series
+      - Re-Engagement Campaigns
+      - Win-Back Campaigns
 
-  creative_tools:
-    - adobe_creative_suite
-    - canva
-    - figma
+  marketing_automation_platforms:
+    archetype_relevance:
+      - lifecycle_marketing
+      - email_marketing
+      - crm_revops_associate
+    skills:
+      - Marketing Automation
+      - Marketing Automation Platforms
+      - Marketing Automation Workflows
+      - HubSpot
+      - Mailchimp
+      - Klaviyo
+      - Iterable
+      - ActiveCampaign
+      - Eloqua
+      - Salesforce Marketing Cloud
+      - Customer.io
+      - Stensul
+      - Moveable Ink
+      - Enterprise ESPs
+      - Enterprise ESP Platforms
+      - SMS/Push Notification Platforms
+      - Behavioral Triggers
+      - Behavioral Trigger Setup
+      - Automated Workflow Configuration
+      - Automated Workflows
+      - Logic-Based Flows
+      - Conditional Logic Frameworks
+      - Dynamic Content
+      - Dynamic Content Personalization
+      - Dynamic Personalization
+      - Trigger-Based Campaigns
+      - Webhook Implementation
+      - API Integrations
+      - Cross-Platform CRM Automation
+      - UTM Tracking
+
+  lifecycle_and_retention:
+    archetype_relevance:
+      - lifecycle_marketing
+      - email_marketing
+    skills:
+      - Lifecycle Marketing
+      - Lifecycle Strategy
+      - Lifecycle Campaigns
+      - Lifecycle Automation
+      - Lifecycle Journeys
+      - Lifecycle Flows
+      - Lifecycle Mapping
+      - Lifecycle Campaign Orchestration
+      - Lifecycle Communications
+      - Lifecycle Communications Strategy
+      - Lifecycle Conversion Optimization
+      - Lifecycle & CRM Strategy
+      - Customer Journey Mapping
+      - Journey Mapping
+      - Journey Design
+      - Retention Strategy
+      - Retention & Loyalty Programs
+      - Retention & Winback Strategies
+      - Churn Prevention
+      - Churn Reduction
+      - Reactivation Campaigns
+      - Re-Engagement Strategies
+      - Loyalty & Retention Campaigns
+      - Customer Segmentation
+      - Audience Segmentation
+      - Segmentation Strategy
+      - Segmentation/Personalization
+      - Personalization At Scale
+      - Personalization Strategy
+      - Cohort Analysis
+      - Cohort Reporting
+      - Engagement Scoring
+      - Incremental LTV Growth
+
+  sales_enablement:
+    archetype_relevance:
+      - sales_enablement
+      - customer_onboarding_implementation
+    skills:
+      - Sales Enablement
+      - Sales Enablement Content
+      - Sales Enablement Tools
+      - Sales Enablement Platforms
+      - Sales Playbooks
+      - Playbooks
+      - Battlecard Creation
+      - Talk Tracks
+      - Objection Handling
+      - Objection Libraries
+      - Sales Training & Onboarding
+      - Training Materials
+      - Onboarding Materials
+      - Training & QA
+      - Enablement Materials
+      - Enablement Training
+      - Ramp Acceleration
+      - Sales Process Development
+      - Sales & Marketing Alignment
+      - Sales-Marketing Alignment
+      - Cadence Architecture
+      - Cadences
+      - Messaging Playbooks
+      - Asset Libraries
+      - Gong
+      - Highspot
+      - Seismic
+      - Chorus.ai
+      - LeanData
+      - Call Coaching
+      - AE Handoffs
+      - AE Collaboration Routines
+      - Discovery Call Setup
+      - Discovery Preparation
+      - Platform Adoption
+      - Platform Training & Adoption
+
+  content_copywriting:
+    archetype_relevance:
+      - b2b_content_strategist
+      - lifecycle_marketing
+    skills:
+      - Copywriting
+      - Content Strategy
+      - Campaign Copywriting
+      - SEO Copywriting
+      - UX Writing
+      - Creative Writing
+      - Script Writing
+      - Value Proposition Copy
+      - Conversion Copy
+      - Brand Voice
+      - Brand Voice & Messaging
+      - Brand Voice Development
+      - Brand Messaging
+      - Brand Consistency
+      - Storytelling
+      - Storytelling Frameworks
+      - Messaging
+      - Strategic Messaging
+      - Message Hierarchy
+      - Campaign Messaging
+      - Editorial Strategy
+      - Editorial Calendars
+      - Editorial Judgment
+      - Editorial QA
+      - Content Marketing Strategy
+      - Content Management
+      - Content Auditing
+      - Case Studies
+      - Case Studies & Whitepapers
+      - White Papers
+      - Newsletters
+      - Thought Leadership
+      - Press Releases
+      - Product Descriptions
+      - Landing Pages
+      - Web & Landing Page Content
+      - Persona Development
+      - Persona Messaging
+      - Persona Targeting
+      - DEI & Inclusive Messaging
+      - AP Style
+      - Copy Editing & Proofreading
+      - Editing & Proofreading
+
+  analytics_and_reporting:
+    archetype_relevance:
+      - crm_revops_associate
+      - sales_enablement
+      - lifecycle_marketing
+    skills:
+      - Analytics
+      - Analytics & Reporting
+      - Data Analysis
+      - Data Visualization
+      - Reporting
+      - Reporting & Dashboards
+      - KPI Reporting
+      - KPI Dashboards
+      - Campaign Reporting
+      - Campaign Analytics
+      - Campaign ROI Analysis
+      - Performance Dashboards
+      - Dashboard Creation & Interpretation
+      - Funnel Analysis
+      - Funnel Reporting
+      - Sales Reporting & Dashboards
+      - Stage Conversion Dashboards
+      - Executive Reporting
+      - Executive Summaries
+      - Google Analytics
+      - Tableau
+      - SQL
+      - Python
+      - SOQL Logic
+      - Pivot Tables
+      - Google Sheets
+      - Microsoft Excel
+      - Statistical Analysis
+      - A/B Testing
+      - A/B & Multivariate Testing
+      - Multivariate Testing
+      - Test & Learn Strategy
+      - ROI Analysis
+      - Win/Loss Analysis
+      - Competitive Analysis
+      - Market Research
+
+  project_collaboration_tools:
+    archetype_relevance:
+      - crm_revops_associate
+      - sales_enablement
+      - b2b_content_strategist
+    skills:
+      - Asana
+      - Trello
+      - Notion
+      - Airtable
+      - Slack
+      - Zoom
+      - Loom
+      - Google Workspace
+      - Google Calendar
+      - Microsoft Office Suite
+      - Microsoft Word
+      - Microsoft PowerPoint
+      - Keynote
+      - Google Slides
+      - Project Management
+      - Agile Project Management
+      - Agile Workflows
+      - Sprint Planning
+      - Process Documentation
+      - Process Optimization
+      - Campaign Documentation
+      - Internal Documentation
+      - QA Processes
+      - QA Systems
+      - QA Process Development
+      - Campaign QA
+      - Cross-Functional Collaboration
+      - Stakeholder Management
+      - Change Management
+
+  creative_and_design_tools:
+    archetype_relevance:
+      - b2b_content_strategist
+      - lifecycle_marketing
+    skills:
+      - Adobe Creative Suite
+      - Adobe Illustrator
+      - Adobe InDesign
+      - Adobe Photoshop
+      - Adobe Premiere Pro
+      - Canva
+      - Figma
+      - Graphic Design
+      - Visual Design
+      - Visual Storytelling
+      - Visual Communication
+      - Presentation Design
+      - Presentation Deck Creation
+      - Executive Decks
+      - Pitch Deck Design
+      - Slide Deck Design
+      - Brand Development & Visual Identity
+      - Layout Design
+      - Typography
+      - Photo Editing
+      - Video Editing
+      - Video Production
+      - Webflow
+      - WordPress
+      - Wix
+      - CMS Platforms
+      - CMS/WYSIWYG Editing
+      - HTML/CSS Editing
+      - HTML Editing
+
+  ai_and_emerging_tech:
+    archetype_relevance:
+      - crm_revops_associate
+      - b2b_content_strategist
+      - sales_enablement
+    skills:
+      - ChatGPT
+      - Claude
+      - Google Gemini
+      - Jasper AI
+      - Generative AI
+      - Prompt Engineering
+      - Prompt Writing
+      - System Prompting
+      - AI Dataset Experience
+      - Personalization Tools
+      - Personalized Video
+      - Vidyard
+      - Intent Data Platforms
+      - Intent Signals
+      - Lead Scoring Platforms
+      - MarTech Integrations
+      - RevOps Stack Integrations
+      - API Troubleshooting And Configuration
+      - Integration Troubleshooting
+      - Webhook Implementation
+      - ETL Processes
+
+  sales_prospecting_and_outbound:
+    archetype_relevance:
+      - sales_enablement
+      - crm_revops_associate
+    skills:
+      - Outbound Prospecting
+      - Cold Email
+      - Cold Email Campaigns
+      - Cold Calling
+      - LinkedIn Sales Navigator
+      - ZoomInfo
+      - PersistIQ
+      - ToutApp
+      - List Building
+      - Lead Generation
+      - Lead Qualification
+      - Lead Nurture Flows
+      - Lead Pipeline Tracking
+      - Account-Based Marketing
+      - ABM
+      - ABM Display
+      - ICP Definition
+      - Ideal Customer Profile
+      - Buyer Committee Mapping
+      - Multi-Threading
+      - Consultative Selling
+      - Discovery & Demos
+      - Objection Handling
+      - Social Selling
+      - High-Volume Outbound
+      - Pipeline & Lead Generation
+      - Book-To-Show/Show-To-SQL Tracking
+
+  campaign_strategy_and_planning:
+    archetype_relevance:
+      - lifecycle_marketing
+      - b2b_content_strategist
+      - crm_revops_associate
+    skills:
+      - Campaign Strategy
+      - Campaign Management
+      - Campaign Execution
+      - Campaign Optimization
+      - Campaign Coordination
+      - Campaign Calendars
+      - Campaign Calendar Planning
+      - Campaign Briefs
+      - Creative Brief Development
+      - Full-Funnel Strategy
+      - Full-Funnel Campaigns
+      - Integrated Campaigns
+      - Cross-Channel Marketing
+      - Cross-Channel Campaigns
+      - Multichannel Campaigns
+      - Omnichannel Engagement
+      - Demand Generation
+      - Go-To-Market Strategy
+      - Go-To-Market Campaigns
+      - GTM Strategy
+      - Field Marketing
+      - Field Marketing Programs
+      - Webinars
+      - Webinar Ops
+      - Partner Marketing
+      - Growth Marketing
+      - Paid Media Strategy
+      - Facebook Ads
+      - Google Ads
+      - LinkedIn Ads
+      - Meta Ads
+      - SEO Strategy
+      - SEO Best Practices
+      - Conversion Optimization
+      - Funnel Strategy
+      - Funnel Optimization
 
 penalties:
 
@@ -49,6 +506,7 @@ excellent_characteristics:
   - role_relevant
   - easy_to_scan
   - evidence_backed
+  - archetype_aligned
 
 flags:
 
@@ -56,3 +514,4 @@ flags:
   unsupported_skills
   excessive_keywords
   poor_organization
+  archetype_mismatch
