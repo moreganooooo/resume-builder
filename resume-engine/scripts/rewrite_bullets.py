@@ -13,6 +13,8 @@ Pipeline per bullet:
      Else pick best version (original vs rewrite) and loop with updated notes
   5. Max 3 attempts per bullet. On failure → status=MANUAL
   6. KEEP bullets already in the cluster map are seeded into the keeper CSV at startup
+  7. On restart, bullets whose original text already appears in a prior output run
+     are skipped automatically (resumable runs).
 
 Knowledge base context injected at startup:
   - cv.md                        → full career narrative (all bullets)
@@ -85,6 +87,9 @@ SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
 # Score columns that are numeric (float64 in the CSV) vs string
 NUMERIC_SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score", "ats_value"]
 STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
+
+# Statuses that mean a bullet was fully processed in a prior run
+DONE_STATUSES = {"KEEP", "MANUAL"}
 
 # Keyword patterns that indicate a Treering bullet (case-insensitive)
 TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
@@ -251,10 +256,7 @@ def persona_context(tags: str) -> str:
 
 
 def _safe_str(v) -> str:
-    """Convert any value to str, treating None/NaN as empty string.
-    Used when writing into df_map string columns that pandas may have inferred
-    as StringDtype (which rejects bare ints/floats).
-    """
+    """Convert any value to str, treating None/NaN as empty string."""
     if v is None:
         return ""
     if isinstance(v, float) and pd.isna(v):
@@ -264,8 +266,29 @@ def _safe_str(v) -> str:
 
 def _safe_numeric(v):
     """Convert a value to float (or NaN), for writing into float64 columns."""
-    result = pd.to_numeric(v, errors="coerce")
-    return result
+    return pd.to_numeric(v, errors="coerce")
+
+
+def load_already_processed(output_path: str) -> set:
+    """
+    Return a set of already-processed bullet texts by reading the updated
+    cluster map output from a prior run (if it exists).
+
+    A bullet is considered done if its rewrite_status is KEEP or MANUAL,
+    meaning it completed the full pipeline in a previous run.
+    """
+    if not os.path.exists(output_path):
+        return set()
+    try:
+        df = pd.read_csv(output_path)
+        if "rewrite_status" not in df.columns or "Bullet Point" not in df.columns:
+            return set()
+        done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
+        done_bullets = set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
+        return done_bullets
+    except Exception as e:
+        print(f"  ⚠️  Could not read prior output for resume check: {e}")
+        return set()
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +637,13 @@ def main():
         if col not in df_map.columns:
             df_map[col] = ""
 
+    # ------------------------------------------------------------------
+    # RESUME SUPPORT: find bullets already fully processed in a prior run
+    # ------------------------------------------------------------------
+    already_done = load_already_processed(args.output)
+    if already_done:
+        print(f"  ⏭️  Resume mode: {len(already_done)} bullets already processed — will skip.")
+
     kb         = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
 
@@ -622,6 +652,15 @@ def main():
         df_map["next_action"].isin(["REWRITE", "REVIEW"])
     )
     targets = df_map[mask].copy()
+
+    # Filter out already-processed bullets
+    if already_done:
+        before = len(targets)
+        targets = targets[~targets["Bullet Point"].str.strip().isin(already_done)]
+        skipped = before - len(targets)
+        if skipped:
+            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s).")
+
     if args.limit:
         targets = targets.head(args.limit)
 
@@ -629,6 +668,10 @@ def main():
     print(f"\n🎯 Bullets to process: {total}")
     if args.dry_run:
         print("  🧪 DRY RUN — no real API calls will be made.")
+
+    if total == 0:
+        print("  ✨ Nothing left to process — all bullets are already done!")
+        return
 
     kept = 0
     manual = 0
