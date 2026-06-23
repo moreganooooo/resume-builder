@@ -11,7 +11,8 @@ config.local.*
 *audit*.csv
 *audit*.json
 *_log.csv
-bullet-bank-cluster-map-updated.csv
+**/bullet-bank-cluster-map-updated.csv
+**/bullet-bank-audited.csv
 *_log.json
 output/
 outputs/
@@ -50,4 +51,3 @@ yarn-error.log*
 # === OS ===
 .DS_Store
 **/.DS_Store
-**/bullet-bank-audited.csv
