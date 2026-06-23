@@ -595,11 +595,11 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
         )
         if dry_run:
             rw_data = {"rewritten_bullet": f"[DRY RUN] {current_bullet}", "reasoning": "dry-run", "context_gaps": ""}
-            else:
-                try:
-                    raw = client.generate(model=REWRITE_MODEL, system_instruction=REWRITE_SYSTEM, contents=rw_prompt, temperature=0.1)
-                    rw_data = GeminiClient.parse_json(raw)
-                except Exception as e:
+        else:
+            try:
+                raw = client.generate(...)
+                rw_data = GeminiClient.parse_json(raw)
+            except Exception as e:
                     print(f"    ⚠️  API error on attempt {attempt}: {e}")
                     if attempt < MAX_ATTEMPTS:
                         print(f"    🔄 Retrying in {SLEEP_ON_RETRY}s...")
@@ -617,13 +617,20 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
                             "source": "manual_review",
                         }
             rewritten = rw_data.get("rewritten_bullet", "").strip()
-            ...
+            last_reasoning = rw_data.get("reasoning", "")
+            last_gaps = rw_data.get("context_gaps", "")
+            if not rewritten:
+                print(f"    ⚠️  Empty rewrite on attempt {attempt} — retrying in {SLEEP_ON_RETRY}s...")
+                time.sleep(SLEEP_ON_RETRY)
+                continue
+            time.sleep(SLEEP_BETWEEN_BULLETS)
+            print(f"    📊 Scoring rewrite...")
             try:
                 new_scores = score_bullet(rewritten, tags, dry_run=dry_run)
             except Exception as e:
                 print(f"    ⚠️  Scoring API error on attempt {attempt}: {e} — using previous scores.")
                 new_scores = current_scores
-        new_action = decide_action(new_scores)
+            new_action = decide_action(new_scores)
         print(f"       acc={new_scores.get('accuracy_score')} bel={new_scores.get('believability_score')} mgr={new_scores.get('manager_test')} → {new_action}")
         last_rewrite = rewritten
         if is_keeper(new_scores):
