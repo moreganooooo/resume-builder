@@ -1,4 +1,4 @@
-version: 2.0
+version: 2.1
 
 # Morgan Escott Resume Design System — Style Rules
 # Source: Morgan-Escott-Complete-Resume-Design-System.md
@@ -52,11 +52,113 @@ verb_rules:
   - Open every bullet with a strong specific past-tense action verb
   - Present tense only for actively held roles
   - Each opening verb must be UNIQUE across the entire CV; no verb may open more than one bullet
+  - A strong verb is self-sufficient — it does not need an adverb or adjective to complete its meaning
+  - If you find yourself writing "developed effectively" or "managed successfully", the verb is weak; replace it with one precise verb
+  - Never flag a weak verb without also providing the replacement; the rewrite must fix it, not just note it
   - Recommended verbs: Architected, Authored, Launched, Recovered, Systematized, Audited, Spearheaded,
       Negotiated, Synthesized, Produced, Streamlined, Championed, Deployed, Developed, Expanded,
       Coordinated, Mentored, Built, Implemented, Founded, Delivered, Drove, Engineered, Established,
       Executed, Generated, Identified, Led, Managed, Orchestrated, Overhauled, Piloted, Redesigned,
       Reduced, Secured, Trained, Unified
+
+# Vague verbs — these trigger a weak-verb flag during critique scoring.
+# When one of these opens a bullet, the rewrite model MUST replace it using
+# the verb_upgrades table below. Do not leave the vague verb in place.
+vague_verbs:
+  - developed      # too broad; does not signal whether built/designed/launched/wrote
+  - worked on      # task language, not ownership language
+  - handled        # passive; implies assignment not initiative
+  - helped         # supporting role framing; loses credit
+  - assisted       # same as helped
+  - supported      # same pattern; dilutes ownership
+  - did            # non-specific; always replaceable
+  - made           # vague noun-hiding verb ("made a plan" → "planned")
+  - got            # vague acquisition verb
+  - created        # overused and hollow without context; upgrade to the specific creative act
+  - utilized       # bureaucratic; replace with the direct verb ("used" is fine; specific is better)
+  - leveraged      # consultant-speak; replace with the actual action
+  - facilitated    # weakens ownership; use "led", "ran", "taught", "moderated"
+  - was responsible for   # forbidden opener (see forbidden_openers)
+  - oversaw        # management-speak; use "directed", "supervised", "led"
+  - participated in       # spectator framing; always replaceable
+  - contributed to        # credit-sharing framing; find what she specifically owned
+  - involved in           # passive; rewrite to show active ownership
+
+# Verb upgrade swap table — domain-organized replacements for vague verbs.
+# Format: vague opening → stronger alternatives relevant to Morgan's work.
+# Rule: pick the upgrade that most precisely names the actual action performed.
+# When in doubt, use the noun in the sentence as a clue ("made a plan" → "planned").
+verb_upgrades:
+
+  data_and_ops:
+    description: "CRM hygiene, reporting, systems administration, process ops"
+    upgrades:
+      - weak: "developed [a process/system/workflow]"
+        strong: [Engineered, Architected, Systematized, Standardized, Overhauled, Built]
+      - weak: "managed [accounts/records/data]"
+        strong: [Administered, Audited, Migrated, Reconciled, Maintained, Governed]
+      - weak: "worked on [Salesforce/CRM/reporting]"
+        strong: [Administered, Configured, Implemented, Owned, Deployed]
+      - weak: "created [reports/dashboards]"
+        strong: [Built, Designed, Engineered, Produced, Automated]
+      - weak: "handled [data/records/tickets]"
+        strong: [Audited, Reconciled, Triaged, Processed, Resolved]
+
+  content_and_comms:
+    description: "Writing, email, newsletters, campaigns, copy, social"
+    upgrades:
+      - weak: "developed [content/copy/campaign]"
+        strong: [Authored, Produced, Drafted, Crafted, Launched, Wrote]
+      - weak: "created [content/assets/materials]"
+        strong: [Produced, Authored, Designed, Built, Packaged]
+      - weak: "worked on [campaigns/emails/copy]"
+        strong: [Executed, Launched, Managed, Ran, Owned]
+      - weak: "managed [email/social/newsletter]"
+        strong: [Owned, Ran, Orchestrated, Directed, Launched]
+      - weak: "helped [with messaging/copy/communications]"
+        strong: [Wrote, Authored, Edited, Shaped, Drafted]
+
+  training_and_enablement:
+    description: "Onboarding, training docs, facilitation, coaching, LMS"
+    upgrades:
+      - weak: "developed [training/curriculum/materials]"
+        strong: [Designed, Built, Authored, Produced, Systematized]
+      - weak: "facilitated [training/workshops/sessions]"
+        strong: [Led, Taught, Ran, Delivered, Coached]
+      - weak: "helped [train/onboard/coach]"
+        strong: [Trained, Onboarded, Coached, Mentored, Guided]
+      - weak: "created [onboarding docs/playbooks/guides]"
+        strong: [Built, Authored, Designed, Produced, Standardized]
+      - weak: "worked on [enablement/training programs]"
+        strong: [Designed, Built, Ran, Owned, Launched]
+
+  project_delivery:
+    description: "Coordinating, executing, launching, delivering projects"
+    upgrades:
+      - weak: "managed [a project/initiative/rollout]"
+        strong: [Led, Directed, Orchestrated, Spearheaded, Executed, Delivered]
+      - weak: "worked on [a project/launch/initiative]"
+        strong: [Executed, Delivered, Led, Piloted, Drove]
+      - weak: "helped [launch/roll out/coordinate]"
+        strong: [Launched, Coordinated, Executed, Delivered, Supported → (reframe to specific ownership)]
+      - weak: "oversaw [a project/team/process]"
+        strong: [Directed, Led, Supervised, Managed, Owned]
+      - weak: "participated in [a project/committee/initiative]"
+        strong: [(find what she specifically owned or contributed → name that thing directly)]
+
+  systems_and_tech:
+    description: "Tool implementation, integrations, admin, automation"
+    upgrades:
+      - weak: "developed [a tool/integration/system]"
+        strong: [Engineered, Architected, Built, Implemented, Deployed, Configured]
+      - weak: "utilized [Salesforce/Outreach/HubSpot/tools]"
+        strong: [Administered, Configured, Deployed, Implemented, Operated]
+      - weak: "leveraged [technology/tools/data]"
+        strong: [(replace with the specific action: Queried, Automated, Configured, Extracted, Analyzed)]
+      - weak: "created [automations/workflows/sequences]"
+        strong: [Built, Engineered, Designed, Automated, Deployed]
+      - weak: "worked on [implementation/integration/setup]"
+        strong: [Implemented, Configured, Deployed, Integrated, Launched]
 
 forbidden_openers:
   - responsible for
