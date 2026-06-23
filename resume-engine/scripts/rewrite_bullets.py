@@ -246,6 +246,18 @@ def persona_context(tags: str) -> str:
     return ", ".join(parts) if parts else "general marketing roles"
 
 
+def _safe_str(v) -> str:
+    """Convert any value to str, treating None/NaN as empty string.
+    Used when writing into df_map columns that pandas may have inferred
+    as StringDtype (which rejects bare ints/floats).
+    """
+    if v is None:
+        return ""
+    if isinstance(v, float) and pd.isna(v):
+        return ""
+    return str(v)
+
+
 # ---------------------------------------------------------------------------
 # REWRITE PROMPT
 # ---------------------------------------------------------------------------
@@ -588,18 +600,9 @@ def main():
     df_map["next_action"]       = df_map["next_action"].fillna("").str.strip().str.upper()
     df_map["manager_test"]      = df_map["manager_test"].fillna("").str.strip().str.upper()
 
-    # Initialise output columns with object dtype so pandas accepts both str and int
-    # values without raising a StringDtype conflict on assignment.
     for col in ["final_bullet", "rewrite_status", "rewrite_attempts", "rewrite_reasoning", "context_gaps"]:
         if col not in df_map.columns:
-            df_map[col] = pd.array([""] * len(df_map), dtype=object)
-        else:
-            df_map[col] = df_map[col].astype(object)
-
-    # Also cast score columns that may have been inferred as StringDtype → object
-    for col in SCORE_COLS + ["weaknesses"]:
-        if col in df_map.columns:
-            df_map[col] = df_map[col].astype(object)
+            df_map[col] = ""
 
     kb         = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
@@ -635,15 +638,17 @@ def main():
 
         result = process_bullet(row, kb, dry_run=args.dry_run)
 
-        df_map.at[idx, "final_bullet"]      = result["final_bullet"]
-        df_map.at[idx, "rewrite_status"]    = result["status"]
-        df_map.at[idx, "rewrite_attempts"]  = result["rewrite_attempts"]
-        df_map.at[idx, "rewrite_reasoning"] = result["rewrite_reasoning"]
-        df_map.at[idx, "context_gaps"]      = result["context_gaps"]
-        df_map.at[idx, "next_action"]        = result["status"]
+        # Use _safe_str() for every assignment to guarantee the value is a str,
+        # regardless of what dtype pandas inferred for that column from the CSV.
+        df_map.at[idx, "final_bullet"]      = _safe_str(result["final_bullet"])
+        df_map.at[idx, "rewrite_status"]    = _safe_str(result["status"])
+        df_map.at[idx, "rewrite_attempts"]  = _safe_str(result["rewrite_attempts"])
+        df_map.at[idx, "rewrite_reasoning"] = _safe_str(result["rewrite_reasoning"])
+        df_map.at[idx, "context_gaps"]      = _safe_str(result["context_gaps"])
+        df_map.at[idx, "next_action"]        = _safe_str(result["status"])
 
         for col in SCORE_COLS + ["weaknesses"]:
-            df_map.at[idx, col] = result["final_scores"].get(col, "")
+            df_map.at[idx, col] = _safe_str(result["final_scores"].get(col, ""))
 
         if result["status"] == "KEEP":
             kept += 1
