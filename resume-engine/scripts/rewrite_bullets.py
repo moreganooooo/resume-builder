@@ -23,6 +23,16 @@ Knowledge base context injected at startup:
   - verified-claims.csv          → tag-filtered rows (Treering bullets only, max 15 rows)
   - extracted-screenshot-metrics.csv → screenshot-sourced metrics (Treering bullets only)
 
+Rules loaded at startup (resume-engine/rules/):
+  - language_quality.yaml    → weak verbs, buzzwords, AI patterns, verb scoring
+  - verb_taxonomy.yaml       → verb library by role category + priority tiers
+  - verb_intent_mapping.yaml → maps accomplishment intent → correct verb family
+  - hard_failures.yaml       → 7 critical fail conditions (HF001–HF007)
+  - truthfulness_rules.yaml  → 4 truthfulness tests (metric, ownership, leadership, software)
+  - style_rules.yaml         → style guidance
+  - ats_rules.yaml           → ATS keyword weights and section placement rules
+  - formatting_rules.yaml    → date format and forbidden layout elements
+
 Usage:
   python rewrite_bullets.py                  # process all REWRITE + REVIEW reps
   python rewrite_bullets.py --limit 20       # cap for testing
@@ -41,10 +51,12 @@ import time
 from datetime import datetime
 
 import pandas as pd
+import yaml
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 
 TOP_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 if TOP_SCRIPTS_DIR not in sys.path:
@@ -199,6 +211,121 @@ CLAIM_TAG_KEYWORDS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# RULES LOADER
+# ---------------------------------------------------------------------------
+
+def _load_yaml_safe(path: str, label: str) -> dict:
+    """Load a YAML rules file. Returns empty dict on any error."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        print(f"  ✅ Rules loaded: {label}")
+        return data
+    except Exception as e:
+        print(f"  ⚠️  Could not load rules {label}: {e}")
+        return {}
+
+
+def _yaml_to_str(data: dict) -> str:
+    """Serialise a rules dict back to compact YAML string for prompt injection."""
+    try:
+        return yaml.dump(data, default_flow_style=False, allow_unicode=True).strip()
+    except Exception:
+        return str(data)
+
+
+class RulesBundle:
+    """
+    Loads all YAML rule files from resume-engine/rules/ once at startup.
+    Exposes pre-formatted strings ready for injection into system prompts.
+    """
+
+    def __init__(self, rules_dir: str):
+        print("\n📋 Loading rules bundle...")
+
+        lq  = _load_yaml_safe(os.path.join(rules_dir, "language_quality.yaml"),    "language_quality")
+        vt  = _load_yaml_safe(os.path.join(rules_dir, "verb_taxonomy.yaml"),        "verb_taxonomy")
+        vim = _load_yaml_safe(os.path.join(rules_dir, "verb_intent_mapping.yaml"),  "verb_intent_mapping")
+        hf  = _load_yaml_safe(os.path.join(rules_dir, "hard_failures.yaml"),        "hard_failures")
+        tr  = _load_yaml_safe(os.path.join(rules_dir, "truthfulness_rules.yaml"),   "truthfulness_rules")
+        sr  = _load_yaml_safe(os.path.join(rules_dir, "style_rules.yaml"),          "style_rules")
+        ats = _load_yaml_safe(os.path.join(rules_dir, "ats_rules.yaml"),            "ats_rules")
+        fmt = _load_yaml_safe(os.path.join(rules_dir, "formatting_rules.yaml"),     "formatting_rules")
+
+        # --- Rewrite system prompt block ---
+        # Injected into REWRITE_SYSTEM so the model has full verb + language
+        # guidance before writing a single word.
+        self.rewrite_rules_block = "\n".join([
+            "=== VERB INTENT MAP ===",
+            "Before choosing a verb, identify the accomplishment intent (creation, implementation,",
+            "optimization, automation, analysis, revenue_generation, training, leadership, etc.)",
+            "and select from the matching preferred_verbs list below.",
+            _yaml_to_str(vim),
+            "",
+            "=== VERB TAXONOMY (priority tiers) ===",
+            "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+            _yaml_to_str({"priority_tiers": vt.get("priority_tiers", {}), "avoid": vt.get("avoid", [])}),
+            "",
+            "=== LANGUAGE QUALITY RULES ===",
+            "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
+            "Verb scoring: elite=100, strong=85, acceptable=70, weak=40, generic=20.",
+            _yaml_to_str({
+                "weak_verbs":          lq.get("weak_verbs", {}),
+                "buzzwords":           lq.get("buzzwords", {}),
+                "ai_language_patterns": lq.get("ai_language_patterns", {}),
+                "specificity_checks":  lq.get("specificity_checks", {}),
+                "final_principle":     lq.get("final_principle", ""),
+            }),
+            "",
+            "=== HARD FAILURE CONDITIONS ===",
+            "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
+            _yaml_to_str(hf),
+            "",
+            "=== TRUTHFULNESS RULES ===",
+            "Apply these four tests before finalising any bullet:",
+            _yaml_to_str(tr),
+            "",
+            "=== STYLE RULES ===",
+            _yaml_to_str(sr),
+        ])
+
+        # --- Score system prompt block ---
+        # Injected into SCORE_SYSTEM so the scorer uses the same criteria as the writer.
+        self.score_rules_block = "\n".join([
+            "=== SCORING CRITERIA ===",
+            "",
+            "HARD FAILURES (any of these → automatic believability_score <= 50 AND manager_test=FAIL):",
+            _yaml_to_str(hf),
+            "",
+            "VERB SCORING:",
+            _yaml_to_str(lq.get("verb_scoring", {})),
+            "",
+            "LANGUAGE QUALITY — penalise these:",
+            _yaml_to_str({
+                "weak_verbs":           lq.get("weak_verbs", {}),
+                "buzzwords":            lq.get("buzzwords", {}),
+                "ai_language_patterns": lq.get("ai_language_patterns", {}),
+            }),
+            "",
+            "TRUTHFULNESS TESTS — fail any bullet that does not pass all four:",
+            _yaml_to_str(tr),
+            "",
+            "ATS VALUE — use these weights when scoring ats_value:",
+            _yaml_to_str(ats),
+            "",
+            "MANAGER TEST:",
+            _yaml_to_str(lq.get("manager_test", {})),
+        ])
+
+        print(f"  📐 Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
+        print(f"  📊 Score rules block:   {len(self.score_rules_block):,} chars\n")
+
+
+# ---------------------------------------------------------------------------
+# FILE LOADERS
+# ---------------------------------------------------------------------------
+
 def load_text_file(path: str, label: str) -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -306,6 +433,14 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
     return filtered.head(MAX_CLAIMS_ROWS)
 
 
+def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
+    if df_claims.empty:
+        return ""
+    cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
+    available = [c for c in cols if c in df_claims.columns]
+    return df_claims[available].to_csv(index=False)
+
+
 def build_background_summary(tags: str) -> str:
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     sections = [BACKGROUND_IDENTITY]
@@ -393,22 +528,7 @@ def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_already_processed(output_path: str, keepers_path: str) -> set:
-    """
-    Build the set of bullet texts that are already done so they are skipped on resume.
-
-    Sources:
-      1. Cluster map output (bullet-bank-cluster-map-updated.csv) — rows whose
-         rewrite_status is KEEP or MANUAL from a previous run of this script.
-      2. Keepers CSV (bullet-bank-keepers.csv) — ALL rows, both the original seed
-         bullets and any bullets written by prior runs. This is the authoritative
-         source of truth for "this bullet is done and polished."
-
-    Both the original "Bullet Point" text AND the "final_bullet" rewrite are added
-    so a bullet is skipped regardless of which text variant appears in the cluster map.
-    """
     done = set()
-
-    # --- Source 1: cluster map output ---
     if os.path.exists(output_path):
         try:
             df = pd.read_csv(output_path)
@@ -419,24 +539,24 @@ def load_already_processed(output_path: str, keepers_path: str) -> set:
                     done |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
         except Exception as e:
             print(f"  ⚠️  Could not read cluster map output for resume check: {e}")
-
-    # --- Source 2: keepers CSV ---
     if os.path.exists(keepers_path):
         try:
             df_k = pd.read_csv(keepers_path)
             if "Bullet Point" in df_k.columns:
                 done |= set(df_k["Bullet Point"].dropna().str.strip())
-            # Also add the final rewritten text if the column exists
             if "final_bullet" in df_k.columns:
                 done |= set(df_k["final_bullet"].dropna().str.strip())
             print(f"  📚 Keepers CSV: {len(df_k)} rows added to done set.")
         except Exception as e:
             print(f"  ⚠️  Could not read keepers CSV for resume check: {e}")
-
     return done
 
 
-REWRITE_SYSTEM = """
+# ---------------------------------------------------------------------------
+# SYSTEM PROMPTS  (rules injected at runtime by build_system_prompts())
+# ---------------------------------------------------------------------------
+
+REWRITE_SYSTEM_BASE = """\
 You are an expert resume writer specialising in B2B SaaS and marketing careers.
 Your job is to rewrite a single resume bullet point so it:
   - Passes the "manager test" (a hiring manager reading fast can immediately grasp
@@ -446,7 +566,7 @@ Your job is to rewrite a single resume bullet point so it:
   - Is strong for the target persona/role context provided
   - Fixes every weakness listed
   - Stays under 30 words where possible; never exceeds 40 words
-  - Starts with a strong past-tense action verb
+  - Starts with a strong past-tense action verb (consult VERB INTENT MAP below)
   - Includes a concrete metric or outcome if one can be reasonably inferred
     from the knowledge base context provided — use ONLY verified metrics from
     the Verified Claims section; do NOT invent numbers
@@ -455,13 +575,47 @@ If you genuinely lack enough context to fix a specific weakness, note this hones
 in your reasoning — do not fabricate details.
 
 Respond ONLY with valid JSON, no markdown fences:
-{
+{{
   "rewritten_bullet": "<the new bullet text>",
   "reasoning": "<1-2 sentences explaining what you changed and why>",
   "context_gaps": "<details you couldn't fill due to missing context, or empty string>"
-}
+}}
+
+{rules_block}
 """
 
+SCORE_SYSTEM_BASE = """\
+You are a resume quality auditor. Score the following resume bullet on five dimensions.
+Respond ONLY with valid JSON, no markdown fences:
+{{
+  "accuracy_score":      <0-100 int>,
+  "believability_score": <0-100 int>,
+  "clarity_score":       <0-100 int>,
+  "ats_value":           <0-100 int>,
+  "manager_test":        <"PASS" or "FAIL">,
+  "weaknesses":          "<comma-separated issues, or empty string>",
+  "score_notes":         "<1-2 sentences of overall feedback>"
+}}
+
+{rules_block}
+"""
+
+
+def build_system_prompts(rules: RulesBundle) -> tuple:
+    """
+    Returns (rewrite_system, score_system) with rules injected.
+    Called once at startup after RulesBundle is loaded.
+    """
+    rewrite_system = REWRITE_SYSTEM_BASE.format(rules_block=rules.rewrite_rules_block)
+    score_system   = SCORE_SYSTEM_BASE.format(rules_block=rules.score_rules_block)
+    print(f"  ✏️  Rewrite system prompt: {len(rewrite_system):,} chars")
+    print(f"  📊 Score system prompt:   {len(score_system):,} chars")
+    return rewrite_system, score_system
+
+
+# ---------------------------------------------------------------------------
+# PROMPT BUILDER
+# ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: str, attempt: int, prev_scores: dict = None) -> str:
     """
@@ -471,12 +625,10 @@ def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: st
     forms a stable, byte-for-byte-identical prefix across all 3 attempts on the same
     bullet, and across bullets sharing the same (role_company, tags) pair.
     The variable parts (bullet text, weaknesses, prev_scores feedback) are appended
-    AFTER the static prefix — matching the same pattern used in orchestrator.py's
-    _load_knowledge_base() / build_tailored_resume().
+    AFTER the static prefix.
     """
     persona = persona_context(tags)
 
-    # ── Static cacheable prefix ──────────────────────────────────────────────
     kb_block = ""
     if kb_context:
         kb_block = (
@@ -487,7 +639,6 @@ def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: st
             f"{kb_context}\n\n"
         )
 
-    # ── Variable tail (changes per attempt / bullet) ─────────────────────────
     prev_block = ""
     if prev_scores and attempt > 1:
         prev_block = f"""
@@ -513,22 +664,12 @@ Use these scores and notes to improve your rewrite.
         f"Now rewrite the bullet. Respond with JSON only."
     )
 
-SCORE_SYSTEM = """
-You are a resume quality auditor. Score the following resume bullet on five dimensions.
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "accuracy_score":      <0-100 int>,
-  "believability_score": <0-100 int>,
-  "clarity_score":       <0-100 int>,
-  "ats_value":           <0-100 int>,
-  "manager_test":        <"PASS" or "FAIL">,
-  "weaknesses":          "<comma-separated issues, or empty string>",
-  "score_notes":         "<1-2 sentences of overall feedback>"
-}
-"""
 
+# ---------------------------------------------------------------------------
+# SCORING
+# ---------------------------------------------------------------------------
 
-def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
+def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = False) -> dict:
     if dry_run:
         return {
             "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
@@ -536,7 +677,7 @@ def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
         }
     raw = client.generate(
         model=SCORE_MODEL,
-        system_instruction=SCORE_SYSTEM,
+        system_instruction=score_system,
         contents=f"--- BULLET ---\n{bullet}\n\n--- TARGET PERSONA ---\n{persona_context(tags)}\n\nScore this bullet. Respond with JSON only.",
         temperature=0.0
     )
@@ -577,9 +718,6 @@ def best_version(original_bullet: str, original_scores: dict, rewritten_bullet: 
     return original_bullet, original_scores
 
 
-# rewrite_date added so every keeper row has a full audit trail:
-# original seed bullets get the script start time; newly written bullets get
-# the exact timestamp they were appended.
 KEEPER_COLS = [
     "Bullet Point", "Role / Company", "Tags",
     "accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test",
@@ -621,7 +759,11 @@ def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFram
     return df_keepers
 
 
-def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
+# ---------------------------------------------------------------------------
+# BULLET PROCESSOR
+# ---------------------------------------------------------------------------
+
+def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score_system: str, dry_run: bool) -> dict:
     original_bullet = str(row["Bullet Point"]).strip()
     tags = str(row.get("Tags", ""))
     weaknesses = str(row.get("weaknesses", ""))
@@ -649,7 +791,7 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
             try:
                 raw = client.generate(
                     model=REWRITE_MODEL,
-                    system_instruction=REWRITE_SYSTEM,
+                    system_instruction=rewrite_system,
                     contents=rw_prompt,
                     temperature=0.1
                 )
@@ -684,7 +826,7 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
         time.sleep(SLEEP_BETWEEN_BULLETS)
         print(f"    📊 Scoring rewrite...")
         try:
-            new_scores = score_bullet(rewritten, tags, dry_run=dry_run)
+            new_scores = score_bullet(rewritten, tags, score_system, dry_run=dry_run)
         except Exception as e:
             print(f"    ⚠️  Scoring API error on attempt {attempt}: {e} — using previous scores.")
             new_scores = current_scores
@@ -724,6 +866,10 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, dry_run: bool) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(description="Agentic rewrite loop for resume bullets using Gemini.")
     parser.add_argument("--map", default=CLUSTER_MAP_IN, help="Input cluster map CSV")
@@ -732,6 +878,10 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Cap number of bullets (for testing)")
     parser.add_argument("--dry-run", action="store_true", help="Skip API calls, use dummy responses")
     args = parser.parse_args()
+
+    # Load rules bundle and build system prompts once at startup
+    rules = RulesBundle(RULES_DIR)
+    rewrite_system, score_system = build_system_prompts(rules)
 
     source_map = args.output if os.path.exists(args.output) else args.map
     print(f"\n📥 Loading cluster map: {source_map}")
@@ -754,9 +904,6 @@ def main():
             df_map[col] = ""
     df_map = ensure_writable_dtypes(df_map)
 
-    # load_already_processed now checks BOTH the cluster map output AND the
-    # keepers CSV so bullets that are already polished and stored in
-    # bullet-bank-keepers.csv are never re-processed on resume.
     already_done = load_already_processed(args.output, args.keepers)
     if already_done:
         print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set (cluster map + keepers) — will skip if encountered.")
@@ -798,7 +945,7 @@ def main():
         treering_label = "🌳 Treering — verified claims injected (tag-filtered)" if is_treering_bullet(role_company) else "📄 Non-Treering — career context injected"
         print(f"  {treering_label}")
 
-        result = process_bullet(row, kb, dry_run=args.dry_run)
+        result = process_bullet(row, kb, rewrite_system, score_system, dry_run=args.dry_run)
 
         df_map.at[idx, "final_bullet"] = _safe_str(result["final_bullet"])
         df_map.at[idx, "rewrite_status"] = _safe_str(result["status"])
