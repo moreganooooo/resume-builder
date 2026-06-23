@@ -1,6 +1,5 @@
-version: 2.0
-# DRAFT — not active. Rename to believability.yaml to activate.
-# Expanded from v1.1 to align with the Morgan Escott Design System and style_rules.yaml.
+version: 2.1
+# Expanded from v2.0 — adds context_anchoring rules for verified-but-suspicious metrics.
 
 # Believability measures whether a human recruiter or hiring manager would
 # instinctively trust a bullet — not just whether it is technically accurate.
@@ -68,3 +67,40 @@ bonuses:
 # Hidden gem threshold
 # Bullets scoring >= 90 after bonuses are flagged as candidates for top-5 placement
 hidden_gem_threshold: 90
+
+# Context anchoring — rules for verified metrics that read as suspiciously high
+# These apply during BOTH critique scoring and rewrite generation.
+#
+# Core principle: a verified metric is NEVER a reason to lower a score or omit
+# a number. Suspiciously high figures are a signal to add scope context, not
+# to discard the claim.
+context_anchoring:
+  rule: >
+    If a verified metric appears suspiciously high (e.g., a 74% open rate, a
+    3x industry benchmark, a 100% retention figure), do NOT omit it or soften
+    the number. Instead, explicitly anchor it with the campaign scope, audience
+    size, or channel context so a recruiter can evaluate it fairly.
+    Write the context into the bullet itself — not as a caveat, but as a
+    clarifying detail that makes the number MORE credible, not less.
+
+  examples:
+    - metric: "74% email open rate"
+      bad_rewrite: "Strong email open rate well above industry benchmarks"
+      good_rewrite: "Achieved 74% open rate on a 200-person PTA newsletter campaign via Mailchimp — 3x the 22% nonprofit average"
+      why: "The scope (200-person PTA list) explains why the rate is high without discrediting it."
+
+    - metric: "100% event attendance rate"
+      bad_rewrite: "Consistently high event attendance"
+      good_rewrite: "Maintained 100% attendance across 6 executive QBRs (12 attendees each) by owning all logistics and pre-read distribution"
+      why: "Small-group context reframes the figure as a precision achievement, not an inflated vanity metric."
+
+    - metric: "98% customer satisfaction score"
+      bad_rewrite: "Delivered exceptional customer satisfaction"
+      good_rewrite: "Earned 98% CSAT across 40 onboarding accounts in Q3 2023 (Gainsight survey, n=40)"
+      why: "Named tool + sample size + time period = a recruiter can picture exactly what happened."
+
+  anti_patterns:
+    - do_not: "Round down or hedge the number ('nearly 75%', 'approximately 3x')"
+    - do_not: "Add a disclaimer tone ('though this was a small list...')"
+    - do_not: "Omit the metric and replace with a vague adjective ('strong', 'high-performing')"
+    - do_not: "Flag the metric as a weakness in the critique output without first checking if scope context resolves it"
