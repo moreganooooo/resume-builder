@@ -82,6 +82,10 @@ SLEEP_ON_RETRY        = 12   # extra pause before a retry attempt
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
               "ats_value", "manager_test"]
 
+# Score columns that are numeric (float64 in the CSV) vs string
+NUMERIC_SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score", "ats_value"]
+STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
+
 # Keyword patterns that indicate a Treering bullet (case-insensitive)
 TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
 
@@ -248,7 +252,7 @@ def persona_context(tags: str) -> str:
 
 def _safe_str(v) -> str:
     """Convert any value to str, treating None/NaN as empty string.
-    Used when writing into df_map columns that pandas may have inferred
+    Used when writing into df_map string columns that pandas may have inferred
     as StringDtype (which rejects bare ints/floats).
     """
     if v is None:
@@ -256,6 +260,12 @@ def _safe_str(v) -> str:
     if isinstance(v, float) and pd.isna(v):
         return ""
     return str(v)
+
+
+def _safe_numeric(v):
+    """Convert a value to float (or NaN), for writing into float64 columns."""
+    result = pd.to_numeric(v, errors="coerce")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -638,8 +648,7 @@ def main():
 
         result = process_bullet(row, kb, dry_run=args.dry_run)
 
-        # Use _safe_str() for every assignment to guarantee the value is a str,
-        # regardless of what dtype pandas inferred for that column from the CSV.
+        # String columns: use _safe_str() to handle StringDtype gracefully
         df_map.at[idx, "final_bullet"]      = _safe_str(result["final_bullet"])
         df_map.at[idx, "rewrite_status"]    = _safe_str(result["status"])
         df_map.at[idx, "rewrite_attempts"]  = _safe_str(result["rewrite_attempts"])
@@ -647,7 +656,12 @@ def main():
         df_map.at[idx, "context_gaps"]      = _safe_str(result["context_gaps"])
         df_map.at[idx, "next_action"]        = _safe_str(result["status"])
 
-        for col in SCORE_COLS + ["weaknesses"]:
+        # Numeric score columns: write as float so float64 columns accept the value
+        for col in NUMERIC_SCORE_COLS:
+            df_map.at[idx, col] = _safe_numeric(result["final_scores"].get(col))
+
+        # String score columns: write as str
+        for col in STRING_SCORE_COLS:
             df_map.at[idx, col] = _safe_str(result["final_scores"].get(col, ""))
 
         if result["status"] == "KEEP":
