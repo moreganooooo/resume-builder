@@ -14,7 +14,7 @@ Pipeline per bullet:
   5. Max 3 attempts per bullet. On failure → status=MANUAL
   6. KEEP bullets already in the cluster map are seeded into the keeper CSV at startup
   7. On restart, bullets whose original text already appears in a prior output run
-     are skipped automatically (resumable runs).
+     OR in bullet-bank-keepers.csv are skipped automatically (resumable runs).
 
 Knowledge base context injected at startup:
   - cv.md                        → role section matching bullet's company only
@@ -392,21 +392,49 @@ def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_already_processed(output_path: str) -> set:
-    if not os.path.exists(output_path):
-        return set()
-    try:
-        df = pd.read_csv(output_path)
-        if "rewrite_status" not in df.columns or "Bullet Point" not in df.columns:
-            return set()
-        done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
-        done_bullets = set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
-        if "final_bullet" in df.columns:
-            done_bullets |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
-        return done_bullets
-    except Exception as e:
-        print(f"  ⚠️  Could not read prior output for resume check: {e}")
-        return set()
+def load_already_processed(output_path: str, keepers_path: str) -> set:
+    """
+    Build the set of bullet texts that are already done so they are skipped on resume.
+
+    Sources:
+      1. Cluster map output (bullet-bank-cluster-map-updated.csv) — rows whose
+         rewrite_status is KEEP or MANUAL from a previous run of this script.
+      2. Keepers CSV (bullet-bank-keepers.csv) — ALL rows, both the original seed
+         bullets and any bullets written by prior runs. This is the authoritative
+         source of truth for "this bullet is done and polished."
+
+    Both the original "Bullet Point" text AND the "final_bullet" rewrite are added
+    so a bullet is skipped regardless of which text variant appears in the cluster map.
+    """
+    done = set()
+
+    # --- Source 1: cluster map output ---
+    if os.path.exists(output_path):
+        try:
+            df = pd.read_csv(output_path)
+            if "rewrite_status" in df.columns and "Bullet Point" in df.columns:
+                done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
+                done |= set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
+                if "final_bullet" in df.columns:
+                    done |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
+        except Exception as e:
+            print(f"  ⚠️  Could not read cluster map output for resume check: {e}")
+
+    # --- Source 2: keepers CSV ---
+    if os.path.exists(keepers_path):
+        try:
+            df_k = pd.read_csv(keepers_path)
+            if "Bullet Point" in df_k.columns:
+                done |= set(df_k["Bullet Point"].dropna().str.strip())
+            # Also add the final rewritten text if the column exists
+            if "final_bullet" in df_k.columns:
+                done |= set(df_k["final_bullet"].dropna().str.strip())
+            print(f"  📚 Keepers CSV: {len(df_k)} rows added to done set.")
+        except Exception as e:
+            print(f"  ⚠️  Could not read keepers CSV for resume check: {e}")
+
+    return done
+
 
 REWRITE_SYSTEM = """
 You are an expert resume writer specialising in B2B SaaS and marketing careers.
@@ -534,10 +562,15 @@ def best_version(original_bullet: str, original_scores: dict, rewritten_bullet: 
         return rewritten_bullet, rewritten_scores
     return original_bullet, original_scores
 
+
+# rewrite_date added so every keeper row has a full audit trail:
+# original seed bullets get the script start time; newly written bullets get
+# the exact timestamp they were appended.
 KEEPER_COLS = [
     "Bullet Point", "Role / Company", "Tags",
     "accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test",
-    "weaknesses", "source", "rewrite_attempts", "rewrite_reasoning", "context_gaps"
+    "weaknesses", "source", "rewrite_attempts", "rewrite_reasoning", "context_gaps",
+    "rewrite_date",
 ]
 
 
@@ -556,6 +589,7 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
     df_seed["rewrite_attempts"] = 0
     df_seed["rewrite_reasoning"] = ""
     df_seed["context_gaps"] = ""
+    df_seed["rewrite_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for col in KEEPER_COLS:
         if col not in df_seed.columns:
             df_seed[col] = ""
@@ -567,6 +601,7 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
 
 def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFrame:
     new_row = {col: row.get(col, "") for col in KEEPER_COLS}
+    new_row["rewrite_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df_keepers = pd.concat([df_keepers, pd.DataFrame([new_row])], ignore_index=True)
     df_keepers.to_csv(path, index=False)
     return df_keepers
@@ -705,9 +740,12 @@ def main():
             df_map[col] = ""
     df_map = ensure_writable_dtypes(df_map)
 
-    already_done = load_already_processed(args.output)
+    # load_already_processed now checks BOTH the cluster map output AND the
+    # keepers CSV so bullets that are already polished and stored in
+    # bullet-bank-keepers.csv are never re-processed on resume.
+    already_done = load_already_processed(args.output, args.keepers)
     if already_done:
-        print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set — will skip if encountered.")
+        print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set (cluster map + keepers) — will skip if encountered.")
 
     kb = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
@@ -720,7 +758,7 @@ def main():
         targets = targets[~targets["Bullet Point"].str.strip().isin(already_done)]
         skipped = before - len(targets)
         if skipped:
-            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s) (text-match safety net).")
+            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s) (cluster map + keepers safety net).")
 
     if args.limit:
         targets = targets.head(args.limit)
