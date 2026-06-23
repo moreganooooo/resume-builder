@@ -165,11 +165,18 @@ class GeminiClient:
             data = resp.json()
 
             # --- DIAGNOSTIC: log token usage on every successful response ---
+            # cachedContentTokenCount is present (and > 0) only when Google's
+            # implicit caching activated. It is omitted from the log when 0 or
+            # absent so non-cached calls stay clean. Look for ✨ cached: N to
+            # confirm cache hits at a glance.
             usage = data.get("usageMetadata", {})
             if usage:
+                cached = usage.get("cachedContentTokenCount", 0) or 0
+                cache_str = f" | ✨ cached: {cached}" if cached > 0 else ""
                 print(f"         📊 tokens — prompt: {usage.get('promptTokenCount', '?')} | "
                       f"output: {usage.get('candidatesTokenCount', '?')} | "
-                      f"total: {usage.get('totalTokenCount', '?')}")
+                      f"total: {usage.get('totalTokenCount', '?')}"
+                      f"{cache_str}")
 
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
