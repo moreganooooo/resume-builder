@@ -351,13 +351,11 @@ def build_score_prompt(bullet: str, tags: str) -> str:
 def score_bullet(bullet: str, tags: str, dry_run: bool = False) -> dict:
     """Score a bullet and return a dict of score fields."""
     if dry_run:
-        time.sleep(0)
         return {
             "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
             "ats_value": 90, "manager_test": "PASS", "weaknesses": "", "score_notes": "dry-run"
         }
 
-    prompt = build_score_prompt(bullet, tags)
     raw  = client.generate(
         model=SCORE_MODEL,
         system_instruction=SCORE_SYSTEM,
@@ -590,9 +588,18 @@ def main():
     df_map["next_action"]       = df_map["next_action"].fillna("").str.strip().str.upper()
     df_map["manager_test"]      = df_map["manager_test"].fillna("").str.strip().str.upper()
 
+    # Initialise output columns with object dtype so pandas accepts both str and int
+    # values without raising a StringDtype conflict on assignment.
     for col in ["final_bullet", "rewrite_status", "rewrite_attempts", "rewrite_reasoning", "context_gaps"]:
         if col not in df_map.columns:
-            df_map[col] = ""
+            df_map[col] = pd.array([""] * len(df_map), dtype=object)
+        else:
+            df_map[col] = df_map[col].astype(object)
+
+    # Also cast score columns that may have been inferred as StringDtype → object
+    for col in SCORE_COLS + ["weaknesses"]:
+        if col in df_map.columns:
+            df_map[col] = df_map[col].astype(object)
 
     kb         = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
