@@ -1,0 +1,23 @@
+{
+  "memorable_strengths": [
+    {
+      "item": "$3M pipeline discovery",
+      "memorability_score": 98
+    },
+    {
+      "item": "$1M closed-won achievement",
+      "memorability_score": 95
+    }
+  ],
+
+  "forgettable_content": [
+    {
+      "item": "Strong communication skills",
+      "memorability_score": 5
+    },
+    {
+      "item": "Results-driven professional",
+      "memorability_score": 2
+    }
+  ]
+}

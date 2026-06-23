@@ -1,0 +1,34 @@
+{
+  "candidate_id": "morgan",
+  "verified_facts": [
+    {
+      "id": "fact_001",
+      "category": "achievement",
+      "fact": "First outbound representative to exceed $1M closed-won revenue",
+      "confidence": 100,
+      "source": [
+        "resume_v5",
+        "interview_notes"
+      ]
+    },
+    {
+      "id": "fact_002",
+      "category": "crm",
+      "fact": "Identified more than $3M in untapped pipeline opportunities through CRM audit",
+      "confidence": 100,
+      "source": [
+        "resume_v5",
+        "career_history"
+      ]
+    },
+    {
+      "id": "fact_003",
+      "category": "technology",
+      "fact": "Led Outreach implementation and adoption",
+      "confidence": 100,
+      "source": [
+        "resume_v5"
+      ]
+    }
+  ]
+}

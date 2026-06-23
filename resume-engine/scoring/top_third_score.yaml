@@ -1,0 +1,101 @@
+version: 1.0
+
+section: top_third_score
+
+max_score: 100
+
+weights:
+
+  role_clarity: 30
+  specialization_visibility: 20
+  strongest_evidence_visibility: 20
+  recruiter_comprehension_speed: 15
+  differentiation: 15
+
+role_clarity:
+
+  excellent:
+
+    - target_role_obvious
+    - professional_identity_clear
+    - no_competing_narratives
+
+  poor:
+
+    - role_ambiguity
+    - multiple_unrelated_career_tracks
+    - unclear_positioning
+
+specialization_visibility:
+
+  excellent:
+
+    - core_specialization_visible
+    - domain_expertise_visible
+    - relevant_tools_visible
+
+  poor:
+
+    - buried_specialization
+    - generic_positioning
+
+strongest_evidence_visibility:
+
+  excellent:
+
+    - major_accomplishments_above_fold
+    - metrics_visible
+    - differentiators_visible
+
+  poor:
+
+    - hidden_gems_buried
+    - strongest_metrics_below_page_one
+
+recruiter_comprehension_speed:
+
+  target_seconds: 8
+
+  excellent:
+
+    - candidate_understood_immediately
+
+  poor:
+
+    - requires_close_reading
+    - unclear_value_proposition
+
+differentiation:
+
+  excellent:
+
+    - memorable_achievement
+    - rare_experience
+    - uncommon_combination_of_skills
+
+  poor:
+
+    - generic_candidate_profile
+
+hidden_gem_rules:
+
+  promote_if:
+
+    - revenue_impact
+    - process_ownership
+    - implementation_leadership
+    - platform_expertise
+    - measurable_business_outcome
+
+flags:
+
+  unclear_identity
+  buried_accomplishments
+  weak_top_section
+  slow_recruiter_comprehension
+  generic_positioning
+
+final_question:
+
+  Could a recruiter explain why this candidate is qualified
+  after viewing only the top third of page one?

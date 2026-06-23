@@ -1,0 +1,75 @@
+version: 1.0
+
+section: certifications
+
+max_score: 100
+
+weights:
+
+  relevance: 50
+  credibility: 25
+  recency: 25
+
+scoring_rules:
+
+  relevance:
+
+    excellent:
+
+      - role_specific
+      - industry_recognized
+
+    poor:
+
+      - unrelated_certification
+      - filler_certification
+
+  credibility:
+
+    excellent:
+
+      - vendor_backed
+      - accredited_provider
+
+    poor:
+
+      - unknown_source
+      - unverifiable
+
+  recency:
+
+    excellent:
+
+      - current
+      - actively_maintained
+
+    poor:
+
+      - expired
+      - obsolete
+
+high_value_examples:
+
+  crm:
+    - Salesforce Administrator
+    - Salesforce Advanced Administrator
+
+  marketing:
+    - HubSpot Marketing Software
+    - Google Analytics Certification
+
+  project_management:
+    - PMP
+    - CAPM
+
+penalties:
+
+  irrelevant_certification: -15
+  expired_certification: -10
+  certification_spam: -15
+
+flags:
+
+  low_relevance
+  expired_credentials
+  excessive_certifications

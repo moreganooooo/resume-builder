@@ -1,0 +1,35 @@
+{
+  "nodes": [
+    {
+      "id": "crm_audit"
+    },
+    {
+      "id": "salesforce"
+    },
+    {
+      "id": "pipeline_analysis"
+    }
+  ],
+
+  "relationships": [
+    {
+      "source": "crm_audit",
+      "supports": "salesforce"
+    },
+    {
+      "source": "crm_audit",
+      "supports": "pipeline_analysis"
+    }
+  ],
+
+  "evidence": [
+    {
+      "claim": "Identified $3M in untapped pipeline",
+      "sources": [
+        "metric_002",
+        "fact_002"
+      ],
+      "confidence": 100
+    }
+  ]
+}

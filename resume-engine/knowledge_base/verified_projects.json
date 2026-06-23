@@ -1,0 +1,28 @@
+{
+  "projects": [
+    {
+      "id": "project_001",
+      "name": "Outreach Rollout",
+      "category": "sales_operations",
+      "skills": [
+        "Outreach",
+        "Salesforce",
+        "Automation"
+      ],
+      "evidence_strength": 95,
+      "business_impact": 90
+    },
+    {
+      "id": "project_002",
+      "name": "CRM Audit Initiative",
+      "category": "crm",
+      "skills": [
+        "Pipeline Analysis",
+        "Data Quality",
+        "Salesforce"
+      ],
+      "evidence_strength": 100,
+      "business_impact": 100
+    }
+  ]
+}

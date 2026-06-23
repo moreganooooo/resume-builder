@@ -1,0 +1,28 @@
+{
+  "tools": [
+    {
+      "name": "Salesforce",
+      "confidence": 100,
+      "experience_level": "advanced",
+      "evidence_count": 14
+    },
+    {
+      "name": "Outreach",
+      "confidence": 100,
+      "experience_level": "advanced",
+      "evidence_count": 12
+    },
+    {
+      "name": "HubSpot",
+      "confidence": 85,
+      "experience_level": "intermediate",
+      "evidence_count": 4
+    },
+    {
+      "name": "Mailchimp",
+      "confidence": 90,
+      "experience_level": "intermediate",
+      "evidence_count": 3
+    }
+  ]
+}

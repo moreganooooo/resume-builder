@@ -1,0 +1,25 @@
+{
+  "metrics": [
+    {
+      "id": "metric_001",
+      "value": "$1M+",
+      "description": "Closed-won revenue",
+      "category": "sales",
+      "confidence": 100
+    },
+    {
+      "id": "metric_002",
+      "value": "$3M+",
+      "description": "Pipeline opportunity identified",
+      "category": "crm",
+      "confidence": 100
+    },
+    {
+      "id": "metric_003",
+      "value": "2x",
+      "description": "Top Seller Award",
+      "category": "performance",
+      "confidence": 100
+    }
+  ]
+}
