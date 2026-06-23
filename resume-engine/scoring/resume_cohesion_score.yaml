@@ -1,0 +1,62 @@
+version: 1.0
+
+section: resume_cohesion
+
+max_score: 100
+
+weights:
+
+  summary_to_skills_alignment: 25
+  skills_to_experience_alignment: 25
+  experience_to_jd_alignment: 25
+  overall_narrative_alignment: 25
+
+alignment_checks:
+
+  summary_to_skills:
+
+    question:
+      Does the summary describe capabilities visible in the skills section?
+
+  skills_to_experience:
+
+    question:
+      Are skills supported by accomplishments and work history?
+
+  experience_to_jd:
+
+    question:
+      Does experience support target role requirements?
+
+  narrative_alignment:
+
+    question:
+      Does the entire resume present one coherent professional identity?
+
+excellent_signals:
+
+  - consistent_role_story
+  - clear_specialization
+  - evidence_supported_positioning
+  - role_targeting_consistency
+
+poor_signals:
+
+  - disconnected_sections
+  - conflicting_professional_identity
+  - unsupported_positioning
+  - random_keyword_insertion
+
+major_flags:
+
+  summary_experience_mismatch
+  skills_experience_mismatch
+  role_identity_conflict
+  jd_alignment_gap
+
+recommendations:
+
+  promote_hidden_gems
+  remove_conflicting_content
+  strengthen_role_positioning
+  improve_section_alignment

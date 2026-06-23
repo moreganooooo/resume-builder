@@ -1,0 +1,105 @@
+version: 1.0
+
+section: summary
+
+max_score: 100
+
+weights:
+
+  relevance_to_jd: 30
+  specificity_and_evidence: 25
+  role_alignment: 20
+  credibility: 15
+  readability: 10
+
+hard_failures:
+
+  - first_person_pronouns
+  - buzzword_opener
+  - generic_professional_summary
+  - unsupported_seniority
+  - unsupported_role_claim
+
+buzzword_openers:
+
+  - results-driven
+  - dynamic professional
+  - accomplished professional
+  - highly motivated
+  - dedicated professional
+  - seasoned professional
+  - proven track record
+  - strategic thinker
+  - visionary leader
+
+scoring_rules:
+
+  relevance_to_jd:
+
+    excellent:
+      - target_role_explicitly_identified
+      - core_jd_requirements_visible
+      - strongest_relevant_experience_featured
+
+    poor:
+      - generic_summary
+      - no_target_role_signal
+      - unrelated_experience_prioritized
+
+  specificity_and_evidence:
+
+    excellent:
+      - named_platforms
+      - named_specializations
+      - measurable_scope
+      - unique_differentiators
+
+    poor:
+      - vague_claims
+      - generic_strengths
+      - unsupported_superlatives
+
+  role_alignment:
+
+    excellent:
+      - summary_matches_experience
+      - summary_matches_skills
+      - summary_matches_target_role
+
+    poor:
+      - conflicting_identity
+      - role_mismatch
+      - inflated_seniority
+
+  credibility:
+
+    excellent:
+      - believable_claims
+      - evidence_backed_language
+      - realistic_scope
+
+    poor:
+      - executive_language_without_evidence
+      - exaggerated_claims
+      - consultant_speak
+
+  readability:
+
+    excellent:
+      - under_80_words
+      - concise_sentences
+      - direct_language
+
+    poor:
+      - over_120_words
+      - dense_paragraphs
+      - filler_language
+
+flags:
+
+  generic_summary
+  buzzword_heavy
+  unsupported_claim
+  role_mismatch
+  too_long
+  low_specificity

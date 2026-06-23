@@ -1,0 +1,58 @@
+version: 1.0
+
+section: skills
+
+max_score: 100
+
+weights:
+
+  relevance: 40
+  logical_grouping: 25
+  evidence_support: 20
+  no_redundancy: 15
+
+required_rules:
+
+  - skills_must_be_grouped
+  - skills_must_be_relevant
+  - skills_should_be_supported_by_experience
+
+preferred_groupings:
+
+  crm_sales_operations:
+    - salesforce
+    - outreach
+    - hubspot
+    - pipeline_management
+    - forecasting
+
+  marketing_technology:
+    - mailchimp
+    - google_analytics
+    - campaign_automation
+
+  creative_tools:
+    - adobe_creative_suite
+    - canva
+    - figma
+
+penalties:
+
+  keyword_dump: -20
+  unsupported_skill: -15
+  duplicate_skill: -10
+  poor_grouping: -10
+
+excellent_characteristics:
+
+  - grouped_by_function
+  - role_relevant
+  - easy_to_scan
+  - evidence_backed
+
+flags:
+
+  ungrouped_skills
+  unsupported_skills
+  excessive_keywords
+  poor_organization
