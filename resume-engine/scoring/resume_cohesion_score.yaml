@@ -1,62 +1,317 @@
-version: 1.0
+version: 2.0
 
 section: resume_cohesion
+
+description: >
+  Evaluates whether all resume sections support a consistent
+  professional narrative and target role. Measures alignment
+  between summary, competencies, skills, experience, achievements,
+  certifications, and job description requirements.
 
 max_score: 100
 
 weights:
 
-  summary_to_skills_alignment: 25
-  skills_to_experience_alignment: 25
-  experience_to_jd_alignment: 25
-  overall_narrative_alignment: 25
+  summary_to_skills: 15
+
+  skills_to_experience: 20
+
+  summary_to_experience: 20
+
+  experience_to_jd: 20
+
+  achievement_visibility: 10
+
+  section_consistency: 10
+
+  narrative_alignment: 5
 
 alignment_checks:
 
   summary_to_skills:
 
     question:
-      Does the summary describe capabilities visible in the skills section?
+      Do the capabilities described in the summary appear in the skills section?
+
+    pass_threshold: 75
+
+    passing_example:
+
+      summary:
+        CRM & Revenue Operations professional experienced in Salesforce administration, reporting, workflow automation, and pipeline analysis.
+
+      skills:
+        - Salesforce
+        - Reporting
+        - Revenue Operations
+        - Workflow Automation
+        - Pipeline Analysis
+
+      rationale:
+        Summary claims are directly supported by skills.
+
+    failing_example:
+
+      summary:
+        Lifecycle Marketing Specialist focused on customer journeys and retention.
+
+      skills:
+        - Salesforce
+        - Territory Planning
+        - Prospecting
+        - Cold Calling
+
+      rationale:
+        Skills do not support stated identity.
 
   skills_to_experience:
 
     question:
-      Are skills supported by accomplishments and work history?
+      Are listed skills supported by accomplishments and work history?
+
+    pass_threshold: 80
+
+    passing_example:
+
+      skills:
+        - Salesforce
+        - Outreach
+        - Reporting
+
+      experience:
+        - Administered Salesforce instance.
+        - Built Outreach workflows.
+        - Created executive dashboards.
+
+      rationale:
+        Skills are evidenced in experience.
+
+    failing_example:
+
+      skills:
+        - SQL
+        - Tableau
+        - Python
+
+      experience:
+        - Managed customer accounts.
+        - Scheduled meetings.
+
+      rationale:
+        No evidence supports listed skills.
+
+  summary_to_experience:
+
+    question:
+      Does experience validate the professional identity stated in the summary?
+
+    pass_threshold: 80
+
+    passing_example:
+
+      summary:
+        Sales Enablement professional focused on process optimization and sales productivity.
+
+      experience:
+        - Led Outreach implementation.
+        - Created sales workflows.
+        - Improved CRM adoption.
+
+      rationale:
+        Experience supports positioning.
+
+    failing_example:
+
+      summary:
+        Senior Email Marketing Specialist.
+
+      experience:
+        - Managed CRM records.
+        - Conducted pipeline audits.
+        - Built sales reporting.
+
+      rationale:
+        Experience contradicts positioning.
 
   experience_to_jd:
 
     question:
-      Does experience support target role requirements?
+      Does the experience directly support target role requirements?
+
+    pass_threshold: 80
+
+    passing_example:
+
+      jd_keywords:
+        - Salesforce
+        - Reporting
+        - Process Improvement
+
+      experience:
+        - Built Salesforce dashboards.
+        - Improved lead routing.
+        - Conducted CRM audits.
+
+      rationale:
+        Strong alignment.
+
+    failing_example:
+
+      jd_keywords:
+        - Salesforce
+        - Revenue Operations
+
+      experience:
+        - Wrote blog content.
+        - Managed social media.
+
+      rationale:
+        Weak alignment.
+
+  achievement_visibility:
+
+    question:
+      Are the strongest accomplishments easy to find?
+
+    pass_threshold: 75
+
+    passing_example:
+
+      visible_accomplishments:
+
+        - Identified $3M+ in untapped pipeline opportunities.
+        - First outbound rep to exceed $1M closed-won revenue.
+
+      location:
+        first_page
+
+      rationale:
+        Major differentiators are visible.
+
+    failing_example:
+
+      visible_accomplishments:
+
+        - Managed CRM records.
+        - Assisted sales team.
+
+      buried_accomplishments:
+
+        - Identified $3M+ in pipeline opportunities.
+
+      rationale:
+        Strongest evidence is hidden.
+
+  section_consistency:
+
+    question:
+      Do sections reinforce rather than contradict each other?
+
+    pass_threshold: 80
+
+    passing_example:
+
+      summary:
+        CRM & Revenue Operations
+
+      skills:
+        Salesforce
+        Reporting
+        Process Improvement
+
+      experience:
+        CRM administration
+        Workflow automation
+
+      rationale:
+        Sections reinforce same identity.
+
+    failing_example:
+
+      summary:
+        Content Strategist
+
+      skills:
+        Salesforce
+        Revenue Operations
+
+      experience:
+        Sales Operations
+
+      rationale:
+        Competing narratives exist.
 
   narrative_alignment:
 
     question:
-      Does the entire resume present one coherent professional identity?
+      Could a recruiter describe this candidate's value proposition after one read?
 
-excellent_signals:
+    pass_threshold: 80
 
-  - consistent_role_story
-  - clear_specialization
-  - evidence_supported_positioning
-  - role_targeting_consistency
+    passing_example:
 
-poor_signals:
+      identity:
+        CRM & Revenue Operations Associate
 
-  - disconnected_sections
-  - conflicting_professional_identity
-  - unsupported_positioning
-  - random_keyword_insertion
+      recruiter_takeaway:
+        Strong Salesforce and process optimization background.
 
-major_flags:
+    failing_example:
 
-  summary_experience_mismatch
-  skills_experience_mismatch
-  role_identity_conflict
-  jd_alignment_gap
+      recruiter_takeaway:
+        Unsure whether candidate is marketing, sales, design, or operations.
 
-recommendations:
+cohesion_diagnosis:
 
-  promote_hidden_gems
-  remove_conflicting_content
-  strengthen_role_positioning
-  improve_section_alignment
+  identity_confidence:
+
+    strong:
+      score_range: 90-100
+
+    moderate:
+      score_range: 75-89
+
+    weak:
+      score_range: 60-74
+
+    unclear:
+      score_range: below_60
+
+  common_failure_modes:
+
+    - conflicting_identities
+    - unsupported_skills
+    - unsupported_summary
+    - buried_accomplishments
+    - keyword_stuffing
+    - weak_jd_alignment
+
+flags:
+
+  unclear_professional_identity
+
+  competing_narratives
+
+  unsupported_summary
+
+  unsupported_skills
+
+  weak_jd_alignment
+
+  buried_accomplishments
+
+  low_evidence_density
+
+final_output:
+
+  overall_score
+
+  primary_identity
+
+  strongest_alignment
+
+  weakest_alignment
+
+  recruiter_takeaway
+
+  recommendations

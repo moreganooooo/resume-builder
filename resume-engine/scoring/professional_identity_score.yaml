@@ -1,0 +1,419 @@
+version: 1.0
+
+section: professional_identity_score
+
+description: >
+  Determines the professional identity currently presented by the resume,
+  evaluates alignment between sections, detects conflicting narratives,
+  and measures confidence in the candidate's positioning.
+
+max_score: 100
+
+weights:
+
+  summary_alignment: 25
+  skills_alignment: 20
+  experience_alignment: 35
+  tool_alignment: 10
+  achievement_alignment: 10
+
+supported_identities:
+
+  lifecycle_marketing:
+
+    description:
+      Professional focused on customer journeys, nurture programs,
+      retention, engagement, and lifecycle optimization.
+
+    evidence_sources:
+
+      - email_campaigns
+      - lifecycle_programs
+      - customer_journeys
+      - audience_segmentation
+      - retention_campaigns
+      - nurture_programs
+      - marketing_automation
+
+    supporting_tools:
+
+      - HubSpot
+      - Mailchimp
+      - Salesforce
+      - Marketing Automation Platforms
+
+    summary_signals:
+
+      - lifecycle marketing
+      - customer lifecycle
+      - customer journey
+      - nurture campaigns
+      - retention
+      - engagement
+      - segmentation
+
+    achievement_signals:
+
+      - improved engagement
+      - increased retention
+      - lifecycle optimization
+      - nurture performance improvements
+
+  email_marketing:
+
+    description:
+      Professional focused on email strategy, execution,
+      optimization, segmentation, and campaign performance.
+
+    evidence_sources:
+
+      - email_campaigns
+      - email_optimization
+      - segmentation
+      - performance_reporting
+      - deliverability
+      - campaign_testing
+
+    supporting_tools:
+
+      - Mailchimp
+      - HubSpot
+      - Salesforce Marketing Cloud
+      - Klaviyo
+
+    summary_signals:
+
+      - email marketing
+      - campaign optimization
+      - audience segmentation
+      - deliverability
+      - email strategy
+
+    achievement_signals:
+
+      - increased open rates
+      - improved click-through rates
+      - improved campaign performance
+
+  sales_enablement:
+
+    description:
+      Professional focused on helping sales teams perform more effectively
+      through process design, systems administration, training,
+      reporting, and tooling.
+
+    evidence_sources:
+
+      - sales_process_design
+      - outreach_implementation
+      - sales_tool_administration
+      - workflow_optimization
+      - reporting
+      - rep_enablement
+      - training
+
+    supporting_tools:
+
+      - Salesforce
+      - Outreach
+      - Gong
+      - HubSpot
+      - Salesloft
+
+    summary_signals:
+
+      - sales enablement
+      - sales operations
+      - sales productivity
+      - workflow optimization
+      - process improvement
+
+    achievement_signals:
+
+      - improved rep efficiency
+      - reduced manual work
+      - increased sales productivity
+      - improved process adoption
+
+  customer_onboarding_implementation:
+
+    description:
+      Professional focused on onboarding, implementation,
+      platform rollout, adoption, training, and customer success.
+
+    evidence_sources:
+
+      - software_rollouts
+      - implementation_projects
+      - stakeholder_training
+      - platform_configuration
+      - customer_success
+      - onboarding_programs
+
+    supporting_tools:
+
+      - Salesforce
+      - Outreach
+      - HubSpot
+      - CRM Platforms
+
+    summary_signals:
+
+      - implementation
+      - onboarding
+      - adoption
+      - customer success
+      - platform rollout
+
+    achievement_signals:
+
+      - successful implementations
+      - user adoption improvements
+      - onboarding efficiency
+
+  b2b_content_strategist:
+
+    description:
+      Professional focused on messaging, content planning,
+      content creation, nurture content, and demand generation.
+
+    evidence_sources:
+
+      - copywriting
+      - content_strategy
+      - campaign_messaging
+      - nurture_content
+      - content_creation
+      - editorial_planning
+
+    supporting_tools:
+
+      - HubSpot
+      - CMS Platforms
+      - Google Analytics
+      - Content Management Systems
+
+    summary_signals:
+
+      - content strategy
+      - content marketing
+      - messaging
+      - thought leadership
+      - demand generation
+
+    achievement_signals:
+
+      - content performance improvements
+      - engagement growth
+      - content program success
+
+  crm_revops_associate:
+
+    description:
+      Professional focused on CRM administration, reporting,
+      process optimization, pipeline management, and revenue operations.
+
+    evidence_sources:
+
+      - crm_administration
+      - reporting
+      - pipeline_analysis
+      - process_improvement
+      - data_quality
+      - workflow_automation
+      - revenue_operations
+
+    supporting_tools:
+
+      - Salesforce
+      - Outreach
+      - HubSpot
+      - Excel
+      - CRM Platforms
+
+    summary_signals:
+
+      - crm administration
+      - revenue operations
+      - sales operations
+      - pipeline analysis
+      - reporting
+      - workflow automation
+
+    achievement_signals:
+
+      - pipeline improvements
+      - reporting improvements
+      - crm optimization
+      - process automation
+      - data quality initiatives
+
+identity_conflicts:
+
+  severe:
+
+    - graphic_designer_vs_revops
+    - software_engineer_vs_email_marketer
+    - recruiter_vs_crm_administrator
+    - accountant_vs_content_strategist
+
+  moderate:
+
+    - content_marketer_vs_sales_enablement
+    - lifecycle_marketer_vs_revops
+    - onboarding_vs_content_strategist
+
+  low:
+
+    - lifecycle_marketer_vs_email_marketer
+    - sales_enablement_vs_revops
+    - onboarding_vs_revops
+    - lifecycle_marketer_vs_content_strategist
+
+alignment_checks:
+
+  summary_to_skills:
+
+    question:
+      Does the summary describe capabilities visible in the skills section?
+
+    pass_threshold: 75
+
+  skills_to_experience:
+
+    question:
+      Are listed skills supported by accomplishments and work history?
+
+    pass_threshold: 75
+
+  experience_to_jd:
+
+    question:
+      Does experience support target role requirements?
+
+    pass_threshold: 80
+
+  narrative_alignment:
+
+    question:
+      Does the resume present one coherent professional identity?
+
+    pass_threshold: 80
+
+identity_confidence_thresholds:
+
+  strong:
+
+    minimum_score: 85
+
+    interpretation:
+      Resume clearly presents this professional identity.
+
+  moderate:
+
+    minimum_score: 70
+
+    interpretation:
+      Identity is present but could be strengthened.
+
+  weak:
+
+    minimum_score: 50
+
+    interpretation:
+      Some supporting evidence exists, but positioning is unclear.
+
+  unsupported:
+
+    minimum_score: 0
+
+    interpretation:
+      Resume lacks sufficient evidence for this identity.
+
+output_schema:
+
+  primary_identity:
+
+    name: string
+
+    confidence: integer
+
+    evidence_count: integer
+
+  secondary_identity:
+
+    name: string
+
+    confidence: integer
+
+    evidence_count: integer
+
+  tertiary_identity:
+
+    name: string
+
+    confidence: integer
+
+    evidence_count: integer
+
+  weak_identities:
+
+    - identity_name
+
+  conflicts:
+
+    - conflict_name
+
+  recommendations:
+
+    - recommendation
+
+example_output:
+
+  primary_identity:
+
+    name: CRM & Revenue Operations Associate
+
+    confidence: 95
+
+    evidence_count: 27
+
+  secondary_identity:
+
+    name: Sales Enablement
+
+    confidence: 90
+
+    evidence_count: 20
+
+  tertiary_identity:
+
+    name: Customer Onboarding & Implementation
+
+    confidence: 78
+
+    evidence_count: 12
+
+  weak_identities:
+
+    - B2B Content Strategist
+
+  conflicts:
+
+    none
+
+  recommendations:
+
+    - Promote CRM accomplishments higher in resume
+    - Increase visibility of Salesforce expertise
+    - Reduce generic marketing language
+    - Strengthen RevOps positioning in summary
+
+flags:
+
+  unclear_professional_identity
+  competing_narratives
+  unsupported_positioning
+  weak_role_alignment
+  buried_specialization
+  hidden_gems_buried
