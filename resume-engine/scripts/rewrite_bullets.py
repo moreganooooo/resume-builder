@@ -464,7 +464,30 @@ Respond ONLY with valid JSON, no markdown fences:
 
 
 def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: str, attempt: int, prev_scores: dict = None) -> str:
+    """
+    Build the rewrite prompt for a single bullet.
+
+    IMPLICIT CACHING: kb_context is placed at the TOP of the returned string so it
+    forms a stable, byte-for-byte-identical prefix across all 3 attempts on the same
+    bullet, and across bullets sharing the same (role_company, tags) pair.
+    The variable parts (bullet text, weaknesses, prev_scores feedback) are appended
+    AFTER the static prefix — matching the same pattern used in orchestrator.py's
+    _load_knowledge_base() / build_tailored_resume().
+    """
     persona = persona_context(tags)
+
+    # ── Static cacheable prefix ──────────────────────────────────────────────
+    kb_block = ""
+    if kb_context:
+        kb_block = (
+            "--- KNOWLEDGE BASE CONTEXT ---\n"
+            "Use the following background information to inform your rewrite.\n"
+            "Draw on verified metrics where they strengthen the bullet.\n"
+            "Do NOT use metrics marked Low confidence as hard facts.\n\n"
+            f"{kb_context}\n\n"
+        )
+
+    # ── Variable tail (changes per attempt / bullet) ─────────────────────────
     prev_block = ""
     if prev_scores and attempt > 1:
         prev_block = f"""
@@ -479,23 +502,14 @@ Your last rewrite scored:
 
 Use these scores and notes to improve your rewrite.
 """
-    kb_block = ""
-    if kb_context:
-        kb_block = f"""
---- KNOWLEDGE BASE CONTEXT ---
-Use the following background information to inform your rewrite.
-Draw on verified metrics where they strengthen the bullet.
-Do NOT use metrics marked Low confidence as hard facts.
 
-{kb_context}
-"""
     return (
-        f"{REWRITE_SYSTEM}\n\n"
+        f"{kb_block}"
         f"--- BULLET TO REWRITE ---\n{bullet}\n\n"
         f"--- TARGET PERSONA ---\nThis bullet should resonate for: {persona}\n\n"
         f"--- KNOWN WEAKNESSES (fix these) ---\n"
         f"{weaknesses if weaknesses and weaknesses.strip() else 'None noted — improve clarity and manager-test score generally.'}"
-        f"{prev_block}{kb_block}\n"
+        f"{prev_block}\n"
         f"Now rewrite the bullet. Respond with JSON only."
     )
 
