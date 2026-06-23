@@ -173,3 +173,8 @@ Bullet Point,Role / Company,Tags,accuracy_score,believability_score,clarity_scor
 - Systems: Built a 15-point “personal CRM” tracking system in Google Sheets with two-way sync to Salesforce,Misc. / Unassigned,[content] [ops],90.0,85.0,95.0,90.0,PASS,,original,0,,
 - Systems: Salesforce + Outreach power user; surfaced $3M+ hidden/at-risk pipeline via CRM audit and hygiene dashboards,Misc. / Unassigned,[ops],95.0,90.0,95.0,95.0,PASS,,original,0,,
 "- Top-Down Expansion: Formalized outreach process to district leaders and PTA councils, creating a scalable path into multi-school deals (e.g., presentations in large, key districts and statewide promotion with the Georgia State PTA)",Misc. / Unassigned,[generalist],85.0,90.0,95.0,80.0,PASS,,original,0,,
+"[DRY RUN] - Audited AI-generated sales and marketing content for technical accuracy, ensuring compliance with campaign standards",Mercor,[ops],90.0,90.0,90.0,90.0,PASS,,rewritten,1,dry-run,
+"[DRY RUN] - Audited copy, segmentation, and reporting logic to ensure operational accuracy and campaign readiness.",Mercor,[ops],90.0,90.0,90.0,90.0,PASS,,rewritten,1,dry-run,
+[DRY RUN] - Collaborated asynchronously with leadership and subject matter experts to refine training datasets and improve system performance in campaign and territory analysis.,Mercor,[enablement],90.0,90.0,90.0,90.0,PASS,,rewritten,1,dry-run,
+[DRY RUN] - Collaborated with leadership to refine system prompts and improve training datasets,Mercor,[generalist],90.0,90.0,90.0,90.0,PASS,,rewritten,1,dry-run,
+"[DRY RUN] - Evaluated AI-generated sales and marketing outputs for accuracy and alignment with industry standards, annotating conversational data to improve content quality.",Mercor,[ops],90.0,90.0,90.0,90.0,PASS,,rewritten,1,dry-run,
