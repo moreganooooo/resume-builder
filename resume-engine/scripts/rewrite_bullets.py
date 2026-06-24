@@ -17,11 +17,16 @@ Pipeline per bullet:
      OR in bullet-bank-keepers.csv are skipped automatically (resumable runs).
 
 Knowledge base context injected at startup:
-  - cv.md                        → role section matching bullet's company only
-  - morgan-background-guide.md   → tag-keyed summary (no interview coaching / timeline noise)
-  - profile.yml                  → target roles, superpowers, deal-breakers (trimmed; all bullets)
-  - verified-claims.csv          → tag-filtered rows (Treering bullets only, max 15 rows)
-  - extracted-screenshot-metrics.csv → screenshot-sourced metrics (Treering bullets only)
+  - cv.md                             → role section matching bullet's company only
+  - morgan-background-guide.md        → tag-keyed summary (no interview coaching / timeline noise)
+  - profile.yml                       → target roles, superpowers, deal-breakers (trimmed; all bullets)
+  - verified-claims.csv               → tag-filtered rows (Treering bullets only, max 15 rows)
+  - extracted-screenshot-metrics.csv  → screenshot-sourced metrics (Treering bullets only)
+  - verified_facts.json               → 18 high-confidence factual claims about what Morgan built/did/led
+  - verified_metrics.json             → verified numeric metrics (rates, revenue, counts)
+  - verified_projects.json            → verified project descriptions and scopes
+  - verified_tools.json               → verified tools/software Morgan actually used (guards HF002)
+  - recruiter_memory_patterns.json    → recruiter reading patterns / what hiring managers notice first
 
 Rules loaded at startup (resume-engine/rules/):
   - language_quality.yaml    → weak verbs, buzzwords, AI patterns, verb scoring
@@ -44,6 +49,7 @@ Outputs (resume-engine/knowledge_base/):
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -73,6 +79,11 @@ KB_BACKGROUND         = os.path.join(KB_DIR, "morgan-background-guide.md")
 KB_PROFILE            = os.path.join(KB_DIR, "profile.yml")
 KB_VERIFIED_CLAIMS    = os.path.join(KB_DIR, "verified-claims.csv")
 KB_SCREENSHOT_METRICS = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv")
+KB_VERIFIED_FACTS     = os.path.join(KB_DIR, "verified_facts.json")
+KB_VERIFIED_METRICS   = os.path.join(KB_DIR, "verified_metrics.json")
+KB_VERIFIED_PROJECTS  = os.path.join(KB_DIR, "verified_projects.json")
+KB_VERIFIED_TOOLS     = os.path.join(KB_DIR, "verified_tools.json")
+KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 
 REWRITE_MODEL = "gemini-3.1-flash-lite"
 SCORE_MODEL   = "gemini-3.1-flash-lite"
@@ -253,9 +264,6 @@ class RulesBundle:
         ats = _load_yaml_safe(os.path.join(rules_dir, "ats_rules.yaml"),            "ats_rules")
         fmt = _load_yaml_safe(os.path.join(rules_dir, "formatting_rules.yaml"),     "formatting_rules")
 
-        # --- Rewrite system prompt block ---
-        # Injected into REWRITE_SYSTEM so the model has full verb + language
-        # guidance before writing a single word.
         self.rewrite_rules_block = "\n".join([
             "=== VERB INTENT MAP ===",
             "Before choosing a verb, identify the accomplishment intent (creation, implementation,",
@@ -290,8 +298,6 @@ class RulesBundle:
             _yaml_to_str(sr),
         ])
 
-        # --- Score system prompt block ---
-        # Injected into SCORE_SYSTEM so the scorer uses the same criteria as the writer.
         self.score_rules_block = "\n".join([
             "=== SCORING CRITERIA ===",
             "",
@@ -330,6 +336,23 @@ def load_text_file(path: str, label: str) -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
+        print(f"  ✅ Loaded {label} ({len(content):,} chars)")
+        return content
+    except Exception as e:
+        print(f"  ⚠️  Could not load {label}: {e}")
+        return ""
+
+
+def load_json_file(path: str, label: str) -> str:
+    """
+    Load a JSON knowledge base file and return its content as a compact,
+    prompt-ready string. Returns empty string on any error so a missing
+    file never crashes the rewrite loop.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        content = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         print(f"  ✅ Loaded {label} ({len(content):,} chars)")
         return content
     except Exception as e:
@@ -433,14 +456,6 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
     return filtered.head(MAX_CLAIMS_ROWS)
 
 
-def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
-    if df_claims.empty:
-        return ""
-    cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
-    available = [c for c in cols if c in df_claims.columns]
-    return df_claims[available].to_csv(index=False)
-
-
 def build_background_summary(tags: str) -> str:
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     sections = [BACKGROUND_IDENTITY]
@@ -451,6 +466,18 @@ def build_background_summary(tags: str) -> str:
 
 
 class KnowledgeBase:
+    """
+    Loads all knowledge base files once at startup and exposes a
+    context_block_for_bullet() method used by the rewrite prompt builder.
+
+    JSON files loaded:
+      verified_facts.json     — 18 high-confidence factual claims (what Morgan built/did/led)
+      verified_metrics.json   — verified numeric metrics; authoritative source for all numbers
+      verified_projects.json  — verified project descriptions and scopes
+      verified_tools.json     — verified tools/software (guards against HF002 false tool claims)
+      recruiter_memory_patterns.json — recruiter reading patterns; injected into score context
+    """
+
     def __init__(self):
         print("\n📚 Loading knowledge base context...")
         self.cv_full = load_text_file(KB_CV, "cv.md")
@@ -459,23 +486,58 @@ class KnowledgeBase:
         self.profile = trim_profile_yml(raw_profile)
         self.df_claims = load_verified_claims(KB_VERIFIED_CLAIMS)
         self.screenshot_metrics = load_screenshot_metrics(KB_SCREENSHOT_METRICS)
+
+        # --- Verified JSON knowledge bases ---
+        self.verified_facts     = load_json_file(KB_VERIFIED_FACTS,     "verified_facts.json")
+        self.verified_metrics   = load_json_file(KB_VERIFIED_METRICS,   "verified_metrics.json")
+        self.verified_projects  = load_json_file(KB_VERIFIED_PROJECTS,  "verified_projects.json")
+        self.verified_tools     = load_json_file(KB_VERIFIED_TOOLS,     "verified_tools.json")
+        self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
+
         print(f"  📝 profile.yml trimmed to {len(self.profile):,} chars")
         print(f"  ℹ️  Context slimming active: cv section-only | tag-filtered claims | tag-keyed background\n")
 
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
         sections = []
+
         cv_section = extract_cv_section(self.cv_full, role_company)
         if cv_section:
             label = "ROLE CONTEXT (cv.md excerpt)" if cv_section != self.cv_full else "CAREER OVERVIEW (cv.md)"
             sections.append(f"=== {label} ===\n{cv_section}")
+
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
         if self.profile:
             sections.append(
                 f"=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                 f"Use these to understand what roles this bullet needs to appeal to and what to avoid.\n{self.profile}"
             )
+
+        # --- Verified JSON blocks (all bullets, not Treering-gated) ---
+        # verified_facts and verified_tools apply to ALL bullets so the
+        # model never invents a claim or tool that isn't on record.
+        if self.verified_facts:
+            sections.append(
+                f"=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
+                f"These are the only facts about Morgan's career that are evidence-backed.\n"
+                f"Do NOT invent facts outside this list.\n{self.verified_facts}"
+            )
+
+        if self.verified_tools:
+            sections.append(
+                f"=== VERIFIED TOOLS (HF002 guard — only claim tools listed here) ===\n"
+                f"Never claim proficiency with any tool not present in this list.\n{self.verified_tools}"
+            )
+
+        if self.verified_projects:
+            sections.append(
+                f"=== VERIFIED PROJECTS ===\n"
+                f"Use these to add accurate project detail and scope.\n{self.verified_projects}"
+            )
+
+        # --- Treering-specific metric sources ---
         if is_treering_bullet(role_company):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags)
             claims_text = get_verified_claims_text(filtered_claims)
@@ -487,7 +549,25 @@ class KnowledgeBase:
                 )
             if self.screenshot_metrics:
                 sections.append(f"=== SCREENSHOT-SOURCED METRICS ===\n{self.screenshot_metrics}")
+
+            if self.verified_metrics:
+                sections.append(
+                    f"=== VERIFIED METRICS (authoritative — use these numbers, not guesses) ===\n"
+                    f"These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                    f"{self.verified_metrics}"
+                )
+
         return "\n\n".join(sections)
+
+    def recruiter_context_block(self) -> str:
+        """Returns the recruiter memory patterns block for injection into score prompts."""
+        if not self.recruiter_patterns:
+            return ""
+        return (
+            "=== RECRUITER READING PATTERNS (what hiring managers notice first) ===\n"
+            "Use these patterns to calibrate believability and manager_test scoring.\n"
+            f"{self.recruiter_patterns}"
+        )
 
 
 def persona_context(tags: str) -> str:
@@ -510,10 +590,6 @@ def _safe_numeric(v):
 
 
 def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalize columns that receive mixed/string values so pandas 3.x / Python 3.14
-    doesn't raise dtype upcast errors when assigning with .at/.loc.
-    """
     object_cols = [
         "Bullet Point", "Role / Company", "Tags", "weaknesses",
         "final_bullet", "rewrite_status", "rewrite_reasoning", "context_gaps",
@@ -569,7 +645,7 @@ Your job is to rewrite a single resume bullet point so it:
   - Starts with a strong past-tense action verb (consult VERB INTENT MAP below)
   - Includes a concrete metric or outcome if one can be reasonably inferred
     from the knowledge base context provided — use ONLY verified metrics from
-    the Verified Claims section; do NOT invent numbers
+    the Verified Claims / Verified Metrics sections; do NOT invent numbers
 
 If you genuinely lack enough context to fix a specific weakness, note this honestly
 in your reasoning — do not fabricate details.
@@ -598,16 +674,21 @@ Respond ONLY with valid JSON, no markdown fences:
 }}
 
 {rules_block}
+
+{recruiter_block}
 """
 
 
-def build_system_prompts(rules: RulesBundle) -> tuple:
+def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
     """
-    Returns (rewrite_system, score_system) with rules injected.
-    Called once at startup after RulesBundle is loaded.
+    Returns (rewrite_system, score_system) with rules and recruiter patterns injected.
+    Called once at startup after RulesBundle and KnowledgeBase are loaded.
     """
     rewrite_system = REWRITE_SYSTEM_BASE.format(rules_block=rules.rewrite_rules_block)
-    score_system   = SCORE_SYSTEM_BASE.format(rules_block=rules.score_rules_block)
+    score_system   = SCORE_SYSTEM_BASE.format(
+        rules_block=rules.score_rules_block,
+        recruiter_block=kb.recruiter_context_block()
+    )
     print(f"  ✏️  Rewrite system prompt: {len(rewrite_system):,} chars")
     print(f"  📊 Score system prompt:   {len(score_system):,} chars")
     return rewrite_system, score_system
@@ -618,15 +699,6 @@ def build_system_prompts(rules: RulesBundle) -> tuple:
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: str, attempt: int, prev_scores: dict = None) -> str:
-    """
-    Build the rewrite prompt for a single bullet.
-
-    IMPLICIT CACHING: kb_context is placed at the TOP of the returned string so it
-    forms a stable, byte-for-byte-identical prefix across all 3 attempts on the same
-    bullet, and across bullets sharing the same (role_company, tags) pair.
-    The variable parts (bullet text, weaknesses, prev_scores feedback) are appended
-    AFTER the static prefix.
-    """
     persona = persona_context(tags)
 
     kb_block = ""
@@ -879,9 +951,10 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Skip API calls, use dummy responses")
     args = parser.parse_args()
 
-    # Load rules bundle and build system prompts once at startup
+    # Load rules bundle and KB first; build_system_prompts needs both.
     rules = RulesBundle(RULES_DIR)
-    rewrite_system, score_system = build_system_prompts(rules)
+    kb = KnowledgeBase()
+    rewrite_system, score_system = build_system_prompts(rules, kb)
 
     source_map = args.output if os.path.exists(args.output) else args.map
     print(f"\n📥 Loading cluster map: {source_map}")
@@ -908,7 +981,6 @@ def main():
     if already_done:
         print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set (cluster map + keepers) — will skip if encountered.")
 
-    kb = KnowledgeBase()
     df_keepers = load_or_init_keepers(args.keepers, df_map)
 
     mask = df_map["is_representative"] & df_map["next_action"].isin(["REWRITE", "REVIEW"])
@@ -942,7 +1014,7 @@ def main():
         print(f"\n[{i}/{total}] {bullet_preview}...")
         print(f"  Company: {role_company}  |  Tags: {tags}")
         print(f"  Action: {row['next_action']}  |  Weaknesses: {str(row.get('weaknesses', ''))[:80]}")
-        treering_label = "🌳 Treering — verified claims injected (tag-filtered)" if is_treering_bullet(role_company) else "📄 Non-Treering — career context injected"
+        treering_label = "🌳 Treering — verified claims + metrics injected (tag-filtered)" if is_treering_bullet(role_company) else "📄 Non-Treering — career context + verified facts/tools injected"
         print(f"  {treering_label}")
 
         result = process_bullet(row, kb, rewrite_system, score_system, dry_run=args.dry_run)
