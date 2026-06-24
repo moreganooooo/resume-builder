@@ -39,9 +39,11 @@ Rules loaded at startup (resume-engine/rules/):
   - formatting_rules.yaml    → date format and forbidden layout elements
 
 Usage:
-  python rewrite_bullets.py                  # process all REWRITE + REVIEW reps
-  python rewrite_bullets.py --limit 20       # cap for testing
-  python rewrite_bullets.py --dry-run        # print prompts, no API calls
+  python rewrite_bullets.py                        # process all REWRITE + REVIEW reps
+  python rewrite_bullets.py --limit 20             # cap for testing
+  python rewrite_bullets.py --dry-run              # print prompts, no API calls
+  python rewrite_bullets.py --retry-manual         # re-run all MANUAL bullets (same model, fresh context)
+  python rewrite_bullets.py --retry-manual --model gemini-2.5-pro  # stronger model for stubborn MANUALs
 
 Outputs (resume-engine/knowledge_base/):
   bullet-bank-cluster-map-updated.csv   updated cluster map with rewrite results
@@ -515,9 +517,6 @@ class KnowledgeBase:
                 f"Use these to understand what roles this bullet needs to appeal to and what to avoid.\n{self.profile}"
             )
 
-        # --- Verified JSON blocks (all bullets, not Treering-gated) ---
-        # verified_facts and verified_tools apply to ALL bullets so the
-        # model never invents a claim or tool that isn't on record.
         if self.verified_facts:
             sections.append(
                 f"=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
@@ -537,7 +536,6 @@ class KnowledgeBase:
                 f"Use these to add accurate project detail and scope.\n{self.verified_projects}"
             )
 
-        # --- Treering-specific metric sources ---
         if is_treering_bullet(role_company):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags)
             claims_text = get_verified_claims_text(filtered_claims)
@@ -603,18 +601,28 @@ def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_already_processed(output_path: str, keepers_path: str) -> set:
+def load_already_processed(output_path: str, keepers_path: str, retry_manual: bool = False) -> set:
+    """
+    Build the set of bullet texts to skip on this run.
+
+    Normal mode:   skip KEEP + MANUAL (anything already resolved).
+    --retry-manual: skip KEEP only — MANUAL bullets are the target, so don't skip them.
+                    Keepers are still always skipped (they're already won).
+    """
     done = set()
+    skip_statuses = {"KEEP"} if retry_manual else DONE_STATUSES
+
     if os.path.exists(output_path):
         try:
             df = pd.read_csv(output_path)
             if "rewrite_status" in df.columns and "Bullet Point" in df.columns:
-                done_mask = df["rewrite_status"].str.strip().str.upper().isin(DONE_STATUSES)
+                done_mask = df["rewrite_status"].str.strip().str.upper().isin(skip_statuses)
                 done |= set(df.loc[done_mask, "Bullet Point"].dropna().str.strip())
                 if "final_bullet" in df.columns:
                     done |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
         except Exception as e:
             print(f"  ⚠️  Could not read cluster map output for resume check: {e}")
+
     if os.path.exists(keepers_path):
         try:
             df_k = pd.read_csv(keepers_path)
@@ -625,6 +633,7 @@ def load_already_processed(output_path: str, keepers_path: str) -> set:
             print(f"  📚 Keepers CSV: {len(df_k)} rows added to done set.")
         except Exception as e:
             print(f"  ⚠️  Could not read keepers CSV for resume check: {e}")
+
     return done
 
 
@@ -949,7 +958,32 @@ def main():
     parser.add_argument("--keepers", default=KEEPERS_OUT, help="Keeper bullets CSV")
     parser.add_argument("--limit", type=int, default=None, help="Cap number of bullets (for testing)")
     parser.add_argument("--dry-run", action="store_true", help="Skip API calls, use dummy responses")
+    parser.add_argument(
+        "--retry-manual",
+        action="store_true",
+        help=(
+            "Re-run all MANUAL bullets from the updated cluster map with a fresh 3-attempt loop. "
+            "Bullets already in the keepers CSV are always skipped. "
+            "Combine with --model to upgrade to a stronger model for stubborn entries."
+        ),
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Override the rewrite and score model for this run "
+            "(e.g. gemini-2.5-pro, gemini-2.5-flash). "
+            "Defaults to the module-level REWRITE_MODEL / SCORE_MODEL constants."
+        ),
+    )
     args = parser.parse_args()
+
+    # Apply model override before any prompts are built
+    global REWRITE_MODEL, SCORE_MODEL
+    if args.model:
+        REWRITE_MODEL = args.model
+        SCORE_MODEL   = args.model
+        print(f"\n🔧 Model override: rewrite={REWRITE_MODEL}  score={SCORE_MODEL}")
 
     # Load rules bundle and KB first; build_system_prompts needs both.
     rules = RulesBundle(RULES_DIR)
@@ -977,31 +1011,56 @@ def main():
             df_map[col] = ""
     df_map = ensure_writable_dtypes(df_map)
 
-    already_done = load_already_processed(args.output, args.keepers)
+    # --- Mode banner ---
+    if args.retry_manual:
+        print("\n♻️  RETRY-MANUAL MODE — targeting rewrite_status=MANUAL rows for a fresh loop.")
+        print(f"   Model: {REWRITE_MODEL}  |  Max attempts per bullet: {MAX_ATTEMPTS}")
+        print("   Bullets already in keepers CSV will be skipped.\n")
+    else:
+        print("\n▶️  NORMAL MODE — targeting is_representative=True rows with next_action in (REWRITE, REVIEW).\n")
+
+    already_done = load_already_processed(args.output, args.keepers, retry_manual=args.retry_manual)
     if already_done:
-        print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set (cluster map + keepers) — will skip if encountered.")
+        skip_label = "KEEP-only skip set" if args.retry_manual else "KEEP+MANUAL skip set"
+        print(f"  ⏭️  Resume mode: {len(already_done)} bullet text(s) in done set ({skip_label}) — will skip if encountered.")
 
     df_keepers = load_or_init_keepers(args.keepers, df_map)
 
-    mask = df_map["is_representative"] & df_map["next_action"].isin(["REWRITE", "REVIEW"])
-    targets = df_map[mask].copy()
+    # --- Target selection ---
+    if args.retry_manual:
+        # Target representative MANUAL bullets not already in keepers
+        rewrite_status_col = "rewrite_status" if "rewrite_status" in df_map.columns else "next_action"
+        mask = (
+            df_map["is_representative"]
+            & df_map[rewrite_status_col].str.strip().str.upper().eq("MANUAL")
+        )
+        targets = df_map[mask].copy()
+        # Reset rewrite_attempts so process_bullet gets a clean 3-attempt slate
+        targets["rewrite_attempts"] = 0
+    else:
+        mask = df_map["is_representative"] & df_map["next_action"].isin(["REWRITE", "REVIEW"])
+        targets = df_map[mask].copy()
 
     if already_done:
         before = len(targets)
         targets = targets[~targets["Bullet Point"].str.strip().isin(already_done)]
         skipped = before - len(targets)
         if skipped:
-            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s) (cluster map + keepers safety net).")
+            print(f"  ⏭️  Skipping {skipped} already-processed bullet(s).")
 
     if args.limit:
         targets = targets.head(args.limit)
 
     total = len(targets)
-    print(f"\n🎯 Bullets to process: {total}")
+    mode_label = "MANUAL rescues" if args.retry_manual else "bullets"
+    print(f"\n🎯 {mode_label.capitalize()} to process: {total}")
     if args.dry_run:
         print("  🧪 DRY RUN — no real API calls will be made.")
     if total == 0:
-        print("  ✨ Nothing left to process — all bullets are already done!")
+        if args.retry_manual:
+            print("  ✨ No MANUAL bullets found — nothing to retry!")
+        else:
+            print("  ✨ Nothing left to process — all bullets are already done!")
         return
 
     kept = 0
@@ -1013,7 +1072,7 @@ def main():
         tags = str(row.get("Tags", ""))
         print(f"\n[{i}/{total}] {bullet_preview}...")
         print(f"  Company: {role_company}  |  Tags: {tags}")
-        print(f"  Action: {row['next_action']}  |  Weaknesses: {str(row.get('weaknesses', ''))[:80]}")
+        print(f"  Action: {row.get('next_action', 'MANUAL')}  |  Weaknesses: {str(row.get('weaknesses', ''))[:80]}")
         treering_label = "🌳 Treering — verified claims + metrics injected (tag-filtered)" if is_treering_bullet(role_company) else "📄 Non-Treering — career context + verified facts/tools injected"
         print(f"  {treering_label}")
 
@@ -1053,10 +1112,10 @@ def main():
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
+    rescued_label = f"   🎉 Rescued (MANUAL → KEEP): {kept}\n   🚩 Still manual: {manual}" if args.retry_manual else f"   ✅ Keepers: {kept}\n   🚩 Manual review needed: {manual}"
     print(f"\n{'='*60}")
-    print(f"✨ Done! Processed {total} bullets.")
-    print(f"   ✅ Keepers: {kept}")
-    print(f"   🚩 Manual review needed: {manual}")
+    print(f"✨ Done! Processed {total} {mode_label}.")
+    print(rescued_label)
     print(f"   📄 Updated cluster map: {args.output}")
     print(f"   💎 Keeper CSV: {args.keepers}")
     print(f"   Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
