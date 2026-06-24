@@ -870,15 +870,20 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score
             rw_data = {"rewritten_bullet": f"[DRY RUN] {current_bullet}", "reasoning": "dry-run", "context_gaps": ""}
         else:
             try:
-                # Jitter temperature upward slightly on subsequent retries
-                current_temp = 0.1 if attempt == 1 else 0.25
-                
+                # 1. Provide a temporary dict schema or target layout if no Pydantic model exists here
+                # Or simply pass your schema object if you have one for the runner script
+                runner_schema = {"type": "OBJECT", "properties": {
+                    "rewritten_bullet": {"type": "STRING"},
+                    "reasoning": {"type": "STRING"},
+                    "context_gaps": {"type": "STRING"}
+                }}
+
                 raw = client.generate(
                     model=REWRITE_MODEL,
                     system_instruction=rewrite_system,
                     contents=rw_prompt,
-                    temperature=current_temp,             # <-- DYNAMIC JITTER
-                    response_mime_type="application/json"  # <-- NATIVE JSON
+                    temperature=0.1,
+                    response_schema=runner_schema  # <-- PASS THIS INSTEAD of response_mime_type
                 )
                 rw_data = GeminiClient.parse_json(raw)
             except Exception as e:
