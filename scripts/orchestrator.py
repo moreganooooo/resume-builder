@@ -69,11 +69,21 @@ class GeminiClient:
 
     @staticmethod
     def parse_json(text: str) -> dict:
-        """Strip markdown fencing and parse JSON. Falls back to regex extraction."""
+        """Strip markdown fencing and parse JSON. Falls back to regex extraction.
+
+        Pre-processing step: Gemma 4 models emit <|think|>...</|think|> reasoning
+        blocks before their actual response. This strip is a no-op for all standard
+        Gemini models (Flash, Flash-Lite, Pro) which never produce these tokens.
+        """
         if not text or not text.strip():
             raise ValueError("parse_json received an empty string — the model returned no content.")
 
-        cleaned = text.strip()
+        # Strip Gemma 4 thinking tokens before any other processing.
+        # Safe no-op if the pattern is absent (i.e. all non-Gemma models).
+        cleaned = re.sub(r"<\|think\|>.*?</\|think\|>", "", text, flags=re.DOTALL).strip()
+
+        if not cleaned:
+            raise ValueError("parse_json: string was empty after stripping thinking tokens.")
 
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1]
