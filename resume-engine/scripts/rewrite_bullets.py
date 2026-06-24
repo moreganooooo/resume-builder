@@ -870,11 +870,15 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score
             rw_data = {"rewritten_bullet": f"[DRY RUN] {current_bullet}", "reasoning": "dry-run", "context_gaps": ""}
         else:
             try:
+                # Jitter temperature upward slightly on subsequent retries
+                current_temp = 0.1 if attempt == 1 else 0.25
+                
                 raw = client.generate(
                     model=REWRITE_MODEL,
                     system_instruction=rewrite_system,
                     contents=rw_prompt,
-                    temperature=0.1
+                    temperature=current_temp,             # <-- DYNAMIC JITTER
+                    response_mime_type="application/json"  # <-- NATIVE JSON
                 )
                 rw_data = GeminiClient.parse_json(raw)
             except Exception as e:
