@@ -164,11 +164,6 @@ class GeminiClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # --- DIAGNOSTIC: log token usage on every successful response ---
-            # cachedContentTokenCount is present (and > 0) only when Google's
-            # implicit caching activated. It is omitted from the log when 0 or
-            # absent so non-cached calls stay clean. Look for ✨ cached: N to
-            # confirm cache hits at a glance.
             usage = data.get("usageMetadata", {})
             if usage:
                 cached = usage.get("cachedContentTokenCount", 0) or 0
@@ -329,15 +324,28 @@ class ResumeEngine:
         This context block is placed at the TOP of every payload so it forms
         the cacheable prefix. The variable content (JD, bullets) is always
         appended AFTER it.
+
+        JSON files (verified_facts, verified_metrics, verified_projects,
+        verified_tools, recruiter_memory_patterns, evidence_graph) are included
+        alongside .md / .yml / .yaml / .txt so every writing and rewriting call
+        has access to the full verified evidence base.
         """
         master_context = "=== SYSTEM KNOWLEDGE BASE ===\n\n"
 
+        # File extensions included in the knowledge base context.
+        # .json added so verified_*.json and recruiter_memory_patterns.json
+        # are available to the builder, critique, and rewrite prompts.
+        KB_EXTENSIONS = ('.md', '.yml', '.yaml', '.txt', '.json')
+
         if os.path.exists(self.kb_dir):
             for filename in sorted(os.listdir(self.kb_dir)):
-                if filename.endswith(('.md', '.yml', '.yaml', '.txt')):
+                if filename.endswith(KB_EXTENSIONS):
                     filepath = os.path.join(self.kb_dir, filename)
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
+                    try:
+                        with open(filepath, "r", encoding="utf-8") as f:
+                            master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
+                    except Exception as e:
+                        print(f"   ⚠️  Could not load KB file {filename}: {e}")
         return master_context
 
     def audit_and_refine_bullets(self, raw_bullets: List[str], static_prefix: str):
@@ -351,7 +359,6 @@ class ResumeEngine:
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
 
-        # --- DIAGNOSTIC: log prompt sizes before the first API call ---
         print(f"   📏 static_prefix size: {len(static_prefix):,} chars (~{len(static_prefix) // 4:,} tokens)")
 
         if not isinstance(raw_bullets, list) or len(raw_bullets) == 0:
@@ -363,20 +370,34 @@ class ResumeEngine:
         manager_test_rules = json.dumps(self._load_yaml(self.scoring_dir, "manager_test.yaml"))
         believability_rules = json.dumps(self._load_yaml(self.scoring_dir, "believability.yaml"))
         style_rules = json.dumps(self._load_yaml(self.rules_dir, "style_rules.yaml"))
+        language_quality = json.dumps(self._load_yaml(self.rules_dir, "language_quality.yaml"))
+        verb_taxonomy = json.dumps(self._load_yaml(self.rules_dir, "verb_taxonomy.yaml"))
+        verb_intent_mapping = json.dumps(self._load_yaml(self.rules_dir, "verb_intent_mapping.yaml"))
+        hard_failures = json.dumps(self._load_yaml(self.rules_dir, "hard_failures.yaml"))
+        truthfulness_rules = json.dumps(self._load_yaml(self.rules_dir, "truthfulness_rules.yaml"))
+        ats_rules = json.dumps(self._load_yaml(self.rules_dir, "ats_rules.yaml"))
 
         critique_system = (
             f"{static_prefix}"
             f"\n\n{critique_prompt}"
             f"\n\nRULES:\n{manager_test_rules}"
             f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
+            f"\n\nHARD FAILURES (any of these = automatic FAIL):\n{hard_failures}"
+            f"\n\nTRUTHFULNESS RULES:\n{truthfulness_rules}"
+            f"\n\nLANGUAGE QUALITY:\n{language_quality}"
+            f"\n\nATS RULES:\n{ats_rules}"
         )
         rewrite_system = (
             f"{static_prefix}"
             f"\n\n{rewrite_prompt}"
             f"\n\nSTYLE RULES:\n{style_rules}"
+            f"\n\nVERB INTENT MAP:\n{verb_intent_mapping}"
+            f"\n\nVERB TAXONOMY:\n{verb_taxonomy}"
+            f"\n\nLANGUAGE QUALITY RULES:\n{language_quality}"
+            f"\n\nHARD FAILURES:\n{hard_failures}"
+            f"\n\nTRUTHFULNESS RULES:\n{truthfulness_rules}"
         )
 
-        # --- DIAGNOSTIC: log full critique system prompt size ---
         print(f"   📏 critique_system size: {len(critique_system):,} chars (~{len(critique_system) // 4:,} tokens)")
 
         refined_bullets = []
@@ -487,16 +508,15 @@ class ResumeEngine:
         if os.path.exists(npy_path):
             try:
                 print(f"   🧠 Semantic pre-filter: embedding JD via {EMBED_MODEL}...")
-                jd_vec = np.array(client.embed(jd_text), dtype=np.float32)  # (768,)
-                bullet_matrix = np.load(npy_path)                           # (N, 768)
+                jd_vec = np.array(client.embed(jd_text), dtype=np.float32)
+                bullet_matrix = np.load(npy_path)
 
                 if bullet_matrix.shape[0] != len(df):
                     print(f"   ⚠️ Vector count ({bullet_matrix.shape[0]}) != CSV rows ({len(df)}). "
                           f"Re-run embed_bullet_bank.py. Falling back to keyword-only.")
                 else:
-                    # Cosine similarity: normalise both sides, then dot product.
                     norms = np.linalg.norm(bullet_matrix, axis=1, keepdims=True)
-                    norms = np.where(norms == 0, 1e-9, norms)  # avoid div-by-zero
+                    norms = np.where(norms == 0, 1e-9, norms)
                     normed_matrix = bullet_matrix / norms
 
                     jd_norm = np.linalg.norm(jd_vec)
@@ -504,7 +524,7 @@ class ResumeEngine:
                         jd_norm = 1e-9
                     normed_jd = jd_vec / jd_norm
 
-                    cosine_scores = normed_matrix @ normed_jd  # (N,)
+                    cosine_scores = normed_matrix @ normed_jd
                     pool_size = min(SEMANTIC_POOL, len(df))
                     semantic_indices = np.argsort(cosine_scores)[::-1][:pool_size]
                     print(f"   ✅ Semantic pool: top {pool_size} candidates by cosine similarity.")
@@ -516,7 +536,6 @@ class ResumeEngine:
             print(f"   ℹ️  No vector cache found ({npy_path}).")
             print(f"      Run scripts/embed_bullet_bank.py to enable semantic pre-filtering.")
 
-        # Narrow the DataFrame to the semantic pool (or use all rows as fallback)
         if semantic_indices is not None:
             df_pool = df.iloc[semantic_indices].reset_index(drop=True)
         else:
@@ -623,7 +642,9 @@ class ResumeEngine:
             job_description = f.read()
 
         # Full KB loaded here for the final builder assembly call only.
-        # The audit loop receives static_prefix="" to keep critique prompts lean.
+        # Now includes .json files — verified_facts, verified_metrics,
+        # verified_projects, verified_tools, recruiter_memory_patterns,
+        # and evidence_graph flow into every builder and future rewrite call.
         knowledge_context = self._load_knowledge_base()
 
         raw_mined_bullets = self.mine_bullet_bank(job_description)
@@ -662,7 +683,6 @@ class ResumeEngine:
             json.dump(resume_json, f, indent=2)
         print(f"✅ Success! Tailored resume saved to {output_path}")
 
-        # Post-build holistic critique — checks Summary, Skills, Competencies against JD
         try:
             self.critique_assembled_resume(resume_json, job_description)
         except Exception as e:
