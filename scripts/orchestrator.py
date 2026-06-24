@@ -137,26 +137,42 @@ class GeminiClient:
                  max_retries: int = 6) -> str:
         """Call generateContent and return the response text.
 
-        Retries with exponential backoff on 429 rate-limit errors.
-        max_retries=6 gives a backoff window of up to 315s
-        (5+10+20+40+80+160) so transient quota spikes recover
-        instead of dropping bullets.
+        Retries with exponential backoff on 429 and 500 errors.
         """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
+        # Initialize config dict
         generation_config = {"temperature": temperature}
 
+        # FIX FOR #3: Native JSON Mode & Schema Mapping for REST API
         if response_schema is not None:
             generation_config["responseMimeType"] = "application/json"
-
-        body = {
-            "system_instruction": {"parts": [{"text": system_instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": contents}]}],
-            "generationConfig": generation_config,
-        }
+            
+            # Convert Pydantic schemas to the OpenAPI JSON dict that Gemini's REST API expects
+            if hasattr(response_schema, "model_json_schema"):
+                # Pydantic v2
+                generation_config["responseSchema"] = response_schema.model_json_schema()
+            elif hasattr(response_schema, "schema"):
+                # Pydantic v1 fallback
+                generation_config["responseSchema"] = response_schema.schema()
+            elif isinstance(response_schema, dict):
+                # If you already pass a raw dictionary schema
+                generation_config["responseSchema"] = response_schema
 
         RETRYABLE = (429, 500, 502, 503, 504)
+        
         for attempt in range(max_retries):
+            # FIX FOR 500 LOOPS: If a previous attempt hit a 500/Format wall, 
+            # slightly vary the temperature to change token selection weights
+            if attempt > 0 and response_schema is not None:
+                generation_config["temperature"] = min(temperature + (attempt * 0.1), 0.4)
+
+            body = {
+                "system_instruction": {"parts": [{"text": system_instruction}]},
+                "contents": [{"role": "user", "parts": [{"text": contents}]}],
+                "generationConfig": generation_config,
+            }
+
             resp = requests.post(url, json=body, timeout=self.timeout)
 
             if resp.status_code in RETRYABLE:
@@ -167,7 +183,7 @@ class GeminiClient:
                     print(resp.text)
                 print("=============================\n")
                 wait = 5 * (2 ** attempt)
-                print(f"         ⏳ Rate limited. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
+                print(f"         ⏳ Server issue/Rate limit. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
                 time.sleep(wait)
                 continue
 
@@ -191,11 +207,11 @@ class GeminiClient:
 
             return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
 
+        # Fallback out of loop
         resp = requests.post(url, json=body, timeout=self.timeout)
         resp.raise_for_status()
         data = resp.json()
         return data["candidates"][0]["content"]["parts"][0]["text"]
-
 
 client = GeminiClient(api_key=API_KEY, timeout=120)
 
@@ -424,6 +440,7 @@ class ResumeEngine:
                     system_instruction=critique_system,
                     contents=bullet,
                     response_schema=CritiqueSchema,
+                    response_mime_type="application/json",  # <-- ADD THIS LINE
                     temperature=0.0
                 )
 
@@ -442,11 +459,13 @@ class ResumeEngine:
                         f"{bullet}"
                         f"\n\nWEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
                     )
+                    # Introduce temperature jitter dynamically for the retry step if desired
                     rewrite_text = client.generate(
                         model=CRITIQUE_MODEL,
                         system_instruction=rewrite_system,
                         contents=rewrite_contents,
                         response_schema=RewriteSchema,
+                        response_mime_type="application/json",  # <-- ADD THIS LINE
                         temperature=0.0
                     )
 
