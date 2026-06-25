@@ -675,6 +675,13 @@ class ResumeEngine:
     def mine_bullet_bank(self, jd_text: str, top_k: int = TOP_K_BULLETS):
         """Returns the top-K most relevant bullets from the CSV.
 
+        BULLET SOURCE PRIORITY:
+            1. bullet-bank-keepers.csv — pre-vetted, rewritten bullets from
+               rewrite_bullets.py. Used automatically when the file exists and
+               contains at least one row. This is the preferred source.
+            2. bullet-bank-clean.csv — fallback for when keepers.csv is absent
+               or empty (e.g. rewrite run hasn't started yet).
+
         TWO-STAGE PIPELINE:
 
         Stage 1 — Semantic pre-filter (gemini-embedding-2):
@@ -691,9 +698,27 @@ class ResumeEngine:
             Tools keywords weight 2x, hard skills and core functions weight 1x.
             Return the top top_k highest-scoring bullets.
         """
-        print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
+        # --- BULLET SOURCE SELECTION ---
+        keepers_path = os.path.join(self.kb_dir, "bullet-bank-keepers.csv")
+        clean_path   = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
 
-        csv_path = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
+        csv_path = clean_path  # default
+        if os.path.exists(keepers_path):
+            try:
+                df_check = pd.read_csv(keepers_path)
+                if len(df_check) > 0:
+                    csv_path = keepers_path
+                    print(f"⛏️  Mining bullet-bank-keepers.csv for the top {top_k} best matches "
+                          f"({len(df_check)} pre-vetted bullets available)...")
+                else:
+                    print(f"⛏️  keepers.csv exists but is empty — falling back to bullet-bank-clean.csv.")
+                    print(f"   Mining bullet-bank-clean.csv for the top {top_k} best matches...")
+            except Exception as e:
+                print(f"⛏️  keepers.csv unreadable ({e}) — falling back to bullet-bank-clean.csv.")
+                print(f"   Mining bullet-bank-clean.csv for the top {top_k} best matches...")
+        else:
+            print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
+
         if not os.path.exists(csv_path):
             print(f"⚠️ Warning: {csv_path} not found. Skipping extraction.")
             return []
