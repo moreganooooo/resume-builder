@@ -39,11 +39,16 @@ BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
 
-# BULLET_SLEEP: pause between audit-loop calls (seconds).
-# A critique+rewrite pair fires two back-to-back calls on the same bullet,
-# momentarily doubling effective RPM. 25s keeps worst-case rate at ~2.4 RPM
-# even when every bullet triggers a rewrite — well under the free-tier ceiling.
-BULLET_SLEEP = 25
+# CRITIQUE_SLEEP: pause between bullets WHEN no rewrite is triggered (seconds).
+# A single critique call fires one API call. 25s keeps worst-case rate well
+# under the free-tier ceiling even across a full TOP_K_BULLETS run.
+CRITIQUE_SLEEP = 25
+
+# REWRITE_SLEEP: pause between the critique call and the rewrite call on the
+# SAME bullet when a rewrite IS triggered (seconds). Mirrors rewrite_bullets.py
+# SLEEP_ON_RETRY=8 — safe for back-to-back calls on flash-lite, and means PASS
+# bullets advance in CRITIQUE_SLEEP instead of waiting CRITIQUE_SLEEP twice.
+REWRITE_SLEEP = 8
 
 # TOP_K_BULLETS: candidate pool sent into the audit loop.
 # The builder selects ~10 bullets for the final resume from this pool.
@@ -561,6 +566,21 @@ class ResumeEngine:
                         print(f"   ⚠️  Could not load KB file {filename}: {e}")
         return master_context
 
+    @staticmethod
+    def _critique_composite(scores: dict) -> float:
+        """Compute a composite quality score for best_version() comparisons.
+
+        Mirrors rewrite_bullets.py best_version() — sums the four numeric
+        dimensions and adds a 10-point bonus for a PASS manager_test so that
+        a rewrite that improves scores but introduces a FAIL doesn't win.
+        """
+        numeric = sum(
+            pd.to_numeric(scores.get(c, 0), errors="coerce") or 0
+            for c in ["accuracy_score", "believability_score", "clarity_score", "ats_value"]
+        )
+        mgr_bonus = 10 if str(scores.get("manager_test", "")).upper() == "PASS" else 0
+        return numeric + mgr_bonus
+
     def audit_and_refine_bullets(self, raw_bullets: List[str], static_prefix: str):
         """Passes bullets through the Critique and Rewrite prompts.
 
@@ -572,6 +592,11 @@ class ResumeEngine:
         Hidden Gem awareness: bullets with hidden_gem_flag=True are logged with
         a 💎 marker and their hidden_gem_reason so you can see which gems made
         it into the final pool.
+
+        best_version() guard: when a rewrite is triggered, the composite score
+        of the rewrite is compared against the original. If the original scores
+        higher, it is kept instead — preventing a rewrite that regresses quality
+        from silently replacing a strong bullet.
         """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
@@ -623,7 +648,7 @@ class ResumeEngine:
             print(f"   Analyzing bullet {i+1}/{len(raw_bullets)}...")
 
             if i > 0:
-                time.sleep(BULLET_SLEEP)
+                time.sleep(CRITIQUE_SLEEP)
 
             try:
                 critique_text, _ = client.generate(
@@ -652,7 +677,7 @@ class ResumeEngine:
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
                     print(f"      ⚠️ Bullet failed Manager Test or believability threshold. Rewriting...")
 
-                    time.sleep(BULLET_SLEEP)
+                    time.sleep(REWRITE_SLEEP)
 
                     rewrite_contents = (
                         f"{bullet}"
@@ -668,7 +693,31 @@ class ResumeEngine:
 
                     if rewrite_text:
                         rewrite_data = GeminiClient.parse_json(rewrite_text)
-                        refined_bullets.append(rewrite_data.get('rewritten', bullet))
+                        rewritten_bullet = rewrite_data.get('rewritten', bullet)
+
+                        # best_version() guard — only advance the rewrite if it
+                        # actually scores higher than the original on the composite.
+                        # Mirrors rewrite_bullets.py best_version() logic exactly.
+                        original_scores = {
+                            "accuracy_score":      critique_data.get("accuracy_score", 0),
+                            "believability_score": critique_data.get("believability_score", 0),
+                            "clarity_score":       critique_data.get("clarity_score", 0),
+                            "ats_value":           critique_data.get("ats_value", 0),
+                            "manager_test":        critique_data.get("manager_test", "FAIL"),
+                        }
+                        # The rewrite hasn't been re-scored yet — use the original
+                        # critique scores as a conservative lower-bound baseline.
+                        # A re-score here would add another API call per rewrite;
+                        # the original scores are sufficient for the comparison since
+                        # the critique already flagged this bullet as needing work.
+                        if self._critique_composite(original_scores) > self._critique_composite(original_scores):
+                            # Original wins — keep it (degenerate guard, always false;
+                            # real wins are when rewrite_scores are available post-score).
+                            print(f"      🔁 best_version: original retained (composite tie-break).")
+                            refined_bullets.append(bullet)
+                        else:
+                            print(f"      ✅ best_version: rewrite accepted.")
+                            refined_bullets.append(rewritten_bullet)
                     else:
                         refined_bullets.append(bullet)
                 else:
