@@ -2,13 +2,13 @@
 """
 cluster_bullet_bank.py
 
-Groups near-duplicate bullets in bullet-bank-clean.csv using TF-IDF + cosine
-similarity, then joins ALL columns from bullet-bank-audited.csv so every
-output row has cluster info, scores, company, tags, and weaknesses in one place.
+Groups near-duplicate bullets in bullet-bank-keepers.csv using TF-IDF + cosine
+similarity. bullet-bank-keepers.csv already contains all score columns, so the
+audit join is a self-join no-op that keeps everything in sync automatically.
 
 Usage:
   python cluster_bullet_bank.py                   # uses defaults
-  python cluster_bullet_bank.py --threshold 0.88  # stricter grouping
+  python cluster_bullet_bank.py --threshold 0.85  # stricter grouping
   python cluster_bullet_bank.py --report-only     # preview clusters, no files written
 
 Outputs (written to resume-engine/knowledge_base/):
@@ -27,8 +27,11 @@ SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 
-DEFAULT_INPUT     = os.path.join(KB_DIR, "bullet-bank-clean.csv")
-DEFAULT_AUDIT     = os.path.join(KB_DIR, "bullet-bank-audited.csv")
+# Stage 2 now runs exclusively on the keeper pool.
+# bullet-bank-keepers.csv already has all score columns, so --audit
+# points to the same file (self-join drops shared cols cleanly).
+DEFAULT_INPUT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
+DEFAULT_AUDIT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 DEFAULT_DEDUP_OUT = os.path.join(KB_DIR, "bullet-bank-deduplicated.csv")
 DEFAULT_MAP_OUT   = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 
@@ -41,7 +44,9 @@ WEAKNESS_COL = "weaknesses"
 MERGE_KEY    = "__merge_key__"
 SCRIPT_COLS  = ["cluster_id", "cluster_size", "is_representative", "next_action"]
 
-DEFAULT_THRESHOLD = 0.75
+# 0.82 is tighter than the old 0.75 — catches true near-duplicates without
+# collapsing bullets that tell different angles of the same achievement.
+DEFAULT_THRESHOLD = 0.82
 
 
 # ---------------------------------------------------------------------------
