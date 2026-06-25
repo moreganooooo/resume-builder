@@ -821,14 +821,17 @@ def build_rewrite_prompt(
         else "Improve clarity, specificity, and believability."
     )
 
-    # Tier 3 tail: persona + weaknesses + bullet (the only per-call variables)
     parts = []
+
+    # Stable context block first — maximises cache-hit prefix length.
     if kb_context:
         parts.extend([
             "Use only supported facts from this context:",
             kb_context,
             "",
         ])
+
+    # Per-bullet tail — the only part that changes between calls.
     parts.extend([
         f"Persona: {persona}",
         f"Weaknesses: {weakness_text}",
@@ -852,11 +855,6 @@ def _log_cache_stats(raw_response, kb_context_chars: int, attempt: int) -> None:
     """
     Extracts cachedContentTokenCount from the API response metadata and logs it
     alongside the kb_context size so you can verify provider-side cache hits.
-
-    Handles three common response shapes:
-      1. GeminiClient returns a response object with .usage_metadata attribute
-      2. Response is a dict with a 'usage_metadata' key
-      3. Neither — logs a warning so you know the shape needs updating
     """
     cached_tokens = None
     try:
@@ -1141,4 +1139,258 @@ def process_bullet(
             }
             if use_minimal_schema
             else {
-                "ty
+                "type": "object",
+                "properties": {
+                    "rewritten_bullet": {"type": "string"},
+                    "reasoning":        {"type": "string"},
+                    "context_gaps":     {"type": "string"},
+                },
+                "required": ["rewritten_bullet", "reasoning", "context_gaps"],
+            }
+        )
+
+        prompt = build_rewrite_prompt(
+            bullet=current_bullet,
+            tags=tags,
+            weaknesses=str(current_scores.get("weaknesses", "")),
+            kb_context=kb_context,
+            attempt=attempt,
+            prev_scores=current_scores if attempt > 1 else None,
+            minimal_schema=use_minimal_schema,
+        )
+
+        if dry_run:
+            print(f"\n{'='*60}\nDRY RUN PROMPT (attempt {attempt}):\n{prompt}\n{'='*60}\n")
+            rewritten = f"[DRY RUN] {original_bullet}"
+            reasoning = "dry-run"
+            gaps = ""
+        else:
+            try:
+                raw = client.generate(
+                    model=active_rewrite_model,
+                    system_instruction=rewrite_system,
+                    contents=prompt,
+                    temperature=0.7,
+                    response_schema=runner_schema,
+                    max_output_tokens=120,
+                    service_tier="standard",
+                )
+                _log_cache_stats(raw, kb_context_chars, attempt)
+                parsed = GeminiClient.parse_json(raw)
+                rewritten = str(parsed.get("rewritten_bullet", "")).strip()
+                reasoning = str(parsed.get("reasoning", "")).strip()
+                gaps      = str(parsed.get("context_gaps", "")).strip()
+
+                if not rewritten:
+                    raise ValueError("Empty rewritten_bullet in response")
+
+            except Exception as e:
+                rewrite_parse_failures += 1
+                print(f"   ⚠️ Rewrite parse error (attempt {attempt}): {e}")
+                if rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES and active_rewrite_model != REWRITE_FALLBACK_MODEL:
+                    print(f"   🔄 Switching to fallback model: {REWRITE_FALLBACK_MODEL}")
+                    active_rewrite_model = REWRITE_FALLBACK_MODEL
+                time.sleep(SLEEP_ON_RETRY)
+                continue
+
+        last_rewrite  = rewritten
+        last_reasoning = reasoning
+        last_gaps     = gaps
+
+        print(f"   📝 Rewritten: {rewritten[:80]}...")
+
+        new_scores = score_bullet(rewritten, tags, score_system, dry_run)
+        action     = decide_action(new_scores)
+        print(
+            f"   📊 Scores → accuracy={new_scores.get('accuracy_score')} "
+            f"bel={new_scores.get('believability_score')} "
+            f"clarity={new_scores.get('clarity_score')} "
+            f"ats={new_scores.get('ats_value')} "
+            f"mgr={new_scores.get('manager_test')} → {action}"
+        )
+
+        if action == "KEEP" and new_scores.get("manager_test", "").upper() == "PASS":
+            return {
+                "final_bullet":      rewritten,
+                "rewrite_status":    "KEEP",
+                "rewrite_attempts":  attempt,
+                "rewrite_reasoning": reasoning,
+                "context_gaps":      gaps,
+                "source":            "rewrite",
+                **{col: new_scores.get(col, "") for col in SCORE_COLS},
+                "weaknesses":        new_scores.get("weaknesses", ""),
+            }
+
+        # Not a keeper — pick best version so far and loop
+        current_bullet, current_scores = best_version(
+            current_bullet, current_scores, rewritten, new_scores
+        )
+        current_scores["weaknesses"] = new_scores.get("weaknesses", "")
+
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(SLEEP_ON_RETRY)
+
+    # Exhausted attempts — return best version found
+    print(f"   ⚠️ Max attempts reached. Marking as MANUAL.")
+    return {
+        "final_bullet":      current_bullet,
+        "rewrite_status":    "MANUAL",
+        "rewrite_attempts":  MAX_ATTEMPTS,
+        "rewrite_reasoning": last_reasoning,
+        "context_gaps":      last_gaps,
+        "source":            "rewrite",
+        **{col: current_scores.get(col, "") for col in SCORE_COLS},
+        "weaknesses":        current_scores.get("weaknesses", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(description="Agentic bullet rewriter")
+    parser.add_argument("--limit",        type=int,  default=None,  help="Max bullets to process")
+    parser.add_argument("--dry-run",      action="store_true",       help="Print prompts, no API calls")
+    parser.add_argument("--retry-manual", action="store_true",       help="Re-run MANUAL bullets")
+    parser.add_argument("--model",        type=str,  default=None,   help="Override rewrite model")
+    args = parser.parse_args()
+
+    global REWRITE_MODEL
+    if args.model:
+        REWRITE_MODEL = args.model
+        print(f"🔧 Model override: {REWRITE_MODEL}")
+
+    # ------------------------------------------------------------------
+    # Load cluster map
+    # ------------------------------------------------------------------
+    print(f"\n📥 Loading cluster map: {CLUSTER_MAP_IN}")
+    df_map = pd.read_csv(CLUSTER_MAP_IN)
+    df_map = ensure_writable_dtypes(df_map)
+
+    required_cols = ["Bullet Point", "Role / Company", "Tags", "next_action", "is_representative"]
+    for col in required_cols:
+        if col not in df_map.columns:
+            raise ValueError(f"Missing required column in cluster map: {col}")
+
+    # ------------------------------------------------------------------
+    # Identify bullets to process
+    # ------------------------------------------------------------------
+    target_actions = {"REWRITE", "REVIEW"}
+    if args.retry_manual:
+        target_actions.add("MANUAL")
+
+    mask_rep    = df_map["is_representative"].astype(str).str.strip().str.lower().isin(["true", "1", "yes"])
+    mask_action = df_map["next_action"].str.strip().str.upper().isin(target_actions)
+    df_todo     = df_map[mask_rep & mask_action].copy()
+
+    print(f"   📋 Total cluster map rows:         {len(df_map)}")
+    print(f"   🎯 Representative + target action: {len(df_todo)}")
+
+    # ------------------------------------------------------------------
+    # Resume / skip already-processed bullets
+    # ------------------------------------------------------------------
+    already_done = load_already_processed(CLUSTER_MAP_OUT, KEEPERS_OUT, retry_manual=args.retry_manual)
+    if already_done:
+        before = len(df_todo)
+        df_todo = df_todo[~df_todo["Bullet Point"].str.strip().isin(already_done)]
+        print(f"   ⏭️  Skipping {before - len(df_todo)} already-processed bullets")
+
+    if args.limit:
+        df_todo = df_todo.head(args.limit)
+
+    print(f"   ▶️  Bullets to process this run:    {len(df_todo)}\n")
+
+    if df_todo.empty:
+        print("✅ Nothing to process. All bullets are already done.")
+        return
+
+    # ------------------------------------------------------------------
+    # Startup: load rules, KB, warm cache, build system prompts
+    # ------------------------------------------------------------------
+    rules      = RulesBundle(RULES_DIR)
+    kb         = KnowledgeBase()
+    kb.warm_segment_cache(df_todo)
+    rewrite_system, score_system = build_system_prompts(rules, kb)
+
+    # ------------------------------------------------------------------
+    # Load or init outputs
+    # ------------------------------------------------------------------
+    if os.path.exists(CLUSTER_MAP_OUT):
+        df_out = pd.read_csv(CLUSTER_MAP_OUT)
+        df_out = ensure_writable_dtypes(df_out)
+    else:
+        df_out = df_map.copy()
+        for col in ["final_bullet", "rewrite_status", "rewrite_attempts",
+                    "rewrite_reasoning", "context_gaps"]:
+            if col not in df_out.columns:
+                df_out[col] = ""
+        df_out = ensure_writable_dtypes(df_out)
+
+    df_keepers = load_or_init_keepers(KEEPERS_OUT, df_map)
+
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
+    total       = len(df_todo)
+    n_keep      = 0
+    n_manual    = 0
+    bullets_since_flush = 0
+
+    for i, (idx, row) in enumerate(df_todo.iterrows(), 1):
+        bullet_preview = str(row["Bullet Point"])[:60]
+        print(f"\n{'─'*60}")
+        print(f"[{i}/{total}] {bullet_preview}...")
+        print(f"   Tags: {row.get('Tags', '')}  |  Action: {row.get('next_action', '')}")
+
+        result = process_bullet(row, kb, rewrite_system, score_system, dry_run=args.dry_run)
+
+        # Write result back into df_out
+        out_mask = df_out["Bullet Point"].str.strip() == str(row["Bullet Point"]).strip()
+        for col, val in result.items():
+            if col in df_out.columns:
+                df_out.loc[out_mask, col] = _safe_str(val) if col in STRING_SCORE_COLS + ["final_bullet", "rewrite_status", "rewrite_reasoning", "context_gaps"] else _safe_numeric(val) if col in NUMERIC_SCORE_COLS else val
+
+        if result["rewrite_status"] == "KEEP":
+            n_keep += 1
+            keeper_row = {
+                "Bullet Point":      result["final_bullet"],
+                "Role / Company":    row.get("Role / Company", ""),
+                "Tags":              row.get("Tags", ""),
+                "source":            result.get("source", "rewrite"),
+                "rewrite_attempts":  result.get("rewrite_attempts", 0),
+                "rewrite_reasoning": result.get("rewrite_reasoning", ""),
+                "context_gaps":      result.get("context_gaps", ""),
+                **{col: result.get(col, "") for col in SCORE_COLS},
+                "weaknesses":        result.get("weaknesses", ""),
+            }
+            df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_OUT)
+            print(f"   ✅ KEEPER saved.")
+        else:
+            n_manual += 1
+            print(f"   🔧 MANUAL — best version retained.")
+
+        # Batch CSV flush: write every CSV_FLUSH_EVERY bullets, always on the last
+        bullets_since_flush += 1
+        is_last = (i == total)
+        if bullets_since_flush >= CSV_FLUSH_EVERY or is_last:
+            df_out.to_csv(CLUSTER_MAP_OUT, index=False)
+            bullets_since_flush = 0
+            print(f"   💾 Flushed cluster map ({i}/{total} bullets processed).")
+
+        if i < total:
+            time.sleep(SLEEP_BETWEEN_BULLETS)
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print(f"✅ Run complete: {total} bullets processed")
+    print(f"   KEEP:   {n_keep}")
+    print(f"   MANUAL: {n_manual}")
+    print(f"   Cluster map → {CLUSTER_MAP_OUT}")
+    print(f"   Keepers     → {KEEPERS_OUT}")
+
+
+if __name__ == "__main__":
+    main()
