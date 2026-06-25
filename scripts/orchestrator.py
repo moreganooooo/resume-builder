@@ -3,6 +3,7 @@ import time
 import yaml
 import json
 import re
+import random
 import requests
 import numpy as np
 import pandas as pd
@@ -63,48 +64,74 @@ SEMANTIC_POOL = 30
 class GeminiClient:
     """Minimal REST wrapper around the Gemini generateContent and embedContent endpoints."""
 
-    def __init__(self, api_key: str, timeout: int = 120):
-        self.api_key = api_key
+    def __init__(self, api_key: str = None, timeout: int = 180):
+        self.api_key = api_key or API_KEY
+        if not self.api_key:
+            raise ValueError("API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY.")
+        # <--- THIS IS THE MISSING LINE --->
         self.timeout = timeout
 
+    @staticmethod
+    def _sanitize_schema(schema: dict) -> dict:
+        """Strips Pydantic keys and capitalizes Enums for the REST API."""
+        if not isinstance(schema, dict):
+            return schema
+            
+        clean = {}
+        for k, v in schema.items():
+            if k in ("title", "default", "$defs"):
+                continue
+            if k == "type" and isinstance(v, str):
+                clean[k] = v.upper()
+            elif isinstance(v, dict):
+                clean[k] = GeminiClient._sanitize_schema(v)
+            elif isinstance(v, list):
+                clean[k] = [GeminiClient._sanitize_schema(i) if isinstance(i, dict) else i for i in v]
+            else:
+                clean[k] = v
+        return clean
+    
     @staticmethod
     def parse_json(text: str) -> dict:
         """Strip markdown fencing and parse JSON. Falls back to regex extraction.
 
-        Pre-processing step: Gemma 4 models emit <|think|>...</|think|> reasoning
-        blocks before their actual response. This strip is a no-op for all standard
-        Gemini models (Flash, Flash-Lite, Pro) which never produce these tokens.
+        Pre-processing step: Gemma 4 models may emit <|think|> ... </|think|>
+        or <|think|> ... <|/think|> reasoning blocks before their actual response.
+        This strip is a no-op for Gemini models that never produce these tokens.
         """
         if not text or not text.strip():
             raise ValueError("parse_json received an empty string — the model returned no content.")
 
-        # Strip Gemma 4 thinking tokens before any other processing.
-        # Safe no-op if the pattern is absent (i.e. all non-Gemma models).
-        cleaned = re.sub(r"<\|think\|>.*?</\|think\|>", "", text, flags=re.DOTALL).strip()
+        cleaned = re.sub(
+            r"<\|think\|>.*?(?:</\|think\|>|<\|/think\|>)",
+            "",
+            text,
+            flags=re.DOTALL,
+        ).strip()
 
         if not cleaned:
             raise ValueError("parse_json: string was empty after stripping thinking tokens.")
 
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1]
-            cleaned = cleaned.rsplit("```", 1)[0]
-
-        cleaned = cleaned.strip()
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
 
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
             pass
 
-        match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if match:
             try:
-                return json.loads(match.group())
+                return json.loads(match.group(0))
             except json.JSONDecodeError:
                 pass
 
         preview = cleaned[:300].replace("\n", " ")
-        raise ValueError(f"JSON parse failed — could not extract valid JSON.\nRaw preview: {preview!r}")
+        raise ValueError(
+            f"JSON parse failed — could not extract valid JSON.\nRaw preview: {preview!r}"
+        )
 
     def embed(self, text: str, max_retries: int = 4) -> list:
         """Call gemini-embedding-2 embedContent. Returns a flat list of floats.
@@ -132,48 +159,96 @@ class GeminiClient:
         resp.raise_for_status()
         return resp.json()["embedding"]["values"]
 
-    def generate(self, model: str, system_instruction: str, contents: str,
-                 response_schema: type = None, temperature: float = 0.1,
-                 max_retries: int = 6) -> str:
-        """Call generateContent and return the response text.
-
-        Retries with exponential backoff on 429 and 500 errors.
-        """
+    def generate(
+        self,
+        model: str,
+        system_instruction: str,
+        contents: str,
+        response_schema: type = None,
+        temperature: float = 0.1,
+        max_retries: int = 6,
+        max_output_tokens: int = None,
+        service_tier: str = "standard",
+    ) -> str:
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
-        # Initialize config dict
-        generation_config = {"temperature": temperature}
-
-        # FIX FOR #3: Native JSON Mode & Schema Mapping for REST API
-        if response_schema is not None:
-            generation_config["responseMimeType"] = "application/json"
-            
-            # Convert Pydantic schemas to the OpenAPI JSON dict that Gemini's REST API expects
-            if hasattr(response_schema, "model_json_schema"):
-                # Pydantic v2
-                generation_config["responseSchema"] = response_schema.model_json_schema()
-            elif hasattr(response_schema, "schema"):
-                # Pydantic v1 fallback
-                generation_config["responseSchema"] = response_schema.schema()
-            elif isinstance(response_schema, dict):
-                # If you already pass a raw dictionary schema
-                generation_config["responseSchema"] = response_schema
-
         RETRYABLE = (429, 500, 502, 503, 504)
-        
-        for attempt in range(max_retries):
-            # FIX FOR 500 LOOPS: If a previous attempt hit a 500/Format wall, 
-            # slightly vary the temperature to change token selection weights
-            if attempt > 0 and response_schema is not None:
-                generation_config["temperature"] = min(temperature + (attempt * 0.1), 0.4)
+        SERVER_ERRORS = (500, 502, 503, 504)
+        HIGH_DEMAND_STATUS = 503
+        BASE_BACKOFF_SECONDS = 8
+        MAX_BACKOFF_SECONDS = 90
 
-            body = {
-                "system_instruction": {"parts": [{"text": system_instruction}]},
-                "contents": [{"role": "user", "parts": [{"text": contents}]}],
-                "generationConfig": generation_config,
+        fallback_model = "gemini-3.1-flash-lite"
+        failure_streak = 0
+
+        valid_tiers = {"standard", "priority", "flex"}
+        tier = (service_tier or "standard").strip().lower()
+        if tier not in valid_tiers:
+            raise ValueError(f"Invalid service_tier={service_tier!r}. Use one of {sorted(valid_tiers)}.")
+
+        for attempt in range(max_retries):
+            current_temp = 0.0 if response_schema is not None else temperature
+
+            generation_config = {
+                "temperature": current_temp,
             }
 
-            resp = requests.post(url, json=body, timeout=self.timeout)
+            if max_output_tokens is not None:
+                generation_config["maxOutputTokens"] = int(max_output_tokens)
+
+            if response_schema is not None:
+                generation_config["responseMimeType"] = "application/json"
+
+            raw_schema = None
+            if response_schema is not None and "gemma" not in model.lower():
+                if hasattr(response_schema, "model_json_schema"):
+                    raw_schema = response_schema.model_json_schema()
+                elif hasattr(response_schema, "schema") and callable(response_schema.schema):
+                    raw_schema = response_schema.schema()
+                elif isinstance(response_schema, dict):
+                    raw_schema = response_schema
+                elif isinstance(response_schema, str):
+                    try:
+                        raw_schema = json.loads(response_schema)
+                    except json.JSONDecodeError:
+                        print(" ⚠️ ERROR: response_schema string is not valid JSON.")
+
+                if raw_schema:
+                    generation_config["responseSchema"] = GeminiClient._sanitize_schema(raw_schema)
+                else:
+                    print(f" ⚠️ DEBUG: Schema was passed but skipped. Unrecognized type: {type(response_schema)}")
+
+            if "gemma" in model.lower():
+                merged_contents = f"{system_instruction}\n\n---\n\n{contents}"
+                body = {
+                    "contents": [{"role": "user", "parts": [{"text": merged_contents}]}],
+                    "generationConfig": generation_config,
+                    "service_tier": tier,
+                }
+            else:
+                body = {
+                    "systemInstruction": {"parts": [{"text": system_instruction}]},
+                    "contents": [{"role": "user", "parts": [{"text": contents}]}],
+                    "generationConfig": generation_config,
+                    "service_tier": tier,
+                }
+
+            try:
+                resp = requests.post(url, json=body, timeout=self.timeout)
+            except requests.exceptions.RequestException as e:
+                failure_streak += 1
+                print(f" ⚠️ Network error/Timeout ({self.timeout}s): {str(e).split(':')[-1].strip()}")
+
+                if failure_streak >= 2 and model != fallback_model and ("pro" in model.lower() or "gemma" in model.lower()):
+                    print(f" 🔄 Consecutive transport failures: falling back from {model} to {fallback_model}...")
+                    model = fallback_model
+                    url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
+                    failure_streak = 0
+
+                sleep_duration = min(BASE_BACKOFF_SECONDS * (2 ** attempt), MAX_BACKOFF_SECONDS) + random.uniform(1, 4)
+                print(f" ⏳ Network spike. Waiting {sleep_duration:.1f}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(sleep_duration)
+                continue
 
             if resp.status_code in RETRYABLE:
                 print(f"\n===== HTTP {resp.status_code} RESPONSE BODY =====")
@@ -182,39 +257,99 @@ class GeminiClient:
                 except Exception:
                     print(resp.text)
                 print("=============================\n")
-                wait = 5 * (2 ** attempt)
-                print(f"         ⏳ Server issue/Rate limit. Waiting {wait}s before retry {attempt + 1}/{max_retries}...")
-                time.sleep(wait)
+
+                if resp.status_code in SERVER_ERRORS:
+                    failure_streak += 1
+                elif resp.status_code == 429:
+                    failure_streak = max(failure_streak, 1)
+
+                if resp.status_code == HIGH_DEMAND_STATUS:
+                    print(" ⚠️ Model is experiencing high demand (503). Treating as transient capacity issue.")
+
+                if failure_streak >= 2 and model != fallback_model and ("pro" in model.lower() or "gemma" in model.lower()):
+                    print(f" 🔄 Consecutive server/transport failures: falling back from {model} to {fallback_model}...")
+                    model = fallback_model
+                    url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
+                    failure_streak = 0
+
+                sleep_duration = min(BASE_BACKOFF_SECONDS * (2 ** attempt), MAX_BACKOFF_SECONDS) + random.uniform(1, 4)
+                print(f" ⏳ Server issue/Rate limit. Waiting {sleep_duration:.1f}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(sleep_duration)
                 continue
 
             resp.raise_for_status()
+            failure_streak = 0
             data = resp.json()
 
             usage = data.get("usageMetadata", {})
             if usage:
                 cached = usage.get("cachedContentTokenCount", 0) or 0
                 cache_str = f" | ✨ cached: {cached}" if cached > 0 else ""
-                print(f"         📊 tokens — prompt: {usage.get('promptTokenCount', '?')} | "
-                      f"output: {usage.get('candidatesTokenCount', '?')} | "
-                      f"total: {usage.get('totalTokenCount', '?')}"
-                      f"{cache_str}")
+                print(
+                    f" 📊 tokens — prompt: {usage.get('promptTokenCount', '?')} | "
+                    f"output: {usage.get('candidatesTokenCount', '?')} | "
+                    f"total: {usage.get('totalTokenCount', '?')}"
+                    f"{cache_str}"
+                )
 
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
             if finish_reason not in ("STOP", "MAX_TOKENS"):
-                print(f"         ⚠️  Unexpected finishReason: {finish_reason}")
-                print(f"         Raw API response: {json.dumps(data, indent=2)[:600]}")
+                print(f" ⚠️ Unexpected finishReason: {finish_reason}")
+                print(f" Raw API response: {json.dumps(data, indent=2)[:600]}")
 
             return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
 
-        # Fallback out of loop
-        resp = requests.post(url, json=body, timeout=self.timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        raise RuntimeError(f"generate() failed after {max_retries} attempts for model {model}.")
 
-client = GeminiClient(api_key=API_KEY, timeout=120)
+client = GeminiClient(api_key=API_KEY, timeout=90)
 
+def smoke_test_gemma(model: str = "gemma-4-31b-it") -> bool:
+    print(f"\n🔬 Gemma Smoke Test — model: {model}")
+
+    system = (
+        "Return only valid JSON. "
+        "Do not explain. "
+        "Do not repeat instructions. "
+        "Do not use markdown. "
+        "Output must begin with { and end with }."
+    )
+
+    prompt = """
+Return a JSON object with exactly these keys:
+- status
+- model
+- message
+
+Example valid output:
+{"status":"ok","model":"gemma","message":"smoke test passed"}
+
+Now return the JSON object only.
+""".strip()
+
+    try:
+        raw = client.generate(
+            model=model,
+            system_instruction=system,
+            contents=prompt,
+            temperature=0.0
+        )
+
+        if not raw or not raw.strip():
+            print(" ❌ FAIL — API returned an empty response.")
+            return False
+
+        print(f" 📨 Raw response preview: {raw[:200].replace(chr(10), ' ')!r}")
+        result = GeminiClient.parse_json(raw)
+        print(f" ✅ PASS — Parsed JSON: {result}")
+        return True
+
+    except Exception as e:
+        print(f" ❌ FAIL — Exception: {e}")
+        return False
+
+# To run the smoke test from the command line:
+# python -c "from orchestrator import smoke_test_gemma; smoke_test_gemma()"
 
 # ==========================================
 # PYDANTIC SCHEMAS
@@ -440,7 +575,6 @@ class ResumeEngine:
                     system_instruction=critique_system,
                     contents=bullet,
                     response_schema=CritiqueSchema,
-                    response_mime_type="application/json",  # <-- ADD THIS LINE
                     temperature=0.0
                 )
 
@@ -465,7 +599,6 @@ class ResumeEngine:
                         system_instruction=rewrite_system,
                         contents=rewrite_contents,
                         response_schema=RewriteSchema,
-                        response_mime_type="application/json",  # <-- ADD THIS LINE
                         temperature=0.0
                     )
 
