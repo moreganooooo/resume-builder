@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Tuple
 
 
 # --- PATH RESOLUTION & ENV SETUP ---
@@ -68,7 +68,6 @@ class GeminiClient:
         self.api_key = api_key or API_KEY
         if not self.api_key:
             raise ValueError("API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY.")
-        # <--- THIS IS THE MISSING LINE --->
         self.timeout = timeout
 
     @staticmethod
@@ -169,7 +168,16 @@ class GeminiClient:
         max_retries: int = 6,
         max_output_tokens: int = None,
         service_tier: str = "standard",
-    ) -> str:
+    ) -> Tuple[str, dict]:
+        """Call generateContent and return (text, usage_metadata).
+
+        usage_metadata keys (all int, 0 if absent):
+            promptTokenCount, candidatesTokenCount, totalTokenCount,
+            cachedContentTokenCount
+
+        Callers that only need the text can unpack with:
+            text, _ = client.generate(...)
+        """
         url = f"{BASE_URL}/{model}:generateContent?key={self.api_key}"
 
         RETRYABLE = (429, 500, 502, 503, 504)
@@ -282,13 +290,19 @@ class GeminiClient:
             data = resp.json()
 
             usage = data.get("usageMetadata", {})
+            usage_out = {
+                "promptTokenCount":        usage.get("promptTokenCount", 0),
+                "candidatesTokenCount":    usage.get("candidatesTokenCount", 0),
+                "totalTokenCount":         usage.get("totalTokenCount", 0),
+                "cachedContentTokenCount": usage.get("cachedContentTokenCount", 0),
+            }
             if usage:
-                cached = usage.get("cachedContentTokenCount", 0) or 0
+                cached = usage_out["cachedContentTokenCount"]
                 cache_str = f" | ✨ cached: {cached}" if cached > 0 else ""
                 print(
-                    f" 📊 tokens — prompt: {usage.get('promptTokenCount', '?')} | "
-                    f"output: {usage.get('candidatesTokenCount', '?')} | "
-                    f"total: {usage.get('totalTokenCount', '?')}"
+                    f" 📊 tokens — prompt: {usage_out['promptTokenCount']} | "
+                    f"output: {usage_out['candidatesTokenCount']} | "
+                    f"total: {usage_out['totalTokenCount']}"
                     f"{cache_str}"
                 )
 
@@ -298,7 +312,8 @@ class GeminiClient:
                 print(f" ⚠️ Unexpected finishReason: {finish_reason}")
                 print(f" Raw API response: {json.dumps(data, indent=2)[:600]}")
 
-            return candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+            text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+            return text, usage_out
 
         raise RuntimeError(f"generate() failed after {max_retries} attempts for model {model}.")
 
@@ -328,7 +343,7 @@ Now return the JSON object only.
 """.strip()
 
     try:
-        raw = client.generate(
+        raw, _ = client.generate(
             model=model,
             system_instruction=system,
             contents=prompt,
@@ -570,7 +585,7 @@ class ResumeEngine:
                 time.sleep(BULLET_SLEEP)
 
             try:
-                critique_text = client.generate(
+                critique_text, _ = client.generate(
                     model=CRITIQUE_MODEL,
                     system_instruction=critique_system,
                     contents=bullet,
@@ -593,8 +608,7 @@ class ResumeEngine:
                         f"{bullet}"
                         f"\n\nWEAKNESSES TO FIX:\n{critique_data.get('weaknesses', 'None')}"
                     )
-                    # Introduce temperature jitter dynamically for the retry step if desired
-                    rewrite_text = client.generate(
+                    rewrite_text, _ = client.generate(
                         model=CRITIQUE_MODEL,
                         system_instruction=rewrite_system,
                         contents=rewrite_contents,
@@ -622,7 +636,7 @@ class ResumeEngine:
         """Uses Gemini to extract structured requirements from the Job Description."""
         print("🔍 Analyzing JD to extract core tools and functional requirements...")
 
-        response_text = client.generate(
+        response_text, _ = client.generate(
             model=BUILDER_MODEL,
             system_instruction="You are an expert technical recruiter. Extract tools, hard skills, and core functions from the provided job description.",
             contents=jd_text,
@@ -740,7 +754,7 @@ class ResumeEngine:
             f"\n# AI Risk Definitions: {json.dumps(ai_risk_rules)}"
         )
 
-        response_text = client.generate(
+        response_text, _ = client.generate(
             model=CRITIQUE_MODEL,
             system_instruction=system_instruction,
             contents=bullet_text,
@@ -767,7 +781,7 @@ class ResumeEngine:
 # TARGET JD
 {job_description}
 """
-        response_text = client.generate(
+        response_text, _ = client.generate(
             model=CRITIQUE_MODEL,
             system_instruction=critique_prompt,
             contents=contents,
@@ -803,10 +817,6 @@ class ResumeEngine:
         with open(jd_path, "r") as f:
             job_description = f.read()
 
-        # Full KB loaded here for the final builder assembly call only.
-        # Now includes .json files — verified_facts, verified_metrics,
-        # verified_projects, verified_tools, recruiter_memory_patterns,
-        # and evidence_graph flow into every builder and future rewrite call.
         knowledge_context = self._load_knowledge_base()
 
         raw_mined_bullets = self.mine_bullet_bank(job_description)
@@ -832,7 +842,7 @@ class ResumeEngine:
 {polished_bullets}
 """
 
-        response_text = client.generate(
+        response_text, _ = client.generate(
             model=BUILDER_MODEL,
             system_instruction=system_instruction,
             contents=combined_contents,
