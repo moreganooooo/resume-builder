@@ -767,7 +767,7 @@ def build_rewrite_prompt(
 
 def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     """
-    Logs token usage + cachedContentTokenCount on a single line.
+    Logs token usage on a single line.
 
     Args:
         usage: The second element of the (text, usage) tuple from client.generate().
@@ -789,17 +789,9 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     )
 
     if cached_tokens and cached_tokens > 0:
-        print(
-            f"   📊 tokens — {token_part} | ✨ cached: {cached_tokens:,}"
-            f"   💾 Cache stats [attempt {attempt}]: kb_context={kb_context_chars:,} chars"
-            f" | cachedContentTokenCount={cached_tokens:,} ✨"
-        )
+        print(f"   📊 tokens — {token_part} | ✨ cached: {cached_tokens:,}")
     else:
-        print(
-            f"   📊 tokens — {token_part}"
-            f"   💾 Cache stats [attempt {attempt}]: kb_context={kb_context_chars:,} chars"
-            f" | cachedContentTokenCount=0 (no cache hit this call)"
-        )
+        print(f"   📊 tokens — {token_part}")
 
 
 # ---------------------------------------------------------------------------
