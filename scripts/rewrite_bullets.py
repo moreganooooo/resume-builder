@@ -16,23 +16,26 @@ Pipeline per bullet:
   7. On restart, bullets whose original text already appears in a prior output run
      OR in bullet-bank-keepers.csv are skipped automatically (resumable runs).
 
-CACHE OPTIMIZATION (vs prior version):
-  Context is now built in three tiers to maximise provider-side prompt-prefix reuse:
+CACHE OPTIMIZATION — three-tier prompt structure:
 
   Tier 1 — static_prefix  (built ONCE at startup, identical for every bullet)
-    profile.yml + verified_facts + verified_tools + verified_projects
-    These never change between bullets. Freezing them into a single leading string
-    gives the API the best chance of recognising a repeated prefix and cache-hitting.
+    profile.yml + verified_facts + verified_tools + verified_projects.
+    Placed at the TOP of every contents payload so the API can cache-hit the prefix.
 
   Tier 2 — segment bundles  (built ONCE per unique company+tags combo)
     CV section excerpt + background summary + Treering evidence (claims,
-    screenshot metrics, verified metrics). Computed by warm_segment_cache()
-    before the rewrite loop starts. All bullets sharing the same company+tags
-    pair will have an identical segment block, strengthening per-group reuse.
+    screenshot metrics, verified metrics). Warmed by warm_segment_cache() before
+    the loop. All bullets sharing the same company+tags pair get the same frozen
+    string, maximising per-group prefix reuse.
 
-  Tier 3 — per-bullet tail  (the only part that varies)
-    Bullet text + weaknesses + persona descriptor. Appended in
-    build_rewrite_prompt() as before — this part is meant to differ.
+  Tier 3 — per-bullet tail  (the ONLY part that varies per call)
+    Persona descriptor + weaknesses + bullet text. No boilerplate here — all
+    output-contract instructions live in the system prompt (Tier 0) so the
+    merged Gemma payload starts with an identical, stable header on every call.
+
+Cache observability:
+  Every rewrite call logs cachedContentTokenCount from the API response metadata
+  alongside kb_context length so you can verify provider-side cache hits directly.
 
 Knowledge base files loaded at startup:
   - cv.md                          → role section matching bullet's company only
@@ -526,13 +529,10 @@ class KnowledgeBase:
 
         print(f"   📝 profile.yml trimmed to {len(self.profile):,} chars")
 
-        # Build the universal static prefix once
         self.static_prefix = self._build_static_prefix()
         print(f"   📌 Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets")
 
-        # Segment cache populated by warm_segment_cache() after df_map is loaded
         self._segment_cache: dict = {}
-
         print("   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n")
 
     # ------------------------------------------------------------------
@@ -543,7 +543,7 @@ class KnowledgeBase:
         """
         Universal evidence block — identical string for every bullet in every run.
         Profile + verified JSON files only. No per-company or per-tag material here.
-        Placed at the TOP of every prompt so the API can cache-hit the prefix.
+        Placed at the TOP of the contents payload so the API can cache-hit the prefix.
         """
         sections = []
 
@@ -626,8 +626,6 @@ class KnowledgeBase:
         Pre-build all segment bundles before the rewrite loop starts.
         Pass in the full cluster map DataFrame; every unique (role_company, tags)
         pair gets computed once here instead of once per bullet at runtime.
-
-        Logs each bundle size so you can immediately spot under-populated combos.
         """
         self._segment_cache = {}
         pairs = df[["Role / Company", "Tags"]].drop_duplicates()
@@ -652,8 +650,7 @@ class KnowledgeBase:
         """
         Returns static_prefix + segment_bundle.
         Both are pre-built — no file I/O, no filtering, no string assembly on the hot path.
-        Falls back gracefully to building the segment on-demand if the cache was not warmed
-        (e.g. a bullet with an unexpected company/tags combo appears mid-run).
+        Falls back gracefully to building on-demand if the cache was not warmed.
         """
         key = (role_company, tags)
         if key not in self._segment_cache:
@@ -661,10 +658,7 @@ class KnowledgeBase:
             self._segment_cache[key] = self._build_segment_bundle(role_company, tags)
 
         segment = self._segment_cache[key]
-
-        if segment:
-            return f"{self.static_prefix}\n\n{segment}"
-        return self.static_prefix
+        return f"{self.static_prefix}\n\n{segment}" if segment else self.static_prefix
 
     def recruiter_context_block(self) -> str:
         if not self.recruiter_patterns:
@@ -680,13 +674,35 @@ class KnowledgeBase:
 # SYSTEM PROMPTS
 # ---------------------------------------------------------------------------
 
+# NOTE ON CACHE STABILITY:
+# Output-contract instructions (JSON shape, no-markdown, no-preamble) live HERE
+# in the system prompt, not in build_rewrite_prompt(). This keeps them in the
+# stable Tier 0 that is identical across every call.
+#
+# For Gemma: orchestrator.py merges system_instruction into the user payload.
+# Having the contract block at the TOP of system_instruction means it leads the
+# merged string on every call, giving Gemma its best prefix-stability too.
+
 REWRITE_SYSTEM_BASE = """\
 You are an expert resume writer specialising in B2B SaaS and marketing careers.
 
-Your task is to rewrite one resume bullet into a stronger, more credible version that remains fully truthful.
+OUTPUT CONTRACT (apply to every response, no exceptions):
+- Return exactly one raw JSON object.
+- Do not use markdown fences.
+- Do not add preamble, commentary, or any text before or after the JSON.
+- Do not echo the prompt or repeat instructions.
+- Do not add extra keys beyond those specified below.
+- rewritten_bullet must be a single resume bullet sentence, never a list.
+
+JSON shape (full schema):
+{{"rewritten_bullet": "", "reasoning": "", "context_gaps": ""}}
+
+Minimal schema (Gemma / minimal mode — used when instructed):
+{{"rewritten_bullet": ""}}
 
 Rewrite goals:
-- Pass the manager test: a hiring manager scanning quickly should understand what was done, how it was done, and why it mattered.
+- Pass the manager test: a hiring manager scanning quickly should understand what was done,
+  how it was done, and why it mattered.
 - Improve clarity, specificity, and ATS value.
 - Sound human and believable, not inflated or AI-written.
 - Use a strong past-tense action verb.
@@ -695,22 +711,8 @@ Rewrite goals:
 - Use metrics only when they are verified in the provided context.
 - Do not invent scope, ownership, tools, or results.
 
-If the context is not strong enough to support an improved claim, keep the rewrite conservative and explain the limitation in context_gaps.
-
-You must return exactly one raw JSON object with these keys:
-{{
-  "rewritten_bullet": "",
-  "reasoning": "",
-  "context_gaps": ""
-}}
-
-Output rules:
-- Return JSON only.
-- Do not use markdown fences.
-- Do not add preamble or commentary.
-- Do not echo the prompt.
-- Do not add extra keys.
-- Ensure rewritten_bullet is a single resume bullet sentence, not a list.
+If the context is not strong enough to support an improved claim, keep the rewrite
+conservative and explain the limitation in context_gaps.
 
 {rules_block}
 """
@@ -740,7 +742,7 @@ def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
         rules_block=rules.score_rules_block,
         recruiter_block=kb.recruiter_context_block(),
     )
-    print(f"   ✏️  Rewrite system prompt: {len(rewrite_system):,} chars")
+    print(f"   ✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
     print(f"   📊 Score system prompt:   {len(score_system):,} chars")
     return rewrite_system, score_system
 
@@ -757,7 +759,7 @@ def persona_context(tags: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# PROMPT BUILDER
+# PROMPT BUILDER  (Tier 3 — per-bullet tail only)
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(
@@ -769,6 +771,22 @@ def build_rewrite_prompt(
     prev_scores: dict = None,
     minimal_schema: bool = False,
 ) -> str:
+    """
+    Builds the user `contents` payload for one rewrite call.
+
+    Deliberately contains ONLY the parts that vary per bullet:
+      - Persona descriptor (stable per tag combo, but short)
+      - Weaknesses
+      - Bullet text
+      - KB context (Tier 1 + Tier 2, pre-built and frozen)
+
+    Output-contract instructions have been moved to REWRITE_SYSTEM_BASE so they
+    live in the stable system prompt and are never repeated here. This keeps the
+    per-call contents as short and as tail-only as possible.
+
+    The schema reminder at the bottom is one line and uses the exact shape string
+    already declared in the system prompt — no new boilerplate introduced.
+    """
     persona = persona_context(tags)
     weakness_text = (
         weaknesses.strip()
@@ -776,13 +794,8 @@ def build_rewrite_prompt(
         else "Improve clarity, specificity, and believability."
     )
 
+    # Tier 3 tail: persona + weaknesses + bullet (the only per-call variables)
     parts = [
-        "Return exactly one raw JSON object.",
-        "Do not use markdown.",
-        "Do not explain.",
-        "Do not repeat the prompt.",
-        "Do not add any text before or after the JSON.",
-        "",
         f"Persona: {persona}",
         f"Weaknesses: {weakness_text}",
         f"Bullet: {bullet}",
@@ -795,12 +808,55 @@ def build_rewrite_prompt(
             kb_context,
         ])
 
+    # One-line schema reminder — matches the shape already in the system prompt.
+    # Kept here because Gemma benefits from having it near the end of the merged payload.
     if minimal_schema:
-        parts.extend(["", 'Return exactly this shape: {"rewritten_bullet":""}'])
+        parts.extend(["", 'Schema: {"rewritten_bullet":""}'])
     else:
-        parts.extend(["", 'Return exactly this shape: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'])
+        parts.extend(["", 'Schema: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'])
 
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# CACHE-HIT LOGGING HELPER
+# ---------------------------------------------------------------------------
+
+def _log_cache_stats(raw_response, kb_context_chars: int, attempt: int) -> None:
+    """
+    Extracts cachedContentTokenCount from the API response metadata and logs it
+    alongside the kb_context size so you can verify provider-side cache hits.
+
+    Handles three common response shapes:
+      1. GeminiClient returns a response object with .usage_metadata attribute
+      2. Response is a dict with a 'usage_metadata' key
+      3. Neither — logs a warning so you know the shape needs updating
+    """
+    cached_tokens = None
+    try:
+        if hasattr(raw_response, "usage_metadata"):
+            um = raw_response.usage_metadata
+            cached_tokens = getattr(um, "cached_content_token_count", None)
+            if cached_tokens is None and isinstance(um, dict):
+                cached_tokens = um.get("cachedContentTokenCount") or um.get("cached_content_token_count")
+        elif isinstance(raw_response, dict):
+            um = raw_response.get("usage_metadata", {})
+            cached_tokens = um.get("cachedContentTokenCount") or um.get("cached_content_token_count")
+    except Exception:
+        pass
+
+    if cached_tokens is not None:
+        print(
+            f"   💾 Cache stats [attempt {attempt}]: "
+            f"kb_context={kb_context_chars:,} chars | "
+            f"cachedContentTokenCount={cached_tokens:,}"
+        )
+    else:
+        print(
+            f"   💾 Cache stats [attempt {attempt}]: "
+            f"kb_context={kb_context_chars:,} chars | "
+            f"cachedContentTokenCount=n/a (not in response metadata)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1036,8 +1092,9 @@ def process_bullet(
     role_company    = str(row.get("Role / Company", ""))
     original_scores = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
 
-    # Single dict-lookup — no assembly work on the hot path
+    # Single dict-lookup — no assembly on the hot path
     kb_context = kb.context_block_for_bullet(role_company, tags)
+    kb_context_chars = len(kb_context)
 
     current_bullet = original_bullet
     current_scores = original_scores.copy()
@@ -1095,11 +1152,15 @@ def process_bullet(
                     response_schema=runner_schema,
                     service_tier="standard",
                 )
+
+                # Log cache stats immediately after each rewrite call
+                _log_cache_stats(raw, kb_context_chars, attempt)
+
                 try:
                     rw_data = GeminiClient.parse_json(raw)
                     rewrite_parse_failures = 0
                 except Exception:
-                    cleaned = raw.strip()
+                    cleaned = raw.strip() if isinstance(raw, str) else str(raw)
                     m = re.search(r'"rewritten_bullet"\s*:\s*"([^"]+)"', cleaned, re.DOTALL)
                     if m:
                         rw_data = {"rewritten_bullet": m.group(1).strip(),
@@ -1150,7 +1211,7 @@ def process_bullet(
                         "source":            "manual_review",
                     }
 
-        rewritten     = rw_data.get("rewritten_bullet", "").strip()
+        rewritten      = rw_data.get("rewritten_bullet", "").strip()
         last_reasoning = rw_data.get("reasoning", "")
         last_gaps      = rw_data.get("context_gaps", "")
 
@@ -1197,7 +1258,6 @@ def process_bullet(
         if attempt < MAX_ATTEMPTS:
             time.sleep(SLEEP_ON_RETRY)
 
-    # All attempts exhausted — return best achieved
     return {
         "final_bullet":      current_bullet,
         "final_scores":      current_scores,
@@ -1226,26 +1286,19 @@ def main():
         REWRITE_MODEL = args.model
         print(f"🔧 Rewrite model overridden: {REWRITE_MODEL}")
 
-    # --- Load rules & KB ---
     rules = RulesBundle(RULES_DIR)
     kb    = KnowledgeBase()
 
-    # --- Load cluster map ---
     print(f"\n📂 Loading cluster map: {CLUSTER_MAP_IN}")
     df_map = pd.read_csv(CLUSTER_MAP_IN)
     df_map = ensure_writable_dtypes(df_map)
 
-    # --- Warm segment cache BEFORE loop (key optimisation) ---
     kb.warm_segment_cache(df_map)
-
-    # --- Build system prompts (after KB is warmed) ---
     rewrite_system, score_system = build_system_prompts(rules, kb)
 
-    # --- Load already-processed bullets ---
     done_bullets = load_already_processed(CLUSTER_MAP_OUT, KEEPERS_OUT, args.retry_manual)
     print(f"\n⏭️  Skipping {len(done_bullets)} already-processed bullets.")
 
-    # --- Filter to bullets that need work ---
     target_actions = {"REWRITE", "REVIEW"}
     mask = (
         (df_map.get("is_representative", pd.Series(True, index=df_map.index))
@@ -1269,10 +1322,8 @@ def main():
         print("✅ Nothing to do. All bullets are already processed.")
         return
 
-    # --- Init keepers CSV ---
     df_keepers = load_or_init_keepers(KEEPERS_OUT, df_map)
 
-    # --- Load or init output cluster map ---
     if os.path.exists(CLUSTER_MAP_OUT):
         df_out = pd.read_csv(CLUSTER_MAP_OUT)
         df_out = ensure_writable_dtypes(df_out)
@@ -1284,7 +1335,6 @@ def main():
             if col not in df_out.columns:
                 df_out[col] = ""
 
-    # --- Rewrite loop ---
     for i, (idx, row) in enumerate(df_todo.iterrows()):
         bullet_preview = str(row["Bullet Point"])[:60]
         print(f"\n{'='*70}")
@@ -1293,13 +1343,9 @@ def main():
 
         result = process_bullet(row, kb, rewrite_system, score_system, args.dry_run)
 
-        # Write result back to output map
         out_idx = df_out.index[df_out["Bullet Point"].astype(str).str.strip()
                                == str(row["Bullet Point"]).strip()]
-        if len(out_idx) > 0:
-            target_idx = out_idx[0]
-        else:
-            target_idx = idx
+        target_idx = out_idx[0] if len(out_idx) > 0 else idx
 
         df_out.loc[target_idx, "final_bullet"]      = result["final_bullet"]
         df_out.loc[target_idx, "rewrite_status"]    = result["status"]
@@ -1333,11 +1379,10 @@ def main():
         else:
             print(f"   🚩 Status: {result['status']}")
 
-        # Save progress after every bullet
         df_out.to_csv(CLUSTER_MAP_OUT, index=False)
 
     print(f"\n{'='*70}")
-    print(f"✅ Run complete.")
+    print("✅ Run complete.")
     print(f"   Updated cluster map : {CLUSTER_MAP_OUT}")
     print(f"   Keepers CSV         : {KEEPERS_OUT}")
     keep_count   = (df_out.get("rewrite_status", pd.Series(dtype=str))
