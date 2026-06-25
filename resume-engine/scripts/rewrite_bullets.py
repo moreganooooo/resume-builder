@@ -87,13 +87,16 @@ KB_VERIFIED_PROJECTS  = os.path.join(KB_DIR, "verified_projects.json")
 KB_VERIFIED_TOOLS     = os.path.join(KB_DIR, "verified_tools.json")
 KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 
-REWRITE_MODEL = "gemini-3.1-flash-lite"
-SCORE_MODEL   = "gemini-3.1-flash-lite"
-MAX_ATTEMPTS  = 3
+REWRITE_MODEL = "gemma-4-31b-it"
+REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+SCORE_MODEL = "gemini-3.1-flash-lite"
+MAX_ATTEMPTS = 3
+MAX_REWRITE_PARSE_FAILURES = 2
+GEMMA_MINIMAL_JSON = True
 
-SLEEP_BETWEEN_BULLETS = 4.5
-SLEEP_BETWEEN_SCORES  = 4.5
-SLEEP_ON_RETRY        = 4.5
+SLEEP_BETWEEN_BULLETS = 8
+SLEEP_BETWEEN_SCORES  = 8
+SLEEP_ON_RETRY        = 12
 
 SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score",
               "ats_value", "manager_test"]
@@ -643,28 +646,35 @@ def load_already_processed(output_path: str, keepers_path: str, retry_manual: bo
 
 REWRITE_SYSTEM_BASE = """\
 You are an expert resume writer specialising in B2B SaaS and marketing careers.
-Your job is to rewrite a single resume bullet point so it:
-  - Passes the "manager test" (a hiring manager reading fast can immediately grasp
-    WHAT you did, HOW you did it, and WHY it mattered / what the result was)
-  - Scores 85+ on accuracy (factually grounded, no inflation)
-  - Scores 85+ on believability (sounds like a real human did this, not AI hype)
-  - Is strong for the target persona/role context provided
-  - Fixes every weakness listed
-  - Stays under 30 words where possible; never exceeds 40 words
-  - Starts with a strong past-tense action verb (consult VERB INTENT MAP below)
-  - Includes a concrete metric or outcome if one can be reasonably inferred
-    from the knowledge base context provided — use ONLY verified metrics from
-    the Verified Claims / Verified Metrics sections; do NOT invent numbers
 
-If you genuinely lack enough context to fix a specific weakness, note this honestly
-in your reasoning — do not fabricate details.
+Your task is to rewrite one resume bullet into a stronger, more credible version that remains fully truthful.
 
-Respond ONLY with valid JSON, no markdown fences:
+Rewrite goals:
+- Pass the manager test: a hiring manager scanning quickly should understand what was done, how it was done, and why it mattered.
+- Improve clarity, specificity, and ATS value.
+- Sound human and believable, not inflated or AI-written.
+- Use a strong past-tense action verb.
+- Stay under 30 words where possible; never exceed 40 words.
+- Use only information supported by the provided context.
+- Use metrics only when they are verified in the provided context.
+- Do not invent scope, ownership, tools, or results.
+
+If the context is not strong enough to support an improved claim, keep the rewrite conservative and explain the limitation in context_gaps.
+
+You must return exactly one raw JSON object with these keys:
 {{
-  "rewritten_bullet": "<the new bullet text>",
-  "reasoning": "<1-2 sentences explaining what you changed and why>",
-  "context_gaps": "<details you couldn't fill due to missing context, or empty string>"
+  "rewritten_bullet": "",
+  "reasoning": "",
+  "context_gaps": ""
 }}
+
+Output rules:
+- Return JSON only.
+- Do not use markdown fences.
+- Do not add preamble or commentary.
+- Do not echo the prompt.
+- Do not add extra keys.
+- Ensure rewritten_bullet is a single resume bullet sentence, not a list.
 
 {rules_block}
 """
@@ -687,7 +697,6 @@ Respond ONLY with valid JSON, no markdown fences:
 {recruiter_block}
 """
 
-
 def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
     """
     Returns (rewrite_system, score_system) with rules and recruiter patterns injected.
@@ -707,44 +716,53 @@ def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
 # PROMPT BUILDER
 # ---------------------------------------------------------------------------
 
-def build_rewrite_prompt(bullet: str, tags: str, weaknesses: str, kb_context: str, attempt: int, prev_scores: dict = None) -> str:
+def build_rewrite_prompt(
+    bullet: str,
+    tags: str,
+    weaknesses: str,
+    kb_context: str,
+    attempt: int,
+    prev_scores: dict = None,
+    minimal_schema: bool = False
+) -> str:
     persona = persona_context(tags)
-
-    kb_block = ""
-    if kb_context:
-        kb_block = (
-            "--- KNOWLEDGE BASE CONTEXT ---\n"
-            "Use the following background information to inform your rewrite.\n"
-            "Draw on verified metrics where they strengthen the bullet.\n"
-            "Do NOT use metrics marked Low confidence as hard facts.\n\n"
-            f"{kb_context}\n\n"
-        )
-
-    prev_block = ""
-    if prev_scores and attempt > 1:
-        prev_block = f"""
---- PREVIOUS ATTEMPT FEEDBACK ---
-Your last rewrite scored:
-  accuracy_score:      {prev_scores.get('accuracy_score', 'n/a')}
-  believability_score: {prev_scores.get('believability_score', 'n/a')}
-  clarity_score:       {prev_scores.get('clarity_score', 'n/a')}
-  ats_value:           {prev_scores.get('ats_value', 'n/a')}
-  manager_test:        {prev_scores.get('manager_test', 'n/a')}
-  score_notes:         {prev_scores.get('score_notes', '')}
-
-Use these scores and notes to improve your rewrite.
-"""
-
-    return (
-        f"{kb_block}"
-        f"--- BULLET TO REWRITE ---\n{bullet}\n\n"
-        f"--- TARGET PERSONA ---\nThis bullet should resonate for: {persona}\n\n"
-        f"--- KNOWN WEAKNESSES (fix these) ---\n"
-        f"{weaknesses if weaknesses and weaknesses.strip() else 'None noted — improve clarity and manager-test score generally.'}"
-        f"{prev_block}\n"
-        f"Now rewrite the bullet. Respond with JSON only."
+    weakness_text = (
+        weaknesses.strip()
+        if weaknesses and weaknesses.strip()
+        else "Improve clarity, specificity, and believability."
     )
 
+    parts = [
+        'Return exactly one raw JSON object.',
+        'Do not use markdown.',
+        'Do not explain.',
+        'Do not repeat the prompt.',
+        'Do not add any text before or after the JSON.',
+        '',
+        f'Persona: {persona}',
+        f'Weaknesses: {weakness_text}',
+        f'Bullet: {bullet}',
+    ]
+
+    if kb_context:
+        parts.extend([
+            '',
+            'Use only supported facts from this context:',
+            kb_context
+        ])
+
+    if minimal_schema:
+        parts.extend([
+            '',
+            'Return exactly this shape: {"rewritten_bullet":""}'
+        ])
+    else:
+        parts.extend([
+            '',
+            'Return exactly this shape: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'
+        ])
+
+    return "\n".join(parts)
 
 # ---------------------------------------------------------------------------
 # SCORING
@@ -756,32 +774,94 @@ def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = Fals
             "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
             "ats_value": 90, "manager_test": "PASS", "weaknesses": "", "score_notes": "dry-run"
         }
+        
+    # Enforces JSON mode via your client setup
+    scoring_schema = {
+            "type": "object",
+            "properties": {
+                "accuracy_score": {"type": "integer"},
+                "believability_score": {"type": "integer"},
+                "clarity_score": {"type": "integer"},
+                "ats_value": {"type": "integer"},
+                "manager_test": {"type": "string"},
+                "weaknesses": {"type": "string"},
+                "score_notes": {"type": "string"}
+            },
+            "required": [
+                    "accuracy_score", 
+                    "believability_score", 
+                    "clarity_score", 
+                    "ats_value", 
+                    "manager_test", 
+                    "weaknesses", 
+                    "score_notes"
+                ]
+            }
+
     raw = client.generate(
         model=SCORE_MODEL,
         system_instruction=score_system,
         contents=f"--- BULLET ---\n{bullet}\n\n--- TARGET PERSONA ---\n{persona_context(tags)}\n\nScore this bullet. Respond with JSON only.",
-        temperature=0.0
+        temperature=0.0,
+        response_schema=scoring_schema,
+        max_output_tokens=220,
+        service_tier="standard",
     )
+    
     data = GeminiClient.parse_json(raw)
     time.sleep(SLEEP_BETWEEN_SCORES)
+    
+    # --- RESTORED CLEANUP AND RETURN LOGIC ---
     mgr = str(data.get("manager_test", "")).strip().upper()
     data["manager_test"] = mgr if mgr in ("PASS", "FAIL") else "FAIL"
+    
     for col in ["accuracy_score", "believability_score", "clarity_score", "ats_value"]:
         data[col] = pd.to_numeric(data.get(col, 0), errors="coerce")
+        
     return data
+    
+
+def _is_meaningful_weakness(text: str) -> bool:
+    t = str(text or "").strip().lower()
+    return t not in ("", "none", "nan", "n/a", "no major weaknesses", "no significant weaknesses")
 
 
 def decide_action(scores: dict) -> str:
     mgr = str(scores.get("manager_test", "")).strip().upper()
-    believability = pd.to_numeric(scores.get("believability_score"), errors="coerce")
     accuracy = pd.to_numeric(scores.get("accuracy_score"), errors="coerce")
+    believability = pd.to_numeric(scores.get("believability_score"), errors="coerce")
+    clarity = pd.to_numeric(scores.get("clarity_score"), errors="coerce")
+    ats_value = pd.to_numeric(scores.get("ats_value"), errors="coerce")
     weaknesses = str(scores.get("weaknesses", "")).strip()
+
     if pd.isna(accuracy) and pd.isna(believability):
         return "NEEDS_AUDIT"
-    if mgr == "FAIL" or (pd.notna(believability) and believability < 80):
+
+    if mgr == "FAIL":
         return "REWRITE"
-    if weaknesses and weaknesses.lower() not in ("", "none", "nan", "n/a"):
-        return "REVIEW" if (pd.notna(accuracy) and accuracy >= 85) else "REWRITE"
+
+    if pd.notna(believability) and believability < 80:
+        return "REWRITE"
+
+    if pd.notna(accuracy) and accuracy < 85:
+        return "REWRITE"
+
+    strong_keep = (
+        mgr == "PASS"
+        and pd.notna(accuracy) and accuracy >= 90
+        and pd.notna(believability) and believability >= 88
+        and pd.notna(clarity) and clarity >= 85
+    )
+
+    if strong_keep:
+        return "KEEP"
+
+    if _is_meaningful_weakness(weaknesses):
+        return "REVIEW"
+
+    if pd.notna(ats_value) and ats_value < 75:
+        return "REVIEW"
+
     return "KEEP"
 
 
@@ -844,56 +924,141 @@ def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFram
 # BULLET PROCESSOR
 # ---------------------------------------------------------------------------
 
-def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score_system: str, dry_run: bool) -> dict:
+def process_bullet(
+    row: pd.Series,
+    kb: KnowledgeBase,
+    rewrite_system: str,
+    score_system: str,
+    dry_run: bool
+) -> dict:
     original_bullet = str(row["Bullet Point"]).strip()
     tags = str(row.get("Tags", ""))
     weaknesses = str(row.get("weaknesses", ""))
     role_company = str(row.get("Role / Company", ""))
     original_scores = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
+
     kb_context = kb.context_block_for_bullet(role_company, tags)
     current_bullet = original_bullet
-    current_scores = original_scores
+    current_scores = original_scores.copy()
+
     last_rewrite = ""
     last_reasoning = ""
     last_gaps = ""
 
+    active_rewrite_model = REWRITE_MODEL
+    rewrite_parse_failures = 0
+
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        print(f"    ✏️  Attempt {attempt}/{MAX_ATTEMPTS}...")
+        print(f" ✏️ Attempt {attempt}/{MAX_ATTEMPTS}... (rewrite model: {active_rewrite_model})")
+
+        use_minimal_schema = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
+
+        if use_minimal_schema:
+            runner_schema = {
+                "type": "object",
+                "properties": {
+                    "rewritten_bullet": {"type": "string"},
+                },
+                "required": ["rewritten_bullet"],
+            }
+        else:
+            runner_schema = {
+                "type": "object",
+                "properties": {
+                    "rewritten_bullet": {"type": "string"},
+                    "reasoning": {"type": "string"},
+                    "context_gaps": {"type": "string"},
+                },
+                "required": ["rewritten_bullet", "reasoning", "context_gaps"],
+            }
+
         rw_prompt = build_rewrite_prompt(
-            current_bullet, tags,
+            current_bullet,
+            tags,
             str(current_scores.get("weaknesses", weaknesses)),
             kb_context,
             attempt=attempt,
-            prev_scores=current_scores if attempt > 1 else None
+            prev_scores=current_scores if attempt > 1 else None,
+            minimal_schema=use_minimal_schema,
         )
+
         if dry_run:
-            rw_data = {"rewritten_bullet": f"[DRY RUN] {current_bullet}", "reasoning": "dry-run", "context_gaps": ""}
+            rw_data = {
+                "rewritten_bullet": f"[DRY RUN] {current_bullet}",
+                "reasoning": "dry-run",
+                "context_gaps": "",
+            }
         else:
             try:
-                # 1. Provide a temporary dict schema or target layout if no Pydantic model exists here
-                # Or simply pass your schema object if you have one for the runner script
-                runner_schema = {"type": "OBJECT", "properties": {
-                    "rewritten_bullet": {"type": "STRING"},
-                    "reasoning": {"type": "STRING"},
-                    "context_gaps": {"type": "STRING"}
-                }}
+                rewrite_temp = 0.0 if "gemma" in active_rewrite_model.lower() else 0.1
 
                 raw = client.generate(
-                    model=REWRITE_MODEL,
+                    model=active_rewrite_model,
                     system_instruction=rewrite_system,
                     contents=rw_prompt,
-                    temperature=0.1,
-                    response_schema=runner_schema  # <-- PASS THIS INSTEAD of response_mime_type
+                    temperature=rewrite_temp,
+                    response_schema=runner_schema,
+                    service_tier="standard",
                 )
-                rw_data = GeminiClient.parse_json(raw)
+
+                try:
+                    rw_data = GeminiClient.parse_json(raw)
+                    rewrite_parse_failures = 0
+                except Exception:
+                    cleaned = raw.strip()
+
+                    m = re.search(r'"rewritten_bullet"\s*:\s*"([^"]+)"', cleaned, re.DOTALL)
+                    if m:
+                        rw_data = {
+                            "rewritten_bullet": m.group(1).strip(),
+                            "reasoning": "",
+                            "context_gaps": "Recovered from partial JSON output",
+                        }
+                        rewrite_parse_failures = 0
+                    else:
+                        bullet_match = re.search(
+                            r'(?:Rewritten Bullet|Rewrite|Final Bullet)\s*[:\-]\s*(.+)',
+                            cleaned,
+                            re.IGNORECASE | re.DOTALL,
+                        )
+                        if bullet_match:
+                            first_line = bullet_match.group(1).strip().splitlines()[0].strip(' "*')
+                            rw_data = {
+                                "rewritten_bullet": first_line,
+                                "reasoning": "",
+                                "context_gaps": "Recovered from non-JSON output",
+                            }
+                            rewrite_parse_failures = 0
+                        else:
+                            rewrite_parse_failures += 1
+                            print(
+                                f" ⚠️ Rewrite parse failure "
+                                f"{rewrite_parse_failures}/{MAX_REWRITE_PARSE_FAILURES}. "
+                                f"Raw preview: {cleaned[:400]!r}"
+                            )
+
+                            if (
+                                rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
+                                and "gemma" in active_rewrite_model.lower()
+                                and active_rewrite_model != REWRITE_FALLBACK_MODEL
+                            ):
+                                print(
+                                    f" 🔄 Non-JSON rewrite fallback: switching this bullet "
+                                    f"from {active_rewrite_model} to {REWRITE_FALLBACK_MODEL}"
+                                )
+                                active_rewrite_model = REWRITE_FALLBACK_MODEL
+                                rewrite_parse_failures = 0
+
+                            raise ValueError("Rewrite returned unusable non-JSON output")
+
             except Exception as e:
-                print(f"    ⚠️  API error on attempt {attempt}: {e}")
+                print(f" ⚠️ API error on attempt {attempt}: {e}")
                 if attempt < MAX_ATTEMPTS:
-                    print(f"    🔄 Retrying in {SLEEP_ON_RETRY}s...")
+                    print(f" 🔄 Retrying in {SLEEP_ON_RETRY}s...")
                     time.sleep(SLEEP_ON_RETRY)
                     continue
                 else:
-                    print(f"    🚩 API error on final attempt — marking MANUAL.")
+                    print(" 🚩 API error on final attempt — marking MANUAL.")
                     return {
                         "final_bullet": current_bullet,
                         "final_scores": current_scores,
@@ -909,20 +1074,33 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score
         last_gaps = rw_data.get("context_gaps", "")
 
         if not rewritten:
-            print(f"    ⚠️  Empty rewrite on attempt {attempt} — retrying in {SLEEP_ON_RETRY}s...")
-            time.sleep(SLEEP_ON_RETRY)
-            continue
+            print(f" ⚠️ Empty rewrite on attempt {attempt} — using previous bullet state.")
+            rewritten = current_bullet
 
         time.sleep(SLEEP_BETWEEN_BULLETS)
-        print(f"    📊 Scoring rewrite...")
+        print(" 📊 Scoring rewrite...")
         try:
             new_scores = score_bullet(rewritten, tags, score_system, dry_run=dry_run)
         except Exception as e:
-            print(f"    ⚠️  Scoring API error on attempt {attempt}: {e} — using previous scores.")
+            print(f" ⚠️ Scoring API error on attempt {attempt}: {e} — using previous scores.")
             new_scores = current_scores
 
         new_action = decide_action(new_scores)
-        print(f"       acc={new_scores.get('accuracy_score')} bel={new_scores.get('believability_score')} mgr={new_scores.get('manager_test')} → {new_action}")
+        print(
+            f" acc={new_scores.get('accuracy_score')} "
+            f"bel={new_scores.get('believability_score')} "
+            f"clr={new_scores.get('clarity_score')} "
+            f"mgr={new_scores.get('manager_test')} → {new_action}"
+        )
+
+        if (
+            new_action == "REVIEW"
+            and str(new_scores.get("manager_test", "")).strip().upper() == "PASS"
+            and pd.to_numeric(new_scores.get("accuracy_score"), errors="coerce") >= 90
+            and pd.to_numeric(new_scores.get("believability_score"), errors="coerce") >= 88
+        ):
+            print(f" ↳ high-score REVIEW weakness: {str(new_scores.get('weaknesses', '')).strip()[:200]}")
+
         last_rewrite = rewritten
 
         if is_keeper(new_scores):
@@ -936,15 +1114,28 @@ def process_bullet(row: pd.Series, kb: KnowledgeBase, rewrite_system: str, score
                 "source": "rewritten",
             }
 
-        current_bullet, current_scores = best_version(original_bullet, original_scores, rewritten, new_scores)
+        best_bullet, best_scores = best_version(
+            original_bullet,
+            original_scores,
+            rewritten,
+            new_scores,
+        )
+        current_bullet = best_bullet
+        current_scores = best_scores.copy()
         current_scores["weaknesses"] = new_scores.get("weaknesses", "")
 
         if attempt < MAX_ATTEMPTS:
-            print(f"    🔄 Not a keeper yet — retrying in {SLEEP_ON_RETRY}s...")
+            print(f" 🔄 Not a keeper yet — retrying in {SLEEP_ON_RETRY}s...")
             time.sleep(SLEEP_ON_RETRY)
 
-    print(f"    🚩 Max attempts reached — marking MANUAL.")
-    final_bullet, final_scores = best_version(original_bullet, original_scores, last_rewrite if last_rewrite else original_bullet, current_scores)
+    print(" 🚩 Max attempts reached — marking MANUAL.")
+    final_bullet, final_scores = best_version(
+        original_bullet,
+        original_scores,
+        last_rewrite if last_rewrite else original_bullet,
+        current_scores,
+    )
+
     return {
         "final_bullet": final_bullet,
         "final_scores": final_scores,
@@ -976,23 +1167,19 @@ def main():
             "Combine with --model to upgrade to a stronger model for stubborn entries."
         ),
     )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help=(
-            "Override the rewrite and score model for this run "
-            "(e.g. gemini-2.5-pro, gemini-2.5-flash). "
-            "Defaults to the module-level REWRITE_MODEL / SCORE_MODEL constants."
-        ),
-    )
+    parser.add_argument("--rewrite-model", default=None, help="Override rewrite model only")
+    parser.add_argument("--score-model", default=None, help="Override score model only")
+    
     args = parser.parse_args()
 
     # Apply model override before any prompts are built
     global REWRITE_MODEL, SCORE_MODEL
-    if args.model:
-        REWRITE_MODEL = args.model
-        SCORE_MODEL   = args.model
-        print(f"\n🔧 Model override: rewrite={REWRITE_MODEL}  score={SCORE_MODEL}")
+    if args.rewrite_model:
+        REWRITE_MODEL = args.rewrite_model
+    if args.score_model:
+        SCORE_MODEL = args.score_model
+
+    print(f"\n🔧 Models: rewrite={REWRITE_MODEL} | score={SCORE_MODEL}")
 
     # Load rules bundle and KB first; build_system_prompts needs both.
     rules = RulesBundle(RULES_DIR)
