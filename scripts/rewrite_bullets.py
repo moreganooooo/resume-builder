@@ -82,14 +82,27 @@ from datetime import datetime
 import pandas as pd
 import yaml
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-KB_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
-RULES_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
+# ---------------------------------------------------------------------------
+# PATH RESOLUTION
+#
+# Layout:
+#   resume-builder/          ← PROJECT_ROOT
+#     scripts/               ← SCRIPT_DIR  (this file lives here)
+#     resume-engine/
+#       knowledge_base/
+#       rules/
+#
+# SCRIPT_DIR   = .../resume-builder/scripts
+# PROJECT_ROOT = .../resume-builder          (one dirname up, not two)
+# ---------------------------------------------------------------------------
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))   # resume-builder/scripts
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                   # resume-builder/
+KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 
-TOP_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
-if TOP_SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, TOP_SCRIPTS_DIR)
+# orchestrator.py lives in the same scripts/ directory as this file
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 
 from orchestrator import client, GeminiClient  # noqa: E402
 
