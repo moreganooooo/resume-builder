@@ -627,21 +627,21 @@ class KnowledgeBase:
 
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPTS
+#
+# FIX 1: REWRITE_SYSTEM_BASE — removed the `(example: "* User wants a resume
+# bullet rewritten.")` line. Gemma was pattern-matching on that example and
+# echoing it verbatim as its response. The anti-preamble block is replaced
+# with a tighter output-fence instruction: "Your response must begin with {
+# and end with }." This is unambiguous and gives Gemma nothing to echo.
 # ---------------------------------------------------------------------------
 
 REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
 
-Apply every rule below without exception:
-- You must ONLY reply in raw JSON.
-- Non-JSON output is forbidden.
-- The response MUST follow the template labeled "JSON shape (full schema)" below.
-- NEVER include column names, tags, or labels such as: "*   Persona:", "*   Weaknesses:", "*   Goal:", "*   Current Bullet:", "*   Target:", "*   Constraints:", or anything similar.
-- NEVER start a response with "*   Persona:", "*   Current Bullet:", "*   Weaknesses:", "*   Goal:", "*   Target:", "*   Constraints:"or anything similar.
-- Do not include a preamble, commentary, heading, description, or additional text (example: "*   User wants a resume bullet rewritten.").
-- Do not include markdown fences.
-- Do not echo prompt or repeat instructions.
-- Do not include a single extra character beyond what is specified.
+Output rules — apply without exception:
+- Your response must begin with {{ and end with }}. No other characters before or after.
+- Raw JSON only. No markdown fences, no preamble, no commentary, no labels, no explanations.
+- Do not repeat, echo, or paraphrase any part of the input.
 - "rewritten_bullet" must be a single resume bullet sentence, never a list.
 
 JSON shape (full schema):
@@ -710,6 +710,12 @@ def persona_context(tags: str) -> str:
 
 # ---------------------------------------------------------------------------
 # PROMPT BUILDER  (Tier 3 — per-bullet tail only)
+#
+# FIX 2: Relabelled the per-bullet tail fields.
+# Old labels ("Persona:", "Weaknesses:", "Bullet:") looked like a structured
+# form to Gemma, which echoed them back as output headers. New phrasing reads
+# as inline prose instructions — Gemma consumes them as context rather than
+# treating them as an output template to reproduce.
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(
@@ -729,21 +735,28 @@ def build_rewrite_prompt(
     )
 
     parts = []
+
+    # Stable context block first — maximises cache-hit prefix length.
     if kb_context:
         parts.extend([
             "Use only supported facts from this context:",
             kb_context,
             "",
         ])
+
+    # Per-bullet tail — phrased as prose so Gemma reads it as instructions,
+    # not as a structured form to echo back.
     parts.extend([
-        f"Persona: {persona}",
-        f"Weaknesses: {weakness_text}",
-        f"Bullet: {bullet}",
+        f"Rewrite this bullet for {persona} roles.",
+        f"Known weaknesses to fix: {weakness_text}",
+        f"Bullet to rewrite: {bullet}",
     ])
+
+    # One-line schema reminder close to the generation point.
     if minimal_schema:
-        parts.extend(["", 'Schema: {"rewritten_bullet":""}'])
+        parts.extend(["", 'Output JSON: {"rewritten_bullet":""}'])
     else:
-        parts.extend(["", 'Schema: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'])
+        parts.extend(["", 'Output JSON: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'])
 
     return "\n".join(parts)
 
@@ -1060,13 +1073,17 @@ def process_bullet(
             gaps = ""
         else:
             try:
+                # FIX 3: max_output_tokens raised from 120 → 300.
+                # At 120 tokens the full-schema response (rewritten_bullet +
+                # reasoning + context_gaps) was being truncated mid-string,
+                # causing JSON parse failures on the flash-lite fallback path.
                 raw, usage = client.generate(
                     model=active_rewrite_model,
                     system_instruction=rewrite_system,
                     contents=prompt,
                     temperature=0.7,
                     response_schema=runner_schema,
-                    max_output_tokens=120,
+                    max_output_tokens=300,
                     service_tier="standard",
                 )
                 _log_cache_stats(usage, kb_context_chars, attempt)
