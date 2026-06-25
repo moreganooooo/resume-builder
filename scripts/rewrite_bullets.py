@@ -711,10 +711,11 @@ You are an industry-leading resume writer specialising in B2B SaaS and marketing
 
 Apply every rule below without exception:
 - You must ONLY reply in raw JSON.
+- Non-JSON output is forbidden.
 - The response MUST follow the template labeled "JSON shape (full schema)" below.
-- NEVER include column names, tags, or labels such as: "*   Persona:", "*   Weaknesses:", "*   Goal:", "*   Current Bullet:", or anything similar.
-- NEVER start a response with "*   Persona:", "*   Current Bullet:", "*   Weaknesses:", "*   Goal:", or anything similar.
-- Do not include a preamble, commentary, heading, or additional text.
+- NEVER include column names, tags, or labels such as: "*   Persona:", "*   Weaknesses:", "*   Goal:", "*   Current Bullet:", "*   Target:", "*   Constraints:", or anything similar.
+- NEVER start a response with "*   Persona:", "*   Current Bullet:", "*   Weaknesses:", "*   Goal:", "*   Target:", "*   Constraints:"or anything similar.
+- Do not include a preamble, commentary, heading, description, or additional text (example: "*   User wants a resume bullet rewritten.").
 - Do not include markdown fences.
 - Do not echo prompt or repeat instructions.
 - Do not include a single extra character beyond what is specified.
@@ -820,17 +821,14 @@ def build_rewrite_prompt(
         else "Improve clarity, specificity, and believability."
     )
 
+    # Tier 3 tail: persona + weaknesses + bullet (the only per-call variables)
     parts = []
-
-    # Stable context block first — maximises cache-hit prefix length.
     if kb_context:
         parts.extend([
             "Use only supported facts from this context:",
             kb_context,
             "",
         ])
-
-    # Per-bullet tail — the only part that changes between calls.
     parts.extend([
         f"Persona: {persona}",
         f"Weaknesses: {weakness_text}",
