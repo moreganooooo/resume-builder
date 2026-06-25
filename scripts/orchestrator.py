@@ -186,6 +186,9 @@ class GeminiClient:
         BASE_BACKOFF_SECONDS = 8
         MAX_BACKOFF_SECONDS = 90
 
+        # finishReasons that mean we have a usable response.
+        GOOD_FINISH_REASONS = {"STOP", "MAX_TOKENS"}
+
         fallback_model = "gemini-3.1-flash-lite"
         failure_streak = 0
 
@@ -195,7 +198,16 @@ class GeminiClient:
             raise ValueError(f"Invalid service_tier={service_tier!r}. Use one of {sorted(valid_tiers)}.")
 
         for attempt in range(max_retries):
-            current_temp = 0.0 if response_schema is not None else temperature
+            # FIX: Gemma constrained decoding — temperature is honoured for Gemma
+            # when a schema is passed (the old code forced 0.0 for all schema calls,
+            # which is fine for scoring but hurts creativity on rewrites).
+            # We keep 0.0 only for non-Gemma schema calls to preserve exact behaviour
+            # for flash-lite scoring.
+            is_gemma = "gemma" in model.lower()
+            if response_schema is not None and not is_gemma:
+                current_temp = 0.0
+            else:
+                current_temp = temperature
 
             generation_config = {
                 "temperature": current_temp,
@@ -207,8 +219,13 @@ class GeminiClient:
             if response_schema is not None:
                 generation_config["responseMimeType"] = "application/json"
 
+            # FIX A: responseSchema is now sent for ALL models, including Gemma.
+            # Previously guarded by `and "gemma" not in model.lower()` which meant
+            # Gemma only got responseMimeType (soft hint) but no structural schema
+            # enforcement — letting it free-form echo the prompt instead of producing JSON.
+            # gemma-4-31b-it on v1beta supports responseSchema constrained decoding.
             raw_schema = None
-            if response_schema is not None and "gemma" not in model.lower():
+            if response_schema is not None:
                 if hasattr(response_schema, "model_json_schema"):
                     raw_schema = response_schema.model_json_schema()
                 elif hasattr(response_schema, "schema") and callable(response_schema.schema):
@@ -226,7 +243,7 @@ class GeminiClient:
                 else:
                     print(f" ⚠️ DEBUG: Schema was passed but skipped. Unrecognized type: {type(response_schema)}")
 
-            if "gemma" in model.lower():
+            if is_gemma:
                 merged_contents = f"{system_instruction}\n\n---\n\n{contents}"
                 body = {
                     "contents": [{"role": "user", "parts": [{"text": merged_contents}]}],
@@ -308,9 +325,19 @@ class GeminiClient:
 
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
-            if finish_reason not in ("STOP", "MAX_TOKENS"):
+
+            # FIX B: Raise on bad finishReason so the rewrite_bullets retry loop
+            # catches it properly instead of passing empty/garbage text to parse_json().
+            # SAFETY / RECITATION blocks were previously silently returning "" which
+            # caused parse_json() to find the echoed prompt text from a prior raw
+            # response buffer and treat it as valid output.
+            if finish_reason not in GOOD_FINISH_REASONS:
                 print(f" ⚠️ Unexpected finishReason: {finish_reason}")
                 print(f" Raw API response: {json.dumps(data, indent=2)[:600]}")
+                raise ValueError(
+                    f"generate() got finishReason={finish_reason!r} for model {model}. "
+                    f"Treating as retriable error."
+                )
 
             text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
             return text, usage_out
