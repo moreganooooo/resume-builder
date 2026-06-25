@@ -34,8 +34,9 @@ CACHE OPTIMIZATION — three-tier prompt structure:
     merged Gemma payload starts with an identical, stable header on every call.
 
 Cache observability:
-  Every rewrite call logs cachedContentTokenCount from the API response metadata
-  alongside kb_context length so you can verify provider-side cache hits directly.
+  Every rewrite call logs cachedContentTokenCount from the usage dict returned
+  by generate() alongside kb_context length so you can verify provider-side
+  cache hits directly.
 
 Knowledge base files loaded at startup:
   - cv.md                          → role section matching bullet's company only
@@ -130,16 +131,11 @@ GEMMA_MINIMAL_JSON    = True
 
 # ---------------------------------------------------------------------------
 # SLEEP CONSTANTS
-# Reduced from 10/10/12 → 5/5/8. At 15 RPM the minimum gap between calls is
-# ~4 s; 5 s gives a small safety margin without wasting wall-clock time on
-# bullets that KEEP on the first attempt.
 # ---------------------------------------------------------------------------
 SLEEP_BETWEEN_BULLETS = 5
 SLEEP_BETWEEN_SCORES  = 5
 SLEEP_ON_RETRY        = 8
 
-# How often to flush df_out to disk (every N bullets). The final bullet always
-# triggers a flush regardless of this value.
 CSV_FLUSH_EVERY = 5
 
 SCORE_COLS         = ["accuracy_score", "believability_score", "clarity_score",
@@ -298,11 +294,6 @@ def _yaml_to_str(data: dict) -> str:
 
 
 class RulesBundle:
-    """
-    Loads all YAML rule files from resume-engine/rules/ once at startup.
-    Exposes pre-formatted strings ready for injection into system prompts.
-    """
-
     def __init__(self, rules_dir: str):
         print("\n📋 Loading rules bundle...")
 
@@ -521,21 +512,6 @@ def build_background_summary(tags: str) -> str:
 # ---------------------------------------------------------------------------
 
 class KnowledgeBase:
-    """
-    Loads all KB files once at startup, then pre-builds context in two stable tiers:
-
-    static_prefix   — profile + verified JSON files; identical for every bullet.
-                      Built by _build_static_prefix() and stored as self.static_prefix.
-
-    segment bundles — CV section + background + Treering evidence; identical for all
-                      bullets sharing the same (role_company, tags) pair.
-                      Built by warm_segment_cache() before the rewrite loop starts
-                      and stored in self._segment_cache dict.
-
-    context_block_for_bullet() is then just a dict lookup + join — no file I/O or
-    filtering on the hot path.
-    """
-
     def __init__(self):
         print("\n📚 Loading knowledge base context...")
         self.cv_full           = load_text_file(KB_CV,               "cv.md")
@@ -558,18 +534,8 @@ class KnowledgeBase:
         self._segment_cache: dict = {}
         print("   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n")
 
-    # ------------------------------------------------------------------
-    # Tier 1: static prefix
-    # ------------------------------------------------------------------
-
     def _build_static_prefix(self) -> str:
-        """
-        Universal evidence block — identical string for every bullet in every run.
-        Profile + verified JSON files only. No per-company or per-tag material here.
-        Placed at the TOP of the contents payload so the API can cache-hit the prefix.
-        """
         sections = []
-
         if self.profile:
             sections.append(
                 "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
@@ -595,32 +561,18 @@ class KnowledgeBase:
                 "Use these to add accurate project detail and scope.\n"
                 + self.verified_projects
             )
-
         return "\n\n".join(sections)
 
-    # ------------------------------------------------------------------
-    # Tier 2: segment bundles (per company+tags)
-    # ------------------------------------------------------------------
-
     def _build_segment_bundle(self, role_company: str, tags: str) -> str:
-        """
-        CV section + background summary + Treering-specific evidence.
-        Stable for all bullets that share the same (role_company, tags) pair.
-        Called once per unique pair by warm_segment_cache(); thereafter only
-        looked up from self._segment_cache.
-        """
         sections = []
-
         cv_section = extract_cv_section(self.cv_full, role_company)
         if cv_section:
             label = ("ROLE CONTEXT (cv.md excerpt)"
                      if cv_section != self.cv_full else "CAREER OVERVIEW (cv.md)")
             sections.append(f"=== {label} ===\n{cv_section}")
-
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
-
         if is_treering_bullet(role_company):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags)
             claims_text = get_verified_claims_text(filtered_claims)
@@ -632,28 +584,19 @@ class KnowledgeBase:
                     + claims_text
                 )
             if self.screenshot_metrics:
-                sections.append(
-                    f"=== SCREENSHOT-SOURCED METRICS ===\n{self.screenshot_metrics}"
-                )
+                sections.append(f"=== SCREENSHOT-SOURCED METRICS ===\n{self.screenshot_metrics}")
             if self.verified_metrics:
                 sections.append(
                     "=== VERIFIED METRICS (authoritative — use these numbers, not guesses) ===\n"
                     "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
                     + self.verified_metrics
                 )
-
         return "\n\n".join(sections)
 
     def warm_segment_cache(self, df: pd.DataFrame) -> None:
-        """
-        Pre-build all segment bundles before the rewrite loop starts.
-        Pass in the full cluster map DataFrame; every unique (role_company, tags)
-        pair gets computed once here instead of once per bullet at runtime.
-        """
         self._segment_cache = {}
         pairs = df[["Role / Company", "Tags"]].drop_duplicates()
         print(f"\n🔥 Warming segment cache for {len(pairs)} unique (company, tags) combos...")
-
         for _, row in pairs.iterrows():
             rc   = str(row["Role / Company"])
             tags = str(row["Tags"])
@@ -662,24 +605,13 @@ class KnowledgeBase:
             self._segment_cache[key] = bundle
             treering_flag = " [Treering+claims]" if is_treering_bullet(rc) else ""
             print(f"   📦 ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag}")
-
         print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
 
-    # ------------------------------------------------------------------
-    # Hot-path lookup (called once per bullet)
-    # ------------------------------------------------------------------
-
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
-        """
-        Returns static_prefix + segment_bundle.
-        Both are pre-built — no file I/O, no filtering, no string assembly on the hot path.
-        Falls back gracefully to building on-demand if the cache was not warmed.
-        """
         key = (role_company, tags)
         if key not in self._segment_cache:
             print(f"   ⚠️ Cache miss for {key} — building segment on demand.")
             self._segment_cache[key] = self._build_segment_bundle(role_company, tags)
-
         segment = self._segment_cache[key]
         return f"{self.static_prefix}\n\n{segment}" if segment else self.static_prefix
 
@@ -696,15 +628,6 @@ class KnowledgeBase:
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPTS
 # ---------------------------------------------------------------------------
-
-# NOTE ON CACHE STABILITY:
-# Output-contract instructions (JSON shape, no-markdown, no-preamble) live HERE
-# in the system prompt, not in build_rewrite_prompt(). This keeps them in the
-# stable Tier 0 that is identical across every call.
-#
-# For Gemma: orchestrator.py merges system_instruction into the user payload.
-# Having the contract block at the TOP of system_instruction means it leads the
-# merged string on every call, giving Gemma its best prefix-stability too.
 
 REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
@@ -798,22 +721,6 @@ def build_rewrite_prompt(
     prev_scores: dict = None,
     minimal_schema: bool = False,
 ) -> str:
-    """
-    Builds the user `contents` payload for one rewrite call.
-
-    Structure (cache-optimised):
-      1. kb_context first — stable Tier 1 + Tier 2 block leads the payload so the
-         API sees the longest stable prefix at the top of every call, maximising
-         provider-side cache hits.
-      2. Per-bullet tail last — Persona, Weaknesses, Bullet are the ONLY parts that
-         vary per call. Keeping them at the end of the payload means any prefix up
-         to (but not including) the tail is identical across all bullets that share
-         the same (company, tags) pair.
-      3. Schema reminder at the very end — one line, matches system prompt shape;
-         Gemma benefits from having it close to the generation point.
-
-    Output-contract instructions live in REWRITE_SYSTEM_BASE (Tier 0), not here.
-    """
     persona = persona_context(tags)
     weakness_text = (
         weaknesses.strip()
@@ -822,23 +729,17 @@ def build_rewrite_prompt(
     )
 
     parts = []
-
-    # Stable context block first — maximises cache-hit prefix length.
     if kb_context:
         parts.extend([
             "Use only supported facts from this context:",
             kb_context,
             "",
         ])
-
-    # Per-bullet tail — the only part that changes between calls.
     parts.extend([
         f"Persona: {persona}",
         f"Weaknesses: {weakness_text}",
         f"Bullet: {bullet}",
     ])
-
-    # One-line schema reminder — Gemma benefits from having it near the end.
     if minimal_schema:
         parts.extend(["", 'Schema: {"rewritten_bullet":""}'])
     else:
@@ -851,35 +752,29 @@ def build_rewrite_prompt(
 # CACHE-HIT LOGGING HELPER
 # ---------------------------------------------------------------------------
 
-def _log_cache_stats(raw_response, kb_context_chars: int, attempt: int) -> None:
+def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     """
-    Extracts cachedContentTokenCount from the API response metadata and logs it
-    alongside the kb_context size so you can verify provider-side cache hits.
-    """
-    cached_tokens = None
-    try:
-        if hasattr(raw_response, "usage_metadata"):
-            um = raw_response.usage_metadata
-            cached_tokens = getattr(um, "cached_content_token_count", None)
-            if cached_tokens is None and isinstance(um, dict):
-                cached_tokens = um.get("cachedContentTokenCount") or um.get("cached_content_token_count")
-        elif isinstance(raw_response, dict):
-            um = raw_response.get("usage_metadata", {})
-            cached_tokens = um.get("cachedContentTokenCount") or um.get("cached_content_token_count")
-    except Exception:
-        pass
+    Logs cachedContentTokenCount from the usage dict returned by generate().
 
-    if cached_tokens is not None:
+    Args:
+        usage: The second element of the (text, usage) tuple from client.generate().
+               Keys: promptTokenCount, candidatesTokenCount, totalTokenCount,
+                     cachedContentTokenCount (all int, 0 if not present in response).
+        kb_context_chars: Length of the kb_context string passed to this call.
+        attempt: Current attempt number (for log labelling).
+    """
+    cached_tokens = usage.get("cachedContentTokenCount", 0) if isinstance(usage, dict) else 0
+    if cached_tokens and cached_tokens > 0:
         print(
             f"   💾 Cache stats [attempt {attempt}]: "
             f"kb_context={kb_context_chars:,} chars | "
-            f"cachedContentTokenCount={cached_tokens:,}"
+            f"cachedContentTokenCount={cached_tokens:,} ✨"
         )
     else:
         print(
             f"   💾 Cache stats [attempt {attempt}]: "
             f"kb_context={kb_context_chars:,} chars | "
-            f"cachedContentTokenCount=n/a (not in response metadata)"
+            f"cachedContentTokenCount=0 (no cache hit this call)"
         )
 
 
@@ -909,7 +804,7 @@ def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = Fals
                      "ats_value", "manager_test", "weaknesses", "score_notes"],
     }
 
-    raw = client.generate(
+    raw, _ = client.generate(
         model=SCORE_MODEL,
         system_instruction=score_system,
         contents=(
@@ -1116,7 +1011,6 @@ def process_bullet(
     role_company    = str(row.get("Role / Company", ""))
     original_scores = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
 
-    # Single dict-lookup — no assembly on the hot path
     kb_context = kb.context_block_for_bullet(role_company, tags)
     kb_context_chars = len(kb_context)
 
@@ -1166,7 +1060,7 @@ def process_bullet(
             gaps = ""
         else:
             try:
-                raw = client.generate(
+                raw, usage = client.generate(
                     model=active_rewrite_model,
                     system_instruction=rewrite_system,
                     contents=prompt,
@@ -1175,7 +1069,7 @@ def process_bullet(
                     max_output_tokens=120,
                     service_tier="standard",
                 )
-                _log_cache_stats(raw, kb_context_chars, attempt)
+                _log_cache_stats(usage, kb_context_chars, attempt)
                 parsed = GeminiClient.parse_json(raw)
                 rewritten = str(parsed.get("rewritten_bullet", "")).strip()
                 reasoning = str(parsed.get("reasoning", "")).strip()
@@ -1221,7 +1115,6 @@ def process_bullet(
                 "weaknesses":        new_scores.get("weaknesses", ""),
             }
 
-        # Not a keeper — pick best version so far and loop
         current_bullet, current_scores = best_version(
             current_bullet, current_scores, rewritten, new_scores
         )
@@ -1230,7 +1123,6 @@ def process_bullet(
         if attempt < MAX_ATTEMPTS:
             time.sleep(SLEEP_ON_RETRY)
 
-    # Exhausted attempts — return best version found
     print(f"   ⚠️ Max attempts reached. Marking as MANUAL.")
     return {
         "final_bullet":      current_bullet,
@@ -1261,9 +1153,6 @@ def main():
         REWRITE_MODEL = args.model
         print(f"🔧 Model override: {REWRITE_MODEL}")
 
-    # ------------------------------------------------------------------
-    # Load cluster map
-    # ------------------------------------------------------------------
     print(f"\n📥 Loading cluster map: {CLUSTER_MAP_IN}")
     df_map = pd.read_csv(CLUSTER_MAP_IN)
     df_map = ensure_writable_dtypes(df_map)
@@ -1273,9 +1162,6 @@ def main():
         if col not in df_map.columns:
             raise ValueError(f"Missing required column in cluster map: {col}")
 
-    # ------------------------------------------------------------------
-    # Identify bullets to process
-    # ------------------------------------------------------------------
     target_actions = {"REWRITE", "REVIEW"}
     if args.retry_manual:
         target_actions.add("MANUAL")
@@ -1287,9 +1173,6 @@ def main():
     print(f"   📋 Total cluster map rows:         {len(df_map)}")
     print(f"   🎯 Representative + target action: {len(df_todo)}")
 
-    # ------------------------------------------------------------------
-    # Resume / skip already-processed bullets
-    # ------------------------------------------------------------------
     already_done = load_already_processed(CLUSTER_MAP_OUT, KEEPERS_OUT, retry_manual=args.retry_manual)
     if already_done:
         before = len(df_todo)
@@ -1305,17 +1188,11 @@ def main():
         print("✅ Nothing to process. All bullets are already done.")
         return
 
-    # ------------------------------------------------------------------
-    # Startup: load rules, KB, warm cache, build system prompts
-    # ------------------------------------------------------------------
     rules      = RulesBundle(RULES_DIR)
     kb         = KnowledgeBase()
     kb.warm_segment_cache(df_todo)
     rewrite_system, score_system = build_system_prompts(rules, kb)
 
-    # ------------------------------------------------------------------
-    # Load or init outputs
-    # ------------------------------------------------------------------
     if os.path.exists(CLUSTER_MAP_OUT):
         df_out = pd.read_csv(CLUSTER_MAP_OUT)
         df_out = ensure_writable_dtypes(df_out)
@@ -1329,9 +1206,6 @@ def main():
 
     df_keepers = load_or_init_keepers(KEEPERS_OUT, df_map)
 
-    # ------------------------------------------------------------------
-    # Main loop
-    # ------------------------------------------------------------------
     total       = len(df_todo)
     n_keep      = 0
     n_manual    = 0
@@ -1345,7 +1219,6 @@ def main():
 
         result = process_bullet(row, kb, rewrite_system, score_system, dry_run=args.dry_run)
 
-        # Write result back into df_out
         out_mask = df_out["Bullet Point"].str.strip() == str(row["Bullet Point"]).strip()
         for col, val in result.items():
             if col in df_out.columns:
@@ -1370,7 +1243,6 @@ def main():
             n_manual += 1
             print(f"   🔧 MANUAL — best version retained.")
 
-        # Batch CSV flush: write every CSV_FLUSH_EVERY bullets, always on the last
         bullets_since_flush += 1
         is_last = (i == total)
         if bullets_since_flush >= CSV_FLUSH_EVERY or is_last:
@@ -1381,9 +1253,6 @@ def main():
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
-    # ------------------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------------------
     print(f"\n{'='*60}")
     print(f"✅ Run complete: {total} bullets processed")
     print(f"   KEEP:   {n_keep}")
