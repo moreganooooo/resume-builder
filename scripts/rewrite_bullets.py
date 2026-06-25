@@ -128,9 +128,19 @@ MAX_ATTEMPTS          = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON    = True
 
-SLEEP_BETWEEN_BULLETS = 10
-SLEEP_BETWEEN_SCORES  = 10
-SLEEP_ON_RETRY        = 12
+# ---------------------------------------------------------------------------
+# SLEEP CONSTANTS
+# Reduced from 10/10/12 → 5/5/8. At 15 RPM the minimum gap between calls is
+# ~4 s; 5 s gives a small safety margin without wasting wall-clock time on
+# bullets that KEEP on the first attempt.
+# ---------------------------------------------------------------------------
+SLEEP_BETWEEN_BULLETS = 5
+SLEEP_BETWEEN_SCORES  = 5
+SLEEP_ON_RETRY        = 8
+
+# How often to flush df_out to disk (every N bullets). The final bullet always
+# triggers a flush regardless of this value.
+CSV_FLUSH_EVERY = 5
 
 SCORE_COLS         = ["accuracy_score", "believability_score", "clarity_score",
                       "ats_value", "manager_test"]
@@ -790,18 +800,18 @@ def build_rewrite_prompt(
     """
     Builds the user `contents` payload for one rewrite call.
 
-    Deliberately contains ONLY the parts that vary per bullet:
-      - Persona descriptor (stable per tag combo, but short)
-      - Weaknesses
-      - Bullet text
-      - KB context (Tier 1 + Tier 2, pre-built and frozen)
+    Structure (cache-optimised):
+      1. kb_context first — stable Tier 1 + Tier 2 block leads the payload so the
+         API sees the longest stable prefix at the top of every call, maximising
+         provider-side cache hits.
+      2. Per-bullet tail last — Persona, Weaknesses, Bullet are the ONLY parts that
+         vary per call. Keeping them at the end of the payload means any prefix up
+         to (but not including) the tail is identical across all bullets that share
+         the same (company, tags) pair.
+      3. Schema reminder at the very end — one line, matches system prompt shape;
+         Gemma benefits from having it close to the generation point.
 
-    Output-contract instructions have been moved to REWRITE_SYSTEM_BASE so they
-    live in the stable system prompt and are never repeated here. This keeps the
-    per-call contents as short and as tail-only as possible.
-
-    The schema reminder at the bottom is one line and uses the exact shape string
-    already declared in the system prompt — no new boilerplate introduced.
+    Output-contract instructions live in REWRITE_SYSTEM_BASE (Tier 0), not here.
     """
     persona = persona_context(tags)
     weakness_text = (
@@ -810,22 +820,24 @@ def build_rewrite_prompt(
         else "Improve clarity, specificity, and believability."
     )
 
-    # Tier 3 tail: persona + weaknesses + bullet (the only per-call variables)
-    parts = [
+    parts = []
+
+    # Stable context block first — maximises cache-hit prefix length.
+    if kb_context:
+        parts.extend([
+            "Use only supported facts from this context:",
+            kb_context,
+            "",
+        ])
+
+    # Per-bullet tail — the only part that changes between calls.
+    parts.extend([
         f"Persona: {persona}",
         f"Weaknesses: {weakness_text}",
         f"Bullet: {bullet}",
-    ]
+    ])
 
-    if kb_context:
-        parts.extend([
-            "",
-            "Use only supported facts from this context:",
-            kb_context,
-        ])
-
-    # One-line schema reminder — matches the shape already in the system prompt.
-    # Kept here because Gemma benefits from having it near the end of the merged payload.
+    # One-line schema reminder — Gemma benefits from having it near the end.
     if minimal_schema:
         parts.extend(["", 'Schema: {"rewritten_bullet":""}'])
     else:
@@ -1131,282 +1143,4 @@ def process_bullet(
             }
             if use_minimal_schema
             else {
-                "type": "object",
-                "properties": {
-                    "rewritten_bullet": {"type": "string"},
-                    "reasoning":        {"type": "string"},
-                    "context_gaps":     {"type": "string"},
-                },
-                "required": ["rewritten_bullet", "reasoning", "context_gaps"],
-            }
-        )
-
-        rw_prompt = build_rewrite_prompt(
-            current_bullet,
-            tags,
-            str(current_scores.get("weaknesses", weaknesses)),
-            kb_context,
-            attempt=attempt,
-            prev_scores=current_scores if attempt > 1 else None,
-            minimal_schema=use_minimal_schema,
-        )
-
-        if dry_run:
-            rw_data = {
-                "rewritten_bullet": f"[DRY RUN] {current_bullet}",
-                "reasoning": "dry-run",
-                "context_gaps": "",
-            }
-        else:
-            try:
-                rewrite_temp = 0.0 if "gemma" in active_rewrite_model.lower() else 0.1
-                raw = client.generate(
-                    model=active_rewrite_model,
-                    system_instruction=rewrite_system,
-                    contents=rw_prompt,
-                    temperature=rewrite_temp,
-                    response_schema=runner_schema,
-                    service_tier="standard",
-                )
-
-                # Log cache stats immediately after each rewrite call
-                _log_cache_stats(raw, kb_context_chars, attempt)
-
-                try:
-                    rw_data = GeminiClient.parse_json(raw)
-                    rewrite_parse_failures = 0
-                except Exception:
-                    cleaned = raw.strip() if isinstance(raw, str) else str(raw)
-                    m = re.search(r'"rewritten_bullet"\s*:\s*"([^"]+)"', cleaned, re.DOTALL)
-                    if m:
-                        rw_data = {"rewritten_bullet": m.group(1).strip(),
-                                   "reasoning": "", "context_gaps": "Recovered from partial JSON"}
-                        rewrite_parse_failures = 0
-                    else:
-                        bm = re.search(
-                            r"(?:Rewritten Bullet|Rewrite|Final Bullet)\s*[:\-]\s*(.+)",
-                            cleaned, re.IGNORECASE | re.DOTALL,
-                        )
-                        if bm:
-                            first_line = bm.group(1).strip().splitlines()[0].strip(' "*')
-                            rw_data = {"rewritten_bullet": first_line,
-                                       "reasoning": "", "context_gaps": "Recovered from non-JSON"}
-                            rewrite_parse_failures = 0
-                        else:
-                            rewrite_parse_failures += 1
-                            print(
-                                f"   ⚠️ Rewrite parse failure "
-                                f"{rewrite_parse_failures}/{MAX_REWRITE_PARSE_FAILURES}. "
-                                f"Preview: {cleaned[:400]!r}"
-                            )
-                            if (
-                                rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
-                                and "gemma" in active_rewrite_model.lower()
-                                and active_rewrite_model != REWRITE_FALLBACK_MODEL
-                            ):
-                                print(f"   🔄 Falling back to {REWRITE_FALLBACK_MODEL}")
-                                active_rewrite_model = REWRITE_FALLBACK_MODEL
-                                rewrite_parse_failures = 0
-                            raise ValueError("Rewrite returned unusable non-JSON output")
-
-            except Exception as e:
-                print(f"   ⚠️ API error on attempt {attempt}: {e}")
-                if attempt < MAX_ATTEMPTS:
-                    print(f"   🔄 Retrying in {SLEEP_ON_RETRY}s...")
-                    time.sleep(SLEEP_ON_RETRY)
-                    continue
-                else:
-                    print("   🚩 API error on final attempt — marking MANUAL.")
-                    return {
-                        "final_bullet":      current_bullet,
-                        "final_scores":      current_scores,
-                        "status":            "MANUAL",
-                        "rewrite_attempts":  attempt,
-                        "rewrite_reasoning": f"API error: {e}",
-                        "context_gaps":      "",
-                        "source":            "manual_review",
-                    }
-
-        rewritten      = rw_data.get("rewritten_bullet", "").strip()
-        last_reasoning = rw_data.get("reasoning", "")
-        last_gaps      = rw_data.get("context_gaps", "")
-
-        if not rewritten:
-            print(f"   ⚠️ Empty rewrite on attempt {attempt} — using previous bullet.")
-            rewritten = current_bullet
-
-        time.sleep(SLEEP_BETWEEN_BULLETS)
-        print("   📊 Scoring rewrite...")
-        try:
-            new_scores = score_bullet(rewritten, tags, score_system, dry_run=dry_run)
-        except Exception as e:
-            print(f"   ⚠️ Scoring error on attempt {attempt}: {e} — using previous scores.")
-            new_scores = current_scores
-
-        new_action = decide_action(new_scores)
-        print(
-            f"   acc={new_scores.get('accuracy_score')} "
-            f"bel={new_scores.get('believability_score')} "
-            f"clr={new_scores.get('clarity_score')} "
-            f"mgr={new_scores.get('manager_test')} → {new_action}"
-        )
-
-        last_rewrite = rewritten
-
-        if is_keeper(new_scores):
-            return {
-                "final_bullet":      rewritten,
-                "final_scores":      new_scores,
-                "status":            "KEEP",
-                "rewrite_attempts":  attempt,
-                "rewrite_reasoning": last_reasoning,
-                "context_gaps":      last_gaps,
-                "source":            "rewritten",
-            }
-
-        best_bullet, best_scores = best_version(
-            original_bullet, original_scores, rewritten, new_scores
-        )
-        current_bullet = best_bullet
-        current_scores = best_scores
-        current_scores["weaknesses"] = new_scores.get("weaknesses", "")
-
-        if attempt < MAX_ATTEMPTS:
-            time.sleep(SLEEP_ON_RETRY)
-
-    return {
-        "final_bullet":      current_bullet,
-        "final_scores":      current_scores,
-        "status":            "MANUAL",
-        "rewrite_attempts":  MAX_ATTEMPTS,
-        "rewrite_reasoning": last_reasoning,
-        "context_gaps":      last_gaps,
-        "source":            "manual_review",
-    }
-
-
-# ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
-
-def main():
-    parser = argparse.ArgumentParser(description="Cache-optimised resume bullet rewriter.")
-    parser.add_argument("--limit",        type=int, default=None,  help="Cap number of bullets to process.")
-    parser.add_argument("--dry-run",      action="store_true",     help="Print prompts; no API calls.")
-    parser.add_argument("--retry-manual", action="store_true",     help="Re-run MANUAL bullets only.")
-    parser.add_argument("--model",        type=str, default=None,  help="Override rewrite model.")
-    args = parser.parse_args()
-
-    global REWRITE_MODEL
-    if args.model:
-        REWRITE_MODEL = args.model
-        print(f"🔧 Rewrite model overridden: {REWRITE_MODEL}")
-
-    rules = RulesBundle(RULES_DIR)
-    kb    = KnowledgeBase()
-
-    print(f"\n📂 Loading cluster map: {CLUSTER_MAP_IN}")
-    df_map = pd.read_csv(CLUSTER_MAP_IN)
-    df_map = ensure_writable_dtypes(df_map)
-
-    kb.warm_segment_cache(df_map)
-    rewrite_system, score_system = build_system_prompts(rules, kb)
-
-    done_bullets = load_already_processed(CLUSTER_MAP_OUT, KEEPERS_OUT, args.retry_manual)
-    print(f"\n⏭️  Skipping {len(done_bullets)} already-processed bullets.")
-
-    target_actions = {"REWRITE", "REVIEW"}
-    mask = (
-        (df_map.get("is_representative", pd.Series(True, index=df_map.index))
-         .astype(str).str.strip().str.lower().isin(["true", "1", "yes"]))
-        & (df_map["next_action"].str.strip().str.upper().isin(target_actions))
-        & (~df_map["Bullet Point"].astype(str).str.strip().isin(done_bullets))
-    )
-    df_todo = df_map[mask].copy()
-
-    if args.retry_manual and "rewrite_status" in df_map.columns:
-        manual_mask = (
-            df_map["rewrite_status"].str.strip().str.upper() == "MANUAL"
-        ) & (~df_map["Bullet Point"].astype(str).str.strip().isin(done_bullets))
-        df_todo = df_map[manual_mask].copy()
-
-    if args.limit:
-        df_todo = df_todo.head(args.limit)
-
-    print(f"\n🎯 Bullets to process: {len(df_todo)}")
-    if df_todo.empty:
-        print("✅ Nothing to do. All bullets are already processed.")
-        return
-
-    df_keepers = load_or_init_keepers(KEEPERS_OUT, df_map)
-
-    if os.path.exists(CLUSTER_MAP_OUT):
-        df_out = pd.read_csv(CLUSTER_MAP_OUT)
-        df_out = ensure_writable_dtypes(df_out)
-    else:
-        df_out = df_map.copy()
-        df_out = ensure_writable_dtypes(df_out)
-        for col in ["final_bullet", "rewrite_status", "rewrite_reasoning",
-                    "context_gaps", "rewrite_attempts", "rewrite_date"]:
-            if col not in df_out.columns:
-                df_out[col] = ""
-
-    for i, (idx, row) in enumerate(df_todo.iterrows()):
-        bullet_preview = str(row["Bullet Point"])[:60]
-        print(f"\n{'='*70}")
-        print(f"[{i+1}/{len(df_todo)}] {bullet_preview}...")
-        print(f"   Company: {row.get('Role / Company', '?')}  |  Tags: {row.get('Tags', '?')}")
-
-        result = process_bullet(row, kb, rewrite_system, score_system, args.dry_run)
-
-        out_idx = df_out.index[df_out["Bullet Point"].astype(str).str.strip()
-                               == str(row["Bullet Point"]).strip()]
-        target_idx = out_idx[0] if len(out_idx) > 0 else idx
-
-        df_out.loc[target_idx, "final_bullet"]      = result["final_bullet"]
-        df_out.loc[target_idx, "rewrite_status"]    = result["status"]
-        df_out.loc[target_idx, "rewrite_reasoning"] = result.get("rewrite_reasoning", "")
-        df_out.loc[target_idx, "context_gaps"]      = result.get("context_gaps", "")
-        df_out.loc[target_idx, "rewrite_attempts"]  = result.get("rewrite_attempts", 0)
-        df_out.loc[target_idx, "rewrite_date"]      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        for score_col in NUMERIC_SCORE_COLS:
-            val = result["final_scores"].get(score_col)
-            if val is not None:
-                df_out.loc[target_idx, score_col] = val
-        for score_col in STRING_SCORE_COLS:
-            val = result["final_scores"].get(score_col)
-            if val is not None:
-                df_out.loc[target_idx, score_col] = str(val)
-
-        if result["status"] == "KEEP":
-            keeper_row = {
-                "Bullet Point":       result["final_bullet"],
-                "Role / Company":     row.get("Role / Company", ""),
-                "Tags":               row.get("Tags", ""),
-                "source":             result.get("source", "rewritten"),
-                "rewrite_attempts":   result.get("rewrite_attempts", 0),
-                "rewrite_reasoning":  result.get("rewrite_reasoning", ""),
-                "context_gaps":       result.get("context_gaps", ""),
-                **{c: result["final_scores"].get(c, "") for c in SCORE_COLS},
-            }
-            df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_OUT)
-            print(f"   🏆 KEEPER saved.")
-        else:
-            print(f"   🚩 Status: {result['status']}")
-
-        df_out.to_csv(CLUSTER_MAP_OUT, index=False)
-
-    print(f"\n{'='*70}")
-    print("✅ Run complete.")
-    print(f"   Updated cluster map : {CLUSTER_MAP_OUT}")
-    print(f"   Keepers CSV         : {KEEPERS_OUT}")
-    keep_count   = (df_out.get("rewrite_status", pd.Series(dtype=str))
-                    .str.strip().str.upper() == "KEEP").sum()
-    manual_count = (df_out.get("rewrite_status", pd.Series(dtype=str))
-                    .str.strip().str.upper() == "MANUAL").sum()
-    print(f"   KEEP: {keep_count}  |  MANUAL (needs review): {manual_count}")
-
-
-if __name__ == "__main__":
-    main()
+                "ty
