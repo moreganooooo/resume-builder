@@ -367,7 +367,7 @@ class RulesBundle:
         ])
 
         print(f"   📐 Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
-        print(f"   📊 Score rules block:   {len(self.score_rules_block):,} chars\n")
+        print(f"   💯 Score rules block:   {len(self.score_rules_block):,} chars\n")
 
 
 # ---------------------------------------------------------------------------
@@ -692,8 +692,8 @@ def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
         rules_block=rules.score_rules_block,
         recruiter_block=kb.recruiter_context_block(),
     )
-    print(f"   ✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
-    print(f"   📊 Score system prompt:   {len(score_system):,} chars")
+    print(f"   🖊  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+    print(f"   💯 Score system prompt:   {len(score_system):,} chars")
     return rewrite_system, score_system
 
 
@@ -789,9 +789,9 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     )
 
     if cached_tokens and cached_tokens > 0:
-        print(f"   📊 tokens — {token_part} | ✨ cached: {cached_tokens:,}")
+        print(f"   💫 tokens — {token_part} | ✨ cached: {cached_tokens:,}")
     else:
-        print(f"   📊 tokens — {token_part}")
+        print(f"   💫 tokens — {token_part}")
 
 
 # ---------------------------------------------------------------------------
@@ -1037,7 +1037,7 @@ def process_bullet(
     rewrite_parse_failures = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        print(f"   ✏️  Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
+        print(f"   🖊  Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
 
         use_minimal_schema = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
 
@@ -1116,7 +1116,7 @@ def process_bullet(
         new_scores = score_bullet(rewritten, tags, score_system, dry_run)
         action     = decide_action(new_scores)
         print(
-            f"   📊 Scores → accuracy={new_scores.get('accuracy_score')} "
+            f"   💯 Scores → accuracy={new_scores.get('accuracy_score')} "
             f"bel={new_scores.get('believability_score')} "
             f"clarity={new_scores.get('clarity_score')} "
             f"ats={new_scores.get('ats_value')} "
