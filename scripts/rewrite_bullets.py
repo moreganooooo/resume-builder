@@ -767,7 +767,7 @@ def build_rewrite_prompt(
 
 def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     """
-    Logs cachedContentTokenCount from the usage dict returned by generate().
+    Logs token usage + cachedContentTokenCount on a single line.
 
     Args:
         usage: The second element of the (text, usage) tuple from client.generate().
@@ -776,18 +776,29 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
         kb_context_chars: Length of the kb_context string passed to this call.
         attempt: Current attempt number (for log labelling).
     """
-    cached_tokens = usage.get("cachedContentTokenCount", 0) if isinstance(usage, dict) else 0
+    if not isinstance(usage, dict):
+        usage = {}
+
+    prompt_tokens    = usage.get("promptTokenCount", 0)
+    output_tokens    = usage.get("candidatesTokenCount", 0)
+    total_tokens     = usage.get("totalTokenCount", 0)
+    cached_tokens    = usage.get("cachedContentTokenCount", 0)
+
+    token_part = (
+        f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
+    )
+
     if cached_tokens and cached_tokens > 0:
         print(
-            f"   💾 Cache stats [attempt {attempt}]: "
-            f"kb_context={kb_context_chars:,} chars | "
-            f"cachedContentTokenCount={cached_tokens:,} ✨"
+            f"   📊 tokens — {token_part} | ✨ cached: {cached_tokens:,}"
+            f"   💾 Cache stats [attempt {attempt}]: kb_context={kb_context_chars:,} chars"
+            f" | cachedContentTokenCount={cached_tokens:,} ✨"
         )
     else:
         print(
-            f"   💾 Cache stats [attempt {attempt}]: "
-            f"kb_context={kb_context_chars:,} chars | "
-            f"cachedContentTokenCount=0 (no cache hit this call)"
+            f"   📊 tokens — {token_part}"
+            f"   💾 Cache stats [attempt {attempt}]: kb_context={kb_context_chars:,} chars"
+            f" | cachedContentTokenCount=0 (no cache hit this call)"
         )
 
 
