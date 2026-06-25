@@ -427,12 +427,22 @@ class JDKeywordSchema(BaseModel):
 
 
 class CritiqueSchema(BaseModel):
-    accuracy_score: int = Field(description="0-100 score")
-    believability_score: int = Field(description="0-100 score based on believability.yaml")
-    clarity_score: int = Field(description="0-100 score")
-    ats_value: int = Field(description="0-100 score")
+    """Mirrors the output contract in critique_bullet.md exactly.
+
+    All 9 fields are required. hidden_gem_score and hidden_gem_flag unlock
+    gem-aware prioritization in audit_and_refine_bullets(); omitting them from
+    the schema previously caused the responseSchema to strip them from the
+    model's output, silently disabling the entire Hidden Gem scoring layer.
+    """
+    accuracy_score: int = Field(description="0-100: specific, grounded, traceable claim")
+    believability_score: int = Field(description="0-100: would a skeptical hiring manager believe this?")
+    clarity_score: int = Field(description="0-100: immediately clear on first read")
+    ats_value: int = Field(description="0-100: high-value ATS keywords without stuffing")
+    hidden_gem_score: int = Field(description="0-100: memorability and evidence rarity (see critique_bullet.md)")
+    hidden_gem_flag: bool = Field(description="true if hidden_gem_score >= 90")
     manager_test: str = Field(description="Strictly 'PASS' or 'FAIL'")
-    weaknesses: str = Field(description="Explanation of flaws")
+    weaknesses: str = Field(description="Specific explanation of flaws; 'None' if PASS with high scores")
+    hidden_gem_reason: str = Field(description="One sentence: what makes this a gem, or what holds it back")
 
 
 class RewriteSchema(BaseModel):
@@ -558,6 +568,10 @@ class ResumeEngine:
         static_prefix is intentionally passed as "" from build_tailored_resume()
         to keep audit loop prompts lean (~4-5k tokens vs ~58k with full KB).
         The full KB is only needed by the final builder assembly call.
+
+        Hidden Gem awareness: bullets with hidden_gem_flag=True are logged with
+        a 💎 marker and their hidden_gem_reason so you can see which gems made
+        it into the final pool.
         """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
@@ -626,8 +640,17 @@ class ResumeEngine:
 
                 critique_data = GeminiClient.parse_json(critique_text)
 
+                # Log hidden gem flags so you can see which bullets are 💎-worthy
+                gem_score = critique_data.get('hidden_gem_score', 0)
+                gem_flag  = critique_data.get('hidden_gem_flag', False)
+                gem_reason = critique_data.get('hidden_gem_reason', '')
+                if gem_flag:
+                    print(f"      💎 Hidden Gem (score: {gem_score}) — {gem_reason}")
+                elif gem_score >= 75:
+                    print(f"      ⭐ Strong bullet (gem score: {gem_score}) — {gem_reason}")
+
                 if critique_data.get('manager_test') == 'FAIL' or critique_data.get('believability_score', 100) < 80:
-                    print(f"      ⚠️ Bullet failed Manager Test. Rewriting...")
+                    print(f"      ⚠️ Bullet failed Manager Test or believability threshold. Rewriting...")
 
                     time.sleep(BULLET_SLEEP)
 
