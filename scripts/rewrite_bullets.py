@@ -128,8 +128,8 @@ MAX_ATTEMPTS          = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON    = True
 
-SLEEP_BETWEEN_BULLETS = 8
-SLEEP_BETWEEN_SCORES  = 8
+SLEEP_BETWEEN_BULLETS = 10
+SLEEP_BETWEEN_SCORES  = 10
 SLEEP_ON_RETRY        = 12
 
 SCORE_COLS         = ["accuracy_score", "believability_score", "clarity_score",
@@ -139,7 +139,7 @@ STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
 
 DONE_STATUSES      = {"KEEP", "MANUAL"}
 TREERING_KEYWORDS  = ["treering", "tree ring", "yearbook"]
-MAX_CLAIMS_ROWS    = 15
+MAX_CLAIMS_ROWS    = 12
 
 TAG_CONTEXT = {
     "[content]":   "content marketing, editorial strategy, brand voice, or copywriting roles",
@@ -699,15 +699,16 @@ class KnowledgeBase:
 REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
 
-Apply every rule below to every response, NO exceptions:
-- You may only reply in raw JSON.
-- Your raw JSON response must follow the specified template below exactly.
-- Do not add preamble, commentary, reply, heading, or text before or after the raw JSON.
-- Do not include column names such as "*   Current Bullet:", "*   Persona:", "*   Weaknesses:", "*   Goal:", and so on.
-- Do not use markdown fences.
-- Do not echo the prompt or repeat instructions.
-- Do not add a single extra character beyond what is specified below.
-- rewritten_bullet must be a single resume bullet sentence, never a list.
+Apply every rule below without exception:
+- You must ONLY reply in raw JSON.
+- The response MUST follow the template labeled "JSON shape (full schema)" below.
+- NEVER include column names, tags, or labels such as: "*   Persona:", "*   Weaknesses:", "*   Goal:", "*   Current Bullet:", or anything similar.
+- NEVER start a response with "*   Persona:", "*   Current Bullet:", "*   Weaknesses:", "*   Goal:", or anything similar.
+- Do not include a preamble, commentary, heading, or additional text.
+- Do not include markdown fences.
+- Do not echo prompt or repeat instructions.
+- Do not include a single extra character beyond what is specified.
+- "rewritten_bullet" must be a single resume bullet sentence, never a list.
 
 JSON shape (full schema):
 {{"rewritten_bullet": "", "reasoning": "", "context_gaps": ""}}
@@ -723,7 +724,7 @@ Rewrite goals:
 - Use a strong past-tense action verb.
 - Stay under 30 words where possible; never exceed 40 words.
 - Use only information supported by the provided context.
-- Use metrics only when they are verified in the provided context.
+- Use only metrics verified in the provided context.
 - Do not invent scope, ownership, tools, or results.
 
 If the context is not strong enough to support an improved claim, keep the rewrite
