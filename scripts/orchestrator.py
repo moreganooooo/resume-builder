@@ -318,15 +318,6 @@ class GeminiClient:
                 "totalTokenCount":         usage.get("totalTokenCount", 0),
                 "cachedContentTokenCount": usage.get("cachedContentTokenCount", 0),
             }
-            if usage:
-                cached = usage_out["cachedContentTokenCount"]
-                cache_str = f" | ✨ cached: {cached}" if cached > 0 else ""
-                print(
-                    f" 📊 tokens — prompt: {usage_out['promptTokenCount']} | "
-                    f"output: {usage_out['candidatesTokenCount']} | "
-                    f"total: {usage_out['totalTokenCount']}"
-                    f"{cache_str}"
-                )
 
             candidate = data.get("candidates", [{}])[0]
             finish_reason = candidate.get("finishReason", "UNKNOWN")
