@@ -526,7 +526,7 @@ class KnowledgeBase:
         self.verified_tools    = load_json_file(KB_VERIFIED_TOOLS,    "verified_tools.json")
         self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
 
-        print(f"   📝 profile.yml trimmed to {len(self.profile):,} chars")
+        print(f"   💥 profile.yml trimmed to {len(self.profile):,} chars")
 
         self.static_prefix = self._build_static_prefix()
         print(f"   📌 Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets")
@@ -1111,7 +1111,7 @@ def process_bullet(
         last_reasoning = reasoning
         last_gaps     = gaps
 
-        print(f"   📝 Rewritten: {rewritten[:80]}...")
+        print(f"   💥 Rewritten: {rewritten[:80]}...")
 
         new_scores = score_bullet(rewritten, tags, score_system, dry_run)
         action     = decide_action(new_scores)
