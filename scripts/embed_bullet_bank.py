@@ -54,7 +54,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 EMBED_MODEL  = "gemini-embedding-2"
 EMBED_DIM    = 768   # sweet spot for text-only
 BATCH_SIZE   = 20    # batchEmbedContents supports up to ~20 requests per call
-EMBED_SLEEP  = 4     # seconds between batch calls → ~15 RPM
+EMBED_SLEEP  = 11     # seconds between batch calls → ~15 RPM
 MAX_RETRIES  = 4
 
 KB_DIR           = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
@@ -81,7 +81,7 @@ def embed_batch(texts: list) -> list:
     for attempt in range(MAX_RETRIES):
         resp = requests.post(url, json=body, timeout=120)
         if resp.status_code == 429:
-            wait = 5 * (2 ** attempt)
+            wait = 10 * (2 ** attempt)
             print(f"    ⏳ Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
             time.sleep(wait)
             continue
