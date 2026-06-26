@@ -144,6 +144,31 @@ def _read_bullets_from_file(path: str) -> set:
     return bullets
 
 
+def _read_cluster_id_map_from_file(path: str) -> dict:
+    """
+    Return a dict of {bullet_text: source_cluster_id_str} from a keepers file.
+    Used to re-attach source_cluster_id values after Stage 1 overwrites the
+    audited file from keepers.csv (which lacks the column).
+    """
+    mapping: dict = {}
+    if not os.path.exists(path):
+        return mapping
+    try:
+        df = pd.read_csv(path, usecols=["Bullet Point", "source_cluster_id"])
+        for _, row in df.iterrows():
+            bp = str(row.get("Bullet Point", "")).strip()
+            v  = row.get("source_cluster_id", "")
+            sv = str(v).strip() if pd.notna(v) else ""
+            if bp and sv and sv.lower() not in ("", "nan"):
+                try:
+                    mapping[bp] = str(int(float(sv)))
+                except (ValueError, TypeError):
+                    mapping[bp] = sv
+    except Exception:
+        pass
+    return mapping
+
+
 # Capture pre-Stage-1 state immediately on module load.
 _STARTUP_DONE_IDS: set = (
     _read_cluster_ids_from_file(KEEPERS_IN)
@@ -153,6 +178,9 @@ _STARTUP_DONE_BULLETS: set = (
     _read_bullets_from_file(KEEPERS_IN)
     | _read_bullets_from_file(KEEPERS_AUDITED)
 )
+# Full bullet → cluster_id map captured before Stage 1 can overwrite the file.
+# Stage 1 merges this back in after writing so the column is never lost.
+_STARTUP_CLUSTER_ID_MAP: dict = _read_cluster_id_map_from_file(KEEPERS_AUDITED)
 
 
 def _all_known_keeper_cluster_ids() -> set:
@@ -247,6 +275,11 @@ def stage1_audit_keepers(
     Re-score keepers that are missing scores or have manager_test != PASS.
     Adds / refreshes: accuracy_score, believability_score, clarity_score,
     ats_value, manager_test, weaknesses, audit_status.
+
+    After scoring, merges source_cluster_id values back from the startup
+    snapshot (_STARTUP_CLUSTER_ID_MAP) so that IDs stamped by
+    backfill_cluster_ids.py are never lost when this function is called
+    from a fresh keepers.csv that lacks the column.
     """
     print("\n" + "=" * 60)
     print("STAGE 1 — Audit Keepers")
@@ -271,47 +304,70 @@ def stage1_audit_keepers(
 
     if to_score.empty:
         print("   ✅ All keepers already clean — no scoring needed.")
-        return df_keepers
-
-    if skip_rescore:
+    elif skip_rescore:
         print("   ⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
         for idx in to_score.index:
             df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
-        return df_keepers
+    else:
+        total = len(to_score)
+        for i, (idx, row) in enumerate(to_score.iterrows(), 1):
+            bullet = str(row.get("Bullet Point", "")).strip()
+            tags   = str(row.get("Tags", ""))
+            print(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
 
-    total = len(to_score)
-    for i, (idx, row) in enumerate(to_score.iterrows(), 1):
-        bullet = str(row.get("Bullet Point", "")).strip()
-        tags   = str(row.get("Tags", ""))
-        print(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
+            scores = score_bullet(bullet, tags, score_system, dry_run=dry_run)
 
-        scores = score_bullet(bullet, tags, score_system, dry_run=dry_run)
+            for col in SCORE_COLS:
+                if col in NUMERIC_SCORE_COLS:
+                    df_keepers.loc[idx, col] = pd.to_numeric(scores.get(col, None), errors="coerce")
+                else:
+                    df_keepers.loc[idx, col] = _safe_str(scores.get(col, ""))
+            df_keepers.loc[idx, "weaknesses"] = _safe_str(scores.get("weaknesses", ""))
+            df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
 
-        for col in SCORE_COLS:
-            if col in NUMERIC_SCORE_COLS:
-                df_keepers.loc[idx, col] = pd.to_numeric(scores.get(col, None), errors="coerce")
-            else:
-                df_keepers.loc[idx, col] = _safe_str(scores.get(col, ""))
-        df_keepers.loc[idx, "weaknesses"] = _safe_str(scores.get("weaknesses", ""))
-        df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
+            status = df_keepers.loc[idx, "audit_status"]
+            mgr    = str(scores.get("manager_test", "")).upper()
+            print(
+                f"   → status={status}  mgr={mgr}  "
+                f"acc={scores.get('accuracy_score')}  "
+                f"bel={scores.get('believability_score')}  "
+                f"cla={scores.get('clarity_score')}  "
+                f"ats={scores.get('ats_value')}"
+            )
 
-        status = df_keepers.loc[idx, "audit_status"]
-        mgr    = str(scores.get("manager_test", "")).upper()
-        print(
-            f"   → status={status}  mgr={mgr}  "
-            f"acc={scores.get('accuracy_score')}  "
-            f"bel={scores.get('believability_score')}  "
-            f"cla={scores.get('clarity_score')}  "
-            f"ats={scores.get('ats_value')}"
-        )
+            if i < total:
+                time.sleep(SLEEP_BETWEEN_BULLETS)
 
-        if i < total:
-            time.sleep(SLEEP_BETWEEN_BULLETS)
+        n_clean   = (df_keepers["audit_status"] == "CLEAN").sum()
+        n_rewrite = (df_keepers["audit_status"] == "NEEDS_REWRITE").sum()
+        n_manual  = (df_keepers["audit_status"] == "MANUAL").sum()
+        print(f"\n   Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
 
-    n_clean   = (df_keepers["audit_status"] == "CLEAN").sum()
-    n_rewrite = (df_keepers["audit_status"] == "NEEDS_REWRITE").sum()
-    n_manual  = (df_keepers["audit_status"] == "MANUAL").sum()
-    print(f"\n   Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
+    # ------------------------------------------------------------------
+    # Restore source_cluster_id from the startup snapshot.
+    # keepers.csv never has this column; keepers-audited.csv does after
+    # backfill_cluster_ids.py has run.  Without this merge, every Stage 1
+    # write would silently wipe the column, causing Stage 3 to see 0
+    # known IDs and re-queue all 262 MANUAL bullets on every --auto-rewrite
+    # run.
+    # ------------------------------------------------------------------
+    if "source_cluster_id" not in df_keepers.columns:
+        df_keepers["source_cluster_id"] = ""
+
+    if _STARTUP_CLUSTER_ID_MAP:
+        restored = 0
+        for idx, row in df_keepers.iterrows():
+            current = str(row.get("source_cluster_id", "")).strip()
+            if current and current.lower() not in ("", "nan"):
+                continue  # already has an ID — leave it alone
+            bp = str(row.get("Bullet Point", "")).strip()
+            stamped = _STARTUP_CLUSTER_ID_MAP.get(bp, "")
+            if stamped:
+                df_keepers.loc[idx, "source_cluster_id"] = stamped
+                restored += 1
+        if restored:
+            print(f"   🔁 Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
+
     return df_keepers
 
 
@@ -573,7 +629,7 @@ def stage4_auto_rewrite(
 
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         bullet_preview = str(row.get("Bullet Point", ""))[:60]
-        print(f"\n{'\u2500' * 60}")
+        print(f"\n{chr(9472) * 60}")
         print(f"[{i}/{total}] {bullet_preview}...")
         print(f"   Source: {row.get('queue_source', '')}  "
               f"Composite: {row.get('composite_score', '?')}")
@@ -685,9 +741,9 @@ def main():
         skip_rescore=args.skip_rescore,
     )
 
-    # Save audited keepers after Stage 1
-    # NOTE: this overwrites the file, but _STARTUP_DONE_IDS already captured
-    # the source_cluster_id values before this write happens.
+    # Save audited keepers after Stage 1.
+    # source_cluster_id values are already restored inside stage1_audit_keepers()
+    # from _STARTUP_CLUSTER_ID_MAP, so this write preserves them correctly.
     df_keepers.to_csv(KEEPERS_AUDITED, index=False)
     print(f"\n   💾 Audited keepers → {os.path.basename(KEEPERS_AUDITED)}")
 
