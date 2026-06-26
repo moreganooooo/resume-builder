@@ -101,6 +101,87 @@ DISCREPANCIES_OUT  = os.path.join(KB_DIR, "audit-discrepancies.csv")
 REWRITE_QUEUE_OUT  = os.path.join(KB_DIR, "audit-rewrite-queue.csv")
 
 # ---------------------------------------------------------------------------
+# STARTUP SNAPSHOT
+# ---------------------------------------------------------------------------
+# Stage 1 overwrites bullet-bank-keepers-audited.csv with a fresh copy
+# of bullet-bank-keepers.csv (which has no source_cluster_id values).
+# Stage 3 needs the IDs that were stamped by backfill_cluster_ids.py or
+# by a prior Stage 4 run.  Capture them NOW, before any file writes happen.
+#
+# These module-level sets are populated once at import time and never
+# mutated by Stage 1's overwrite.
+# ---------------------------------------------------------------------------
+
+def _read_cluster_ids_from_file(path: str) -> set:
+    """Return the set of source_cluster_id values recorded in a keepers file."""
+    ids: set = set()
+    if not os.path.exists(path):
+        return ids
+    try:
+        df = pd.read_csv(path, usecols=lambda c: c == "source_cluster_id")
+        raw = df["source_cluster_id"].dropna()
+        for v in raw:
+            sv = str(v).strip()
+            if sv and sv.lower() not in ("", "nan"):
+                try:
+                    ids.add(int(float(sv)))
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    return ids
+
+
+def _read_bullets_from_file(path: str) -> set:
+    bullets: set = set()
+    if not os.path.exists(path):
+        return bullets
+    try:
+        df = pd.read_csv(path, usecols=["Bullet Point"])
+        bullets.update(df["Bullet Point"].dropna().str.strip().tolist())
+    except Exception:
+        pass
+    return bullets
+
+
+# Capture pre-Stage-1 state immediately on module load.
+_STARTUP_DONE_IDS: set = (
+    _read_cluster_ids_from_file(KEEPERS_IN)
+    | _read_cluster_ids_from_file(KEEPERS_AUDITED)
+)
+_STARTUP_DONE_BULLETS: set = (
+    _read_bullets_from_file(KEEPERS_IN)
+    | _read_bullets_from_file(KEEPERS_AUDITED)
+)
+
+
+def _all_known_keeper_cluster_ids() -> set:
+    """
+    Returns the union of source_cluster_id values from both keepers files.
+    Stage 3 calls this to skip cluster-map MANUAL rows whose cluster has
+    already been processed.
+
+    Returns the startup snapshot so Stage 1's file overwrite doesn't
+    erase the IDs that backfill_cluster_ids.py stamped.
+    Stage 4 appends to the file incrementally, so new IDs written during
+    the current run are added to the snapshot dynamically.
+    """
+    # Re-read KEEPERS_AUDITED live so Stage 4 rows from the current run
+    # are included if Stage 3 is called again (not typical, but safe).
+    live_ids = _read_cluster_ids_from_file(KEEPERS_AUDITED)
+    return _STARTUP_DONE_IDS | live_ids
+
+
+def _all_known_keeper_bullets() -> set:
+    """
+    Secondary / fallback exclusion: returns bullet text from both keepers
+    files. Catches legacy rows that predate source_cluster_id.
+    """
+    live_bullets = _read_bullets_from_file(KEEPERS_AUDITED)
+    return _STARTUP_DONE_BULLETS | live_bullets
+
+
+# ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
 
@@ -150,57 +231,6 @@ def _safe_str(v) -> str:
     if isinstance(v, float) and pd.isna(v):
         return ""
     return str(v)
-
-
-def _read_cluster_ids_from_file(path: str) -> set:
-    """Return the set of source_cluster_id values recorded in a keepers file."""
-    ids: set = set()
-    if not os.path.exists(path):
-        return ids
-    try:
-        df = pd.read_csv(path)
-        if "source_cluster_id" in df.columns:
-            raw = df["source_cluster_id"].dropna()
-            for v in raw:
-                try:
-                    ids.add(int(float(str(v))))
-                except (ValueError, TypeError):
-                    pass
-    except Exception:
-        pass
-    return ids
-
-
-def _all_known_keeper_cluster_ids() -> set:
-    """
-    Returns the union of source_cluster_id values recorded in both keepers
-    files.  Stage 3 uses this to skip cluster-map MANUAL rows whose cluster
-    has already been processed by a prior Stage 4 run.
-
-    This is the primary exclusion mechanism.  It works even though the saved
-    keeper text differs from the original cluster-map bullet text.
-    """
-    ids: set = set()
-    for path in (KEEPERS_IN, KEEPERS_AUDITED):
-        ids |= _read_cluster_ids_from_file(path)
-    return ids
-
-
-def _all_known_keeper_bullets() -> set:
-    """
-    Secondary / fallback exclusion: returns the union of Bullet Point values
-    from both keepers files.  Used for rows that have no cluster_id recorded
-    (e.g. legacy keeper rows from before source_cluster_id was introduced).
-    """
-    bullets: set = set()
-    for path in (KEEPERS_IN, KEEPERS_AUDITED):
-        if os.path.exists(path):
-            try:
-                df = pd.read_csv(path, usecols=["Bullet Point"])
-                bullets.update(df["Bullet Point"].dropna().str.strip().tolist())
-            except Exception:
-                pass
-    return bullets
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +416,7 @@ def stage3_build_rewrite_queue(
     Exclusion uses cluster_id as the primary key (stored in
     source_cluster_id on saved keeper rows) so that bullets already
     processed by a prior Stage 4 run are not re-queued even though the
-    saved keeper text differs from the original cluster-map bullet text.
+    saved bullet text differs from the original cluster-map bullet text.
     Falls back to bullet-text matching for rows with no cluster_id.
 
     Sorted by composite score ascending (worst first).
@@ -421,12 +451,13 @@ def stage3_build_rewrite_queue(
 
         # -----------------------------------------------------------------
         # PRIMARY exclusion: by cluster_id
-        # Stage 4 writes source_cluster_id onto every keeper it saves, so
-        # on the next run we can skip those cluster IDs entirely — even
-        # though the saved bullet text differs from the original.
+        # Uses the startup snapshot so Stage 1's file overwrite doesn't
+        # erase the IDs that backfill_cluster_ids.py stamped.
+        # _all_known_keeper_cluster_ids() merges the snapshot with any new
+        # IDs written by Stage 4 during the current run.
         # -----------------------------------------------------------------
         done_ids = _all_known_keeper_cluster_ids()
-        before = len(df_map_manual)
+        before   = len(df_map_manual)
 
         if done_ids and "cluster_id" in df_map_manual.columns:
             def _to_int_id(v):
@@ -444,6 +475,7 @@ def stage3_build_rewrite_queue(
         # Catches legacy keeper rows that predate source_cluster_id and any
         # edge case where the cluster map MANUAL text exactly matches a
         # saved keeper (e.g. the bullet passed without needing a rewrite).
+        # Uses the startup snapshot for the same reason as above.
         # -----------------------------------------------------------------
         all_keeper_bullets = _all_known_keeper_bullets()
         df_map_manual = df_map_manual[
@@ -541,7 +573,7 @@ def stage4_auto_rewrite(
 
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         bullet_preview = str(row.get("Bullet Point", ""))[:60]
-        print(f"\n{'─' * 60}")
+        print(f"\n{'\u2500' * 60}")
         print(f"[{i}/{total}] {bullet_preview}...")
         print(f"   Source: {row.get('queue_source', '')}  "
               f"Composite: {row.get('composite_score', '?')}")
@@ -626,6 +658,8 @@ def main():
             df_keepers[col] = ""
 
     print(f"\n   📂 Loaded keepers: {len(df_keepers)} rows from {os.path.basename(KEEPERS_IN)}")
+    print(f"   📌 Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
+          f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed")
 
     # --- Load rules + KB only when scoring is needed ---
     rules = kb = rewrite_system = score_system = None
@@ -643,7 +677,7 @@ def main():
         kb.warm_segment_cache(df_keepers)
         rewrite_system, score_system = build_system_prompts(rules, kb)
 
-    # ── Stage 1 ──────────────────────────────────────────────────────────────
+    # ── Stage 1 ───────────────────────────────────────────────────────────────
     df_keepers = stage1_audit_keepers(
         df_keepers,
         score_system=score_system or "",
@@ -652,16 +686,18 @@ def main():
     )
 
     # Save audited keepers after Stage 1
+    # NOTE: this overwrites the file, but _STARTUP_DONE_IDS already captured
+    # the source_cluster_id values before this write happens.
     df_keepers.to_csv(KEEPERS_AUDITED, index=False)
     print(f"\n   💾 Audited keepers → {os.path.basename(KEEPERS_AUDITED)}")
 
-    # ── Stage 2 ──────────────────────────────────────────────────────────────
+    # ── Stage 2 ───────────────────────────────────────────────────────────────
     _df_disc = stage2_diff_cluster_map(df_keepers)
 
-    # ── Stage 3 ──────────────────────────────────────────────────────────────
+    # ── Stage 3 ───────────────────────────────────────────────────────────────
     df_queue = stage3_build_rewrite_queue(df_keepers)
 
-    # ── Stage 4 (optional) ───────────────────────────────────────────────────
+    # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:
         if df_queue.empty:
             print("\n   STAGE 4 skipped — queue is empty.")
