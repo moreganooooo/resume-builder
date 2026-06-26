@@ -74,6 +74,14 @@ def _norm_company(company) -> str:
     return str(company).strip().lower() if pd.notna(company) else ""
 
 
+def _to_str_id(v) -> str:
+    """Convert a cluster_id value to a clean string (no '.0' suffix)."""
+    try:
+        return str(int(float(str(v))))
+    except (ValueError, TypeError):
+        return str(v)
+
+
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
@@ -109,9 +117,14 @@ def main():
         print("    Run audit_keepers.py first so the file exists locally.")
         sys.exit(1)
 
-    df_keepers = pd.read_csv(KEEPERS_AUDITED)
+    df_keepers = pd.read_csv(KEEPERS_AUDITED, dtype={"source_cluster_id": str})
     if "source_cluster_id" not in df_keepers.columns:
         df_keepers["source_cluster_id"] = ""
+    else:
+        # Normalise any existing values (e.g. "69.0" → "69")
+        df_keepers["source_cluster_id"] = df_keepers["source_cluster_id"].apply(
+            lambda v: _to_str_id(v) if pd.notna(v) and str(v).strip() not in ("", "nan") else ""
+        )
 
     # Decide which rows need stamping
     if args.all_rows:
@@ -151,12 +164,12 @@ def main():
 
     status_col = "rewrite_status" if "rewrite_status" in df_map.columns else "next_action"
 
-    # Build exact-match lookup: normalised bullet text → cluster_id
+    # Build exact-match lookup: normalised bullet text → cluster_id (as str)
     exact_lookup: dict = {}
     for _, row in df_map.iterrows():
         key = row["_norm_bullet"]
         if key and key not in exact_lookup:
-            exact_lookup[key] = row["cluster_id"]
+            exact_lookup[key] = _to_str_id(row["cluster_id"])
 
     print(f"   Cluster map: {len(df_map)} rows  |  {len(exact_lookup)} unique bullets\n")
 
@@ -174,7 +187,7 @@ def main():
         tags     = _norm_tags(row.get("Tags", ""))
         norm_bp  = _norm(bullet)
 
-        matched_id   = None
+        matched_id   = None  # always a str when set
         match_method = None
 
         # ── Pass 1: exact text match (any cluster map row) ──────────────────
@@ -197,7 +210,7 @@ def main():
                     r = _ratio(bullet, crow["Bullet Point"])
                     if r > best_ratio:
                         best_ratio = r
-                        best_cid   = crow["cluster_id"]
+                        best_cid   = _to_str_id(crow["cluster_id"])
                 if best_ratio >= args.threshold:
                     matched_id   = best_cid
                     match_method = f"fuzzy-manual (ratio={best_ratio:.2f})"
@@ -216,7 +229,7 @@ def main():
                     r = _ratio(bullet, crow["Bullet Point"])
                     if r > best_ratio:
                         best_ratio = r
-                        best_cid   = crow["cluster_id"]
+                        best_cid   = _to_str_id(crow["cluster_id"])
                 if best_ratio >= args.threshold:
                     matched_id   = best_cid
                     match_method = f"fuzzy-all (ratio={best_ratio:.2f})"
@@ -224,10 +237,7 @@ def main():
 
         # ── Record result ────────────────────────────────────────────────────
         if matched_id is not None:
-            try:
-                matched_id = int(float(str(matched_id)))
-            except (ValueError, TypeError):
-                pass
+            # matched_id is already a str — safe to write into string column
             df_keepers.loc[idx, "source_cluster_id"] = matched_id
             print(f"   ✅  [{match_method}]  cluster_id={matched_id}")
             print(f"       Keeper:  {bullet[:80]}")
