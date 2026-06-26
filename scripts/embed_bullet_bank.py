@@ -78,6 +78,11 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
+    # Force API-key auth: prevent the SDK from picking up gcloud / ADC credentials
+    # which override api_key and cause 401 ACCESS_TOKEN_TYPE_UNSUPPORTED errors.
+    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
+
     # Import here so a missing package gives a clear message
     try:
         from google import genai
