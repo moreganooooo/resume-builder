@@ -762,7 +762,7 @@ class ResumeEngine:
             Return the top top_k highest-scoring bullets.
         """
         # --- BULLET SOURCE SELECTION ---
-        keepers_path = os.path.join(self.kb_dir, "bullet-bank-keepers.csv")
+        keepers_path = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         clean_path   = os.path.join(self.kb_dir, "bullet-bank-clean.csv")
 
         csv_path = clean_path  # default
