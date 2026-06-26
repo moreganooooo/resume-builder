@@ -13,6 +13,11 @@ The .npy file is loaded at runtime by mine_bullet_bank() in
 orchestrator.py for cosine pre-filtering. Re-run this script if you
 add or change bullets — the .npy will be regenerated from scratch.
 
+Resume from checkpoint:
+    If the script is interrupted it saves a checkpoint every 50 bullets.
+    Simply re-run the same command — it will pick up where it left off.
+    The checkpoint file is deleted automatically on successful completion.
+
 Usage:
     python scripts/embed_bullet_bank.py
 
@@ -36,21 +41,22 @@ from dotenv import load_dotenv
 # --- PATH SETUP ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-# override=True forces .env values to win over any pre-existing shell env vars
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-EMBED_MODEL = "gemini-embedding-2"
-EMBED_DIM   = 768   # sweet spot for text-only; upgrade to 1536 if adding image/PDF KB docs
-EMBED_SLEEP = 4     # seconds between calls → ~15 RPM, safely at free-tier ceiling
-MAX_RETRIES = 4
+EMBED_MODEL     = "gemini-embedding-2"
+EMBED_DIM       = 768  # sweet spot for text-only; upgrade to 1536 if adding image/PDF KB docs
+EMBED_SLEEP     = 4    # seconds between calls → ~15 RPM, safely at free-tier ceiling
+MAX_RETRIES     = 4
+CHECKPOINT_EVERY = 50  # save progress every N bullets
 
-KB_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
-CSV_PATH  = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
-NPY_PATH  = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
-META_PATH = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.meta")
+KB_DIR          = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+CSV_PATH        = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
+NPY_PATH        = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
+META_PATH       = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.meta")
+CHECKPOINT_PATH = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.checkpoint.npz")
 
 
 def embed_text(text: str) -> list:
@@ -71,6 +77,26 @@ def embed_text(text: str) -> list:
         resp.raise_for_status()
         return resp.json()["embedding"]["values"]
     raise RuntimeError(f"embed_text failed after {MAX_RETRIES} retries.")
+
+
+def load_checkpoint():
+    """Load saved vectors and resume index from checkpoint file if it exists."""
+    if os.path.exists(CHECKPOINT_PATH):
+        data = np.load(CHECKPOINT_PATH, allow_pickle=False)
+        vectors = list(data["vectors"])  # list of float32 arrays
+        start_index = int(data["next_index"])
+        print(f"   ♻️  Resuming from checkpoint: {start_index} bullets already embedded.")
+        return vectors, start_index
+    return [], 0
+
+
+def save_checkpoint(vectors: list, next_index: int):
+    """Save current progress to checkpoint file."""
+    np.savez(
+        CHECKPOINT_PATH,
+        vectors=np.array(vectors, dtype=np.float32),
+        next_index=np.array(next_index),
+    )
 
 
 def main():
@@ -96,17 +122,29 @@ def main():
         bullets = df[bullet_col].astype(str).tolist()
 
     print(f"📄 Loaded {len(bullets)} bullets from {CSV_PATH}")
-    print(f"🔢 Embedding with {EMBED_MODEL} @ {EMBED_DIM}d  ({EMBED_SLEEP}s between calls)")
-    print(f"⏱  Estimated time: ~{len(bullets) * EMBED_SLEEP // 60}m {len(bullets) * EMBED_SLEEP % 60}s\n")
 
-    vectors = []
-    for i, bullet in enumerate(bullets):
+    # Resume from checkpoint if available
+    vectors, start_index = load_checkpoint()
+
+    remaining = len(bullets) - start_index
+    print(f"🔢 Embedding with {EMBED_MODEL} @ {EMBED_DIM}d  ({EMBED_SLEEP}s between calls)")
+    print(f"⏱  Remaining: {remaining} bullets (~{remaining * EMBED_SLEEP // 60}m {remaining * EMBED_SLEEP % 60}s)\n")
+
+    for i in range(start_index, len(bullets)):
+        bullet = bullets[i]
         print(f"   [{i+1:>4}/{len(bullets)}] {bullet[:80]}{'...' if len(bullet) > 80 else ''}")
         vec = embed_text(bullet)
         vectors.append(vec)
+
+        # Checkpoint every N bullets
+        if (i + 1) % CHECKPOINT_EVERY == 0:
+            save_checkpoint(vectors, i + 1)
+            print(f"   💾 Checkpoint saved at bullet {i+1}/{len(bullets)}")
+
         if i < len(bullets) - 1:
             time.sleep(EMBED_SLEEP)
 
+    # All done — write final outputs
     matrix = np.array(vectors, dtype=np.float32)  # shape: (N, EMBED_DIM)
     np.save(NPY_PATH, matrix)
     print(f"\n✅ Saved {matrix.shape} vector matrix → {NPY_PATH}")
@@ -121,6 +159,12 @@ def main():
     with open(META_PATH, "w") as f:
         json.dump(meta, f, indent=2)
     print(f"📋 Saved metadata sidecar → {META_PATH}")
+
+    # Clean up checkpoint on successful completion
+    if os.path.exists(CHECKPOINT_PATH):
+        os.remove(CHECKPOINT_PATH)
+        print(f"🧹 Checkpoint file removed.")
+
     print("\n🎉 Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
 
 
