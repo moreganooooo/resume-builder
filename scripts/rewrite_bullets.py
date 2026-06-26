@@ -122,7 +122,7 @@ KB_VERIFIED_PROJECTS = os.path.join(KB_DIR, "verified_projects.json")
 KB_VERIFIED_TOOLS   = os.path.join(KB_DIR, "verified_tools.json")
 KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 
-REWRITE_MODEL         = "gemma-4-31b-it"
+REWRITE_MODEL         = "gemini-3.5-flash"
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 SCORE_MODEL           = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS          = 3
