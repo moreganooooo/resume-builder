@@ -910,7 +910,7 @@ KEEPER_COLS = [
     "Bullet Point", "Role / Company", "Tags",
     "accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test",
     "weaknesses", "source", "rewrite_attempts", "rewrite_reasoning", "context_gaps",
-    "rewrite_date",
+    "rewrite_date", "source_cluster_id",
 ]
 
 
@@ -934,6 +934,7 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
     df_seed["rewrite_reasoning"] = ""
     df_seed["context_gaps"]     = ""
     df_seed["rewrite_date"]     = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    df_seed["source_cluster_id"] = df_seed.get("cluster_id", "")
     for col in KEEPER_COLS:
         if col not in df_seed.columns:
             df_seed[col] = ""
@@ -1076,10 +1077,6 @@ def process_bullet(
             gaps = ""
         else:
             try:
-                # FIX 3: max_output_tokens raised from 120 → 300.
-                # At 120 tokens the full-schema response (rewritten_bullet +
-                # reasoning + context_gaps) was being truncated mid-string,
-                # causing JSON parse failures on the flash-lite fallback path.
                 raw, usage = client.generate(
                     model=active_rewrite_model,
                     system_instruction=rewrite_system,
@@ -1246,11 +1243,23 @@ def main():
 
         if result["rewrite_status"] == "KEEP":
             n_keep += 1
+            # Carry the cluster_id from the source row so keepers.csv always
+            # has a direct link back to the cluster map. This means
+            # audit_keepers.py Stage 3 can exclude by ID rather than relying
+            # on fuzzy bullet-text matching via backfill_cluster_ids.py.
+            source_cluster_id = ""
+            if "cluster_id" in row and pd.notna(row["cluster_id"]):
+                try:
+                    source_cluster_id = int(float(str(row["cluster_id"])))
+                except (ValueError, TypeError):
+                    source_cluster_id = str(row["cluster_id"])
+
             keeper_row = {
                 "Bullet Point":      result["final_bullet"],
                 "Role / Company":    row.get("Role / Company", ""),
                 "Tags":              row.get("Tags", ""),
                 "source":            result.get("source", "rewrite"),
+                "source_cluster_id": source_cluster_id,
                 "rewrite_attempts":  result.get("rewrite_attempts", 0),
                 "rewrite_reasoning": result.get("rewrite_reasoning", ""),
                 "context_gaps":      result.get("context_gaps", ""),
@@ -1258,7 +1267,7 @@ def main():
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_OUT)
-            print(f"   ✅ KEEPER saved.")
+            print(f"   ✅ KEEPER saved (source_cluster_id={source_cluster_id}).")
         else:
             n_manual += 1
             print(f"   🔧 MANUAL — best version retained.")
