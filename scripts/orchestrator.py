@@ -1062,11 +1062,22 @@ class ResumeEngine:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Resume Builder — Tailoring Pipeline")
+    parser.add_argument(
+        "--jd",
+        default="dummy_jd.txt",
+        help="Filename of the job description in the /jds/ folder (default: dummy_jd.txt)"
+    )
+    args = parser.parse_args()
+
     engine = ResumeEngine()
     print("Engine Ready. Starting the full Pipeline...")
+    print(f"   📄 JD: {args.jd}")
 
     input_parsed_json = "parsed_resume.json"
-    input_jd_file = "dummy_jd.txt"
+    input_jd_file = args.jd
 
     output_tailored_json = "tailored_resume.json"
     output_final_pdf = "MorganEscott_Tailored_Resume.pdf"
