@@ -27,6 +27,10 @@ Four stages:
     ranks by composite score ascending (worst first), writes to
     audit-rewrite-queue.csv.
 
+    audit-rewrite-queue.csv is ALWAYS overwritten on every run — even
+    when the queue is empty — so a stale file from a prior run can never
+    mislead you into thinking there is still work to do.
+
     Exclusion uses cluster_id (primary) and bullet text (secondary fallback)
     so that bullets already processed by a prior Stage 4 run are not
     re-queued even though the saved keeper text differs from the original.
@@ -46,7 +50,8 @@ Four stages:
 Outputs (resume-engine/knowledge_base/):
   bullet-bank-keepers-audited.csv    keepers with refreshed scores + audit_status
   audit-discrepancies.csv            cluster-map / keeper mismatches
-  audit-rewrite-queue.csv            ranked rewrite queue (Stage 3)
+  audit-rewrite-queue.csv            ranked rewrite queue (Stage 3) — always
+                                     overwritten; empty file = nothing left to do
 
 Usage:
   python audit_keepers.py                    # run all four stages, no auto-rewrite
@@ -493,7 +498,11 @@ def stage3_build_rewrite_queue(
       - MANUAL rows from the cluster map that aren't already processed
         (Source B — SKIPPED when --from-audited is set, since the audited
         file is already the source of truth and we only want to retry the
-        33 stragglers, not re-inflate the queue with cluster-map rows)
+        stragglers, not re-inflate the queue with cluster-map rows)
+
+    audit-rewrite-queue.csv is ALWAYS overwritten on every run, even when
+    the queue is empty. This prevents a stale file from a prior run from
+    misleading you into thinking there is still work to do.
 
     Exclusion uses cluster_id as the primary key (stored in
     source_cluster_id on saved keeper rows) so that bullets already
@@ -574,8 +583,19 @@ def stage3_build_rewrite_queue(
         else:
             print("   ⚠️  Cluster map not found — skipping cluster-map MANUAL source.")
 
+    # ------------------------------------------------------------------
+    # ALWAYS overwrite the queue file — even when empty.
+    # A stale non-empty file from a prior run must never survive a clean
+    # run that produced zero work items. Write the header-only CSV first,
+    # then overwrite again below if there are actual rows.
+    # ------------------------------------------------------------------
+    pd.DataFrame(columns=["Bullet Point", "queue_source", "composite_score", "queue_rank"]).to_csv(
+        REWRITE_QUEUE_OUT, index=False
+    )
+
     if not queue_rows or all(df.empty for df in queue_rows):
         print("   ✅ Queue is empty — nothing to rewrite!")
+        print(f"   💾 Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
         return pd.DataFrame()
 
     df_queue = pd.concat(queue_rows, ignore_index=True)
@@ -587,6 +607,7 @@ def stage3_build_rewrite_queue(
 
     if df_queue.empty:
         print("   ✅ Queue is empty — nothing to rewrite!")
+        print(f"   💾 Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
         return pd.DataFrame()
 
     # Rank worst-first by composite score
