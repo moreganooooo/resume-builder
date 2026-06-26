@@ -27,6 +27,10 @@ Four stages:
     ranks by composite score ascending (worst first), writes to
     audit-rewrite-queue.csv.
 
+    Exclusion check reads from BOTH bullet-bank-keepers.csv AND
+    bullet-bank-keepers-audited.csv (when it exists), so bullets already
+    processed by a previous Stage 4 run are not re-queued.
+
   Stage 4 — Optional Auto-Rewrite
     If --auto-rewrite flag is passed, hands each queued bullet to
     process_bullet() imported directly from rewrite_bullets.py.
@@ -144,6 +148,28 @@ def _safe_str(v) -> str:
     if isinstance(v, float) and pd.isna(v):
         return ""
     return str(v)
+
+
+def _all_known_keeper_bullets() -> set:
+    """
+    Returns the union of Bullet Point values from both keepers files.
+
+    bullet-bank-keepers.csv        — original pipeline output
+    bullet-bank-keepers-audited.csv — Stage 4 output from any prior run
+
+    Stage 3 uses this set to exclude bullets that have already been
+    processed, preventing the same 262 MANUAL entries from re-queuing
+    on every subsequent run.
+    """
+    bullets: set = set()
+    for path in (KEEPERS_IN, KEEPERS_AUDITED):
+        if os.path.exists(path):
+            try:
+                df = pd.read_csv(path, usecols=["Bullet Point"])
+                bullets.update(df["Bullet Point"].dropna().str.strip().tolist())
+            except Exception:
+                pass
+    return bullets
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +352,10 @@ def stage3_build_rewrite_queue(
       - NEEDS_REWRITE / MANUAL rows from the audited keepers (Stage 1)
       - MANUAL rows from the cluster map that aren't already in keepers
 
+    The exclusion check reads from BOTH bullet-bank-keepers.csv AND
+    bullet-bank-keepers-audited.csv so that bullets already processed by
+    a prior Stage 4 run are not re-queued on subsequent runs.
+
     Sorted by composite score ascending (worst first).
     """
     print("\n" + "=" * 60)
@@ -356,11 +386,17 @@ def stage3_build_rewrite_queue(
 
         df_map_manual = df_map[manual_mask].copy()
 
-        # Exclude bullets already in keepers
-        keeper_bullets = set(df_keepers["Bullet Point"].dropna().str.strip())
+        # Exclude bullets already processed in any prior run.
+        # Reads from BOTH keepers files: original + audited (Stage 4 output).
+        # This prevents the same MANUAL entries re-queuing on every run.
+        all_keeper_bullets = _all_known_keeper_bullets()
+        before = len(df_map_manual)
         df_map_manual = df_map_manual[
-            ~df_map_manual["Bullet Point"].str.strip().isin(keeper_bullets)
+            ~df_map_manual["Bullet Point"].str.strip().isin(all_keeper_bullets)
         ].copy()
+        excluded = before - len(df_map_manual)
+        if excluded:
+            print(f"   Excluded {excluded} already-processed bullets (found in keepers-audited.csv)")
 
         # Carry over scores if present in the cluster map
         for col in SCORE_COLS:
@@ -383,6 +419,10 @@ def stage3_build_rewrite_queue(
     before_dedup = len(df_queue)
     df_queue = df_queue.drop_duplicates(subset=["Bullet Point"], keep="first").copy()
     print(f"   Deduplicated: {before_dedup} → {len(df_queue)} unique bullets")
+
+    if df_queue.empty:
+        print("   ✅ Queue is empty — nothing to rewrite!")
+        return pd.DataFrame()
 
     # Rank worst-first by composite score
     df_queue["composite_score"] = df_queue.apply(_composite, axis=1)
