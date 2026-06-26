@@ -17,6 +17,10 @@ Four stages:
     in the cluster map — i.e. the keeper won best_version() but the map
     never reflected that. Writes discrepancies to audit-discrepancies.csv.
 
+    NOT_FOUND entries (keepers that are rewrites not present verbatim in
+    the cluster map) are expected and normal — they are counted silently
+    and shown only as a summary line, not printed one-by-one.
+
   Stage 3 — Triage Queue
     Pulls all NEEDS_REWRITE bullets from Stage 1 + all MANUAL bullets
     from the cluster map that are not already in keepers. Deduplicates,
@@ -234,6 +238,10 @@ def stage2_diff_cluster_map(
     """
     Cross-reference keepers against the cluster map.
     Returns a DataFrame of discrepancy rows written to audit-discrepancies.csv.
+
+    NOT_FOUND entries are expected and normal: keepers that are rewrites will
+    not match any row in the cluster map verbatim. They are counted silently
+    and shown only as a summary line at the end.
     """
     print("\n" + "=" * 60)
     print("STAGE 2 — Diff Against Cluster Map")
@@ -267,11 +275,14 @@ def stage2_diff_cluster_map(
             map_status_lookup[bp] = status
 
     discrepancies = []
+    n_not_found = 0  # expected: rewrites won't match cluster map text verbatim
+
     for _, row in df_keepers.iterrows():
         bp = str(row.get("Bullet Point", "")).strip()
         map_status = map_status_lookup.get(bp, "NOT_FOUND")
-        # A discrepancy is: keeper is marked CLEAN but cluster map still says MANUAL
+
         if map_status == "MANUAL":
+            # Actionable: keeper is CLEAN but cluster map still shows MANUAL
             discrepancies.append({
                 "Bullet Point":    bp,
                 "Role / Company":  row.get("Role / Company", ""),
@@ -282,27 +293,23 @@ def stage2_diff_cluster_map(
                 "composite_score": _composite(row),
             })
         elif map_status == "NOT_FOUND":
-            discrepancies.append({
-                "Bullet Point":    bp,
-                "Role / Company":  row.get("Role / Company", ""),
-                "Tags":            row.get("Tags", ""),
-                "keeper_status":   row.get("audit_status", ""),
-                "map_status":      map_status,
-                "note":            "Bullet in keepers.csv but not found in cluster map at all",
-                "composite_score": _composite(row),
-            })
+            # Normal: rewritten bullets live in keepers but not in the cluster map verbatim.
+            # Count silently; do NOT append to discrepancies.
+            n_not_found += 1
 
     df_disc = pd.DataFrame(discrepancies)
-    print(f"   Keepers checked:    {len(df_keepers)}")
-    print(f"   Discrepancies found: {len(df_disc)}")
+    print(f"   Keepers checked:          {len(df_keepers)}")
+    print(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites ✓)")
+    print(f"   Actionable discrepancies: {len(df_disc)}")
 
     if not df_disc.empty:
         df_disc.to_csv(DISCREPANCIES_OUT, index=False)
         print(f"   💾 Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
+        print("   Entries (MANUAL in cluster map, CLEAN in keepers):")
         for _, d in df_disc.iterrows():
             print(f"      ⚠️  [{d['map_status']}] {str(d['Bullet Point'])[:70]}")
     else:
-        print("   ✅ No discrepancies — keepers and cluster map are in sync.")
+        print("   ✅ No actionable discrepancies — keepers and cluster map are in sync.")
 
     return df_disc
 
@@ -319,7 +326,7 @@ def stage3_build_rewrite_queue(
       - NEEDS_REWRITE / MANUAL rows from the audited keepers (Stage 1)
       - MANUAL rows from the cluster map that aren't already in keepers
 
-    Sorted by composite score ascending (worst bullets first).
+    Sorted by composite score ascending (worst first).
     """
     print("\n" + "=" * 60)
     print("STAGE 3 — Triage Queue")
