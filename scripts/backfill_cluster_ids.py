@@ -18,6 +18,11 @@ Matching strategy (applied in order, stops at first hit per keeper row):
   3. Fuzzy match (ALL rows, same Role/Company + Tags)
      — same threshold, broader pool — last resort before giving up
 
+  4. Fuzzy match (ALL rows, same Role/Company only — no tag constraint)
+     — threshold lowered by TAG_FREE_DISCOUNT (default 0.05) to compensate
+       for the wider pool; catches bullets whose tags drifted between stages
+       or whose company has zero rows for that exact tag combo in the map
+
 Rows with no match are left blank and printed for manual review.
 
 Usage:
@@ -47,6 +52,7 @@ CLUSTER_MAP_UPDATED = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv"
 CLUSTER_MAP_IN      = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 
 FUZZY_THRESHOLD_DEFAULT = 0.35  # conservative — avoids false matches across companies
+TAG_FREE_DISCOUNT       = 0.05  # Pass 4 uses threshold - this value (wider pool = lower bar)
 
 
 # ---------------------------------------------------------------------------
@@ -107,9 +113,10 @@ def main():
     print("\n" + "#" * 60)
     print("  backfill_cluster_ids.py")
     print("#" * 60)
-    print(f"  threshold: {args.threshold}")
-    print(f"  dry_run:   {args.dry_run}")
-    print(f"  all_rows:  {args.all_rows}")
+    print(f"  threshold:        {args.threshold}")
+    print(f"  pass-4 threshold: {max(args.threshold - TAG_FREE_DISCOUNT, 0.15):.2f}  (company-only, no tag constraint)")
+    print(f"  dry_run:          {args.dry_run}")
+    print(f"  all_rows:         {args.all_rows}")
 
     # --- Load keepers-audited ---
     if not os.path.exists(KEEPERS_AUDITED):
@@ -173,10 +180,14 @@ def main():
 
     print(f"   Cluster map: {len(df_map)} rows  |  {len(exact_lookup)} unique bullets\n")
 
+    # Pass 4 threshold — slightly lower since the pool is wider (no tag filter)
+    p4_threshold = max(args.threshold - TAG_FREE_DISCOUNT, 0.15)
+
     # --- Match loop ---
     n_exact   = 0
     n_fuzzy_m = 0  # fuzzy, MANUAL pool
-    n_fuzzy_a = 0  # fuzzy, all-rows pool
+    n_fuzzy_a = 0  # fuzzy, all-rows pool (with tags)
+    n_fuzzy_c = 0  # fuzzy, company-only pool (no tag constraint) — Pass 4
     n_miss    = 0
     misses    = []
 
@@ -235,9 +246,28 @@ def main():
                     match_method = f"fuzzy-all (ratio={best_ratio:.2f})"
                     n_fuzzy_a   += 1
 
+        # ── Pass 4: fuzzy, ALL rows, same company ONLY (no tag constraint) ───
+        # Catches bullets whose tags drifted between stages, or companies with
+        # zero cluster-map rows for that exact tag combo (e.g. Misc./Unassigned,
+        # Kansas Colloquies). Uses a slightly lower threshold to compensate for
+        # the wider pool.
+        if matched_id is None:
+            pool = df_map[df_map["_norm_company"] == company]
+            if not pool.empty:
+                best_ratio = 0.0
+                best_cid   = None
+                for _, crow in pool.iterrows():
+                    r = _ratio(bullet, crow["Bullet Point"])
+                    if r > best_ratio:
+                        best_ratio = r
+                        best_cid   = _to_str_id(crow["cluster_id"])
+                if best_ratio >= p4_threshold:
+                    matched_id   = best_cid
+                    match_method = f"fuzzy-company (ratio={best_ratio:.2f})"
+                    n_fuzzy_c   += 1
+
         # ── Record result ────────────────────────────────────────────────────
         if matched_id is not None:
-            # matched_id is already a str — safe to write into string column
             df_keepers.loc[idx, "source_cluster_id"] = matched_id
             print(f"   ✅  [{match_method}]  cluster_id={matched_id}")
             print(f"       Keeper:  {bullet[:80]}")
@@ -255,11 +285,12 @@ def main():
     print("\n" + "=" * 60)
     print("  Backfill summary")
     print("=" * 60)
-    print(f"  Rows processed:   {n_targets}")
-    print(f"  Exact matches:    {n_exact}")
-    print(f"  Fuzzy-MANUAL:     {n_fuzzy_m}")
-    print(f"  Fuzzy-ALL:        {n_fuzzy_a}")
-    print(f"  No match:         {n_miss}")
+    print(f"  Rows processed:      {n_targets}")
+    print(f"  Exact matches:       {n_exact}")
+    print(f"  Fuzzy-MANUAL:        {n_fuzzy_m}")
+    print(f"  Fuzzy-ALL (w/ tags): {n_fuzzy_a}")
+    print(f"  Fuzzy-company only:  {n_fuzzy_c}  ← Pass 4 (new)")
+    print(f"  No match:            {n_miss}")
 
     if misses:
         print(f"\n  ⚠️   {n_miss} rows could not be matched — review manually:")
@@ -268,7 +299,7 @@ def main():
             print(f"             {m['Bullet Point'][:90]}")
         print(
             "\n  Tip: re-run with --threshold 0.25 to cast a wider net, "
-            "or inspect these rows and stamp cluster_id manually."
+            "or stamp cluster_id manually in the CSV."
         )
 
     # --- Write ---
@@ -276,7 +307,7 @@ def main():
         print("\n  🔍  --dry-run set: file NOT written.")
     else:
         df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-        stamped = n_exact + n_fuzzy_m + n_fuzzy_a
+        stamped = n_exact + n_fuzzy_m + n_fuzzy_a + n_fuzzy_c
         print(f"\n  💾  Written → {os.path.basename(KEEPERS_AUDITED)}")
         print(f"      {stamped} rows now have source_cluster_id")
         print(f"      {n_miss} rows still blank (see above)")
