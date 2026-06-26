@@ -51,9 +51,10 @@ CRITIQUE_SLEEP = 25
 REWRITE_SLEEP = 8
 
 # TOP_K_BULLETS: candidate pool sent into the audit loop.
-# The builder selects ~10 bullets for the final resume from this pool.
-# 12 is enough headroom without blowing the free-tier RPD budget.
-TOP_K_BULLETS = 12
+# The builder selects ~10-14 bullets for the final resume from this pool.
+# 20 gives enough headroom for the builder to cover all roles with correct
+# per-role bullet counts without running dry on relevant candidates.
+TOP_K_BULLETS = 20
 
 # Semantic pre-filter pool size: top-N bullets by cosine similarity passed to the
 # keyword re-ranker. 30 gives a wide enough net without keyword scoring noise.
