@@ -22,12 +22,13 @@ Rate limiting:
     A 1209-row CSV takes ~80 minutes. Run it offline / overnight.
 
 Dependencies:
-    pip install google-genai numpy pandas python-dotenv
+    pip install requests numpy pandas python-dotenv
 """
 
 import os
 import time
 import json
+import requests
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -35,9 +36,11 @@ from dotenv import load_dotenv
 # --- PATH SETUP ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+# override=True forces .env values to win over any pre-existing shell env vars
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM   = 768   # sweet spot for text-only; upgrade to 1536 if adding image/PDF KB docs
@@ -50,27 +53,23 @@ NPY_PATH  = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
 META_PATH = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.meta")
 
 
-def embed_text(client, text: str) -> list:
-    """Embed a single string via the google-genai SDK. Returns a list of floats."""
+def embed_text(text: str) -> list:
+    """Call gemini-embedding-2 embedContent endpoint. Returns a list of floats."""
+    url = f"{BASE_URL}/{EMBED_MODEL}:embedContent?key={API_KEY}"
+    body = {
+        "model": f"models/{EMBED_MODEL}",
+        "content": {"parts": [{"text": text}]},
+        "outputDimensionality": EMBED_DIM,
+    }
     for attempt in range(MAX_RETRIES):
-        try:
-            result = client.models.embed_content(
-                model=EMBED_MODEL,
-                contents=text,
-                config={
-                    "task_type": "RETRIEVAL_DOCUMENT",
-                    "output_dimensionality": EMBED_DIM,
-                },
-            )
-            return result.embeddings[0].values
-        except Exception as exc:
-            msg = str(exc)
-            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                wait = 5 * (2 ** attempt)
-                print(f"    ⏳ Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
-                time.sleep(wait)
-                continue
-            raise
+        resp = requests.post(url, json=body, timeout=60)
+        if resp.status_code == 429:
+            wait = 5 * (2 ** attempt)
+            print(f"    ⏳ Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        return resp.json()["embedding"]["values"]
     raise RuntimeError(f"embed_text failed after {MAX_RETRIES} retries.")
 
 
@@ -78,20 +77,7 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
-    # Force API-key auth: prevent the SDK from picking up gcloud / ADC credentials
-    # which override api_key and cause 401 ACCESS_TOKEN_TYPE_UNSUPPORTED errors.
-    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-    os.environ.pop("GOOGLE_GENAI_USE_VERTEXAI", None)
-
-    # Import here so a missing package gives a clear message
-    try:
-        from google import genai
-    except ImportError:
-        raise ImportError(
-            "google-genai not installed. Run: pip install google-genai"
-        )
-
-    client = genai.Client(api_key=API_KEY)
+    print(f"   🔑 Using key: {API_KEY[:8]}... (length {len(API_KEY)})")
 
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
@@ -116,7 +102,7 @@ def main():
     vectors = []
     for i, bullet in enumerate(bullets):
         print(f"   [{i+1:>4}/{len(bullets)}] {bullet[:80]}{'...' if len(bullet) > 80 else ''}")
-        vec = embed_text(client, bullet)
+        vec = embed_text(bullet)
         vectors.append(vec)
         if i < len(bullets) - 1:
             time.sleep(EMBED_SLEEP)
