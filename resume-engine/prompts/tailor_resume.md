@@ -89,6 +89,21 @@ Detect the primary role archetype from the JD and foreground the corresponding e
 - Content Committee: founded and chaired, 100+ assets, 129 sequences, QA process, voice/tone guidelines
 - SDR Process Map: 8-step website used as official onboarding asset years after creation
 
+# Per-Role Bullet Count Targets
+
+These are exact targets. Do not over-fill or under-fill any role. The total across all roles must fit the 2-page layout.
+
+| Role | Company | Bullets |
+|---|---|---|
+| Mercor AI Evaluator (contract) | Mercor | 2 |
+| Senior Marketing Manager | Treering | 4–5 |
+| Inside Sales & Marketing Specialist | Inside Sales Team | 3–4 |
+| Marketing Strategist / Account Manager | Element 8 / Strategy LLC | 3 |
+| Senior Copywriter | VML (Wunderman Thompson) | 2–3 |
+| Copywriter | Callahan Creek | 2 |
+
+**Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. Reduce Treering to 4 or IST to 3 before trimming any other role. Never drop Mercor below 2 or Callahan Creek below 2.
+
 # Section Order (Page 1 → Page 2)
 
 Page 1: Header → Professional Summary → Skills → Work Experience (Mercor if present, Treering, Inside Sales Team)
