@@ -93,14 +93,14 @@ Detect the primary role archetype from the JD and foreground the corresponding e
 
 These are exact targets. Do not over-fill or under-fill any role. The total across all roles must fit the 2-page layout.
 
-| Role | Company | Bullets |
-|---|---|---|
-| Mercor AI Evaluator (contract) | Mercor | 2 |
-| Senior Marketing Manager | Treering | 4–5 |
-| Inside Sales & Marketing Specialist | Inside Sales Team | 3–4 |
-| Marketing Strategist / Account Manager | Element 8 / Strategy LLC | 3 |
-| Senior Copywriter | VML (Wunderman Thompson) | 2–3 |
-| Copywriter | Callahan Creek | 2 |
+| Company | Bullets |
+|---|---|
+| Mercor | 2-3 |
+| Treering Yearbooks | 6-8 |
+| Inside Sales Team | 4-5 |
+| Element 8 / Strategy LLC | 3-4 |
+| VML | 3-4|
+| Callahan Creek | 3-4 |
 
 **Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. Reduce Treering to 4 or IST to 3 before trimming any other role. Never drop Mercor below 2 or Callahan Creek below 2.
 

@@ -54,7 +54,7 @@ REWRITE_SLEEP = 8
 # The builder selects ~10-14 bullets for the final resume from this pool.
 # 20 gives enough headroom for the builder to cover all roles with correct
 # per-role bullet counts without running dry on relevant candidates.
-TOP_K_BULLETS = 20
+TOP_K_BULLETS = 30
 
 # Semantic pre-filter pool size: top-N bullets by cosine similarity passed to the
 # keyword re-ranker. 30 gives a wide enough net without keyword scoring noise.
