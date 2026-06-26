@@ -6,6 +6,7 @@ secrets.yaml
 secrets.json
 api_keys.txt
 config.local.*
+*.meta
 
 # === AUDIT & OUTPUT FILES (may contain keys or PII) ===
 *audit*.csv
@@ -28,6 +29,7 @@ tailored_resume*.json
 MorganEscott_*.pdf
 *_Resume.pdf
 *_resume.pdf
+*.npy
 
 # === PYTHON ===
 __pycache__/
