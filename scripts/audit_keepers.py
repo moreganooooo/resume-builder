@@ -27,15 +27,17 @@ Four stages:
     ranks by composite score ascending (worst first), writes to
     audit-rewrite-queue.csv.
 
-    Exclusion check reads from BOTH bullet-bank-keepers.csv AND
-    bullet-bank-keepers-audited.csv (when it exists), so bullets already
-    processed by a previous Stage 4 run are not re-queued.
+    Exclusion uses cluster_id (primary) and bullet text (secondary fallback)
+    so that bullets already processed by a prior Stage 4 run are not
+    re-queued even though the saved keeper text differs from the original.
 
   Stage 4 — Optional Auto-Rewrite
     If --auto-rewrite flag is passed, hands each queued bullet to
     process_bullet() imported directly from rewrite_bullets.py.
     Uses the same sleep constants and process_bullet() logic — no new
     rewrite code here.
+    Records source_cluster_id on saved keeper rows so Stage 3 can
+    exclude them by ID on the next run.
 
 Outputs (resume-engine/knowledge_base/):
   bullet-bank-keepers-audited.csv    keepers with refreshed scores + audit_status
@@ -150,16 +152,45 @@ def _safe_str(v) -> str:
     return str(v)
 
 
+def _read_cluster_ids_from_file(path: str) -> set:
+    """Return the set of source_cluster_id values recorded in a keepers file."""
+    ids: set = set()
+    if not os.path.exists(path):
+        return ids
+    try:
+        df = pd.read_csv(path)
+        if "source_cluster_id" in df.columns:
+            raw = df["source_cluster_id"].dropna()
+            for v in raw:
+                try:
+                    ids.add(int(float(str(v))))
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    return ids
+
+
+def _all_known_keeper_cluster_ids() -> set:
+    """
+    Returns the union of source_cluster_id values recorded in both keepers
+    files.  Stage 3 uses this to skip cluster-map MANUAL rows whose cluster
+    has already been processed by a prior Stage 4 run.
+
+    This is the primary exclusion mechanism.  It works even though the saved
+    keeper text differs from the original cluster-map bullet text.
+    """
+    ids: set = set()
+    for path in (KEEPERS_IN, KEEPERS_AUDITED):
+        ids |= _read_cluster_ids_from_file(path)
+    return ids
+
+
 def _all_known_keeper_bullets() -> set:
     """
-    Returns the union of Bullet Point values from both keepers files.
-
-    bullet-bank-keepers.csv        — original pipeline output
-    bullet-bank-keepers-audited.csv — Stage 4 output from any prior run
-
-    Stage 3 uses this set to exclude bullets that have already been
-    processed, preventing the same 262 MANUAL entries from re-queuing
-    on every subsequent run.
+    Secondary / fallback exclusion: returns the union of Bullet Point values
+    from both keepers files.  Used for rows that have no cluster_id recorded
+    (e.g. legacy keeper rows from before source_cluster_id was introduced).
     """
     bullets: set = set()
     for path in (KEEPERS_IN, KEEPERS_AUDITED):
@@ -350,11 +381,13 @@ def stage3_build_rewrite_queue(
     """
     Builds the ranked rewrite queue from:
       - NEEDS_REWRITE / MANUAL rows from the audited keepers (Stage 1)
-      - MANUAL rows from the cluster map that aren't already in keepers
+      - MANUAL rows from the cluster map that aren't already processed
 
-    The exclusion check reads from BOTH bullet-bank-keepers.csv AND
-    bullet-bank-keepers-audited.csv so that bullets already processed by
-    a prior Stage 4 run are not re-queued on subsequent runs.
+    Exclusion uses cluster_id as the primary key (stored in
+    source_cluster_id on saved keeper rows) so that bullets already
+    processed by a prior Stage 4 run are not re-queued even though the
+    saved keeper text differs from the original cluster-map bullet text.
+    Falls back to bullet-text matching for rows with no cluster_id.
 
     Sorted by composite score ascending (worst first).
     """
@@ -371,7 +404,7 @@ def stage3_build_rewrite_queue(
     queue_rows.append(df_keeper_bad)
     print(f"   From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
 
-    # Source B: MANUAL bullets in cluster map not already in keepers
+    # Source B: MANUAL bullets in cluster map not already processed
     map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
     if os.path.exists(map_path):
         df_map = pd.read_csv(map_path)
@@ -386,17 +419,40 @@ def stage3_build_rewrite_queue(
 
         df_map_manual = df_map[manual_mask].copy()
 
-        # Exclude bullets already processed in any prior run.
-        # Reads from BOTH keepers files: original + audited (Stage 4 output).
-        # This prevents the same MANUAL entries re-queuing on every run.
-        all_keeper_bullets = _all_known_keeper_bullets()
+        # -----------------------------------------------------------------
+        # PRIMARY exclusion: by cluster_id
+        # Stage 4 writes source_cluster_id onto every keeper it saves, so
+        # on the next run we can skip those cluster IDs entirely — even
+        # though the saved bullet text differs from the original.
+        # -----------------------------------------------------------------
+        done_ids = _all_known_keeper_cluster_ids()
         before = len(df_map_manual)
+
+        if done_ids and "cluster_id" in df_map_manual.columns:
+            def _to_int_id(v):
+                try:
+                    return int(float(str(v)))
+                except (ValueError, TypeError):
+                    return None
+
+            df_map_manual = df_map_manual[
+                ~df_map_manual["cluster_id"].apply(_to_int_id).isin(done_ids)
+            ].copy()
+
+        # -----------------------------------------------------------------
+        # SECONDARY / FALLBACK exclusion: by bullet text
+        # Catches legacy keeper rows that predate source_cluster_id and any
+        # edge case where the cluster map MANUAL text exactly matches a
+        # saved keeper (e.g. the bullet passed without needing a rewrite).
+        # -----------------------------------------------------------------
+        all_keeper_bullets = _all_known_keeper_bullets()
         df_map_manual = df_map_manual[
             ~df_map_manual["Bullet Point"].str.strip().isin(all_keeper_bullets)
         ].copy()
+
         excluded = before - len(df_map_manual)
         if excluded:
-            print(f"   Excluded {excluded} already-processed bullets (found in keepers-audited.csv)")
+            print(f"   Excluded {excluded} already-processed bullets (found in keepers or keepers-audited)")
 
         # Carry over scores if present in the cluster map
         for col in SCORE_COLS:
@@ -462,6 +518,9 @@ def stage4_auto_rewrite(
     """
     Passes each queued bullet through process_bullet() from rewrite_bullets.py.
     KEEP results are appended to the audited keepers CSV.
+
+    Records source_cluster_id on each saved keeper row so that Stage 3 can
+    exclude that cluster on the next run by ID rather than by bullet text.
     """
     print("\n" + "=" * 60)
     print("STAGE 4 — Auto-Rewrite")
@@ -497,11 +556,22 @@ def stage4_auto_rewrite(
 
         if result["rewrite_status"] == "KEEP":
             n_keep += 1
+
+            # Record the originating cluster_id so Stage 3 can exclude it
+            # by ID on the next run (works even though the bullet text changed).
+            source_cluster_id = ""
+            if "cluster_id" in row and pd.notna(row["cluster_id"]):
+                try:
+                    source_cluster_id = int(float(str(row["cluster_id"])))
+                except (ValueError, TypeError):
+                    source_cluster_id = str(row["cluster_id"])
+
             keeper_row = {
                 "Bullet Point":      result["final_bullet"],
                 "Role / Company":    row.get("Role / Company", ""),
                 "Tags":              row.get("Tags", ""),
                 "source":            "audit_rewrite",
+                "source_cluster_id": source_cluster_id,
                 "rewrite_attempts":  result.get("rewrite_attempts", 0),
                 "rewrite_reasoning": result.get("rewrite_reasoning", ""),
                 "context_gaps":      result.get("context_gaps", ""),
@@ -510,7 +580,7 @@ def stage4_auto_rewrite(
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_AUDITED)
-            print(f"   ✅ KEEPER saved to audited keepers.")
+            print(f"   ✅ KEEPER saved (source_cluster_id={source_cluster_id}).")
         else:
             n_manual += 1
             print(f"   🔧 MANUAL — best version retained, not added to keepers.")
