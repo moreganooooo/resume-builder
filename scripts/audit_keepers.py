@@ -47,9 +47,13 @@ Outputs (resume-engine/knowledge_base/):
 Usage:
   python audit_keepers.py                    # run all four stages, no auto-rewrite
   python audit_keepers.py --dry-run          # score pass is mocked, no API calls
-  python audit_keepers.py --auto-rewrite     # Stage 4: run the queue through process_bullet()
+  python audit_keepers.py --auto-rewrite     # Stage 4: run the queue through rewriter
   python audit_keepers.py --auto-rewrite --limit 10
   python audit_keepers.py --skip-rescore     # skip Stage 1 API calls, use existing scores
+  python audit_keepers.py --from-audited --auto-rewrite --skip-rescore
+                                             # resume from keepers-audited.csv — only
+                                             # MANUAL/NEEDS_REWRITE rows are re-processed;
+                                             # CLEAN rows are skipped instantly (no API calls)
 """
 
 import argparse
@@ -270,11 +274,15 @@ def stage1_audit_keepers(
     score_system: str,
     dry_run: bool = False,
     skip_rescore: bool = False,
+    from_audited: bool = False,
 ) -> pd.DataFrame:
     """
     Re-score keepers that are missing scores or have manager_test != PASS.
     Adds / refreshes: accuracy_score, believability_score, clarity_score,
     ats_value, manager_test, weaknesses, audit_status.
+
+    When --from-audited is set, rows already marked CLEAN are skipped
+    entirely (no API calls, no reclassification) — they stay as-is.
 
     After scoring, merges source_cluster_id values back from the startup
     snapshot (_STARTUP_CLUSTER_ID_MAP) so that IDs stamped by
@@ -288,19 +296,28 @@ def stage1_audit_keepers(
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
 
-    needs_score_mask = df_keepers.apply(
-        lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
-        axis=1,
-    )
+    # When loading from the audited file, rows already marked CLEAN are
+    # trusted as-is — no need to re-score or reclassify them.
+    if from_audited:
+        already_clean_mask = df_keepers["audit_status"].str.strip().str.upper() == "CLEAN"
+        needs_score_mask = ~already_clean_mask
+        print(f"   ⚡ --from-audited mode: trusting existing CLEAN rows.")
+    else:
+        needs_score_mask = df_keepers.apply(
+            lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
+            axis=1,
+        )
+        already_clean_mask = ~needs_score_mask
+
     to_score = df_keepers[needs_score_mask]
-    already_clean = df_keepers[~needs_score_mask]
+    already_clean = df_keepers[already_clean_mask]
 
     print(f"   Total keepers:         {len(df_keepers)}")
     print(f"   Already CLEAN (PASS):  {len(already_clean)}")
     print(f"   Need scoring/review:   {len(to_score)}")
 
     # Mark already-clean rows immediately
-    df_keepers.loc[~needs_score_mask, "audit_status"] = "CLEAN"
+    df_keepers.loc[already_clean_mask, "audit_status"] = "CLEAN"
 
     if to_score.empty:
         print("   ✅ All keepers already clean — no scoring needed.")
@@ -690,6 +707,16 @@ def main():
     parser.add_argument("--skip-rescore", action="store_true", help="Skip Stage 1 API scoring")
     parser.add_argument("--auto-rewrite", action="store_true", help="Stage 4: run queue through rewriter")
     parser.add_argument("--limit",        type=int, default=None, help="Cap Stage 4 bullets")
+    parser.add_argument(
+        "--from-audited",
+        action="store_true",
+        help=(
+            "Load from keepers-audited.csv instead of keepers.csv. "
+            "CLEAN rows are trusted as-is (no API calls). Only MANUAL/NEEDS_REWRITE "
+            "rows are re-processed. Use this after a completed run to retry only "
+            "the stragglers without re-scoring the full set."
+        ),
+    )
     args = parser.parse_args()
 
     print("\n" + "#" * 60)
@@ -698,14 +725,25 @@ def main():
     print(f"  dry_run:      {args.dry_run}")
     print(f"  skip_rescore: {args.skip_rescore}")
     print(f"  auto_rewrite: {args.auto_rewrite}")
+    print(f"  from_audited: {args.from_audited}")
     print(f"  limit:        {args.limit}")
 
-    # --- Load keepers ---
-    if not os.path.exists(KEEPERS_IN):
-        print(f"\n❌  {KEEPERS_IN} not found. Run rewrite_bullets.py first.")
+    # --- Resolve source file ---
+    if args.from_audited and os.path.exists(KEEPERS_AUDITED):
+        source_file = KEEPERS_AUDITED
+        print(f"\n   ⚡ --from-audited: loading from {os.path.basename(KEEPERS_AUDITED)}")
+        print(   "      CLEAN rows will be skipped; only MANUAL/NEEDS_REWRITE rows re-processed.")
+    else:
+        source_file = KEEPERS_IN
+        if args.from_audited:
+            print(f"\n   ⚠️  --from-audited set but {os.path.basename(KEEPERS_AUDITED)} not found.")
+            print(   "      Falling back to keepers.csv.")
+
+    if not os.path.exists(source_file):
+        print(f"\n❌  {source_file} not found. Run rewrite_bullets.py first.")
         sys.exit(1)
 
-    df_keepers = pd.read_csv(KEEPERS_IN)
+    df_keepers = pd.read_csv(source_file)
     df_keepers = ensure_writable_dtypes(df_keepers)
 
     # Ensure all expected columns exist
@@ -713,7 +751,7 @@ def main():
         if col not in df_keepers.columns:
             df_keepers[col] = ""
 
-    print(f"\n   📂 Loaded keepers: {len(df_keepers)} rows from {os.path.basename(KEEPERS_IN)}")
+    print(f"\n   📂 Loaded keepers: {len(df_keepers)} rows from {os.path.basename(source_file)}")
     print(f"   📌 Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
           f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed")
 
@@ -739,6 +777,7 @@ def main():
         score_system=score_system or "",
         dry_run=args.dry_run,
         skip_rescore=args.skip_rescore,
+        from_audited=args.from_audited,
     )
 
     # Save audited keepers after Stage 1.
