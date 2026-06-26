@@ -31,6 +31,10 @@ Four stages:
     so that bullets already processed by a prior Stage 4 run are not
     re-queued even though the saved keeper text differs from the original.
 
+    When --from-audited is set, Source B (cluster-map MANUAL rows) is
+    skipped entirely. The audited file is already the source of truth;
+    only the MANUAL/NEEDS_REWRITE rows from that file need retrying.
+
   Stage 4 — Optional Auto-Rewrite
     If --auto-rewrite flag is passed, hands each queued bullet to
     process_bullet() imported directly from rewrite_bullets.py.
@@ -53,7 +57,8 @@ Usage:
   python audit_keepers.py --from-audited --auto-rewrite --skip-rescore
                                              # resume from keepers-audited.csv — only
                                              # MANUAL/NEEDS_REWRITE rows are re-processed;
-                                             # CLEAN rows are skipped instantly (no API calls)
+                                             # CLEAN rows are skipped, cluster-map Source B
+                                             # is skipped entirely (no queue inflation)
 """
 
 import argparse
@@ -480,11 +485,15 @@ def stage2_diff_cluster_map(
 
 def stage3_build_rewrite_queue(
     df_keepers: pd.DataFrame,
+    from_audited: bool = False,
 ) -> pd.DataFrame:
     """
     Builds the ranked rewrite queue from:
       - NEEDS_REWRITE / MANUAL rows from the audited keepers (Stage 1)
       - MANUAL rows from the cluster map that aren't already processed
+        (Source B — SKIPPED when --from-audited is set, since the audited
+        file is already the source of truth and we only want to retry the
+        33 stragglers, not re-inflate the queue with cluster-map rows)
 
     Exclusion uses cluster_id as the primary key (stored in
     source_cluster_id on saved keeper rows) so that bullets already
@@ -500,75 +509,70 @@ def stage3_build_rewrite_queue(
 
     queue_rows = []
 
-    # Source A: keepers that need attention
+    # Source A: keepers that need attention (MANUAL / NEEDS_REWRITE from Stage 1)
     keeper_bad_mask = df_keepers["audit_status"].isin(["NEEDS_REWRITE", "MANUAL"])
     df_keeper_bad = df_keepers[keeper_bad_mask].copy()
     df_keeper_bad["queue_source"] = "keeper_audit"
     queue_rows.append(df_keeper_bad)
     print(f"   From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
 
-    # Source B: MANUAL bullets in cluster map not already processed
-    map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
-    if os.path.exists(map_path):
-        df_map = pd.read_csv(map_path)
-        df_map = ensure_writable_dtypes(df_map)
+    # Source B: MANUAL bullets in cluster map not already processed.
+    # SKIPPED when --from-audited is set — the audited file is the source
+    # of truth, and pulling cluster-map MANUALs would re-inflate the queue
+    # back to the full original size (exactly the problem we're fixing).
+    if from_audited:
+        print("   Source B (cluster-map MANUAL): SKIPPED — --from-audited mode.")
+        print("   ℹ️  Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.")
+    else:
+        map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
+        if os.path.exists(map_path):
+            df_map = pd.read_csv(map_path)
+            df_map = ensure_writable_dtypes(df_map)
 
-        status_col = "rewrite_status" if "rewrite_status" in df_map.columns else "next_action"
-        manual_mask = df_map[status_col].str.strip().str.upper() == "MANUAL"
-        rep_col = "is_representative"
-        if rep_col in df_map.columns:
-            rep_mask = df_map[rep_col].astype(str).str.strip().str.lower().isin(["true", "1", "yes"])
-            manual_mask = manual_mask & rep_mask
+            status_col = "rewrite_status" if "rewrite_status" in df_map.columns else "next_action"
+            manual_mask = df_map[status_col].str.strip().str.upper() == "MANUAL"
+            rep_col = "is_representative"
+            if rep_col in df_map.columns:
+                rep_mask = df_map[rep_col].astype(str).str.strip().str.lower().isin(["true", "1", "yes"])
+                manual_mask = manual_mask & rep_mask
 
-        df_map_manual = df_map[manual_mask].copy()
+            df_map_manual = df_map[manual_mask].copy()
 
-        # -----------------------------------------------------------------
-        # PRIMARY exclusion: by cluster_id
-        # Uses the startup snapshot so Stage 1's file overwrite doesn't
-        # erase the IDs that backfill_cluster_ids.py stamped.
-        # _all_known_keeper_cluster_ids() merges the snapshot with any new
-        # IDs written by Stage 4 during the current run.
-        # -----------------------------------------------------------------
-        done_ids = _all_known_keeper_cluster_ids()
-        before   = len(df_map_manual)
+            # PRIMARY exclusion: by cluster_id
+            done_ids = _all_known_keeper_cluster_ids()
+            before   = len(df_map_manual)
 
-        if done_ids and "cluster_id" in df_map_manual.columns:
-            def _to_int_id(v):
-                try:
-                    return int(float(str(v)))
-                except (ValueError, TypeError):
-                    return None
+            if done_ids and "cluster_id" in df_map_manual.columns:
+                def _to_int_id(v):
+                    try:
+                        return int(float(str(v)))
+                    except (ValueError, TypeError):
+                        return None
 
+                df_map_manual = df_map_manual[
+                    ~df_map_manual["cluster_id"].apply(_to_int_id).isin(done_ids)
+                ].copy()
+
+            # SECONDARY / FALLBACK exclusion: by bullet text
+            all_keeper_bullets = _all_known_keeper_bullets()
             df_map_manual = df_map_manual[
-                ~df_map_manual["cluster_id"].apply(_to_int_id).isin(done_ids)
+                ~df_map_manual["Bullet Point"].str.strip().isin(all_keeper_bullets)
             ].copy()
 
-        # -----------------------------------------------------------------
-        # SECONDARY / FALLBACK exclusion: by bullet text
-        # Catches legacy keeper rows that predate source_cluster_id and any
-        # edge case where the cluster map MANUAL text exactly matches a
-        # saved keeper (e.g. the bullet passed without needing a rewrite).
-        # Uses the startup snapshot for the same reason as above.
-        # -----------------------------------------------------------------
-        all_keeper_bullets = _all_known_keeper_bullets()
-        df_map_manual = df_map_manual[
-            ~df_map_manual["Bullet Point"].str.strip().isin(all_keeper_bullets)
-        ].copy()
+            excluded = before - len(df_map_manual)
+            if excluded:
+                print(f"   Excluded {excluded} already-processed bullets (found in keepers or keepers-audited)")
 
-        excluded = before - len(df_map_manual)
-        if excluded:
-            print(f"   Excluded {excluded} already-processed bullets (found in keepers or keepers-audited)")
+            # Carry over scores if present in the cluster map
+            for col in SCORE_COLS:
+                if col not in df_map_manual.columns:
+                    df_map_manual[col] = None
 
-        # Carry over scores if present in the cluster map
-        for col in SCORE_COLS:
-            if col not in df_map_manual.columns:
-                df_map_manual[col] = None
-
-        df_map_manual["queue_source"] = "cluster_map_manual"
-        queue_rows.append(df_map_manual)
-        print(f"   From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
-    else:
-        print("   ⚠️  Cluster map not found — skipping cluster-map MANUAL source.")
+            df_map_manual["queue_source"] = "cluster_map_manual"
+            queue_rows.append(df_map_manual)
+            print(f"   From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
+        else:
+            print("   ⚠️  Cluster map not found — skipping cluster-map MANUAL source.")
 
     if not queue_rows or all(df.empty for df in queue_rows):
         print("   ✅ Queue is empty — nothing to rewrite!")
@@ -713,8 +717,9 @@ def main():
         help=(
             "Load from keepers-audited.csv instead of keepers.csv. "
             "CLEAN rows are trusted as-is (no API calls). Only MANUAL/NEEDS_REWRITE "
-            "rows are re-processed. Use this after a completed run to retry only "
-            "the stragglers without re-scoring the full set."
+            "rows are re-processed. Cluster-map Source B is skipped entirely to "
+            "prevent queue inflation. Use this after a completed run to retry only "
+            "the stragglers without re-processing the full set."
         ),
     )
     args = parser.parse_args()
@@ -732,7 +737,7 @@ def main():
     if args.from_audited and os.path.exists(KEEPERS_AUDITED):
         source_file = KEEPERS_AUDITED
         print(f"\n   ⚡ --from-audited: loading from {os.path.basename(KEEPERS_AUDITED)}")
-        print(   "      CLEAN rows will be skipped; only MANUAL/NEEDS_REWRITE rows re-processed.")
+        print(   "      CLEAN rows will be skipped; cluster-map Source B skipped entirely.")
     else:
         source_file = KEEPERS_IN
         if args.from_audited:
@@ -790,7 +795,8 @@ def main():
     _df_disc = stage2_diff_cluster_map(df_keepers)
 
     # ── Stage 3 ───────────────────────────────────────────────────────────────
-    df_queue = stage3_build_rewrite_queue(df_keepers)
+    # Pass from_audited so Stage 3 knows to skip Source B (cluster-map MANUALs)
+    df_queue = stage3_build_rewrite_queue(df_keepers, from_audited=args.from_audited)
 
     # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:
