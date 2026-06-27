@@ -21,6 +21,8 @@ Usage:
   python score_keeper_gems.py --report-only          # print report, skip writing CSV
   python score_keeper_gems.py --rescore-all          # rescore even rows that already have a score
   python score_keeper_gems.py --dry-run              # show what would be scored, no API calls
+  python score_keeper_gems.py --call-delay 6         # sleep 6s between calls (default: 4)
+  python score_keeper_gems.py --checkpoint-every 20  # save every 20 bullets (default: 10)
 
 Skips rows that:
   - Already have a hidden_gem_score (unless --rescore-all is passed)
@@ -28,6 +30,18 @@ Skips rows that:
 
 Reads GEMINI_API_KEY (or GOOGLE_API_KEY as fallback) from environment.
 Model defaults to gemini-3.1-flash-lite — override with --model.
+
+Rate limiting:
+  CALL_DELAY_SECONDS (default 4) is slept after every successful API call.
+  At 4s/call the script runs at ~15 RPM — right at the free-tier ceiling
+  for flash-lite. Increase to 5–6s if you still hit 429s.
+  The retry backoff (5s * 2^attempt) kicks in on top of this when a 429
+  is actually returned.
+
+Checkpointing:
+  The CSV is written to disk every CHECKPOINT_EVERY (default 10) bullets.
+  If the script is interrupted, re-run it without --rescore-all and it
+  will skip already-scored rows and pick up where it left off.
 """
 
 import argparse
@@ -61,13 +75,22 @@ REPORT_OUTPUT  = KB_DIR / "bullet-bank-gems-report.csv"
 # ── Gemini API constants ──────────────────────────────────────────────────────────────────
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# ── Scoring constants ───────────────────────────────────────────────────────────────────────
+# ── Scoring / pacing constants ───────────────────────────────────────────────────────────────
 GEM_THRESHOLD        = 90
 STRONG_THRESHOLD     = 75
 DEFAULT_MODEL        = "gemini-3.1-flash-lite"
 RETRY_LIMIT          = 4
-RETRY_DELAY_SECONDS  = 5   # base delay; doubled each attempt (5s, 10s, 20s, 40s)
+RETRY_DELAY_SECONDS  = 5    # base for retry backoff: 5s, 10s, 20s, 40s
 RETRYABLE_STATUSES   = {429, 500, 502, 503, 504}
+
+# Inter-call pacing: sleep this many seconds after every successful API call.
+# 4s ≈ 15 RPM — right at the free-tier ceiling for flash-lite. Raise to 5–6
+# if you still see 429s; lower to 2–3 on a paid tier.
+CALL_DELAY_SECONDS   = 4
+
+# Write the full CSV to disk after every N successfully scored bullets.
+# Keeps at-risk data loss to at most one checkpoint window if interrupted.
+CHECKPOINT_EVERY     = 10
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────────────────────
 GEM_SYSTEM_PROMPT = """You are an expert resume strategist and recruiter evaluator.
@@ -115,7 +138,6 @@ def parse_json(text: str) -> dict:
     if not text or not text.strip():
         raise ValueError("parse_json received an empty string — the model returned no content.")
 
-    # Strip reasoning tokens emitted by some Gemma models.
     cleaned = re.sub(
         r"<\|think\|>.*?(?:</\|think\|>|<\|/think\|>)",
         "",
@@ -123,7 +145,6 @@ def parse_json(text: str) -> dict:
         flags=re.DOTALL,
     ).strip()
 
-    # Strip markdown fences.
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[-1]
         cleaned = cleaned.rsplit("```", 1)[0].strip()
@@ -133,7 +154,6 @@ def parse_json(text: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Last-resort: extract the first {...} block.
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
         try:
@@ -152,6 +172,8 @@ def score_bullet(api_key: str, company: str, role: str, bullet: str, model: str)
 
     Retry pattern mirrors GeminiClient.generate(): exponential backoff on
     retryable HTTP status codes (429, 5xx), up to RETRY_LIMIT attempts.
+    The inter-call delay (CALL_DELAY_SECONDS / --call-delay) is applied
+    by the caller AFTER this function returns successfully.
     """
     url      = f"{BASE_URL}/{model}:generateContent?key={api_key}"
     user_msg = GEM_USER_TEMPLATE.format(company=company, role=role, bullet=bullet)
@@ -210,7 +232,6 @@ def score_bullet(api_key: str, company: str, role: str, bullet: str, model: str)
 
 # ── Column detection ─────────────────────────────────────────────────────────────────────────────────────
 
-# Non-bullet columns to skip in the fallback scan.
 _NON_BULLET_COLS = frozenset({
     "audit_status", "manager_test", "cluster_id", "company", "role",
     "hidden_gem_reason", "source", "tags", "rewrite_reasoning",
@@ -218,9 +239,8 @@ _NON_BULLET_COLS = frozenset({
     "weaknesses", "role / company",
 })
 
-# Explicit bullet column names, checked in priority order (case-insensitive).
 _BULLET_CANDIDATES = [
-    "bullet point",       # keepers-audited.csv produced by audit pipeline
+    "bullet point",
     "rewritten_bullet",
     "bullet",
     "bullet_text",
@@ -231,26 +251,17 @@ _BULLET_CANDIDATES = [
 
 
 def detect_bullet_column(df: pd.DataFrame) -> str:
-    """Return the name of the column that holds bullet text.
-
-    Three-pass strategy:
-      1. Check explicit candidates (case-insensitive) in priority order.
-      2. Check all columns whose lowercased name contains 'bullet'.
-      3. Fall back to the first object-dtype column not in _NON_BULLET_COLS.
-    """
+    """Return the name of the column that holds bullet text (3-pass strategy)."""
     col_lower = {c.lower(): c for c in df.columns}
 
-    # Pass 1: explicit candidate list.
     for name in _BULLET_CANDIDATES:
         if name in col_lower:
             return col_lower[name]
 
-    # Pass 2: any column whose name contains 'bullet'.
     for lower, original in col_lower.items():
         if "bullet" in lower and lower not in _NON_BULLET_COLS:
             return original
 
-    # Pass 3: first string column that isn't a known non-bullet column.
     for col in df.columns:
         if df[col].dtype == object and col.lower() not in _NON_BULLET_COLS:
             return col
@@ -260,19 +271,13 @@ def detect_bullet_column(df: pd.DataFrame) -> str:
     )
 
 
-# Combined column name produced by the audit pipeline.
 _COMBINED_COL = "role / company"
 
 
 def detect_company_role_columns(df: pd.DataFrame) -> tuple[str, str, bool]:
-    """Return (company_col, role_col, is_combined).
-
-    is_combined=True means both values live in a single 'Role / Company'
-    column and should be split with split_role_company() at scoring time.
-    """
+    """Return (company_col, role_col, is_combined)."""
     col_lower = {c.lower(): c for c in df.columns}
 
-    # Detect the combined 'Role / Company' column first.
     if _COMBINED_COL in col_lower:
         combined = col_lower[_COMBINED_COL]
         return combined, combined, True
@@ -287,11 +292,7 @@ def detect_company_role_columns(df: pd.DataFrame) -> tuple[str, str, bool]:
 
 
 def split_role_company(value: str) -> tuple[str, str]:
-    """Split a 'Role / Company' or 'Role - Company' string into (role, company).
-
-    Tries common separators in order: ' / ', ' - ', ' @ ', ' at '.
-    Returns (value, '') if no separator is found.
-    """
+    """Split 'Role / Company' string into (role, company)."""
     for sep in (" / ", " - ", " @ ", " at "):
         if sep in value:
             parts = value.split(sep, 1)
@@ -301,7 +302,6 @@ def split_role_company(value: str) -> tuple[str, str]:
 
 def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
     """Return boolean mask of rows that need scoring."""
-    # Only score CLEAN rows (already passed audit).
     if "audit_status" in df.columns:
         eligible = df["audit_status"].str.upper() == "CLEAN"
     else:
@@ -310,9 +310,14 @@ def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
     if rescore_all or "hidden_gem_score" not in df.columns:
         return eligible
 
-    # Skip rows that already have a valid score.
     already_scored = df["hidden_gem_score"].notna() & (df["hidden_gem_score"] != "")
     return eligible & ~already_scored
+
+
+def checkpoint_save(df: pd.DataFrame, output_path: Path, scored_count: int) -> None:
+    """Write the full dataframe to disk as a mid-run checkpoint."""
+    df.to_csv(output_path, index=False)
+    print(f"   💾  Checkpoint saved ({scored_count} scored so far) → {output_path}")
 
 
 def print_gem_report(
@@ -332,8 +337,8 @@ def print_gem_report(
     print(f"\n✨  HIDDEN GEM REPORT — {len(gem_rows)} gem(s) found (score >= {threshold})\n")
     print("-" * 70)
     for _, row in gem_rows.iterrows():
-        text  = str(row.get(bullet_col, ""))
-        score = int(row["hidden_gem_score"])
+        text   = str(row.get(bullet_col, ""))
+        score  = int(row["hidden_gem_score"])
         reason = str(row.get("hidden_gem_reason", ""))
 
         if is_combined and company_col:
@@ -357,10 +362,9 @@ def save_gems_report(
     company_col: str = "",
     role_col: str = "",
 ) -> None:
-    # Use detected column names; fall back gracefully if absent.
-    id_cols = [c for c in [company_col, role_col, bullet_col] if c and c in df.columns]
-    extra   = [c for c in ["hidden_gem_score", "hidden_gem_reason"] if c in df.columns]
-    available = list(dict.fromkeys(id_cols + extra))  # dedup, preserve order
+    id_cols   = [c for c in [company_col, role_col, bullet_col] if c and c in df.columns]
+    extra     = [c for c in ["hidden_gem_score", "hidden_gem_reason"] if c in df.columns]
+    available = list(dict.fromkeys(id_cols + extra))
 
     gem_rows = df[df["hidden_gem_score"] >= threshold][available].copy()
     gem_rows = gem_rows.sort_values("hidden_gem_score", ascending=False)
@@ -372,21 +376,27 @@ def main():
     parser = argparse.ArgumentParser(
         description="Score keeper bullets for hidden gem potential and persist scores to CSV."
     )
-    parser.add_argument("--input",       default=str(DEFAULT_INPUT),
+    parser.add_argument("--input",            default=str(DEFAULT_INPUT),
                         help="Source keeper CSV (default: bullet-bank-keepers-audited.csv)")
-    parser.add_argument("--output",      default=str(DEFAULT_OUTPUT),
+    parser.add_argument("--output",           default=str(DEFAULT_OUTPUT),
                         help="Destination CSV (default: overwrites input in-place)")
-    parser.add_argument("--report-path", default=str(REPORT_OUTPUT),
+    parser.add_argument("--report-path",      default=str(REPORT_OUTPUT),
                         help="Path for the gems report CSV")
-    parser.add_argument("--threshold",   type=int, default=GEM_THRESHOLD,
+    parser.add_argument("--threshold",        type=int, default=GEM_THRESHOLD,
                         help=f"Minimum score to flag as a gem (default: {GEM_THRESHOLD})")
-    parser.add_argument("--model",       default=DEFAULT_MODEL,
+    parser.add_argument("--model",            default=DEFAULT_MODEL,
                         help=f"Gemini model to use (default: {DEFAULT_MODEL})")
-    parser.add_argument("--report-only", action="store_true",
+    parser.add_argument("--call-delay",       type=float, default=CALL_DELAY_SECONDS,
+                        help=f"Seconds to sleep between API calls (default: {CALL_DELAY_SECONDS}). "
+                             f"Increase to 5–6 if you still hit 429s.")
+    parser.add_argument("--checkpoint-every", type=int, default=CHECKPOINT_EVERY,
+                        help=f"Save CSV to disk every N scored bullets (default: {CHECKPOINT_EVERY}). "
+                             f"Script is safely resumable after any interrupt.")
+    parser.add_argument("--report-only",      action="store_true",
                         help="Print gem report from existing scores; skip API calls")
-    parser.add_argument("--rescore-all", action="store_true",
+    parser.add_argument("--rescore-all",      action="store_true",
                         help="Re-score rows that already have a hidden_gem_score")
-    parser.add_argument("--dry-run",     action="store_true",
+    parser.add_argument("--dry-run",          action="store_true",
                         help="Show which rows would be scored without making API calls")
     args = parser.parse_args()
 
@@ -401,9 +411,11 @@ def main():
     print(f"🔍  Loading: {input_path}")
     df = pd.read_csv(input_path, low_memory=False)
     print(f"   {len(df)} rows loaded.")
-    print(f"   Model: {args.model}")
+    print(f"   Model          : {args.model}")
+    print(f"   Call delay     : {args.call_delay}s between calls")
+    print(f"   Checkpoint     : every {args.checkpoint_every} bullets")
 
-    bullet_col                        = detect_bullet_column(df)
+    bullet_col                         = detect_bullet_column(df)
     company_col, role_col, is_combined = detect_company_role_columns(df)
     print(f"   Bullet column  : {bullet_col}")
     if is_combined:
@@ -412,7 +424,6 @@ def main():
         print(f"   Company column : {company_col or '(not found)'}")
         print(f"   Role column    : {role_col    or '(not found)'}")
 
-    # Ensure score columns exist.
     if "hidden_gem_score" not in df.columns:
         df["hidden_gem_score"]  = pd.NA
     if "hidden_gem_reason" not in df.columns:
@@ -428,7 +439,8 @@ def main():
     # ── Identify rows to score ────────────────────────────────────────────────────────────────────
     to_score_mask = build_to_score_mask(df, args.rescore_all)
     to_score      = df[to_score_mask]
-    print(f"\n   Rows eligible for scoring : {to_score_mask.sum()}")
+    total_to_score = len(to_score)
+    print(f"\n   Rows eligible for scoring : {total_to_score}")
     print(f"   Already scored (skipping) : {(~to_score_mask).sum()}")
 
     if to_score.empty:
@@ -439,17 +451,24 @@ def main():
         return
 
     if args.dry_run:
-        print(f"\n🧪  DRY RUN — would score {len(to_score)} bullets. No API calls made.")
+        print(f"\n🧪  DRY RUN — would score {total_to_score} bullets with {args.call_delay}s between calls.")
+        est_minutes = (total_to_score * args.call_delay) / 60
+        print(f"   Estimated wall time: ~{est_minutes:.0f} min at {args.call_delay}s/call "
+              f"(checkpoints every {args.checkpoint_every}).")
         for _, row in to_score.head(10).iterrows():
-            text    = str(row.get(bullet_col, ""))[:80]
-            rc_val  = str(row.get(company_col, "?")) if company_col else "?"
+            text   = str(row.get(bullet_col, ""))[:80]
+            rc_val = str(row.get(company_col, "?")) if company_col else "?"
             print(f"   • [{rc_val}]  {text}...")
-        if len(to_score) > 10:
-            print(f"   ... and {len(to_score) - 10} more.")
+        if total_to_score > 10:
+            print(f"   ... and {total_to_score - 10} more.")
         return
 
-    # ── Score ───────────────────────────────────────────────────────────────────────────────────────────
-    print(f"\n🚀  Scoring {len(to_score)} bullets with {args.model} ...\n")
+    # ── Score loop ─────────────────────────────────────────────────────────────────────────────────────────
+    output_path  = Path(args.output)
+    est_minutes  = (total_to_score * args.call_delay) / 60
+    print(f"\n🚀  Scoring {total_to_score} bullets with {args.model}")
+    print(f"   Pacing: {args.call_delay}s between calls — est. ~{est_minutes:.0f} min total")
+    print(f"   Checkpointing every {args.checkpoint_every} bullets to {output_path}\n")
 
     scored_count = 0
     gem_count    = 0
@@ -479,15 +498,24 @@ def main():
             gem_count += 1
 
         label = "💎 GEM" if is_gem else ("⭐ STR" if is_strong else "   ---")
-        print(f"  {label}  [{result['hidden_gem_score']:3d}]  {bullet[:80]}...")
+        print(
+            f"  [{scored_count}/{total_to_score}]  {label}  "
+            f"[{result['hidden_gem_score']:3d}]  {bullet[:75]}..."
+        )
+
+        # ─ Inter-call pacing ─────────────────────────────────────────────────────────────────
+        time.sleep(args.call_delay)
+
+        # ─ Checkpoint save ─────────────────────────────────────────────────────────────────
+        if scored_count % args.checkpoint_every == 0:
+            checkpoint_save(df, output_path, scored_count)
 
     print(f"\n✅  Scored {scored_count} bullets. {gem_count} hidden gems found (>= {args.threshold}).")
 
-    # ── Save ───────────────────────────────────────────────────────────────────────────────────────────
+    # ── Final save ───────────────────────────────────────────────────────────────────────────────────────
     if not args.report_only:
-        output_path = Path(args.output)
         df.to_csv(output_path, index=False)
-        print(f"💾  Saved updated CSV: {output_path}")
+        print(f"💾  Final CSV saved: {output_path}")
 
     df["hidden_gem_score"] = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0)
     print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
