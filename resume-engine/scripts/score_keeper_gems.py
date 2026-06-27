@@ -28,9 +28,6 @@ Skips rows that:
   - Already have a hidden_gem_score (unless --rescore-all is passed)
   - Have audit_status != CLEAN  (already failed or pending audit)
 
-Reads GEMINI_API_KEY (or GOOGLE_API_KEY as fallback) from environment.
-Model defaults to gemini-3.1-flash-lite — override with --model.
-
 Rate limiting:
   CALL_DELAY_SECONDS (default 4) is slept after every successful API call.
   At 4s/call the script runs at ~15 RPM — right at the free-tier ceiling
@@ -78,7 +75,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 # ── Scoring / pacing constants ───────────────────────────────────────────────────────────────
 GEM_THRESHOLD        = 90
 STRONG_THRESHOLD     = 75
-DEFAULT_MODEL        = "gemini-3.1-flash-lite"
+DEFAULT_MODEL        = "gemma-4-31b-it"
 RETRY_LIMIT          = 4
 RETRY_DELAY_SECONDS  = 5    # base for retry backoff: 5s, 10s, 20s, 40s
 RETRYABLE_STATUSES   = {429, 500, 502, 503, 504}

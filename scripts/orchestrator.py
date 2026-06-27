@@ -35,7 +35,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Output dimensionality set to 768 — sweet spot for text-only RAG tasks.
 CRITIQUE_MODEL = "gemini-3.1-flash-lite"
-BUILDER_MODEL  = "gemini-3.1-flash-lite"
+BUILDER_MODEL  = "gemma-4-31b-it"
 EMBED_MODEL    = "gemini-embedding-2"
 EMBED_DIM      = 768
 
