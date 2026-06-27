@@ -94,20 +94,22 @@ Detect the primary role archetype from the JD and foreground the corresponding e
 These are exact targets. Do not over-fill or under-fill any role. The total across all roles must fit the 2-page layout.
 
 | Company | Bullets |
-|---|---|
+| --- | --- |
 | Mercor | 2-3 |
 | Treering Yearbooks | 6-8 |
 | Inside Sales Team | 4-5 |
 | Element 8 / Strategy LLC | 3-4 |
-| VML | 3-4|
+| VML | 3-4 |
 | Callahan Creek | 3-4 |
 
-**Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. Reduce Treering to 4 or IST to 3 before trimming any other role. Never drop Mercor below 2 or Callahan Creek below 2.
+**Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. Reduce Treering to 6 or IST to 3 before trimming any other role. Never drop Mercor below 2. Never drop Element 8 / Strategy LLC, VML, or Callahan Creek below 3.
 
 # Section Order (Page 1 → Page 2)
 
-Page 1: Header → Professional Summary → Skills → Work Experience (Mercor if present, Treering, Inside Sales Team)
+Page 1: Header → Professional Summary → Skills → Work Experience (Mercor, Treering, Inside Sales Team)
 Page 2: Work Experience continued (Element 8/Strategy LLC, VML, Callahan Creek) → Training & Certifications → Education → Why [Company]? (if present)
+
+**Important:** The Inside Sales Team entry must fit fully on the first page without running into the second page. Likewise, the entire Inside Sales Team should never be pushed to the second page. If it does not fit, see "# Trimming Priority (when content exceeds 2 pages)" below.
 
 # Training & Certifications — Fixed Order
 
