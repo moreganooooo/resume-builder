@@ -208,27 +208,95 @@ def score_bullet(api_key: str, company: str, role: str, bullet: str, model: str)
     return {"hidden_gem_score": 0, "hidden_gem_reason": "unknown_error"}
 
 
+# ── Column detection ─────────────────────────────────────────────────────────────────────────────────────
+
+# Non-bullet columns to skip in the fallback scan.
+_NON_BULLET_COLS = frozenset({
+    "audit_status", "manager_test", "cluster_id", "company", "role",
+    "hidden_gem_reason", "source", "tags", "rewrite_reasoning",
+    "context_gaps", "rewrite_date", "source_cluster_id", "rewrite_attempts",
+    "weaknesses", "role / company",
+})
+
+# Explicit bullet column names, checked in priority order (case-insensitive).
+_BULLET_CANDIDATES = [
+    "bullet point",       # keepers-audited.csv produced by audit pipeline
+    "rewritten_bullet",
+    "bullet",
+    "bullet_text",
+    "achievement",
+    "text",
+    "content",
+]
+
+
 def detect_bullet_column(df: pd.DataFrame) -> str:
-    """Return the name of the column that holds bullet text."""
-    for candidate in ("rewritten_bullet", "bullet", "bullet_text", "text", "content"):
-        if candidate in df.columns:
-            return candidate
-    # Fallback: first string column that isn't an id/status column.
+    """Return the name of the column that holds bullet text.
+
+    Three-pass strategy:
+      1. Check explicit candidates (case-insensitive) in priority order.
+      2. Check all columns whose lowercased name contains 'bullet'.
+      3. Fall back to the first object-dtype column not in _NON_BULLET_COLS.
+    """
+    col_lower = {c.lower(): c for c in df.columns}
+
+    # Pass 1: explicit candidate list.
+    for name in _BULLET_CANDIDATES:
+        if name in col_lower:
+            return col_lower[name]
+
+    # Pass 2: any column whose name contains 'bullet'.
+    for lower, original in col_lower.items():
+        if "bullet" in lower and lower not in _NON_BULLET_COLS:
+            return original
+
+    # Pass 3: first string column that isn't a known non-bullet column.
     for col in df.columns:
-        if df[col].dtype == object and col not in (
-            "audit_status", "manager_test", "cluster_id", "company", "role",
-            "hidden_gem_reason", "source",
-        ):
+        if df[col].dtype == object and col.lower() not in _NON_BULLET_COLS:
             return col
+
     raise ValueError(
         f"Cannot detect bullet text column. Columns found: {list(df.columns)}"
     )
 
 
-def detect_company_role_columns(df: pd.DataFrame) -> tuple[str, str]:
-    company_col = next((c for c in df.columns if c.lower() in ("company", "employer")), None)
-    role_col    = next((c for c in df.columns if c.lower() in ("role", "title", "job_title")), None)
-    return company_col or "", role_col or ""
+# Combined column name produced by the audit pipeline.
+_COMBINED_COL = "role / company"
+
+
+def detect_company_role_columns(df: pd.DataFrame) -> tuple[str, str, bool]:
+    """Return (company_col, role_col, is_combined).
+
+    is_combined=True means both values live in a single 'Role / Company'
+    column and should be split with split_role_company() at scoring time.
+    """
+    col_lower = {c.lower(): c for c in df.columns}
+
+    # Detect the combined 'Role / Company' column first.
+    if _COMBINED_COL in col_lower:
+        combined = col_lower[_COMBINED_COL]
+        return combined, combined, True
+
+    company_col = next(
+        (col_lower[c] for c in col_lower if c in ("company", "employer")), None
+    )
+    role_col = next(
+        (col_lower[c] for c in col_lower if c in ("role", "title", "job_title")), None
+    )
+    return company_col or "", role_col or "", False
+
+
+def split_role_company(value: str) -> tuple[str, str]:
+    """Split a 'Role / Company' or 'Role - Company' string into (role, company).
+
+    Tries common separators in order: ' / ', ' - ', ' @ ', ' at '.
+    Returns (value, '') if no separator is found.
+    """
+    for sep in (" / ", " - ", " @ ", " at "):
+        if sep in value:
+            parts = value.split(sep, 1)
+            return parts[0].strip(), parts[1].strip()
+    return value.strip(), ""
 
 
 def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
@@ -247,7 +315,14 @@ def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
     return eligible & ~already_scored
 
 
-def print_gem_report(df: pd.DataFrame, bullet_col: str, threshold: int) -> None:
+def print_gem_report(
+    df: pd.DataFrame,
+    bullet_col: str,
+    threshold: int,
+    company_col: str = "",
+    role_col: str = "",
+    is_combined: bool = False,
+) -> None:
     gem_rows = df[df["hidden_gem_score"] >= threshold].copy()
     if gem_rows.empty:
         print(f"\n💎  No hidden gems found (no bullets scored >= {threshold}).")
@@ -257,11 +332,16 @@ def print_gem_report(df: pd.DataFrame, bullet_col: str, threshold: int) -> None:
     print(f"\n✨  HIDDEN GEM REPORT — {len(gem_rows)} gem(s) found (score >= {threshold})\n")
     print("-" * 70)
     for _, row in gem_rows.iterrows():
-        text    = str(row.get(bullet_col, ""))
-        company = str(row.get("company", row.get("employer", "?")))
-        role    = str(row.get("role",    row.get("title",    "?")))
-        score   = int(row["hidden_gem_score"])
-        reason  = str(row.get("hidden_gem_reason", ""))
+        text  = str(row.get(bullet_col, ""))
+        score = int(row["hidden_gem_score"])
+        reason = str(row.get("hidden_gem_reason", ""))
+
+        if is_combined and company_col:
+            role, company = split_role_company(str(row.get(company_col, "")))
+        else:
+            company = str(row.get(company_col, "?")) if company_col else "?"
+            role    = str(row.get(role_col,    "?")) if role_col    else "?"
+
         print(f"  [{score}/100] {company} | {role}")
         print(f"     \"{text[:120]}{'...' if len(text) > 120 else ''}\"")
         if reason and reason not in ("parse_error", "api_error"):
@@ -269,9 +349,19 @@ def print_gem_report(df: pd.DataFrame, bullet_col: str, threshold: int) -> None:
         print()
 
 
-def save_gems_report(df: pd.DataFrame, bullet_col: str, report_path: Path, threshold: int) -> None:
-    cols = ["company", "role", bullet_col, "hidden_gem_score", "hidden_gem_reason"]
-    available = [c for c in cols if c in df.columns]
+def save_gems_report(
+    df: pd.DataFrame,
+    bullet_col: str,
+    report_path: Path,
+    threshold: int,
+    company_col: str = "",
+    role_col: str = "",
+) -> None:
+    # Use detected column names; fall back gracefully if absent.
+    id_cols = [c for c in [company_col, role_col, bullet_col] if c and c in df.columns]
+    extra   = [c for c in ["hidden_gem_score", "hidden_gem_reason"] if c in df.columns]
+    available = list(dict.fromkeys(id_cols + extra))  # dedup, preserve order
+
     gem_rows = df[df["hidden_gem_score"] >= threshold][available].copy()
     gem_rows = gem_rows.sort_values("hidden_gem_score", ascending=False)
     gem_rows.to_csv(report_path, index=False)
@@ -302,7 +392,7 @@ def main():
 
     api_key = get_api_key()
 
-    # ── Load ────────────────────────────────────────────────────────────────────────────────────────────
+    # ── Load ───────────────────────────────────────────────────────────────────────────────────────────
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"❌  Input file not found: {input_path}", file=sys.stderr)
@@ -313,11 +403,14 @@ def main():
     print(f"   {len(df)} rows loaded.")
     print(f"   Model: {args.model}")
 
-    bullet_col            = detect_bullet_column(df)
-    company_col, role_col = detect_company_role_columns(df)
+    bullet_col                        = detect_bullet_column(df)
+    company_col, role_col, is_combined = detect_company_role_columns(df)
     print(f"   Bullet column  : {bullet_col}")
-    print(f"   Company column : {company_col or '(not found)'}")
-    print(f"   Role column    : {role_col    or '(not found)'}")
+    if is_combined:
+        print(f"   Role/Company   : {company_col} (combined — will split on scoring)")
+    else:
+        print(f"   Company column : {company_col or '(not found)'}")
+        print(f"   Role column    : {role_col    or '(not found)'}")
 
     # Ensure score columns exist.
     if "hidden_gem_score" not in df.columns:
@@ -328,8 +421,8 @@ def main():
     # ── Report-only mode ────────────────────────────────────────────────────────────────────
     if args.report_only:
         df["hidden_gem_score"] = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0)
-        print_gem_report(df, bullet_col, args.threshold)
-        save_gems_report(df, bullet_col, Path(args.report_path), args.threshold)
+        print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
+        save_gems_report(df, bullet_col, Path(args.report_path), args.threshold, company_col, role_col)
         return
 
     # ── Identify rows to score ────────────────────────────────────────────────────────────────────
@@ -341,16 +434,16 @@ def main():
     if to_score.empty:
         print("\n✅  Nothing to score. All CLEAN bullets already have gem scores.")
         print("   Use --rescore-all to force a full rescore.")
-        print_gem_report(df, bullet_col, args.threshold)
-        save_gems_report(df, bullet_col, Path(args.report_path), args.threshold)
+        print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
+        save_gems_report(df, bullet_col, Path(args.report_path), args.threshold, company_col, role_col)
         return
 
     if args.dry_run:
         print(f"\n🧪  DRY RUN — would score {len(to_score)} bullets. No API calls made.")
         for _, row in to_score.head(10).iterrows():
             text    = str(row.get(bullet_col, ""))[:80]
-            company = str(row.get(company_col, "?")) if company_col else "?"
-            print(f"   • [{company}]  {text}...")
+            rc_val  = str(row.get(company_col, "?")) if company_col else "?"
+            print(f"   • [{rc_val}]  {text}...")
         if len(to_score) > 10:
             print(f"   ... and {len(to_score) - 10} more.")
         return
@@ -362,9 +455,13 @@ def main():
     gem_count    = 0
 
     for idx, row in to_score.iterrows():
-        bullet  = str(row.get(bullet_col, ""))
-        company = str(row.get(company_col, "")) if company_col else ""
-        role    = str(row.get(role_col,    "")) if role_col    else ""
+        bullet = str(row.get(bullet_col, ""))
+
+        if is_combined and company_col:
+            role, company = split_role_company(str(row.get(company_col, "")))
+        else:
+            company = str(row.get(company_col, "")) if company_col else ""
+            role    = str(row.get(role_col,    "")) if role_col    else ""
 
         if not bullet.strip():
             df.at[idx, "hidden_gem_score"]  = 0
@@ -393,8 +490,8 @@ def main():
         print(f"💾  Saved updated CSV: {output_path}")
 
     df["hidden_gem_score"] = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0)
-    print_gem_report(df, bullet_col, args.threshold)
-    save_gems_report(df, bullet_col, Path(args.report_path), args.threshold)
+    print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
+    save_gems_report(df, bullet_col, Path(args.report_path), args.threshold, company_col, role_col)
 
 
 if __name__ == "__main__":
