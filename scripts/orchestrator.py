@@ -60,6 +60,27 @@ TOP_K_BULLETS = 30
 # keyword re-ranker. 30 gives a wide enough net without keyword scoring noise.
 SEMANTIC_POOL = 30
 
+# GEM_BOOST_WEIGHT: controls how much a bullet's hidden_gem_score lifts its
+# keyword ranking score in mine_bullet_bank(). Applied as:
+#
+#   final_score = keyword_score + (hidden_gem_score * GEM_BOOST_WEIGHT)
+#
+# At the default of 0.05:
+#   - A gem scoring 90  adds  +4.5  points on top of keyword relevance
+#   - A gem scoring 75  adds  +3.75 points
+#   - A gem scoring 50  adds  +2.5  points (mediocre bullets get negligible lift)
+#
+# A typical keyword match for a strong-fit bullet lands in the 5–15 range, so
+# a +4.5 gem bonus is meaningful but won't force an off-topic gem into the pool
+# over a highly relevant non-gem bullet.
+#
+# Tuning guide:
+#   0.00  — disabled; pure keyword ranking (pre-fix behaviour)
+#   0.03  — light nudge; gem bullets need to be borderline relevant to benefit
+#   0.05  — default; gems get a clear lift without overriding keyword signal
+#   0.10  — aggressive; a 90-score gem beats ~9 keyword hits — use carefully
+GEM_BOOST_WEIGHT = 0.05
+
 
 # ==========================================
 # THIN REST CLIENT (replaces google-genai SDK)
@@ -757,9 +778,13 @@ class ResumeEngine:
             Falls back gracefully to Stage 2 alone if the .npy file doesn't exist
             (i.e. embed_bullet_bank.py hasn't been run yet).
 
-        Stage 2 — Keyword re-rank (pandas, zero API calls):
+        Stage 2 — Keyword re-rank + gem boost (pandas, zero API calls):
             Score the Stage 1 candidates by weighted JD keyword overlap.
             Tools keywords weight 2x, hard skills and core functions weight 1x.
+            Bullets with a hidden_gem_score column receive an additive bonus of
+            (hidden_gem_score * GEM_BOOST_WEIGHT) on top of their keyword score,
+            so strong pre-vetted gems surface reliably without overriding a
+            highly relevant non-gem bullet. Set GEM_BOOST_WEIGHT=0.0 to disable.
             Return the top top_k highest-scoring bullets.
         """
         # --- BULLET SOURCE SELECTION ---
@@ -833,16 +858,27 @@ class ResumeEngine:
         else:
             df_pool = df
 
-        # --- STAGE 2: KEYWORD RE-RANK ---
+        # --- STAGE 2: KEYWORD RE-RANK + GEM BOOST ---
         keywords_dict = self.extract_jd_keywords(jd_text)
 
         weighted_kws = {kw.lower(): 2 for kw in keywords_dict.get('tools', [])}
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get('hard_skills', [])})
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get('core_functions', [])})
 
+        gem_boost_enabled = GEM_BOOST_WEIGHT > 0 and "hidden_gem_score" in df_pool.columns
+
+        if gem_boost_enabled:
+            print(f"   💎 Gem boost active (GEM_BOOST_WEIGHT={GEM_BOOST_WEIGHT}). "
+                  f"A score-90 gem gets +{90 * GEM_BOOST_WEIGHT:.1f} pts on top of keyword relevance.")
+
         def score_row(row):
             row_str = " ".join(str(val).lower() for val in row.values)
-            return sum(weight for kw, weight in weighted_kws.items() if kw in row_str)
+            keyword_score = sum(weight for kw, weight in weighted_kws.items() if kw in row_str)
+            if gem_boost_enabled:
+                gem_score = pd.to_numeric(row.get("hidden_gem_score", 0), errors="coerce")
+                gem_score = gem_score if pd.notna(gem_score) else 0.0
+                return keyword_score + (gem_score * GEM_BOOST_WEIGHT)
+            return keyword_score
 
         df_pool = df_pool.copy()
         df_pool['match_score'] = df_pool.apply(score_row, axis=1)
@@ -856,7 +892,7 @@ class ResumeEngine:
             extracted_bullets.append(bullet_string)
 
         print(f"🎯 Extracted {len(extracted_bullets)} bullets "
-              f"({'semantic→keyword' if semantic_indices is not None else 'keyword-only'} pipeline).")
+              f"({'semantic→keyword+gem' if gem_boost_enabled and semantic_indices is not None else 'semantic→keyword' if semantic_indices is not None else 'keyword+gem' if gem_boost_enabled else 'keyword-only'} pipeline).")
         return extracted_bullets
 
     # --- AUDIT ENGINE ---
