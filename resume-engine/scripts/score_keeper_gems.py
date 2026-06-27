@@ -18,14 +18,15 @@ Usage:
   python score_keeper_gems.py
   python score_keeper_gems.py --threshold 85
   python score_keeper_gems.py --input path/to/custom.csv --output path/to/out.csv
-  python score_keeper_gems.py --report-only          # print report, skip writing CSV
+  python score_keeper_gems.py --report-only          # print verbose report, skip API calls
   python score_keeper_gems.py --rescore-all          # rescore even rows that already have a score
   python score_keeper_gems.py --dry-run              # show what would be scored, no API calls
   python score_keeper_gems.py --call-delay 6         # sleep 6s between calls (default: 4)
   python score_keeper_gems.py --checkpoint-every 20  # save every 20 bullets (default: 10)
 
 Skips rows that:
-  - Already have a hidden_gem_score (unless --rescore-all is passed)
+  - Already have a numeric hidden_gem_score (unless --rescore-all is passed)
+    NOTE: non-numeric values like "Unscored" are treated as un-scored and WILL be processed.
   - Have audit_status != CLEAN  (already failed or pending audit)
 
 Reads GEMINI_API_KEY (or GOOGLE_API_KEY as fallback) from environment.
@@ -301,7 +302,12 @@ def split_role_company(value: str) -> tuple[str, str]:
 
 
 def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
-    """Return boolean mask of rows that need scoring."""
+    """Return boolean mask of rows that need scoring.
+
+    FIX: coerce hidden_gem_score to numeric before checking — non-numeric
+    strings like 'Unscored' become NaN and are correctly treated as
+    needing a score. The old notna() + != '' check wrongly skipped them.
+    """
     if "audit_status" in df.columns:
         eligible = df["audit_status"].str.upper() == "CLEAN"
     else:
@@ -310,7 +316,8 @@ def build_to_score_mask(df: pd.DataFrame, rescore_all: bool) -> pd.Series:
     if rescore_all or "hidden_gem_score" not in df.columns:
         return eligible
 
-    already_scored = df["hidden_gem_score"].notna() & (df["hidden_gem_score"] != "")
+    numeric_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce")
+    already_scored = numeric_scores.notna()
     return eligible & ~already_scored
 
 
@@ -328,17 +335,56 @@ def print_gem_report(
     role_col: str = "",
     is_combined: bool = False,
 ) -> None:
-    gem_rows = df[df["hidden_gem_score"] >= threshold].copy()
+    """Print a quiet summary: gem count + top 10 scores only.
+
+    FIX: the old version printed every gem bullet to stdout on every run,
+    flooding the terminal with hundreds of lines. Now prints just the count
+    and a top-10 score preview. Full detail is always in the CSV report.
+    Use --report-only to get the verbose per-bullet list in the terminal.
+    """
+    numeric_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce")
+    gem_rows = df[numeric_scores >= threshold].copy()
+
     if gem_rows.empty:
         print(f"\n💎  No hidden gems found (no bullets scored >= {threshold}).")
         return
 
-    gem_rows = gem_rows.sort_values("hidden_gem_score", ascending=False)
+    gem_rows["_score_num"] = numeric_scores[gem_rows.index]
+    gem_rows = gem_rows.sort_values("_score_num", ascending=False)
+
+    top_scores = gem_rows["_score_num"].head(10).astype(int).tolist()
+    print(f"\n✨  {len(gem_rows)} hidden gem(s) found (score >= {threshold}).")
+    print(f"   Top scores: {', '.join(str(s) for s in top_scores)}")
+    print(f"   Full report → bullet-bank-gems-report.csv\n")
+
+
+def print_gem_report_verbose(
+    df: pd.DataFrame,
+    bullet_col: str,
+    threshold: int,
+    company_col: str = "",
+    role_col: str = "",
+    is_combined: bool = False,
+) -> None:
+    """Verbose gem report — prints every gem bullet to stdout.
+
+    Called only when --report-only is passed.
+    """
+    numeric_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce")
+    gem_rows = df[numeric_scores >= threshold].copy()
+
+    if gem_rows.empty:
+        print(f"\n💎  No hidden gems found (no bullets scored >= {threshold}).")
+        return
+
+    gem_rows["_score_num"] = numeric_scores[gem_rows.index]
+    gem_rows = gem_rows.sort_values("_score_num", ascending=False)
+
     print(f"\n✨  HIDDEN GEM REPORT — {len(gem_rows)} gem(s) found (score >= {threshold})\n")
     print("-" * 70)
     for _, row in gem_rows.iterrows():
         text   = str(row.get(bullet_col, ""))
-        score  = int(row["hidden_gem_score"])
+        score  = int(row["_score_num"])
         reason = str(row.get("hidden_gem_reason", ""))
 
         if is_combined and company_col:
@@ -366,8 +412,10 @@ def save_gems_report(
     extra     = [c for c in ["hidden_gem_score", "hidden_gem_reason"] if c in df.columns]
     available = list(dict.fromkeys(id_cols + extra))
 
-    gem_rows = df[df["hidden_gem_score"] >= threshold][available].copy()
-    gem_rows = gem_rows.sort_values("hidden_gem_score", ascending=False)
+    numeric_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce")
+    gem_rows = df[numeric_scores >= threshold][available].copy()
+    gem_rows["_sort"] = pd.to_numeric(gem_rows["hidden_gem_score"], errors="coerce")
+    gem_rows = gem_rows.sort_values("_sort", ascending=False).drop(columns=["_sort"])
     gem_rows.to_csv(report_path, index=False)
     print(f"📋  Gems report saved: {report_path}  ({len(gem_rows)} rows)")
 
@@ -393,7 +441,7 @@ def main():
                         help=f"Save CSV to disk every N scored bullets (default: {CHECKPOINT_EVERY}). "
                              f"Script is safely resumable after any interrupt.")
     parser.add_argument("--report-only",      action="store_true",
-                        help="Print gem report from existing scores; skip API calls")
+                        help="Print full verbose gem report from existing scores; skip API calls")
     parser.add_argument("--rescore-all",      action="store_true",
                         help="Re-score rows that already have a hidden_gem_score")
     parser.add_argument("--dry-run",          action="store_true",
@@ -432,7 +480,7 @@ def main():
     # ── Report-only mode ────────────────────────────────────────────────────────────────────
     if args.report_only:
         df["hidden_gem_score"] = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0)
-        print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
+        print_gem_report_verbose(df, bullet_col, args.threshold, company_col, role_col, is_combined)
         save_gems_report(df, bullet_col, Path(args.report_path), args.threshold, company_col, role_col)
         return
 
@@ -443,11 +491,13 @@ def main():
     print(f"\n   Rows eligible for scoring : {total_to_score}")
     print(f"   Already scored (skipping) : {(~to_score_mask).sum()}")
 
+    # FIX: removed print_gem_report() + save_gems_report() from this early-exit branch.
+    # They were flooding the terminal with hundreds of bullet lines and masking --dry-run.
+    # Use --report-only to print/refresh the gems report without re-scoring.
     if to_score.empty:
         print("\n✅  Nothing to score. All CLEAN bullets already have gem scores.")
         print("   Use --rescore-all to force a full rescore.")
-        print_gem_report(df, bullet_col, args.threshold, company_col, role_col, is_combined)
-        save_gems_report(df, bullet_col, Path(args.report_path), args.threshold, company_col, role_col)
+        print("   Use --report-only to print/refresh the gems report.")
         return
 
     if args.dry_run:
