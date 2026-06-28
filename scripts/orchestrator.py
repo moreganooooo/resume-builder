@@ -208,6 +208,7 @@ class GeminiClient:
         payload = {
             "model": f"models/{EMBED_MODEL}",
             "content": {"parts": [{"text": text}]},
+            "outputDimensionality": EMBED_DIM,
         }
         req = urllib.request.Request(
             url,
