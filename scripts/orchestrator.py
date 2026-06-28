@@ -135,10 +135,16 @@ class GeminiClient:
         contents: str,
         response_schema,
         temperature: float = 0.0,
+        max_retries: int = 3,
+        base_delay: float = 10.0,
     ) -> tuple[str | None, dict]:
         """
         Call generateContent and return (response_text, usage_metadata).
-        Returns (None, {}) on any error.
+        Returns (None, {}) on any error after max_retries attempts.
+
+        Retries on transient failures (network errors, 429 rate-limits, 5xx
+        server errors) using exponential backoff. Permanent errors (400 bad
+        request, 404 model not found) are not retried.
         """
         schema_dict = response_schema.model_json_schema()
 
@@ -160,20 +166,40 @@ class GeminiClient:
             method="POST",
         )
 
-        try:
-            with urllib.request.urlopen(req, timeout=90) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-                text = (
-                    body.get("candidates", [{}])[0]
-                    .get("content", {})
-                    .get("parts", [{}])[0]
-                    .get("text", "")
-                )
-                usage = body.get("usageMetadata", {})
-                return text, usage
-        except Exception as e:
-            print(f"    ⚠️  Gemini API error: {e}")
-            return None, {}
+        for attempt in range(1, max_retries + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=90) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+                    text = (
+                        body.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
+                    )
+                    usage = body.get("usageMetadata", {})
+                    return text, usage
+            except urllib.error.HTTPError as e:
+                # Don't retry permanent client errors (400, 404)
+                if e.code in (400, 404):
+                    print(f"    ⚠️  Gemini API permanent error {e.code}: {e}. Not retrying.")
+                    return None, {}
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    print(f"    ⚠️  Gemini API error {e.code} (attempt {attempt}/{max_retries}). Retrying in {delay:.0f}s...")
+                    time.sleep(delay)
+                else:
+                    print(f"    ⚠️  Gemini API error {e.code}: {e}. All {max_retries} attempts exhausted.")
+                    return None, {}
+            except Exception as e:
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    print(f"    ⚠️  Gemini API error (attempt {attempt}/{max_retries}): {e}. Retrying in {delay:.0f}s...")
+                    time.sleep(delay)
+                else:
+                    print(f"    ⚠️  Gemini API error: {e}. All {max_retries} attempts exhausted.")
+                    return None, {}
+
+        return None, {}
 
     @staticmethod
     def embed(text: str) -> list[float] | None:
@@ -212,6 +238,7 @@ class WorkExperience(BaseModel):
     title:        str
     company:      str
     period:       str
+    location:     str = Field(default="", description="City, State or 'Remote'. Leave blank if unknown.")
     achievements: List[str]
 
 class ResumeSchema(BaseModel):
@@ -256,6 +283,23 @@ class ResumeCritiqueSchema(BaseModel):
     flags:                   List[str]  = Field(description="Specific issues found, e.g. 'Summary mentions X but JD requires Y'")
     recommendations:         List[str]  = Field(description="Actionable fixes, one per flag")
 
+class ProjectItem(BaseModel):
+    title:       str  = Field(description="Project name.")
+    badge:       str  = Field(default="", description="Short type label, e.g. 'Open Source', 'Featured', 'AI'. Leave blank if none.")
+    description: str  = Field(description="1-2 sentence impact summary.")
+    tech:        str  = Field(default="", description="Comma-separated tech stack. Leave blank if not applicable.")
+
+class CertItem(BaseModel):
+    title: str = Field(description="Full certification or training name.")
+    org:   str = Field(description="Issuing organization.")
+    year:  str = Field(description="4-digit year, e.g. '2023'. Leave blank if unknown.")
+
+class EducationItem(BaseModel):
+    degree:      str = Field(description="Degree or program name.")
+    institution: str = Field(description="School or university name.")
+    year:        str = Field(default="", description="Graduation year or date range. Leave blank if unknown.")
+    description: str = Field(default="", description="Honors, GPA, relevant coursework. Leave blank if none.")
+
 class TemplateSchema(BaseModel):
     NAME:                str        = Field(description="Must match candidate name.")
     TAGLINE:             str        = Field(description="Max 80 chars. Follows archetype tagging rules.")
@@ -273,11 +317,11 @@ class TemplateSchema(BaseModel):
     SECTION_EXPERIENCE:  str        = Field(default="Work Experience")
     EXPERIENCE:          List[WorkExperience] = Field(description="Bulleted achievements. Must pass Jobright QA heuristics.")
     SECTION_PROJECTS:    str        = Field(default="Projects")
-    PROJECTS:            List[str]  = Field(min_length=3, max_length=4, description="Top 3-4 most relevant projects for the role.")
+    PROJECTS:            List[ProjectItem]    = Field(min_length=3, max_length=4, description="Top 3-4 most relevant projects for the role.")
     SECTION_EDUCATION:   str        = Field(default="Education")
-    EDUCATION:           List[str]  = Field(description="KU, KCKCC, and JCCC items exactly as per design system.")
+    EDUCATION:           List[EducationItem]  = Field(description="KU, KCKCC, and JCCC items exactly as per design system.")
     SECTION_CERTIFICATIONS: str     = Field(default="Training & Certifications")
-    CERTIFICATIONS:      List[str]  = Field(min_length=3, max_length=3, description="Exact 3 certifications in order.")
+    CERTIFICATIONS:      List[CertItem]       = Field(min_length=3, max_length=3, description="Exact 3 certifications in order.")
     SECTION_SKILLS:      str        = Field(default="Skills")
     SKILLS:              List[str]  = Field(description="Technical skills mapped to JD.")
 
@@ -374,9 +418,10 @@ class ResumeEngine:
         Passes bullets through the Critique and Rewrite prompts.
 
         Uses CRITIQUE_MODEL (see model strategy comment at top of file).
-        static_prefix is intentionally passed in from build_tailored_resume to
-        keep audit loop prompts lean (~4-5k tokens vs ~58k with full KB).
-        The full KB is only needed by the final builder assembly call.
+        static_prefix is the loaded knowledge_base context string, passed in
+        from build_tailored_resume. This gives the Skeptical Editor full
+        grounding in the candidate's background, verified claims, and what
+        tools/metrics are actually true — without re-loading the KB files here.
 
         Hidden Gem awareness: bullets with hidden_gem_flag=True are logged with a
         marker and their hidden_gem_reason so you can see which gems made it into
@@ -814,7 +859,13 @@ class ResumeEngine:
             print("  No bullets mined. Skipping audit loop.")
             polished_bullets = ""
         else:
-            polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets, static_prefix="")
+            # FIX: Pass knowledge_context as static_prefix so the Skeptical Editor
+            # has full grounding in the candidate's background and verified claims.
+            # Previously this was passed as "" (empty string), meaning bullets were
+            # critiqued and rewritten by an AI with zero context about who wrote them.
+            polished_bullets = self.audit_and_refine_bullets(
+                raw_mined_bullets, static_prefix=knowledge_context
+            )
 
         prompt_template = self.load_prompt("tailor_resume.md")
 
@@ -877,9 +928,11 @@ class ResumeEngine:
         with open(template_path, "r") as f:
             html_content = f.read()
 
+        # --- EXPERIENCE ---
         experience_html = ""
         for job in resume_data.get("EXPERIENCE", []):
             bullets = "\n".join(f"<li>{b}</li>" for b in job.get("achievements", []))
+            location_html = f'<div class="job-location">{job.get("location", "")}</div>' if job.get("location") else ""
             experience_html += (
                 f'<div class="job">'
                 f'<div class="job-header">'
@@ -890,22 +943,71 @@ class ResumeEngine:
                 f'</div>'
                 f'<div class="job-role">{job.get("title", "")}'
                 f'</div>'
+                f'{location_html}'
                 f'<ul>{bullets}</ul>'
                 f'</div>'
             )
 
+        # --- COMPETENCIES ---
         competencies_html = "\n".join(
             f'<span class="competency-tag">{c}</span>'
             for c in resume_data.get("COMPETENCIES", [])
         )
-        projects_html  = (f'<ul>' + "\n".join(f'<li>{p}</li>' for p in resume_data.get("PROJECTS", [])) + '</ul>'
-                          if resume_data.get("PROJECTS") else "")
-        education_html = (f'<ul>' + "\n".join(f'<li>{e}</li>' for e in resume_data.get("EDUCATION", [])) + '</ul>'
-                          if resume_data.get("EDUCATION") else "")
-        certs_html     = (f'<ul>' + "\n".join(f'<li>{c}</li>' for c in resume_data.get("CERTIFICATIONS", [])) + '</ul>'
-                          if resume_data.get("CERTIFICATIONS") else "")
-        skills_html    = (f'<div class="skills-text">' + "<br>".join(resume_data.get("SKILLS", [])) + '</div>'
-                          if resume_data.get("SKILLS") else "")
+
+        # --- PROJECTS (structured rich HTML) ---
+        projects_html = ""
+        for p in resume_data.get("PROJECTS", []):
+            # Support both dict (new TemplateSchema) and plain string (legacy JSON)
+            if isinstance(p, dict):
+                badge_html = f'<span class="project-badge">{p.get("badge")}</span>' if p.get("badge") else ""
+                tech_html  = f'<div class="project-tech">{p.get("tech")}</div>' if p.get("tech") else ""
+                projects_html += (
+                    f'<div class="project">'
+                    f'<div class="project-title">{p.get("title", "")}{badge_html}</div>'
+                    f'<div class="project-desc">{p.get("description", "")}</div>'
+                    f'{tech_html}'
+                    f'</div>'
+                )
+            else:
+                projects_html += f'<div class="project"><div class="project-desc">{p}</div></div>'
+
+        # --- EDUCATION (structured rich HTML) ---
+        education_html = ""
+        for e in resume_data.get("EDUCATION", []):
+            if isinstance(e, dict):
+                desc_html = f'<div class="edu-desc">{e.get("description")}</div>' if e.get("description") else ""
+                education_html += (
+                    f'<div class="edu-item">'
+                    f'<div class="edu-header">'
+                    f'<span class="edu-title">{e.get("degree", "")} — <span class="edu-org">{e.get("institution", "")}</span></span>'
+                    f'<span class="edu-year">{e.get("year", "")}</span>'
+                    f'</div>'
+                    f'{desc_html}'
+                    f'</div>'
+                )
+            else:
+                education_html += f'<div class="edu-item"><div class="edu-title">{e}</div></div>'
+
+        # --- CERTIFICATIONS (structured cert-item grid) ---
+        certs_html = ""
+        for c in resume_data.get("CERTIFICATIONS", []):
+            if isinstance(c, dict):
+                certs_html += (
+                    f'<div class="cert-item">'
+                    f'<span class="cert-title">{c.get("title", "")}</span>'
+                    f'<span class="cert-org">{c.get("org", "")}</span>'
+                    f'<span class="cert-year">{c.get("year", "")}</span>'
+                    f'</div>'
+                )
+            else:
+                certs_html += f'<div class="cert-item"><span class="cert-title">{c}</span></div>'
+
+        # --- SKILLS (skills-grid layout) ---
+        skills_html = (
+            '<div class="skills-grid">'
+            + "".join(f'<span class="skill-item">{s}</span>' for s in resume_data.get("SKILLS", []))
+            + '</div>'
+        ) if resume_data.get("SKILLS") else ""
 
         replacements = {
             "{{LANG}}":               "en",
