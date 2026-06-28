@@ -18,6 +18,14 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 # Initialize client
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "YOUR_API_KEY"))
 
+# --- MODEL STRATEGY ---
+# gemma-4-31b-it: used here because parsed_resume.json is the foundation
+# every tailoring run is built on. A bad parse here silently corrupts every
+# resume generated until ingest is re-run. 31B has the strongest structured
+# output compliance of the Gemma tier, and since ingest only runs once
+# (result is cached as parsed_resume.json), the extra token cost is negligible.
+INGEST_MODEL = "gemma-4-31b-it"
+
 # 1. Define a Pydantic schema to guarantee perfectly structured JSON output
 class WorkExperience(BaseModel):
     title: str
@@ -48,7 +56,7 @@ def parse_resume_to_json(file_path):
     
     try:
         response = client.models.generate_content(
-            model='gemma-4-26b-a4b-it',
+            model=INGEST_MODEL,
             contents=[resume_file, "Extract the resume data into the required JSON schema."],
             config=config
         )
