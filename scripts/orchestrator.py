@@ -5,6 +5,7 @@ import json
 import re
 import random
 import requests
+import urllib.request
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -35,11 +36,18 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   and for the single JD embedding at runtime in mine_bullet_bank().
 #   Native output dimension: 768.
 #
-# GEMMA via Vertex: Gemma 4 31B (gemma-4-27b-it) is available on the free tier
+# GEMMA via Vertex: Gemma 4 31B (gemma-4-31b-it) is available on the free tier
 #   with a much larger daily quota than Gemini Flash. Used in rewrite_bullets.py
 #   (the rewrite-queue runner) where token volume is highest. Not used here because
 #   orchestrator.py runs the live tailoring pipeline and needs strict JSON schema
 #   enforcement, which Gemma handles less reliably than Gemini Flash.
+#
+# NOTE: orchestrator.py intentionally uses raw REST (urllib) rather than the
+#   google-genai SDK. This avoids SDK versioning headaches on the free tier and
+#   gives full explicit control over the payload shape and response parsing.
+#   ingest.py uses the SDK because it relies on the Files API (file upload),
+#   which is much cleaner via SDK. The two are deliberately divergent for
+#   good architectural reasons — not an oversight.
 CRITIQUE_MODEL = "gemini-3.1-flash-lite"
 BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-2"
@@ -190,10 +198,6 @@ class GeminiClient:
             return None
 
 
-# Import urllib.request at module level (used by GeminiClient above)
-import urllib.request
-
-
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
@@ -293,6 +297,13 @@ class ResumeEngine:
         self.templates_dir= os.path.join(self.engine_dir, "templates")
         self.output_json_dir = os.path.join(PROJECT_ROOT, "output", "json")
         self.jds_dir      = os.path.join(PROJECT_ROOT, "jds")
+
+        # FIX #6: Ensure output/json/ exists at engine init time.
+        # output/html/ and output/pdf/ are created in render_pdf before use,
+        # but output/json/ is written to in build_tailored_resume which runs
+        # first. On a fresh clone (output/ is gitignored), this would crash
+        # with FileNotFoundError without this line.
+        os.makedirs(self.output_json_dir, exist_ok=True)
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
@@ -524,8 +535,14 @@ class ResumeEngine:
         print("\nAudit complete.")
         return "\n".join(f"- {b}" for b in refined_bullets)
 
-    def extract_jd_keywords(self, jd_text: str):
-        """Uses Gemini to extract structured requirements from the Job Description."""
+    def extract_jd_keywords(self, jd_text: str) -> dict:
+        """Uses Gemini to extract structured requirements from the Job Description.
+
+        Returns a dict with keys: tools, hard_skills, core_functions.
+        Called once in mine_bullet_bank and the result is cached + passed
+        through to build_tailored_resume to avoid processing the JD a second
+        time via API (FIX #7: JD was previously sent to the API 3x per run).
+        """
         print("Analyzing JD to extract core tools and functional requirements...")
         response_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
@@ -536,9 +553,15 @@ class ResumeEngine:
         )
         return GeminiClient.parse_json(response_text)
 
-    def mine_bullet_bank(self, jd_text: str, top_k: int = TOP_K_BULLETS):
+    def mine_bullet_bank(self, jd_text: str, top_k: int = TOP_K_BULLETS,
+                         keywords_dict: dict = None):
         """
         Returns the top-K most relevant bullets from the CSV.
+
+        keywords_dict (optional): pre-computed result of extract_jd_keywords().
+          If provided, skips the keyword extraction API call entirely.
+          Pass this in from build_tailored_resume to avoid making the same
+          API call twice (FIX #7).
 
         BULLET SOURCE PRIORITY:
           1. bullet-bank-keepers-audited.csv — pre-vetted, rewritten bullets.
@@ -583,13 +606,13 @@ class ResumeEngine:
 
         if not os.path.exists(csv_path):
             print(f"  ⚠️  Warning: {csv_path} not found. Skipping extraction.")
-            return []
+            return [], {}
 
         try:
             df = pd.read_csv(csv_path)
         except Exception as e:
             print(f"  ⚠️  Error reading CSV: {e}")
-            return []
+            return [], {}
 
         # --- STAGE 1: SEMANTIC PRE-FILTER ---
         # NOTE: If you see a matmul dimension mismatch error here (e.g. "size 3072
@@ -633,7 +656,11 @@ class ResumeEngine:
             df_pool = df
 
         # --- STAGE 2: KEYWORD RE-RANK + GEM BOOST ---
-        keywords_dict = self.extract_jd_keywords(jd_text)
+        # FIX #7: Accept pre-computed keywords_dict to avoid a redundant API call.
+        # If not provided (e.g. mine_bullet_bank called standalone), compute it now.
+        if keywords_dict is None:
+            keywords_dict = self.extract_jd_keywords(jd_text)
+
         weighted_kws  = {kw.lower(): 2 for kw in keywords_dict.get("tools", [])}
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get("hard_skills", [])})
         weighted_kws.update({kw.lower(): 1 for kw in keywords_dict.get("core_functions", [])})
@@ -681,7 +708,7 @@ class ResumeEngine:
             "keyword+tier"
         )
         print(f"  🎯 Extracted {len(extracted_bullets)} bullets ({pipeline_label} pipeline).")
-        return extracted_bullets
+        return extracted_bullets, keywords_dict
 
     def extract_evidence(self, bullet_text):
         base_prompt       = self.load_prompt("extract_evidence.md")
@@ -747,13 +774,41 @@ class ResumeEngine:
         jd_path          = os.path.join(self.jds_dir, jd_filename)
         output_path      = os.path.join(self.output_json_dir, output_filename)
 
-        with open(parsed_json_path, "r") as f:
-            master_resume = f.read()
-        with open(jd_path, "r") as f:
-            job_description = f.read()
+        # FIX #5: Wrap file reads in try/except so missing files produce a clear,
+        # actionable error instead of a raw Python traceback.
+        try:
+            with open(parsed_json_path, "r") as f:
+                master_resume = f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"❌ parsed_resume.json not found at:\n    {parsed_json_path}\n"
+                f"   Run 'python scripts/ingest.py' first to generate it."
+            )
 
-        knowledge_context  = self.load_knowledge_base()
-        raw_mined_bullets  = self.mine_bullet_bank(job_description)
+        try:
+            with open(jd_path, "r") as f:
+                job_description = f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"❌ Job description file not found at:\n    {jd_path}\n"
+                f"   Check that '{jd_filename}' exists in the /jds/ folder."
+            )
+
+        knowledge_context = self.load_knowledge_base()
+
+        # FIX #7: Extract JD keywords once here and pass the result into
+        # mine_bullet_bank. Previously, mine_bullet_bank called
+        # extract_jd_keywords internally, meaning the JD was sent to the
+        # API for keyword extraction AND again for the final build call
+        # (plus the embed call) = 3 API calls touching the same JD text.
+        # Now it's 2: embed + final build. Saves one BUILDER_MODEL call
+        # per run, which matters on the free tier.
+        print("\nExtracting JD keywords (shared between mining and build steps)...")
+        keywords_dict = self.extract_jd_keywords(job_description)
+
+        raw_mined_bullets, _ = self.mine_bullet_bank(
+            job_description, keywords_dict=keywords_dict
+        )
 
         if not isinstance(raw_mined_bullets, list) or len(raw_mined_bullets) == 0:
             print("  No bullets mined. Skipping audit loop.")
@@ -783,7 +838,21 @@ class ResumeEngine:
             temperature=0.2,
         )
 
+        # FIX #4: Guard against an empty/None API response writing a blank {} to
+        # disk and printing a false "Success!" message. A failed API call used to
+        # silently produce an empty resume with no indication anything went wrong.
+        if not response_text:
+            raise RuntimeError(
+                "❌ Builder model returned no response. "
+                "Check your API quota, key validity, and network connection."
+            )
         resume_json = GeminiClient.parse_json(response_text)
+        if not resume_json:
+            raise RuntimeError(
+                "❌ Builder model response was not valid JSON. "
+                f"Raw response (first 500 chars): {str(response_text)[:500]}"
+            )
+
         with open(output_path, "w") as f:
             json.dump(resume_json, f, indent=2)
         print(f"\n  ✅ Success! Tailored resume saved to {output_path}")
