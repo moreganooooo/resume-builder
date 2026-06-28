@@ -158,9 +158,38 @@
     font-weight: 600;
   }
 
-  /* === SKILLS === */
-  /* Each line is one category rendered as:
-     <span class="skill-category">Label:</span> Item, Item, Item */
+  /* === SKILLS ===
+     Rendered by render_pdf as:
+       <div class="skills-grid"><span class="skill-item">…</span>…</div>
+     Displays as a flex-wrapped tag cloud with pipe separators. */
+  .skills-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 0;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #000000;
+  }
+
+  .skill-item {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10.5pt;
+    font-weight: 400;
+    color: #000000;
+  }
+
+  .skill-item::after {
+    content: ' | ';
+    color: #9aa3af;
+    padding: 0 4px;
+  }
+
+  .skill-item:last-child::after {
+    content: '';
+  }
+
+  /* Legacy fallback: .skills-text used by any cached JSON rendered before this
+     commit. Styled identically to .skills-grid so old outputs still look right. */
   .skills-text {
     font-size: 10.5pt;
     line-height: 1.7;
@@ -201,6 +230,8 @@
   /* === WORK EXPERIENCE === */
   .job {
     margin-bottom: 14px;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .job-header {
@@ -231,7 +262,15 @@
     font-weight: 400;
     font-style: italic;
     color: #000000;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
+  }
+
+  /* Optional location line below the job title */
+  .job-location {
+    font-size: 10pt;
+    font-weight: 400;
+    color: #555555;
+    margin-bottom: 4px;
   }
 
   /* Career note: optional one-sentence italic note (Treering only) */
@@ -259,14 +298,61 @@
   /* No bold inside bullets per design system */
   .job li strong { font-weight: 400; }
 
-  /* === CERTIFICATIONS === */
-  /* Only cert-title is bold; org and year are regular weight */
+  /* === PROJECTS ===
+     Rendered by render_pdf using ProjectItem: title, badge, description, tech */
+  .project {
+    margin-bottom: 10px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .project-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #000000;
+    margin-bottom: 2px;
+  }
+
+  .project-badge {
+    display: inline-block;
+    font-size: 8pt;
+    font-weight: 600;
+    color: hsl(187, 74%, 32%);
+    border: 1px solid hsl(187, 74%, 32%);
+    border-radius: 3px;
+    padding: 0 5px;
+    margin-left: 6px;
+    vertical-align: middle;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .project-desc {
+    font-size: 10.5pt;
+    color: #000000;
+    line-height: 1.55;
+  }
+
+  .project-tech {
+    font-size: 10pt;
+    color: #555555;
+    margin-top: 2px;
+    font-style: italic;
+  }
+
+  /* === CERTIFICATIONS ===
+     Three-column grid: title | org | year
+     Mirrors career-ops cert layout exactly. */
   .cert-item {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(90px, max-content) 44px;
     align-items: baseline;
     gap: 12px;
     margin-bottom: 5px;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .cert-title {
@@ -294,6 +380,8 @@
   /* === EDUCATION === */
   .edu-item {
     margin-bottom: 8px;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .edu-header {
@@ -305,6 +393,14 @@
 
   .edu-title {
     font-weight: 600;
+    font-size: 10.5pt;
+    color: #000000;
+  }
+
+  /* Institution name inside edu-title — rendered as
+     Degree — <span class="edu-org">School</span> */
+  .edu-org {
+    font-weight: 400;
     font-size: 10.5pt;
     color: #000000;
   }
@@ -337,8 +433,6 @@
   }
 
   /* === WHY SECTION === */
-  /* First and last sentences italicized via <em> in the data;
-     body text is plain; first-person pronouns allowed here only */
   .why-text {
     font-size: 10.5pt;
     line-height: 1.6;
@@ -362,11 +456,11 @@
     .page { padding: 0; }
   }
 
-  /* === PAGE BREAK CONTROL === */
-  .avoid-break,
-  .job,
-  .edu-item,
-  .cert-item {
+  /* === PAGE BREAK CONTROL ===
+     .job, .edu-item, .cert-item, .project each carry break-inside: avoid
+     in their own rules above. .avoid-break is kept as a general utility
+     class for header and small single-block sections. */
+  .avoid-break {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -393,19 +487,19 @@
     <hr class="header-rule">
   </div>
 
-  <!-- PAGE 1: PROFESSIONAL SUMMARY -->
+  <!-- PROFESSIONAL SUMMARY -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_SUMMARY}}</div>
     <div class="summary-text">{{SUMMARY_TEXT}}</div>
   </div>
 
-  <!-- PAGE 1: SKILLS (immediately after Summary — highest ATS signal) -->
+  <!-- SKILLS (immediately after Summary — highest ATS signal) -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_SKILLS}}</div>
-    <div class="skills-text">{{SKILLS}}</div>
+    {{SKILLS}}
   </div>
 
-  <!-- PAGE 1: CORE COMPETENCIES -->
+  <!-- CORE COMPETENCIES -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_COMPETENCIES}}</div>
     <div class="competencies-grid">
@@ -413,31 +507,29 @@
     </div>
   </div>
 
-  <!-- PAGE 1 → PAGE 2: WORK EXPERIENCE -->
+  <!-- WORK EXPERIENCE -->
   <div class="section">
     <div class="section-title">{{SECTION_EXPERIENCE}}</div>
     {{EXPERIENCE}}
   </div>
 
-  <!-- PAGE 2: TRAINING & CERTIFICATIONS -->
+  <!-- PROJECTS -->
+  <div class="section">
+    <div class="section-title">{{SECTION_PROJECTS}}</div>
+    {{PROJECTS}}
+  </div>
+
+  <!-- TRAINING & CERTIFICATIONS -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_CERTIFICATIONS}}</div>
     {{CERTIFICATIONS}}
   </div>
 
-  <!-- PAGE 2: EDUCATION -->
+  <!-- EDUCATION -->
   <div class="section avoid-break">
     <div class="section-title">{{SECTION_EDUCATION}}</div>
     {{EDUCATION}}
   </div>
-
-  <!-- PAGE 2: WHY [COMPANY]? (optional — omit if not in data or if it causes 3rd page) -->
-  {{#if WHY_TEXT}}
-  <div class="section avoid-break">
-    <div class="section-title">{{SECTION_WHY}}</div>
-    <div class="why-text">{{WHY_TEXT}}</div>
-  </div>
-  {{/if}}
 
 </div>
 </body>
