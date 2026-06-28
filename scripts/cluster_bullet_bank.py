@@ -61,7 +61,7 @@ VECTOR_CACHE  = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.npy")
 # ---------------------------------------------------------------------------
 SIMILARITY_THRESHOLD = 0.88   # cosine >= this => same cluster
 EMBED_MODEL          = "gemini-embedding-2"
-EMBED_DIM            = 3072
+EMBED_DIM            = 768    # gemini-embedding-2 native dimension
 EMBED_SLEEP          = 1.2    # seconds between embed calls (free-tier rate limit)
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")

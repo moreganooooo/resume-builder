@@ -33,6 +33,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 # EMBED_MODEL: gemini-embedding-2 (GA April 2026) — multimodal, 8k token input.
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
 #   and for the single JD embedding at runtime in mine_bullet_bank().
+#   Native output dimension: 768.
 #
 # GEMMA via Vertex: Gemma 4 31B (gemma-4-27b-it) is available on the free tier
 #   with a much larger daily quota than Gemini Flash. Used in rewrite_bullets.py
@@ -42,7 +43,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 CRITIQUE_MODEL = "gemini-3.1-flash-lite"
 BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-2"
-EMBED_DIM      = 3072
+EMBED_DIM      = 768   # gemini-embedding-2 native dimension
 
 
 # --- TIMING CONSTANTS ---
@@ -801,10 +802,13 @@ class ResumeEngine:
             experience_html += (
                 f'<div class="job">'
                 f'<div class="job-header">'
-                f'<div class="job-company">{job.get("company", "")}</div>'
-                f'<div class="job-period">{job.get("period", "")}</div>'
+                f'<div class="job-company">{job.get("company", "")}'
                 f'</div>'
-                f'<div class="job-role">{job.get("title", "")}</div>'
+                f'<div class="job-period">{job.get("period", "")}'
+                f'</div>'
+                f'</div>'
+                f'<div class="job-role">{job.get("title", "")}'
+                f'</div>'
                 f'<ul>{bullets}</ul>'
                 f'</div>'
             )
