@@ -10,20 +10,20 @@ config.local.*
 */.meta
 **/.meta
 
+
 # === AUDIT & OUTPUT FILES (may contain keys or PII) ===
-*audit*.csv
-*audit*.json
+# IMPORTANT: Be specific here. Wildcards like *audit*.csv will catch
+# bullet-bank-keepers-audited.csv if it ever needs to be re-added.
+audit-discrepancies.csv
+audit-rewrite-queue.csv
 *_log.csv
-**/bullet-bank-cluster-map-updated.csv
-**/bullet-bank-audited.csv
 *_log.json
 output/
-outputs/
 logs/
 *.log
 
+
 # === RESUME OUTPUT FILES ===
-# Tailored JSONs and PDFs are local outputs, not source files
 tailored_resume*.json
 *_tailored.json
 *_resume.json
@@ -32,6 +32,8 @@ MorganEscott_*.pdf
 *_Resume.pdf
 *_resume.pdf
 *.npy
+*.npz
+
 
 # === PYTHON ===
 __pycache__/
@@ -46,16 +48,14 @@ build/
 venv/
 env/
 
+
 # === NODE ===
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+
 # === OS ===
 .DS_Store
 **/.DS_Store
-***/.DS_Store
-*.npz
-**/.npz
-***/.npz
