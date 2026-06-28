@@ -53,3 +53,4 @@ yarn-error.log*
 # === OS ===
 .DS_Store
 **/.DS_Store
+resume-engine/knowledge_base/bullet_vectors_ge2_d768.checkpoint.npz
