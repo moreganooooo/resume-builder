@@ -4,7 +4,7 @@
  * generate-pdf.mjs — HTML → PDF via Playwright
  *
  * Usage:
- *   node career-ops/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4]
+ *   node scripts/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4]
  *
  * Requires: @playwright/test (or playwright) installed.
  * Uses Chromium headless to render the HTML and produce a clean, ATS-parseable PDF.
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Ensure output directory exists (fresh setup)
-mkdirSync(resolve(__dirname, 'output'), { recursive: true });
+mkdirSync(resolve(__dirname, '../output'), { recursive: true });
 
 /**
  * Normalize text for ATS compatibility by converting problematic Unicode.
@@ -70,18 +70,18 @@ function normalizeTextForATS(html) {
     t = t.replace(/\u2026/g, () => { bump('ellipsis', 1); return '...'; });
     t = t.replace(/[\u200B\u200C\u200D\u2060\uFEFF]/g, () => { bump('zero-width', 1); return ''; });
     t = t.replace(/\u00A0/g, () => { bump('nbsp', 1); return ' '; });
-    // Arrows often stripped by PDF text extractors \u2014 replace with ASCII for ATS safety.
+    // Arrows often stripped by PDF text extractors — replace with ASCII for ATS safety.
     // Consume surrounding whitespace to avoid double-spacing in output.
     t = t.replace(/\s*\u2192\s*/g, () => { bump('right-arrow', 1); return ' to '; });
     t = t.replace(/\s*\u2190\s*/g, () => { bump('left-arrow', 1); return ' from '; });
     t = t.replace(/\s*[\u2191\u2193]\s*/g, () => { bump('vert-arrow', 1); return ' '; });
-    // Middle dot and bullet glyphs garble in some extractors \u2014 replace with pipe.
+    // Middle dot and bullet glyphs garble in some extractors — replace with pipe.
     t = t.replace(/\s*\u00B7\s*/g, () => { bump('middot', 1); return ' | '; });
     t = t.replace(/\s*\u2022\s*/g, () => { bump('bullet', 1); return ' | '; });
-    // Currency symbols sometimes stripped by font-subsetted PDFs \u2014 spell out
+    // Currency symbols sometimes stripped by font-subsetted PDFs — spell out
     // the unambiguous ones. \u00A5 is intentionally NOT converted: it maps to both
     // Japanese Yen (JPY) and Chinese Yuan (CNY), so any spelled-out code would be
-    // wrong for half of users \u2014 better to leave the glyph than emit bad data.
+    // wrong for half of users — better to leave the glyph than emit bad data.
     t = t.replace(/\u20AC/g, () => { bump('euro', 1); return 'EUR '; });
     t = t.replace(/\u00A3/g, () => { bump('pound', 1); return 'GBP '; });
     return t;
@@ -126,8 +126,10 @@ async function generatePDF() {
   // Read HTML to inject font paths as absolute file:// URLs
   let html = await readFile(inputPath, 'utf-8');
 
-  // Resolve font paths relative to career-ops/fonts/
-  const fontsDir = resolve(__dirname, '../fonts');
+  // BUG 2 FIX: fonts live in resume-engine/fonts/, not fonts/ at the repo root.
+  // The old path '../fonts' resolved to resume-builder/fonts/ which doesn't exist,
+  // causing Playwright to silently fall back to system fonts for every PDF render.
+  const fontsDir = resolve(__dirname, '../resume-engine/fonts');
   html = html.replace(
     /url\(['"]?\.\/fonts\//g,
     `url('file://${fontsDir}/`

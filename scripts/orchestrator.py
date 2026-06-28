@@ -50,6 +50,11 @@ CRITIQUE_SLEEP = 25
 # bullets advance in CRITIQUE_SLEEP instead of waiting CRITIQUE_SLEEP twice.
 REWRITE_SLEEP = 8
 
+# RESCORE_SLEEP: pause between the rewrite call and the re-score call (seconds).
+# Needed for best_version() — we re-score the rewrite so we can compare it
+# against the original composite. 8s mirrors REWRITE_SLEEP on the same tier.
+RESCORE_SLEEP = 8
+
 # TOP_K_BULLETS: candidate pool sent into the audit loop.
 # The builder selects ~10-14 bullets for the final resume from this pool.
 # 20 gives enough headroom for the builder to cover all roles with correct
@@ -80,6 +85,12 @@ SEMANTIC_POOL = 30
 #   0.05  — default; gems get a clear lift without overriding keyword signal
 #   0.10  — aggressive; a 90-score gem beats ~9 keyword hits — use carefully
 GEM_BOOST_WEIGHT = 0.05
+
+# STRENGTH_ORDER: primary sort key for mine_bullet_bank().
+# Bullets are sorted by tier first (Hidden Gem → Strong → Solid → Needs Work),
+# then by match_score descending within each tier, so the best bullets of the
+# best tier always surface regardless of keyword overlap noise.
+STRENGTH_ORDER = {"Hidden Gem": 0, "Strong": 1, "Solid": 2, "Needs Work": 3}
 
 # ---------------------------------------------------------------------------
 # KNOWLEDGE BASE ALLOWLIST
@@ -640,10 +651,11 @@ class ResumeEngine:
         a 💎 marker and their hidden_gem_reason so you can see which gems made
         it into the final pool.
 
-        best_version() guard: when a rewrite is triggered, the composite score
-        of the rewrite is compared against the original. If the original scores
-        higher, it is kept instead — preventing a rewrite that regresses quality
-        from silently replacing a strong bullet.
+        best_version() guard: when a rewrite is triggered, the rewrite is
+        re-scored via a second critique call so we can compare its composite
+        against the original. If the original scores higher, it is kept —
+        preventing a rewrite that regresses quality from silently replacing
+        a strong bullet.
         """
         print("🛡️ Starting the Skeptical Editor Audit Loop...")
         print(f"   Model: {CRITIQUE_MODEL}")
@@ -742,9 +754,11 @@ class ResumeEngine:
                         rewrite_data = GeminiClient.parse_json(rewrite_text)
                         rewritten_bullet = rewrite_data.get('rewritten', bullet)
 
-                        # best_version() guard — only advance the rewrite if it
-                        # actually scores higher than the original on the composite.
-                        # Mirrors rewrite_bullets.py best_version() logic exactly.
+                        # BUG 1 FIX: best_version() guard — re-score the rewrite via
+                        # a second critique call so we're comparing rewrite composite
+                        # vs original composite, not original vs itself (which was
+                        # always False and silently accepted every rewrite regardless
+                        # of whether it improved the bullet).
                         original_scores = {
                             "accuracy_score":      critique_data.get("accuracy_score", 0),
                             "believability_score": critique_data.get("believability_score", 0),
@@ -752,18 +766,37 @@ class ResumeEngine:
                             "ats_value":           critique_data.get("ats_value", 0),
                             "manager_test":        critique_data.get("manager_test", "FAIL"),
                         }
-                        # The rewrite hasn't been re-scored yet — use the original
-                        # critique scores as a conservative lower-bound baseline.
-                        # A re-score here would add another API call per rewrite;
-                        # the original scores are sufficient for the comparison since
-                        # the critique already flagged this bullet as needing work.
-                        if self._critique_composite(original_scores) > self._critique_composite(original_scores):
-                            # Original wins — keep it (degenerate guard, always false;
-                            # real wins are when rewrite_scores are available post-score).
-                            print(f"      🔁 best_version: original retained (composite tie-break).")
+
+                        rewrite_scores = original_scores.copy()  # safe fallback
+                        try:
+                            time.sleep(RESCORE_SLEEP)
+                            rescore_text, _ = client.generate(
+                                model=CRITIQUE_MODEL,
+                                system_instruction=critique_system,
+                                contents=rewritten_bullet,
+                                response_schema=CritiqueSchema,
+                                temperature=0.0
+                            )
+                            if rescore_text:
+                                rescore_data = GeminiClient.parse_json(rescore_text)
+                                rewrite_scores = {
+                                    "accuracy_score":      rescore_data.get("accuracy_score", 0),
+                                    "believability_score": rescore_data.get("believability_score", 0),
+                                    "clarity_score":       rescore_data.get("clarity_score", 0),
+                                    "ats_value":           rescore_data.get("ats_value", 0),
+                                    "manager_test":        rescore_data.get("manager_test", "FAIL"),
+                                }
+                        except Exception as rescore_err:
+                            print(f"      ⚠️ Re-score failed ({rescore_err}). Using original scores as fallback — rewrite accepted.")
+
+                        orig_composite = self._critique_composite(original_scores)
+                        rewrite_composite = self._critique_composite(rewrite_scores)
+
+                        if orig_composite > rewrite_composite:
+                            print(f"      🔁 best_version: original retained (orig={orig_composite:.0f} > rewrite={rewrite_composite:.0f}).")
                             refined_bullets.append(bullet)
                         else:
-                            print(f"      ✅ best_version: rewrite accepted.")
+                            print(f"      ✅ best_version: rewrite accepted (rewrite={rewrite_composite:.0f} >= orig={orig_composite:.0f}).")
                             refined_bullets.append(rewritten_bullet)
                     else:
                         refined_bullets.append(bullet)
@@ -795,11 +828,11 @@ class ResumeEngine:
         """Returns the top-K most relevant bullets from the CSV.
 
         BULLET SOURCE PRIORITY:
-            1. bullet-bank-keepers.csv — pre-vetted, rewritten bullets from
-               rewrite_bullets.py. Used automatically when the file exists and
-               contains at least one row. This is the preferred source.
-            2. bullet-bank-clean.csv — fallback for when keepers.csv is absent
-               or empty (e.g. rewrite run hasn't started yet).
+            1. bullet-bank-keepers-audited.csv — pre-vetted, rewritten bullets.
+               Used automatically when the file exists and contains at least one row.
+               This is the preferred source.
+            2. bullet-bank-clean.csv — fallback for when keepers-audited.csv is
+               absent or empty (e.g. rewrite run hasn't started yet).
 
         TWO-STAGE PIPELINE:
 
@@ -812,14 +845,12 @@ class ResumeEngine:
             Falls back gracefully to Stage 2 alone if the .npy file doesn't exist
             (i.e. embed_bullet_bank.py hasn't been run yet).
 
-        Stage 2 — Keyword re-rank + gem boost (pandas, zero API calls):
-            Score the Stage 1 candidates by weighted JD keyword overlap.
-            Tools keywords weight 2x, hard skills and core functions weight 1x.
-            Bullets with a hidden_gem_score column receive an additive bonus of
-            (hidden_gem_score * GEM_BOOST_WEIGHT) on top of their keyword score,
-            so strong pre-vetted gems surface reliably without overriding a
-            highly relevant non-gem bullet. Set GEM_BOOST_WEIGHT=0.0 to disable.
-            Return the top top_k highest-scoring bullets.
+        Stage 2 — Strength-tier sort + keyword re-rank + gem boost (pandas, zero API calls):
+            Sort the Stage 1 candidates by STRENGTH_ORDER first (Hidden Gem → Strong
+            → Solid → Needs Work), then by match_score descending within each tier.
+            This guarantees Hidden Gems are always prioritized over weaker bullets
+            regardless of keyword overlap noise. Set GEM_BOOST_WEIGHT=0.0 to disable
+            the gem score additive bonus while keeping the tier sort.
         """
         # --- BULLET SOURCE SELECTION ---
         keepers_path = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
@@ -831,13 +862,14 @@ class ResumeEngine:
                 df_check = pd.read_csv(keepers_path)
                 if len(df_check) > 0:
                     csv_path = keepers_path
-                    print(f"⛏️  Mining bullet-bank-keepers.csv for the top {top_k} best matches "
+                    # BUG 3 FIX: log now correctly says 'keepers-audited.csv'
+                    print(f"⛏️  Mining bullet-bank-keepers-audited.csv for the top {top_k} best matches "
                           f"({len(df_check)} pre-vetted bullets available)...")
                 else:
-                    print(f"⛏️  keepers.csv exists but is empty — falling back to bullet-bank-clean.csv.")
+                    print(f"⛏️  keepers-audited.csv exists but is empty — falling back to bullet-bank-clean.csv.")
                     print(f"   Mining bullet-bank-clean.csv for the top {top_k} best matches...")
             except Exception as e:
-                print(f"⛏️  keepers.csv unreadable ({e}) — falling back to bullet-bank-clean.csv.")
+                print(f"⛏️  keepers-audited.csv unreadable ({e}) — falling back to bullet-bank-clean.csv.")
                 print(f"   Mining bullet-bank-clean.csv for the top {top_k} best matches...")
         else:
             print(f"⛏️  Mining bullet-bank-clean.csv for the top {top_k} best matches...")
@@ -916,17 +948,37 @@ class ResumeEngine:
 
         df_pool = df_pool.copy()
         df_pool['match_score'] = df_pool.apply(score_row, axis=1)
-        df_sorted = df_pool.sort_values(by='match_score', ascending=False)
+
+        # BUG 4 FIX: sort by strength_category tier first (Hidden Gem → Strong
+        # → Solid → Needs Work), then by match_score descending within each tier.
+        # Previously only sorted by match_score, so a strong keyword match could
+        # silently beat a Hidden Gem.
+        if "strength_category" in df_pool.columns:
+            df_pool["_strength_rank"] = df_pool["strength_category"].map(STRENGTH_ORDER).fillna(99)
+            df_sorted = df_pool.sort_values(
+                by=["_strength_rank", "match_score"],
+                ascending=[True, False]
+            )
+            print(f"   🏆 Strength-tier sort active: Hidden Gem → Strong → Solid → Needs Work.")
+        else:
+            df_sorted = df_pool.sort_values(by='match_score', ascending=False)
+            print(f"   ℹ️  No strength_category column found — sorting by match_score only.")
+
         top_matches = df_sorted.head(top_k)
 
         extracted_bullets = []
         for _, row in top_matches.iterrows():
-            clean_row = row.drop('match_score').to_dict()
+            clean_row = row.drop([c for c in ['match_score', '_strength_rank'] if c in row.index]).to_dict()
             bullet_string = str(row.get('bullet') or row.get('achievement') or clean_row)
             extracted_bullets.append(bullet_string)
 
-        print(f"🎯 Extracted {len(extracted_bullets)} bullets "
-              f"({'semantic→keyword+gem' if gem_boost_enabled and semantic_indices is not None else 'semantic→keyword' if semantic_indices is not None else 'keyword+gem' if gem_boost_enabled else 'keyword-only'} pipeline).")
+        pipeline_label = (
+            'semantic→keyword+gem+tier' if gem_boost_enabled and semantic_indices is not None
+            else 'semantic→keyword+tier' if semantic_indices is not None
+            else 'keyword+gem+tier' if gem_boost_enabled
+            else 'keyword+tier'
+        )
+        print(f"🎯 Extracted {len(extracted_bullets)} bullets ({pipeline_label} pipeline).")
         return extracted_bullets
 
     # --- AUDIT ENGINE ---
