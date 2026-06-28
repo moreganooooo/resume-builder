@@ -7,6 +7,8 @@ secrets.json
 api_keys.txt
 config.local.*
 *.meta
+*/.meta
+**/.meta
 
 # === AUDIT & OUTPUT FILES (may contain keys or PII) ===
 *audit*.csv
@@ -55,3 +57,5 @@ yarn-error.log*
 **/.DS_Store
 ***/.DS_Store
 *.npz
+**/.npz
+***/.npz
