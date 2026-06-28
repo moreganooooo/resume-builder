@@ -54,7 +54,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 EMBED_MODEL  = "gemini-embedding-2"
 EMBED_DIM    = 768   # sweet spot for text-only
 BATCH_SIZE   = 20    # batchEmbedContents supports up to ~20 requests per call
-EMBED_SLEEP  = 11     # seconds between batch calls → ~15 RPM
+EMBED_SLEEP  = 20     # seconds between batch calls → ~15 RPM
 MAX_RETRIES  = 4
 
 KB_DIR           = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
