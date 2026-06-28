@@ -41,8 +41,8 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   enforcement, which Gemma handles less reliably than Gemini Flash.
 CRITIQUE_MODEL = "gemini-3.1-flash-lite"
 BUILDER_MODEL  = "gemini-3.1-flash-lite"
-EMBED_MODEL    = "gemini-embedding-exp-03-07"
-EMBED_DIM      = 3072   # gemini-embedding-exp-03-07 native dimension
+EMBED_MODEL    = "gemini-embedding-2"
+EMBED_DIM      = 3072
 
 
 # --- TIMING CONSTANTS ---
@@ -74,14 +74,24 @@ STRENGTH_ORDER = {
 # Sorted alphabetically to guarantee byte-for-byte identical prefix across
 # every run → maximises Google's implicit prompt-prefix caching hit rate.
 KB_ALLOWLIST = sorted([
+    "article-digest.md",
+    "bullet-bank.md",
     "bullet-bank-keepers-audited.csv",
-    "competencies-master.md",
     "cv.md",
-    "experience-context.md",
-    "hidden-gems.csv",
-    "job-titles-master.md",
-    "projects.md",
-    "taglines.md",
+    "evidence-guide.csv",
+    "evidence_graph.json",
+    "extracted-screenshot-metrics.csv",
+    "morgan-background-guide.md",
+    "portals.yml",
+    "profile.yml",
+    "recruiter_memory_patterns.json",
+    "summaries-and-skills-clean.csv",
+    "treering-archive-readme.md",
+    "verified-claims.csv",
+    "verified_facts.json",
+    "verified_metrics.json",
+    "verified_projects.json",
+    "verified_tools.json",
 ])
 
 

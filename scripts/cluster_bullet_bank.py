@@ -17,7 +17,7 @@ Outputs (all in resume-engine/knowledge_base/):
 
 Algorithm
 ---------
-1. Embed every bullet via Gemini Embedding API (gemini-embedding-exp-03-07).
+1. Embed every bullet via Gemini Embedding API (gemini-embedding-2).
 2. Build a cosine-similarity matrix.
 3. Threshold-cluster: any pair with cosine >= SIMILARITY_THRESHOLD are merged
    into the same cluster (single-linkage).
@@ -60,7 +60,7 @@ VECTOR_CACHE  = os.path.join(KB_DIR, "bullet_vectors_ge2_d3072.npy")
 # CONFIG
 # ---------------------------------------------------------------------------
 SIMILARITY_THRESHOLD = 0.88   # cosine >= this => same cluster
-EMBED_MODEL          = "gemini-embedding-exp-03-07"
+EMBED_MODEL          = "gemini-embedding-2"
 EMBED_DIM            = 3072
 EMBED_SLEEP          = 1.2    # seconds between embed calls (free-tier rate limit)
 
