@@ -6,13 +6,6 @@ Standalone script that reads bullet-bank-keepers.csv and runs every bullet
 through the Gemini critique prompt to populate score columns.  Designed
 for the initial bulk-scoring pass when keepers haven't been scored yet.
 
-This file has been SUPERSEDED by the audit loop inside orchestrator.py
-(audit_and_refine_bullets) and by rewrite_bullets.py for ongoing rewrite runs.
-It is archived here for reference only — do not add it back to scripts/ or
-call it from the pipeline.
-
-ARCHIVED: 2026-06-28
-REPLACED BY: orchestrator.py → audit_and_refine_bullets()
 """
 
 import os
@@ -38,7 +31,7 @@ KEEPERS_CSV = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 # ---------------------------------------------------------------------------
 API_KEY      = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL     = "https://generativelanguage.googleapis.com/v1beta/models"
-MODEL        = "gemini-2.0-flash-lite"
+MODEL        = "gemini-3.1-flash-lite"
 SLEEP_SECS   = 4
 
 SCORE_COLS = [

@@ -39,8 +39,8 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   (the rewrite-queue runner) where token volume is highest. Not used here because
 #   orchestrator.py runs the live tailoring pipeline and needs strict JSON schema
 #   enforcement, which Gemma handles less reliably than Gemini Flash.
-CRITIQUE_MODEL = "gemini-2.0-flash-lite"
-BUILDER_MODEL  = "gemini-2.0-flash-lite"
+CRITIQUE_MODEL = "gemini-3.1-flash-lite"
+BUILDER_MODEL  = "gemini-3.1-flash-lite"
 EMBED_MODEL    = "gemini-embedding-exp-03-07"
 EMBED_DIM      = 3072   # gemini-embedding-exp-03-07 native dimension
 
