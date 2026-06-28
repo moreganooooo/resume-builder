@@ -28,7 +28,7 @@ Algorithm
 Usage:
   python cluster_bullet_bank.py
 
-Note: Embeddings are cached in bullet_vectors_ge2_d3072.npy so you can
+Note: Embeddings are cached in bullet_vectors_ge2_d768.npy so you can
 re-run the clustering step without re-embedding.  Delete the .npy file to
 force a fresh embed pass.
 """
@@ -54,7 +54,7 @@ RAW_CSV       = os.path.join(KB_DIR, "bullet-bank-clean.csv")
 CLUSTERED_CSV = os.path.join(KB_DIR, "bullet-bank-clustered.csv")
 CLUSTER_MAP   = os.path.join(KB_DIR, "cluster-map.json")
 REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
-VECTOR_CACHE  = os.path.join(KB_DIR, "bullet_vectors_ge2_d3072.npy")
+VECTOR_CACHE  = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.npy")
 
 # ---------------------------------------------------------------------------
 # CONFIG
