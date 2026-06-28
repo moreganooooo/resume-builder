@@ -592,6 +592,12 @@ class ResumeEngine:
             return []
 
         # --- STAGE 1: SEMANTIC PRE-FILTER ---
+        # NOTE: If you see a matmul dimension mismatch error here (e.g. "size 3072
+        # is different from 768"), the local .npy file was built with the old
+        # gemini-embedding-exp-03-07 model at 3072d despite having 'd768' in its
+        # filename. Regenerate it:
+        #   rm resume-engine/knowledge_base/bullet_vectors_ge2_d768.npy
+        #   python scripts/embed_bullet_bank.py
         npy_path = os.path.join(self.kb_dir, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
         semantic_indices = None
         if os.path.exists(npy_path):
@@ -755,10 +761,16 @@ class ResumeEngine:
         else:
             polished_bullets = self.audit_and_refine_bullets(raw_mined_bullets, static_prefix="")
 
-        prompt_template   = self.load_prompt("tailor_resume.md")
-        system_instruction = f"{knowledge_context}{prompt_template}"
+        prompt_template = self.load_prompt("tailor_resume.md")
+
+        # FIX: system_instruction contains only the lean prompt (~3.5k tokens).
+        # The KB context (~95k tokens) moves to the TOP of contents so it still
+        # forms the stable cacheable prefix Google looks for, but no longer blows
+        # past gemini-3.1-flash-lite's 32k system_instruction token limit.
+        system_instruction = prompt_template
         combined_contents  = (
-            f"CANDIDATE DATA:\n{master_resume}"
+            f"{knowledge_context}"
+            f"\n\nCANDIDATE DATA:\n{master_resume}"
             f"\n\nTARGET JD:\n{job_description}"
             f"\n\nTARGET JD - POLISHED BULLETS (Audited & Refined):\n{polished_bullets}"
         )
@@ -823,13 +835,14 @@ class ResumeEngine:
                           if resume_data.get("EDUCATION") else "")
         certs_html     = (f'<ul>' + "\n".join(f'<li>{c}</li>' for c in resume_data.get("CERTIFICATIONS", [])) + '</ul>'
                           if resume_data.get("CERTIFICATIONS") else "")
-        skills_html    = (f'<div class="skills-text">' + ", ".join(resume_data.get("SKILLS", [])) + '</div>'
+        skills_html    = (f'<div class="skills-text">' + "<br>".join(resume_data.get("SKILLS", [])) + '</div>'
                           if resume_data.get("SKILLS") else "")
 
         replacements = {
             "{{LANG}}":               "en",
             "{{PAGE_WIDTH}}":         "8.5in",
             "{{NAME}}":               resume_data.get("NAME", ""),
+            "{{TAGLINE}}":            resume_data.get("TAGLINE", ""),
             "{{PHONE}}":              resume_data.get("PHONE", ""),
             "{{EMAIL}}":              resume_data.get("EMAIL", ""),
             "{{LINKEDIN_URL}}":       resume_data.get("LINKEDIN_URL", ""),
