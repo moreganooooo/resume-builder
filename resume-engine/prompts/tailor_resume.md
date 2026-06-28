@@ -152,22 +152,84 @@ Only the certification name is bold; institution and year are regular weight.
 
 Your JSON output MUST use these exact uppercase field names. Any deviation breaks the render pipeline.
 
-Required top-level fields:
+## Simple scalar fields
 
 - NAME (string)
 - TAGLINE (string) — hard-coded UPPERCASE, max 80 chars
-- PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, PORTFOLIO_URL, PORTFOLIO_DISPLAY, LOCATION
+- PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, PORTFOLIO_URL, PORTFOLIO_DISPLAY, LOCATION (all strings)
 - SECTION_SUMMARY = "Professional Summary"
-- SUMMARY_TEXT (string) — max 5 lines, first sentence in <strong> tags
 - SECTION_COMPETENCIES = "Core Competencies"
-- COMPETENCIES (array of 6–8 strings) — exact JD keywords
 - SECTION_EXPERIENCE = "Work Experience"
-- EXPERIENCE (array of objects: title, company, period, achievements)
 - SECTION_PROJECTS = "Projects"
-- PROJECTS (array of 3–4 strings)
 - SECTION_EDUCATION = "Education"
-- EDUCATION (array of strings)
 - SECTION_CERTIFICATIONS = "Training & Certifications"
-- CERTIFICATIONS (array of exactly 3 strings, in fixed order above)
 - SECTION_SKILLS = "Skills"
-- SKILLS (array of strings — each string is one category line formatted as "**Category Label:** Item, Item, Item")
+
+## SUMMARY_TEXT (string)
+Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns.
+
+## COMPETENCIES (array of 6–8 strings)
+Each string is one exact JD keyword. Example:
+```json
+["Lifecycle Marketing", "CRM Strategy", "A/B Testing", "Salesforce", "Pipeline Generation", "Content Governance"]
+```
+
+## SKILLS (array of strings)
+Each string is one category line. Format: `**Category Label:** Item, Item, Item`
+Example:
+```json
+["**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns",
+ "**CRM & Revenue Operations:** Salesforce Administration, Pipeline Hygiene, Territory Analytics"]
+```
+
+## EXPERIENCE (array of objects)
+Each object has these exact keys:
+```json
+{
+  "title": "Job Title",
+  "company": "Company Name",
+  "period": "Month Year – Month Year",
+  "location": "City, ST or Remote",
+  "achievements": ["Bullet one", "Bullet two"]
+}
+```
+`location` may be left as an empty string `""` if unknown. `achievements` is the array of bullet strings for that role.
+
+## PROJECTS (array of objects)
+Each object has these exact keys:
+```json
+{
+  "title": "Project Name",
+  "badge": "Featured",
+  "description": "1-2 sentence impact summary.",
+  "tech": "Tool A, Tool B"
+}
+```
+- `badge`: short type label — e.g. `"Open Source"`, `"Featured"`, `"AI"`. Use `""` if none.
+- `tech`: comma-separated stack. Use `""` if not applicable.
+- Include 3–4 projects. Choose the most relevant to the JD archetype.
+
+## EDUCATION (array of objects)
+Each object has these exact keys:
+```json
+{
+  "degree": "BS, Journalism + Strategic Communication",
+  "institution": "University of Kansas",
+  "year": "2007",
+  "description": "3.56 GPA; Dean's List scholarship recipient"
+}
+```
+- `year`: 4-digit graduation year or date range. Use `""` if unknown.
+- `description`: honors, GPA, relevant coursework, or the action-verb achievement bullet. Use `""` if none.
+- Output exactly 3 education items in the fixed order defined above.
+
+## CERTIFICATIONS (array of exactly 3 objects)
+Each object has these exact keys:
+```json
+{
+  "title": "Email Marketing Software Certification",
+  "org": "HubSpot",
+  "year": "2026"
+}
+```
+Output exactly 3 certifications in the fixed order defined in "# Training & Certifications — Fixed Order" above.
