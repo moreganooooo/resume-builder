@@ -79,9 +79,11 @@ import re
 import sys
 import time
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 import yaml
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
@@ -101,11 +103,12 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                   # resume-builder/
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 
-# orchestrator.py lives in the same scripts/ directory as this file
+# orchestrator.py lives in the same scripts/ directory as this file.
+# Import GeminiClient only — orchestrator.py has no module-level client object.
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from orchestrator import client, GeminiClient  # noqa: E402
+from orchestrator import GeminiClient  # noqa: E402
 
 CLUSTER_MAP_IN  = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
@@ -122,9 +125,26 @@ KB_VERIFIED_PROJECTS = os.path.join(KB_DIR, "verified_projects.json")
 KB_VERIFIED_TOOLS   = os.path.join(KB_DIR, "verified_tools.json")
 KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 
-REWRITE_MODEL         = "gemini-3.5-flash"
+# ---------------------------------------------------------------------------
+# MODEL STRATEGY
+#
+# REWRITE_MODEL: gemma-4-31b-it — primary rewrite model. Has the largest
+#   free-tier daily quota by a wide margin. rewrite_bullets.py is the
+#   highest-volume script in the pipeline (up to 3 API calls per bullet),
+#   so using the model with the biggest free allotment here is intentional.
+#   rewrite_bullets.py (the masterpiece!) was specifically tuned for Gemma.
+#
+# REWRITE_FALLBACK_MODEL: gemini-3.1-flash-lite — activated automatically
+#   after MAX_REWRITE_PARSE_FAILURES consecutive parse failures on a single
+#   bullet. Reliable JSON compliance as a safety net.
+#
+# SCORE_MODEL: gemini-3.1-flash-lite — scoring calls are lower-volume
+#   (one per rewrite attempt) and need strict JSON compliance with a
+#   7-field schema. Flash-lite handles this cleanly within free-tier limits.
+# ---------------------------------------------------------------------------
+REWRITE_MODEL          = "gemma-4-31b-it"
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
-SCORE_MODEL           = "gemini-3.1-flash-lite"
+SCORE_MODEL            = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS          = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON    = True
@@ -270,6 +290,35 @@ CLAIM_TAG_KEYWORDS = {
     "[mgmt]":        ["team", "coach", "manage", "sdr", "direct report", "training"],
     "[writing]":     ["copy", "writing", "email", "sequence", "campaign", "authored"],
 }
+
+# ---------------------------------------------------------------------------
+# PYDANTIC SCHEMAS
+#
+# GeminiClient.generate() calls response_schema.model_json_schema() to build
+# the responseSchema payload, so the schema argument MUST be a Pydantic model
+# class — not a raw dict. These are the two schemas used by rewrite_bullets.py.
+# ---------------------------------------------------------------------------
+
+class RewriteOutputSchema(BaseModel):
+    rewritten_bullet: str = Field(description="Single rewritten resume bullet sentence.")
+    reasoning:        str = Field(default="", description="Explanation of changes made.")
+    context_gaps:     str = Field(default="", description="Missing context that limited the rewrite.")
+
+
+class RewriteOutputMinimalSchema(BaseModel):
+    """Minimal schema used for Gemma calls (GEMMA_MINIMAL_JSON=True)."""
+    rewritten_bullet: str = Field(description="Single rewritten resume bullet sentence.")
+
+
+class ScoreOutputSchema(BaseModel):
+    accuracy_score:      int = Field(description="0-100: specific, grounded, traceable claim")
+    believability_score: int = Field(description="0-100: would a skeptical hiring manager believe this?")
+    clarity_score:       int = Field(description="0-100: immediately clear on first read")
+    ats_value:           int = Field(description="0-100: high-value ATS keywords without stuffing")
+    manager_test:        str = Field(description="Strictly 'PASS' or 'FAIL'")
+    weaknesses:          str = Field(description="Specific explanation of flaws. 'None' if all scores high.")
+    score_notes:         str = Field(default="", description="1-2 sentences of overall feedback.")
+
 
 # ---------------------------------------------------------------------------
 # RULES LOADER
@@ -627,12 +676,6 @@ class KnowledgeBase:
 
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPTS
-#
-# FIX 1: REWRITE_SYSTEM_BASE — removed the `(example: "* User wants a resume
-# bullet rewritten.")` line. Gemma was pattern-matching on that example and
-# echoing it verbatim as its response. The anti-preamble block is replaced
-# with a tighter output-fence instruction: "Your response must begin with {
-# and end with }." This is unambiguous and gives Gemma nothing to echo.
 # ---------------------------------------------------------------------------
 
 REWRITE_SYSTEM_BASE = """\
@@ -710,12 +753,6 @@ def persona_context(tags: str) -> str:
 
 # ---------------------------------------------------------------------------
 # PROMPT BUILDER  (Tier 3 — per-bullet tail only)
-#
-# FIX 2: Relabelled the per-bullet tail fields.
-# Old labels ("Persona:", "Weaknesses:", "Bullet:") looked like a structured
-# form to Gemma, which echoed them back as output headers. New phrasing reads
-# as inline prose instructions — Gemma consumes them as context rather than
-# treating them as an output template to reproduce.
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(
@@ -736,7 +773,6 @@ def build_rewrite_prompt(
 
     parts = []
 
-    # Stable context block first — maximises cache-hit prefix length.
     if kb_context:
         parts.extend([
             "Use only supported facts from this context:",
@@ -744,15 +780,12 @@ def build_rewrite_prompt(
             "",
         ])
 
-    # Per-bullet tail — phrased as prose so Gemma reads it as instructions,
-    # not as a structured form to echo back.
     parts.extend([
         f"Rewrite this bullet for {persona} roles.",
         f"Known weaknesses to fix: {weakness_text}",
         f"Bullet to rewrite: {bullet}",
     ])
 
-    # One-line schema reminder close to the generation point.
     if minimal_schema:
         parts.extend(["", 'Output JSON: {"rewritten_bullet":""}'])
     else:
@@ -766,23 +799,13 @@ def build_rewrite_prompt(
 # ---------------------------------------------------------------------------
 
 def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
-    """
-    Logs token usage on a single line.
-
-    Args:
-        usage: The second element of the (text, usage) tuple from client.generate().
-               Keys: promptTokenCount, candidatesTokenCount, totalTokenCount,
-                     cachedContentTokenCount (all int, 0 if not present in response).
-        kb_context_chars: Length of the kb_context string passed to this call.
-        attempt: Current attempt number (for log labelling).
-    """
     if not isinstance(usage, dict):
         usage = {}
 
-    prompt_tokens    = usage.get("promptTokenCount", 0)
-    output_tokens    = usage.get("candidatesTokenCount", 0)
-    total_tokens     = usage.get("totalTokenCount", 0)
-    cached_tokens    = usage.get("cachedContentTokenCount", 0)
+    prompt_tokens  = usage.get("promptTokenCount", 0)
+    output_tokens  = usage.get("candidatesTokenCount", 0)
+    total_tokens   = usage.get("totalTokenCount", 0)
+    cached_tokens  = usage.get("cachedContentTokenCount", 0)
 
     token_part = (
         f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
@@ -805,22 +828,7 @@ def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = Fals
             "ats_value": 90, "manager_test": "PASS", "weaknesses": "", "score_notes": "dry-run",
         }
 
-    scoring_schema = {
-        "type": "object",
-        "properties": {
-            "accuracy_score":      {"type": "integer"},
-            "believability_score": {"type": "integer"},
-            "clarity_score":       {"type": "integer"},
-            "ats_value":           {"type": "integer"},
-            "manager_test":        {"type": "string"},
-            "weaknesses":          {"type": "string"},
-            "score_notes":         {"type": "string"},
-        },
-        "required": ["accuracy_score", "believability_score", "clarity_score",
-                     "ats_value", "manager_test", "weaknesses", "score_notes"],
-    }
-
-    raw, _ = client.generate(
+    raw, _ = GeminiClient.generate(
         model=SCORE_MODEL,
         system_instruction=score_system,
         contents=(
@@ -829,9 +837,7 @@ def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = Fals
             "Score this bullet. Respond with JSON only."
         ),
         temperature=0.0,
-        response_schema=scoring_schema,
-        max_output_tokens=220,
-        service_tier="standard",
+        response_schema=ScoreOutputSchema,
     )
     data = GeminiClient.parse_json(raw)
     time.sleep(SLEEP_BETWEEN_SCORES)
@@ -1041,24 +1047,7 @@ def process_bullet(
         print(f"   🖊  Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
 
         use_minimal_schema = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
-
-        runner_schema = (
-            {
-                "type": "object",
-                "properties": {"rewritten_bullet": {"type": "string"}},
-                "required": ["rewritten_bullet"],
-            }
-            if use_minimal_schema
-            else {
-                "type": "object",
-                "properties": {
-                    "rewritten_bullet": {"type": "string"},
-                    "reasoning":        {"type": "string"},
-                    "context_gaps":     {"type": "string"},
-                },
-                "required": ["rewritten_bullet", "reasoning", "context_gaps"],
-            }
-        )
+        runner_schema = RewriteOutputMinimalSchema if use_minimal_schema else RewriteOutputSchema
 
         prompt = build_rewrite_prompt(
             bullet=current_bullet,
@@ -1077,14 +1066,12 @@ def process_bullet(
             gaps = ""
         else:
             try:
-                raw, usage = client.generate(
+                raw, usage = GeminiClient.generate(
                     model=active_rewrite_model,
                     system_instruction=rewrite_system,
                     contents=prompt,
                     temperature=0.7,
                     response_schema=runner_schema,
-                    max_output_tokens=300,
-                    service_tier="standard",
                 )
                 _log_cache_stats(usage, kb_context_chars, attempt)
                 parsed = GeminiClient.parse_json(raw)
@@ -1243,10 +1230,6 @@ def main():
 
         if result["rewrite_status"] == "KEEP":
             n_keep += 1
-            # Carry the cluster_id from the source row so keepers.csv always
-            # has a direct link back to the cluster map. This means
-            # audit_keepers.py Stage 3 can exclude by ID rather than relying
-            # on fuzzy bullet-text matching via backfill_cluster_ids.py.
             source_cluster_id = ""
             if "cluster_id" in row and pd.notna(row["cluster_id"]):
                 try:
