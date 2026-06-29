@@ -58,12 +58,48 @@ BUILDER_MODEL          = "gemini-3.1-flash-lite"
 EMBED_MODEL            = "gemini-embedding-2"
 EMBED_DIM              = 768   # gemini-embedding-2 native dimension
 
-# When True, Gemma rewrites use a single-key schema {"rewritten": "..."}
+# When True, Gemma rewrites use a single-key schema {"rewritten_bullet": "..."}
 # instead of the full 3-key schema. Mirrors rewrite_bullets.py's
 # GEMMA_MINIMAL_JSON flag. Dramatically improves Gemma JSON compliance.
 GEMMA_MINIMAL_JSON         = True
 MAX_REWRITE_PARSE_FAILURES = 2
 
+# ---------------------------------------------------------------------------
+# SYSTEM PROMPT BASE  (mirrors rewrite_bullets.py exactly)
+# ---------------------------------------------------------------------------
+REWRITE_SYSTEM_BASE = """\
+You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
+
+Output rules — apply without exception:
+- IMPORTANT: You are an API endpoint. You only output raw, valid JSON.
+- DO NOT start your response with '```json' or '```'.
+- DO NOT include any conversational filler, greetings, or acknowledgments.
+- Start your output immediately with the character '{'.
+- Do not repeat, echo, or paraphrase any part of the input.
+- "rewritten_bullet" must be a single resume bullet sentence, never a list.
+
+JSON shape (full schema):
+{{ {{"rewritten_bullet": "", "reasoning": "", "context_gaps": ""}} }}
+
+Minimal schema (Gemma / minimal mode — used when instructed):
+{{ {{"rewritten_bullet": ""}} }}
+
+Rewrite goals:
+- Pass the manager test: a hiring manager scanning quickly should understand what was done,
+  how it was done, and why it mattered.
+- Improve clarity, specificity, and ATS value.
+- Sound human and believable, not inflated or AI-written.
+- Use a strong past-tense action verb.
+- Stay under 30 words where possible; never exceed 40 words.
+- Use only information supported by the provided context.
+- Use only metrics verified in the provided context.
+- Do not invent scope, ownership, tools, or results.
+
+If the context is not strong enough to support an improved claim, keep the rewrite
+conservative and explain the limitation in context_gaps.
+
+{rules_block}
+"""
 
 # --- TIMING CONSTANTS ---
 CRITIQUE_SLEEP = 4    # seconds between critique calls (free-tier: 15 RPM)
@@ -323,10 +359,15 @@ class GeminiClient:
             usage = data.get("usageMetadata", {})
 
             cached = (usage.get("cachedContentTokenCount", 0) or 0) if usage else 0
-            cache_str = f" cached {cached:,}" if cached > 0 else ""
-            print(f"    tokens prompt {usage.get('promptTokenCount', '?')} "
-                  f"output {usage.get('candidatesTokenCount', '?')} "
-                  f"total {usage.get('totalTokenCount', '?')}{cache_str}")
+            token_part = (
+                f"prompt: {usage.get('promptTokenCount', 0):,} | "
+                f"output: {usage.get('candidatesTokenCount', 0):,} | "
+                f"total: {usage.get('totalTokenCount', 0):,}"
+            )
+            if cached > 0:
+                print(f"   💫 tokens — {token_part} | ✨ cached: {cached:,}")
+            else:
+                print(f"   💫 tokens — {token_part}")
 
             candidates = data.get("candidates", [])
             if not candidates:
@@ -409,12 +450,12 @@ class CritiqueSchema(BaseModel):
     hidden_gem_reason:   str  = Field(description="One sentence: what makes this a gem, or what holds it back")
 
 class RewriteSchema(BaseModel):
-    original:  str
-    rewritten: str
-    reason:    str
+    rewritten_bullet: str = Field(description="Single rewritten resume bullet sentence.")
+    reasoning:        str = Field(default="", description="Explanation of changes made.")
+    context_gaps:     str = Field(default="", description="Missing context that limited the rewrite.")
 
 class RewriteMinimalSchema(BaseModel):
-    rewritten: str
+    rewritten_bullet: str = Field(description="Single rewritten resume bullet sentence.")
 
 class ResumeCritiqueSchema(BaseModel):
     summary_alignment_score: int       = Field(description="0-100: does the Summary match the JD role and tone?")
@@ -679,17 +720,14 @@ class ResumeEngine:
         Critiques on slim static_prefix (Tier 1+2 cache architecture).
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
-        print("Starting the Skeptical Editor Audit Loop...")
-        print(f"  Critique model: {CRITIQUE_MODEL}")
-        print(f"  Rewrite model:  {REWRITE_MODEL}  (fallback: {REWRITE_FALLBACK_MODEL})")
-        print(f"  static_prefix size: {len(static_prefix)} chars / ~{len(static_prefix)//4} tokens")
+        print("\n📋 Loading rules bundle...")
+        print(f"📌 Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
             print("  No bullets to audit -- empty or invalid input. Skipping audit loop.")
             return []
 
         critique_prompt     = self.load_prompt("critique_bullet.md")
-        rewrite_prompt      = self.load_prompt("rewrite_bullet.md")
         manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
         believability_rules = json.dumps(self.load_yaml(self.scoring_dir, "believability.yaml"))
         style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
@@ -709,22 +747,44 @@ class ResumeEngine:
             f"\n\nQUALITY RULES:\n{language_quality}"
             f"\n\nATS RULES:\n{ats_rules}"
         )
-        rewrite_system = (
-            f"{rewrite_prompt}"
-            f"\n\nSTYLE RULES:\n{style_rules}"
-            f"\n\nINTENT MAP:\n{verb_intent_mapping}"
-            f"\n\nTAXONOMY:\n{verb_taxonomy}"
-            f"\n\nQUALITY RULES:\n{language_quality}"
-            f"\n\nHARD FAILURES:\n{hard_failures}"
-            f"\n\nTRUTHFULNESS RULES:\n{truthfulness_rules}"
-        )
+        rewrite_rules_block = "\n".join([
+            "=== VERB INTENT MAP ===",
+            "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
+            verb_intent_mapping,
+            "",
+            "=== VERB TAXONOMY (priority tiers) ===",
+            "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+            verb_taxonomy,
+            "",
+            "=== LANGUAGE QUALITY RULES ===",
+            "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
+            language_quality,
+            "",
+            "=== HARD FAILURE CONDITIONS ===",
+            "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
+            hard_failures,
+            "",
+            "=== TRUTHFULNESS RULES ===",
+            "Apply these four tests before finalising any bullet:",
+            truthfulness_rules,
+            "",
+            "=== STYLE RULES ===",
+            style_rules,
+        ])
+        rewrite_system = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
 
-        print(f"  critique_system size: {len(critique_system)} chars / ~{len(critique_system)//4} tokens")
-        print(f"  rewrite_system size:  {len(rewrite_system)} chars / ~{len(rewrite_system)//4} tokens")
+        print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
+        print(f"✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)\n")
+        print(f"💯 Score system prompt:   {len(critique_system):,} chars")
+
 
         refined_bullets = []
         for i, (bullet, company, tags) in enumerate(bullet_tuples):
-            print(f"\n  Analyzing bullet {i+1}/{len(bullet_tuples)}...")
+            bullet_preview = bullet[:60]
+            print(f"\n{'─'*60}")
+            print(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...")
+            print(f"   Tags: {tags}  |  Company: {company}")
+
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
 
@@ -739,32 +799,29 @@ class ResumeEngine:
                     temperature=0.0,
                     max_output_tokens=280,
                 )
-                cached_tokens = usage.get("cachedContentTokenCount", 0) if usage else 0
-                if cached_tokens:
-                    print(f"    CACHED tokens: {cached_tokens:,}")
 
                 if not critique_text:
                     refined_bullets.append(bullet)
                     continue
-
+    
                 critique_data = GeminiClient.parse_json(critique_text)
 
                 gem_score  = critique_data.get("hidden_gem_score", 0)
                 gem_flag   = critique_data.get("hidden_gem_flag", False)
                 gem_reason = critique_data.get("hidden_gem_reason", "")
                 if gem_flag:
-                    print(f"    GEM: Hidden Gem! score={gem_score} -- {gem_reason}")
+                    print(f"   💎 GEM: Hidden Gem! score={gem_score} — {gem_reason}")
                 elif gem_score >= 75:
-                    print(f"    STRONG: gem_score={gem_score} -- {gem_reason}")
+                    print(f"   ⭐ STRONG: gem_score={gem_score} — {gem_reason}")
 
                 if (critique_data.get("manager_test") == "FAIL" or
                         critique_data.get("believability_score", 100) < 80):
-                    print(f"    Bullet failed. Rewriting with {REWRITE_MODEL}...")
+                    print(f"   ✏️  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
                     segment_bundle = self._build_audit_segment_bundle(company, tags)
                     if segment_bundle:
-                        print(f"    BUNDLE: {len(segment_bundle)} chars / ~{len(segment_bundle)//4} tokens")
+                        print(f"   📦 segment bundle: {len(segment_bundle):,} chars")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
@@ -775,12 +832,20 @@ class ResumeEngine:
                         runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
                         weaknesses    = critique_data.get("weaknesses", "")
 
+                        json_reminder = (
+                            'Output JSON: {"rewritten_bullet":""}'
+                            if use_minimal else
+                            'Output JSON: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'
+                        )
                         rewrite_contents = (
                             f"{static_prefix}\n\n"
                             + (f"{segment_bundle}\n\n" if segment_bundle else "")
                             + f"--- BULLET TO REWRITE ---\n{bullet}\n\n"
-                            f"--- WEAKNESSES TO FIX ---\n{weaknesses}"
+                            f"--- WEAKNESSES TO FIX ---\n{weaknesses}\n\n"
+                            + json_reminder
                         )
+
+                        token_cap = 160 if use_minimal else 300
 
                         try:
                             rewrite_text, rw_usage = GeminiClient.generate(
@@ -789,20 +854,20 @@ class ResumeEngine:
                                 contents=rewrite_contents,
                                 response_schema=runner_schema,
                                 temperature=0.0,
-                                max_output_tokens=160,
+                                max_output_tokens=token_cap,
                             )
-                            rw_cached = rw_usage.get("cachedContentTokenCount", 0) if rw_usage else 0
-                            if rw_cached:
-                                print(f"    CACHED rewrite tokens: {rw_cached:,}")
 
                             if not rewrite_text:
                                 raise ValueError("Empty rewrite response")
 
-                            rw_data          = GeminiClient.parse_json(rewrite_text)
-                            candidate_bullet = rw_data.get("rewritten", "").strip()
+                            # --- INSERT DEBUG PRINT HERE ---
+                            print(f"DEBUG RAW RESPONSE: {rewrite_text[:200]}") 
+
+                            rw_data = GeminiClient.parse_json(rewrite_text)
+                            candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
 
                             if not candidate_bullet:
-                                raise ValueError("Empty rewritten field in response")
+                                raise ValueError("Empty rewritten_bullet in response")
 
                             time.sleep(RESCORE_SLEEP)
                             rescore_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{candidate_bullet}"
@@ -820,18 +885,18 @@ class ResumeEngine:
 
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
-                                print(f"    ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                                print(f"   ✅ ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
                             else:
                                 rewritten_bullet = bullet
-                                print(f"    KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                                print(f"   🔄 KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
                             break
 
                         except Exception as rw_err:
                             rewrite_parse_failures += 1
-                            print(f"    WARNING: Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
+                            print(f"   ⚠️  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
                             if (rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
                                     and active_rewrite_model != REWRITE_FALLBACK_MODEL):
-                                print(f"    FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
+                                print(f"   🔄 FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
@@ -840,10 +905,11 @@ class ResumeEngine:
                     refined_bullets.append(bullet)
 
             except Exception as e:
-                print(f"    WARNING: Critique error on bullet {i+1}: {e}")
+                print(f"   ⚠️  Critique error on bullet {i+1}: {e}")
                 refined_bullets.append(bullet)
 
-        print("\nAudit complete.")
+        print(f"\n{'='*60}")
+        print(f"✅ Audit complete: {len(refined_bullets)} bullets refined")
         return refined_bullets
 
     def mine_bullet_bank(
@@ -865,13 +931,13 @@ class ResumeEngine:
         """
         print("\nMining bullet bank...")
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
-        emb_npy  = os.path.join(self.kb_dir, "bullet_embeddings.npy")
+        emb_npy  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
 
         if not os.path.exists(bank_csv):
             print("  WARNING: bullet-bank-keepers-audited.csv not found. Skipping mine.")
             return []
         if not os.path.exists(emb_npy):
-            print("  WARNING: bullet_embeddings.npy not found. Run embed_bullet_bank.py first. Skipping mine.")
+            print("  WARNING: bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.")
             return []
 
         try:
@@ -881,8 +947,8 @@ class ResumeEngine:
             print(f"  WARNING: Could not load bullet bank: {e}")
             return []
 
-        if "Bullet" not in df.columns:
-            print("  WARNING: 'Bullet' column not found in bullet bank CSV.")
+        if "Bullet Point" not in df.columns:
+            print("  WARNING: 'Bullet Point' column not found in bullet bank CSV.")
             return []
 
         if len(df) != len(embs):
@@ -892,7 +958,7 @@ class ResumeEngine:
         jd_emb = GeminiClient.embed(jd_text[:8000])
         if jd_emb is None:
             print("  WARNING: JD embedding failed. Falling back to first TOP_K_BULLETS rows.")
-            bullets_col  = df["Bullet"].fillna("").tolist()
+            bullets_col  = df["Bullet Point"].fillna("").tolist()
             company_col  = df["Role / Company"].fillna("").tolist()  if "Role / Company" in df.columns else ["" ] * len(df)
             tags_col     = df["Tags"].fillna("").tolist()            if "Tags"           in df.columns else ["" ] * len(df)
             return list(zip(bullets_col[:TOP_K_BULLETS], company_col[:TOP_K_BULLETS], tags_col[:TOP_K_BULLETS]))
@@ -925,7 +991,7 @@ class ResumeEngine:
         pool_df   = pool_df.iloc[order].reset_index(drop=True)
 
         top_df      = pool_df.head(TOP_K_BULLETS)
-        bullets_out = top_df["Bullet"].fillna("").tolist()
+        bullets_out = top_df["Bullet Point"].fillna("").tolist()
         company_out = top_df["Role / Company"].fillna("").tolist() if "Role / Company" in top_df.columns else ["" ] * len(top_df)
         tags_out    = top_df["Tags"].fillna("").tolist()            if "Tags"           in top_df.columns else ["" ] * len(top_df)
 
