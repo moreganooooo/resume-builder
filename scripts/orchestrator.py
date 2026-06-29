@@ -10,6 +10,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
+from rewrite_bullets import build_rewrite_prompt
 
 
 # --- PATH RESOLUTION & ENV SETUP ---
@@ -71,18 +72,16 @@ REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
 
 Output rules — apply without exception:
-- IMPORTANT: You are an API endpoint. You only output raw, valid JSON.
-- DO NOT start your response with '```json' or '```'.
-- DO NOT include any conversational filler, greetings, or acknowledgments.
-- Start your output immediately with the character '{'.
+- Your response must begin with {{ and end with }}. No other characters before or after.
+- Raw JSON only. No markdown fences, no preamble, no commentary, no labels, no explanations.
 - Do not repeat, echo, or paraphrase any part of the input.
-- "rewritten_bullet" must be a single resume bullet sentence, never a list.
+- \"rewritten_bullet\" must be a single resume bullet sentence, never a list.
 
 JSON shape (full schema):
-{{ {{"rewritten_bullet": "", "reasoning": "", "context_gaps": ""}} }}
+{{\"rewritten_bullet\": \"\", \"reasoning\": \"\", \"context_gaps\": \"\"}}
 
 Minimal schema (Gemma / minimal mode — used when instructed):
-{{ {{"rewritten_bullet": ""}} }}
+{{\"rewritten_bullet\": \"\"}}
 
 Rewrite goals:
 - Pass the manager test: a hiring manager scanning quickly should understand what was done,
@@ -834,17 +833,13 @@ class ResumeEngine:
                         runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
                         weaknesses    = critique_data.get("weaknesses", "")
 
-                        json_reminder = (
-                            'Output JSON: {"rewritten_bullet":""}'
-                            if use_minimal else
-                            'Output JSON: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'
-                        )
-                        rewrite_contents = (
-                            f"{static_prefix}\n\n"
-                            + (f"{segment_bundle}\n\n" if segment_bundle else "")
-                            + f"--- BULLET TO REWRITE ---\n{bullet}\n\n"
-                            f"--- WEAKNESSES TO FIX ---\n{weaknesses}\n\n"
-                            + json_reminder
+                        rewrite_contents = build_rewrite_prompt(
+                            bullet=bullet,
+                            tags=tags,
+                            weaknesses=weaknesses,
+                            kb_context=static_prefix + ("\n\n" + segment_bundle if segment_bundle else ""),
+                            attempt=rw_attempt + 1,
+                            minimal_schema=use_minimal,
                         )
 
                         token_cap = 160 if use_minimal else 300
@@ -855,7 +850,7 @@ class ResumeEngine:
                                 system_instruction=rewrite_system,
                                 contents=rewrite_contents,
                                 response_schema=runner_schema,
-                                temperature=0.0,
+                                temperature=0.7,
                                 max_output_tokens=token_cap,
                             )
 
