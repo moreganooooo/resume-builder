@@ -73,7 +73,7 @@ RESCORE_SLEEP  = 8    # seconds before the re-score call after a rewrite
 
 
 # --- PIPELINE CONSTANTS ---
-TOP_K_BULLETS    = 20    # bullets mined from the bank per run
+TOP_K_BULLETS    = 30    # bullets mined from the bank per run
 SEMANTIC_POOL    = 30    # semantic pre-filter pool size (Stage 1)
 GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 
