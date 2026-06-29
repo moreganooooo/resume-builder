@@ -771,6 +771,8 @@ class ResumeEngine:
             "=== STYLE RULES ===",
             style_rules,
         ])
+        # FIX: use .replace() instead of .format() to avoid ValueError when
+        # rules YAML content contains literal curly braces { } (e.g. JSON examples).
         rewrite_system = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
 
         print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
