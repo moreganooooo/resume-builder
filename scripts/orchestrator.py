@@ -39,8 +39,9 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   bullet. Reliable JSON compliance as a safety net.
 #
 # BUILDER_MODEL: handles JD keyword extraction and the final resume assembly.
-#   gemini-3.1-flash-lite for quota reasons. TemplateSchema is complex but
-#   Flash-Lite handles it reliably with temperature=0.1.
+#   gemini-3.1-flash-lite for quota reasons. TemplateSchema is now flattened
+#   (List[dict] instead of List[NestedModel]) to avoid the deeply-nested
+#   $defs in responseSchema that caused the builder 400.
 #
 # EMBED_MODEL: gemini-embedding-2 (GA April 2026) — multimodal, 8k token input.
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
@@ -322,7 +323,7 @@ class GeminiClient:
             elif resp.status_code == 429:
                 failure_streak = max(failure_streak, 1)
 
-            if resp.status_code in HIGH_DEMAND_STATUS.__class__.__mro__ and resp.status_code == HIGH_DEMAND_STATUS:
+            if resp.status_code == HIGH_DEMAND_STATUS:
                 print("    ⚠️  Model is experiencing high demand (503). Treating as transient capacity issue.")
 
             if resp.status_code in RETRYABLE:
@@ -341,11 +342,12 @@ class GeminiClient:
 
             # Don't retry permanent client errors (400, 404).
             if resp.status_code in (400, 404):
-                print(f"    ⚠️  Gemini API permanent error {resp.status_code}. Not retrying.")
+                print(f"    ⚠️  Gemini API permanent error {resp.status_code}: HTTP Error {resp.status_code}: {resp.reason}. Not retrying.")
                 try:
-                    print(json.dumps(resp.json(), indent=2)[:600])
+                    err_detail = resp.json()
+                    print(json.dumps(err_detail, indent=2)[:800])
                 except Exception:
-                    print(resp.text[:600])
+                    print(resp.text[:800])
                 return None, {}
 
             try:
@@ -489,6 +491,19 @@ class EducationItem(BaseModel):
     description: str = Field(default="", description="Honors, GPA, relevant coursework. Leave blank if none.")
 
 class TemplateSchema(BaseModel):
+    """
+    Flattened schema for the builder call.
+
+    EXPERIENCE / PROJECTS / EDUCATION / CERTIFICATIONS are List[dict] instead
+    of List[NestedModel]. This eliminates the deeply-nested $defs structure that
+    Gemini's responseSchema validation rejects with a 400 on gemini-3.1-flash-lite.
+    The standalone Pydantic classes (WorkExperience, ProjectItem, CertItem,
+    EducationItem) are kept intact above for use by render_pdf and other consumers.
+
+    Contract details are enforced via description strings rather than nested
+    schemas — the model receives the same field-level guidance without the
+    schema complexity.
+    """
     NAME:                str        = Field(description="Must match candidate name.")
     TAGLINE:             str        = Field(description="Max 80 chars. Follows archetype tagging rules.")
     PHONE:               str
@@ -503,13 +518,45 @@ class TemplateSchema(BaseModel):
     SECTION_COMPETENCIES:str        = Field(default="Core Competencies")
     COMPETENCIES:        List[str]  = Field(min_length=6, max_length=8, description="6-8 exact keywords extracted from JD requirements.")
     SECTION_EXPERIENCE:  str        = Field(default="Work Experience")
-    EXPERIENCE:          List[WorkExperience] = Field(description="Bulleted achievements. Must pass Jobright QA heuristics.")
+    EXPERIENCE:          List[dict] = Field(
+        description=(
+            "List of work experience objects. Each dict must contain: "
+            "title (str), company (str), period (str), location (str, city/state or Remote), "
+            "achievements (list of str — bulleted accomplishments that pass Jobright QA heuristics). "
+            "Bullet counts per role must match tailor.md targets exactly: "
+            "Mercor 2-3, Treering 6-8, Inside Sales Team 4-5, "
+            "Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4."
+        )
+    )
     SECTION_PROJECTS:    str        = Field(default="Projects")
-    PROJECTS:            List[ProjectItem]    = Field(min_length=3, max_length=4, description="Top 3-4 most relevant projects for the role.")
+    PROJECTS:            List[dict] = Field(
+        min_length=3, max_length=4,
+        description=(
+            "Top 3-4 most relevant projects. Each dict must contain: "
+            "title (str), badge (str, short label e.g. 'Open Source' — leave blank if none), "
+            "description (str, 1-2 sentence impact summary), "
+            "tech (str, comma-separated tech stack — leave blank if not applicable)."
+        )
+    )
     SECTION_EDUCATION:   str        = Field(default="Education")
-    EDUCATION:           List[EducationItem]  = Field(description="KU, KCKCC, and JCCC items exactly as per design system.")
+    EDUCATION:           List[dict] = Field(
+        description=(
+            "KU, KCKCC, and JCCC items exactly as per design system. Each dict must contain: "
+            "degree (str), institution (str), year (str), description (str — honors, GPA, coursework). "
+            "KU: exactly 2 bullets. KCKCC: exactly 2 bullets. JCCC: exactly 1 bullet."
+        )
+    )
     SECTION_CERTIFICATIONS: str     = Field(default="Training & Certifications")
-    CERTIFICATIONS:      List[CertItem]       = Field(min_length=3, max_length=3, description="Exact 3 certifications in order.")
+    CERTIFICATIONS:      List[dict] = Field(
+        min_length=3, max_length=3,
+        description=(
+            "Exactly 3 certifications in fixed order. Each dict must contain: "
+            "title (str, bold name only), org (str), year (str). "
+            "Order: 1) Email Marketing Software Certification | HubSpot | 2026, "
+            "2) Video for Sales Certification | Vidyard | 2021, "
+            "3) Camp Portfolio | Bernstein Rein, Kansas City | 2008."
+        )
+    )
     SECTION_SKILLS:      str        = Field(default="Skills")
     SKILLS:              List[str]  = Field(description="Technical skills mapped to JD.")
 
@@ -820,4 +867,333 @@ class ResumeEngine:
 
                     for rw_attempt in range(MAX_REWRITE_PARSE_FAILURES + 1):
                         use_minimal = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
-                        runner_schema = RewriteMinimalSchema if use_minimal else Re
+                        runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
+
+                        weaknesses = critique_data.get("weaknesses", "")
+                        rewrite_contents = (
+                            f"{static_prefix}\n\n"
+                            f"--- BULLET TO REWRITE ---\n{bullet}\n\n"
+                            f"--- WEAKNESSES TO FIX ---\n{weaknesses}"
+                        )
+
+                        try:
+                            rewrite_text, rw_usage = GeminiClient.generate(
+                                model=active_rewrite_model,
+                                system_instruction=rewrite_system,
+                                contents=rewrite_contents,
+                                response_schema=runner_schema,
+                                temperature=0.0,
+                                max_output_tokens=120,
+                            )
+                            rw_cached = rw_usage.get("cachedContentTokenCount", 0) if rw_usage else 0
+                            if rw_cached:
+                                print(f"    💫 rewrite cached tokens: {rw_cached:,}")
+
+                            if not rewrite_text:
+                                raise ValueError("Empty rewrite response")
+
+                            rw_data = GeminiClient.parse_json(rewrite_text)
+                            candidate_bullet = rw_data.get("rewritten", "").strip()
+
+                            if not candidate_bullet:
+                                raise ValueError("Empty rewritten field in response")
+
+                            # best_version guard: rescore the rewrite and keep
+                            # whichever version has the higher composite.
+                            time.sleep(RESCORE_SLEEP)
+                            rescore_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{candidate_bullet}"
+                            rescore_text, _ = GeminiClient.generate(
+                                model=CRITIQUE_MODEL,
+                                system_instruction=critique_system,
+                                contents=rescore_contents,
+                                response_schema=CritiqueSchema,
+                                temperature=0.0,
+                                max_output_tokens=280,
+                            )
+                            rescore_data = GeminiClient.parse_json(rescore_text or "")
+                            original_composite = ResumeEngine.critique_composite(critique_data)
+                            rewrite_composite  = ResumeEngine.critique_composite(rescore_data)
+
+                            if rewrite_composite >= original_composite:
+                                rewritten_bullet = candidate_bullet
+                                print(f"    ✅ Rewrite accepted (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                            else:
+                                rewritten_bullet = bullet
+                                print(f"    ↩️  Original kept (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                            break
+
+                        except Exception as rw_err:
+                            rewrite_parse_failures += 1
+                            print(f"    ⚠️  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
+                            if (rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
+                                    and active_rewrite_model != REWRITE_FALLBACK_MODEL):
+                                print(f"    🔄 Switching rewrite to fallback: {REWRITE_FALLBACK_MODEL}")
+                                active_rewrite_model = REWRITE_FALLBACK_MODEL
+                            time.sleep(REWRITE_SLEEP)
+
+                    refined_bullets.append(rewritten_bullet)
+                else:
+                    refined_bullets.append(bullet)
+
+            except Exception as e:
+                print(f"    ⚠️  Critique error on bullet {i+1}: {e}")
+                refined_bullets.append(bullet)
+
+        print(f"\nAudit complete.")
+        return refined_bullets
+
+    def mine_bullet_bank(self, jd_text: str, master_resume: dict) -> List[str]:
+        """
+        Semantic + gem-aware retrieval from bullet-bank-keepers-audited.csv.
+
+        Stage 1 — Semantic pre-filter (SEMANTIC_POOL=30):
+          Embeds the JD text once, loads pre-computed bullet embeddings from
+          bullet_embeddings.npy + bullet_texts.npy, computes cosine similarity,
+          and returns the top SEMANTIC_POOL candidates.
+
+        Stage 2 — Gem-aware re-rank (TOP_K_BULLETS=20):
+          Applies a GEM_BOOST_WEIGHT bonus for hidden_gem_score > 0, then
+          strength-tier sort (Hidden Gem > Strong > Solid > Needs Work), then
+          takes the top TOP_K_BULLETS results.
+
+        Falls back to the existing keyword-match logic if embeddings are not
+        available (embed_bullet_bank.py hasn't been run yet).
+        """
+        kb_path  = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_path = os.path.join(self.kb_dir, "bullet_embeddings.npy")
+        txt_path = os.path.join(self.kb_dir, "bullet_texts.npy")
+
+        if not os.path.exists(kb_path):
+            print("  ⚠️  bullet-bank-keepers-audited.csv not found. Returning empty bullet list.")
+            return []
+
+        df = pd.read_csv(kb_path)
+        if df.empty or "Bullet Point" not in df.columns:
+            return []
+
+        # --- Stage 1: semantic pre-filter ---
+        if os.path.exists(emb_path) and os.path.exists(txt_path):
+            jd_vec = GeminiClient.embed(jd_text[:8000])
+            if jd_vec is not None:
+                bank_embs  = np.load(emb_path)
+                bank_texts = np.load(txt_path, allow_pickle=True)
+                jd_arr     = np.array(jd_vec, dtype=np.float32)
+                norms      = np.linalg.norm(bank_embs, axis=1, keepdims=True)
+                bank_norm  = np.divide(bank_embs, norms, where=norms > 0)
+                jd_norm    = jd_arr / (np.linalg.norm(jd_arr) + 1e-9)
+                sims       = bank_norm @ jd_norm
+                top_idx    = np.argsort(sims)[::-1][:SEMANTIC_POOL]
+                top_texts  = set(str(bank_texts[i]) for i in top_idx)
+                df = df[df["Bullet Point"].isin(top_texts)].copy()
+                print(f"  Semantic pre-filter: {len(df)} bullets from pool of {SEMANTIC_POOL}")
+
+        # --- Stage 2: gem-aware re-rank ---
+        if "hidden_gem_score" in df.columns:
+            df["hidden_gem_score"] = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0)
+            df["_gem_boost"] = df["hidden_gem_score"].apply(
+                lambda s: s * GEM_BOOST_WEIGHT if s > 0 else 0
+            )
+        else:
+            df["_gem_boost"] = 0
+
+        if "strength_category" in df.columns:
+            df["_strength_rank"] = df["strength_category"].map(STRENGTH_ORDER).fillna(99)
+        else:
+            df["_strength_rank"] = 99
+
+        df = df.sort_values(["_strength_rank", "_gem_boost"], ascending=[True, False])
+        top_bullets = df["Bullet Point"].dropna().head(TOP_K_BULLETS).tolist()
+        print(f"  Selected {len(top_bullets)} bullets (TOP_K={TOP_K_BULLETS})")
+        return top_bullets
+
+    def extract_jd_keywords(self, jd_text: str) -> dict:
+        """Extracts structured keywords from the JD for skills and competencies injection."""
+        system = (
+            "You are a resume keyword extractor. Given a job description, "
+            "extract three categories of keywords that should appear in a tailored resume.\n"
+            "Return ONLY valid JSON matching the schema. No markdown, no preamble."
+        )
+        contents = f"Job Description:\n\n{jd_text}"
+
+        result, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=system,
+            contents=contents,
+            response_schema=JDKeywordSchema,
+            temperature=0.0,
+            max_output_tokens=400,
+        )
+
+        if not result:
+            return {"tools": [], "hard_skills": [], "core_functions": []}
+
+        parsed = GeminiClient.parse_json(result)
+        return parsed if parsed else {"tools": [], "hard_skills": [], "core_functions": []}
+
+    def build_tailored_resume(
+        self,
+        parsed_json_filename: str,
+        jd_filename: str,
+        output_filename: str,
+    ):
+        """
+        Main pipeline entry point. Orchestrates:
+          1. Load master resume JSON + JD text
+          2. Mine bullet bank (semantic + gem-aware)
+          3. Audit & refine bullets (Skeptical Editor loop)
+          4. Extract JD keywords
+          5. Build tailored resume JSON (builder call)
+          6. Post-build holistic critique
+          7. Save output JSON
+
+        Builder call uses the flattened TemplateSchema (List[dict] instead of
+        List[NestedModel]) to avoid the 400 that nested $defs cause on
+        gemini-3.1-flash-lite's responseSchema validation.
+        """
+        parsed_json_path = os.path.join(self.output_json_dir, parsed_json_filename)
+        jd_path          = os.path.join(self.jds_dir, jd_filename)
+        output_path      = os.path.join(self.output_json_dir, output_filename)
+
+        print(f"\n{'='*60}")
+        print(f"BUILD: {parsed_json_filename} + {jd_filename} → {output_filename}")
+        print(f"{'='*60}\n")
+
+        # --- 1. Load inputs ---
+        try:
+            with open(parsed_json_path, "r", encoding="utf-8") as f:
+                master_resume = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Parsed JSON not found: {parsed_json_path}")
+
+        try:
+            with open(jd_path, "r", encoding="utf-8") as f:
+                jd_text = f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"JD file not found: {jd_path}")
+
+        # --- 2. Mine bullet bank ---
+        print("Step 1: Mining bullet bank...")
+        raw_bullets = self.mine_bullet_bank(jd_text, master_resume)
+        print(f"  Mined {len(raw_bullets)} bullets\n")
+
+        # --- 3. Audit & refine bullets ---
+        print("Step 2: Running Skeptical Editor audit loop...")
+        static_prefix = self.build_audit_static_prefix()
+        print(f"  Audit static prefix: {len(static_prefix)} chars / ~{len(static_prefix)//4} tokens")
+        refined_bullets = self.audit_and_refine_bullets(raw_bullets, static_prefix)
+        print(f"\n  Refined bullet count: {len(refined_bullets)}\n")
+
+        # --- 4. Extract JD keywords ---
+        print("Step 3: Extracting JD keywords...")
+        jd_keywords = self.extract_jd_keywords(jd_text)
+        print(f"  Keywords extracted: {sum(len(v) for v in jd_keywords.values())} total\n")
+
+        # --- 5. Build tailored resume (builder call) ---
+        print("Step 4: Building tailored resume JSON...")
+        kb_context    = self.load_knowledge_base()
+        build_prompt  = self.load_prompt("tailor.md")
+        tailor_rules  = self.load_yaml(self.rules_dir, "tailor_rules.yaml")
+
+        builder_system = (
+            f"{build_prompt}"
+            f"\n\nTAILOR RULES:\n{json.dumps(tailor_rules)}"
+        )
+
+        bullets_block = "\n".join(f"- {b}" for b in refined_bullets)
+        combined_contents = (
+            f"{kb_context}\n\n"
+            f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords, indent=2)}\n\n"
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+            f"=== MASTER RESUME (parsed JSON) ===\n{json.dumps(master_resume, indent=2)}\n\n"
+            f"=== REFINED BULLETS (use these verbatim — already audited) ===\n{bullets_block}"
+        )
+
+        print(f"  Builder system prompt: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
+        print(f"  Builder contents:      {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
+
+        builder_result, builder_usage = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=builder_system,
+            contents=combined_contents,
+            response_schema=TemplateSchema,
+            temperature=0.0,
+            max_output_tokens=4000,
+        )
+
+        if not builder_result:
+            raise RuntimeError(
+                "❌ Builder model returned no response. "
+                "Check your API quota, key validity, and network connection."
+            )
+
+        tailored = GeminiClient.parse_json(builder_result)
+        if not tailored:
+            raise RuntimeError("❌ Builder returned a response but it could not be parsed as JSON.")
+
+        # --- 6. Post-build holistic critique ---
+        print("\nStep 5: Running post-build holistic critique...")
+        critique_system_holistic = (
+            "You are a senior resume reviewer. Evaluate the assembled resume against "
+            "the job description. Score alignment and flag any issues.\n"
+            "Return ONLY valid JSON. No markdown, no preamble."
+        )
+        holistic_contents = (
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+            f"=== ASSEMBLED RESUME ===\n{json.dumps(tailored, indent=2)}"
+        )
+
+        critique_result, _ = GeminiClient.generate(
+            model=CRITIQUE_MODEL,
+            system_instruction=critique_system_holistic,
+            contents=holistic_contents,
+            response_schema=ResumeCritiqueSchema,
+            temperature=0.0,
+            max_output_tokens=600,
+        )
+
+        if critique_result:
+            critique_data = GeminiClient.parse_json(critique_result)
+            print(f"  Overall fit score:       {critique_data.get('overall_fit_score', 'N/A')}")
+            print(f"  Summary alignment score: {critique_data.get('summary_alignment_score', 'N/A')}")
+            print(f"  Skills relevance score:  {critique_data.get('skills_relevance_score', 'N/A')}")
+            flags = critique_data.get("flags", [])
+            if flags:
+                print(f"  Flags ({len(flags)}):")
+                for flag in flags:
+                    print(f"    ⚠️  {flag}")
+            recs = critique_data.get("recommendations", [])
+            if recs:
+                print(f"  Recommendations ({len(recs)}):")
+                for rec in recs:
+                    print(f"    💡 {rec}")
+            tailored["_holistic_critique"] = critique_data
+        else:
+            print("  ⚠️  Holistic critique returned no response — skipping.")
+
+        # --- 7. Save output ---
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(tailored, f, indent=2, ensure_ascii=False)
+
+        print(f"\n✅ Tailored resume saved → {output_path}")
+        return tailored
+
+
+# ---------------------------------------------------------------------------
+# CLI ENTRY POINT
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Resume Builder — orchestrator")
+    parser.add_argument("--parsed-json",  required=True, help="Input parsed resume JSON filename (in output/json/)")
+    parser.add_argument("--jd",           required=True, help="Job description filename (in jds/)")
+    parser.add_argument("--output",       required=True, help="Output tailored JSON filename (in output/json/)")
+    args = parser.parse_args()
+
+    engine = ResumeEngine()
+    engine.build_tailored_resume(
+        parsed_json_filename=args.parsed_json,
+        jd_filename=args.jd,
+        output_filename=args.output,
+    )
