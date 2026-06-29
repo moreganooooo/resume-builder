@@ -103,6 +103,32 @@ KB_ALLOWLIST = sorted([
     "verified_tools.json",
 ])
 
+# --- AUDIT STATIC PREFIX FILES ---
+# Mirrors rewrite_bullets.py's _build_static_prefix() exactly.
+# These 4 files are the ONLY context the Skeptical Editor needs to ground
+# truthfulness checks: who is this person, what facts are verified, what
+# tools did they actually use, what projects are real.
+# Built once per run, shared across all 12 bullet critique/rewrite calls.
+# ~5-10k tokens vs ~457k for the full KB — eliminates the 429 on bullet 1.
+AUDIT_KB_FILES = [
+    "profile.yml",
+    "verified_facts.json",
+    "verified_tools.json",
+    "verified_projects.json",
+]
+
+# profile.yml sections to KEEP in the audit prefix (trimmed for token efficiency).
+# Mirrors rewrite_bullets.py's trim_profile_yml() keep/stop lists.
+AUDIT_PROFILE_KEEP = [
+    "target_roles:", "archetypes:", "narrative:", "superpowers:",
+    "background_context:", "deal_breakers:",
+]
+AUDIT_PROFILE_STOP = [
+    "industries_of_genuine_fit:", "companies_previously_applied:",
+    "compensation:", "location:", "cv:", "proof_points:",
+    "key_recommendations:", "management_evidence:",
+]
+
 
 # ---------------------------------------------------------------------------
 # GEMINI CLIENT  (raw REST — avoids SDK versioning headaches on free tier)
@@ -399,6 +425,104 @@ class ResumeEngine:
                     print(f"  ⚠️  Could not load KB file {filename}: {e}")
         return master_context
 
+    def build_audit_static_prefix(self) -> str:
+        """
+        Builds the slim Tier-1 context prefix for the audit loop.
+
+        Mirrors rewrite_bullets.py's _build_static_prefix() exactly:
+          - profile.yml (trimmed to target_roles / narrative / superpowers /
+            background_context / deal_breakers — same keep/stop lists as
+            rewrite_bullets.py's trim_profile_yml())
+          - verified_facts.json
+          - verified_tools.json
+          - verified_projects.json
+
+        This is the ONLY context the Skeptical Editor needs to ground
+        truthfulness checks. ~5-10k tokens vs ~457k for the full KB.
+        Built once per run, shared across all bullet critique/rewrite calls.
+
+        THREE-TIER ARCHITECTURE (matches rewrite_bullets.py):
+          Tier 0 — system_instruction: rules only (critique/rewrite prompts
+                   + scoring yamls). Compact, stable. No KB here.
+          Tier 1 — contents prefix: this method's output. Stable across all
+                   bullet calls → Google can cache-hit the prefix.
+          Tier 2 — contents tail: bullet text + weaknesses. Only part that
+                   varies per call.
+        """
+        sections = []
+
+        # --- profile.yml (trimmed) ---
+        profile_path = os.path.join(self.kb_dir, "profile.yml")
+        if os.path.exists(profile_path):
+            try:
+                with open(profile_path, "r", encoding="utf-8") as f:
+                    raw = f.read()
+                lines = raw.splitlines()
+                result = []
+                capturing = False
+                for line in lines:
+                    stripped = line.strip()
+                    if any(stripped.startswith(s) for s in AUDIT_PROFILE_KEEP):
+                        capturing = True
+                    elif any(stripped.startswith(s) for s in AUDIT_PROFILE_STOP):
+                        capturing = False
+                    if capturing:
+                        result.append(line)
+                trimmed = "\n".join(result).strip()
+                if trimmed:
+                    sections.append(
+                        "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
+                        "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
+                        + trimmed
+                    )
+            except Exception as e:
+                print(f"  ⚠️  build_audit_static_prefix: could not load profile.yml: {e}")
+
+        # --- verified_facts.json ---
+        facts_path = os.path.join(self.kb_dir, "verified_facts.json")
+        if os.path.exists(facts_path):
+            try:
+                with open(facts_path, "r", encoding="utf-8") as f:
+                    facts = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                sections.append(
+                    "=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
+                    "These are the only facts about Morgan's career that are evidence-backed.\n"
+                    "Do NOT invent facts outside this list.\n"
+                    + facts
+                )
+            except Exception as e:
+                print(f"  ⚠️  build_audit_static_prefix: could not load verified_facts.json: {e}")
+
+        # --- verified_tools.json ---
+        tools_path = os.path.join(self.kb_dir, "verified_tools.json")
+        if os.path.exists(tools_path):
+            try:
+                with open(tools_path, "r", encoding="utf-8") as f:
+                    tools = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                sections.append(
+                    "=== VERIFIED TOOLS (HF002 guard — only claim tools listed here) ===\n"
+                    "Never claim proficiency with any tool not present in this list.\n"
+                    + tools
+                )
+            except Exception as e:
+                print(f"  ⚠️  build_audit_static_prefix: could not load verified_tools.json: {e}")
+
+        # --- verified_projects.json ---
+        projects_path = os.path.join(self.kb_dir, "verified_projects.json")
+        if os.path.exists(projects_path):
+            try:
+                with open(projects_path, "r", encoding="utf-8") as f:
+                    projects = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                sections.append(
+                    "=== VERIFIED PROJECTS ===\n"
+                    "Use these to add accurate project detail and scope.\n"
+                    + projects
+                )
+            except Exception as e:
+                print(f"  ⚠️  build_audit_static_prefix: could not load verified_projects.json: {e}")
+
+        return "\n\n".join(sections)
+
     @staticmethod
     def critique_composite(scores: dict) -> float:
         """
@@ -418,11 +542,23 @@ class ResumeEngine:
         """
         Passes bullets through the Critique and Rewrite prompts.
 
+        THREE-TIER CACHE ARCHITECTURE (mirrors rewrite_bullets.py):
+          Tier 0 — system_instruction: rules ONLY (critique/rewrite prompts +
+            scoring yamls). Compact and stable. No KB context here — that was
+            the root cause of the 429: ~457k tokens in the system instruction
+            on every single bullet call blew past free-tier TPM instantly.
+
+          Tier 1 — contents prefix (static_prefix arg): slim verified-facts
+            bundle built by build_audit_static_prefix(). Same 4 files as
+            rewrite_bullets.py's _build_static_prefix(). ~5-10k tokens,
+            identical across all bullet calls → Google can cache-hit the prefix.
+
+          Tier 2 — contents tail: bullet text (+ weaknesses for rewrites).
+            The ONLY part that varies per call. No boilerplate here.
+
         Uses CRITIQUE_MODEL (see model strategy comment at top of file).
-        static_prefix is the loaded knowledge_base context string, passed in
-        from build_tailored_resume. This gives the Skeptical Editor full
-        grounding in the candidate's background, verified claims, and what
-        tools/metrics are actually true — without re-loading the KB files here.
+        static_prefix is built by build_audit_static_prefix() and passed in
+        from build_tailored_resume() — built once, shared across all calls.
 
         Hidden Gem awareness: bullets with hidden_gem_flag=True are logged with a
         marker and their hidden_gem_reason so you can see which gems made it into
@@ -453,8 +589,11 @@ class ResumeEngine:
         truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
         ats_rules           = json.dumps(self.load_yaml(self.rules_dir,   "ats_rules.yaml"))
 
+        # Tier 0: system_instruction = rules ONLY. No KB context here.
+        # Keeping rules out of contents (and KB out of system_instruction)
+        # means the stable rules block can be cached by Google on the system
+        # side, while the stable KB prefix sits at the top of contents.
         critique_system = (
-            f"{static_prefix}"
             f"{critique_prompt}"
             f"\n\nMANAGER TEST RULES:\n{manager_test_rules}"
             f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
@@ -465,7 +604,6 @@ class ResumeEngine:
         )
 
         rewrite_system = (
-            f"{static_prefix}"
             f"{rewrite_prompt}"
             f"\n\nSTYLE RULES:\n{style_rules}"
             f"\n\nINTENT MAP:\n{verb_intent_mapping}"
@@ -483,14 +621,23 @@ class ResumeEngine:
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
 
+            # Tier 1 + Tier 2: stable prefix first, bullet tail appended after.
+            # static_prefix is identical for every bullet → cache-hit on calls 2-12.
+            critique_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{bullet}"
+
             try:
-                critique_text, _ = GeminiClient.generate(
+                critique_text, usage = GeminiClient.generate(
                     model=CRITIQUE_MODEL,
                     system_instruction=critique_system,
-                    contents=bullet,
+                    contents=critique_contents,
                     response_schema=CritiqueSchema,
                     temperature=0.0,
                 )
+
+                # Log cache hits if present
+                cached_tokens = usage.get("cachedContentTokenCount", 0) if usage else 0
+                if cached_tokens:
+                    print(f"    💫 cached tokens: {cached_tokens:,}")
 
                 if not critique_text:
                     refined_bullets.append(bullet)
@@ -512,8 +659,10 @@ class ResumeEngine:
                     print("    Bullet failed Manager Test or believability threshold. Rewriting...")
                     time.sleep(REWRITE_SLEEP)
 
+                    # Tier 1 + Tier 2 for rewrite: same stable prefix, new tail.
                     rewrite_contents = (
-                        f"{bullet}"
+                        f"{static_prefix}"
+                        f"\n\n--- BULLET TO REWRITE ---\n{bullet}"
                         f"\n\nTO FIX:\n{critique_data.get('weaknesses', 'None')}"
                     )
                     rewrite_text, _ = GeminiClient.generate(
@@ -541,10 +690,11 @@ class ResumeEngine:
                         # Re-score the rewrite to enable a real comparison
                         try:
                             time.sleep(RESCORE_SLEEP)
+                            rescore_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{rewritten_bullet}"
                             rescore_text, _ = GeminiClient.generate(
                                 model=CRITIQUE_MODEL,
                                 system_instruction=critique_system,
-                                contents=rewritten_bullet,
+                                contents=rescore_contents,
                                 response_schema=CritiqueSchema,
                                 temperature=0.0,
                             )
@@ -842,6 +992,13 @@ class ResumeEngine:
 
         knowledge_context = self.load_knowledge_base()
 
+        # Build the slim audit prefix ONCE before the loop.
+        # build_audit_static_prefix() loads only the 4 verified-facts files
+        # (~5-10k tokens) rather than the full KB (~457k tokens). This is the
+        # fix for the 429 that fired on bullet 1 of every run.
+        audit_static_prefix = self.build_audit_static_prefix()
+        print(f"\n  Audit static prefix: {len(audit_static_prefix)} chars / ~{len(audit_static_prefix)//4} tokens")
+
         # FIX #7: Extract JD keywords once here and pass the result into
         # mine_bullet_bank. Previously, mine_bullet_bank called
         # extract_jd_keywords internally, meaning the JD was sent to the
@@ -860,12 +1017,8 @@ class ResumeEngine:
             print("  No bullets mined. Skipping audit loop.")
             polished_bullets = ""
         else:
-            # FIX: Pass knowledge_context as static_prefix so the Skeptical Editor
-            # has full grounding in the candidate's background and verified claims.
-            # Previously this was passed as "" (empty string), meaning bullets were
-            # critiqued and rewritten by an AI with zero context about who wrote them.
             polished_bullets = self.audit_and_refine_bullets(
-                raw_mined_bullets, static_prefix=knowledge_context
+                raw_mined_bullets, static_prefix=audit_static_prefix
             )
 
         prompt_template = self.load_prompt("tailor_resume.md")
