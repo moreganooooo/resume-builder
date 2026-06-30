@@ -805,7 +805,7 @@ class ResumeEngine:
                 if not critique_text:
                     refined_bullets.append(bullet)
                     continue
-    
+
                 critique_data = GeminiClient.parse_json(critique_text)
 
                 gem_score  = critique_data.get("hidden_gem_score", 0)
@@ -859,7 +859,7 @@ class ResumeEngine:
                                 raise ValueError("Empty rewrite response")
 
                             # --- INSERT DEBUG PRINT HERE ---
-                            print(f"DEBUG RAW RESPONSE: {rewrite_text[:200]}") 
+                            print(f"DEBUG RAW RESPONSE: {rewrite_text[:200]}")
 
                             rw_data = GeminiClient.parse_json(rewrite_text)
                             candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
