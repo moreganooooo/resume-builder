@@ -708,15 +708,41 @@ class ResumeEngine:
                         # Compose Tier 1 + Tier 2 + Tier 3 via build_rewrite_prompt.
                         # kb_context = static_prefix (Tier 1) + segment_bundle (Tier 2).
                         # build_rewrite_prompt appends the per-bullet tail (Tier 3).
-                        rewrite_contents = build_rewrite_prompt(
-                            bullet=bullet,
-                            tags=tags,
-                            weaknesses=weaknesses,
-                            kb_context=static_prefix + ("\n\n" + segment_bundle if segment_bundle else ""),
-                            attempt=rw_attempt + 1,
-                            minimal_schema=use_minimal,
-                            json_reminder=json_reminder,
-                        )
+                        # ---- Lean Gemma-safe rewrite contents ----
+                        weaknesses_text = (weaknesses or "").strip() or "Improve clarity, specificity, and believability."
+
+                        persona_map = {
+                            "content":    "Content marketing, editorial strategy",
+                            "ops":        "Marketing operations, CRM, RevOps",
+                            "email":      "Email/lifecycle marketing",
+                            "demand":     "Demand generation, growth marketing",
+                            "sales":      "B2B sales, SDR/AE",
+                            "brand":      "Brand marketing, creative",
+                            "design":     "Graphic design, UX/UI",
+                        }
+                        tag_lower = (tags or "").lower()
+                        persona = next((v for k, v in persona_map.items() if k in tag_lower), "General marketing roles")
+
+                        context_block = f"{static_prefix}\n{segment_bundle}" if segment_bundle else static_prefix
+                        if "gemma" in active_rewrite_model.lower():
+                            context_block = context_block[:3500]
+
+                        parts = [
+                            "Return exactly one raw JSON object.",
+                            "Do not use markdown.",
+                            "Do not explain.",
+                            "Do not repeat the prompt.",
+                            "Do not add any text before or after the JSON.",
+                            "",
+                            f"Persona: {persona}",
+                            f"Weaknesses: {weaknesses_text}",
+                            f"Bullet: {bullet}",
+                        ]
+                        if context_block.strip():
+                            parts += ["", "Use only supported facts from this context:", context_block]
+                        parts += ["", json_reminder]
+
+                        rewrite_contents = "\n".join(parts)
 
                         token_cap = 160 if use_minimal else 300
 
