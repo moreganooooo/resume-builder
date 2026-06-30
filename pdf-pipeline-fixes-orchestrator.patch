@@ -1,0 +1,39 @@
+--- a/scripts/orchestrator.py
++++ b/scripts/orchestrator.py
+@@ -1143,14 +1143,15 @@
+ 
+         # --- Step 4: Build resume ---
+         print("\nStep 4: Building resume...")
+-        build_prompt = self.load_prompt("build_resume.md")
+-        # or more explicitly:
+-        tailor_path = os.path.join(self.rules_dir, "tailor.md")
+-        try:
+-            with open(tailor_path, "r") as f:
+-                tailor_rules = f.read()
+-        except FileNotFoundError:
+-            tailor_rules = ""
++        # BUG: this was loading "build_resume.md", which does not exist in
++        # resume-engine/prompts/ -- load_prompt() was silently falling back
++        # to the placeholder string "Process the text." on every run, so the
++        # builder call had almost no real instructions. The actual file is
++        # tailor_resume.md, and it already contains the full tailoring
++        # hierarchy, archetype rules, and the exact JSON key spec (it even
++        # says outright: "Your JSON output MUST use these exact uppercase
++        # field names. Any deviation breaks the render pipeline.").
++        build_prompt = self.load_prompt("tailor_resume.md")
+ 
+         kb_context = self.load_knowledge_base()
+ 
+@@ -1158,11 +1159,7 @@
+         # system_instruction is the most cacheable part of the payload --
+         # it stays identical across all builder calls on the same run.
+         # The variable tail (JD + bullets) sits alone in combined_contents.
+-        builder_system = (
+-            f"{build_prompt}\n\n"
+-            f"TAILOR RULES:\n{tailor_rules}\n\n"
+-            f"{kb_context}"
+-        )
++        builder_system = f"{build_prompt}\n\n{kb_context}"
+ 
+         bullets_block = "\n".join(f"- {b}" for b in refined_bullets)
+         combined_contents = (
