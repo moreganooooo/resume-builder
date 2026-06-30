@@ -741,6 +741,11 @@ class ResumeEngine:
                             parts += ["", "Use only supported facts from this context:", context_block, ""]
 
                         # Bullet + persona + JSON reminder come LAST
+                        json_schema = (
+                            '{"rewritten_bullet":""}'
+                            if use_minimal
+                            else '{"rewritten_bullet":"","reasoning":"","context_gaps":""}'
+                        )
                         parts += [
                             f"Rewrite this bullet for {persona} roles.",
                             f"Weaknesses: {weaknesses_text}",

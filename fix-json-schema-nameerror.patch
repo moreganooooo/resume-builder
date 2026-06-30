@@ -1,0 +1,16 @@
+diff --git a/scripts/orchestrator.py b/scripts/orchestrator.py
+index 8cda851..968735e 100644
+--- a/scripts/orchestrator.py
++++ b/scripts/orchestrator.py
+@@ -741,6 +741,11 @@ class ResumeEngine:
+                             parts += ["", "Use only supported facts from this context:", context_block, ""]
+ 
+                         # Bullet + persona + JSON reminder come LAST
++                        json_schema = (
++                            '{"rewritten_bullet":""}'
++                            if use_minimal
++                            else '{"rewritten_bullet":"","reasoning":"","context_gaps":""}'
++                        )
+                         parts += [
+                             f"Rewrite this bullet for {persona} roles.",
+                             f"Weaknesses: {weaknesses_text}",
