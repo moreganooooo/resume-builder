@@ -7,6 +7,7 @@ import random
 import requests
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
@@ -68,6 +69,11 @@ MAX_REWRITE_PARSE_FAILURES = 2
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPT BASE  (mirrors rewrite_bullets.py exactly)
 # ---------------------------------------------------------------------------
+# FIX 2: Output rules now match the masterpiece exactly.
+# '{{ and }}' renders as literal { and } after .replace() — they ARE the
+# instruction and the escape simultaneously. This is the primary coercion
+# that keeps Gemma from adding preamble or markdown fences.
+
 REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
 
@@ -207,14 +213,13 @@ from gemini_client import GeminiClient  # replaces the inline class
 # BUILD REWRITE PROMPT
 # Mirrors rewrite_bullets.py's build_rewrite_prompt() exactly.
 #
-# Composes the per-bullet contents payload (Tier 2 + Tier 3):
-#   kb_context   = Tier 1 (static_prefix) + Tier 2 (segment_bundle) --
-#                  assembled by the caller and passed in as a single string.
-#   Tier 3 tail  = weaknesses + bullet text + JSON reminder (built here).
+# FIX 3: Structure and JSON tail now match the masterpiece exactly.
+# The --- HEADERS --- format + tags/persona line + JSON reminder at the tail
+# are what actually coerce Gemma to output clean JSON without preamble.
 #
-# This function was removed during a circular-import fix and never replaced.
-# It is now defined here as a standalone module-level function so
-# audit_and_refine_bullets() can call it without any import.
+# kb_context   = Tier 1 (static_prefix) + Tier 2 (segment_bundle) --
+#                assembled by the caller and passed in as a single string.
+# Tier 3 tail  = tags/persona + weaknesses + bullet text + JSON reminder.
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(
@@ -233,13 +238,30 @@ def build_rewrite_prompt(
       - Tier 2: segment_bundle (cv.md excerpt, background, claims, metrics)
 
     This function appends Tier 3: the per-bullet tail that is unique to
-    each call (weaknesses + bullet text + output reminder).
+    each call (tags/persona + weaknesses + bullet text + output reminder).
+
+    Mirrors rewrite_bullets.py build_rewrite_prompt() exactly.
     """
-    json_reminder = (
-        'Output ONLY: {"rewritten_bullet": "..."}'
-        if minimal_schema
-        else 'Output ONLY: {"rewritten_bullet": "...", "reasoning": "...", "context_gaps": "..."}'
-    )
+    # TAG_CONTEXT maps bullet tags to the persona roles they target.
+    # Used in the "Rewrite this bullet for X roles" framing that coerces Gemma.
+    TAG_CONTEXT = {
+        "[content]":   "content marketing, editorial strategy, brand voice, or copywriting roles",
+        "[ops]":       "marketing operations, RevOps, CRM, automation, or analytics roles",
+        "[email]":     "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
+        "[demand]":    "demand generation, paid media, or growth marketing roles",
+        "[product]":   "product marketing or go-to-market roles",
+        "[enablement]":"sales enablement or revenue enablement roles",
+        "[social]":    "social media or community management roles",
+        "[project]":   "project management or cross-functional coordination roles",
+        "[data]":      "data analysis, reporting, or marketing analytics roles",
+        "[ai]":        "AI-assisted workflows, prompt engineering, or marketing technology roles",
+    }
+
+    # Resolve persona from tags; fall back to a generic descriptor
+    tags_lower = (tags or "").lower()
+    persona_parts = [desc for tag, desc in TAG_CONTEXT.items() if tag in tags_lower]
+    persona = " and ".join(persona_parts) if persona_parts else "marketing and content roles"
+
 
     attempt_note = f" (attempt {attempt})" if attempt > 1 else ""
 
@@ -249,7 +271,7 @@ def build_rewrite_prompt(
 
     tail = (
         f"\n\n--- BULLET TO REWRITE{attempt_note} ---\n{bullet}"
-        f"\n\n--- TAGS / PERSONA ---\n{tags}"
+        f"\n\n--- REWRITE FOR PERSONA ---\nRewrite this bullet for {persona} roles."
         f"\n\n--- WEAKNESSES TO FIX ---\n{weaknesses if weaknesses else 'No specific weaknesses noted — improve clarity and ATS value.'}"
         f"\n\n--- OUTPUT INSTRUCTION ---\n{json_reminder}"
     )
