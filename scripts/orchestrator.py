@@ -204,6 +204,56 @@ from gemini_client import GeminiClient  # replaces the inline class
 
 
 # ---------------------------------------------------------------------------
+# BUILD REWRITE PROMPT
+# Mirrors rewrite_bullets.py's build_rewrite_prompt() exactly.
+#
+# Composes the per-bullet contents payload (Tier 2 + Tier 3):
+#   kb_context   = Tier 1 (static_prefix) + Tier 2 (segment_bundle) --
+#                  assembled by the caller and passed in as a single string.
+#   Tier 3 tail  = weaknesses + bullet text + JSON reminder (built here).
+#
+# This function was removed during a circular-import fix and never replaced.
+# It is now defined here as a standalone module-level function so
+# audit_and_refine_bullets() can call it without any import.
+# ---------------------------------------------------------------------------
+
+def build_rewrite_prompt(
+    bullet: str,
+    tags: str,
+    weaknesses: str,
+    kb_context: str,
+    attempt: int = 1,
+    minimal_schema: bool = False,
+) -> str:
+    """
+    Compose the full contents payload for a single rewrite call.
+
+    kb_context is expected to already contain:
+      - Tier 1: static_prefix  (profile, verified facts/tools/projects)
+      - Tier 2: segment_bundle (cv.md excerpt, background, claims, metrics)
+
+    This function appends Tier 3: the per-bullet tail that is unique to
+    each call (weaknesses + bullet text + output reminder).
+    """
+    json_reminder = (
+        'Output ONLY: {"rewritten_bullet": "..."}'
+        if minimal_schema
+        else 'Output ONLY: {"rewritten_bullet": "...", "reasoning": "...", "context_gaps": "..."}'
+    )
+
+    attempt_note = f" (attempt {attempt})" if attempt > 1 else ""
+
+    tail = (
+        f"\n\n--- BULLET TO REWRITE{attempt_note} ---\n{bullet}"
+        f"\n\n--- TAGS / PERSONA ---\n{tags}"
+        f"\n\n--- WEAKNESSES TO FIX ---\n{weaknesses if weaknesses else 'No specific weaknesses noted — improve clarity and ATS value.'}"
+        f"\n\n--- OUTPUT INSTRUCTION ---\n{json_reminder}"
+    )
+
+    return kb_context + tail
+
+
+# ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
 
@@ -279,7 +329,7 @@ class TemplateSchema(BaseModel):
     """
     Flattened schema for the builder call.
     EXPERIENCE/PROJECTS/EDUCATION/CERTIFICATIONS are List[dict] to avoid
-    deeply-nested $defs that cause builder 400 on gemini-3.1-flash-lite.
+    deeply-nested $defs in responseSchema that caused the builder 400.
     """
     NAME:                   str       = Field(description="Must match candidate name.")
     TAGLINE:                str       = Field(description="Max 80 chars. Follows archetype tagging rules.")
@@ -628,6 +678,9 @@ class ResumeEngine:
                         runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
                         weaknesses    = critique_data.get("weaknesses", "")
 
+                        # Compose Tier 1 + Tier 2 + Tier 3 via build_rewrite_prompt.
+                        # kb_context = static_prefix (Tier 1) + segment_bundle (Tier 2).
+                        # build_rewrite_prompt appends the per-bullet tail (Tier 3).
                         rewrite_contents = build_rewrite_prompt(
                             bullet=bullet,
                             tags=tags,
