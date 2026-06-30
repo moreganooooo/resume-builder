@@ -7,6 +7,7 @@ import random
 import requests
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
@@ -68,6 +69,10 @@ MAX_REWRITE_PARSE_FAILURES = 2
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPT BASE  (mirrors rewrite_bullets.py exactly)
 # ---------------------------------------------------------------------------
+# FIX 2: Output rules now match the masterpiece exactly.
+# '{{ and }}' renders as literal { and } after .replace() — they ARE the
+# instruction and the escape simultaneously. This is the primary coercion
+# that keeps Gemma from adding preamble or markdown fences.
 REWRITE_SYSTEM_BASE = """\
 You are an industry-leading resume writer specialising in B2B SaaS and marketing careers.
 
@@ -207,14 +212,13 @@ from gemini_client import GeminiClient  # replaces the inline class
 # BUILD REWRITE PROMPT
 # Mirrors rewrite_bullets.py's build_rewrite_prompt() exactly.
 #
-# Composes the per-bullet contents payload (Tier 2 + Tier 3):
-#   kb_context   = Tier 1 (static_prefix) + Tier 2 (segment_bundle) --
-#                  assembled by the caller and passed in as a single string.
-#   Tier 3 tail  = weaknesses + bullet text + JSON reminder (built here).
+# FIX 3: Structure and JSON tail now match the masterpiece exactly.
+# The --- HEADERS --- format + tags/persona line + JSON reminder at the tail
+# are what actually coerce Gemma to output clean JSON without preamble.
 #
-# This function was removed during a circular-import fix and never replaced.
-# It is now defined here as a standalone module-level function so
-# audit_and_refine_bullets() can call it without any import.
+# kb_context   = Tier 1 (static_prefix) + Tier 2 (segment_bundle) --
+#                assembled by the caller and passed in as a single string.
+# Tier 3 tail  = tags/persona + weaknesses + bullet text + JSON reminder.
 # ---------------------------------------------------------------------------
 
 def build_rewrite_prompt(
@@ -233,8 +237,30 @@ def build_rewrite_prompt(
       - Tier 2: segment_bundle (cv.md excerpt, background, claims, metrics)
 
     This function appends Tier 3: the per-bullet tail that is unique to
-    each call (weaknesses + bullet text + output reminder).
+    each call (tags/persona + weaknesses + bullet text + output reminder).
+
+    Mirrors rewrite_bullets.py build_rewrite_prompt() exactly.
     """
+    # TAG_CONTEXT maps bullet tags to the persona roles they target.
+    # Used in the "Rewrite this bullet for X roles" framing that coerces Gemma.
+    TAG_CONTEXT = {
+        "[content]":   "content marketing, editorial strategy, brand voice, or copywriting roles",
+        "[ops]":       "marketing operations, RevOps, CRM, automation, or analytics roles",
+        "[email]":     "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
+        "[demand]":    "demand generation, paid media, or growth marketing roles",
+        "[product]":   "product marketing or go-to-market roles",
+        "[enablement]":"sales enablement or revenue enablement roles",
+        "[social]":    "social media or community management roles",
+        "[project]":   "project management or cross-functional coordination roles",
+        "[data]":      "data analysis, reporting, or marketing analytics roles",
+        "[ai]":        "AI-assisted workflows, prompt engineering, or marketing technology roles",
+    }
+
+    # Resolve persona from tags; fall back to a generic descriptor
+    tags_lower = (tags or "").lower()
+    persona_parts = [desc for tag, desc in TAG_CONTEXT.items() if tag in tags_lower]
+    persona = " and ".join(persona_parts) if persona_parts else "marketing and content roles"
+
     json_reminder = (
         'Output ONLY: {"rewritten_bullet": "..."}'
         if minimal_schema
@@ -245,7 +271,7 @@ def build_rewrite_prompt(
 
     tail = (
         f"\n\n--- BULLET TO REWRITE{attempt_note} ---\n{bullet}"
-        f"\n\n--- TAGS / PERSONA ---\n{tags}"
+        f"\n\n--- REWRITE FOR PERSONA ---\nRewrite this bullet for {persona} roles."
         f"\n\n--- WEAKNESSES TO FIX ---\n{weaknesses if weaknesses else 'No specific weaknesses noted — improve clarity and ATS value.'}"
         f"\n\n--- OUTPUT INSTRUCTION ---\n{json_reminder}"
     )
@@ -615,8 +641,8 @@ class ResumeEngine:
             "=== STYLE RULES ===",
             style_rules,
         ])
-        # FIX: use .replace() instead of .format() to avoid ValueError when
-        # rules YAML content contains literal curly braces { } (e.g. JSON examples).
+        # FIX 1 (carried): use .replace() instead of .format() to avoid ValueError
+        # when rules YAML content contains literal curly braces { } (e.g. JSON examples).
         rewrite_system = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
 
         print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
@@ -674,13 +700,14 @@ class ResumeEngine:
                     rewritten_bullet       = bullet
 
                     for rw_attempt in range(MAX_REWRITE_PARSE_FAILURES + 1):
-                        use_minimal   = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
-                        runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
-                        weaknesses    = critique_data.get("weaknesses", "")
+                        use_minimal = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
+                        weaknesses  = critique_data.get("weaknesses", "")
 
-                        # Compose Tier 1 + Tier 2 + Tier 3 via build_rewrite_prompt.
+                        # FIX 3: Use build_rewrite_prompt() with proper structure.
                         # kb_context = static_prefix (Tier 1) + segment_bundle (Tier 2).
-                        # build_rewrite_prompt appends the per-bullet tail (Tier 3).
+                        # build_rewrite_prompt appends the per-bullet tail (Tier 3)
+                        # including the tags/persona framing and JSON reminder that
+                        # coerce Gemma to output clean JSON without preamble.
                         rewrite_contents = build_rewrite_prompt(
                             bullet=bullet,
                             tags=tags,
@@ -693,11 +720,20 @@ class ResumeEngine:
                         token_cap = 160 if use_minimal else 300
 
                         try:
+                            # FIX 1: Pass response_schema=None for Gemma calls.
+                            # Passing any schema (even minimal) causes GeminiClient to set
+                            # responseMimeType: application/json in generationConfig, which
+                            # is enough to break Gemma. The prompt's JSON reminder handles
+                            # output coercion instead. Flash fallback still gets full schema.
+                            rewrite_schema = None if "gemma" in active_rewrite_model.lower() else (
+                                RewriteMinimalSchema if use_minimal else RewriteSchema
+                            )
+
                             rewrite_text, rw_usage = GeminiClient.generate(
                                 model=active_rewrite_model,
                                 system_instruction=rewrite_system,
                                 contents=rewrite_contents,
-                                response_schema=runner_schema,
+                                response_schema=rewrite_schema,
                                 temperature=0.7,
                                 max_output_tokens=token_cap,
                             )
@@ -705,8 +741,7 @@ class ResumeEngine:
                             if not rewrite_text:
                                 raise ValueError("Empty rewrite response")
 
-                            # --- INSERT DEBUG PRINT HERE ---
-                            print(f"DEBUG RAW RESPONSE: {rewrite_text[:200]}")
+                            print(f"   DEBUG RAW RESPONSE: {rewrite_text[:200]}")
 
                             rw_data = GeminiClient.parse_json(rewrite_text)
                             candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
@@ -850,7 +885,7 @@ class ResumeEngine:
         output_filename: str = None,
     ) -> dict:
         """
-        Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique.
+        Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique -> render.
 
         Gap 1 fix: kb_context is placed in builder_system (system_instruction)
         rather than combined_contents. The full ~457k-token KB now forms a
@@ -975,7 +1010,7 @@ class ResumeEngine:
         else:
             print("  WARNING: Holistic critique returned empty.")
 
-        # --- Step 6: Save output ---
+        # --- Step 6: Save output JSON ---
         if output_filename is None:
             jd_stem       = os.path.splitext(os.path.basename(jd_path))[0]
             output_filename = f"{jd_stem}_resume.json"
@@ -983,22 +1018,28 @@ class ResumeEngine:
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(resume_data, f, indent=2, ensure_ascii=False)
-            print(f"\n  Resume saved to: {output_path}")
+            print(f"\n  Resume JSON saved to: {output_path}")
         except Exception as e:
             print(f"  WARNING: Could not save resume JSON: {e}")
 
-        return resume_data
-
-        import subprocess
+        # FIX 4: Step 7 was dead code — return resume_data was placed BEFORE this
+        # block, making HTML+PDF rendering entirely unreachable. Moved return to end.
 
         # --- Step 7: Render HTML + Generate PDF ---
         print("\nStep 7: Rendering HTML and generating PDF...")
-        jd_stem      = Path(jd_path).stem  # e.g. "dummy_jd"
-        html_out     = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
-        pdf_out      = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
-        pdf_script   = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+        import subprocess
+        jd_stem    = Path(jd_path).stem  # e.g. "dummy_jd"
+        html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
+        pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
+        pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
 
-        render_html(result, html_out)   # result = the resume dict you're already building
+        os.makedirs(os.path.dirname(html_out), exist_ok=True)
+        os.makedirs(os.path.dirname(pdf_out),  exist_ok=True)
+
+        try:
+            render_html(resume_data, html_out)
+        except Exception as e:
+            print(f"  ⚠️  HTML render failed: {e}")
 
         pdf_result = subprocess.run(
             ["node", pdf_script, html_out, pdf_out, "--format=letter"],
@@ -1009,6 +1050,8 @@ class ResumeEngine:
             print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
         else:
             print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+
+        return resume_data
 
 
 # ---------------------------------------------------------------------------
