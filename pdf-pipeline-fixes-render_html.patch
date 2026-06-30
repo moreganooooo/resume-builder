@@ -1,0 +1,213 @@
+diff --git a/scripts/render_html.py b/scripts/render_html.py
+index 8177bac..96c3f0d 100644
+--- a/scripts/render_html.py
++++ b/scripts/render_html.py
+@@ -10,6 +10,8 @@ Called programmatically by orchestrator.py's build_tailored_resume() Step 7.
+ import os
+ import json
+ import argparse
++import re
++from html import escape
+ from pathlib import Path
+ 
+ SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+@@ -23,32 +25,49 @@ TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "cv-tem
+ # ---------------------------------------------------------------------------
+ 
+ def build_skills_html(skills: list[str]) -> str:
+-    """Renders skills as the .skills-grid tag cloud the template expects."""
++    """
++    Renders skills as the .skills-grid tag cloud the template expects.
++
++    tailor_resume.md specs each SKILLS string as markdown-style
++    "**Category Label:** Item, Item" -- the template has no markdown
++    handling, so without conversion these rendered as literal asterisks.
++    """
+     if not skills:
+         return ""
+-    items = "".join(f'<span class="skill-item">{s}</span>' for s in skills)
++    def render_skill(s: str) -> str:
++        escaped = escape(s)
++        return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
++    items = "".join(f'<span class="skill-item">{render_skill(s)}</span>' for s in skills)
+     return f'<div class="skills-grid">{items}</div>'
+ 
+ 
+ def build_competencies_html(competencies: list[str]) -> str:
+     """Renders core competencies as .competency-tag spans."""
+-    return "".join(f'<span class="competency-tag">{c}</span>' for c in competencies)
++    return "".join(f'<span class="competency-tag">{escape(c)}</span>' for c in competencies)
+ 
+ 
+ def build_experience_html(jobs: list[dict]) -> str:
+-    """Renders the work experience section."""
++    """
++    Renders the work experience section.
++
++    BUG FIX: was reading job.get("bullets") and job.get("role"), but
++    tailor_resume.md's output spec (and the builder's actual JSON) uses
++    "achievements" and "title". Those mismatches meant every job entry
++    rendered with a blank title and an empty bullet list -- the resume
++    silently lost all of its actual content here.
++    """
+     html = []
+     for job in jobs:
+-        bullets_html = "".join(f"<li>{b}</li>" for b in job.get("bullets", []))
+-        career_note = f'<div class="career-note">{job["career_note"]}</div>' if job.get("career_note") else ""
+-        location    = f'<div class="job-location">{job["location"]}</div>'  if job.get("location")    else ""
++        bullets_html = "".join(f"<li>{escape(b)}</li>" for b in job.get("achievements", []))
++        career_note = f'<div class="career-note">{escape(job["career_note"])}</div>' if job.get("career_note") else ""
++        location    = f'<div class="job-location">{escape(job["location"])}</div>'  if job.get("location")    else ""
+         html.append(f"""
+         <div class="job">
+           <div class="job-header">
+-            <span class="job-company">{job.get("company","")}</span>
+-            <span class="job-period">{job.get("period","")}</span>
++            <span class="job-company">{escape(job.get("company",""))}</span>
++            <span class="job-period">{escape(job.get("period",""))}</span>
+           </div>
+-          <div class="job-role">{job.get("role","")}</div>
++          <div class="job-role">{escape(job.get("title",""))}</div>
+           {location}
+           {career_note}
+           <ul>{bullets_html}</ul>
+@@ -60,12 +79,12 @@ def build_projects_html(projects: list[dict]) -> str:
+     """Renders the projects section."""
+     html = []
+     for p in projects:
+-        badge = f'<span class="project-badge">{p["badge"]}</span>' if p.get("badge") else ""
+-        tech  = f'<div class="project-tech">{p["tech"]}</div>'     if p.get("tech")  else ""
++        badge = f'<span class="project-badge">{escape(p["badge"])}</span>' if p.get("badge") else ""
++        tech  = f'<div class="project-tech">{escape(p["tech"])}</div>'     if p.get("tech")  else ""
+         html.append(f"""
+         <div class="project">
+-          <div class="project-title">{p.get("title","")}{badge}</div>
+-          <div class="project-desc">{p.get("description","")}</div>
++          <div class="project-title">{escape(p.get("title",""))}{badge}</div>
++          <div class="project-desc">{escape(p.get("description",""))}</div>
+           {tech}
+         </div>""")
+     return "\n".join(html)
+@@ -77,27 +96,34 @@ def build_certifications_html(certs: list[dict]) -> str:
+     for c in certs:
+         html.append(f"""
+         <div class="cert-item">
+-          <span class="cert-title">{c.get("title","")}</span>
+-          <span class="cert-org">{c.get("org","")}</span>
+-          <span class="cert-year">{c.get("year","")}</span>
++          <span class="cert-title">{escape(c.get("title",""))}</span>
++          <span class="cert-org">{escape(c.get("org",""))}</span>
++          <span class="cert-year">{escape(c.get("year",""))}</span>
+         </div>""")
+     return "\n".join(html)
+ 
+ 
+ def build_education_html(edu: list[dict]) -> str:
+-    """Renders the education section."""
++    """
++    Renders the education section.
++
++    BUG FIX: was reading e.get("school") and e.get("desc"), but
++    tailor_resume.md's output spec uses "institution" and "description".
++    Those mismatches meant every education entry rendered with a blank
++    school name and a blank description line.
++    """
+     html = []
+     for e in edu:
+         bullets_html = ""
+         if e.get("bullets"):
+-            lis = "".join(f"<li>{b}</li>" for b in e["bullets"])
++            lis = "".join(f"<li>{escape(b)}</li>" for b in e["bullets"])
+             bullets_html = f"<ul>{lis}</ul>"
+-        desc = f'<div class="edu-desc">{e["desc"]}</div>' if e.get("desc") else ""
++        desc = f'<div class="edu-desc">{escape(e["description"])}</div>' if e.get("description") else ""
+         html.append(f"""
+         <div class="edu-item">
+           <div class="edu-header">
+-            <span class="edu-title">{e.get("degree","")} — <span class="edu-org">{e.get("school","")}</span></span>
+-            <span class="edu-year">{e.get("year","")}</span>
++            <span class="edu-title">{escape(e.get("degree",""))} — <span class="edu-org">{escape(e.get("institution",""))}</span></span>
++            <span class="edu-year">{escape(e.get("year",""))}</span>
+           </div>
+           {desc}
+           {bullets_html}
+@@ -113,43 +139,54 @@ def render_html(resume_data: dict, output_path: str) -> str:
+     """
+     Fill cv-template.html with resume_data and write to output_path.
+     Returns the output_path on success.
++
++    BUG FIX: this was reading resume_data with lowercase keys ("name",
++    "tagline", "experience", etc.), but TemplateSchema's fields -- and
++    tailor_resume.md's output spec, which says outright "Your JSON output
++    MUST use these exact uppercase field names" -- are all uppercase
++    (NAME, TAGLINE, EXPERIENCE, ...). Every lowercase .get() call was
++    falling through to its empty default every time, regardless of what
++    the builder actually returned. This was the main reason PDFs rendered
++    as a mostly-blank template no matter how good the builder's output was.
+     """
+     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+         html = f.read()
+ 
+     # --- Simple scalar tokens ---
++    # SUMMARY_TEXT is intentionally NOT escaped -- tailor_resume.md requires
++    # the first sentence to be wrapped in a literal <strong> tag.
+     scalars = {
+-        "LANG":               resume_data.get("lang", "en"),
+-        "NAME":               resume_data.get("name", ""),
+-        "TAGLINE":            resume_data.get("tagline", ""),
+-        "PHONE":              resume_data.get("phone", ""),
+-        "EMAIL":              resume_data.get("email", ""),
+-        "LINKEDIN_URL":       resume_data.get("linkedin_url", ""),
+-        "LINKEDIN_DISPLAY":   resume_data.get("linkedin_display", ""),
+-        "PORTFOLIO_URL":      resume_data.get("portfolio_url", ""),
+-        "PORTFOLIO_DISPLAY":  resume_data.get("portfolio_display", ""),
+-        "LOCATION":           resume_data.get("location", ""),
+-        "PAGE_WIDTH":         resume_data.get("page_width", "8.5in"),
+-        "SUMMARY_TEXT":       resume_data.get("summary", ""),
++        "LANG":               resume_data.get("LANG", "en"),
++        "NAME":               escape(resume_data.get("NAME", "")),
++        "TAGLINE":            escape(resume_data.get("TAGLINE", "")),
++        "PHONE":              escape(resume_data.get("PHONE", "")),
++        "EMAIL":              escape(resume_data.get("EMAIL", "")),
++        "LINKEDIN_URL":       escape(resume_data.get("LINKEDIN_URL", "")),
++        "LINKEDIN_DISPLAY":   escape(resume_data.get("LINKEDIN_DISPLAY", "")),
++        "PORTFOLIO_URL":      escape(resume_data.get("PORTFOLIO_URL", "")),
++        "PORTFOLIO_DISPLAY":  escape(resume_data.get("PORTFOLIO_DISPLAY", "")),
++        "LOCATION":           escape(resume_data.get("LOCATION", "")),
++        "PAGE_WIDTH":         resume_data.get("PAGE_WIDTH", "8.5in"),
++        "SUMMARY_TEXT":       resume_data.get("SUMMARY_TEXT", ""),
+         # Section heading labels (lets you override later if needed)
+-        "SECTION_SUMMARY":        resume_data.get("section_summary",        "Professional Summary"),
+-        "SECTION_SKILLS":         resume_data.get("section_skills",         "Core Skills"),
+-        "SECTION_COMPETENCIES":   resume_data.get("section_competencies",   "Core Competencies"),
+-        "SECTION_EXPERIENCE":     resume_data.get("section_experience",     "Work Experience"),
+-        "SECTION_PROJECTS":       resume_data.get("section_projects",       "Selected Projects"),
+-        "SECTION_CERTIFICATIONS": resume_data.get("section_certifications", "Training & Certifications"),
+-        "SECTION_EDUCATION":      resume_data.get("section_education",      "Education"),
++        "SECTION_SUMMARY":        resume_data.get("SECTION_SUMMARY",        "Professional Summary"),
++        "SECTION_SKILLS":         resume_data.get("SECTION_SKILLS",         "Core Skills"),
++        "SECTION_COMPETENCIES":   resume_data.get("SECTION_COMPETENCIES",   "Core Competencies"),
++        "SECTION_EXPERIENCE":     resume_data.get("SECTION_EXPERIENCE",     "Work Experience"),
++        "SECTION_PROJECTS":       resume_data.get("SECTION_PROJECTS",       "Selected Projects"),
++        "SECTION_CERTIFICATIONS": resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
++        "SECTION_EDUCATION":      resume_data.get("SECTION_EDUCATION",      "Education"),
+     }
+     for token, value in scalars.items():
+         html = html.replace(f"{{{{{token}}}}}", value)
+ 
+     # --- Block tokens (HTML fragments) ---
+-    html = html.replace("{{SKILLS}}",         build_skills_html(resume_data.get("skills", [])))
+-    html = html.replace("{{COMPETENCIES}}",   build_competencies_html(resume_data.get("competencies", [])))
+-    html = html.replace("{{EXPERIENCE}}",     build_experience_html(resume_data.get("experience", [])))
+-    html = html.replace("{{PROJECTS}}",       build_projects_html(resume_data.get("projects", [])))
+-    html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("certifications", [])))
+-    html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("education", [])))
++    html = html.replace("{{SKILLS}}",         build_skills_html(resume_data.get("SKILLS", [])))
++    html = html.replace("{{COMPETENCIES}}",   build_competencies_html(resume_data.get("COMPETENCIES", [])))
++    html = html.replace("{{EXPERIENCE}}",     build_experience_html(resume_data.get("EXPERIENCE", [])))
++    html = html.replace("{{PROJECTS}}",       build_projects_html(resume_data.get("PROJECTS", [])))
++    html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("CERTIFICATIONS", [])))
++    html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("EDUCATION", [])))
+ 
+     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+     with open(output_path, "w", encoding="utf-8") as f:
