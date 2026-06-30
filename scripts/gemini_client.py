@@ -25,6 +25,10 @@ MAX_BACKOFF_SECS   = 90
 # Fallback model used when primary fails repeatedly
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 
+# Embedding model + dimension (matches orchestrator.py constants)
+EMBED_MODEL = "gemini-embedding-2"
+EMBED_DIM   = 768   # gemini-embedding-2 native dimension
+
 
 class GeminiClient:
 
@@ -193,3 +197,24 @@ class GeminiClient:
             return text, usage
 
         return None, {}
+
+    @staticmethod
+    def embed(text: str) -> list[float] | None:
+        """
+        Generates an embedding vector for the given text using EMBED_MODEL.
+        Used by orchestrator.py's mine_bullet_bank() for semantic similarity.
+        Native output dimension: 768 (gemini-embedding-2).
+        """
+        url = f"{BASE_URL}/{EMBED_MODEL}:embedContent?key={API_KEY}"
+        payload = {
+            "model": f"models/{EMBED_MODEL}",
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": EMBED_DIM,
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=30)
+            resp.raise_for_status()
+            return resp.json().get("embedding", {}).get("values")
+        except Exception as e:
+            print(f"    WARNING: Embed error: {e}")
+            return None
