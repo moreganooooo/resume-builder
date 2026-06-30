@@ -740,7 +740,8 @@ class ResumeEngine:
                         ]
                         if context_block.strip():
                             parts += ["", "Use only supported facts from this context:", context_block]
-                        parts += ["", json_reminder]
+                        json_schema = '{"rewritten_bullet":""}' if use_minimal else '{"rewritten_bullet":"","reasoning":"","context_gaps":""}'
+                        parts += ["", f'Output JSON: {json_schema}']
 
                         rewrite_contents = "\n".join(parts)
 
@@ -758,9 +759,6 @@ class ResumeEngine:
 
                             if not rewrite_text:
                                 raise ValueError("Empty rewrite response")
-
-                            # --- INSERT DEBUG PRINT HERE ---
-                            print(f"DEBUG RAW RESPONSE: {rewrite_text[:200]}")
 
                             rw_data = GeminiClient.parse_json(rewrite_text)
                             candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
@@ -952,7 +950,14 @@ class ResumeEngine:
         # --- Step 4: Build resume ---
         print("\nStep 4: Building resume...")
         build_prompt = self.load_prompt("build_resume.md")
-        tailor_rules = self.load_yaml(self.rules_dir, "tailor.md") or ""
+        tailor_rules = self.load_prompt("../rules/tailor.md") or ""
+        # or more explicitly:
+        tailor_path = os.path.join(self.rules_dir, "tailor.md")
+        try:
+            with open(tailor_path, "r") as f:
+                tailor_rules = f.read()
+        except FileNotFoundError:
+            tailor_rules = ""
 
         kb_context = self.load_knowledge_base()
 
@@ -1030,9 +1035,6 @@ class ResumeEngine:
             print("  WARNING: Holistic critique returned empty.")
 
         # --- Step 6: Save output ---
-        if output_filename is None:
-            jd_stem       = os.path.splitext(os.path.basename(jd_path))[0]
-            output_filename = f"{jd_stem}_resume.json"
         output_path = os.path.join(self.output_json_dir, output_filename)
         try:
             with open(output_path, "w", encoding="utf-8") as f:
@@ -1041,18 +1043,18 @@ class ResumeEngine:
         except Exception as e:
             print(f"  WARNING: Could not save resume JSON: {e}")
 
-        return resume_data
-
-        import subprocess
-
         # --- Step 7: Render HTML + Generate PDF ---
         print("\nStep 7: Rendering HTML and generating PDF...")
-        jd_stem      = Path(jd_path).stem  # e.g. "dummy_jd"
-        html_out     = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
-        pdf_out      = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
-        pdf_script   = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+        import subprocess
+        jd_stem    = Path(jd_path).stem
+        html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
+        pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
+        pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
 
-        render_html(result, html_out)   # result = the resume dict you're already building
+        os.makedirs(os.path.dirname(html_out), exist_ok=True)
+        os.makedirs(os.path.dirname(pdf_out),  exist_ok=True)
+
+        render_html(resume_data, html_out)
 
         pdf_result = subprocess.run(
             ["node", pdf_script, html_out, pdf_out, "--format=letter"],
@@ -1063,6 +1065,8 @@ class ResumeEngine:
             print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
         else:
             print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+
+        return resume_data
 
 
 # ---------------------------------------------------------------------------
