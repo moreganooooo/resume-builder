@@ -108,7 +108,7 @@ RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from orchestrator import GeminiClient  # noqa: E402
+from gemini_client import GeminiClient  # noqa: E402
 
 CLUSTER_MAP_IN  = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
