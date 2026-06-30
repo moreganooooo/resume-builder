@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
 from rewrite_bullets import build_rewrite_prompt
+from render_html import render_html
 
 
 # --- PATH RESOLUTION & ENV SETUP ---
@@ -1140,6 +1141,27 @@ class ResumeEngine:
             print(f"  WARNING: Could not save resume JSON: {e}")
 
         return resume_data
+
+        import subprocess
+
+        # --- Step 7: Render HTML + Generate PDF ---
+        print("\nStep 7: Rendering HTML and generating PDF...")
+        jd_stem      = Path(jd_path).stem  # e.g. "dummy_jd"
+        html_out     = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
+        pdf_out      = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
+        pdf_script   = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+
+        render_html(result, html_out)   # result = the resume dict you're already building
+
+        pdf_result = subprocess.run(
+            ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+            capture_output=True, text=True
+        )
+        if pdf_result.returncode == 0:
+            print(pdf_result.stdout)
+            print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
+        else:
+            print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
 
 
 # ---------------------------------------------------------------------------
