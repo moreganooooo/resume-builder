@@ -229,6 +229,7 @@ def build_rewrite_prompt(
     kb_context: str,
     attempt: int = 1,
     minimal_schema: bool = False,
+    json_reminder: str = 'Output JSON {"rewritten_bullet"}',
 ) -> str:
     """
     Compose the full contents payload for a single rewrite call.
@@ -714,6 +715,7 @@ class ResumeEngine:
                             kb_context=static_prefix + ("\n\n" + segment_bundle if segment_bundle else ""),
                             attempt=rw_attempt + 1,
                             minimal_schema=use_minimal,
+                            json_reminder=json_reminder,
                         )
 
                         token_cap = 160 if use_minimal else 300
