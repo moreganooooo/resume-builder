@@ -7,6 +7,7 @@ import random
 import requests
 import numpy as np
 import pandas as pd
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -920,6 +921,10 @@ class ResumeEngine:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
 
+        if output_filename is None:
+            jd_stem = Path(jd_path).stem
+            output_filename = f"{jd_stem}_resume.json"
+
         # --- Step 1: Extract JD keywords ---
         print("\nStep 1: Extracting JD keywords...")
         extract_prompt = self.load_prompt("extract_keywords.md")
@@ -950,7 +955,6 @@ class ResumeEngine:
         # --- Step 4: Build resume ---
         print("\nStep 4: Building resume...")
         build_prompt = self.load_prompt("build_resume.md")
-        tailor_rules = self.load_prompt("../rules/tailor.md") or ""
         # or more explicitly:
         tailor_path = os.path.join(self.rules_dir, "tailor.md")
         try:
@@ -1045,7 +1049,6 @@ class ResumeEngine:
 
         # --- Step 7: Render HTML + Generate PDF ---
         print("\nStep 7: Rendering HTML and generating PDF...")
-        import subprocess
         jd_stem    = Path(jd_path).stem
         html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
         pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
