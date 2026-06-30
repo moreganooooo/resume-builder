@@ -724,9 +724,10 @@ class ResumeEngine:
                         tag_lower = (tags or "").lower()
                         persona = next((v for k, v in persona_map.items() if k in tag_lower), "General marketing roles")
 
+                        if "gemma" in active_rewrite_model.lower() and segment_bundle:
+                            segment_bundle = segment_bundle[:2000]   # keep segment lean
+
                         context_block = f"{static_prefix}\n{segment_bundle}" if segment_bundle else static_prefix
-                        if "gemma" in active_rewrite_model.lower():
-                            context_block = context_block[:3500]
 
                         parts = [
                             "Return exactly one raw JSON object.",
@@ -734,15 +735,19 @@ class ResumeEngine:
                             "Do not explain.",
                             "Do not repeat the prompt.",
                             "Do not add any text before or after the JSON.",
-                            "",
-                            f"Persona: {persona}",
+                        ]
+                        # Context goes here, BEFORE the bullet/persona/JSON reminder
+                        if context_block.strip():
+                            parts += ["", "Use only supported facts from this context:", context_block, ""]
+
+                        # Bullet + persona + JSON reminder come LAST
+                        parts += [
+                            f"Rewrite this bullet for {persona} roles.",
                             f"Weaknesses: {weaknesses_text}",
                             f"Bullet: {bullet}",
+                            "",
+                            f"Output JSON: {json_schema}",
                         ]
-                        if context_block.strip():
-                            parts += ["", "Use only supported facts from this context:", context_block]
-                        json_schema = '{"rewritten_bullet":""}' if use_minimal else '{"rewritten_bullet":"","reasoning":"","context_gaps":""}'
-                        parts += ["", f'Output JSON: {json_schema}']
 
                         rewrite_contents = "\n".join(parts)
 
