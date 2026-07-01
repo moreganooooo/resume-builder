@@ -550,7 +550,7 @@ class EducationItem(BaseModel):
 class TemplateSchema(BaseModel):
     """
     Flattened schema for the builder call.
-    EXPERIENCE/PROJECTS/EDUCATION/CERTIFICATIONS are List[dict] to avoid
+    EXPERIENCE/EDUCATION/CERTIFICATIONS are List[dict] to avoid
     deeply-nested $defs in responseSchema that caused the builder 400.
     """
     NAME:                   str       = Field(description="Must match candidate name.")
@@ -564,8 +564,6 @@ class TemplateSchema(BaseModel):
     LOCATION:               str
     SECTION_SUMMARY:        str       = Field(default="Professional Summary")
     SUMMARY_TEXT:           str       = Field(description="Max 5 lines. First sentence MUST be bolded using <strong> tags. No generic filler.")
-    SECTION_COMPETENCIES:   str       = Field(default="Core Competencies")
-    COMPETENCIES:           List[str] = Field(min_length=6, max_length=8, description="6-8 exact keywords extracted from JD requirements.")
     SECTION_EXPERIENCE:     str       = Field(default="Work Experience")
     EXPERIENCE:             List[dict] = Field(
         description=(
@@ -575,16 +573,6 @@ class TemplateSchema(BaseModel):
             "Bullet counts per role must match tailor.md targets exactly: "
             "Mercor 2-3, Treering 6-8, Inside Sales Team 4-5, "
             "Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4."
-        )
-    )
-    SECTION_PROJECTS:       str       = Field(default="Projects")
-    PROJECTS:               List[dict] = Field(
-        min_length=3, max_length=4,
-        description=(
-            "Top 3-4 most relevant projects. Each dict must contain: "
-            "title (str), badge (str, leave blank if none), "
-            "description (str, 1-2 sentence impact summary), "
-            "tech (str, comma-separated tech stack, leave blank if not applicable)."
         )
     )
     SECTION_EDUCATION:      str       = Field(default="Education")
