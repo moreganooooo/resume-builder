@@ -885,6 +885,8 @@ class ResumeEngine:
         self,
         bullet_tuples: List[Tuple[str, str, str]],
         static_prefix: str,
+        resume_from: List[str] = None,
+        on_bullet_complete=None,
     ) -> List[str]:
         """
         Skeptical Editor audit loop.
@@ -898,6 +900,12 @@ class ResumeEngine:
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
             print("  No bullets to audit -- empty or invalid input. Skipping audit loop.")
             return []
+
+        refined_bullets = list(resume_from) if resume_from else []
+        if len(refined_bullets) >= len(bullet_tuples):
+            print(f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. "
+                  f"Skipping audit loop.")
+            return refined_bullets
 
         critique_prompt     = self.load_prompt("critique_bullet.md")
         manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
@@ -963,8 +971,20 @@ class ResumeEngine:
 
         self.warm_segment_cache(bullet_tuples)
 
-        refined_bullets = []
+        start_index = len(refined_bullets)
+        if start_index:
+            print(f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} "
+                  f"(already refined: {start_index}).")
+
+        def _record(refined_bullet: str) -> None:
+            refined_bullets.append(refined_bullet)
+            if on_bullet_complete:
+                on_bullet_complete(list(refined_bullets))
+
         for i, (bullet, company, tags) in enumerate(bullet_tuples):
+            if i < start_index:
+                continue
+
             bullet_preview = bullet[:60]
             print(f"\n{'─'*60}")
             print(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...")
@@ -986,7 +1006,7 @@ class ResumeEngine:
                 )
 
                 if not critique_text:
-                    refined_bullets.append(bullet)
+                    _record(bullet)
                     continue
 
                 critique_data = GeminiClient.parse_json(critique_text)
@@ -1085,13 +1105,13 @@ class ResumeEngine:
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
-                    refined_bullets.append(rewritten_bullet)
+                    _record(rewritten_bullet)
                 else:
-                    refined_bullets.append(bullet)
+                    _record(bullet)
 
             except Exception as e:
                 print(f"   ⚠️  Critique error on bullet {i+1}: {e}")
-                refined_bullets.append(bullet)
+                _record(bullet)
 
         print(f"\n{'='*60}")
         print(f"✅ Audit complete: {len(refined_bullets)} bullets refined")
