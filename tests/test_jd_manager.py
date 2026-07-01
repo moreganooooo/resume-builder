@@ -224,5 +224,62 @@ class TestCheckpoints(unittest.TestCase):
         jd_manager.delete_checkpoint("never-existed")  # must not raise
 
 
+class TestGetPendingJds(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_pending")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
+        self._real_jds_dir = jd_manager.JDS_DIR
+        self._real_completed_dir = jd_manager.COMPLETED_DIR
+        self._real_tracker_csv = jd_manager.TRACKER_CSV
+        jd_manager.JDS_DIR = self.tmp_dir
+        jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
+        jd_manager.TRACKER_CSV = os.path.join(self.tmp_dir, "tracker.csv")
+
+    def tearDown(self):
+        jd_manager.JDS_DIR = self._real_jds_dir
+        jd_manager.COMPLETED_DIR = self._real_completed_dir
+        jd_manager.TRACKER_CSV = self._real_tracker_csv
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_returns_new_plain_text_jd(self):
+        self._write("posting.txt", "A plain-text JD.")
+        pending = jd_manager.get_pending_jds()
+        self.assertEqual(len(pending), 1)
+
+    def test_splits_batch_file_and_returns_both_jobs(self):
+        self._write("batch.json", json.dumps([
+            {"job_title": "A", "company_name": "X"},
+            {"job_title": "B", "company_name": "Y"},
+        ]))
+        pending = jd_manager.get_pending_jds()
+        self.assertEqual(len(pending), 2)
+
+    def test_already_completed_job_is_excluded(self):
+        path = self._write("posting.json", json.dumps({"source_job_id": "done-1", "job_title": "A"}))
+        jd_manager.JDTracker().mark_completed("done-1")
+        pending = jd_manager.get_pending_jds()
+        self.assertEqual(pending, [])
+
+    def test_files_in_completed_subfolder_are_ignored(self):
+        completed_path = os.path.join(self.tmp_dir, "completed", "old.txt")
+        with open(completed_path, "w", encoding="utf-8") as f:
+            f.write("already done")
+        pending = jd_manager.get_pending_jds()
+        self.assertEqual(pending, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -194,3 +194,29 @@ def delete_checkpoint(job_key: str) -> None:
     path = _checkpoint_path(job_key)
     if os.path.exists(path):
         os.remove(path)
+
+
+def get_pending_jds() -> list:
+    """
+    Scans JDS_DIR for new work: lists all files at root (ignoring the
+    completed/ subfolder), splits any batch exports first, then returns
+    paths whose job_key isn't already marked completed in JDTracker.
+
+    Returns list of file paths ready for processing.
+    """
+    os.makedirs(JDS_DIR, exist_ok=True)
+    os.makedirs(COMPLETED_DIR, exist_ok=True)
+    tracker = JDTracker(TRACKER_CSV)
+
+    tracker_filename = os.path.basename(TRACKER_CSV)
+    root_files = sorted(
+        os.path.join(JDS_DIR, name)
+        for name in os.listdir(JDS_DIR)
+        if os.path.isfile(os.path.join(JDS_DIR, name)) and name != tracker_filename
+    )
+
+    all_paths = []
+    for path in root_files:
+        all_paths.extend(split_batch_jds(path))
+
+    return [p for p in all_paths if not tracker.is_completed(compute_job_key(p))]
