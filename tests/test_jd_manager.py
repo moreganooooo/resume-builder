@@ -148,5 +148,46 @@ class TestSplitBatchJds(unittest.TestCase):
         self.assertNotEqual(result_paths[0], result_paths[1])
 
 
+class TestJDTracker(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_tracker")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.csv_path = os.path.join(self.tmp_dir, "tracker.csv")
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def test_unknown_job_key_is_not_completed(self):
+        tracker = jd_manager.JDTracker(self.csv_path)
+        self.assertFalse(tracker.is_completed("nope"))
+
+    def test_mark_completed_then_is_completed(self):
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_completed("abc123", job_title="Engineer", company_name="Acme",
+                                source_file="abc.json", output_json="output/json/abc.json",
+                                output_pdf="output/pdf/abc.pdf")
+        self.assertTrue(tracker.is_completed("abc123"))
+
+    def test_mark_failed_does_not_count_as_completed(self):
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_failed("abc123", job_title="Engineer", company_name="Acme",
+                             source_file="abc.json", error_message="builder returned empty")
+        self.assertFalse(tracker.is_completed("abc123"))
+
+    def test_failed_then_completed_counts_as_completed(self):
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_failed("abc123", error_message="transient error")
+        tracker.mark_completed("abc123", job_title="Engineer")
+        self.assertTrue(tracker.is_completed("abc123"))
+
+    def test_rows_persist_across_tracker_instances(self):
+        jd_manager.JDTracker(self.csv_path).mark_completed("xyz")
+        second_tracker = jd_manager.JDTracker(self.csv_path)
+        self.assertTrue(second_tracker.is_completed("xyz"))
+
+
 if __name__ == "__main__":
     unittest.main()
