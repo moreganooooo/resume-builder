@@ -1467,6 +1467,11 @@ def main():
             job_key = jd_manager.compute_job_key(jd_path)
         except OSError as e:
             print(f"  ERROR: Could not read JD file {jd_path}: {e}")
+            tracker.mark_failed(
+                job_key=f"unreadable:{os.path.basename(jd_path)}",
+                source_file=os.path.basename(jd_path),
+                error_message=str(e),
+            )
             failed_count += 1
             continue
 
