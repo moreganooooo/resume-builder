@@ -36,7 +36,7 @@ class GeminiClient:
 
     @staticmethod
     def sanitize_schema(schema: dict) -> dict:
-        UNSUPPORTED = {"title", "description", "$defs", "$schema", "default", "examples"}
+        UNSUPPORTED = {"title", "description", "$defs", "$schema", "default", "examples", "additionalProperties"}
         if not isinstance(schema, dict):
             return schema
         cleaned = {}
@@ -98,20 +98,22 @@ class GeminiClient:
             raw_schema = None
             if response_schema is not None:
                 generation_config["responseMimeType"] = "application/json"
-                if "gemma" not in model.lower():
-                    if hasattr(response_schema, "model_json_schema"):
-                        raw_schema = response_schema.model_json_schema()
-                    elif hasattr(response_schema, "schema") and callable(response_schema.schema):
-                        raw_schema = response_schema.schema()
-                    elif isinstance(response_schema, dict):
-                        raw_schema = response_schema
-                    elif isinstance(response_schema, str):
-                        try:
-                            raw_schema = json.loads(response_schema)
-                        except json.JSONDecodeError:
-                            print("ERROR: response_schema string is not valid JSON.")
-                    if raw_schema:
-                        generation_config["responseSchema"] = GeminiClient.sanitize_schema(raw_schema)
+                # Gemma must also get responseSchema, not just responseMimeType --
+                # without it, Gemma defaults to emitting a "thought": true reasoning
+                # part before the real answer, which breaks parts[0]-based extraction.
+                if hasattr(response_schema, "model_json_schema"):
+                    raw_schema = response_schema.model_json_schema()
+                elif hasattr(response_schema, "schema") and callable(response_schema.schema):
+                    raw_schema = response_schema.schema()
+                elif isinstance(response_schema, dict):
+                    raw_schema = response_schema
+                elif isinstance(response_schema, str):
+                    try:
+                        raw_schema = json.loads(response_schema)
+                    except json.JSONDecodeError:
+                        print("ERROR: response_schema string is not valid JSON.")
+                if raw_schema:
+                    generation_config["responseSchema"] = GeminiClient.sanitize_schema(raw_schema)
 
             if "gemma" in model.lower():
                 merged_contents = f"{system_instruction}\n\n---\n{contents}"
@@ -189,10 +191,19 @@ class GeminiClient:
             if not candidates:
                 return None, data.get("usageMetadata", {})
 
+            usage = data.get("usageMetadata", {})
+
+            finish_reason = candidates[0].get("finishReason")
+            if finish_reason not in (None, "STOP", "MAX_TOKENS"):
+                print(f"    WARNING: Unexpected finishReason={finish_reason!r}. Not retrying this attempt.")
+                return None, usage
+
             content = candidates[0].get("content", {})
             parts   = content.get("parts", [])
-            text    = parts[0].get("text", "") if parts else ""
-            usage   = data.get("usageMetadata", {})
+            # Skip thinking parts (part.get("thought") is True) -- Gemma without
+            # a schema puts its reasoning in parts[0] and the real answer later;
+            # concatenate only the non-thought parts to get the actual response.
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
             failure_streak = 0
             return text, usage
 
