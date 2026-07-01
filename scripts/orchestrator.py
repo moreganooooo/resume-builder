@@ -8,6 +8,7 @@ import requests
 import numpy as np
 import pandas as pd
 import subprocess
+import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -1430,9 +1431,12 @@ class ResumeEngine:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Resume Builder Orchestrator")
-    parser.add_argument("jd", help="Path to the job description .txt or .md file")
+    parser.add_argument(
+        "jd", nargs="?", default=None,
+        help="Path to a specific JD file. Omit to batch-process everything pending in jds/.",
+    )
     parser.add_argument("--master", default=None, help="Path to master resume JSON (optional)")
-    parser.add_argument("--output", default=None, help="Output JSON filename (optional)")
+    parser.add_argument("--output", default=None, help="Output JSON filename (single-JD mode only)")
     args = parser.parse_args()
 
     master_resume = {}
@@ -1445,16 +1449,68 @@ def main():
             print(f"WARNING: Could not load master resume: {e}. Proceeding with empty dict.")
 
     engine = ResumeEngine()
-    result = engine.build_tailored_resume(
-        jd_path=args.jd,
-        master_resume=master_resume,
-        output_filename=args.output,
-    )
+    tracker = jd_manager.JDTracker()
 
-    if result:
-        print("\nDone! Resume built successfully.")
+    if args.jd:
+        jd_paths = [args.jd]
     else:
-        print("\nERROR: Resume build failed. Check output above for details.")
+        jd_paths = jd_manager.get_pending_jds()
+        if not jd_paths:
+            print("\nNo pending JDs found in jds/. Nothing to do.")
+            return
+
+    completed_count = 0
+    failed_count = 0
+
+    for jd_path in jd_paths:
+        try:
+            job_key = jd_manager.compute_job_key(jd_path)
+        except OSError as e:
+            print(f"  ERROR: Could not read JD file {jd_path}: {e}")
+            continue
+
+        job_title, company_name = jd_manager.extract_job_meta(jd_path)
+
+        try:
+            result = engine.build_tailored_resume(
+                jd_path=jd_path,
+                master_resume=master_resume,
+                output_filename=args.output if args.jd else None,
+                job_key=job_key,
+            )
+        except Exception as e:
+            result = None
+            print(f"  ERROR: Unhandled exception building resume for {jd_path}: {e}")
+
+        if result:
+            output_paths = result.get("_output_paths", {})
+            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
+            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(jd_path))
+            shutil.move(jd_path, dest)
+            tracker.mark_completed(
+                job_key=job_key,
+                job_title=job_title,
+                company_name=company_name,
+                source_file=os.path.basename(jd_path),
+                output_json=output_paths.get("json", ""),
+                output_pdf=output_paths.get("pdf", ""),
+            )
+            completed_count += 1
+            print(f"\nDone! Resume built successfully for {jd_path}.")
+        else:
+            tracker.mark_failed(
+                job_key=job_key,
+                job_title=job_title,
+                company_name=company_name,
+                source_file=os.path.basename(jd_path),
+                error_message="Resume build failed. Check output above for details.",
+            )
+            failed_count += 1
+            print(f"\nERROR: Resume build failed for {jd_path}. It stays pending and will be retried next run.")
+
+    print(f"\nBatch summary: {completed_count} completed, {failed_count} failed.")
+
+    if args.jd and failed_count and not completed_count:
         raise SystemExit(1)
 
 
