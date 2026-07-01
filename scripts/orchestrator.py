@@ -656,11 +656,8 @@ class ResumeEngine:
 
     def load_prompt(self, filename):
         path = os.path.join(self.prompts_dir, filename)
-        try:
-            with open(path, "r") as f:
-                return f.read()
-        except FileNotFoundError:
-            return "Process the text."
+        with open(path, "r") as f:
+            return f.read()
 
     def load_knowledge_base(self):
         """
