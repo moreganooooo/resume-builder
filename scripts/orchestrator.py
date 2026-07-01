@@ -138,7 +138,12 @@ STRENGTH_ORDER = {
 KB_ALLOWLIST = sorted([
     "article-digest.md",
     "bullet-bank.md",
-    "bullet-bank-keepers-audited.csv",
+    # bullet-bank-keepers-audited.csv intentionally excluded: it's 1.4MB
+    # (~350k tokens), 77% of this entire allowlist, and redundant -- the
+    # JD-relevant bullets it contains are already passed to the builder via
+    # refined_bullets/combined_contents after Step 2-3 mine and audit them.
+    # Including it here blew the builder call past the free-tier's 250k
+    # input-tokens-per-minute cap on every single run.
     "cv.md",
     "evidence-guide.csv",
     "evidence_graph.json",
@@ -444,6 +449,31 @@ def build_rewrite_prompt(
 
 
 # ---------------------------------------------------------------------------
+# CACHE-HIT LOGGING HELPER  (ported verbatim from rewrite_bullets.py so the
+# audit loop's terminal report shows Tier 2/3 token + cache-hit stats too,
+# not just the Tier 1 static-prefix line.)
+# ---------------------------------------------------------------------------
+
+def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
+    if not isinstance(usage, dict):
+        usage = {}
+
+    prompt_tokens  = usage.get("promptTokenCount", 0)
+    output_tokens  = usage.get("candidatesTokenCount", 0)
+    total_tokens   = usage.get("totalTokenCount", 0)
+    cached_tokens  = usage.get("cachedContentTokenCount", 0)
+
+    token_part = (
+        f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
+    )
+
+    if cached_tokens and cached_tokens > 0:
+        print(f"   💫 tokens — {token_part} | ✨ cached: {cached_tokens:,}")
+    else:
+        print(f"   💫 tokens — {token_part}")
+
+
+# ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
 
@@ -593,6 +623,7 @@ class ResumeEngine:
         self.output_json_dir = os.path.join(PROJECT_ROOT, "output", "json")
         self.jds_dir         = os.path.join(PROJECT_ROOT, "jds")
         os.makedirs(self.output_json_dir, exist_ok=True)
+        self._segment_cache: dict = {}
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
@@ -636,6 +667,7 @@ class ResumeEngine:
         Mirrors rewrite_bullets.py _build_static_prefix() exactly.
         ~5-10k tokens vs ~457k for the full KB.
         """
+        print("\n📚 Loading knowledge base context (Tier 1)...")
         sections = []
 
         profile_path = os.path.join(self.kb_dir, "profile.yml")
@@ -643,6 +675,7 @@ class ResumeEngine:
             try:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
+                print(f"   ✅ Loaded profile.yml ({len(raw):,} chars)")
                 lines = raw.splitlines()
                 result = []
                 capturing = False
@@ -656,6 +689,7 @@ class ResumeEngine:
                         result.append(line)
                 trimmed = "\n".join(result).strip()
                 if trimmed:
+                    print(f"   📝 profile.yml trimmed to {len(trimmed):,} chars")
                     sections.append(
                         "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                         "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
@@ -680,6 +714,7 @@ class ResumeEngine:
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                    print(f"   ✅ Loaded {fname} ({len(data):,} chars)")
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
                     print(f"  WARNING: build_audit_static_prefix: could not load {fname}: {e}")
@@ -788,6 +823,36 @@ class ResumeEngine:
 
         return "\n\n".join(sections)
 
+    def audit_segment_bundle_for(self, company: str, tags: str) -> str:
+        """
+        Memoized accessor for _build_audit_segment_bundle (Tier 2), keyed by
+        (company, tags) -- mirrors rewrite_bullets.py's context_block_for_bullet()
+        so repeated (company, tags) pairs reuse the same bundle string instead of
+        rebuilding it (and re-reading cv.md / claims csvs) on every bullet.
+        """
+        key = (company, tags)
+        if key not in self._segment_cache:
+            print(f"   ⚠️ Cache miss for {key} — building segment on demand.")
+            self._segment_cache[key] = self._build_audit_segment_bundle(company, tags)
+        return self._segment_cache[key]
+
+    def warm_segment_cache(self, bullet_tuples: List[Tuple[str, str, str]]) -> None:
+        """
+        Mirrors rewrite_bullets.py's KnowledgeBase.warm_segment_cache(): pre-builds
+        every unique (company, tags) segment bundle before the audit loop starts,
+        so audit_segment_bundle_for() is a pure dict lookup with no on-demand file
+        I/O mid-loop, and the terminal report shows what's cached upfront.
+        """
+        self._segment_cache = {}
+        pairs = sorted({(company, tags) for _, company, tags in bullet_tuples})
+        print(f"\n🔥 Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        for company, tags in pairs:
+            bundle = self._build_audit_segment_bundle(company, tags)
+            self._segment_cache[(company, tags)] = bundle
+            treering_flag = " [Treering+claims]" if is_treering_bullet(company) else ""
+            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag}")
+        print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
+
     @staticmethod
     def critique_composite(scores: dict) -> float:
         numeric = sum(
@@ -817,14 +882,23 @@ class ResumeEngine:
 
         critique_prompt     = self.load_prompt("critique_bullet.md")
         manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
+        print("   ✅ Rules loaded: manager_test")
         believability_rules = json.dumps(self.load_yaml(self.scoring_dir, "believability.yaml"))
+        print("   ✅ Rules loaded: believability")
         style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
+        print("   ✅ Rules loaded: style_rules")
         language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
+        print("   ✅ Rules loaded: language_quality")
         verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
+        print("   ✅ Rules loaded: verb_taxonomy")
         verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
+        print("   ✅ Rules loaded: verb_intent_mapping")
         hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
+        print("   ✅ Rules loaded: hard_failures")
         truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
+        print("   ✅ Rules loaded: truthfulness_rules")
         ats_rules           = json.dumps(self.load_yaml(self.rules_dir,   "ats_rules.yaml"))
+        print("   ✅ Rules loaded: ats_rules")
 
         critique_system = (
             f"{critique_prompt}"
@@ -865,9 +939,10 @@ class ResumeEngine:
         rewrite_system = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
 
         print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
-        print(f"✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)\n")
+        print(f"✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
         print(f"💯 Score system prompt:   {len(critique_system):,} chars")
 
+        self.warm_segment_cache(bullet_tuples)
 
         refined_bullets = []
         for i, (bullet, company, tags) in enumerate(bullet_tuples):
@@ -910,9 +985,9 @@ class ResumeEngine:
                     print(f"   ✏️  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
-                    segment_bundle = self._build_audit_segment_bundle(company, tags)
+                    segment_bundle = self.audit_segment_bundle_for(company, tags)
                     if segment_bundle:
-                        print(f"   📦 segment bundle: {len(segment_bundle):,} chars")
+                        print(f"   📦 segment bundle (Tier 2): {len(segment_bundle):,} chars")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
@@ -935,20 +1010,24 @@ class ResumeEngine:
                             minimal_schema=use_minimal,
                         )
 
-                        token_cap = 160 if use_minimal else 300
-
                         try:
+                            # No max_output_tokens cap here -- matches rewrite_bullets.py's
+                            # rewrite call exactly. Gemma doesn't reliably respect "no
+                            # preamble" instructions, so a tight cap (160/300 tokens) was
+                            # truncating the JSON mid-object before the closing brace,
+                            # which is what produced the non-JSON / empty rewrites.
                             rewrite_text, rw_usage = GeminiClient.generate(
                                 model=active_rewrite_model,
                                 system_instruction=rewrite_system,
                                 contents=rewrite_contents,
                                 response_schema=runner_schema,
                                 temperature=0.7,
-                                max_output_tokens=token_cap,
                             )
 
                             if not rewrite_text:
                                 raise ValueError("Empty rewrite response")
+
+                            _log_cache_stats(rw_usage, len(context_block), rw_attempt + 1)
 
                             rw_data = GeminiClient.parse_json(rewrite_text)
                             candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
