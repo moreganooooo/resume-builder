@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
 from render_html import render_html
+import jd_manager
 
 
 # --- PATH RESOLUTION & ENV SETUP ---
@@ -1208,6 +1209,7 @@ class ResumeEngine:
         jd_path: str,
         master_resume: dict,
         output_filename: str = None,
+        job_key: str = None,
     ) -> dict:
         """
         Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique.
@@ -1228,35 +1230,63 @@ class ResumeEngine:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
 
+        if job_key is None:
+            job_key = jd_manager.compute_job_key(jd_path)
+        checkpoint = jd_manager.load_checkpoint(job_key)
+
         if output_filename is None:
             jd_stem = Path(jd_path).stem
             output_filename = f"{jd_stem}_resume.json"
 
         # --- Step 1: Extract JD keywords ---
         print("\nStep 1: Extracting JD keywords...")
-        extract_prompt = self.load_prompt("extract_keywords.md")
-        keyword_text, _ = GeminiClient.generate(
-            model=BUILDER_MODEL,
-            system_instruction=extract_prompt,
-            contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
-            response_schema=JDKeywordSchema,
-            temperature=0.0,
-        )
-        jd_keywords: dict = GeminiClient.parse_json(keyword_text or "")
-        if not jd_keywords:
-            print("  WARNING: JD keyword extraction returned empty. Proceeding with empty keywords.")
+        jd_keywords = checkpoint.get("jd_keywords")
+        if jd_keywords is not None:
+            print("  Resuming: using JD keywords from checkpoint.")
+        else:
+            extract_prompt = self.load_prompt("extract_keywords.md")
+            keyword_text, _ = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=extract_prompt,
+                contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+                response_schema=JDKeywordSchema,
+                temperature=0.0,
+            )
+            jd_keywords = GeminiClient.parse_json(keyword_text or "")
+            if not jd_keywords:
+                print("  WARNING: JD keyword extraction returned empty. Proceeding with empty keywords.")
+            checkpoint["jd_keywords"] = jd_keywords
+            jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  Keywords extracted: {json.dumps(jd_keywords, indent=2)[:400]}")
 
         # --- Step 2: Mine bullet bank ---
         print("\nStep 2: Mining bullet bank...")
-        bullet_tuples = self.mine_bullet_bank(jd_text, master_resume)
+        bullet_tuples = checkpoint.get("bullet_tuples")
+        if bullet_tuples is not None:
+            print(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
+        else:
+            bullet_tuples = self.mine_bullet_bank(jd_text, master_resume)
+            checkpoint["bullet_tuples"] = bullet_tuples
+            jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(bullet_tuples)} bullet tuples retrieved.")
 
         # --- Step 3: Audit and refine bullets ---
         print("\nStep 3: Auditing bullets...")
-        static_prefix   = self.build_audit_static_prefix()
-        refined_tuples  = self.audit_and_refine_bullets(bullet_tuples, static_prefix)
+        static_prefix = self.build_audit_static_prefix()
+
+        def _save_bullets_checkpoint(partial_bullets):
+            checkpoint["refined_bullets"] = partial_bullets
+            jd_manager.save_checkpoint(job_key, checkpoint)
+
+        refined_tuples = self.audit_and_refine_bullets(
+            bullet_tuples,
+            static_prefix,
+            resume_from=checkpoint.get("refined_bullets", []),
+            on_bullet_complete=_save_bullets_checkpoint,
+        )
         refined_bullets = [b for b in refined_tuples if b]  # plain strings for builder
+        checkpoint["refined_bullets"] = refined_tuples
+        jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(refined_bullets)} bullets after audit.")
 
         # --- Step 4: Build resume ---
@@ -1269,78 +1299,92 @@ class ResumeEngine:
         # hierarchy, archetype rules, and the exact JSON key spec (it even
         # says outright: "Your JSON output MUST use these exact uppercase
         # field names. Any deviation breaks the render pipeline.").
-        build_prompt = self.load_prompt("tailor_resume.md")
+        resume_data = checkpoint.get("resume_data")
+        if resume_data is not None:
+            print("  Resuming: using resume JSON from checkpoint.")
+        else:
+            build_prompt = self.load_prompt("tailor_resume.md")
 
-        kb_context = self.load_knowledge_base()
+            kb_context = self.load_knowledge_base()
 
-        # Gap 1: KB goes into system_instruction, not contents.
-        # system_instruction is the most cacheable part of the payload --
-        # it stays identical across all builder calls on the same run.
-        # The variable tail (JD + bullets) sits alone in combined_contents.
-        builder_system = f"{build_prompt}\n\n{kb_context}"
+            # Gap 1: KB goes into system_instruction, not contents.
+            # system_instruction is the most cacheable part of the payload --
+            # it stays identical across all builder calls on the same run.
+            # The variable tail (JD + bullets) sits alone in combined_contents.
+            builder_system = f"{build_prompt}\n\n{kb_context}"
 
-        bullets_block = "\n".join(f"- {b}" for b in refined_bullets)
-        combined_contents = (
-            f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
-            f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
-            f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
-            f"=== REFINED BULLETS ===\n{bullets_block}"
-        )
+            bullets_block = "\n".join(f"- {b}" for b in refined_bullets)
+            combined_contents = (
+                f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
+                f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+                f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
+                f"=== REFINED BULLETS ===\n{bullets_block}"
+            )
 
-        print(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
-        print(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
+            print(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
+            print(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
 
-        resume_text, _ = GeminiClient.generate(
-            model=BUILDER_MODEL,
-            system_instruction=builder_system,
-            contents=combined_contents,
-            response_schema=TemplateSchema,
-            temperature=0.0,
-        )
+            resume_text, _ = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=builder_system,
+                contents=combined_contents,
+                response_schema=TemplateSchema,
+                temperature=0.0,
+            )
 
-        if not resume_text:
-            print("  ERROR: Builder returned empty response.")
-            return {}
+            if not resume_text:
+                print("  ERROR: Builder returned empty response.")
+                return {}
 
-        resume_data = GeminiClient.parse_json(resume_text)
-        if not resume_data:
-            print("  ERROR: Could not parse builder JSON.")
-            print(f"  Raw response (first 500 chars):\n{resume_text[:500]}")
-            return {}
+            resume_data = GeminiClient.parse_json(resume_text)
+            if not resume_data:
+                print("  ERROR: Could not parse builder JSON.")
+                print(f"  Raw response (first 500 chars):\n{resume_text[:500]}")
+                return {}
+
+            checkpoint["resume_data"] = resume_data
+            jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 5: Post-build holistic critique ---
         print("\nStep 5: Running holistic resume critique...")
-        critique_prompt = self.load_prompt("critique_resume.md")
-        critique_contents = (
-            f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
-            f"=== RESUME JSON ===\n{json.dumps(resume_data, indent=2)}"
-        )
-        critique_text, _ = GeminiClient.generate(
-            model=CRITIQUE_MODEL,
-            system_instruction=critique_prompt,
-            contents=critique_contents,
-            response_schema=ResumeCritiqueSchema,
-            temperature=0.0,
-        )
-        if critique_text:
-            critique_data = GeminiClient.parse_json(critique_text)
-            print(f"  Holistic critique scores:")
-            print(f"    summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
-            print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
-            print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
-            flags = critique_data.get("flags", [])
-            if flags:
-                print("  Flags:")
-                for flag in flags:
-                    print(f"    - {flag}")
-            recs = critique_data.get("recommendations", [])
-            if recs:
-                print("  Recommendations:")
-                for rec in recs:
-                    print(f"    - {rec}")
+        critique_data = checkpoint.get("critique_data")
+        if critique_data is not None:
+            print("  Resuming: using holistic critique from checkpoint.")
             resume_data["_critique"] = critique_data
         else:
-            print("  WARNING: Holistic critique returned empty.")
+            critique_prompt = self.load_prompt("critique_resume.md")
+            critique_contents = (
+                f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+                f"=== RESUME JSON ===\n{json.dumps(resume_data, indent=2)}"
+            )
+            critique_text, _ = GeminiClient.generate(
+                model=CRITIQUE_MODEL,
+                system_instruction=critique_prompt,
+                contents=critique_contents,
+                response_schema=ResumeCritiqueSchema,
+                temperature=0.0,
+            )
+            if critique_text:
+                critique_data = GeminiClient.parse_json(critique_text)
+                print(f"  Holistic critique scores:")
+                print(f"    summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
+                print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
+                print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
+                flags = critique_data.get("flags", [])
+                if flags:
+                    print("  Flags:")
+                    for flag in flags:
+                        print(f"    - {flag}")
+                recs = critique_data.get("recommendations", [])
+                if recs:
+                    print("  Recommendations:")
+                    for rec in recs:
+                        print(f"    - {rec}")
+                resume_data["_critique"] = critique_data
+                checkpoint["critique_data"] = critique_data
+                jd_manager.save_checkpoint(job_key, checkpoint)
+            else:
+                print("  WARNING: Holistic critique returned empty.")
 
         # --- Step 6: Save output ---
         output_path = os.path.join(self.output_json_dir, output_filename)
@@ -1367,11 +1411,14 @@ class ResumeEngine:
             ["node", pdf_script, html_out, pdf_out, "--format=letter"],
             capture_output=True, text=True
         )
-        if pdf_result.returncode == 0:
-            print(pdf_result.stdout)
-            print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
-        else:
+        if pdf_result.returncode != 0:
             print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+            return {}
+
+        print(pdf_result.stdout)
+        print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
+        jd_manager.delete_checkpoint(job_key)
+        resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
 
         return resume_data
 
