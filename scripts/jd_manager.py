@@ -58,3 +58,50 @@ def extract_job_meta(jd_path: str) -> tuple:
     if isinstance(data, dict):
         return _meta_from_dict(data)
     return "", ""
+
+
+def _sanitize_for_filename(text: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9]+", "", text or "")
+    return cleaned or "Unknown"
+
+
+def split_batch_jds(jd_path: str) -> list:
+    """
+    If jd_path contains a JSON array (a batch export), writes one file per
+    array element into JDS_DIR named "YYYY-MM-DD_Company_JobTitle.json" and
+    deletes the original. Returns the list of new file paths.
+
+    If jd_path is anything else (single JSON object, plain text, invalid
+    JSON), returns [jd_path] unchanged.
+    """
+    with open(jd_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return [jd_path]
+
+    if not isinstance(data, list):
+        return [jd_path]
+
+    os.makedirs(JDS_DIR, exist_ok=True)
+    today = datetime.date.today().isoformat()
+    new_paths = []
+
+    for job in data:
+        job_title, company_name = _meta_from_dict(job) if isinstance(job, dict) else ("", "")
+        filename = f"{today}_{_sanitize_for_filename(company_name)}_{_sanitize_for_filename(job_title)}.json"
+        dest = os.path.join(JDS_DIR, filename)
+
+        counter = 1
+        while os.path.exists(dest):
+            dest = os.path.join(JDS_DIR, filename.replace(".json", f"_{counter}.json"))
+            counter += 1
+
+        with open(dest, "w", encoding="utf-8") as f:
+            json.dump(job, f, indent=2, ensure_ascii=False)
+        new_paths.append(dest)
+
+    os.remove(jd_path)
+    return new_paths
