@@ -103,6 +103,26 @@ def build_certifications_html(certs: list[dict]) -> str:
     return "\n".join(html)
 
 
+def build_why_html(section_title: str, why_text: str) -> str:
+    """
+    Renders the conditional "Why [Company]?" section. tailor_resume.md says to
+    include this only when space allows on a 2-page resume -- if the builder
+    leaves WHY_TEXT blank, this drops the section (including its header)
+    entirely rather than leaving an empty div with just a title.
+
+    WHY_TEXT is intentionally NOT escaped, same as SUMMARY_TEXT -- tailor_resume.md
+    requires <p> paragraph tags and <em> tags around the first and last sentences
+    of the section.
+    """
+    if not why_text:
+        return ""
+    return f"""
+    <div class="section avoid-break">
+      <div class="section-title">{escape(section_title)}</div>
+      <div class="why-text">{why_text}</div>
+    </div>"""
+
+
 def build_education_html(edu: list[dict]) -> str:
     """
     Renders the education section.
@@ -187,6 +207,10 @@ def render_html(resume_data: dict, output_path: str) -> str:
     html = html.replace("{{PROJECTS}}",       build_projects_html(resume_data.get("PROJECTS", [])))
     html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("CERTIFICATIONS", [])))
     html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("EDUCATION", [])))
+    html = html.replace("{{WHY_SECTION}}",    build_why_html(
+        resume_data.get("SECTION_WHY", ""),
+        resume_data.get("WHY_TEXT", ""),
+    ))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:

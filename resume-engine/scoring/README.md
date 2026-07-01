@@ -1,24 +1,44 @@
 # resume-engine/scoring/
 
-This folder holds YAML scoring rubrics consumed at runtime by `orchestrator.py` 
-and `score_keeper_gems.py`.
+This folder holds YAML scoring rubrics consumed at runtime by `orchestrator.py`
+(both the per-bullet audit loop and the document-level critique driven by
+`resume-engine/prompts/critique_resume.md`) and by `score_keeper_gems.py`.
 
 ## Files that belong here
 
 | File | Used by | Purpose |
 |---|---|---|
-| `manager_test.yaml` | `orchestrator.py` | Pass/fail rules the Skeptical Editor uses to judge bullets |
-| `believability.yaml` | `orchestrator.py`, `score_keeper_gems.py` | Rubric for believability scoring (0-100) |
-| `ai_risk.yaml` | `orchestrator.py` | Definitions of high-risk AI-sounding language patterns |
+| `manager_test.yaml` | `orchestrator.py`, `critique_resume.md`, `hiring_manager_scan.md` | Pass/fail rules the Skeptical Editor uses to judge bullets |
+| `believability.yaml` | `orchestrator.py`, `score_keeper_gems.py`, `critique_resume.md` | Rubric for bullet-level believability scoring (0-100) |
+| `ai_risk.yaml` | `orchestrator.py`, `critique_resume.md` | Definitions of high-risk AI-sounding language patterns |
+| `professional_identity_score.yaml` | `critique_resume.md` | Identity/archetype detection driving all downstream document-level scoring |
+| `resume_cohesion_score.yaml` | `critique_resume.md` | Cross-section narrative alignment and identity consistency |
+| `experience_structure_score.yaml` | `critique_resume.md` | Bullet structure, depth, and role-level formatting |
+| `skills_scoring.yaml` | `critique_resume.md` | Skills grouping relevance, evidence support, archetype alignment; also the canonical skills-vocabulary bank |
+| `role_dna.yaml` | `tailor_resume.md`, `critique_resume.md` | Archetype library (evidence signals + summary framing) shared between building and scoring |
+| `ats_match.yaml` | `critique_resume.md` | ATS keyword-match weighting against the JD |
+| `evidence_alignment.yaml` | `critique_resume.md` | Achievement-to-claim support -- traces every metric/tool/claim back to verified evidence |
+| `summary_patterns.yaml` | `critique_resume.md` | Summary-level pattern scoring (opener style, specificity, length) |
+| `summary_score.yaml` | (available, not yet wired into `critique_resume.md`) | Summary quality scoring by JD-relevance/specificity/alignment/credibility/readability |
+| `certifications_score.yaml` | `critique_resume.md` | Certification relevance and canonical credential anchoring |
+| `competencies_score.yaml` | `critique_resume.md` | Core competency presence and role alignment |
+| `education_score.yaml` | (available, not yet wired into `critique_resume.md`) | Education section completeness/relevance/formatting |
+| `recruiter_score.yaml` | `critique_resume.md` | Recruiter first-pass scannability (distinct from `top_third_score.yaml`'s narrative-comprehension check) |
+| `top_third_score.yaml` | (available, not yet wired into `critique_resume.md`) | Whether the top third of page one alone communicates fit |
+| `specificity.yaml` | `critique_resume.md` | Projects/Education specificity (bullet- and summary-level specificity are covered separately by `believability.yaml` and `summary_patterns.yaml`) |
 
 ## Status
 
-⚠️ **This folder is currently empty.** The scoring YAML files are expected here 
-but have not been committed yet. `orchestrator.py` handles missing files gracefully 
-(falls back to `{}` via `load_yaml`), but the scoring rules will not apply until 
-these files are added.
+All 17 files above exist and are populated. `critique_resume.md`'s "Load and
+Apply" list is the source of truth for which files actively drive the
+document-level critique -- three files (`summary_score.yaml`,
+`education_score.yaml`, `top_third_score.yaml`) are fully written but not yet
+referenced there; wire them into a step if you want them enforced.
 
-## Next step
+## Format reference
 
-Create `manager_test.yaml`, `believability.yaml`, and `ai_risk.yaml` in this folder. 
-See `resume-engine/rules/` for the format/style reference.
+See any file in this folder for the convention: `version`, `max_score`,
+`reject_if.score_below`, a `criteria` block with per-item `weight` +
+`description` + `good`/`bad` examples, then `penalties` and `bonuses` blocks.
+`resume-engine/rules/` uses a similar but not identical convention for
+bullet-rewrite rules (as opposed to scoring rubrics).

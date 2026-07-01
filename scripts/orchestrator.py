@@ -605,6 +605,25 @@ class TemplateSchema(BaseModel):
     )
     SECTION_SKILLS:         str       = Field(default="Skills")
     SKILLS:                 List[str] = Field(description="Technical skills mapped to JD.")
+    SECTION_WHY:            str       = Field(
+        default="",
+        description=(
+            "'Why [Real Company Name]?' -- ONLY set if space allows on a 2-page "
+            "resume; leave blank ('') to omit the section entirely."
+        ),
+    )
+    WHY_TEXT:                str       = Field(
+        default="",
+        description=(
+            "Two short paragraphs (as HTML <p> tags), max 8 lines total, "
+            "first-person voice -- the only section where pronouns are allowed. "
+            "Only the first sentence of the first paragraph and the last "
+            "sentence of the last paragraph are wrapped in <em> tags. Must "
+            "reference specific company research connected to verified facts. "
+            "Leave blank ('') to omit the section entirely if it would push "
+            "the resume to 3 pages."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 version: 2.0
-# DRAFT — not active. Rename to manager_test.yaml to activate.
+# Active -- primary rubric for critique_resume.md and hiring_manager_scan.md.
 # Expanded from v1.1 to align with the Morgan Escott Design System and style_rules.yaml.
 
 # The Manager Test simulates a hiring manager asking the hardest questions
