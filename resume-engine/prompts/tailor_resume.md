@@ -233,3 +233,16 @@ Each object has these exact keys:
 }
 ```
 Output exactly 3 certifications in the fixed order defined in "# Training & Certifications — Fixed Order" above.
+
+## SECTION_WHY (string) and WHY_TEXT (string) — both optional
+Only set these if the "Why [Company]? Section" rules above say to include it; otherwise
+leave both as empty strings `""` and the section is omitted entirely from the rendered PDF.
+- `SECTION_WHY`: the literal header text, e.g. `"Why Abnormal Security?"`.
+- `WHY_TEXT`: raw HTML — two `<p>` tags, one per paragraph. Wrap the first sentence of the
+  first paragraph and the last sentence of the last paragraph in `<em>` tags. No other HTML.
+```json
+{
+  "SECTION_WHY": "Why Abnormal Security?",
+  "WHY_TEXT": "<p><em>Abnormal's behavioral-AI approach to email security is the kind of infrastructure-over-guesswork bet I look for in a company.</em> ...</p><p>...I built the SDR Process Map at Treering for exactly this reason — <em>durable systems outlast any single campaign.</em></p>"
+}
+```

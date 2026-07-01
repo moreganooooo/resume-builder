@@ -1,18 +1,73 @@
-version: 1.0
+version: 2.0
+# Was a generic 5-category weight stub disconnected from its stated purpose.
+# Rewritten to match critique_resume.md's own description of this file --
+# "Recruiter first-pass readability and signal clarity" -- and to mirror the
+# 6-second-glance persona/criteria defined in recruiter_scan.md, as a scoring
+# rubric rather than a standalone prompt persona.
+#
+# Distinct from top_third_score.yaml: top_third_score.yaml asks "could a
+# recruiter explain WHY this candidate fits" (narrative comprehension).
+# This file asks "can a recruiter SCAN this in 6 seconds without effort"
+# (pure mechanical scannability, independent of how good the story is).
 
-categories:
+max_score: 100
 
-  relevance:
+reject_if:
+  score_below: 60
+
+criteria:
+  years_of_experience_clarity:
+    weight: 25
+    description: >
+      Can a recruiter determine total years of relevant experience within a
+      6-second scan, without doing date math themselves? Driven by whether
+      role periods are consistently formatted (MMM YYYY per formatting_rules.yaml)
+      and whether the tagline/summary states seniority level explicitly.
+    examples:
+      good: "Consistent MMM YYYY dates across every role; tagline states seniority"
+      bad: "Mixed date formats; no explicit seniority signal anywhere in top third"
+
+  hard_skill_keyword_visibility:
     weight: 30
+    description: >
+      Are the JD's hard-skill keywords (tools, platforms, certifications --
+      not soft skills) visible in the top third of page one, not buried in
+      later bullets or the Skills section alone?
+    examples:
+      good: "JD requires Salesforce; 'Salesforce Administration' appears in tagline or first 2 bullets"
+      bad: "Salesforce only appears once, in the 4th bullet of the 3rd role"
 
-  readability:
+  title_progression_logic:
     weight: 20
+    description: >
+      Do job titles read as a logical progression (lateral moves, promotions,
+      or clearly-explained pivots) rather than a confusing or unexplained
+      sequence that makes a recruiter pause?
+    examples:
+      good: "Designer -> Content Strategist -> Marketing Manager, each a clear step up or lateral specialization"
+      bad: "Marketing Manager -> Designer with no career_note explaining the pivot"
 
-  skills_visibility:
-    weight: 20
+  scan_density:
+    weight: 25
+    description: >
+      Pure visual scannability: consistent bullet length (no walls of text),
+      adequate whitespace, no more than ~8 bullets per role, and no
+      single bullet exceeding 2 lines. Independent of content quality --
+      this is purely "does the page look scannable at a glance."
+    examples:
+      good: "Every bullet is 1-2 lines, roles capped at 6-8 bullets"
+      bad: "A single bullet runs 4+ lines, or a role lists 12+ bullets"
 
-  experience_strength:
-    weight: 20
+# Penalties
+penalties:
+  inconsistent_date_format: -10
+  missing_seniority_signal: -10
+  keyword_buried_below_top_third: -15
+  unexplained_title_regression: -20
+  wall_of_text_bullet: -10       # any single bullet exceeding ~2 lines
+  bullet_overload: -10           # any role listing more bullets than tailor_resume.md's target range
 
-  formatting:
-    weight: 10
+# Bonuses
+bonuses:
+  keyword_in_tagline_or_first_bullet: +10
+  career_note_explains_pivot: +10   # matches .career-note usage in cv-template.html

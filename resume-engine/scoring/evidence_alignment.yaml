@@ -1,21 +1,85 @@
-# scoring/ats_match.yaml
-# Defines the mathematical weights for comparing candidate resume vs. target job description.
+version: 1.0
+# scoring/evidence_alignment.yaml
+# Was previously a byte-for-byte duplicate of ats_match.yaml (copy/paste error) --
+# ats_match.yaml scores JD keyword coverage; this file scores something different:
+# whether each claim on the resume actually traces back to verified evidence.
 
-match_weights:
-  exact_match: 1.0    # e.g., JD asks for "Python", resume says "Python"
-  semantic_match: 0.7 # e.g., JD asks for "Data Visualization", resume says "Tableau"
-  partial_match: 0.4  # e.g., JD asks for "Salesforce Administration", resume says "Salesforce User"
+# Evidence alignment measures achievement-to-claim support: does every stated
+# metric, tool, and accomplishment trace back to profile.yml's proof_points or
+# the verified_facts / verified_metrics / verified_projects / verified_tools
+# knowledge-base files, and does the accomplishment actually support the
+# skill/identity claimed for it elsewhere in the resume? This is a traceability
+# check, not a tone check (see believability.yaml) or a keyword-coverage check
+# (see ats_match.yaml).
 
-section_multipliers:
-  recent_experience: 1.2 # Skills used in the last 3 years carry more weight
-  older_experience: 0.8  # Skills used 4+ years ago
-  skills_section: 1.0    # Baseline weight
-  summary_section: 0.5   # Lowest weight; telling, not showing
+max_score: 100
 
-thresholds:
-  excellent_match: 85 # Ready to apply
-  good_match: 70      # Needs tailoring
-  weak_match: 50      # Missing core competencies
+reject_if:
+  score_below: 70
 
-hard_requirements:
-  penalty: -25 # Point deduction if a skill marked "Required" in JD is entirely missing
+# Scoring criteria
+criteria:
+  metric_traceability:
+    weight: 35
+    description: >
+      Every number in the resume (%, $, count) must match a value present in
+      profile.yml proof_points or verified_metrics.json. A metric that does not
+      appear in either source, or that appears with a materially different
+      value, fails this check.
+    examples:
+      good: "74% open rate -- matches proof_points entry 'PTA Council Campaign' exactly"
+      bad: "80% open rate -- nearest verified source states 74%; unexplained inflation"
+
+  tool_and_scope_traceability:
+    weight: 20
+    description: >
+      Any tool, platform, or scope claim (team size, budget owned, account
+      count) must appear in verified_tools.json / verified_projects.json or
+      profile.yml. Unlisted tools trigger the same HF002 guard used during
+      bullet rewriting.
+    examples:
+      good: "Outreach.io -- present in verified_tools.json"
+      bad: "Salesforce Administration -- not present in verified_tools.json; no supporting evidence"
+
+  claim_to_identity_support:
+    weight: 25
+    description: >
+      Does the accomplishment actually demonstrate the skill or identity it is
+      being used to support elsewhere in the resume (Summary, Skills, tagline)?
+      A claim can be individually true and still fail this check if it doesn't
+      logically back up the positioning built around it.
+    examples:
+      good: "Summary claims 'CRM systems fluency'; Experience shows sole Outreach.io admin for 20-person team"
+      bad: "Summary claims 'people management experience'; no bullet anywhere shows direct reports"
+
+  qualifier_handling:
+    weight: 20
+    description: >
+      Claims profile.yml marks as partially verified (see per-entry `notes`
+      fields, e.g. "Partially verified claim, use with appropriate qualifier")
+      must actually carry a qualifier in the resume ("contributed to," "as part
+      of a team that") rather than being stated as a sole, fully-owned claim.
+    examples:
+      good: "Contributed to a $3M+ pipeline recovery effort (partially verified per profile.yml)"
+      bad: "Recovered $3M+ in pipeline single-handedly"
+
+# Penalties
+penalties:
+  unverified_metric: -25       # numeric claim with no match in any verified source
+  unverified_tool: -15         # tool/platform claim absent from verified_tools.json
+  inflated_metric: -20         # verified source exists but resume states a higher/different number
+  missing_qualifier: -15       # profile.yml flags the claim as partially verified but resume states it as fully owned
+  orphaned_identity_claim: -20 # Summary/Skills claims a capability with zero supporting bullet anywhere
+
+# Bonuses
+bonuses:
+  exact_metric_match: +10        # number matches a verified source character-for-character
+  cross_referenced_claim: +10    # same accomplishment reinforced by 2+ independent evidence sources (e.g. proof_points AND verified_facts.json)
+  correctly_qualified: +5        # a partially-verified claim correctly carries a qualifier
+
+# Output expectations for critique_resume.md Step 4
+output_fields:
+  - unverified_claims        # list of claims with no traceable source
+  - inflated_claims          # list of claims where the resume number exceeds the verified source
+  - orphaned_identity_claims # Summary/Skills capabilities with no supporting bullet
+  - missing_qualifiers       # partially-verified claims stated as fully owned

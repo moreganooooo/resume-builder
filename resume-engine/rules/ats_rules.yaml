@@ -2,13 +2,16 @@ version: 1.0
 
 section_headers:
 
+  # Must match SECTION_* defaults in scripts/orchestrator.py's TemplateSchema
+  # and cv-template.html exactly -- these previously listed the generic ATS
+  # convention rather than what the template actually ships.
   preferred:
 
-    - Summary
-    - Experience
+    - Professional Summary
+    - Work Experience
     - Skills
     - Education
-    - Certifications
+    - Training & Certifications
 
 keyword_rules:
 
