@@ -1402,9 +1402,17 @@ class ResumeEngine:
             return {}
 
         print(pdf_result.stdout)
+
+        page_count_match = re.search(r"Pages:\s*(\d+)", pdf_result.stdout)
+        page_count = int(page_count_match.group(1)) if page_count_match else None
+        if page_count is not None and page_count > 2:
+            print(f"  ⚠️  WARNING: PDF is {page_count} pages — spec requires exactly 2. "
+                  f"(Automatic trim-and-retry is not implemented yet; see Phase 3.)")
+
         print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
         resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
+        resume_data["_page_count"] = page_count
 
         return resume_data
 
