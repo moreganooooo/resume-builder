@@ -41,11 +41,6 @@ def build_skills_html(skills: list[str]) -> str:
     return f'<div class="skills-grid">{items}</div>'
 
 
-def build_competencies_html(competencies: list[str]) -> str:
-    """Renders core competencies as .competency-tag spans."""
-    return "".join(f'<span class="competency-tag">{escape(c)}</span>' for c in competencies)
-
-
 def build_experience_html(jobs: list[dict]) -> str:
     """
     Renders the work experience section.
@@ -71,21 +66,6 @@ def build_experience_html(jobs: list[dict]) -> str:
           {location}
           {career_note}
           <ul>{bullets_html}</ul>
-        </div>""")
-    return "\n".join(html)
-
-
-def build_projects_html(projects: list[dict]) -> str:
-    """Renders the projects section."""
-    html = []
-    for p in projects:
-        badge = f'<span class="project-badge">{escape(p["badge"])}</span>' if p.get("badge") else ""
-        tech  = f'<div class="project-tech">{escape(p["tech"])}</div>'     if p.get("tech")  else ""
-        html.append(f"""
-        <div class="project">
-          <div class="project-title">{escape(p.get("title",""))}{badge}</div>
-          <div class="project-desc">{escape(p.get("description",""))}</div>
-          {tech}
         </div>""")
     return "\n".join(html)
 
@@ -191,9 +171,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
         # Section heading labels (lets you override later if needed)
         "SECTION_SUMMARY":        resume_data.get("SECTION_SUMMARY",        "Professional Summary"),
         "SECTION_SKILLS":         resume_data.get("SECTION_SKILLS",         "Core Skills"),
-        "SECTION_COMPETENCIES":   resume_data.get("SECTION_COMPETENCIES",   "Core Competencies"),
         "SECTION_EXPERIENCE":     resume_data.get("SECTION_EXPERIENCE",     "Work Experience"),
-        "SECTION_PROJECTS":       resume_data.get("SECTION_PROJECTS",       "Selected Projects"),
         "SECTION_CERTIFICATIONS": resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
         "SECTION_EDUCATION":      resume_data.get("SECTION_EDUCATION",      "Education"),
     }
@@ -202,9 +180,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
 
     # --- Block tokens (HTML fragments) ---
     html = html.replace("{{SKILLS}}",         build_skills_html(resume_data.get("SKILLS", [])))
-    html = html.replace("{{COMPETENCIES}}",   build_competencies_html(resume_data.get("COMPETENCIES", [])))
     html = html.replace("{{EXPERIENCE}}",     build_experience_html(resume_data.get("EXPERIENCE", [])))
-    html = html.replace("{{PROJECTS}}",       build_projects_html(resume_data.get("PROJECTS", [])))
     html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("CERTIFICATIONS", [])))
     html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("EDUCATION", [])))
     html = html.replace("{{WHY_SECTION}}",    build_why_html(

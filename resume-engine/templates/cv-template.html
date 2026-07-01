@@ -203,30 +203,6 @@
     color: #000000;
   }
 
-  /* === CORE COMPETENCIES === */
-  .competencies-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 0;
-  }
-
-  .competency-tag {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10pt;
-    font-weight: 400;
-    color: #000000;
-  }
-
-  .competency-tag::after {
-    content: ' | ';
-    color: #9aa3af;
-    padding: 0 4px;
-  }
-
-  .competency-tag:last-child::after {
-    content: '';
-  }
-
   /* === WORK EXPERIENCE === */
   .job {
     margin-bottom: 14px;
@@ -297,50 +273,6 @@
 
   /* No bold inside bullets per design system */
   .job li strong { font-weight: 400; }
-
-  /* === PROJECTS ===
-     Rendered by render_pdf using ProjectItem: title, badge, description, tech */
-  .project {
-    margin-bottom: 10px;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .project-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10.5pt;
-    font-weight: 600;
-    color: #000000;
-    margin-bottom: 2px;
-  }
-
-  .project-badge {
-    display: inline-block;
-    font-size: 8pt;
-    font-weight: 600;
-    color: hsl(187, 74%, 32%);
-    border: 1px solid hsl(187, 74%, 32%);
-    border-radius: 3px;
-    padding: 0 5px;
-    margin-left: 6px;
-    vertical-align: middle;
-    line-height: 1.6;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .project-desc {
-    font-size: 10.5pt;
-    color: #000000;
-    line-height: 1.55;
-  }
-
-  .project-tech {
-    font-size: 10pt;
-    color: #555555;
-    margin-top: 2px;
-    font-style: italic;
-  }
 
   /* === CERTIFICATIONS ===
      Three-column grid: title | org | year
@@ -499,24 +431,10 @@
     {{SKILLS}}
   </div>
 
-  <!-- CORE COMPETENCIES -->
-  <div class="section avoid-break">
-    <div class="section-title">{{SECTION_COMPETENCIES}}</div>
-    <div class="competencies-grid">
-      {{COMPETENCIES}}
-    </div>
-  </div>
-
   <!-- WORK EXPERIENCE -->
   <div class="section">
     <div class="section-title">{{SECTION_EXPERIENCE}}</div>
     {{EXPERIENCE}}
-  </div>
-
-  <!-- PROJECTS -->
-  <div class="section">
-    <div class="section-title">{{SECTION_PROJECTS}}</div>
-    {{PROJECTS}}
   </div>
 
   <!-- TRAINING & CERTIFICATIONS -->

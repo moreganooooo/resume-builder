@@ -158,21 +158,13 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 - TAGLINE (string) — hard-coded UPPERCASE, max 80 chars
 - PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, PORTFOLIO_URL, PORTFOLIO_DISPLAY, LOCATION (all strings)
 - SECTION_SUMMARY = "Professional Summary"
-- SECTION_COMPETENCIES = "Core Competencies"
 - SECTION_EXPERIENCE = "Work Experience"
-- SECTION_PROJECTS = "Projects"
 - SECTION_EDUCATION = "Education"
 - SECTION_CERTIFICATIONS = "Training & Certifications"
 - SECTION_SKILLS = "Skills"
 
 ## SUMMARY_TEXT (string)
 Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns.
-
-## COMPETENCIES (array of 6–8 strings)
-Each string is one exact JD keyword. Example:
-```json
-["Lifecycle Marketing", "CRM Strategy", "A/B Testing", "Salesforce", "Pipeline Generation", "Content Governance"]
-```
 
 ## SKILLS (array of strings)
 Each string is one category line. Format: `**Category Label:** Item, Item, Item`
@@ -194,20 +186,6 @@ Each object has these exact keys:
 }
 ```
 `location` may be left as an empty string `""` if unknown. `achievements` is the array of bullet strings for that role.
-
-## PROJECTS (array of objects)
-Each object has these exact keys:
-```json
-{
-  "title": "Project Name",
-  "badge": "Featured",
-  "description": "1-2 sentence impact summary.",
-  "tech": "Tool A, Tool B"
-}
-```
-- `badge`: short type label — e.g. `"Open Source"`, `"Featured"`, `"AI"`. Use `""` if none.
-- `tech`: comma-separated stack. Use `""` if not applicable.
-- Include 3–4 projects. Choose the most relevant to the JD archetype.
 
 ## EDUCATION (array of objects)
 Each object has these exact keys:
