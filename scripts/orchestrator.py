@@ -1467,6 +1467,7 @@ def main():
             job_key = jd_manager.compute_job_key(jd_path)
         except OSError as e:
             print(f"  ERROR: Could not read JD file {jd_path}: {e}")
+            failed_count += 1
             continue
 
         job_title, company_name = jd_manager.extract_job_meta(jd_path)
