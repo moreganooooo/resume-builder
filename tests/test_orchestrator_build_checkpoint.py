@@ -1,0 +1,134 @@
+import json
+import os
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
+SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+sys.path.insert(0, SCRIPTS_DIR)
+
+import orchestrator  # noqa: E402
+import jd_manager  # noqa: E402
+
+
+def _pass_critique_json():
+    return json.dumps({
+        "manager_test": "PASS",
+        "believability_score": 95,
+        "hidden_gem_score": 10,
+        "hidden_gem_flag": False,
+        "hidden_gem_reason": "",
+        "weaknesses": "",
+    })
+
+
+class TestBuildCheckpointResume(unittest.TestCase):
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            f.write("We are hiring a Widget Engineer.")
+        self.job_key = "test-build-checkpoint-job"
+        self.output_filename = "TESTONLY_build_checkpoint_resume.json"
+        self.output_path = os.path.join(self.engine.output_json_dir, self.output_filename)
+
+    def tearDown(self):
+        if os.path.exists(self.jd_path):
+            os.remove(self.jd_path)
+        if os.path.exists(self.output_path):
+            os.remove(self.output_path)
+        jd_manager.delete_checkpoint(self.job_key)
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_skips_keyword_extraction_and_mining_when_checkpointed(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # Pre-seed a checkpoint as if steps 1 and 2 already ran.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90,
+                    "skills_relevance_score": 90,
+                    "overall_fit_score": 90,
+                    "flags": [],
+                    "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank") as mock_mine:
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+            mock_mine.assert_not_called()
+
+        self.assertTrue(result)
+        self.assertIn("_output_paths", result)
+        # jd_keywords/bullet_tuples were cached, so GeminiClient.generate should
+        # only have been called for: 1 bullet critique + 1 builder call + 1 resume critique.
+        self.assertEqual(mock_generate.call_count, 3)
+        # Full success deletes the checkpoint.
+        self.assertEqual(jd_manager.load_checkpoint(self.job_key), {})
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_pdf_failure_leaves_checkpoint_and_returns_falsy(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=1, stdout="", stderr="node crashed")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result, {})
+        # Checkpoint must survive so the next run doesn't redo the API calls.
+        self.assertNotEqual(jd_manager.load_checkpoint(self.job_key), {})
+
+
+if __name__ == "__main__":
+    unittest.main()
