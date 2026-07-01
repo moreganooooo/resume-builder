@@ -48,6 +48,15 @@ class TestNoProjectsOrCompetencies(unittest.TestCase):
         self.assertNotIn("Selected Projects", html)
         self.assertNotIn("project-title", html)
 
+    def test_missing_section_skills_key_falls_back_to_skills_not_core_skills(self):
+        data = _minimal_resume_data()
+        data.pop("SECTION_SKILLS", None)  # confirm it's absent
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn(">Skills<", html)
+        self.assertNotIn("Core Skills", html)
+
 
 if __name__ == "__main__":
     unittest.main()

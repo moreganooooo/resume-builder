@@ -170,7 +170,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
         "SUMMARY_TEXT":       resume_data.get("SUMMARY_TEXT", ""),
         # Section heading labels (lets you override later if needed)
         "SECTION_SUMMARY":        resume_data.get("SECTION_SUMMARY",        "Professional Summary"),
-        "SECTION_SKILLS":         resume_data.get("SECTION_SKILLS",         "Core Skills"),
+        "SECTION_SKILLS":         resume_data.get("SECTION_SKILLS",         "Skills"),
         "SECTION_EXPERIENCE":     resume_data.get("SECTION_EXPERIENCE",     "Work Experience"),
         "SECTION_CERTIFICATIONS": resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
         "SECTION_EDUCATION":      resume_data.get("SECTION_EDUCATION",      "Education"),
