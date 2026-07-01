@@ -105,3 +105,65 @@ def split_batch_jds(jd_path: str) -> list:
 
     os.remove(jd_path)
     return new_paths
+
+
+TRACKER_FIELDNAMES = [
+    "job_key", "job_title", "company_name", "source_file",
+    "status", "date_processed", "output_json", "output_pdf", "error_message",
+]
+
+
+class JDTracker:
+    """Thin CSV-backed completion log, keyed by job_key."""
+
+    def __init__(self, csv_path: str = None):
+        self.csv_path = csv_path or TRACKER_CSV
+
+    def _read_rows(self) -> list:
+        if not os.path.exists(self.csv_path):
+            return []
+        with open(self.csv_path, "r", newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+
+    def _append_row(self, row: dict) -> None:
+        parent = os.path.dirname(self.csv_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        file_exists = os.path.exists(self.csv_path)
+        with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=TRACKER_FIELDNAMES)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+
+    def is_completed(self, job_key: str) -> bool:
+        return any(row["job_key"] == job_key and row["status"] == "completed"
+                   for row in self._read_rows())
+
+    def mark_completed(self, job_key, job_title="", company_name="", source_file="",
+                        output_json="", output_pdf="") -> None:
+        self._append_row({
+            "job_key": job_key,
+            "job_title": job_title,
+            "company_name": company_name,
+            "source_file": source_file,
+            "status": "completed",
+            "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
+            "output_json": output_json,
+            "output_pdf": output_pdf,
+            "error_message": "",
+        })
+
+    def mark_failed(self, job_key, job_title="", company_name="", source_file="",
+                     error_message="") -> None:
+        self._append_row({
+            "job_key": job_key,
+            "job_title": job_title,
+            "company_name": company_name,
+            "source_file": source_file,
+            "status": "failed",
+            "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
+            "output_json": "",
+            "output_pdf": "",
+            "error_message": error_message,
+        })
