@@ -223,6 +223,18 @@ class TestCheckpoints(unittest.TestCase):
     def test_delete_checkpoint_missing_is_a_no_op(self):
         jd_manager.delete_checkpoint("never-existed")  # must not raise
 
+    def test_checkpoint_path_sanitizes_unsafe_job_key(self):
+        unsafe_key = "../../evil"
+        jd_manager.save_checkpoint(unsafe_key, {"jd_keywords": {}})
+        saved_path = jd_manager._checkpoint_path(unsafe_key)
+        self.assertEqual(
+            os.path.commonpath([os.path.abspath(saved_path), os.path.abspath(self.tmp_dir)]),
+            os.path.abspath(self.tmp_dir),
+        )
+        self.assertEqual(jd_manager.load_checkpoint(unsafe_key), {"jd_keywords": {}})
+        jd_manager.delete_checkpoint(unsafe_key)
+        self.assertEqual(jd_manager.load_checkpoint(unsafe_key), {})
+
 
 class TestGetPendingJds(unittest.TestCase):
 

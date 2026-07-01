@@ -170,7 +170,7 @@ class JDTracker:
 
 
 def _checkpoint_path(job_key: str) -> str:
-    return os.path.join(CHECKPOINTS_DIR, f"{job_key}.json")
+    return os.path.join(CHECKPOINTS_DIR, f"{_sanitize_for_filename(job_key)}.json")
 
 
 def load_checkpoint(job_key: str) -> dict:

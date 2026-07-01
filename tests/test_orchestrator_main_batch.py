@@ -92,12 +92,17 @@ class TestMainBatchMode(unittest.TestCase):
                 contextlib.redirect_stdout(stdout):
             orchestrator.main()
 
-        # There's no job_key for good_path (compute_job_key raised before one
-        # could be produced), so mark_failed must NOT be called for it -
-        # main() just logs the error and moves on. bad_path succeeds, so
-        # mark_completed is called exactly once and mark_failed never.
+        # There's no real job_key for good_path (compute_job_key raised before
+        # one could be produced), so main() logs the error, records a
+        # sentinel "unreadable:<filename>" row via mark_failed so the tracker
+        # CSV has history of it, and moves on. bad_path succeeds, so
+        # mark_completed is called exactly once and mark_failed exactly once.
         mock_tracker.mark_completed.assert_called_once()
-        mock_tracker.mark_failed.assert_not_called()
+        mock_tracker.mark_failed.assert_called_once_with(
+            job_key="unreadable:good.txt",
+            source_file="good.txt",
+            error_message="could not read file",
+        )
 
         # good_path is left untouched (never moved, build_tailored_resume
         # never even invoked for it) since the loop continued past it.
@@ -163,7 +168,11 @@ class TestMainBatchMode(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 1)
         mock_build.assert_not_called()
-        mock_tracker_cls.return_value.mark_failed.assert_not_called()
+        mock_tracker_cls.return_value.mark_failed.assert_called_once_with(
+            job_key="unreadable:missing.txt",
+            source_file="missing.txt",
+            error_message="No such file or directory",
+        )
         mock_tracker_cls.return_value.mark_completed.assert_not_called()
 
 
