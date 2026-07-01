@@ -59,3 +59,7 @@ yarn-error.log*
 # === OS ===
 .DS_Store
 **/.DS_Store
+
+
+# === CLAUDE SUPERPOWERS SCRATCH ===
+.superpowers/
