@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import sys
 import unittest
@@ -60,6 +62,109 @@ class TestMainBatchMode(unittest.TestCase):
         self.assertFalse(os.path.exists(self.good_path))
         # A failed JD stays in place (pending) for the next run to retry.
         self.assertTrue(os.path.exists(self.bad_path))
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch("orchestrator.jd_manager.get_pending_jds")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    @patch("orchestrator.jd_manager.compute_job_key")
+    def test_batch_mode_handles_compute_job_key_oserror(
+        self, mock_compute_key, mock_build, mock_get_pending, mock_tracker_cls
+    ):
+        # good_path's job_key computation raises OSError (e.g. file vanished
+        # or became unreadable between listing and processing); bad_path's
+        # key computation succeeds normally and its build succeeds.
+        def compute_key_side_effect(jd_path):
+            if jd_path == self.good_path:
+                raise OSError("could not read file")
+            return "some-job-key"
+
+        mock_compute_key.side_effect = compute_key_side_effect
+        mock_get_pending.return_value = [self.good_path, self.bad_path]
+
+        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None):
+            return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+
+        mock_build.side_effect = build_side_effect
+        mock_tracker = mock_tracker_cls.return_value
+
+        stdout = io.StringIO()
+        with patch.object(sys, "argv", ["orchestrator.py"]), \
+                contextlib.redirect_stdout(stdout):
+            orchestrator.main()
+
+        # There's no job_key for good_path (compute_job_key raised before one
+        # could be produced), so mark_failed must NOT be called for it -
+        # main() just logs the error and moves on. bad_path succeeds, so
+        # mark_completed is called exactly once and mark_failed never.
+        mock_tracker.mark_completed.assert_called_once()
+        mock_tracker.mark_failed.assert_not_called()
+
+        # good_path is left untouched (never moved, build_tailored_resume
+        # never even invoked for it) since the loop continued past it.
+        self.assertTrue(os.path.exists(self.good_path))
+        self.assertEqual(mock_build.call_count, 1)
+
+        # bad_path succeeded and was moved into the completed dir.
+        self.assertTrue(os.path.exists(os.path.join(self.completed_dir, "bad.txt")))
+        self.assertFalse(os.path.exists(self.bad_path))
+
+        # The failed_count must have been incremented for the OSError case -
+        # this is the regression this test guards against (Finding 1): the
+        # summary line must report "1 failed", not "0 failed".
+        self.assertIn("1 completed, 1 failed", stdout.getvalue())
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch("orchestrator.jd_manager.get_pending_jds")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    def test_batch_mode_handles_build_exception(
+        self, mock_build, mock_get_pending, mock_tracker_cls
+    ):
+        # bad_path's build_tailored_resume call raises an unhandled exception
+        # (not just a falsy return value); good_path still succeeds.
+        mock_get_pending.return_value = [self.good_path, self.bad_path]
+
+        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None):
+            if jd_path == self.good_path:
+                return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+            raise Exception("boom")
+
+        mock_build.side_effect = build_side_effect
+        mock_tracker = mock_tracker_cls.return_value
+
+        with patch.object(sys, "argv", ["orchestrator.py"]):
+            orchestrator.main()
+
+        # The batch continues past the raised exception: good.txt succeeds,
+        # bad.txt is marked failed via tracker.mark_failed (job_key was
+        # computed fine before build_tailored_resume raised).
+        mock_tracker.mark_completed.assert_called_once()
+        mock_tracker.mark_failed.assert_called_once()
+        self.assertTrue(os.path.exists(os.path.join(self.completed_dir, "good.txt")))
+        self.assertFalse(os.path.exists(self.good_path))
+        self.assertTrue(os.path.exists(self.bad_path))
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    @patch("orchestrator.jd_manager.compute_job_key")
+    def test_single_file_mode_exits_nonzero_on_unreadable_jd(
+        self, mock_compute_key, mock_build, mock_tracker_cls
+    ):
+        # Regression test for Finding 1: in single-file mode
+        # (`python orchestrator.py jds/missing.txt`), if compute_job_key
+        # raises OSError, main() must still exit non-zero instead of
+        # silently succeeding (exit 0) because failed_count never got
+        # incremented.
+        missing_path = os.path.join(self.tmp_dir, "missing.txt")
+        mock_compute_key.side_effect = OSError("No such file or directory")
+
+        with patch.object(sys, "argv", ["orchestrator.py", missing_path]):
+            with self.assertRaises(SystemExit) as ctx:
+                orchestrator.main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        mock_build.assert_not_called()
+        mock_tracker_cls.return_value.mark_failed.assert_not_called()
+        mock_tracker_cls.return_value.mark_completed.assert_not_called()
 
 
 if __name__ == "__main__":
