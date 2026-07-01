@@ -189,5 +189,40 @@ class TestJDTracker(unittest.TestCase):
         self.assertTrue(second_tracker.is_completed("xyz"))
 
 
+class TestCheckpoints(unittest.TestCase):
+
+    def setUp(self):
+        self._real_dir = jd_manager.CHECKPOINTS_DIR
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_checkpoints")
+        jd_manager.CHECKPOINTS_DIR = self.tmp_dir
+
+    def tearDown(self):
+        jd_manager.CHECKPOINTS_DIR = self._real_dir
+        if os.path.isdir(self.tmp_dir):
+            for name in os.listdir(self.tmp_dir):
+                os.remove(os.path.join(self.tmp_dir, name))
+            os.rmdir(self.tmp_dir)
+
+    def test_load_checkpoint_missing_returns_empty_dict(self):
+        self.assertEqual(jd_manager.load_checkpoint("nope"), {})
+
+    def test_save_then_load_roundtrip(self):
+        jd_manager.save_checkpoint("job1", {"jd_keywords": {"skills": ["python"]}})
+        self.assertEqual(jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}})
+
+    def test_save_overwrites_previous_checkpoint(self):
+        jd_manager.save_checkpoint("job1", {"jd_keywords": {}})
+        jd_manager.save_checkpoint("job1", {"jd_keywords": {}, "bullet_tuples": [["a", "b", "c"]]})
+        self.assertIn("bullet_tuples", jd_manager.load_checkpoint("job1"))
+
+    def test_delete_checkpoint_removes_file(self):
+        jd_manager.save_checkpoint("job1", {"jd_keywords": {}})
+        jd_manager.delete_checkpoint("job1")
+        self.assertEqual(jd_manager.load_checkpoint("job1"), {})
+
+    def test_delete_checkpoint_missing_is_a_no_op(self):
+        jd_manager.delete_checkpoint("never-existed")  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()

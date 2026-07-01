@@ -167,3 +167,30 @@ class JDTracker:
             "output_pdf": "",
             "error_message": error_message,
         })
+
+
+def _checkpoint_path(job_key: str) -> str:
+    return os.path.join(CHECKPOINTS_DIR, f"{job_key}.json")
+
+
+def load_checkpoint(job_key: str) -> dict:
+    path = _checkpoint_path(job_key)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_checkpoint(job_key: str, data: dict) -> None:
+    os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
+    with open(_checkpoint_path(job_key), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def delete_checkpoint(job_key: str) -> None:
+    path = _checkpoint_path(job_key)
+    if os.path.exists(path):
+        os.remove(path)
