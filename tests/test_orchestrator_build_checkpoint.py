@@ -129,6 +129,48 @@ class TestBuildCheckpointResume(unittest.TestCase):
         # Checkpoint must survive so the next run doesn't redo the API calls.
         self.assertNotEqual(jd_manager.load_checkpoint(self.job_key), {})
 
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_captures_page_count_from_pdf_stdout(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0,
+            stdout="📄 Input:  x\n📁 Output: y\n📏 Format: LETTER\n✅ PDF generated: y\n📊 Pages: 3\n📦 Size: 42.0 KB\n",
+            stderr="",
+        )
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result.get("_page_count"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
