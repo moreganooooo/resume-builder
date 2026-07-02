@@ -20,6 +20,18 @@
 - On validator-retry exhaustion, `build_tailored_resume` returns `{}` (falsy) — the existing pattern already used for the PDF-generation-failure path. Do not add a new tracker/mark_failed call site; `scripts/orchestrator.py`'s `main()` batch loop already calls `tracker.mark_failed(...)` generically whenever `build_tailored_resume` returns falsy (confirmed at `scripts/orchestrator.py:1500-1506`).
 - Exact numbers used throughout this plan, copied verbatim from `ResumeDesignSystem.md` / `style_rules.yaml`: bullets 110-120 chars (one-liner) / up to 220 chars (two-liner), max 2 printed lines; Skills lines max 110 chars; Summary max 5 lines; Why section max 8 lines; tagline max 80 chars; per-role bullet counts (Mercor 2-3, Treering 6-8, Inside Sales Team 4-5, Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4); dates `MM/YYYY` with en-dash, never named months.
 
+## Execution Strategy (token-budget optimization)
+
+Dispatch as 4 batches, not 7 individual task dispatches, to cut subagent overhead:
+
+- **Batch A — Tasks 1-3:** one Haiku implementer dispatch (all three are rules-file/YAML cleanup, fully specified with literal before/after content). One Haiku reviewer dispatch on the combined diff.
+- **Batch B — Tasks 4-5:** one Haiku implementer dispatch (Task 5 depends on Task 4's `fixed_content.py`, so run in that order within the batch — they're already designed as a tightly-coupled pair). One Sonnet reviewer dispatch — this batch changes `TemplateSchema`'s LLM-facing contract, worth more scrutiny than pure content edits.
+- **Task 6 alone:** one Haiku implementer dispatch (the validator module is fully specified, but it's real logic with the largest test surface in this phase — genuinely the highest-value review target). One Sonnet reviewer dispatch.
+- **Task 7 alone:** one Haiku implementer dispatch (code is fully specified, so still cheapest-tier per the "transcription plus testing" rule; escalate to Sonnet only if the implementer reports BLOCKED). One Sonnet reviewer dispatch — this is the highest-risk task in the phase (two retry loops modifying the core `build_tailored_resume` control flow), worth the extra reviewer scrutiny even though the implementer stays on the cheap tier.
+- **Final whole-branch review:** one Sonnet dispatch (not Opus) covering the full phase diff.
+
+Keep per-task TDD discipline intact within each batch (failing test before implementation, full suite before the batch's commit(s)) — the savings come from fewer dispatches and cheaper models, not from skipping verification.
+
 ---
 
 ### Task 1: Retire formatting_rules.yaml and ats_rules.yaml
