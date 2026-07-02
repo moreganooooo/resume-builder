@@ -19,6 +19,19 @@ class TestNormalizeResume(unittest.TestCase):
             "KCKCC_ACHIEVEMENT_KEY": "writing_content",
         }
 
+    def test_injects_company_meta_for_known_companies(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["EXPERIENCE"][0]["size_revenue"], "~800 employees; $75M+ revenue")
+        self.assertEqual(result["EXPERIENCE"][0]["location"], "Short-Term Contract | Remote")
+
+    def test_leaves_unknown_company_without_meta(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Some Startup Nobody Hardcoded", "period": "01/2020 – 01/2021", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertNotIn("size_revenue", result["EXPERIENCE"][0])
+
     def test_injects_fixed_certifications(self):
         result = normalize_resume.normalize(self.raw)
         self.assertEqual(result["CERTIFICATIONS"], fixed_content.CERTIFICATIONS)
@@ -26,7 +39,7 @@ class TestNormalizeResume(unittest.TestCase):
     def test_injects_fixed_education_using_the_selected_achievement_keys(self):
         result = normalize_resume.normalize(self.raw)
         self.assertEqual(len(result["EDUCATION"]), 3)
-        self.assertIn("800% social media follower growth", result["EDUCATION"][0]["description"])
+        self.assertIn("800% social media follower growth", result["EDUCATION"][0]["bullets"][1])
 
     def test_forces_section_header_labels(self):
         result = normalize_resume.normalize(self.raw)

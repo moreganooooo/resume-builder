@@ -45,25 +45,31 @@ def build_experience_html(jobs: list[dict]) -> str:
     """
     Renders the work experience section.
 
-    BUG FIX: was reading job.get("bullets") and job.get("role"), but
-    tailor_resume.md's output spec (and the builder's actual JSON) uses
-    "achievements" and "title". Those mismatches meant every job entry
-    rendered with a blank title and an empty bullet list -- the resume
-    silently lost all of its actual content here.
+    Job title comes first (bold, its own line); the job-meta line below it
+    combines company, size/revenue (if known -- see fixed_content.COMPANY_META
+    and normalize_resume.normalize), location or work type, and dates, all
+    pipe-separated, per ResumeDesignSystem.md's .job-title/.job-meta split.
     """
+    sep = '<span class="sep">|</span>'
     html = []
     for job in jobs:
         bullets_html = "".join(f"<li>{escape(b)}</li>" for b in job.get("achievements", []))
         career_note = f'<div class="career-note">{escape(job["career_note"])}</div>' if job.get("career_note") else ""
-        location    = f'<div class="job-location">{escape(job["location"])}</div>'  if job.get("location")    else ""
+
+        # company is pre-escaped (it may already contain the escaped
+        # size/revenue parenthetical); the other parts are escaped inline.
+        company = escape(job.get("company", ""))
+        if job.get("size_revenue"):
+            company = f"{company} ({escape(job['size_revenue'])})"
+        meta_parts = [p for p in (company, job.get("location", ""), job.get("period", "")) if p]
+        meta_line = f" {sep} ".join(
+            part if part is company else escape(part) for part in meta_parts
+        ) if meta_parts else ""
+
         html.append(f"""
         <div class="job">
-          <div class="job-header">
-            <span class="job-company">{escape(job.get("company",""))}</span>
-            <span class="job-period">{escape(job.get("period",""))}</span>
-          </div>
-          <div class="job-role">{escape(job.get("title",""))}</div>
-          {location}
+          <div class="job-title">{escape(job.get("title",""))}</div>
+          <div class="job-meta">{meta_line}</div>
           {career_note}
           <ul>{bullets_html}</ul>
         </div>""")
@@ -71,14 +77,12 @@ def build_experience_html(jobs: list[dict]) -> str:
 
 
 def build_certifications_html(certs: list[dict]) -> str:
-    """Renders the three-column cert grid the template expects."""
+    """Renders each certification as a single pipe-separated line: Title | Org | Year."""
     html = []
     for c in certs:
         html.append(f"""
         <div class="cert-item">
-          <span class="cert-title">{escape(c.get("title",""))}</span>
-          <span class="cert-org">{escape(c.get("org",""))}</span>
-          <span class="cert-year">{escape(c.get("year",""))}</span>
+          <span class="cert-title">{escape(c.get("title",""))}</span><span class="cert-sep">|</span><span class="cert-org">{escape(c.get("org",""))}</span><span class="cert-sep">|</span><span class="cert-year">{escape(c.get("year",""))}</span>
         </div>""")
     return "\n".join(html)
 
@@ -119,10 +123,11 @@ def build_education_html(edu: list[dict]) -> str:
             lis = "".join(f"<li>{escape(b)}</li>" for b in e["bullets"])
             bullets_html = f"<ul>{lis}</ul>"
         desc = f'<div class="edu-desc">{escape(e["description"])}</div>' if e.get("description") else ""
+        location = f' — {escape(e["location"])}' if e.get("location") else ""
         html.append(f"""
         <div class="edu-item">
           <div class="edu-header">
-            <span class="edu-title">{escape(e.get("degree",""))} — <span class="edu-org">{escape(e.get("institution",""))}</span></span>
+            <span class="edu-title">{escape(e.get("degree",""))} — <span class="edu-org">{escape(e.get("institution",""))}</span>{location}</span>
             <span class="edu-year">{escape(e.get("year",""))}</span>
           </div>
           {desc}

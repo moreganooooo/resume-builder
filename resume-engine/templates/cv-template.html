@@ -161,13 +161,14 @@
   /* === SKILLS ===
      Rendered by render_pdf as:
        <div class="skills-grid"><span class="skill-item">…</span>…</div>
-     Displays as a flex-wrapped tag cloud with pipe separators. */
+     Each category is its own line -- no pipe separators between them
+     (a pipe-joined single flow read as stray "|" characters at line wraps). */
   .skills-grid {
     display: flex;
-    flex-wrap: wrap;
-    gap: 2px 0;
+    flex-direction: column;
+    gap: 2px;
     font-size: 10.5pt;
-    line-height: 1.7;
+    line-height: 1.6;
     color: #000000;
   }
 
@@ -176,16 +177,6 @@
     font-size: 10.5pt;
     font-weight: 400;
     color: #000000;
-  }
-
-  .skill-item::after {
-    content: ' | ';
-    color: #9aa3af;
-    padding: 0 4px;
-  }
-
-  .skill-item:last-child::after {
-    content: '';
   }
 
   /* Legacy fallback: .skills-text used by any cached JSON rendered before this
@@ -210,43 +201,27 @@
     page-break-inside: avoid;
   }
 
-  .job-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 1px;
-  }
-
-  .job-company {
+  /* Job title comes first (bold) -- role plus industry/type descriptor. */
+  .job-title {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 10.5pt;
     font-weight: 600;
     color: #000000;
+    margin-bottom: 1px;
   }
 
-  .job-period {
+  /* Job meta comes second (regular weight, one line): company, size/revenue,
+     location or work type, then dates -- all pipe-separated. */
+  .job-meta {
     font-size: 10pt;
     font-weight: 400;
     color: #000000;
-    white-space: nowrap;
-  }
-
-  /* Job title: italic, per design system */
-  .job-role {
-    font-size: 10.5pt;
-    font-weight: 400;
-    font-style: italic;
-    color: #000000;
-    margin-bottom: 2px;
-  }
-
-  /* Optional location line below the job title */
-  .job-location {
-    font-size: 10pt;
-    font-weight: 400;
-    color: #555555;
     margin-bottom: 4px;
+  }
+
+  .job-meta .sep {
+    color: #9aa3af;
+    padding: 0 4px;
   }
 
   /* Career note: optional one-sentence italic note (Treering only) */
@@ -275,13 +250,8 @@
   .job li strong { font-weight: 400; }
 
   /* === CERTIFICATIONS ===
-     Three-column grid: title | org | year
-     Mirrors career-ops cert layout exactly. */
+     Single pipe-separated line per entry: Title | Org | Year */
   .cert-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(90px, max-content) 44px;
-    align-items: baseline;
-    gap: 12px;
     margin-bottom: 5px;
     break-inside: avoid;
     page-break-inside: avoid;
@@ -291,22 +261,25 @@
     font-size: 10.5pt;
     font-weight: 600;
     color: #000000;
-    min-width: 0;
+  }
+
+  .cert-sep {
+    font-size: 10.5pt;
+    font-weight: 400;
+    color: #9aa3af;
+    padding: 0 4px;
   }
 
   .cert-org {
-    font-size: 10pt;
+    font-size: 10.5pt;
     font-weight: 400;
     color: #000000;
-    white-space: nowrap;
   }
 
   .cert-year {
-    font-size: 10pt;
+    font-size: 10.5pt;
     font-weight: 400;
     color: #000000;
-    white-space: nowrap;
-    text-align: right;
   }
 
   /* === EDUCATION === */

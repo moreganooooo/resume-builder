@@ -27,15 +27,15 @@ class TestFixedContent(unittest.TestCase):
 
     def test_build_education_selects_the_requested_ku_achievement(self):
         edu = fixed_content.build_education("email_ops", "generalist")
-        self.assertIn("800%", edu[0]["description"])
-        self.assertIn("managed promotional campaigns", edu[0]["description"])
+        self.assertIn("800%", edu[0]["bullets"][1])
+        self.assertIn("managed promotional campaigns", edu[0]["bullets"][1])
 
     def test_build_education_falls_back_to_first_option_on_unknown_key(self):
         edu = fixed_content.build_education("not_a_real_key", "not_a_real_key_either")
-        # Check that one of the KU achievement options is in the description
-        self.assertTrue(any(value in edu[0]["description"] for value in fixed_content.KU_ACHIEVEMENT_OPTIONS.values()))
-        # Check that one of the KCKCC achievement options is in the description
-        self.assertTrue(any(value in edu[1]["description"] for value in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.values()))
+        # Check that one of the KU achievement options is the achievement bullet
+        self.assertTrue(any(value == edu[0]["bullets"][1] for value in fixed_content.KU_ACHIEVEMENT_OPTIONS.values()))
+        # Check that one of the KCKCC achievement options is the achievement bullet
+        self.assertTrue(any(value == edu[1]["bullets"][1] for value in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.values()))
 
     def test_template_schema_has_no_free_form_certifications_or_education_fields(self):
         fields = orchestrator.TemplateSchema.model_fields
