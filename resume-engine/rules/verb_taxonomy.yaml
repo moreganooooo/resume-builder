@@ -14,8 +14,6 @@ description: >
 universal:
 
   - built
-  - created
-  - developed
   - designed
   - launched
   - implemented
@@ -580,8 +578,6 @@ priority_tiers:
     - reduced
     - accelerated
     - identified
-    - created
-    - developed
     - led
     - delivered
 
@@ -590,7 +586,6 @@ priority_tiers:
     - managed
     - coordinated
     - executed
-    - facilitated
     - improved
     - analyzed
     - configured
@@ -599,9 +594,7 @@ priority_tiers:
 
   acceptable:
 
-    - supported
     - collaborated
-    - assisted
     - maintained
 
 # --------------------------------------------------
@@ -615,4 +608,8 @@ avoid:
   - responsible_for
   - participated_in
   - did
-  - handled
+  - created
+  - developed
+  - facilitated
+  - supported
+  - assisted
