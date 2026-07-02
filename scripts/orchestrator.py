@@ -631,11 +631,8 @@ class ResumeEngine:
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
-        try:
-            with open(path, "r") as f:
-                return yaml.safe_load(f)
-        except FileNotFoundError:
-            return {}
+        with open(path, "r") as f:
+            return yaml.safe_load(f)
 
     def load_prompt(self, filename):
         path = os.path.join(self.prompts_dir, filename)
