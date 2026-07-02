@@ -78,6 +78,22 @@ class TestAuditResume(unittest.TestCase):
         mock_generate.assert_not_called()
         self.assertEqual(result, already_done)
 
+    def test_bullet_sort_key_ranks_pass_before_fail(self):
+        pass_result = {"manager_test": "PASS", "believability_score": 50}
+        fail_result = {"manager_test": "FAIL", "believability_score": 99}
+        self.assertLess(
+            orchestrator._bullet_sort_key(pass_result),
+            orchestrator._bullet_sort_key(fail_result),
+        )
+
+    def test_bullet_sort_key_ranks_higher_believability_first_within_same_pass_status(self):
+        higher = {"manager_test": "PASS", "believability_score": 90}
+        lower = {"manager_test": "PASS", "believability_score": 40}
+        self.assertLess(
+            orchestrator._bullet_sort_key(higher),
+            orchestrator._bullet_sort_key(lower),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
