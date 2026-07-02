@@ -11,6 +11,20 @@ text; JCCC has no achievement bullet at all (spec: exactly 1 fixed bullet).
 Source: resume-engine/knowledge_base/bullet-bank.md's EDUCATION section.
 """
 
+# Company facts (size, revenue, location/work-type) don't vary by JD --
+# only bullet selection and job-title reframing do -- so they're hard-coded
+# here rather than left for the builder to reproduce correctly every run.
+# Keyed on the exact company names tailor_resume.md instructs the builder
+# to use (see its per-role bullet count table).
+COMPANY_META = {
+    "Mercor": {"size_revenue": "~800 employees; $75M+ revenue", "location": "Short-Term Contract | Remote"},
+    "Treering Yearbooks": {"size_revenue": "~120 employees; $17M+ revenue", "location": "Remote"},
+    "Inside Sales Team": {"size_revenue": "~150 employees; ~$21M revenue", "location": "Buffalo, NY"},
+    "Element 8 / Strategy LLC": {"size_revenue": "~10–15 employees; ~$1M+ revenue", "location": "Lenexa, KS"},
+    "VML": {"size_revenue": "~600+ employees; ~$75M+ revenue", "location": "Kansas City, MO"},
+    "Callahan Creek": {"size_revenue": "~30 employees; ~$5M revenue", "location": "Lawrence, KS"},
+}
+
 CERTIFICATIONS = [
     {"title": "Email Marketing Software Certification", "org": "HubSpot", "year": "2026"},
     {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"},
@@ -51,21 +65,32 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
     )
     return [
         {
-            "degree": "BS, Journalism + Strategic Communication",
+            "degree": "Bachelor of Science, Journalism + Strategic Communication",
             "institution": "University of Kansas",
-            "year": "2006–2008",
-            "description": f"3.56 GPA, Phi Theta Kappa Scholarship recipient; {ku_bullet}",
+            "location": "Lawrence, KS",
+            "year": "2006 – 2008",
+            "bullets": [
+                "3.56 GPA, Phi Theta Kappa Scholarship recipient",
+                ku_bullet,
+            ],
         },
         {
-            "degree": "AA, Journalism",
+            "degree": "Associate of Arts, Journalism",
             "institution": "Kansas City Kansas Community College",
-            "year": "2004–2006",
-            "description": f"3.75 GPA, Full academic scholarship, Graduated with honors; {kckcc_bullet}",
+            "location": "Kansas City, KS",
+            "year": "2004 – 2006",
+            "bullets": [
+                "3.75 GPA, Full academic scholarship, Graduated with honors",
+                kckcc_bullet,
+            ],
         },
         {
             "degree": "Relevant Coursework, Graphic Design",
             "institution": "Johnson County Community College",
-            "year": "2010–2011",
-            "description": "3.86 GPA, studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography",
+            "location": "Overland Park, KS",
+            "year": "2010 – 2011",
+            "bullets": [
+                "3.86 GPA, studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography",
+            ],
         },
     ]

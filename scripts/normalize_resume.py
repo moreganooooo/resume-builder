@@ -33,6 +33,17 @@ def normalize(resume_data: dict) -> dict:
         result.get("KCKCC_ACHIEVEMENT_KEY", ""),
     )
 
+    if result.get("EXPERIENCE"):
+        new_experience = []
+        for job in result["EXPERIENCE"]:
+            job = dict(job)
+            meta = fixed_content.COMPANY_META.get(job.get("company", ""))
+            if meta:
+                job["size_revenue"] = meta["size_revenue"]
+                job["location"] = meta["location"]
+            new_experience.append(job)
+        result["EXPERIENCE"] = new_experience
+
     for key, value in _SECTION_DEFAULTS.items():
         result[key] = value
 
