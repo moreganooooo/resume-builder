@@ -1320,6 +1320,13 @@ class ResumeEngine:
         # of whether this run resumed resume_data from a checkpoint.
         build_prompt = self.load_prompt("tailor_resume.md")
 
+        # Loaded unconditionally (not just in the fresh-build branch below)
+        # for the same reason build_prompt is: Step 7's trim loop re-validates
+        # every trim attempt regardless of whether this run resumed resume_data
+        # from a checkpoint, so style_rules_for_validation must be in scope
+        # even when the fresh-build branch below never executes.
+        style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
+
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
             print("  Resuming: using resume JSON from checkpoint.")
@@ -1363,7 +1370,6 @@ class ResumeEngine:
 
             resume_data = normalize_resume.normalize(resume_data)
 
-            style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
             violations = validate_resume.validate(resume_data, style_rules_for_validation)
             max_fix_attempts = 3
             fix_attempt = 0
@@ -1512,7 +1518,18 @@ class ResumeEngine:
             if not trimmed:
                 print("  WARNING: Trim attempt returned unparseable JSON; stopping trim loop.")
                 break
-            resume_data = normalize_resume.normalize(trimmed)
+
+            trimmed_resume_data = normalize_resume.normalize(trimmed)
+            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation)
+            if trim_violations:
+                print(f"  ⚠️  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                      f"validator violation(s); discarding this trim and keeping the prior resume_data:")
+                for v in trim_violations:
+                    print(f"    - {v}")
+                trim_attempt += 1
+                continue
+
+            resume_data = trimmed_resume_data
             render_html(resume_data, html_out)
             trim_attempt += 1
 
