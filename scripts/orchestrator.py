@@ -570,24 +570,14 @@ class TemplateSchema(BaseModel):
             "Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4."
         )
     )
-    SECTION_EDUCATION:      str       = Field(default="Education")
-    EDUCATION:              List[dict] = Field(
-        description=(
-            "KU, KCKCC, and JCCC items. Each dict must contain: "
-            "degree (str), institution (str), year (str), description (str). "
-            "KU: exactly 2 bullets. KCKCC: exactly 2 bullets. JCCC: exactly 1 bullet."
-        )
-    )
-    SECTION_CERTIFICATIONS: str       = Field(default="Training & Certifications")
-    CERTIFICATIONS:         List[dict] = Field(
-        min_length=3, max_length=3,
-        description=(
-            "Exactly 3 certifications in fixed order. Each dict: title, org, year. "
-            "Order: 1) Email Marketing Software Certification | HubSpot | 2026, "
-            "2) Video for Sales Certification | Vidyard | 2021, "
-            "3) Camp Portfolio | Bernstein Rein, Kansas City | 2008."
-        )
-    )
+    KU_ACHIEVEMENT_KEY:     str       = Field(description=(
+        "Which pre-approved KU achievement bullet best fits this JD's archetype. "
+        "Must be exactly one of: content_generalist, email_ops, content."
+    ))
+    KCKCC_ACHIEVEMENT_KEY:  str       = Field(description=(
+        "Which pre-approved KCKCC achievement bullet best fits this JD's archetype. "
+        "Must be exactly one of: writing_content, enablement_mgmt, generalist."
+    ))
     SECTION_SKILLS:         str       = Field(default="Skills")
     SKILLS:                 List[str] = Field(description="Technical skills mapped to JD.")
     SECTION_WHY:            str       = Field(
