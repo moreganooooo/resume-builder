@@ -271,6 +271,17 @@ class TestGetPendingJds(unittest.TestCase):
         pending = jd_manager.get_pending_jds()
         self.assertEqual(len(pending), 1)
 
+    def test_ignores_hidden_files_like_ds_store(self):
+        # Real .DS_Store files are binary and not valid UTF-8 -- writing one
+        # with invalid bytes here reproduces the actual crash this guards
+        # against (get_pending_jds used to try to read it as a JD).
+        with open(os.path.join(self.tmp_dir, ".DS_Store"), "wb") as f:
+            f.write(b"\x00\x00\x00\x01Bud1\x86not valid utf-8")
+        self._write("posting.txt", "A plain-text JD.")
+        pending = jd_manager.get_pending_jds()
+        self.assertEqual(len(pending), 1)
+        self.assertTrue(pending[0].endswith("posting.txt"))
+
     def test_splits_batch_file_and_returns_both_jobs(self):
         self._write("batch.json", json.dumps([
             {"job_title": "A", "company_name": "X"},
