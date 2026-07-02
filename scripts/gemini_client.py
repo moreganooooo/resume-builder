@@ -5,6 +5,7 @@ Imported by both orchestrator.py and rewrite_bullets.py to break
 the circular import between them.
 """
 
+import copy
 import json
 import os
 import random
@@ -33,6 +34,39 @@ EMBED_DIM   = 768   # gemini-embedding-2 native dimension
 class GeminiClient:
 
     _timeout = 90
+
+    @staticmethod
+    def resolve_refs(schema: dict) -> dict:
+        """
+        Inlines every "$ref": "#/$defs/X" pointer with a deep copy of
+        $defs["X"], then drops $defs from the tree.
+
+        Pydantic's model_json_schema() emits nested BaseModel fields as
+        $ref/$defs, but sanitize_schema() deletes $defs unconditionally
+        (Gemini's structured-output API doesn't support $ref/$defs) -- so
+        a nested model's schema would be left with a dangling $ref if this
+        resolution didn't happen first, most likely producing a 400 from
+        the API. Must run before sanitize_schema, not after.
+        """
+        if not isinstance(schema, dict):
+            return schema
+        defs = schema.get("$defs", {})
+
+        def _resolve(node, seen):
+            if isinstance(node, dict):
+                if "$ref" in node:
+                    key = node["$ref"].rsplit("/", 1)[-1]
+                    if key in seen:
+                        raise ValueError(f"Circular $ref detected resolving schema: {node['$ref']}")
+                    if key not in defs:
+                        raise ValueError(f"Unresolvable $ref: {node['$ref']}")
+                    return _resolve(copy.deepcopy(defs[key]), seen | {key})
+                return {k: _resolve(v, seen) for k, v in node.items() if k != "$defs"}
+            if isinstance(node, list):
+                return [_resolve(item, seen) for item in node]
+            return node
+
+        return _resolve(schema, frozenset())
 
     @staticmethod
     def sanitize_schema(schema: dict) -> dict:
@@ -113,7 +147,9 @@ class GeminiClient:
                     except json.JSONDecodeError:
                         print("ERROR: response_schema string is not valid JSON.")
                 if raw_schema:
-                    generation_config["responseSchema"] = GeminiClient.sanitize_schema(raw_schema)
+                    generation_config["responseSchema"] = GeminiClient.sanitize_schema(
+                        GeminiClient.resolve_refs(raw_schema)
+                    )
 
             if "gemma" in model.lower():
                 merged_contents = f"{system_instruction}\n\n---\n{contents}"
