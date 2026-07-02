@@ -128,8 +128,13 @@ GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 # phrasing variants of some achievements, and a real run's per-company
 # minimum pulled multiple near-identical "audited CRM data, recovered $3M"
 # variants into the same resume instead of finding genuinely distinct
-# achievements.
-DEDUP_SIMILARITY_THRESHOLD = 0.93
+# achievements. 0.93 still let through bullets that reuse the same "100+"
+# stat for two different specific activities (sequence library vs. email
+# campaigns) -- their embeddings are similar but not that similar, since the
+# underlying activities do differ; lowered to catch that case. This is an
+# empirical knob: too low starts merging genuinely distinct achievements
+# that just share a topic, so nudge it back up if that starts happening.
+DEDUP_SIMILARITY_THRESHOLD = 0.85
 
 # Per-company minimum bullets to guarantee during mining, using the low end
 # of tailor_resume.md's per-role bullet-count targets. Pure global top-K
