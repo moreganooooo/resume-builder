@@ -32,13 +32,11 @@ intent_categories:
       elite:
 
         - built
-        - developed
-        - created
         - launched
+        - designed
 
       strong:
 
-        - designed
         - produced
         - generated
 
@@ -271,9 +269,7 @@ intent_categories:
 
       strong:
 
-        - supported
         - guided
-        - facilitated
 
 # --------------------------------------------------
 # TRAINING
@@ -303,7 +299,6 @@ intent_categories:
 
         - guided
         - educated
-        - facilitated
 
 # --------------------------------------------------
 # LEADERSHIP
@@ -360,7 +355,6 @@ intent_categories:
       strong:
 
         - coordinated
-        - facilitated
 
 # --------------------------------------------------
 # CRM ADMINISTRATION
@@ -413,7 +407,6 @@ intent_categories:
       elite:
 
         - built
-        - developed
         - automated
 
       strong:
@@ -442,8 +435,6 @@ intent_categories:
 
       elite:
 
-        - created
-        - developed
         - authored
 
       strong:

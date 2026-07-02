@@ -17,8 +17,6 @@ weak_verbs:
 
     preferred:
 
-      - supported
-      - facilitated
       - coordinated
       - executed
       - enabled
@@ -32,8 +30,6 @@ weak_verbs:
 
     preferred:
 
-      - developed
-      - created
       - designed
       - built
       - launched
@@ -50,7 +46,6 @@ weak_verbs:
       - directed
       - coordinated
       - owned
-      - oversaw
 
   handled:
     severity: medium
@@ -68,10 +63,9 @@ weak_verbs:
 
     preferred:
 
-      - supported
-      - facilitated
       - contributed_to
       - coordinated
+      - executed
 
   participated_in:
     severity: medium
@@ -81,7 +75,6 @@ weak_verbs:
       - contributed_to
       - collaborated_on
       - executed
-      - supported
 
   used:
     severity: medium
@@ -99,8 +92,6 @@ weak_verbs:
 
     preferred:
 
-      - created
-      - developed
       - generated
       - produced
       - designed
@@ -119,8 +110,6 @@ weak_verbs:
 elite_verbs:
 
   - built
-  - created
-  - developed
   - designed
   - launched
   - implemented
@@ -301,11 +290,11 @@ buzzwords:
     - thought leader
     - synergy
     - synergies
+    - leverage
+    - utilized
 
   medium_risk:
 
-    - leverage
-    - utilized
     - various
     - several
     - multiple
@@ -384,6 +373,8 @@ ai_language_patterns:
     - dynamic professional
     - proven track record
     - passionate professional
+    - utilized
+    - leverage technology
 
   moderate:
 
@@ -396,7 +387,6 @@ ai_language_patterns:
 
   low:
 
-    - utilized
     - various
     - multiple
     - several
