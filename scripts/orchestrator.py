@@ -525,16 +525,10 @@ class RewriteMinimalSchema(BaseModel):
 
 class ResumeCritiqueSchema(BaseModel):
     summary_alignment_score: int       = Field(description="0-100: does the Summary match the JD role and tone?")
-    skills_relevance_score:  int       = Field(description="0-100: are Skills and Competencies JD-relevant?")
+    skills_relevance_score:  int       = Field(description="0-100: are Skills JD-relevant?")
     overall_fit_score:       int       = Field(description="0-100: holistic resume-to-JD fit")
     flags:                   List[str] = Field(description="Specific issues found")
     recommendations:         List[str] = Field(description="Actionable fixes, one per flag")
-
-class ProjectItem(BaseModel):
-    title:       str = Field(description="Project name.")
-    badge:       str = Field(default="", description="Short type label, e.g. 'Open Source', 'Featured', 'AI'. Leave blank if none.")
-    description: str = Field(description="1-2 sentence impact summary.")
-    tech:        str = Field(default="", description="Comma-separated tech stack. Leave blank if not applicable.")
 
 class CertItem(BaseModel):
     title: str = Field(description="Full certification or training name.")
