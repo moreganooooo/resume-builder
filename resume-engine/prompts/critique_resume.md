@@ -27,9 +27,8 @@ Load and apply all of the following scoring files before evaluating:
 12. `evidence_alignment.yaml` — Achievement-to-claim support
 13. `summary_patterns.yaml` — Summary quality, specificity, and positioning strength
 14. `certifications_score.yaml` — Certification relevance and canonical credential anchoring
-15. `competencies_score.yaml` — Core competency presence and role alignment
-16. `recruiter_score.yaml` — Recruiter first-pass readability and signal clarity
-17. `specificity.yaml` — Projects and Education section specificity (bullet- and
+15. `recruiter_score.yaml` — Recruiter first-pass readability and signal clarity
+16. `specificity.yaml` — Education section specificity (bullet- and
     summary-level specificity are already covered by believability.yaml and
     summary_patterns.yaml respectively)
 
@@ -87,12 +86,10 @@ Using `role_dna.yaml`, `ats_match.yaml`, and `manager_test.yaml`:
 
 ### Step 7 — Evaluate Supporting Sections
 
-Using `summary_patterns.yaml`, `certifications_score.yaml`,
-`competencies_score.yaml`, `specificity.yaml`:
+Using `summary_patterns.yaml`, `certifications_score.yaml`, `specificity.yaml`:
 - Score summary quality and positioning clarity
 - Confirm canonical certifications are present and correctly positioned
-- Evaluate competency relevance
-- Score Projects and Education section specificity
+- Score Education section specificity
 
 ### Step 8 — Risk and Readability Checks
 

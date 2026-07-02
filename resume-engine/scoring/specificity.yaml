@@ -1,9 +1,12 @@
-version: 2.0
+version: 3.0
 # Was a generic positive/negative point stub, unreferenced by any prompt or
 # script. Bullet-level specificity is already covered by believability.yaml's
 # `specificity` criterion, and Summary-level specificity is already covered
-# by summary_patterns.yaml. The real gap this file now fills: specificity in
-# the Projects and Education sections, which nothing else scores.
+# by summary_patterns.yaml. The remaining gap this file fills: specificity in
+# the Education section, which nothing else scores.
+#
+# v3.0: Projects criteria removed -- the Projects section was deleted from
+# the resume pipeline entirely (it never existed in ResumeDesignSystem.md).
 
 max_score: 100
 
@@ -11,24 +14,8 @@ reject_if:
   score_below: 60
 
 criteria:
-  project_description_specificity:
-    weight: 40
-    description: >
-      Does each project description name the specific technology, scope, or
-      outcome, rather than a generic one-line blurb that could describe any
-      project?
-    examples:
-      good: "Built a Playwright-based PDF pipeline with ATS Unicode normalization for a resume-tailoring tool"
-      bad: "Built a tool to help with resumes"
-
-  project_tech_specificity:
-    weight: 20
-    description: >
-      Is the `tech` field a concrete, named stack (e.g. "Python, Playwright,
-      Gemini API") rather than a vague category (e.g. "various tools")?
-
   education_description_specificity:
-    weight: 40
+    weight: 100
     description: >
       Does each education entry's description name a concrete honor, GPA,
       scholarship, or coursework focus, rather than a generic "graduated with
@@ -39,11 +26,7 @@ criteria:
 
 # Penalties
 penalties:
-  generic_project_description: -15   # could describe any project, names nothing concrete
-  generic_project_tech: -10          # tech field vague or missing
   generic_education_description: -15 # no GPA, honor, or coursework specificity
 
 # Bonuses
-bonuses:
-  named_outcome: +10        # project description states a concrete result, not just what was built
-  named_system_or_stack: +5 # names the actual tool/platform/language
+bonuses: {}
