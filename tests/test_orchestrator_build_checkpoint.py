@@ -382,6 +382,117 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(result["_page_count"], 2)
         self.assertEqual(pdf_call_count["n"], 2)  # 1 over-length render + 1 trimmed re-render
 
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_page_count_trim_loop_exhausts_and_returns_empty(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        """Every trim attempt still comes back over-length -- the loop must
+        cap out at max_trim_attempts and return {} rather than an exception
+        or partial/invalid resume."""
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        always_long_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                # Both the initial build and every trim attempt return
+                # parseable JSON that never actually shrinks the page count.
+                return (json.dumps(always_long_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        # Every render reports 3 pages, no matter how many trim attempts run.
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 3\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertFalse(result)
+        self.assertEqual(result, {})
+        # 1 initial render + 4 trim attempts (max_trim_attempts == len(trim_instructions) == 4).
+        self.assertEqual(mock_subprocess_run.call_count, 5)
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_trim_loop_after_checkpoint_resumed_resume_data_does_not_raise(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        """Regression test for Bug 1: when Step 4 resumes resume_data from a
+        checkpoint (the `if resume_data is not None:` branch), the old code
+        never assigned build_prompt, since that assignment lived only in the
+        fresh-build `else:` branch. Step 7's trim loop references build_prompt
+        unconditionally, so an over-length PDF on a checkpoint-resumed run
+        used to raise UnboundLocalError instead of returning {} per contract.
+        """
+        seeded_resume_data = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+            "resume_data": seeded_resume_data,
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                # Trim attempts: keep returning parseable but still over-length JSON.
+                return (json.dumps(seeded_resume_data), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        # Always over-length -- forces the trim loop to run to exhaustion.
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 3\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            try:
+                result = self.engine.build_tailored_resume(
+                    jd_path=self.jd_path,
+                    master_resume={},
+                    output_filename=self.output_filename,
+                    job_key=self.job_key,
+                )
+            except UnboundLocalError as e:
+                self.fail(f"build_tailored_resume raised UnboundLocalError (Bug 1 regression): {e}")
+
+        # Trim attempts exhausted (page count never drops below 3), so the
+        # contract is to return {} gracefully -- not raise, not return partial data.
+        self.assertEqual(result, {})
+        self.assertEqual(mock_subprocess_run.call_count, 5)  # 1 initial + 4 trim attempts
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -965,8 +965,11 @@ class ResumeEngine:
 
         self.warm_segment_cache(bullet_tuples)
 
-        # Track both bullets and their critique data for deterministic sorting
-        bullet_critique_pairs = []  # List of (bullet_text, critique_dict)
+        # Track critique data parallel to refined_bullets (same length, same
+        # order, always appended -- including None entries) so no bullet can
+        # be silently dropped when sorting below. A None entry sorts last via
+        # _bullet_sort_key({}) (worst manager_test tier, 0 believability).
+        bullet_critique_list = []  # List[Optional[dict]], parallel to refined_bullets
 
         start_index = len(refined_bullets)
         if start_index:
@@ -975,8 +978,7 @@ class ResumeEngine:
 
         def _record(refined_bullet: str, critique_data: dict = None) -> None:
             refined_bullets.append(refined_bullet)
-            if critique_data:
-                bullet_critique_pairs.append((refined_bullet, critique_data))
+            bullet_critique_list.append(critique_data)
             if on_bullet_complete:
                 on_bullet_complete(list(refined_bullets))
 
@@ -1121,8 +1123,11 @@ class ResumeEngine:
 
         # Sort bullets deterministically by manager_test and believability_score.
         # Only apply sorting to bullets processed in this run (not resumed bullets).
-        if bullet_critique_pairs and start_index == 0:
-            sorted_pairs = sorted(bullet_critique_pairs, key=lambda pair: _bullet_sort_key(pair[1]))
+        # Every bullet in refined_bullets is paired with its critique (or None,
+        # which sorts last) so no bullet is ever dropped by this step.
+        if start_index == 0 and refined_bullets:
+            paired = list(zip(refined_bullets, bullet_critique_list))
+            sorted_pairs = sorted(paired, key=lambda pair: _bullet_sort_key(pair[1] or {}))
             refined_bullets = [bullet for bullet, critique in sorted_pairs]
 
         return refined_bullets
@@ -1308,12 +1313,15 @@ class ResumeEngine:
         # hierarchy, archetype rules, and the exact JSON key spec (it even
         # says outright: "Your JSON output MUST use these exact uppercase
         # field names. Any deviation breaks the render pipeline.").
+        # build_prompt is loaded unconditionally (not just in the fresh-build
+        # branch below) because Step 7's trim loop references it regardless
+        # of whether this run resumed resume_data from a checkpoint.
+        build_prompt = self.load_prompt("tailor_resume.md")
+
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
             print("  Resuming: using resume JSON from checkpoint.")
         else:
-            build_prompt = self.load_prompt("tailor_resume.md")
-
             kb_context = self.load_knowledge_base()
 
             # Gap 1: KB goes into system_instruction, not contents.
