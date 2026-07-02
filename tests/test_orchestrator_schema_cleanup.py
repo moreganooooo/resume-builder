@@ -64,10 +64,38 @@ class TestSchemaCleanup(unittest.TestCase):
         self.assertNotIn("$ref", exp_items)
         self.assertEqual(set(exp_items["required"]), {"title", "company", "period", "achievements"})
         self.assertEqual(exp_items["properties"]["achievements"]["type"], "array")
+        # Every required property must actually still exist in "properties" --
+        # this is the exact invariant sanitize_schema violated when it treated
+        # the "title" *property name* (job title) as the UNSUPPORTED $schema
+        # "title" keyword and deleted it, leaving "required" pointing at a
+        # property that no longer existed (Gemini rejected this with
+        # "property is not defined").
+        for required_field in exp_items["required"]:
+            self.assertIn(required_field, exp_items["properties"],
+                          f"{required_field!r} is required but missing from properties")
 
     def test_resolve_refs_raises_on_unresolvable_ref(self):
         with self.assertRaises(ValueError):
             GeminiClient.resolve_refs({"properties": {"x": {"$ref": "#/$defs/Missing"}}})
+
+    def test_sanitize_schema_preserves_property_named_title(self):
+        """
+        Regression test: a field literally named "title" (ExperienceEntry's
+        job title) collides with the UNSUPPORTED "title" $schema metadata
+        keyword. sanitize_schema() must only strip "title" as metadata, never
+        as a key inside "properties" (where keys are field names).
+        """
+        schema = {
+            "type": "object",
+            "properties": {
+                "title": {"title": "Title", "type": "string"},
+                "company": {"title": "Company", "type": "string"},
+            },
+            "required": ["title", "company"],
+        }
+        sanitized = GeminiClient.sanitize_schema(schema)
+        self.assertIn("title", sanitized["properties"])
+        self.assertEqual(sanitized["properties"]["title"], {"type": "string"})
 
 
 if __name__ == "__main__":
