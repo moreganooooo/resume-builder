@@ -16,6 +16,16 @@
 - This phase does not touch `scripts/orchestrator.py`'s `TemplateSchema`, `tailor_resume.md`, or anything in the builder call path (Step 4 of `build_tailored_resume`) — only the Step 5 critique call and its supporting prompt/schema/scoring files.
 - Do not implement any retry/gating/enforcement logic — this phase is content correctness only. Enforcement is Phase 3 (`docs/superpowers/specs/2026-07-01-resume-spec-enforcement-design.md`).
 
+## Execution Strategy (token-budget optimization)
+
+Dispatch as 2 batches, not 6 individual task dispatches, to cut subagent overhead:
+
+- **Batch A — Tasks 1-4:** one Haiku implementer dispatch covering all four (each is small, independent, and fully specified with literal before/after content). One Haiku reviewer dispatch on the combined diff.
+- **Batch B — Tasks 5-6:** one Haiku implementer dispatch (Task 6 depends on Task 5's output, so they must run in that order within the batch). One Sonnet reviewer dispatch — Task 5 touches the live Step 5 critique API call path, worth slightly more reviewer scrutiny than pure content edits.
+- **Final whole-branch review:** one Sonnet dispatch (not Opus) covering the full phase diff.
+
+Keep per-task TDD discipline intact within each batch (failing test before implementation, full suite before the batch's commit(s)) — the savings come from fewer dispatches and cheaper models, not from skipping verification. A batch may still produce one commit per task internally (each task's own commit message), or one combined commit per batch if that reads more cleanly — either is fine as long as the batch's own tests all pass before moving to the next batch.
+
 ---
 
 ### Task 1: Delete dead prompts and clean up Phase 1's leftover minor findings
