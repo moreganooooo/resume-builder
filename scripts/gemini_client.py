@@ -75,6 +75,17 @@ class GeminiClient:
             return schema
         cleaned = {}
         for k, v in schema.items():
+            if k == "properties" and isinstance(v, dict):
+                # Keys here are field names, not schema metadata -- must
+                # never be treated as candidates for UNSUPPORTED stripping,
+                # even when a field happens to be named e.g. "title" (a job
+                # title, not the $schema "title" keyword). A prior version
+                # stripped this blindly and deleted a field literally named
+                # "title" from properties while "required" still listed it,
+                # producing "property is not defined" from the API. Each
+                # property's own schema is still sanitized normally.
+                cleaned[k] = {name: GeminiClient.sanitize_schema(prop) for name, prop in v.items()}
+                continue
             if k in UNSUPPORTED:
                 continue
             if isinstance(v, dict):
