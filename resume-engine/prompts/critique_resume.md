@@ -90,8 +90,9 @@ Using `role_dna.yaml`, `ats_match.yaml`, and `manager_test.yaml`:
 
 ### Step 7 — Evaluate Supporting Sections
 
-Using `summary_patterns.yaml`, `certifications_score.yaml`, `specificity.yaml`:
+Using `summary_patterns.yaml`, `summary_score.yaml`, `certifications_score.yaml`, `specificity.yaml`:
 - Score summary quality and positioning clarity
+- Score Summary readability against the 5-line limit using summary_score.yaml's criteria
 - Confirm canonical certifications are present and correctly positioned
 - Score Education section specificity
 
