@@ -71,6 +71,12 @@
     background: #ffffff;
     padding: 0;
     margin: 0;
+    /* text-wrap is inherited, so setting it once here applies resume-wide
+       (Skills, bullets, Summary, Why, Education) rather than per-section.
+       Chromium's line-balancing reduces short widow lines when text wraps --
+       doesn't guarantee zero widows (a real post-render layout check would
+       be needed for that), but it's a free, safe improvement everywhere. */
+    text-wrap: pretty;
   }
 
   .page {
