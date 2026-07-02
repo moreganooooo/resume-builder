@@ -122,6 +122,15 @@ RESCORE_SLEEP  = 8    # seconds before the re-score call after a rewrite
 TOP_K_BULLETS    = 30    # bullets mined from the bank per run
 GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 
+# Bullets whose embedding cosine similarity to an already-selected bullet
+# meets or exceeds this are treated as near-duplicates (the same underlying
+# achievement, reworded) and skipped during mining -- the bank stores several
+# phrasing variants of some achievements, and a real run's per-company
+# minimum pulled multiple near-identical "audited CRM data, recovered $3M"
+# variants into the same resume instead of finding genuinely distinct
+# achievements.
+DEDUP_SIMILARITY_THRESHOLD = 0.93
+
 # Per-company minimum bullets to guarantee during mining, using the low end
 # of tailor_resume.md's per-role bullet-count targets. Pure global top-K
 # ranking has no per-company floor -- a JD whose embedding favors one
@@ -1184,6 +1193,11 @@ class ResumeEngine:
            (a real run mined 0 Mercor and 0 Callahan Creek bullets out of 30).
         4. Fill the remaining TOP_K_BULLETS - guaranteed slots from the overall
            ranking, skipping bullets already guaranteed.
+        Both 3 and 4 skip any candidate whose embedding is a near-duplicate
+        (DEDUP_SIMILARITY_THRESHOLD) of a bullet already selected -- the bank
+        stores several reworded variants of some achievements, and without
+        this a company's guaranteed minimum could fill entirely with
+        near-identical bullets about the same underlying achievement.
         """
         print("\nMining bullet bank...")
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
@@ -1245,23 +1259,34 @@ class ResumeEngine:
         selected_set: set = set()
         guaranteed_count = 0
 
+        def _is_near_duplicate(idx: int) -> bool:
+            if not selected_idx:
+                return False
+            return bool((embs_norm[selected_idx] @ embs_norm[idx]).max() >= DEDUP_SIMILARITY_THRESHOLD)
+
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
             for company, min_count in COMPANY_MIN_BULLETS.items():
                 company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
-                for i in company_ranked[:min_count]:
-                    if i not in selected_set:
-                        selected_idx.append(i)
-                        selected_set.add(i)
-                        guaranteed_count += 1
+                taken = 0
+                for i in company_ranked:
+                    if taken >= min_count:
+                        break
+                    if i in selected_set or _is_near_duplicate(i):
+                        continue
+                    selected_idx.append(i)
+                    selected_set.add(i)
+                    guaranteed_count += 1
+                    taken += 1
 
         for i in ranked_idx:
             if len(selected_idx) >= TOP_K_BULLETS:
                 break
             i = int(i)
-            if i not in selected_set:
-                selected_idx.append(i)
-                selected_set.add(i)
+            if i in selected_set or _is_near_duplicate(i):
+                continue
+            selected_idx.append(i)
+            selected_set.add(i)
 
         top_df      = df.iloc[selected_idx]
         bullets_out = top_df["Bullet Point"].fillna("").tolist()
