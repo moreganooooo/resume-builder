@@ -1476,6 +1476,21 @@ class ResumeEngine:
                     f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
                     f"=== REFINED BULLETS (source material if an issue requires populating "
                     f"or fixing Experience/achievements) ===\n{bullets_block}\n\n"
+                )
+                if any(v.startswith("Opening verb") for v in violations):
+                    # Naming only the 2 colliding bullets per violation risks
+                    # whack-a-mole: a replacement verb picked to fix one pair
+                    # can collide with some other, unflagged bullet, since
+                    # uniqueness is a whole-CV constraint, not a pairwise one.
+                    current_verbs = validate_resume.get_opening_verbs(resume_data)
+                    fix_contents += (
+                        f"=== ALL OPENING VERBS CURRENTLY USED ACROSS THE CV ===\n"
+                        f"{', '.join(current_verbs)}\n"
+                        f"When fixing a duplicate-opening-verb issue, the replacement verb must not "
+                        f"appear anywhere in this full list -- not just avoid the two bullets named "
+                        f"in the issue below.\n\n"
+                    )
+                fix_contents += (
                     f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
                 )
                 fix_text, _ = GeminiClient.generate(

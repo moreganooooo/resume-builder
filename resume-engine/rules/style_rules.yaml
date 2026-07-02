@@ -238,7 +238,8 @@ tool_mention_rules:
 skills_section:
   position: immediately_after_summary
   importance: highest_ats_signal
-  line_max_chars: 110  # including category label and commas; widow prevention
+  line_max_chars: 110  # including category label and commas; wrapping to a 2nd line is fine as long as it doesn't leave a short widow
+  widow_min_chars: 25  # a 2nd-line remainder shorter than this looks like a stray scrap, not an intentional wrap
   separator: ", "  # comma + space; no bullets or pipes inside a category
   label_style: bold  # via .skill-category class
   archetype_ordering:
