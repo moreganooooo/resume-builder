@@ -169,21 +169,43 @@ forbidden_openers:
 
 forbidden_phrases:
   - results-driven
+  - results-driven professional
   - results-oriented
   - dynamic professional
   - self-starter
   - go-getter
   - thought leader
   - visionary
+  - visionary leader
   - synergized
   - synergy
+  - synergies
   - best-in-class
   - passionate
+  - passionate professional
   - driven professional
   - seeking opportunities
   - proven track record
   - detail-oriented
+  - detail-oriented professional
   - team player
+  - accomplished professional
+  - highly motivated
+  - highly motivated professional
+  - dedicated professional
+  - seasoned professional
+  - strategic thinker
+  - innovative thinker
+  - hard worker
+  - fast learner
+  - excellent communication skills
+  - demonstrated success
+  - thrives in fast-paced environments
+  - world-class
+  - cutting-edge
+  - leverage
+  - leverage technology
+  - utilized
 
 punctuation_rules:
   - Bullets never end with periods or any trailing punctuation
