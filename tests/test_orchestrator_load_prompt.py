@@ -24,6 +24,15 @@ class TestLoadPromptFailsLoudly(unittest.TestCase):
         self.assertIn("hard_skills", content)
         self.assertIn("core_functions", content)
 
+    def test_load_yaml_raises_instead_of_silent_empty_dict(self):
+        with self.assertRaises(FileNotFoundError):
+            self.engine.load_yaml(self.engine.rules_dir, "this_file_does_not_exist.yaml")
+
+    def test_load_yaml_still_loads_a_real_file(self):
+        data = self.engine.load_yaml(self.engine.rules_dir, "style_rules.yaml")
+        self.assertIsInstance(data, dict)
+        self.assertIn("vague_verbs", data)
+
 
 if __name__ == "__main__":
     unittest.main()
