@@ -27,7 +27,12 @@ def _all_bullets(resume_data: dict) -> list[str]:
 def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
     violations = []
     phrases = [p.lower() for p in style_rules.get("forbidden_phrases", [])]
-    haystacks = [_strip_html(resume_data.get("SUMMARY_TEXT", ""))] + _all_bullets(resume_data)
+    haystacks = (
+        [_strip_html(resume_data.get("SUMMARY_TEXT", ""))]
+        + resume_data.get("SKILLS", [])
+        + [_strip_html(resume_data.get("WHY_TEXT", ""))]
+        + _all_bullets(resume_data)
+    )
     for text in haystacks:
         lowered = text.lower()
         for phrase in phrases:

@@ -105,6 +105,17 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("innovated" in v.lower() and "unique" in v.lower() for v in violations))
 
+    def test_flags_forbidden_phrase_in_skills_or_why_section(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**Marketing:** results-driven campaign management"]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("results-driven" in v for v in violations))
+
+        resume2 = _valid_resume()
+        resume2["WHY_TEXT"] = "<p><em>I bring a results-driven approach to this role.</em></p>"
+        violations2 = validate_resume.validate(resume2, STYLE_RULES)
+        self.assertTrue(any("results-driven" in v for v in violations2))
+
 
 if __name__ == "__main__":
     unittest.main()
