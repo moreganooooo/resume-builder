@@ -212,7 +212,9 @@ def get_pending_jds() -> list:
     root_files = sorted(
         os.path.join(JDS_DIR, name)
         for name in os.listdir(JDS_DIR)
-        if os.path.isfile(os.path.join(JDS_DIR, name)) and name != tracker_filename
+        if os.path.isfile(os.path.join(JDS_DIR, name))
+        and name != tracker_filename
+        and not name.startswith(".")  # skip hidden files like macOS's .DS_Store
     )
 
     all_paths = []
