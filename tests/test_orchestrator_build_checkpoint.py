@@ -171,6 +171,51 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         self.assertEqual(result.get("_page_count"), 3)
 
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_critique_call_attaches_summary_and_top_third_scoring_yaml(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        seen_critique_system_instructions = []
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                seen_critique_system_instructions.append(kwargs.get("system_instruction", ""))
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 85,
+                    "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result["_critique"]["top_third_score"], 85)
+        self.assertEqual(len(seen_critique_system_instructions), 1)
+        system_instruction = seen_critique_system_instructions[0]
+        self.assertIn("readability", system_instruction)          # from summary_score.yaml
+        self.assertIn("recruiter_comprehension_speed", system_instruction)  # from top_third_score.yaml
+
 
 if __name__ == "__main__":
     unittest.main()
