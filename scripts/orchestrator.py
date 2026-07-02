@@ -1380,6 +1380,8 @@ class ResumeEngine:
                     print(f"    - {v}")
                 fix_contents = (
                     f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
+                    f"=== REFINED BULLETS (source material if an issue requires populating "
+                    f"or fixing Experience/achievements) ===\n{bullets_block}\n\n"
                     f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
                 )
                 fix_text, _ = GeminiClient.generate(
