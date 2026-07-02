@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Tuple
 from render_html import render_html
+import normalize_resume
 import jd_manager
 
 
@@ -1319,6 +1320,8 @@ class ResumeEngine:
                 print("  ERROR: Could not parse builder JSON.")
                 print(f"  Raw response (first 500 chars):\n{resume_text[:500]}")
                 return {}
+
+            resume_data = normalize_resume.normalize(resume_data)
 
             checkpoint["resume_data"] = resume_data
             jd_manager.save_checkpoint(job_key, checkpoint)
