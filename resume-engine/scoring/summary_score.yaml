@@ -86,12 +86,12 @@ scoring_rules:
   readability:
 
     excellent:
-      - under_80_words
+      - within_5_line_limit
       - concise_sentences
       - direct_language
 
     poor:
-      - over_120_words
+      - exceeds_5_line_limit
       - dense_paragraphs
       - filler_language
 
