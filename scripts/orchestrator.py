@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from typing import List, Tuple
 from render_html import render_html
 import normalize_resume
+import validate_resume
 import jd_manager
 
 
@@ -603,6 +604,19 @@ class TemplateSchema(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# BULLET SORTING
+# ---------------------------------------------------------------------------
+
+def _bullet_sort_key(bullet_result: dict) -> tuple:
+    """PASS before FAIL, then descending believability_score. Ported from the
+    retired rank_bullets.md prompt -- this is a deterministic sort over data
+    the audit loop already computes, not a judgment call, so it needs no LLM
+    call. (ai_risk is not included: CritiqueSchema has no ai_risk field.)"""
+    manager_test_rank = 0 if bullet_result.get("manager_test") == "PASS" else 1
+    return (manager_test_rank, -bullet_result.get("believability_score", 0))
+
+
+# ---------------------------------------------------------------------------
 # RESUME ENGINE
 # ---------------------------------------------------------------------------
 
@@ -951,13 +965,18 @@ class ResumeEngine:
 
         self.warm_segment_cache(bullet_tuples)
 
+        # Track both bullets and their critique data for deterministic sorting
+        bullet_critique_pairs = []  # List of (bullet_text, critique_dict)
+
         start_index = len(refined_bullets)
         if start_index:
             print(f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} "
                   f"(already refined: {start_index}).")
 
-        def _record(refined_bullet: str) -> None:
+        def _record(refined_bullet: str, critique_data: dict = None) -> None:
             refined_bullets.append(refined_bullet)
+            if critique_data:
+                bullet_critique_pairs.append((refined_bullet, critique_data))
             if on_bullet_complete:
                 on_bullet_complete(list(refined_bullets))
 
@@ -986,7 +1005,7 @@ class ResumeEngine:
                 )
 
                 if not critique_text:
-                    _record(bullet)
+                    _record(bullet, None)
                     continue
 
                 critique_data = GeminiClient.parse_json(critique_text)
@@ -1071,9 +1090,13 @@ class ResumeEngine:
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
                                 print(f"   ✅ ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                                # Use the rescore data for the rewritten bullet
+                                critique_to_record = rescore_data
                             else:
                                 rewritten_bullet = bullet
                                 print(f"   🔄 KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                                # Use the original critique data
+                                critique_to_record = critique_data
                             break
 
                         except Exception as rw_err:
@@ -1085,16 +1108,23 @@ class ResumeEngine:
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
-                    _record(rewritten_bullet)
+                    _record(rewritten_bullet, critique_to_record)
                 else:
-                    _record(bullet)
+                    _record(bullet, critique_data)
 
             except Exception as e:
                 print(f"   ⚠️  Critique error on bullet {i+1}: {e}")
-                _record(bullet)
+                _record(bullet, None)
 
         print(f"\n{'='*60}")
         print(f"✅ Audit complete: {len(refined_bullets)} bullets refined")
+
+        # Sort bullets deterministically by manager_test and believability_score.
+        # Only apply sorting to bullets processed in this run (not resumed bullets).
+        if bullet_critique_pairs and start_index == 0:
+            sorted_pairs = sorted(bullet_critique_pairs, key=lambda pair: _bullet_sort_key(pair[1]))
+            refined_bullets = [bullet for bullet, critique in sorted_pairs]
+
         return refined_bullets
 
     def mine_bullet_bank(
@@ -1323,6 +1353,39 @@ class ResumeEngine:
 
             resume_data = normalize_resume.normalize(resume_data)
 
+            style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
+            violations = validate_resume.validate(resume_data, style_rules_for_validation)
+            max_fix_attempts = 3
+            fix_attempt = 0
+            while violations and fix_attempt < max_fix_attempts:
+                fix_attempt += 1
+                print(f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:")
+                for v in violations:
+                    print(f"    - {v}")
+                fix_contents = (
+                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
+                    f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
+                )
+                fix_text, _ = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    system_instruction=build_prompt,
+                    contents=fix_contents,
+                    response_schema=TemplateSchema,
+                    temperature=0.0,
+                )
+                fixed = GeminiClient.parse_json(fix_text or "")
+                if not fixed:
+                    print("  WARNING: Fix attempt returned unparseable JSON; keeping prior resume_data.")
+                    break
+                resume_data = normalize_resume.normalize(fixed)
+                violations = validate_resume.validate(resume_data, style_rules_for_validation)
+
+            if violations:
+                print(f"  ERROR: Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
+                for v in violations:
+                    print(f"    - {v}")
+                return {}
+
             checkpoint["resume_data"] = resume_data
             jd_manager.save_checkpoint(job_key, checkpoint)
 
@@ -1396,21 +1459,56 @@ class ResumeEngine:
 
         render_html(resume_data, html_out)
 
-        pdf_result = subprocess.run(
-            ["node", pdf_script, html_out, pdf_out, "--format=letter"],
-            capture_output=True, text=True
-        )
-        if pdf_result.returncode != 0:
-            print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
-            return {}
+        trim_instructions = [
+            "Trim the Summary to its 5-line limit and the Why section to its 8-line limit.",
+            "Tighten bullets: trim adjectives, front-load keywords, collapse redundant clauses.",
+            "Remove the least-relevant bullets, starting with Treering, while protecting the "
+            "Outreach.io implementation and CRM-hygiene bullets.",
+            "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings).",
+        ]
+        max_trim_attempts = len(trim_instructions)
+        trim_attempt = 0
+        page_count = None
 
-        print(pdf_result.stdout)
+        while True:
+            pdf_result = subprocess.run(
+                ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+                capture_output=True, text=True
+            )
+            if pdf_result.returncode != 0:
+                print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+                return {}
 
-        page_count_match = re.search(r"Pages:\s*(\d+)", pdf_result.stdout)
-        page_count = int(page_count_match.group(1)) if page_count_match else None
+            print(pdf_result.stdout)
+            page_count_match = re.search(r"Pages:\s*(\d+)", pdf_result.stdout)
+            page_count = int(page_count_match.group(1)) if page_count_match else None
+
+            if page_count is None or page_count <= 2 or trim_attempt >= max_trim_attempts:
+                break
+
+            print(f"  PDF is {page_count} pages, applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
+            trim_contents = (
+                f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
+                f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt]}"
+            )
+            trim_text, _ = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=build_prompt,
+                contents=trim_contents,
+                response_schema=TemplateSchema,
+                temperature=0.0,
+            )
+            trimmed = GeminiClient.parse_json(trim_text or "")
+            if not trimmed:
+                print("  WARNING: Trim attempt returned unparseable JSON; stopping trim loop.")
+                break
+            resume_data = normalize_resume.normalize(trimmed)
+            render_html(resume_data, html_out)
+            trim_attempt += 1
+
         if page_count is not None and page_count > 2:
-            print(f"  ⚠️  WARNING: PDF is {page_count} pages — spec requires exactly 2. "
-                  f"(Automatic trim-and-retry is not implemented yet; see Phase 3.)")
+            print(f"  ERROR: PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
+            return {}
 
         print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
