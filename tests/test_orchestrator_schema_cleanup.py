@@ -40,6 +40,35 @@ class TestSchemaCleanup(unittest.TestCase):
         self.assertIn("enum", kckcc_field)
         self.assertEqual(set(kckcc_field["enum"]), {"writing_content", "enablement_mgmt", "generalist"})
 
+    def test_experience_entry_required_fields_survive_ref_resolution_and_sanitize(self):
+        """
+        Regression test: EXPERIENCE used to be List[dict], which has no
+        required sub-properties at all, so an empty {} is fully valid
+        against what Gemini actually receives -- a real run got EXPERIENCE
+        back as several empty objects. EXPERIENCE is now List[ExperienceEntry],
+        a nested Pydantic model, which Pydantic serializes as
+        items: {"$ref": "#/$defs/ExperienceEntry"}. sanitize_schema() deletes
+        $defs unconditionally, so resolve_refs() must inline the ref *before*
+        sanitize_schema runs, or the schema sent to Gemini would have a
+        dangling $ref (the likely actual cause of the "nested $defs caused a
+        400" this schema used to avoid).
+        """
+        raw_schema = orchestrator.TemplateSchema.model_json_schema()
+        self.assertIn("$defs", raw_schema, "test setup check: Pydantic should still emit $defs for a nested model")
+
+        resolved = GeminiClient.resolve_refs(raw_schema)
+        sanitized = GeminiClient.sanitize_schema(resolved)
+
+        self.assertNotIn("$defs", sanitized)
+        exp_items = sanitized["properties"]["EXPERIENCE"]["items"]
+        self.assertNotIn("$ref", exp_items)
+        self.assertEqual(set(exp_items["required"]), {"title", "company", "period", "achievements"})
+        self.assertEqual(exp_items["properties"]["achievements"]["type"], "array")
+
+    def test_resolve_refs_raises_on_unresolvable_ref(self):
+        with self.assertRaises(ValueError):
+            GeminiClient.resolve_refs({"properties": {"x": {"$ref": "#/$defs/Missing"}}})
+
 
 if __name__ == "__main__":
     unittest.main()

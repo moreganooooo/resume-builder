@@ -559,12 +559,29 @@ class EducationItem(BaseModel):
     year:        str = Field(default="", description="Graduation year or date range. Leave blank if unknown.")
     description: str = Field(default="", description="Honors, GPA, relevant coursework. Leave blank if none.")
 
+class ExperienceEntry(BaseModel):
+    """
+    A previous version used EXPERIENCE: List[dict] to avoid nested $defs in
+    responseSchema, believing Gemini's structured-output API couldn't handle
+    them -- but a real run then got EXPERIENCE back as several empty {}
+    objects: List[dict]'s per-item schema has no required properties at all,
+    so an empty object is entirely valid against what Gemini actually
+    receives (the Field description explaining title/company/achievements
+    lives only in Pydantic metadata, which GeminiClient.sanitize_schema()
+    strips before submission). The real cause of the earlier 400 was
+    sanitize_schema() deleting $defs unconditionally, leaving nested models'
+    $ref pointers dangling -- fixed by GeminiClient.resolve_refs(), which
+    inlines $ref/$defs before sanitize_schema runs. This model now lets
+    "required" actually reach the API.
+    """
+    title:        str       = Field(description="Job title, reframed per this JD's archetype if applicable.")
+    company:      str       = Field(description="Company name, exactly as used in tailor_resume.md's per-role bullet targets.")
+    period:       str       = Field(description="Employment dates, MM/YYYY - MM/YYYY format.")
+    location:     str       = Field(default="", description="City/state or Remote. Leave blank if unknown.")
+    achievements: List[str] = Field(description="Achievement bullets for this role. Must not be empty.")
+
 class TemplateSchema(BaseModel):
-    """
-    Flattened schema for the builder call.
-    EXPERIENCE/EDUCATION/CERTIFICATIONS are List[dict] to avoid
-    deeply-nested $defs in responseSchema that caused the builder 400.
-    """
+    """Flattened schema for the builder call."""
     NAME:                   str       = Field(description="Must match candidate name.")
     TAGLINE:                str       = Field(description="Max 80 chars. Follows archetype tagging rules.")
     PHONE:                  str
@@ -577,14 +594,12 @@ class TemplateSchema(BaseModel):
     SECTION_SUMMARY:        str       = Field(default="Professional Summary")
     SUMMARY_TEXT:           str       = Field(description="Max 5 lines. First sentence MUST be bolded using <strong> tags. No generic filler.")
     SECTION_EXPERIENCE:     str       = Field(default="Work Experience")
-    EXPERIENCE:             List[dict] = Field(
+    EXPERIENCE:             List[ExperienceEntry] = Field(
         description=(
-            "List of work experience objects. Each dict must contain: "
-            "title (str), company (str), period (str), location (str, city/state or Remote), "
-            "achievements (list of str). "
-            "Bullet counts per role must match tailor.md targets exactly: "
-            "Mercor 2-3, Treering 6-8, Inside Sales Team 4-5, "
-            "Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4."
+            "One entry per company. Bullet counts per role must match "
+            "tailor.md targets exactly: Mercor 2-3, Treering 6-8, "
+            "Inside Sales Team 4-5, Element 8/Strategy LLC 3-4, VML 3-4, "
+            "Callahan Creek 3-4."
         )
     )
     KU_ACHIEVEMENT_KEY:     Literal["content_generalist", "email_ops", "content"] = Field(description=(
