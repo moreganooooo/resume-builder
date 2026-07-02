@@ -120,8 +120,23 @@ RESCORE_SLEEP  = 8    # seconds before the re-score call after a rewrite
 
 # --- PIPELINE CONSTANTS ---
 TOP_K_BULLETS    = 30    # bullets mined from the bank per run
-SEMANTIC_POOL    = 30    # semantic pre-filter pool size (Stage 1)
 GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
+
+# Per-company minimum bullets to guarantee during mining, using the low end
+# of tailor_resume.md's per-role bullet-count targets. Pure global top-K
+# ranking has no per-company floor -- a JD whose embedding favors one
+# company can starve every other company of material entirely (a real run
+# mined 0 Mercor and 0 Callahan Creek bullets out of 30). These minimums
+# are pulled from each company's own bullet pool before the remaining
+# TOP_K_BULLETS - sum(minimums) slots are filled by the global ranking.
+COMPANY_MIN_BULLETS = {
+    "Mercor": 2,
+    "Treering Yearbooks": 6,
+    "Inside Sales Team": 4,
+    "Element 8 / Strategy LLC": 3,
+    "VML": 3,
+    "Callahan Creek": 3,
+}
 
 
 # --- STRENGTH TIER SORT ORDER ---
@@ -1140,16 +1155,20 @@ class ResumeEngine:
         master_resume: dict,
     ) -> List[Tuple[str, str, str]]:
         """
-        Semantic + gem-aware retrieval from bullet-bank-keepers-audited.csv.
+        Semantic + gem-aware retrieval from bullet-bank-keepers-audited.csv, with
+        a per-company floor so no target company is starved of material.
 
         Returns List[Tuple[str, str, str]] -- (bullet_text, company, tags) --
         so audit_and_refine_bullets() can build per-bullet segment bundles (Gap 3).
 
-        Stage 1: embed JD, compute cosine similarity against pre-embedded bank,
-                 take top SEMANTIC_POOL candidates.
-        Stage 2: gem-aware reranking -- adds GEM_BOOST_WEIGHT * hidden_gem_score
-                 bonus to similarity score, then sorts by strength_category tier,
-                 then takes top TOP_K_BULLETS.
+        1. Embed JD, compute cosine similarity against the whole pre-embedded bank.
+        2. Rank the whole bank by gem-boosted similarity, then strength_category tier.
+        3. Guarantee each company in COMPANY_MIN_BULLETS its minimum from within
+           its own bullets (ranked the same way) -- a pure global top-K let one
+           company's high-scoring bullets crowd out every other company entirely
+           (a real run mined 0 Mercor and 0 Callahan Creek bullets out of 30).
+        4. Fill the remaining TOP_K_BULLETS - guaranteed slots from the overall
+           ranking, skipping bullets already guaranteed.
         """
         print("\nMining bullet bank...")
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
@@ -1193,31 +1212,49 @@ class ResumeEngine:
         embs_norm = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
         sims      = embs_norm @ jd_vec
 
-        pool_size = min(SEMANTIC_POOL, len(df))
-        pool_idx  = np.argsort(sims)[::-1][:pool_size]
-        pool_df   = df.iloc[pool_idx].copy()
-        pool_sims = sims[pool_idx]
-
-        if "hidden_gem_score" in pool_df.columns:
-            gem_scores = pd.to_numeric(pool_df["hidden_gem_score"], errors="coerce").fillna(0).values
-            boosted    = pool_sims + GEM_BOOST_WEIGHT * gem_scores
+        if "hidden_gem_score" in df.columns:
+            gem_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0).values
+            boosted    = sims + GEM_BOOST_WEIGHT * gem_scores
         else:
-            boosted    = pool_sims
+            boosted    = sims
 
-        if "strength_category" in pool_df.columns:
-            tier_rank = pool_df["strength_category"].map(STRENGTH_ORDER).fillna(99).values
+        if "strength_category" in df.columns:
+            tier_rank = df["strength_category"].map(STRENGTH_ORDER).fillna(99).values
         else:
-            tier_rank = np.zeros(len(pool_df))
+            tier_rank = np.zeros(len(df))
 
-        order = np.lexsort(((-boosted), tier_rank))
-        pool_df   = pool_df.iloc[order].reset_index(drop=True)
+        # Full-bank ranking, best first: lower tier_rank wins, then higher boosted score.
+        ranked_idx = np.lexsort((-boosted, tier_rank))
 
-        top_df      = pool_df.head(TOP_K_BULLETS)
+        selected_idx: list = []
+        selected_set: set = set()
+        guaranteed_count = 0
+
+        if "Role / Company" in df.columns:
+            company_values = df["Role / Company"].values
+            for company, min_count in COMPANY_MIN_BULLETS.items():
+                company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
+                for i in company_ranked[:min_count]:
+                    if i not in selected_set:
+                        selected_idx.append(i)
+                        selected_set.add(i)
+                        guaranteed_count += 1
+
+        for i in ranked_idx:
+            if len(selected_idx) >= TOP_K_BULLETS:
+                break
+            i = int(i)
+            if i not in selected_set:
+                selected_idx.append(i)
+                selected_set.add(i)
+
+        top_df      = df.iloc[selected_idx]
         bullets_out = top_df["Bullet Point"].fillna("").tolist()
         company_out = top_df["Role / Company"].fillna("").tolist() if "Role / Company" in top_df.columns else ["" ] * len(top_df)
         tags_out    = top_df["Tags"].fillna("").tolist()            if "Tags"           in top_df.columns else ["" ] * len(top_df)
 
-        print(f"  Mined {len(bullets_out)} bullets from bank (pool={pool_size}, top_k={TOP_K_BULLETS}).")
+        print(f"  Mined {len(bullets_out)} bullets from bank "
+              f"({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).")
         return list(zip(bullets_out, company_out, tags_out))
 
     def build_tailored_resume(
@@ -1305,6 +1342,15 @@ class ResumeEngine:
         jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(refined_bullets)} bullets after audit.")
 
+        # audit_and_refine_bullets emits exactly one output bullet per input
+        # tuple, in order, so re-pairing by index recovers each bullet's
+        # source company without changing that function's return contract or
+        # the checkpoint format. Without this, the builder saw a flat list of
+        # bullet text with no company attribution at all and had to guess
+        # which company each bullet belonged to -- a likely contributor to it
+        # giving up and emitting empty Experience entries.
+        bullet_companies = [company for (_, company, _) in bullet_tuples[:len(refined_bullets)]]
+
         # --- Step 4: Build resume ---
         print("\nStep 4: Building resume...")
         # BUG: this was loading "build_resume.md", which does not exist in
@@ -1339,7 +1385,10 @@ class ResumeEngine:
             # The variable tail (JD + bullets) sits alone in combined_contents.
             builder_system = f"{build_prompt}\n\n{kb_context}"
 
-            bullets_block = "\n".join(f"- {b}" for b in refined_bullets)
+            bullets_block = "\n".join(
+                f"- [{company or 'unknown company'}] {b}"
+                for b, company in zip(refined_bullets, bullet_companies)
+            )
             combined_contents = (
                 f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
