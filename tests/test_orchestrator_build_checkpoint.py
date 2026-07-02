@@ -138,6 +138,65 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_verb_duplication_fix_attempt_sees_every_verb_already_in_use(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # A fix prompt naming only the 2 colliding bullets per violation risks
+        # whack-a-mole: a replacement verb picked to fix one pair can collide
+        # with some other, unflagged bullet, since uniqueness is a whole-CV
+        # constraint. The fix call must see every verb already in use.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        template_call_count = {"n": 0}
+        captured_fix_contents = {}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                template_call_count["n"] += 1
+                if template_call_count["n"] == 1:
+                    return (json.dumps({
+                        "SUMMARY": "Test summary.",
+                        "EXPERIENCE": [{
+                            "title": "Engineer", "company": "Acme", "period": "2020 - 2021",
+                            "achievements": [
+                                "Managed a team of 5 engineers across two products",
+                                "Managed the migration to a new billing platform",
+                            ],
+                        }],
+                    }), {})
+                captured_fix_contents["contents"] = kwargs.get("contents")
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertIn("ALL OPENING VERBS CURRENTLY USED", captured_fix_contents["contents"])
+        self.assertIn("managed", captured_fix_contents["contents"].lower())
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_pdf_failure_leaves_checkpoint_and_returns_falsy(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):

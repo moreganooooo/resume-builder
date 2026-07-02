@@ -81,6 +81,20 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("110" in v for v in violations))
 
+    def test_allows_skills_line_that_wraps_cleanly_to_a_full_second_line(self):
+        # Wrapping onto a second line is normal, unremarkable text wrapping --
+        # only a short widow (or a 3rd-line-length overflow) is a defect.
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**Cat:** " + "X" * 155]  # plain length 160, remainder 50 -- a full 2nd line
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("skills line" in v.lower() for v in violations))
+
+    def test_flags_skills_line_that_leaves_a_short_widow(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**Cat:** " + "X" * 110]  # plain length 115, remainder 5 -- a stray scrap
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("widow" in v.lower() for v in violations))
+
     def test_flags_pronoun_outside_why_section(self):
         resume = _valid_resume()
         resume["SUMMARY_TEXT"] = "<strong>I am a lifecycle marketer.</strong>"
@@ -99,6 +113,43 @@ class TestValidateResume(unittest.TestCase):
         # _valid_resume() already has "Recovered 3M" in a bullet -- now it's in both places.
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("3m" in v.lower() and ("once" in v.lower() or "duplicate" in v.lower()) for v in violations))
+
+    def test_does_not_flag_k12_as_a_duplicate_of_an_unrelated_12(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Authored niche email sequences for K-12 segments in Outreach.io, achieving a 95% open rate",
+            "Promoted to sole manager of a 12-member team within six months",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("metric" in v.lower() for v in violations))
+
+    def test_does_not_flag_k12_with_en_dash_either(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Mapped reference personas across the K–12 buying unit to accelerate first calls",
+            "Promoted to sole manager of a 12-member team within six months",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("metric" in v.lower() for v in violations))
+
+    def test_does_not_flag_same_number_in_different_contexts(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Recovered 3M in dormant pipeline through CRM audits and reactivation workflows",
+            "Ranked as a Top 10 Performer for two consecutive months",
+        ]
+        resume["SUMMARY_TEXT"] = "<strong>Lifecycle marketer with 10+ years of experience.</strong>"
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("metric '10'" in v.lower() for v in violations))
+
+    def test_still_flags_same_number_and_context_repeated(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Managed a 12-member cross-functional team across three regions",
+            "Onboarded a 12-member team within the first quarter",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("12" in v and "metric" in v.lower() for v in violations))
 
     def test_does_not_flag_numeral_led_bullets_as_duplicate_opening_verbs(self):
         resume = _valid_resume()
