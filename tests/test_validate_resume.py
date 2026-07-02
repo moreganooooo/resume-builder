@@ -20,7 +20,7 @@ def _valid_resume():
         "SUMMARY_TEXT": "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> Returning to full-time work after a caregiving pause.",
         "SKILLS": ["**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns"],
         "EXPERIENCE": [
-            {"company": "Treering", "achievements": [
+            {"title": "Lifecycle Marketing Manager", "company": "Treering", "period": "08/2016 – 08/2024", "achievements": [
                 "Recovered 3M in dormant pipeline through CRM audits and reactivation workflows",
                 "Architected the SDR onboarding program used company-wide for three years",
             ]},
@@ -34,6 +34,19 @@ class TestValidateResume(unittest.TestCase):
     def test_valid_resume_has_no_violations(self):
         violations = validate_resume.validate(_valid_resume(), STYLE_RULES)
         self.assertEqual(violations, [])
+
+    def test_flags_empty_experience_entries(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"] = [{}, {}, {}]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertEqual(len(violations), 6)  # 3 missing-fields + 3 no-achievements, one pair per empty entry
+
+    def test_flags_experience_entry_missing_achievements_only(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"] = [{"title": "Content Strategist", "company": "Acme", "period": "01/2020 – 01/2022", "achievements": []}]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("no achievement bullets", violations[0])
 
     def test_flags_forbidden_phrase_in_summary(self):
         resume = _valid_resume()

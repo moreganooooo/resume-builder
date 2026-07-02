@@ -126,6 +126,17 @@ def _check_metric_uniqueness(resume_data: dict) -> list[str]:
     return violations
 
 
+def _check_experience_completeness(resume_data: dict) -> list[str]:
+    violations = []
+    for i, job in enumerate(resume_data.get("EXPERIENCE", [])):
+        missing = [f for f in ("title", "company", "period") if not job.get(f)]
+        if missing:
+            violations.append(f"Experience entry {i} is missing required field(s) {missing}: {job!r}")
+        if not job.get("achievements"):
+            violations.append(f"Experience entry {i} ({job.get('company', 'unknown company')!r}) has no achievement bullets")
+    return violations
+
+
 def validate(resume_data: dict, style_rules: dict) -> list[str]:
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
@@ -135,4 +146,5 @@ def validate(resume_data: dict, style_rules: dict) -> list[str]:
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
+    violations.extend(_check_experience_completeness(resume_data))
     return violations
