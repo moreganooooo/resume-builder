@@ -527,6 +527,7 @@ class ResumeCritiqueSchema(BaseModel):
     summary_alignment_score: int       = Field(description="0-100: does the Summary match the JD role and tone?")
     skills_relevance_score:  int       = Field(description="0-100: are Skills JD-relevant?")
     overall_fit_score:       int       = Field(description="0-100: holistic resume-to-JD fit")
+    top_third_score:         int       = Field(description="0-100: does the top third of page one alone communicate fit within a 15-30 second first read (first-impression / above-the-fold test)?")
     flags:                   List[str] = Field(description="Specific issues found")
     recommendations:         List[str] = Field(description="Actionable fixes, one per flag")
 
@@ -1333,13 +1334,20 @@ class ResumeEngine:
             resume_data["_critique"] = critique_data
         else:
             critique_prompt = self.load_prompt("critique_resume.md")
+            summary_score_rules    = json.dumps(self.load_yaml(self.scoring_dir, "summary_score.yaml"))
+            top_third_score_rules  = json.dumps(self.load_yaml(self.scoring_dir, "top_third_score.yaml"))
+            critique_system = (
+                f"{critique_prompt}"
+                f"\n\nSUMMARY SCORING RUBRIC:\n{summary_score_rules}"
+                f"\n\nTOP-THIRD-OF-PAGE-ONE SCORING RUBRIC:\n{top_third_score_rules}"
+            )
             critique_contents = (
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
                 f"=== RESUME JSON ===\n{json.dumps(resume_data, indent=2)}"
             )
             critique_text, _ = GeminiClient.generate(
                 model=CRITIQUE_MODEL,
-                system_instruction=critique_prompt,
+                system_instruction=critique_system,
                 contents=critique_contents,
                 response_schema=ResumeCritiqueSchema,
                 temperature=0.0,
@@ -1349,6 +1357,7 @@ class ResumeEngine:
                 print(f"  Holistic critique scores:")
                 print(f"    summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
                 print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
+                print(f"    top_third         : {critique_data.get('top_third_score',         '?')}")
                 print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
                 flags = critique_data.get("flags", [])
                 if flags:

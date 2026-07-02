@@ -31,6 +31,10 @@ Load and apply all of the following scoring files before evaluating:
 16. `specificity.yaml` — Education section specificity (bullet- and
     summary-level specificity are already covered by believability.yaml and
     summary_patterns.yaml respectively)
+17. `summary_score.yaml` — Summary quality scoring by JD-relevance, specificity,
+    alignment, credibility, and readability
+18. `top_third_score.yaml` — Whether the top third of page one alone
+    communicates fit within a 15-30 second first read
 
 > Rule: If a file is listed here but not attached, flag it as missing rather than
 > proceeding without it. Do not substitute guesses for missing scoring criteria.
@@ -97,6 +101,17 @@ Using `ai_risk.yaml` and `recruiter_score.yaml`:
 - Flag any AI-pattern risk signals
 - Score recruiter first-pass readability
 
+### Step 9 — Evaluate Top-Third-of-Page-One Impact
+
+Using `top_third_score.yaml`:
+- Simulate a hiring manager's first 15-30 seconds of reading: is the single
+  strongest accomplishment visible in the top third of page one, without
+  scrolling?
+- Score `role_clarity`, `specialization_visibility`,
+  `strongest_evidence_visibility`, `recruiter_comprehension_speed`, and
+  `differentiation` per the rubric's weights
+- Flag `weak_top_section` if the strongest evidence is buried below the fold
+
 ---
 
 ## Output Format
@@ -126,6 +141,7 @@ SECTION SCORES
   Certifications:           [x/100]
   AI Risk:                  [x/100] (lower = better)
   Recruiter Readability:    [x/100]
+  Top-Third Impression:     [x/100]
 
 OVERALL SCORE: [x/100]
 
