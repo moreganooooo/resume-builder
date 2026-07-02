@@ -1523,8 +1523,14 @@ class ResumeEngine:
                 _log_cache_stats(fix_usage, 0, 0)
                 fixed = GeminiClient.parse_json(fix_text or "")
                 if not fixed:
-                    print("  WARNING: Fix attempt returned unparseable JSON; keeping prior resume_data.")
-                    break
+                    # A transient failure here (e.g. all of GeminiClient.generate()'s
+                    # own inner retries/fallback exhausted) shouldn't burn the whole
+                    # outer fix loop -- fix_attempt was already incremented above, so
+                    # continuing just moves on to the next outer attempt with the
+                    # same (unchanged) violations, rather than giving up after one
+                    # network hiccup with attempts still remaining.
+                    print(f"  WARNING: Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
+                    continue
                 resume_data = normalize_resume.normalize(fixed)
                 violations = validate_resume.validate(resume_data, style_rules_for_validation)
 
@@ -1651,8 +1657,16 @@ class ResumeEngine:
             _log_cache_stats(trim_usage, 0, 0)
             trimmed = GeminiClient.parse_json(trim_text or "")
             if not trimmed:
-                print("  WARNING: Trim attempt returned unparseable JSON; stopping trim loop.")
-                break
+                # A transient failure here (e.g. all of GeminiClient.generate()'s
+                # own inner retries/fallback exhausted) shouldn't burn the whole
+                # trim loop -- unlike the violations-found branch below, this
+                # point is reached before trim_attempt is incremented, so it
+                # must be bumped here too or `continue` would spin on the same
+                # index forever.
+                print(f"  WARNING: Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
+                      f"keeping prior resume_data and retrying if attempts remain.")
+                trim_attempt += 1
+                continue
 
             trimmed_resume_data = normalize_resume.normalize(trimmed)
             trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation)

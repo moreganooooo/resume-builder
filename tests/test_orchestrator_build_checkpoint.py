@@ -197,6 +197,65 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_fix_loop_survives_one_unparseable_attempt_and_still_succeeds(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # A transient failure (e.g. GeminiClient.generate() exhausting its own
+        # inner retries/fallback and returning None) on one outer fix attempt
+        # must not burn the whole loop when attempts remain -- previously this
+        # `break`-ed out immediately, wasting any remaining max_fix_attempts.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        bad_resume = {
+            "SUMMARY_TEXT": "<strong>A results-driven lifecycle marketer.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        good_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        template_call_count = {"n": 0}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                template_call_count["n"] += 1
+                if template_call_count["n"] == 1:
+                    return (json.dumps(bad_resume), {})  # initial build, has a violation
+                if template_call_count["n"] == 2:
+                    return (None, {})  # fix attempt 1/3: total failure, unparseable
+                return (json.dumps(good_resume), {})  # fix attempt 2/3: resolves it
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(template_call_count["n"], 3)
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_pdf_failure_leaves_checkpoint_and_returns_falsy(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):
@@ -433,6 +492,71 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         self.assertEqual(result, {})
         mock_subprocess_run.assert_not_called()  # never reached PDF generation
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_trim_loop_survives_one_unparseable_attempt_and_still_succeeds(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # Same class of bug as the fix-loop test above, but trim_attempt is
+        # incremented in a different spot in this loop (after the API call,
+        # not before) -- the unparseable-JSON branch has to bump it manually
+        # before continuing, or the loop would spin on the same index forever.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        good_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        template_call_count = {"n": 0}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                template_call_count["n"] += 1
+                if template_call_count["n"] == 1:
+                    return (json.dumps(good_resume), {})  # initial build
+                if template_call_count["n"] == 2:
+                    return (None, {})  # trim attempt 1: total failure, unparseable
+                return (json.dumps(good_resume), {})  # trim attempt 2: succeeds
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        # HTML is only re-rendered after a *successful* trim, so the unparseable
+        # attempt's re-check of the same (unchanged) HTML still reports 3 pages.
+        page_counts = [3, 3, 2]
+        pdf_call_count = {"n": 0}
+
+        def subprocess_side_effect(*args, **kwargs):
+            pages = page_counts[pdf_call_count["n"]]
+            pdf_call_count["n"] += 1
+            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+
+        mock_subprocess_run.side_effect = subprocess_side_effect
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(result["_page_count"], 2)
+        self.assertEqual(pdf_call_count["n"], 3)
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")
