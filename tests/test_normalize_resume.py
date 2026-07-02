@@ -45,6 +45,12 @@ class TestNormalizeResume(unittest.TestCase):
         normalize_resume.normalize(self.raw)
         self.assertEqual(self.raw, original)
 
+    def test_forces_tagline_ampersand_case_insensitively(self):
+        data = dict(self.raw)
+        data["TAGLINE"] = "Lifecycle Marketing Manager And CRM Strategist"
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,14 +20,14 @@ _SECTION_DEFAULTS = {
 
 
 def _and_to_ampersand(text: str) -> str:
-    return re.sub(r"\band\b", "&", text)
+    return re.sub(r"\band\b", "&", text, flags=re.IGNORECASE)
 
 
 def normalize(resume_data: dict) -> dict:
     """Returns a new dict; never mutates the input."""
     result = dict(resume_data)
 
-    result["CERTIFICATIONS"] = fixed_content.CERTIFICATIONS
+    result["CERTIFICATIONS"] = list(fixed_content.CERTIFICATIONS)
     result["EDUCATION"] = fixed_content.build_education(
         result.get("KU_ACHIEVEMENT_KEY", ""),
         result.get("KCKCC_ACHIEVEMENT_KEY", ""),
