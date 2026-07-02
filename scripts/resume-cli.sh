@@ -22,7 +22,24 @@ resume() {
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/orchestrator.py "$@" )
       ;;
     test)
-      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python -m unittest discover -s tests -v )
+      # unittest's own pass/fail reporting goes to stderr; the app code under
+      # test prints a lot of its own operational logging (Step 1/2/3..., batch
+      # summaries, etc.) to stdout. Discarding stdout here keeps the actual
+      # test results clean and readable without touching any test code.
+      #   resume test        -- one dot per passing test, full detail only on failure
+      #   resume test -v     -- one line per test (name + ok/FAIL), still no app noise
+      #   resume test -vv    -- everything, including the app's own logging
+      case "$1" in
+        -vv)
+          ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python -m unittest discover -s tests -v )
+          ;;
+        -v|verbose)
+          ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python -m unittest discover -s tests -v 1>/dev/null )
+          ;;
+        *)
+          ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python -m unittest discover -s tests 1>/dev/null )
+          ;;
+      esac
       ;;
     *)
       echo "resume-builder shortcuts:"
@@ -30,7 +47,9 @@ resume() {
       echo "  resume cd              just cd into the project"
       echo "  resume run             run orchestrator.py in batch mode (processes every pending JD)"
       echo "  resume run jds/x.txt   run orchestrator.py in single-file mode"
-      echo "  resume test            run the full test suite"
+      echo "  resume test            run the full test suite (compact: dots + summary)"
+      echo "  resume test -v         same, but lists every test by name"
+      echo "  resume test -vv        same, but shows the app's own logging too"
       ;;
   esac
 }
