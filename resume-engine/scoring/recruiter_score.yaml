@@ -20,10 +20,11 @@ criteria:
     description: >
       Can a recruiter determine total years of relevant experience within a
       6-second scan, without doing date math themselves? Driven by whether
-      role periods are consistently formatted (MMM YYYY per formatting_rules.yaml)
-      and whether the tagline/summary states seniority level explicitly.
+      role periods are consistently formatted (MM/YYYY with en-dash, per
+      style_rules.yaml) and whether the tagline/summary states seniority
+      level explicitly.
     examples:
-      good: "Consistent MMM YYYY dates across every role; tagline states seniority"
+      good: "Consistent MM/YYYY dates across every role; tagline states seniority"
       bad: "Mixed date formats; no explicit seniority signal anywhere in top third"
 
   hard_skill_keyword_visibility:

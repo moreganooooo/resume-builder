@@ -352,8 +352,6 @@ class RulesBundle:
         hf  = _load_yaml_safe(os.path.join(rules_dir, "hard_failures.yaml"),        "hard_failures")
         tr  = _load_yaml_safe(os.path.join(rules_dir, "truthfulness_rules.yaml"),   "truthfulness_rules")
         sr  = _load_yaml_safe(os.path.join(rules_dir, "style_rules.yaml"),          "style_rules")
-        ats = _load_yaml_safe(os.path.join(rules_dir, "ats_rules.yaml"),             "ats_rules")
-        _load_yaml_safe(os.path.join(rules_dir, "formatting_rules.yaml"),            "formatting_rules")
 
         self.rewrite_rules_block = "\n".join([
             "=== VERB INTENT MAP ===",

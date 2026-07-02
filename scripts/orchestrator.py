@@ -747,6 +747,35 @@ class ResumeEngine:
             + data
         )
 
+    def build_bullet_critique_system(self) -> str:
+        """
+        Builds the complete critique system prompt for bullet auditing.
+        Loads all rule files and concatenates them with the critique_bullet.md prompt.
+        This is extracted into a separate testable method so tests can verify
+        the final prompt structure without running the full audit loop.
+        """
+        critique_prompt     = self.load_prompt("critique_bullet.md")
+        manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
+        believability_rules = json.dumps(self.load_yaml(self.scoring_dir, "believability.yaml"))
+        style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
+        language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
+        verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
+        verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
+        hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
+        truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
+
+        critique_system = (
+            f"{critique_prompt}"
+            f"\n\nMANAGER TEST RULES:\n{manager_test_rules}"
+            f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
+            f"\n\nHARD FAILURES (any of these = automatic FAIL):\n{hard_failures}"
+            f"\n\nTRUTHFULNESS RULES:\n{truthfulness_rules}"
+            f"\n\nQUALITY RULES:\n{language_quality}"
+            f"\n\nSTYLE RULES (includes ATS rules):\n{style_rules}"
+            f"\n\n{self.recruiter_context_block()}"
+        )
+        return critique_system
+
     def _build_audit_segment_bundle(self, company: str, tags: str) -> str:
         """
         Builds a per-bullet context bundle for the rewrite call (Tier 2).
@@ -889,36 +918,17 @@ class ResumeEngine:
                   f"Skipping audit loop.")
             return refined_bullets
 
-        critique_prompt     = self.load_prompt("critique_bullet.md")
-        manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
-        print("   ✅ Rules loaded: manager_test")
-        believability_rules = json.dumps(self.load_yaml(self.scoring_dir, "believability.yaml"))
-        print("   ✅ Rules loaded: believability")
-        style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
-        print("   ✅ Rules loaded: style_rules")
-        language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
-        print("   ✅ Rules loaded: language_quality")
-        verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
-        print("   ✅ Rules loaded: verb_taxonomy")
-        verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
-        print("   ✅ Rules loaded: verb_intent_mapping")
-        hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
-        print("   ✅ Rules loaded: hard_failures")
-        truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
-        print("   ✅ Rules loaded: truthfulness_rules")
-        ats_rules           = json.dumps(self.load_yaml(self.rules_dir,   "ats_rules.yaml"))
-        print("   ✅ Rules loaded: ats_rules")
+        critique_system = self.build_bullet_critique_system()
+        print("   ✅ Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
 
-        critique_system = (
-            f"{critique_prompt}"
-            f"\n\nMANAGER TEST RULES:\n{manager_test_rules}"
-            f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
-            f"\n\nHARD FAILURES (any of these = automatic FAIL):\n{hard_failures}"
-            f"\n\nTRUTHFULNESS RULES:\n{truthfulness_rules}"
-            f"\n\nQUALITY RULES:\n{language_quality}"
-            f"\n\nATS RULES:\n{ats_rules}"
-            f"\n\n{self.recruiter_context_block()}"
-        )
+        # Load rules needed for rewrite prompt
+        verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
+        verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
+        language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
+        hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
+        truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
+        style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
+
         rewrite_rules_block = "\n".join([
             "=== VERB INTENT MAP ===",
             "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
