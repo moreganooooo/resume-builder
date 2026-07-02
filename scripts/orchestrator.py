@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List, Tuple
+from typing import List, Literal, Tuple
 from render_html import render_html
 import normalize_resume
 import validate_resume
@@ -572,13 +572,15 @@ class TemplateSchema(BaseModel):
             "Element 8/Strategy LLC 3-4, VML 3-4, Callahan Creek 3-4."
         )
     )
-    KU_ACHIEVEMENT_KEY:     str       = Field(description=(
+    KU_ACHIEVEMENT_KEY:     Literal["content_generalist", "email_ops", "content"] = Field(description=(
         "Which pre-approved KU achievement bullet best fits this JD's archetype. "
-        "Must be exactly one of: content_generalist, email_ops, content."
+        "content_generalist = broad audience-growth framing; email_ops = campaign/channel "
+        "management framing; content = editorial/content-production framing."
     ))
-    KCKCC_ACHIEVEMENT_KEY:  str       = Field(description=(
+    KCKCC_ACHIEVEMENT_KEY:  Literal["writing_content", "enablement_mgmt", "generalist"] = Field(description=(
         "Which pre-approved KCKCC achievement bullet best fits this JD's archetype. "
-        "Must be exactly one of: writing_content, enablement_mgmt, generalist."
+        "writing_content = editorial/writing framing; enablement_mgmt = team leadership/"
+        "enablement framing; generalist = balanced ownership framing."
     ))
     SECTION_SKILLS:         str       = Field(default="Skills")
     SKILLS:                 List[str] = Field(description="Technical skills mapped to JD.")
