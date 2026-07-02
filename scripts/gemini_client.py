@@ -26,6 +26,19 @@ MAX_BACKOFF_SECS   = 90
 # Fallback model used when primary fails repeatedly
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 
+# Per-model fallback targets: after failure_streak reaches 2 within one
+# generate() call, switch to the mapped model rather than continuing to
+# retry the one that's struggling. gemini-3.1-flash-lite has a 250k TPM
+# cap and is the model builder/fix/trim calls use directly (with nowhere
+# to fall back to previously, since REWRITE_FALLBACK_MODEL pointed at
+# itself) -- gemma-4-31b-it has TPM Unlimited on this account's quota
+# tiers, making it a real rescue path when flash-lite is under high
+# demand, not just a same-model retry with backoff.
+MODEL_FALLBACKS = {
+    "gemma-4-31b-it": REWRITE_FALLBACK_MODEL,
+    "gemini-3.1-flash-lite": "gemma-4-31b-it",
+}
+
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM   = 768   # gemini-embedding-2 native dimension
@@ -181,11 +194,10 @@ class GeminiClient:
                 resp = requests.post(url, json=body, timeout=GeminiClient._timeout)
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
-                if (failure_streak >= 2
-                        and model != REWRITE_FALLBACK_MODEL
-                        and ("pro" in model.lower() or "gemma" in model.lower())):
-                    print(f"    WARNING: Transport failures — falling back to {REWRITE_FALLBACK_MODEL}...")
-                    model = REWRITE_FALLBACK_MODEL
+                if failure_streak >= 2 and model in MODEL_FALLBACKS:
+                    fallback_model = MODEL_FALLBACKS[model]
+                    print(f"    WARNING: Transport failures — falling back to {fallback_model}...")
+                    model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent?key={API_KEY}"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
@@ -203,11 +215,10 @@ class GeminiClient:
                 print("    WARNING: Model high demand (503). Treating as transient.")
 
             if resp.status_code in RETRYABLE:
-                if (failure_streak >= 2
-                        and model != REWRITE_FALLBACK_MODEL
-                        and ("pro" in model.lower() or "gemma" in model.lower())):
-                    print(f"    WARNING: Server failures — falling back to {REWRITE_FALLBACK_MODEL}...")
-                    model = REWRITE_FALLBACK_MODEL
+                if failure_streak >= 2 and model in MODEL_FALLBACKS:
+                    fallback_model = MODEL_FALLBACKS[model]
+                    print(f"    WARNING: Server failures — falling back to {fallback_model}...")
+                    model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent?key={API_KEY}"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
