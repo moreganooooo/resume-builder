@@ -4,8 +4,8 @@
 
 **Goal:** Stop trusting a single LLM call to follow `ResumeDesignSystem.md`'s formatting rules correctly. Move every rule that has zero legitimate per-JD variation into Python (never asked of the LLM at all, or forced as post-processing regardless of what it returns), and add a real deterministic validator that gates the rules which do require generated text (banned words, verb uniqueness, length limits) with a targeted-retry loop — instead of the current setup, where `ResumeDesignSystem.md` compliance rests entirely on prose instructions an LLM may or may not follow, with only an advisory critique afterward that doesn't block anything.
 
-**Architecture:** Three layers, built bottom-up across 7 tasks:
-1. **Rules consolidation** (Tasks 1-2): one canonical machine-readable rules source (`style_rules.yaml`), with the stale/contradictory duplicates retired or reconciled.
+**Architecture:** Three layers, built bottom-up across 8 tasks:
+1. **Rules consolidation** (Tasks 1-2, 8): one canonical machine-readable rules source (`style_rules.yaml`), with the stale/contradictory duplicates retired or reconciled. Task 8 folds in a gap discovered after Phase 2 shipped: banned-phrase lists (not just verbs) also differ across `style_rules.yaml`, `summary_score.yaml`, and `language_quality.yaml`.
 2. **Fixed-content ownership** (Tasks 3-4): content with zero legitimate variation (Certifications, most of Education, section header labels, tagline casing, date formatting, ampersand substitution) becomes Python constants and unconditional post-processing, never left to the LLM to get right.
 3. **Deterministic validation + retry** (Tasks 5-6): a pure-function validator checks the LLM-generated content (Summary, Skills, Bullets, Why) against `style_rules.yaml`; violations trigger a small targeted fix call (not a full regenerate), capped at 3 attempts, then a loud failure — never a silently-shipped bad PDF.
 
@@ -22,9 +22,9 @@
 
 ## Execution Strategy (token-budget optimization)
 
-Dispatch as 4 batches, not 7 individual task dispatches, to cut subagent overhead:
+Dispatch as 4 batches, not 8 individual task dispatches, to cut subagent overhead:
 
-- **Batch A — Tasks 1-3:** one Haiku implementer dispatch (all three are rules-file/YAML cleanup, fully specified with literal before/after content). One Haiku reviewer dispatch on the combined diff.
+- **Batch A — Tasks 1-3 and 8:** one Haiku implementer dispatch (all four are rules-file/YAML cleanup, fully specified with literal before/after content; Task 8 was folded in after Phase 2 surfaced the same class of gap for banned phrases that Task 2 fixes for verbs). One Haiku reviewer dispatch on the combined diff.
 - **Batch B — Tasks 4-5:** one Haiku implementer dispatch (Task 5 depends on Task 4's `fixed_content.py`, so run in that order within the batch — they're already designed as a tightly-coupled pair). One Sonnet reviewer dispatch — this batch changes `TemplateSchema`'s LLM-facing contract, worth more scrutiny than pure content edits.
 - **Task 6 alone:** one Haiku implementer dispatch (the validator module is fully specified, but it's real logic with the largest test surface in this phase — genuinely the highest-value review target). One Sonnet reviewer dispatch.
 - **Task 7 alone:** one Haiku implementer dispatch (code is fully specified, so still cheapest-tier per the "transcription plus testing" rule; escalate to Sonnet only if the implementer reports BLOCKED). One Sonnet reviewer dispatch — this is the highest-risk task in the phase (two retry loops modifying the core `build_tailored_resume` control flow), worth the extra reviewer scrutiny even though the implementer stays on the cheap tier.
@@ -2210,9 +2210,173 @@ EOF
 
 ---
 
+### Task 8: Unify banned-phrase lists across rule files
+
+**Files:**
+- Modify: `resume-engine/rules/style_rules.yaml` (expand `forbidden_phrases` to the complete union)
+- Modify: `resume-engine/scoring/summary_score.yaml` (no content change needed if already a subset — verify only)
+- Modify: `resume-engine/rules/language_quality.yaml` (no content change needed if already a subset after Task 2's edits — verify only)
+- Test: Create `tests/test_banned_phrase_consistency.py`
+
+**Interfaces:**
+- Consumes: none.
+- Produces: a regression test mechanically verifying every phrase in `summary_score.yaml`'s `buzzword_openers`, `language_quality.yaml`'s `buzzwords.high_risk`, and `language_quality.yaml`'s `ai_language_patterns.severe` also appears in `style_rules.yaml`'s `forbidden_phrases` — the same "one canonical source, others are subsets" pattern Task 2 already established for verbs.
+
+**Context:** Discovered after Phase 2 shipped (tracker item #9, originally scoped separately but folded in here since it's the same class of fix as Task 2, just for multi-word phrases instead of single verbs). Three files independently list banned buzzwords/clichés with only partial overlap: `style_rules.yaml`'s `forbidden_phrases` (16 phrases), `summary_score.yaml`'s `buzzword_openers` (9 phrases, only 3 shared with `style_rules.yaml`), and `language_quality.yaml`'s `buzzwords.high_risk` (23 phrases as of Task 2's edits, which added `leverage`/`utilized`) plus `ai_language_patterns.severe` (7 phrases as of Task 2's edits). None of these differences are contradictions (unlike Task 2's verb case) — they're gaps: each file bans some genuine buzzwords the others miss. Resolution: `style_rules.yaml` becomes the complete union of all phrases from all three files (deduplicated), and the other two files' lists — already narrower, purpose-specific subsets — must each be verified as fully contained within it.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/test_banned_phrase_consistency.py`:
+
+```python
+import os
+import unittest
+import yaml
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RULES_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
+SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
+
+
+def _load(dir_path, filename):
+    with open(os.path.join(dir_path, filename), "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+class TestBannedPhraseConsistency(unittest.TestCase):
+
+    def setUp(self):
+        self.style_rules = _load(RULES_DIR, "style_rules.yaml")
+        self.language_quality = _load(RULES_DIR, "language_quality.yaml")
+        self.summary_score = _load(SCORING_DIR, "summary_score.yaml")
+        self.master_list = set(self.style_rules["forbidden_phrases"])
+
+    def test_summary_score_buzzword_openers_are_a_subset_of_style_rules(self):
+        missing = set(self.summary_score["buzzword_openers"]) - self.master_list
+        self.assertEqual(missing, set(), f"summary_score.yaml bans phrases not in style_rules.yaml: {missing}")
+
+    def test_language_quality_high_risk_buzzwords_are_a_subset_of_style_rules(self):
+        missing = set(self.language_quality["buzzwords"]["high_risk"]) - self.master_list
+        self.assertEqual(missing, set(), f"language_quality.yaml's high_risk bans phrases not in style_rules.yaml: {missing}")
+
+    def test_language_quality_severe_ai_patterns_are_a_subset_of_style_rules(self):
+        missing = set(self.language_quality["ai_language_patterns"]["severe"]) - self.master_list
+        self.assertEqual(missing, set(), f"language_quality.yaml's severe ai_language_patterns ban phrases not in style_rules.yaml: {missing}")
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `/usr/local/bin/python3.13 -m unittest tests.test_banned_phrase_consistency -v`
+Expected: FAIL — `style_rules.yaml`'s current 16-phrase list is missing many phrases the other two files ban (e.g. `accomplished professional`, `highly motivated`, `hard worker`, `world-class`, `cutting-edge`, and more).
+
+- [ ] **Step 3: Expand style_rules.yaml's forbidden_phrases to the complete union**
+
+In `resume-engine/rules/style_rules.yaml`, replace:
+
+```yaml
+forbidden_phrases:
+  - results-driven
+  - results-oriented
+  - dynamic professional
+  - self-starter
+  - go-getter
+  - thought leader
+  - visionary
+  - synergized
+  - synergy
+  - best-in-class
+  - passionate
+  - driven professional
+  - seeking opportunities
+  - proven track record
+  - detail-oriented
+  - team player
+```
+
+with:
+
+```yaml
+forbidden_phrases:
+  - results-driven
+  - results-driven professional
+  - results-oriented
+  - dynamic professional
+  - self-starter
+  - go-getter
+  - thought leader
+  - visionary
+  - visionary leader
+  - synergized
+  - synergy
+  - synergies
+  - best-in-class
+  - passionate
+  - passionate professional
+  - driven professional
+  - seeking opportunities
+  - proven track record
+  - detail-oriented
+  - detail-oriented professional
+  - team player
+  - accomplished professional
+  - highly motivated
+  - highly motivated professional
+  - dedicated professional
+  - seasoned professional
+  - strategic thinker
+  - innovative thinker
+  - hard worker
+  - fast learner
+  - excellent communication skills
+  - demonstrated success
+  - thrives in fast-paced environments
+  - world-class
+  - cutting-edge
+```
+
+(This is the deduplicated union of `style_rules.yaml`'s original 16 phrases, `summary_score.yaml`'s `buzzword_openers`, and `language_quality.yaml`'s `buzzwords.high_risk` + `ai_language_patterns.severe`, computed while writing this plan — the implementer does not need to recompute it, only verify the test passes once this replacement is applied. If Task 2's edits to `language_quality.yaml` changed since this plan was written such that a phrase here is stale or a new one is missing, trust the test failure output over this literal list and add whatever it reports missing.)
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `/usr/local/bin/python3.13 -m unittest tests.test_banned_phrase_consistency -v`
+Expected: PASS (3 tests). No changes to `summary_score.yaml` or `language_quality.yaml` should be needed — they were already the narrower, purpose-specific lists; only `style_rules.yaml` needed to grow to cover them.
+
+- [ ] **Step 5: Run the full suite**
+
+Run:
+```bash
+/usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency tests.test_banned_phrase_consistency -v
+```
+Expected: all PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add resume-engine/rules/style_rules.yaml tests/test_banned_phrase_consistency.py
+git commit -m "$(cat <<'EOF'
+Unify banned-phrase lists: style_rules.yaml becomes the complete union
+
+style_rules.yaml, summary_score.yaml, and language_quality.yaml each
+independently listed banned buzzwords/clichés with only partial overlap --
+not contradictions like Task 2's verb case, but gaps: each file caught some
+genuine buzzwords the others missed. style_rules.yaml is now the complete
+union; a regression test verifies the other two files' narrower lists stay
+subsets of it going forward.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
 ## Self-Review Notes
 
-- **Spec coverage:** Every element of the design doc's Phase 3 section is covered: rules consolidation (Tasks 1-2), fixed-content ownership for Education/Certifications/section-headers/tagline-casing/date-formatting/ampersands (Tasks 4-5), the deterministic validator (Task 6), targeted-retry + page-count trim loop + hard-fail-via-existing-falsy-return (Task 7), and the deterministic bullet-ordering sort folded in as part of Task 7 (its natural home, since `rank_bullets.md`'s retirement in Phase 2 explicitly deferred the actual sort implementation here).
+- **Spec coverage:** Every element of the design doc's Phase 3 section is covered: rules consolidation (Tasks 1-2), fixed-content ownership for Education/Certifications/section-headers/tagline-casing/date-formatting/ampersands (Tasks 4-5), the deterministic validator (Task 6), targeted-retry + page-count trim loop + hard-fail-via-existing-falsy-return (Task 7), and the deterministic bullet-ordering sort folded in as part of Task 7 (its natural home, since `rank_bullets.md`'s retirement in Phase 2 explicitly deferred the actual sort implementation here). Task 8 (banned-phrase unification) was added after Phase 2 shipped to close tracker item #9, which fell through the gap between the original Phase 2 and Phase 3 scopes — it's independent of Tasks 1-7 and batches naturally with Task 1's rules-file cleanup.
 - **Placeholder scan:** no TBD/TODO. Two steps (Task 1 Step 4's `style_rules` variable-name confirmation, Task 7 Step 9's "read the function's current tail" instruction) ask the implementer to confirm an exact variable name or insertion point against the live file rather than presuming byte-for-byte text this plan can't fully re-derive without re-reading the entire 1500+ line file at plan-writing time — both come with the complete transformation to apply once located, not a vague "do the right thing."
 - **Type consistency:** `fixed_content.build_education(ku_key: str, kckcc_key: str) -> list[dict]` (Task 4) is called identically in `normalize_resume.normalize()` (Task 5) and in `tests/test_fixed_content.py`. `validate_resume.validate(resume_data: dict, style_rules: dict) -> list[str]` (Task 6) is called identically in Task 7's retry loop. `normalize_resume.normalize(resume_data: dict) -> dict` (Task 5) is called in Task 7's fix/trim loops with the same signature it's defined with.
 - **Scope check:** This plan assumes Phase 1 is merged (it depends on `_page_count` from Phase 1 Task 5, and `load_prompt`'s raise-loudly behavior from Phase 1 Task 1). It does **not** require Phase 2 to be merged first — Phase 2 touches `critique_resume.md`, `ResumeCritiqueSchema`'s advisory fields, and scoring YAML retirement; this plan touches `TemplateSchema`'s generated fields, `style_rules.yaml`-family files, and the builder/render pipeline. The only shared file is `scripts/orchestrator.py`, and the two phases' edits land in different functions (`build_tailored_resume`'s Step 4/7 here vs. Step 5 in Phase 2) — if both phases are in flight on separate branches, merge whichever lands first, then rebase the other; do not attempt to write both simultaneously in the same working tree without merging one first.
