@@ -3,10 +3,23 @@
 Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 
 ## Setup
-- Requires Python 3.10+ (code uses `str | None` syntax). Create a venv and
-  `pip install -r requirements.txt`.
+- Requires Python 3.10+ (code uses `str | None` syntax). A venv already
+  exists at `.venv/` — `source .venv/bin/activate` (or `resume activate`
+  from any shell, see Shortcuts below). If it's ever missing/broken, rebuild
+  with `/usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate
+  && pip install -r requirements.txt`.
 - PDF generation (`scripts/generate-pdf.mjs`) needs Node + Playwright's
   Chromium browser installed.
+- Bare `python3` on this machine may resolve to an unrelated stray venv —
+  always activate `.venv/` first (see `.claude.local.md`).
+
+## Shortcuts
+- `resume run` / `resume run jds/some_file.txt` — batch or single-file mode
+  (see Running below), venv handled automatically.
+- `resume test` — full test suite, venv handled automatically.
+- `resume activate` — cd into the project and activate `.venv/` in the
+  current shell (stays active, unlike `run`/`test` which use a subshell).
+- Defined in `scripts/resume-cli.sh`, sourced from `~/.zshrc`.
 
 ## Running
 - `python scripts/orchestrator.py` (no args) — batch mode: processes every
@@ -21,5 +34,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   mode will process it for real (real API calls) unless removed.
 
 ## Testing
-- `python3 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch -v`
-  run from the project root. Stdlib `unittest`, not pytest (not installed).
+- `python -m unittest discover -s tests -v`, run from the project root with
+  `.venv/` activated. Stdlib `unittest`, not pytest (not installed) —
+  discovery picks up every `tests/test_*.py` file, so this never goes stale
+  as new test files are added.
