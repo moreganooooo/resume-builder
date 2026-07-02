@@ -158,10 +158,12 @@ Only the certification name is bold; institution and year are regular weight.
 
 # Trimming Priority (when content exceeds 2 pages)
 
-1. Trim Summary to 5-line limit; trim Why section to 8-line limit
-2. Tighten bullets: trim adjectives, front-load keywords, collapse redundant clauses
-3. Remove least-relevant bullets starting with Treering (protect Outreach implementation and CRM hygiene bullets)
-4. Last resort: remove Why section entirely
+Why is the first thing trimmed, not the last resort: it only belongs on the resume if it fits without pushing the page count past 2.
+
+1. Remove Why section entirely
+2. Trim Summary to 5-line limit
+3. Tighten bullets: trim adjectives, front-load keywords, collapse redundant clauses
+4. Remove least-relevant bullets starting with Treering (protect Outreach implementation and CRM hygiene bullets)
 
 # Output Schema Requirements
 
