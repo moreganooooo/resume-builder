@@ -10,6 +10,7 @@ import re
 
 _METRIC_PATTERN = re.compile(r"\$?\d[\d,.]*[%MK]?\b", re.IGNORECASE)
 _PRONOUN_PATTERN = re.compile(r"\b(i|me|my|we|our)\b", re.IGNORECASE)
+_FIRST_WORD_PATTERN = re.compile(r"[^\w]*(\w+)")
 
 
 def _strip_html(text: str) -> str:
@@ -50,7 +51,12 @@ def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
     violations = []
     seen = {}
     for bullet in _all_bullets(resume_data):
-        first_word = bullet.split(" ", 1)[0].lower().rstrip(",;:")
+        match = _FIRST_WORD_PATTERN.match(bullet)
+        if not match:
+            continue
+        first_word = match.group(1).lower()
+        if first_word[0].isdigit():
+            continue
         if first_word in seen:
             violations.append(
                 f"Opening verb '{first_word}' is not unique across the CV "

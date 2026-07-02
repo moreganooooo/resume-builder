@@ -87,6 +87,24 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("3m" in v.lower() and ("once" in v.lower() or "duplicate" in v.lower()) for v in violations))
 
+    def test_does_not_flag_numeral_led_bullets_as_duplicate_opening_verbs(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "3M in pipeline recovered through targeted reactivation campaigns",
+            "3 new territories launched under the revised go-to-market plan",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("opening verb" in v.lower() for v in violations))
+
+    def test_flags_duplicate_opening_verb_even_with_leading_quote(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            '"Innovated new onboarding flow adopted company-wide within a quarter"',
+            "Innovated a new pricing model that increased average deal size",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("innovated" in v.lower() and "unique" in v.lower() for v in violations))
+
 
 if __name__ == "__main__":
     unittest.main()
