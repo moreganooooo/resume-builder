@@ -112,9 +112,17 @@ conservative and explain the limitation in context_gaps.
 """
 
 # --- TIMING CONSTANTS ---
-CRITIQUE_SLEEP = 4    # seconds between critique calls (free-tier: 15 RPM)
-REWRITE_SLEEP  = 4    # seconds before the rewrite call after a FAIL
-RESCORE_SLEEP  = 8    # seconds before the re-score call after a rewrite
+CRITIQUE_SLEEP     = 4    # seconds between critique calls (free-tier: 15 RPM)
+REWRITE_SLEEP      = 4    # seconds before the rewrite call after a FAIL
+RESCORE_SLEEP      = 8    # seconds before the re-score call after a rewrite
+# Step 3's audit loop makes up to 30 calls (several with large segment
+# bundles, 16k-24k tokens each per the logs), then Step 4 immediately fires
+# one ~105k-token builder call -- cumulative tokens across that window can
+# approach the free tier's 250k input-tokens-per-minute cap (see
+# KB_ALLOWLIST's comment below for where that cap is already documented),
+# producing the timeouts/retries seen in a real run. This pause lets the
+# rolling per-minute window recover before the big call.
+PRE_BUILDER_SLEEP  = 15
                       # (longer because rescore fires immediately after rewrite)
 
 
@@ -1424,10 +1432,15 @@ class ResumeEngine:
         else:
             kb_context = self.load_knowledge_base()
 
-            # Gap 1: KB goes into system_instruction, not contents.
-            # system_instruction is the most cacheable part of the payload --
-            # it stays identical across all builder calls on the same run.
-            # The variable tail (JD + bullets) sits alone in combined_contents.
+            # Gap 1: KB goes into system_instruction, not contents, so the
+            # ~105k-token kb_context forms a stable, cacheable prefix if
+            # Gemini's automatic caching kicks in across nearby calls (e.g.
+            # consecutive JDs in batch mode reusing the same kb_context
+            # bytes) -- NOT within this one call, and NOT reused by the
+            # retry/fix loop or trim loop below, both of which deliberately
+            # use build_prompt alone (no kb_context) to keep those calls
+            # cheap. The variable tail (JD + bullets) sits alone in
+            # combined_contents.
             builder_system = f"{build_prompt}\n\n{kb_context}"
 
             bullets_block = "\n".join(
@@ -1444,13 +1457,20 @@ class ResumeEngine:
             print(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
             print(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
 
-            resume_text, _ = GeminiClient.generate(
+            # Step 3's audit loop just made up to 30 calls; give the free
+            # tier's rolling per-minute token window a moment to recover
+            # before this ~105k-token call (see PRE_BUILDER_SLEEP above).
+            print(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...")
+            time.sleep(PRE_BUILDER_SLEEP)
+
+            resume_text, usage = GeminiClient.generate(
                 model=BUILDER_MODEL,
                 system_instruction=builder_system,
                 contents=combined_contents,
                 response_schema=TemplateSchema,
                 temperature=0.0,
             )
+            _log_cache_stats(usage, 0, 0)
 
             if not resume_text:
                 print("  ERROR: Builder returned empty response.")
@@ -1493,13 +1513,14 @@ class ResumeEngine:
                 fix_contents += (
                     f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
                 )
-                fix_text, _ = GeminiClient.generate(
+                fix_text, fix_usage = GeminiClient.generate(
                     model=BUILDER_MODEL,
                     system_instruction=build_prompt,
                     contents=fix_contents,
                     response_schema=TemplateSchema,
                     temperature=0.0,
                 )
+                _log_cache_stats(fix_usage, 0, 0)
                 fixed = GeminiClient.parse_json(fix_text or "")
                 if not fixed:
                     print("  WARNING: Fix attempt returned unparseable JSON; keeping prior resume_data.")
@@ -1620,13 +1641,14 @@ class ResumeEngine:
                 f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
                 f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt]}"
             )
-            trim_text, _ = GeminiClient.generate(
+            trim_text, trim_usage = GeminiClient.generate(
                 model=BUILDER_MODEL,
                 system_instruction=build_prompt,
                 contents=trim_contents,
                 response_schema=TemplateSchema,
                 temperature=0.0,
             )
+            _log_cache_stats(trim_usage, 0, 0)
             trimmed = GeminiClient.parse_json(trim_text or "")
             if not trimmed:
                 print("  WARNING: Trim attempt returned unparseable JSON; stopping trim loop.")
