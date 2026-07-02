@@ -1,9 +1,8 @@
 version: 2.0
 # Was a generic 5-category weight stub disconnected from its stated purpose.
 # Rewritten to match critique_resume.md's own description of this file --
-# "Recruiter first-pass readability and signal clarity" -- and to mirror the
-# 6-second-glance persona/criteria defined in recruiter_scan.md, as a scoring
-# rubric rather than a standalone prompt persona.
+# "Recruiter first-pass readability and signal clarity" -- as a mechanical
+# 6-second-glance scannability rubric, independent of narrative quality.
 #
 # Distinct from top_third_score.yaml: top_third_score.yaml asks "could a
 # recruiter explain WHY this candidate fits" (narrative comprehension).
