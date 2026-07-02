@@ -41,7 +41,9 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 | `resume cd` | cd into the project, no venv activation |
 | `resume run` | batch mode — processes every pending JD in `jds/`, splitting any multi-job export into per-job files first |
 | `resume run jds/some_file.txt` | single-file mode — tailor a resume for one specific JD |
-| `resume test` | run the full test suite |
+| `resume test` | run the full test suite (compact: dots + summary, no app-log noise) |
+| `resume test -v` | same, but lists every test by name |
+| `resume test -vv` | same, but shows the app's own operational logging too |
 | `resume` (no arguments) | print this list of commands |
 
 ## Running without the shortcuts
@@ -56,8 +58,13 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 ## Testing
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests
 ```
 
 Stdlib `unittest`, not pytest (not installed) — discovery picks up every
-`tests/test_*.py` file automatically.
+`tests/test_*.py` file automatically. `unittest`'s own pass/fail reporting
+goes to stderr, while the application code under test prints its own
+operational logging to stdout — `resume test` takes advantage of this to
+discard stdout by default, so the output stays a clean pass/fail summary
+instead of an interleaved wall of text (see Shortcuts above for the
+verbose tiers).
