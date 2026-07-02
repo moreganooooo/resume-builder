@@ -213,8 +213,8 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(result["_critique"]["top_third_score"], 85)
         self.assertEqual(len(seen_critique_system_instructions), 1)
         system_instruction = seen_critique_system_instructions[0]
-        self.assertIn("readability", system_instruction)          # from summary_score.yaml
-        self.assertIn("recruiter_comprehension_speed", system_instruction)  # from top_third_score.yaml
+        self.assertIn("buzzword_openers", system_instruction)     # from summary_score.yaml (unique identifier)
+        self.assertIn("hidden_gem_rules", system_instruction)     # from top_third_score.yaml (unique identifier)
 
 
 if __name__ == "__main__":
