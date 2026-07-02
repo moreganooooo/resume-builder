@@ -36,7 +36,7 @@ Phase 3 design), leaving nothing for an LLM rubric to judge.
 which files drive the document-level critique. As of this rewrite,
 `summary_score.yaml` and `top_third_score.yaml` are both listed there AND
 have their real YAML content attached to the Step 5 critique API call in
-`orchestrator.py` (not just referenced by name) -- the remaining 12 files in
+`orchestrator.py` (not just referenced by name) -- the remaining 14 files in
 the Load and Apply list are still prose-only references the critique model
 must infer compliance with; wiring their actual content into the call the
 same way is future work, not required by this rewrite.
