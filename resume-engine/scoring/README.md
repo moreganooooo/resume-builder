@@ -1,14 +1,14 @@
 # resume-engine/scoring/
 
-This folder holds YAML scoring rubrics consumed at runtime by `orchestrator.py`
-(both the per-bullet audit loop and the document-level critique driven by
-`resume-engine/prompts/critique_resume.md`) and by `score_keeper_gems.py`.
+This folder holds YAML scoring rubrics used by `orchestrator.py`'s per-bullet
+audit loop and the document-level critique driven by
+`resume-engine/prompts/critique_resume.md`, plus `score_keeper_gems.py`.
 
 ## Files that belong here
 
 | File | Used by | Purpose |
 |---|---|---|
-| `manager_test.yaml` | `orchestrator.py`, `critique_resume.md`, `hiring_manager_scan.md` | Pass/fail rules the Skeptical Editor uses to judge bullets |
+| `manager_test.yaml` | `orchestrator.py`, `critique_resume.md` | Pass/fail rules the Skeptical Editor uses to judge bullets |
 | `believability.yaml` | `orchestrator.py`, `score_keeper_gems.py`, `critique_resume.md` | Rubric for bullet-level believability scoring (0-100) |
 | `ai_risk.yaml` | `orchestrator.py`, `critique_resume.md` | Definitions of high-risk AI-sounding language patterns |
 | `professional_identity_score.yaml` | `critique_resume.md` | Identity/archetype detection driving all downstream document-level scoring |
@@ -19,21 +19,27 @@ This folder holds YAML scoring rubrics consumed at runtime by `orchestrator.py`
 | `ats_match.yaml` | `critique_resume.md` | ATS keyword-match weighting against the JD |
 | `evidence_alignment.yaml` | `critique_resume.md` | Achievement-to-claim support -- traces every metric/tool/claim back to verified evidence |
 | `summary_patterns.yaml` | `critique_resume.md` | Summary-level pattern scoring (opener style, specificity, length) |
-| `summary_score.yaml` | (available, not yet wired into `critique_resume.md`) | Summary quality scoring by JD-relevance/specificity/alignment/credibility/readability |
+| `summary_score.yaml` | `critique_resume.md`, actually attached to the Step 5 critique API call | Summary quality scoring by JD-relevance/specificity/alignment/credibility/readability (readability is line-count based, matching the spec's 5-line limit) |
 | `certifications_score.yaml` | `critique_resume.md` | Certification relevance and canonical credential anchoring |
-| `competencies_score.yaml` | `critique_resume.md` | Core competency presence and role alignment |
-| `education_score.yaml` | (available, not yet wired into `critique_resume.md`) | Education section completeness/relevance/formatting |
 | `recruiter_score.yaml` | `critique_resume.md` | Recruiter first-pass scannability (distinct from `top_third_score.yaml`'s narrative-comprehension check) |
-| `top_third_score.yaml` | (available, not yet wired into `critique_resume.md`) | Whether the top third of page one alone communicates fit |
-| `specificity.yaml` | `critique_resume.md` | Projects/Education specificity (bullet- and summary-level specificity are covered separately by `believability.yaml` and `summary_patterns.yaml`) |
+| `top_third_score.yaml` | `critique_resume.md`, actually attached to the Step 5 critique API call | Whether the top third of page one alone communicates fit within a 15-30 second first read |
+| `specificity.yaml` | `critique_resume.md` | Education section specificity only (Projects criteria removed -- that section no longer exists; bullet- and summary-level specificity are covered separately by `believability.yaml` and `summary_patterns.yaml`) |
+
+`competencies_score.yaml` and `education_score.yaml` have been retired:
+Competencies no longer exists as a resume section, and Education's rules are
+fully fixed content (see `docs/superpowers/specs/2026-07-01-resume-spec-enforcement-design.md`'s
+Phase 3 design), leaving nothing for an LLM rubric to judge.
 
 ## Status
 
-All 17 files above exist and are populated. `critique_resume.md`'s "Load and
-Apply" list is the source of truth for which files actively drive the
-document-level critique -- three files (`summary_score.yaml`,
-`education_score.yaml`, `top_third_score.yaml`) are fully written but not yet
-referenced there; wire them into a step if you want them enforced.
+`critique_resume.md`'s "Load and Apply" list is the source of truth for
+which files drive the document-level critique. As of this rewrite,
+`summary_score.yaml` and `top_third_score.yaml` are both listed there AND
+have their real YAML content attached to the Step 5 critique API call in
+`orchestrator.py` (not just referenced by name) -- the remaining 12 files in
+the Load and Apply list are still prose-only references the critique model
+must infer compliance with; wiring their actual content into the call the
+same way is future work, not required by this rewrite.
 
 ## Format reference
 
