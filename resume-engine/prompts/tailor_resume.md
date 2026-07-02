@@ -31,6 +31,21 @@ Detect the primary role archetype from the JD and foreground the corresponding e
 - **Marketing Ops / CRM:** Salesforce hygiene, reporting, QA, territory analytics, pipeline cleanup ($3M recovery), process docs
 - **Generalist:** cross-functional range, multi-hat IC capability, adaptability
 
+# Education Achievement Bullet Selection
+
+The Education section's University of Kansas and Kansas City Kansas Community College entries
+each feature one pre-approved achievement bullet, selected (not written) via a key -- pick the
+option whose framing best matches the archetype you detected above.
+
+- **KU_ACHIEVEMENT_KEY** (University of Kansas) — choose one of:
+  - `content_generalist` — broad audience-growth framing
+  - `email_ops` — campaign/channel management framing
+  - `content` — editorial/content-production framing
+- **KCKCC_ACHIEVEMENT_KEY** (Kansas City Kansas Community College) — choose one of:
+  - `writing_content` — editorial/writing framing
+  - `enablement_mgmt` — team leadership/enablement framing
+  - `generalist` — balanced ownership framing
+
 # Tagline Rules
 
 - Format: [JD Role Title, cleaned] | [Archetype Descriptor]

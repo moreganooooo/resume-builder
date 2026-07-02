@@ -39,9 +39,13 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
     verified content -- an archetype-suboptimal pick is a quality issue,
     not a truthfulness issue.
     """
+    if ku_achievement_key not in KU_ACHIEVEMENT_OPTIONS:
+        print(f"  ⚠️  WARNING: unrecognized KU_ACHIEVEMENT_KEY {ku_achievement_key!r}, falling back to first option.")
     ku_bullet = KU_ACHIEVEMENT_OPTIONS.get(
         ku_achievement_key, next(iter(KU_ACHIEVEMENT_OPTIONS.values()))
     )
+    if kckcc_achievement_key not in KCKCC_ACHIEVEMENT_OPTIONS:
+        print(f"  ⚠️  WARNING: unrecognized KCKCC_ACHIEVEMENT_KEY {kckcc_achievement_key!r}, falling back to first option.")
     kckcc_bullet = KCKCC_ACHIEVEMENT_OPTIONS.get(
         kckcc_achievement_key, next(iter(KCKCC_ACHIEVEMENT_OPTIONS.values()))
     )
