@@ -266,11 +266,13 @@ layout_rules:
   content_width: 7.5in
   page_1: [Header, Professional Summary, Skills, Work Experience (Mercor if present, Treering, IST)]
   page_2: [Work Experience continued (Element 8/Strategy LLC VML Callahan Creek), Training & Certifications, Education, Why section if present]
+  # Why is the first thing trimmed, not the last resort: it only belongs on
+  # the resume if it fits without pushing the page count past 2.
   trimming_priority:
-    1: Trim Summary to 5-line limit; trim Why to 8-line limit
-    2: Tighten bullets (trim adjectives, front-load keywords, collapse redundant clauses)
-    3: Remove least-relevant bullets (protect Outreach implementation and CRM hygiene)
-    4: Remove Why section entirely
+    1: Remove Why section entirely
+    2: Trim Summary to 5-line limit
+    3: Tighten bullets (trim adjectives, front-load keywords, collapse redundant clauses)
+    4: Remove least-relevant bullets (protect Outreach implementation and CRM hygiene)
 
 typography:
   name_font: DM Serif Display 400 32pt

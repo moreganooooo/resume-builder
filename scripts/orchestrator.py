@@ -1478,11 +1478,13 @@ class ResumeEngine:
         render_html(resume_data, html_out)
 
         trim_instructions = [
-            "Trim the Summary to its 5-line limit and the Why section to its 8-line limit.",
+            "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings). "
+            "It only belongs on the resume if it fits without pushing the page count past 2 -- "
+            "when space is tight, it is the first thing to go.",
+            "Trim the Summary to its 5-line limit.",
             "Tighten bullets: trim adjectives, front-load keywords, collapse redundant clauses.",
             "Remove the least-relevant bullets, starting with Treering, while protecting the "
             "Outreach.io implementation and CRM-hygiene bullets.",
-            "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings).",
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
