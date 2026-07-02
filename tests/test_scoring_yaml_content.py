@@ -29,6 +29,9 @@ class TestSpecificityYamlIsEducationOnly(unittest.TestCase):
         self.assertNotIn("named_outcome", data.get("bonuses", {}))
         self.assertNotIn("named_system_or_stack", data.get("bonuses", {}))
 
+    def test_education_score_file_no_longer_exists(self):
+        self.assertFalse(os.path.exists(os.path.join(SCORING_DIR, "education_score.yaml")))
+
 
 if __name__ == "__main__":
     unittest.main()
