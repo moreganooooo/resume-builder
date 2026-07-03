@@ -177,7 +177,7 @@ The tagline is generated automatically from the JD and archetype.[^1]
   - B2B Content → “Brand Voice & Campaign Copywriter”
   - Marketing Ops → “CRM Campaign Systems Specialist”
   - Generalist Coordinator → “Campaign Strategy & Lifecycle Marketing”[^1]
-- Tagline must fit on one printed line; if too long, shorten the secondary descriptor (never the role title). Target 70–80 characters at 14pt.[^1]
+- Tagline must fit on one printed line; if too long, condense by removing words repeated between the two halves rather than shortening either half awkwardly. Updated: max 60 characters (empirically measured via real 14pt Space Grotesk rendering -- a prior "70–80 characters" target was wrong; a 65-char tagline already wrapped to a 2nd line).[^1]
 
 ### Copywriter/Communications Variants
 

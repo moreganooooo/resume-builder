@@ -101,6 +101,24 @@ def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
     return violations
 
 
+def _check_tagline_length(resume_data: dict, style_rules: dict) -> list[str]:
+    """
+    tailor_resume.md used to say "target 70-80 characters" for the tagline
+    fitting one printed line at 14pt -- but a real 65-char tagline
+    ("CAMPAIGN CRM STRATEGIST | CAMPAIGN STRATEGY & LIFECYCLE MARKETING")
+    wrapped to 2 lines anyway. Empirically measured (Playwright, actual
+    Space Grotesk 14pt rendering at the real 7.5in content width): realistic
+    uppercase taglines run ~0.117-0.119in/char, so even 65 chars can exceed
+    the available width. This uses a conservative 60-char cap with margin
+    for that per-character variance.
+    """
+    max_chars = style_rules.get("tagline", {}).get("max_chars", 60)
+    tagline = resume_data.get("TAGLINE", "")
+    if len(tagline) > max_chars:
+        return [f"Tagline exceeds {max_chars}-char max ({len(tagline)} chars) and will wrap to a 2nd line: {tagline!r}"]
+    return []
+
+
 def _check_bullet_lengths(resume_data: dict, style_rules: dict) -> list[str]:
     violations = []
     limits = style_rules.get("bullet_structure", {})
@@ -215,6 +233,7 @@ def validate(resume_data: dict, style_rules: dict) -> list[str]:
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
     violations.extend(_check_unique_opening_verbs(resume_data))
+    violations.extend(_check_tagline_length(resume_data, style_rules))
     violations.extend(_check_bullet_lengths(resume_data, style_rules))
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_pronouns_outside_why(resume_data))

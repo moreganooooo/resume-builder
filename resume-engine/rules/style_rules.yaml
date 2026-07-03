@@ -235,6 +235,13 @@ tool_mention_rules:
   per_bullet_max: 2
   per_bullet_hard_limit: 3  # 3+ reads as a list not a narrative
 
+tagline:
+  # Empirically measured (Playwright, real Space Grotesk 14pt rendering at
+  # the actual 7.5in content width): realistic uppercase taglines run
+  # ~0.117-0.119in/char, so even a 65-char tagline can wrap to a 2nd line.
+  # A prior "target 70-80 characters" guess was simply wrong.
+  max_chars: 60
+
 skills_section:
   position: immediately_after_summary
   importance: highest_ats_signal
