@@ -98,6 +98,20 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
             html,
         )
 
+    def test_career_note_renders_after_bullets_with_bold_label(self):
+        data = _minimal_resume_data(EXPERIENCE=[{
+            "title": "Creative Strategy Lead", "company": "Treering Yearbooks", "period": "08/2016 – 08/2024",
+            "achievements": ["Founded the Content Committee"],
+            "career_note": "Returning with renewed focus.",
+        }])
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        bullets_pos = html.index("Founded the Content Committee")
+        career_note_pos = html.index("Returning with renewed focus.")
+        self.assertLess(bullets_pos, career_note_pos, "career note must render after the bullets, not before")
+        self.assertIn('<strong>Career Note:</strong> Returning with renewed focus.', html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,10 +41,20 @@ def normalize(resume_data: dict) -> dict:
         new_experience = []
         for job in result["EXPERIENCE"]:
             job = dict(job)
-            meta = fixed_content.COMPANY_META.get(job.get("company", ""))
+            company = job.get("company", "")
+
+            meta = fixed_content.COMPANY_META.get(company)
             if meta:
                 job["size_revenue"] = meta["size_revenue"]
                 job["location"] = meta["location"]
+
+            descriptor = fixed_content.COMPANY_TITLE_DESCRIPTOR.get(company)
+            if descriptor and job.get("title") and not job["title"].rstrip().endswith(f"({descriptor})"):
+                job["title"] = f"{job['title']} ({descriptor})"
+
+            if company == "Treering Yearbooks":
+                job["career_note"] = fixed_content.CAREER_NOTE
+
             new_experience.append(job)
         result["EXPERIENCE"] = new_experience
 

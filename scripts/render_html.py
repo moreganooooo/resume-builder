@@ -54,7 +54,10 @@ def build_experience_html(jobs: list[dict]) -> str:
     html = []
     for job in jobs:
         bullets_html = "".join(f"<li>{escape(b)}</li>" for b in job.get("achievements", []))
-        career_note = f'<div class="career-note">{escape(job["career_note"])}</div>' if job.get("career_note") else ""
+        career_note = (
+            f'<div class="career-note"><strong>Career Note:</strong> {escape(job["career_note"])}</div>'
+            if job.get("career_note") else ""
+        )
 
         # company is pre-escaped (it may already contain the escaped
         # size/revenue parenthetical); the other parts are escaped inline.
@@ -70,8 +73,8 @@ def build_experience_html(jobs: list[dict]) -> str:
         <div class="job">
           <div class="job-title">{escape(job.get("title",""))}</div>
           <div class="job-meta">{meta_line}</div>
-          {career_note}
           <ul>{bullets_html}</ul>
+          {career_note}
         </div>""")
     return "\n".join(html)
 

@@ -110,27 +110,28 @@ option whose framing best matches the archetype you detected above.
 
 Honest, role-specific reframing of job titles is allowed to better match responsibilities and the
 target archetype -- this is about emphasis, not fabrication. Company, dates, and seniority level may
-never be altered.
+never be altered. Do NOT append your own industry/role descriptor in parentheses -- a fixed one is
+appended automatically per company after generation (e.g. Mercor always gets "(AI Training)"
+appended); just produce the title itself.
 
-Two formats:
+Two formats for the title itself:
 - **Additive** (`Title A + Title B`): used when a role genuinely covered two distinct functions and
   the JD calls for emphasizing both. Examples already used and approved:
   - Inside Sales Team: `ABM Specialist + Business Development Representative`
-  - Treering Yearbooks: `Creative Strategy Lead + Senior Sales Development Lead` (or other similarly
-    reasonable `X + Senior Sales Development Lead` combinations, chosen per archetype)
-- **Parenthetical** (`Title (Descriptor)`): used to add a short industry/type/focus descriptor after
-  the main title without changing the title itself, when ATS title consistency matters more than
-  reframing. Example: `Sales/Marketing Strategy + QA Expert (AI Training)` for Mercor.
+  - Treering Yearbooks: `Creative Strategy Lead + Senior Sales Development Lead` or
+    `Creative Strategy Lead + Senior Sales Development Manager` (or other similarly reasonable
+    `X + Senior Sales Development Lead/Manager` combinations, chosen per archetype)
+- **Single title**: used when one title already captures the role well and no additive framing is
+  needed (e.g. `Lead Graphic Designer`, `Copywriting Intern`).
 
 Pick whichever format best fits the JD's archetype and this role's actual responsibilities. Titles
 must remain traceable to real work Morgan did in that role -- reframe emphasis, don't invent scope.
 
 # Career Note (Treering Yearbooks)
 
-Always include a career note immediately after the Treering Yearbooks entry (not optional). One
-sentence, maximum two lines, forward-looking. It explains the 2024-2025 gap succinctly: an
-intentional caregiving pause, now returning with full focus on lifecycle marketing and digital
-strategy. Output this in the `career_note` field of the Treering Yearbooks EXPERIENCE object.
+A career note is auto-filled after generation, immediately after the Treering Yearbooks entry's
+bullets (not optional, and not something you write) -- always output `""` for the `career_note`
+field on every EXPERIENCE entry, including Treering Yearbooks.
 
 # Protected Bullets — Do Not Aggressively Shorten
 
@@ -146,7 +147,7 @@ These are exact targets. Do not over-fill or under-fill any role. The total acro
 | Company | Bullets |
 | --- | --- |
 | Mercor | 2-3 |
-| Treering Yearbooks | 6-8 |
+| Treering Yearbooks | 6-7 |
 | Inside Sales Team | 5 |
 | Element 8 / Strategy LLC | 4 |
 | VML | 4 |
@@ -233,15 +234,16 @@ Each object has these exact keys:
 {
   "title": "Job Title",
   "company": "Company Name",
-  "period": "Month Year – Month Year",
+  "period": "08/2016 – 08/2024",
   "location": "City, ST or Remote",
   "achievements": ["Bullet one", "Bullet two"],
   "career_note": ""
 }
 ```
-`location` may be left as an empty string `""` if unknown. `achievements` is the array of bullet
-strings for that role. `career_note`: always populate for the Treering Yearbooks entry per the
-"Career Note (Treering Yearbooks)" section above; leave as `""` for every other company.
+Dates are always numeric MM/YYYY, never spelled-out months (e.g. `08/2016 – 08/2024`, not
+`August 2016 – August 2024`). `location` may be left as an empty string `""` if unknown.
+`achievements` is the array of bullet strings for that role. `career_note` is auto-filled after
+generation for the Treering Yearbooks entry -- always output `""` for this field, on every entry.
 
 ## EDUCATION (array of objects)
 Each object has these exact keys:

@@ -32,6 +32,30 @@ class TestNormalizeResume(unittest.TestCase):
         result = normalize_resume.normalize(data)
         self.assertNotIn("size_revenue", result["EXPERIENCE"][0])
 
+    def test_appends_fixed_title_descriptor_for_known_companies(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "Sales/Marketing Strategy + QA Expert", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["EXPERIENCE"][0]["title"], "Sales/Marketing Strategy + QA Expert (AI Training)")
+
+    def test_does_not_double_append_descriptor_if_builder_already_included_it(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "Sales/Marketing Strategy + QA Expert (AI Training)", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["EXPERIENCE"][0]["title"], "Sales/Marketing Strategy + QA Expert (AI Training)")
+
+    def test_forces_the_career_note_for_treering_regardless_of_builder_output(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Treering Yearbooks", "period": "08/2016 – 08/2024", "achievements": [], "career_note": "something the builder made up"}]
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["EXPERIENCE"][0]["career_note"], fixed_content.CAREER_NOTE)
+
+    def test_does_not_add_career_note_for_other_companies(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertNotIn("career_note", result["EXPERIENCE"][0])
+
     def test_injects_fixed_contact_info(self):
         result = normalize_resume.normalize(self.raw)
         for key, value in fixed_content.CONTACT_INFO.items():
