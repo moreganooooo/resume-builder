@@ -144,20 +144,21 @@ GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 # that just share a topic, so nudge it back up if that starts happening.
 DEDUP_SIMILARITY_THRESHOLD = 0.85
 
-# Per-company minimum bullets to guarantee during mining, using the low end
-# of tailor_resume.md's per-role bullet-count targets. Pure global top-K
-# ranking has no per-company floor -- a JD whose embedding favors one
-# company can starve every other company of material entirely (a real run
-# mined 0 Mercor and 0 Callahan Creek bullets out of 30). These minimums
-# are pulled from each company's own bullet pool before the remaining
-# TOP_K_BULLETS - sum(minimums) slots are filled by the global ranking.
+# Per-company minimum bullets to guarantee during mining, matching
+# tailor_resume.md's per-role bullet-count targets (low end for the two
+# ranged roles). Pure global top-K ranking has no per-company floor -- a JD
+# whose embedding favors one company can starve every other company of
+# material entirely (a real run mined 0 Mercor and 0 Callahan Creek bullets
+# out of 30). These minimums are pulled from each company's own bullet pool
+# before the remaining TOP_K_BULLETS - sum(minimums) slots are filled by the
+# global ranking.
 COMPANY_MIN_BULLETS = {
     "Mercor": 2,
     "Treering Yearbooks": 6,
-    "Inside Sales Team": 4,
-    "Element 8 / Strategy LLC": 3,
-    "VML": 3,
-    "Callahan Creek": 3,
+    "Inside Sales Team": 5,
+    "Element 8 / Strategy LLC": 4,
+    "VML": 4,
+    "Callahan Creek": 4,
 }
 
 
@@ -601,18 +602,19 @@ class ExperienceEntry(BaseModel):
     period:       str       = Field(description="Employment dates, MM/YYYY - MM/YYYY format.")
     location:     str       = Field(default="", description="City/state or Remote. Leave blank if unknown.")
     achievements: List[str] = Field(description="Achievement bullets for this role. Must not be empty.")
+    career_note:  str       = Field(default="", description="Treering Yearbooks only: always include, per tailor_resume.md's Career Note section. Empty string for every other company.")
 
 class TemplateSchema(BaseModel):
-    """Flattened schema for the builder call."""
-    NAME:                   str       = Field(description="Must match candidate name.")
+    """
+    Flattened schema for the builder call.
+    NAME/PHONE/EMAIL/LINKEDIN_URL/LINKEDIN_DISPLAY/LOCATION are not builder
+    fields -- contact info doesn't vary by JD, so it's hard-coded in
+    fixed_content.CONTACT_INFO and force-applied by normalize_resume,
+    same pattern as Certifications/Education/company facts. There is no
+    PORTFOLIO_URL/PORTFOLIO_DISPLAY field at all -- the portfolio link was
+    removed resume-wide.
+    """
     TAGLINE:                str       = Field(description="Max 80 chars. Follows archetype tagging rules.")
-    PHONE:                  str
-    EMAIL:                  str
-    LINKEDIN_URL:           str
-    LINKEDIN_DISPLAY:       str
-    PORTFOLIO_URL:          str
-    PORTFOLIO_DISPLAY:      str
-    LOCATION:               str
     SECTION_SUMMARY:        str       = Field(default="Professional Summary")
     SUMMARY_TEXT:           str       = Field(description="Max 5 lines. First sentence MUST be bolded using <strong> tags. No generic filler.")
     SECTION_EXPERIENCE:     str       = Field(default="Work Experience")
@@ -620,8 +622,8 @@ class TemplateSchema(BaseModel):
         description=(
             "One entry per company. Bullet counts per role must match "
             "tailor.md targets exactly: Mercor 2-3, Treering 6-8, "
-            "Inside Sales Team 4-5, Element 8/Strategy LLC 3-4, VML 3-4, "
-            "Callahan Creek 3-4."
+            "Inside Sales Team 5, Element 8/Strategy LLC 4, VML 4, "
+            "Callahan Creek 4."
         )
     )
     KU_ACHIEVEMENT_KEY:     Literal["content_generalist", "email_ops", "content"] = Field(description=(

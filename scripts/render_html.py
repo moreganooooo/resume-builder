@@ -116,6 +116,7 @@ def build_education_html(edu: list[dict]) -> str:
     Those mismatches meant every education entry rendered with a blank
     school name and a blank description line.
     """
+    sep = '<span class="sep">|</span>'
     html = []
     for e in edu:
         bullets_html = ""
@@ -123,13 +124,12 @@ def build_education_html(edu: list[dict]) -> str:
             lis = "".join(f"<li>{escape(b)}</li>" for b in e["bullets"])
             bullets_html = f"<ul>{lis}</ul>"
         desc = f'<div class="edu-desc">{escape(e["description"])}</div>' if e.get("description") else ""
-        location = f' — {escape(e["location"])}' if e.get("location") else ""
+        meta_parts = [escape(p) for p in (e.get("institution", ""), e.get("location", ""), e.get("year", "")) if p]
+        meta_line = f" {sep} ".join(meta_parts)
         html.append(f"""
         <div class="edu-item">
-          <div class="edu-header">
-            <span class="edu-title">{escape(e.get("degree",""))} — <span class="edu-org">{escape(e.get("institution",""))}</span>{location}</span>
-            <span class="edu-year">{escape(e.get("year",""))}</span>
-          </div>
+          <div class="edu-title">{escape(e.get("degree",""))}</div>
+          <div class="edu-meta">{meta_line}</div>
           {desc}
           {bullets_html}
         </div>""")
@@ -166,10 +166,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
         "TAGLINE":            escape(resume_data.get("TAGLINE", "")),
         "PHONE":              escape(resume_data.get("PHONE", "")),
         "EMAIL":              escape(resume_data.get("EMAIL", "")),
-        "LINKEDIN_URL":       escape(resume_data.get("LINKEDIN_URL", "")),
         "LINKEDIN_DISPLAY":   escape(resume_data.get("LINKEDIN_DISPLAY", "")),
-        "PORTFOLIO_URL":      escape(resume_data.get("PORTFOLIO_URL", "")),
-        "PORTFOLIO_DISPLAY":  escape(resume_data.get("PORTFOLIO_DISPLAY", "")),
         "LOCATION":           escape(resume_data.get("LOCATION", "")),
         "PAGE_WIDTH":         resume_data.get("PAGE_WIDTH", "8.5in"),
         "SUMMARY_TEXT":       resume_data.get("SUMMARY_TEXT", ""),

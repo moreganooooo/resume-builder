@@ -113,6 +113,8 @@ Before generating any resume, the system must perform a structured research pass
 - Name: DM Serif Display, 32pt, normal weight, black.[^1]
 - Tagline: Space Grotesk, 14pt, all caps, *hard‑coded* uppercase in HTML (not via CSS `text-transform`) to avoid reversed text bugs.[^1]
 - Contact row: Space Grotesk, 10pt, using separators (`·` or `|`) between phone, email, LinkedIn, location.[^4]
+- Updated: no portfolio link (removed resume-wide); LinkedIn is plain text (spelled-out URL, no hyperlink) rather than a clickable link, since hyperlinks in a resume can read as a red flag to some ATS parsers.
+- Updated: all contact info (name, phone, email, LinkedIn, location) is fixed content -- it doesn't vary by JD, so the builder no longer generates it.
 - Ampersand usage in tagline and labels uses “&” (e.g., “Content & Lifecycle Systems”).[^4]
 
 ### Page Layout and Section Order
@@ -309,13 +311,13 @@ The tagline is generated automatically from the JD and archetype.[^1]
 
 - Honest, role‑specific reframing is allowed to better match responsibilities and target archetypes.[^1]
 - Two formats are available:
-  - Additive: `Creative Strategy Lead / Senior Sales Development Manager` (for content‑forward roles).[^1]
-  - Parenthetical: `Senior Sales Development Lead (Creative Strategy & Lifecycle Programs)` when ATS title consistency is crucial.[^1]
+  - Additive: `Title A + Title B`, e.g. `ABM Specialist + Business Development Representative` (Inside Sales Team) or `Creative Strategy Lead + Senior Sales Development Lead` (Treering, or other reasonable `X + Senior Sales Development Lead` variants per archetype).[^1]
+  - Parenthetical: `Title (Descriptor)`, e.g. `Sales/Marketing Strategy + QA Expert (AI Training)` (Mercor), when ATS title consistency is crucial.[^1]
 - Company, dates, and seniority level may not be altered.
 
 #### Career Note at Treering
 
-- Optional, Treering‑only; must pass the credibility/relevance/differentiation test.[^1]
+- Updated: always included, Treering‑only (previously optional).
 - One sentence, maximum two lines.
 - Explains the 2024–25 gap succinctly and forward‑looking (“intentional caregiving pause, returning with full focus on lifecycle marketing and digital strategy”).[^3][^1]
 

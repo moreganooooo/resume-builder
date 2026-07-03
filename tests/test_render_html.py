@@ -58,5 +58,46 @@ class TestNoProjectsOrCompetencies(unittest.TestCase):
         self.assertNotIn("Core Skills", html)
 
 
+class TestContactRowAndEducationFormatting(unittest.TestCase):
+
+    def setUp(self):
+        self.out_path = os.path.join(os.path.dirname(__file__), "_tmp_contact_edu.html")
+
+    def tearDown(self):
+        if os.path.exists(self.out_path):
+            os.remove(self.out_path)
+
+    def test_contact_row_has_no_portfolio_and_linkedin_is_not_a_hyperlink(self):
+        data = _minimal_resume_data(
+            LINKEDIN_DISPLAY="linkedin.com/in/morganescott",
+            PORTFOLIO_URL="https://example.com/portfolio",
+            PORTFOLIO_DISPLAY="example.com/portfolio",
+        )
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertNotIn("example.com/portfolio", html)
+        self.assertIn("linkedin.com/in/morganescott", html)
+        self.assertNotIn('<a href="https://linkedin.com', html)
+
+    def test_education_renders_pipe_separated_meta_with_no_bold_location(self):
+        data = _minimal_resume_data(EDUCATION=[{
+            "degree": "Bachelor of Science, Journalism",
+            "institution": "University of Kansas",
+            "location": "Lawrence, KS",
+            "year": "2006 – 2008",
+            "bullets": ["3.56 GPA"],
+        }])
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn('<div class="edu-title">Bachelor of Science, Journalism</div>', html)
+        self.assertIn(
+            '<div class="edu-meta">University of Kansas <span class="sep">|</span> '
+            'Lawrence, KS <span class="sep">|</span> 2006 – 2008</div>',
+            html,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
