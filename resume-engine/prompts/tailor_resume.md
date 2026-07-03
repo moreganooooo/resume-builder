@@ -72,7 +72,16 @@ option whose framing best matches the archetype you detected above.
 - Include every tool, platform, methodology, and framework from the JD that Morgan genuinely knows
 - Include logically implied skills (JD mentions HubSpot → include "CRM" if true)
 - NO soft skills unless the JD explicitly lists them as requirements
-- Lines must not exceed 110 characters including category labels and commas (widow prevention)
+- Source your tool/platform names from verified_tools.json (in your knowledge base context) --
+  don't invent tools or platforms Morgan hasn't verifiably used
+- Lines up to 110 characters fit on one line; wrapping to a 2nd line is fine as long as it doesn't
+  leave a short widow (a stray few characters alone on that 2nd line) -- if a line is going to wrap
+  awkwardly, add or remove a skill to land on a full line instead
+- You have a small amount of wording latitude on individual items to help a line land well, as long
+  as the underlying tool/skill is unchanged: e.g. "Salesforce Administration" may become "Salesforce,
+  Salesforce Lightning"; "Microsoft Office" may become "Microsoft Word, Microsoft PowerPoint,
+  Microsoft Excel" or just "Word, PowerPoint, Excel". Don't invent a tool that isn't already implied
+  by the category
 - Items are comma-separated with a space after each comma; no bullets or pipes inside a category
 - Category labels are bold via the skill-category class; items are plain body font
 - Archetype ordering:
@@ -97,6 +106,32 @@ option whose framing best matches the archetype you detected above.
 - Tool mentions: one per bullet ideal, two acceptable; three or more reads as a list
 - Order bullets within each role: (1) most JD-relevant, (2) most impressive, (3) most unique
 
+# Job Title Reframing
+
+Honest, role-specific reframing of job titles is allowed to better match responsibilities and the
+target archetype -- this is about emphasis, not fabrication. Company, dates, and seniority level may
+never be altered.
+
+Two formats:
+- **Additive** (`Title A + Title B`): used when a role genuinely covered two distinct functions and
+  the JD calls for emphasizing both. Examples already used and approved:
+  - Inside Sales Team: `ABM Specialist + Business Development Representative`
+  - Treering Yearbooks: `Creative Strategy Lead + Senior Sales Development Lead` (or other similarly
+    reasonable `X + Senior Sales Development Lead` combinations, chosen per archetype)
+- **Parenthetical** (`Title (Descriptor)`): used to add a short industry/type/focus descriptor after
+  the main title without changing the title itself, when ATS title consistency matters more than
+  reframing. Example: `Sales/Marketing Strategy + QA Expert (AI Training)` for Mercor.
+
+Pick whichever format best fits the JD's archetype and this role's actual responsibilities. Titles
+must remain traceable to real work Morgan did in that role -- reframe emphasis, don't invent scope.
+
+# Career Note (Treering Yearbooks)
+
+Always include a career note immediately after the Treering Yearbooks entry (not optional). One
+sentence, maximum two lines, forward-looking. It explains the 2024-2025 gap succinctly: an
+intentional caregiving pause, now returning with full focus on lifecycle marketing and digital
+strategy. Output this in the `career_note` field of the Treering Yearbooks EXPERIENCE object.
+
 # Protected Bullets — Do Not Aggressively Shorten
 
 - Outreach.io full platform ownership (vendor eval, Salesforce integration, migration, adoption training, ongoing stewardship)
@@ -112,12 +147,12 @@ These are exact targets. Do not over-fill or under-fill any role. The total acro
 | --- | --- |
 | Mercor | 2-3 |
 | Treering Yearbooks | 6-8 |
-| Inside Sales Team | 4-5 |
-| Element 8 / Strategy LLC | 3-4 |
-| VML | 3-4 |
-| Callahan Creek | 3-4 |
+| Inside Sales Team | 5 |
+| Element 8 / Strategy LLC | 4 |
+| VML | 4 |
+| Callahan Creek | 4 |
 
-**Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. Reduce Treering to 6 or IST to 3 before trimming any other role. Never drop Mercor below 2. Never drop Element 8 / Strategy LLC, VML, or Callahan Creek below 3.
+**Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. If the resume doesn't fit 2 pages, reduce Treering to 6 or Inside Sales Team to 4 before trimming any other role. Never drop Mercor below 2. Never drop Element 8 / Strategy LLC, VML, or Callahan Creek below 3, even under trimming pressure.
 
 # Section Order (Page 1 → Page 2)
 
@@ -171,9 +206,10 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 
 ## Simple scalar fields
 
-- NAME (string)
 - TAGLINE (string) — hard-coded UPPERCASE, max 80 chars
-- PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, PORTFOLIO_URL, PORTFOLIO_DISPLAY, LOCATION (all strings)
+- Do NOT output NAME, PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, or LOCATION -- contact info
+  doesn't vary by JD and is filled in automatically after your output is generated. There is no
+  portfolio link field at all; it's been removed resume-wide.
 - SECTION_SUMMARY = "Professional Summary"
 - SECTION_EXPERIENCE = "Work Experience"
 - SECTION_EDUCATION = "Education"
@@ -199,10 +235,13 @@ Each object has these exact keys:
   "company": "Company Name",
   "period": "Month Year – Month Year",
   "location": "City, ST or Remote",
-  "achievements": ["Bullet one", "Bullet two"]
+  "achievements": ["Bullet one", "Bullet two"],
+  "career_note": ""
 }
 ```
-`location` may be left as an empty string `""` if unknown. `achievements` is the array of bullet strings for that role.
+`location` may be left as an empty string `""` if unknown. `achievements` is the array of bullet
+strings for that role. `career_note`: always populate for the Treering Yearbooks entry per the
+"Career Note (Treering Yearbooks)" section above; leave as `""` for every other company.
 
 ## EDUCATION (array of objects)
 Each object has these exact keys:

@@ -27,6 +27,10 @@ def normalize(resume_data: dict) -> dict:
     """Returns a new dict; never mutates the input."""
     result = dict(resume_data)
 
+    result.update(fixed_content.CONTACT_INFO)
+    result.pop("PORTFOLIO_URL", None)
+    result.pop("PORTFOLIO_DISPLAY", None)
+
     result["CERTIFICATIONS"] = list(fixed_content.CERTIFICATIONS)
     result["EDUCATION"] = fixed_content.build_education(
         result.get("KU_ACHIEVEMENT_KEY", ""),

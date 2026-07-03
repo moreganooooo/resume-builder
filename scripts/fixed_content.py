@@ -11,6 +11,22 @@ text; JCCC has no achievement bullet at all (spec: exactly 1 fixed bullet).
 Source: resume-engine/knowledge_base/bullet-bank.md's EDUCATION section.
 """
 
+# Contact info doesn't vary by JD either -- previously the builder was asked
+# to reproduce name/phone/email/LinkedIn/location from knowledge-base context
+# on every single run, risking the same kind of drift already fixed for
+# Certifications/Education/company facts. Source: profile.yml. Portfolio link
+# is intentionally not included here (removed resume-wide -- can read as an
+# ATS red flag on some parsers, and LinkedIn is presented as plain text
+# rather than a hyperlink for the same reason).
+CONTACT_INFO = {
+    "NAME": "Morgan Escott",
+    "PHONE": "716-352-9050",
+    "EMAIL": "escott.morgan@gmail.com",
+    "LINKEDIN_URL": "https://linkedin.com/in/morganescott",
+    "LINKEDIN_DISPLAY": "linkedin.com/in/morganescott",
+    "LOCATION": "Getzville, NY",
+}
+
 # Company facts (size, revenue, location/work-type) don't vary by JD --
 # only bullet selection and job-title reframing do -- so they're hard-coded
 # here rather than left for the builder to reproduce correctly every run.

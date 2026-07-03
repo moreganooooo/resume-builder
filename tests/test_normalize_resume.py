@@ -32,6 +32,27 @@ class TestNormalizeResume(unittest.TestCase):
         result = normalize_resume.normalize(data)
         self.assertNotIn("size_revenue", result["EXPERIENCE"][0])
 
+    def test_injects_fixed_contact_info(self):
+        result = normalize_resume.normalize(self.raw)
+        for key, value in fixed_content.CONTACT_INFO.items():
+            self.assertEqual(result[key], value)
+
+    def test_overrides_any_builder_supplied_contact_info(self):
+        data = dict(self.raw)
+        data["PHONE"] = "555-000-0000"
+        data["EMAIL"] = "someone-else@example.com"
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["PHONE"], fixed_content.CONTACT_INFO["PHONE"])
+        self.assertEqual(result["EMAIL"], fixed_content.CONTACT_INFO["EMAIL"])
+
+    def test_removes_portfolio_fields_entirely(self):
+        data = dict(self.raw)
+        data["PORTFOLIO_URL"] = "https://example.com/portfolio"
+        data["PORTFOLIO_DISPLAY"] = "example.com/portfolio"
+        result = normalize_resume.normalize(data)
+        self.assertNotIn("PORTFOLIO_URL", result)
+        self.assertNotIn("PORTFOLIO_DISPLAY", result)
+
     def test_injects_fixed_certifications(self):
         result = normalize_resume.normalize(self.raw)
         self.assertEqual(result["CERTIFICATIONS"], fixed_content.CERTIFICATIONS)
