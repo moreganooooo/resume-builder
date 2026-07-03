@@ -51,7 +51,12 @@ option whose framing best matches the archetype you detected above.
 - Format: [JD Role Title, cleaned] | [Archetype Descriptor]
 - Archetype descriptors: Email Lifecycle → "Campaign CRM Strategist" | Sales Enablement → "Content Systems & Training Designer" | B2B Content → "Brand Voice & Campaign Copywriter" | Marketing Ops → "CRM Campaign Systems Specialist" | Generalist → "Campaign Strategy & Lifecycle Marketing"
 - Remove "Sr.", "Junior", "Remote", parentheses from the role title; keep the essence
-- Must fit one printed line; target 70–80 characters at 14pt
+- Must fit one printed line, max 60 characters total (empirically measured -- a 65-char tagline
+  ("CAMPAIGN CRM STRATEGIST | CAMPAIGN STRATEGY & LIFECYCLE MARKETING") already wraps to a 2nd line
+  at 14pt). If your first draft runs long, condense by removing repeated words between the two
+  halves rather than shortening either half awkwardly -- e.g. "CAMPAIGN CRM STRATEGIST | CAMPAIGN
+  STRATEGY & LIFECYCLE MARKETING" (65 chars, wraps) became "CAMPAIGN & CRM STRATEGIST | LIFECYCLE
+  MARKETING" (48 chars, fits) by merging the repeated "Campaign"/"Strategy"/"Strategist" language
 - Use "&" (not "and") in tagline and category names
 - Tagline must be HARD-CODED UPPERCASE in the string value — do NOT rely on CSS text-transform
 

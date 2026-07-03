@@ -35,6 +35,20 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(_valid_resume(), STYLE_RULES)
         self.assertEqual(violations, [])
 
+    def test_flags_tagline_that_would_wrap_to_a_2nd_line(self):
+        resume = _valid_resume()
+        # A real 65-char tagline that wrapped to a 2nd line despite fitting
+        # the previous (wrong) "70-80 char" guidance.
+        resume["TAGLINE"] = "CAMPAIGN CRM STRATEGIST | CAMPAIGN STRATEGY & LIFECYCLE MARKETING"
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("tagline" in v.lower() for v in violations))
+
+    def test_allows_condensed_tagline_that_fits(self):
+        resume = _valid_resume()
+        resume["TAGLINE"] = "CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING"
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("tagline" in v.lower() for v in violations))
+
     def test_flags_empty_experience_entries(self):
         resume = _valid_resume()
         resume["EXPERIENCE"] = [{}, {}, {}]
