@@ -6,7 +6,7 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
-from render_html import render_html  # noqa: E402
+from render_html import render_html, build_why_html  # noqa: E402
 
 
 def _minimal_resume_data(**overrides):
@@ -111,6 +111,37 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         career_note_pos = html.index("Returning with renewed focus.")
         self.assertLess(bullets_pos, career_note_pos, "career note must render after the bullets, not before")
         self.assertIn('<strong>Career Note:</strong> Returning with renewed focus.', html)
+
+
+class TestWhySectionDropsCleanly(unittest.TestCase):
+    """
+    A real run's Why section, after being trimmed away, still showed the
+    literal word "null" plus its own section-title/divider instead of being
+    dropped entirely -- WHY_TEXT had picked up the literal string "null"
+    (echoed back by the model after seeing a stray Python None rendered as
+    the unquoted JSON token null in an earlier trim prompt).
+    """
+
+    def test_empty_string_drops_the_section(self):
+        self.assertEqual(build_why_html("Why Acme?", ""), "")
+
+    def test_none_drops_the_section(self):
+        self.assertEqual(build_why_html(None, None), "")
+
+    def test_literal_null_string_drops_the_section(self):
+        self.assertEqual(build_why_html("null", "null"), "")
+        self.assertEqual(build_why_html("Why Acme?", "NULL"), "")
+        self.assertEqual(build_why_html("Why Acme?", "  null  "), "")
+
+    def test_real_content_still_renders(self):
+        html = build_why_html("Why Acme?", "<p>Real why text.</p>")
+        self.assertIn("Why Acme?", html)
+        self.assertIn("Real why text.", html)
+
+    def test_falls_back_to_generic_header_if_only_the_title_is_null(self):
+        html = build_why_html("null", "<p>Real why text.</p>")
+        self.assertIn("Additional Relevant Experience", html)
+        self.assertNotIn(">null<", html)
 
 
 if __name__ == "__main__":

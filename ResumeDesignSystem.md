@@ -200,7 +200,7 @@ The tagline is generated automatically from the JD and archetype.[^1]
 
 - Skills lines must not exceed **110 characters**, including category labels and commas, to avoid a single trailing word on the next line.[^1]
 - Category labels are bold and take up extra width, so 110 characters is the safety threshold.
-- If a line wraps with a one‑word widow, trim or move items to another category until the line fits cleanly.[^1]
+- If a line wraps with a one‑word widow, three fixes are available, in order of preference: (1) add or remove an item within the category; (2) shorten or lengthen the category label itself (e.g. "CRM Strategy & Operations" → "CRM & Operations"), as long as it still fairly describes the items; (3) pull in 1–2 more genuinely‑held skills from `summaries-and-skills-clean.csv` or `verified_tools.json`, even if the JD didn't explicitly ask for them, as long as they fit the category and archetype.
 
 ### Category Structure and Ordering
 

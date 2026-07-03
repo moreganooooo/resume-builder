@@ -98,5 +98,30 @@ class TestSchemaCleanup(unittest.TestCase):
         self.assertEqual(sanitized["properties"]["title"], {"type": "string"})
 
 
+class TestSanitizeNoneForPrompt(unittest.TestCase):
+    """
+    A real run's Why section rendered the literal word "null" instead of
+    being dropped: a stray Python None in WHY_TEXT got json.dumps()'d into
+    a *later* trim prompt as the unquoted JSON token null, and the model
+    echoed that back as the literal string "null". Stripping None before
+    every re-dump means the model never sees a raw null to mis-copy.
+    """
+
+    def test_replaces_top_level_none_with_empty_string(self):
+        result = orchestrator._sanitize_none_for_prompt({"WHY_TEXT": None, "TAGLINE": "Real value"})
+        self.assertEqual(result, {"WHY_TEXT": "", "TAGLINE": "Real value"})
+
+    def test_replaces_none_nested_in_lists_and_dicts(self):
+        result = orchestrator._sanitize_none_for_prompt({
+            "EXPERIENCE": [{"title": "X", "career_note": None}],
+        })
+        self.assertEqual(result["EXPERIENCE"][0]["career_note"], "")
+
+    def test_does_not_mutate_the_input(self):
+        original = {"WHY_TEXT": None}
+        orchestrator._sanitize_none_for_prompt(original)
+        self.assertIsNone(original["WHY_TEXT"])
+
+
 if __name__ == "__main__":
     unittest.main()

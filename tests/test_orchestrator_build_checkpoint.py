@@ -197,6 +197,61 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_skills_widow_fix_attempt_gets_reminded_of_all_three_fix_options(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # Repeated Skills-widow violations across retry attempts (seen in a
+        # real run) suggest the model needs the fix options spelled out
+        # again in the fix prompt, not just relying on tailor_resume.md's
+        # rules buried earlier in a huge system prompt.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        template_call_count = {"n": 0}
+        captured_fix_contents = {}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                template_call_count["n"] += 1
+                if template_call_count["n"] == 1:
+                    # Plain length 115 (5 chars past the 110-char limit) -- a
+                    # short widow, not a clean wrap to a fuller 2nd line.
+                    return (json.dumps({
+                        "SUMMARY": "Test summary.",
+                        "SKILLS": ["**Cat:** " + "X" * 110],
+                    }), {})
+                captured_fix_contents["contents"] = kwargs.get("contents")
+                return (json.dumps({"SUMMARY": "Test summary.", "SKILLS": []}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertIn("FIXING A SKILLS LINE WIDOW", captured_fix_contents["contents"])
+        self.assertIn("summaries-and-skills-clean.csv", captured_fix_contents["contents"])
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_fix_loop_survives_one_unparseable_attempt_and_still_succeeds(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):
