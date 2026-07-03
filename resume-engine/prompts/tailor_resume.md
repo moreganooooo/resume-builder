@@ -81,7 +81,15 @@ option whose framing best matches the archetype you detected above.
   don't invent tools or platforms Morgan hasn't verifiably used
 - Lines up to 110 characters fit on one line; wrapping to a 2nd line is fine as long as it doesn't
   leave a short widow (a stray few characters alone on that 2nd line) -- if a line is going to wrap
-  awkwardly, add or remove a skill to land on a full line instead
+  awkwardly, you have three ways to fix it, in order of preference:
+  1. Add or remove an item within the category.
+  2. Shorten or lengthen the category label itself, as long as it still fairly describes the items
+     in it and stays relevant to the JD archetype: e.g. "CRM Strategy & Operations" may become "CRM
+     & Operations"; "Content Strategy & Communications" may become "Content & Communications".
+  3. Pull in 1-2 more skills from summaries-and-skills-clean.csv or verified_tools.json (in your
+     knowledge base context) that Morgan genuinely has, even if the JD didn't explicitly ask for
+     them -- as long as they're relevant to the category and archetype. Never invent a skill that
+     isn't in that verified material.
 - You have a small amount of wording latitude on individual items to help a line land well, as long
   as the underlying tool/skill is unchanged: e.g. "Salesforce Administration" may become "Salesforce,
   Salesforce Lightning"; "Microsoft Office" may become "Microsoft Word, Microsoft PowerPoint,

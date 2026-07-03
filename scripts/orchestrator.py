@@ -515,6 +515,28 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
         print(f"   💫 tokens — {token_part}")
 
 
+def _sanitize_none_for_prompt(value):
+    """
+    Recursively replaces None with "" throughout a dict/list structure
+    before it gets json.dumps()'d into a later fix/trim/critique prompt.
+
+    A real run's trim step correctly blanked WHY_TEXT, but if that value
+    was ever a Python None (rather than "") a *later* trim step's prompt
+    would render it as the unquoted JSON token null -- the model then
+    echoed that back as the literal string "null" instead of leaving it
+    blank, producing a visible "null" in the rendered PDF. Stripping None
+    before every re-dump means the model never sees a raw null token in
+    its own context to mis-copy in the first place.
+    """
+    if isinstance(value, dict):
+        return {k: _sanitize_none_for_prompt(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_none_for_prompt(v) for v in value]
+    if value is None:
+        return ""
+    return value
+
+
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
@@ -1495,7 +1517,7 @@ class ResumeEngine:
                 for v in violations:
                     print(f"    - {v}")
                 fix_contents = (
-                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
+                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                     f"=== REFINED BULLETS (source material if an issue requires populating "
                     f"or fixing Experience/achievements) ===\n{bullets_block}\n\n"
                 )
@@ -1511,6 +1533,20 @@ class ResumeEngine:
                         f"When fixing a duplicate-opening-verb issue, the replacement verb must not "
                         f"appear anywhere in this full list -- not just avoid the two bullets named "
                         f"in the issue below.\n\n"
+                    )
+                if any(v.startswith("Skills line wraps") for v in violations):
+                    # Repeated Skills-widow violations across retry attempts
+                    # suggest the model needs the fix options spelled out
+                    # again here, not just relying on tailor_resume.md's
+                    # Skills Section Rules buried earlier in a huge prompt.
+                    fix_contents += (
+                        f"=== FIXING A SKILLS LINE WIDOW ===\n"
+                        f"In order of preference: (1) add or remove an item within the category; "
+                        f"(2) shorten or lengthen the category label itself, as long as it still "
+                        f"fairly describes the items (e.g. 'CRM Strategy & Operations' -> 'CRM & "
+                        f"Operations'); (3) pull in 1-2 more genuinely-held skills from "
+                        f"summaries-and-skills-clean.csv or verified_tools.json, even if the JD "
+                        f"didn't ask for them, as long as they fit the category and archetype.\n\n"
                     )
                 fix_contents += (
                     f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
@@ -1562,7 +1598,7 @@ class ResumeEngine:
             )
             critique_contents = (
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
-                f"=== RESUME JSON ===\n{json.dumps(resume_data, indent=2)}"
+                f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
             )
             critique_text, _ = GeminiClient.generate(
                 model=CRITIQUE_MODEL,
@@ -1646,7 +1682,7 @@ class ResumeEngine:
 
             print(f"  PDF is {page_count} pages, applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (
-                f"=== ORIGINAL RESUME JSON ===\n{json.dumps(resume_data, indent=2)}\n\n"
+                f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                 f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt]}"
             )
             trim_text, trim_usage = GeminiClient.generate(

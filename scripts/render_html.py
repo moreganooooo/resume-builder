@@ -97,12 +97,22 @@ def build_why_html(section_title: str, why_text: str) -> str:
     leaves WHY_TEXT blank, this drops the section (including its header)
     entirely rather than leaving an empty div with just a title.
 
+    A real run trimmed Why away, but a *later* trim step's prompt re-dumped
+    resume_data with a stray Python None in WHY_TEXT (rendered by
+    json.dumps as the unquoted JSON token null) -- the model then echoed
+    that back as the literal string "null" instead of leaving it blank,
+    which rendered as a visible "null" plus the section's own title/divider
+    instead of being dropped. Treat None and a literal "null" string
+    (whitespace/case-insensitive) as blank too, not just empty string.
+
     WHY_TEXT is intentionally NOT escaped, same as SUMMARY_TEXT -- tailor_resume.md
     requires <p> paragraph tags and <em> tags around the first and last sentences
     of the section.
     """
-    if not why_text:
+    if not why_text or why_text.strip().lower() == "null":
         return ""
+    if not section_title or section_title.strip().lower() == "null":
+        section_title = "Additional Relevant Experience"
     return f"""
     <div class="section avoid-break">
       <div class="section-title">{escape(section_title)}</div>
@@ -189,8 +199,8 @@ def render_html(resume_data: dict, output_path: str) -> str:
     html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("CERTIFICATIONS", [])))
     html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("EDUCATION", [])))
     html = html.replace("{{WHY_SECTION}}",    build_why_html(
-        resume_data.get("SECTION_WHY", ""),
-        resume_data.get("WHY_TEXT", ""),
+        resume_data.get("SECTION_WHY") or "",
+        resume_data.get("WHY_TEXT") or "",
     ))
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
