@@ -41,6 +41,30 @@ COMPANY_META = {
     "Callahan Creek": {"size_revenue": "~30 employees; ~$5M revenue", "location": "Lawrence, KS"},
 }
 
+# Job-title parenthetical industry/role-type descriptors don't vary by JD --
+# they're a fixed tag appended after whatever title (additive or plain) the
+# builder produces for that company, per resume_example.pdf. Applied
+# automatically by normalize_resume regardless of which Job Title Reframing
+# format tailor_resume.md's builder chose for the title itself.
+COMPANY_TITLE_DESCRIPTOR = {
+    "Mercor": "AI Training",
+    "Treering Yearbooks": "SaaS/EdTech",
+    "Inside Sales Team": "Outbound/Agency",
+    "Element 8 / Strategy LLC": "Design/Agency/Startup",
+    "VML": "Agency/Digital/Brand",
+    "Callahan Creek": "Agency/Creative/Brand",
+}
+
+# Deeply personal, sensitive content describing a real health/caregiving
+# situation -- hard-coded rather than left for an LLM to freshly paraphrase
+# every run, given the risk of mangling tone on something this sensitive.
+# Always follows the Treering Yearbooks entry, after its bullets.
+CAREER_NOTE = (
+    "After a fulfilling run at Treering, I took intentional time in 2024–25 to support a "
+    "loved one's health and invest in professional growth while searching for a role "
+    "aligned with my skills and values. I'm excited to return to work with renewed focus."
+)
+
 CERTIFICATIONS = [
     {"title": "Email Marketing Software Certification", "org": "HubSpot", "year": "2026"},
     {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"},

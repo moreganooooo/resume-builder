@@ -309,17 +309,31 @@ The tagline is generated automatically from the JD and archetype.[^1]
 
 #### Job Title Reframing
 
-- Honest, role‑specific reframing is allowed to better match responsibilities and target archetypes.[^1]
-- Two formats are available:
-  - Additive: `Title A + Title B`, e.g. `ABM Specialist + Business Development Representative` (Inside Sales Team) or `Creative Strategy Lead + Senior Sales Development Lead` (Treering, or other reasonable `X + Senior Sales Development Lead` variants per archetype).[^1]
-  - Parenthetical: `Title (Descriptor)`, e.g. `Sales/Marketing Strategy + QA Expert (AI Training)` (Mercor), when ATS title consistency is crucial.[^1]
+- Honest, role‑specific reframing of the title itself is allowed to better match responsibilities and target archetypes.[^1]
+- Two formats for the title itself:
+  - Additive: `Title A + Title B`, e.g. `ABM Specialist + Business Development Representative` (Inside Sales Team) or `Creative Strategy Lead + Senior Sales Development Lead`/`Manager` (Treering, or other reasonable `X + Senior Sales Development Lead/Manager` variants per archetype).[^1]
+  - Single title: used when one title already captures the role well (e.g. `Lead Graphic Designer`, `Copywriting Intern`).
 - Company, dates, and seniority level may not be altered.
+- Updated: a fixed industry/role-type descriptor is appended automatically after whatever title is
+  produced, per company (independent of which title format above is used):
+  - Mercor: `(AI Training)`
+  - Treering Yearbooks: `(SaaS/EdTech)`
+  - Inside Sales Team: `(Outbound/Agency)`
+  - Element 8 / Strategy LLC: `(Design/Agency/Startup)`
+  - VML: `(Agency/Digital/Brand)`
+  - Callahan Creek: `(Agency/Creative/Brand)`
 
 #### Career Note at Treering
 
-- Updated: always included, Treering‑only (previously optional).
-- One sentence, maximum two lines.
-- Explains the 2024–25 gap succinctly and forward‑looking (“intentional caregiving pause, returning with full focus on lifecycle marketing and digital strategy”).[^3][^1]
+- Updated: always included, Treering‑only (previously optional), and hard-coded (not LLM-generated)
+  given the sensitivity of the content.
+- Updated: positioned after the Treering entry's bullets (previously before them), formatted as
+  bold `Career Note:` followed by the note in italics.
+- Updated: pronouns and standard sentence punctuation are allowed here, unlike the rest of the
+  Experience section.
+- Current text: “Career Note: After a fulfilling run at Treering, I took intentional time in 2024–25
+  to support a loved one's health and invest in professional growth while searching for a role
+  aligned with my skills and values. I'm excited to return to work with renewed focus.”[^3][^1]
 
 ### Training & Certifications
 

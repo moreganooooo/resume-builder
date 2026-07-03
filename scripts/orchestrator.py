@@ -602,7 +602,7 @@ class ExperienceEntry(BaseModel):
     period:       str       = Field(description="Employment dates, MM/YYYY - MM/YYYY format.")
     location:     str       = Field(default="", description="City/state or Remote. Leave blank if unknown.")
     achievements: List[str] = Field(description="Achievement bullets for this role. Must not be empty.")
-    career_note:  str       = Field(default="", description="Treering Yearbooks only: always include, per tailor_resume.md's Career Note section. Empty string for every other company.")
+    career_note:  str       = Field(default="", description="Auto-filled after generation for Treering Yearbooks by normalize_resume; always output empty string here.")
 
 class TemplateSchema(BaseModel):
     """
@@ -621,7 +621,7 @@ class TemplateSchema(BaseModel):
     EXPERIENCE:             List[ExperienceEntry] = Field(
         description=(
             "One entry per company. Bullet counts per role must match "
-            "tailor.md targets exactly: Mercor 2-3, Treering 6-8, "
+            "tailor.md targets exactly: Mercor 2-3, Treering 6-7, "
             "Inside Sales Team 5, Element 8/Strategy LLC 4, VML 4, "
             "Callahan Creek 4."
         )
