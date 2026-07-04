@@ -24,6 +24,30 @@ TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "cv-tem
 # Each function takes a slice of the resume JSON and returns an HTML string.
 # ---------------------------------------------------------------------------
 
+def _wrap_tagline_pipe(escaped_tagline: str) -> str:
+    """
+    tailor_resume.md's tagline format is "[Role] | [Archetype Descriptor]" --
+    a single hard-coded string with no per-segment markup, unlike the
+    contact-row/job-meta/cert-item pipes, which are already built as their
+    own <span class="sep">. Wraps the pipe the same way so it can be styled
+    gray (#9aa3af) to match those.
+    """
+    return escaped_tagline.replace(" | ", ' <span class="tagline-sep">|</span> ')
+
+
+def _preserve_arrow_glyph(text: str) -> str:
+    """
+    generate-pdf.mjs's ATS text normalizer strips any literal U+2192 arrow
+    to " to " (arrows often get mangled by resume-parsing software) -- right
+    for prose, but Element 8 / Strategy LLC's fixed title wants to keep its
+    visible "->" showing the in-role promotion. Swapping in the HTML entity
+    reference means the normalizer's raw-string regex (which only matches a
+    literal U+2192 codepoint) has nothing to match, while the browser still
+    renders the identical glyph once it parses the entity.
+    """
+    return text.replace("→", "&rarr;")
+
+
 def build_skills_html(skills: list[str]) -> str:
     """
     Renders skills as the .skills-grid tag cloud the template expects.
@@ -69,10 +93,16 @@ def build_experience_html(jobs: list[dict]) -> str:
             part if part is company else escape(part) for part in meta_parts
         ) if meta_parts else ""
 
+        clients = (
+            f'<div class="job-clients"><strong>Clients:</strong> {escape(job["clients"])}</div>'
+            if job.get("clients") else ""
+        )
+
         html.append(f"""
         <div class="job">
-          <div class="job-title">{escape(job.get("title",""))}</div>
+          <div class="job-title">{_preserve_arrow_glyph(escape(job.get("title","")))}</div>
           <div class="job-meta">{meta_line}</div>
+          {clients}
           <ul>{bullets_html}</ul>
           {career_note}
         </div>""")
@@ -141,8 +171,7 @@ def build_education_html(edu: list[dict]) -> str:
         meta_line = f" {sep} ".join(meta_parts)
         html.append(f"""
         <div class="edu-item">
-          <div class="edu-title">{escape(e.get("degree",""))}</div>
-          <div class="edu-meta">{meta_line}</div>
+          <div class="edu-header"><span class="edu-title">{escape(e.get("degree",""))}</span>{sep}<span class="edu-meta-text">{meta_line}</span></div>
           {desc}
           {bullets_html}
         </div>""")
@@ -176,7 +205,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
     scalars = {
         "LANG":               resume_data.get("LANG", "en"),
         "NAME":               escape(resume_data.get("NAME", "")),
-        "TAGLINE":            escape(resume_data.get("TAGLINE", "")),
+        "TAGLINE":            _wrap_tagline_pipe(escape(resume_data.get("TAGLINE", ""))),
         "PHONE":              escape(resume_data.get("PHONE", "")),
         "EMAIL":              escape(resume_data.get("EMAIL", "")),
         "LINKEDIN_DISPLAY":   escape(resume_data.get("LINKEDIN_DISPLAY", "")),

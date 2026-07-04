@@ -13,7 +13,7 @@ philosophy:
   - Mirror employer language for ATS; use exact JD phrasing across Summary Skills and bullets
   - Do not waste space on assumed soft skills; use space for scale technical depth and strategic ownership
   - Repeat real differentiators deliberately; K-12 depth, Salesforce admin, Outreach implementation, lifecycle systems, CRM ops
-  - Summary is positioning not biography; who she is, what she specializes in, what value she creates
+  - Summary is positioning not biography; role/identity, area of specialization, value created — written pronoun-free, not third-person biography
   - Skills reinforce identity; lead with the archetype-relevant category not a tool dumping ground
   - Think like the hiring manager; dissolve their core anxieties through content selection
   - Bullet bank is LEGO not prose inspiration; start from curated verified bullets not net-new text
@@ -203,9 +203,15 @@ forbidden_phrases:
   - thrives in fast-paced environments
   - world-class
   - cutting-edge
-  - leverage
-  - leverage technology
-  - utilized
+
+# "leverage"/"leverage technology"/"utilized" were removed from the hard-gate
+# forbidden_phrases list above -- unlike the cliches above them, these are
+# real verbs that can be the clearest, most specific way to describe actual
+# tool usage ("Leveraged Claude to draft email copy" is concrete, not empty
+# filler). A hard gate can't tell "lazy filler" from "accurate and specific"
+# apart; that judgment call is better left to vague_verbs below (a softer,
+# advisory upgrade nudge the critique/rewrite steps weigh against everything
+# else) rather than an unconditional validator rejection.
 
 punctuation_rules:
   - Bullets never end with periods or any trailing punctuation
@@ -236,7 +242,7 @@ tool_mention_rules:
   per_bullet_hard_limit: 3  # 3+ reads as a list not a narrative
 
 tagline:
-  # Empirically measured (Playwright, real Space Grotesk 14pt rendering at
+  # Empirically measured (Playwright, real DM Sans 14pt rendering at
   # the actual 7.5in content width): realistic uppercase taglines run
   # ~0.117-0.119in/char, so even a 65-char tagline can wrap to a 2nd line.
   # A prior "target 70-80 characters" guess was simply wrong.
@@ -249,6 +255,7 @@ skills_section:
   widow_min_chars: 25  # a 2nd-line remainder shorter than this looks like a stray scrap, not an intentional wrap
   separator: ", "  # comma + space; no bullets or pipes inside a category
   label_style: bold  # via .skill-category class
+  casing: title_case  # every category label and item is Title Case, even when mirroring a JD term that's written lowercase/sentence-case (e.g. JD's "CMS platforms" -> "CMS Platforms")
   archetype_ordering:
     lifecycle: [Lifecycle/Retention Marketing, CRM/Revenue Operations, Content/Enablement/Training, Creative/Design]
     copywriter: [Content & Communications Strategy, Writing & Editing, CRM/Analytics, Creative]
@@ -285,10 +292,10 @@ layout_rules:
 typography:
   name_font: DM Serif Display 400 32pt
   section_headers_font: DM Serif Display 400 16pt
-  body_font: Space Grotesk 400/600
+  body_font: DM Sans 400/600
   tagline_size: 14pt
   body_size: 10.5pt
-  contact_size: 10pt
+  contact_size: 9.75pt
   prohibited_fonts: [Inter]  # Chromium/Playwright reversed-text bug
   color_text: "#000000"
   color_rules: "#9aa3af"  # horizontal rules and separators only; no gradients or accent colors

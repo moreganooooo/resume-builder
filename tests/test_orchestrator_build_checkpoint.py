@@ -776,6 +776,172 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(result, {})
         self.assertEqual(mock_subprocess_run.call_count, 5)  # 1 initial + 4 trim attempts
 
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_recommendation_pass_applies_actionable_and_skips_the_rest(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
+            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+
+        rec_call_count = {"n": 0}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                rec_call_count["n"] += 1
+                if rec_call_count["n"] == 1:
+                    # First recommendation: a concrete resume edit -- applied.
+                    return (json.dumps({
+                        **base_resume,
+                        "SUMMARY_TEXT": "<strong>A lifecycle marketer skilled in ChatGPT and Claude.</strong>",
+                        "applied_recommendations": ["Name the specific AI tools used."],
+                        "skipped_recommendations": [],
+                    }), {})
+                # Second recommendation: networking advice, not a resume edit -- skipped.
+                return (json.dumps({
+                    **base_resume,
+                    "SUMMARY_TEXT": "<strong>A lifecycle marketer skilled in ChatGPT and Claude.</strong>",
+                    "applied_recommendations": [],
+                    "skipped_recommendations": ["Reach out to the KU alumni contact for a referral."],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90, "overall_fit_score": 90,
+                    "top_third_score": 90, "flags": [],
+                    "recommendations": ["Name the specific AI tools used.",
+                                        "Reach out to the KU alumni contact for a referral."],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        self.assertEqual(rec_call_count["n"], 2, "each recommendation must get its own call")
+        self.assertIn("ChatGPT and Claude", result["SUMMARY_TEXT"])
+        actions = result["_recommendation_actions"]
+        self.assertEqual(actions["applied"], ["Name the specific AI tools used."])
+        self.assertEqual(actions["skipped"], ["Reach out to the KU alumni contact for a referral."])
+
+    @patch("orchestrator.validate_resume.validate")
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_recommendation_pass_discards_result_that_introduces_a_violation(
+        self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
+            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                return (json.dumps({
+                    **base_resume,
+                    "SUMMARY_TEXT": "<strong>Broke something.</strong>",
+                    "applied_recommendations": ["Name the specific AI tools used."],
+                    "skipped_recommendations": [],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90, "overall_fit_score": 90,
+                    "top_third_score": 90, "flags": [], "recommendations": ["Name the specific AI tools used."],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        # Step 4's own initial validation call must stay clean (call 1); the
+        # recommendation pass's candidate (call 2) is the one that must fail.
+        mock_validate.side_effect = [[], ["FAKE VIOLATION FOR TEST"]]
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        self.assertEqual(result["SUMMARY_TEXT"], base_resume["SUMMARY_TEXT"], "must discard the violating rewrite")
+        actions = result["_recommendation_actions"]
+        self.assertEqual(actions["applied"], [])
+        self.assertEqual(len(actions["skipped"]), 1)
+        self.assertIn("introduced a validator violation", actions["skipped"][0])
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_recommendation_pass_resumes_from_checkpoint_without_a_new_api_call(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>Already applied.</strong>", "SKILLS": [], "EXPERIENCE": [],
+            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+            "refined_bullets": ["Shipped a widget platform used by 10k users."],
+            "resume_data": base_resume,
+            "critique_data": {
+                "summary_alignment_score": 90, "skills_relevance_score": 90, "overall_fit_score": 90,
+                "recommendations": ["Name the specific AI tools used."],
+            },
+            "recommendation_actions": {
+                "resume_data": dict(base_resume),
+                "applied": ["Name the specific AI tools used."],
+                "skipped": [],
+                "next_index": 1,
+            },
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.RecommendationApplySchema:
+                raise AssertionError("must not re-call the API when resuming from checkpoint")
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        self.assertEqual(result["_recommendation_actions"]["applied"], ["Name the specific AI tools used."])
+        mock_generate.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

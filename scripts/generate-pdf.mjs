@@ -11,10 +11,11 @@
  */
 
 import { chromium } from 'playwright';
-import { resolve, dirname } from 'path';
-import { readFile } from 'fs/promises';
+import { resolve, dirname, join } from 'path';
+import { readFile, writeFile, mkdtemp, rm } from 'fs/promises';
 import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { tmpdir } from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -149,15 +150,28 @@ async function generatePDF() {
     console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
   }
 
+  // page.setContent() + baseURL resolves relative file:// URLs correctly,
+  // but does NOT grant the page file:// fetch privileges -- only an actual
+  // navigation to a file:// URL does. Every @font-face load was silently
+  // failing ("Not allowed to load local resource") under setContent(), with
+  // no visible error in the PDF output. This machine happened to mask it
+  // for DM Serif Display (also installed as a real system font here), but
+  // DM Sans isn't, so every resume was silently falling back to
+  // Chromium's generic sans-serif (Helvetica) instead of the real font --
+  // exactly the "looks different on someone else's machine" failure mode
+  // this pipeline exists to avoid. Writing the transformed HTML to a real
+  // temp file and navigating to it with page.goto('file://...') gives the
+  // page genuine file:// origin privileges, so local font/image fetches
+  // from the same directory actually succeed.
+  const tmpDir = await mkdtemp(join(tmpdir(), 'resume-pdf-'));
+  const tmpHtmlPath = join(tmpDir, 'resume.html');
+  await writeFile(tmpHtmlPath, html, 'utf-8');
+
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
 
-    // Set content with file base URL for any relative resources
-    await page.setContent(html, {
-      waitUntil: 'networkidle',
-      baseURL: `file://${dirname(inputPath)}/`,
-    });
+    await page.goto(`file://${tmpHtmlPath}`, { waitUntil: 'networkidle' });
 
     // Wait for fonts to load
     await page.evaluate(() => document.fonts.ready);
@@ -176,7 +190,6 @@ async function generatePDF() {
     });
 
     // Write PDF
-    const { writeFile } = await import('fs/promises');
     await writeFile(outputPath, pdfBuffer);
 
     // Count pages (approximate from PDF structure)
@@ -190,6 +203,7 @@ async function generatePDF() {
     return { outputPath, pageCount, size: pdfBuffer.length };
   } finally {
     await browser.close();
+    await rm(tmpDir, { recursive: true, force: true });
   }
 }
 

@@ -349,8 +349,8 @@ Remove this entire CSS block from the `<style>` section:
   }
 
   .competency-tag {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 10pt;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 9.75pt;
     font-weight: 400;
     color: #000000;
   }
@@ -378,7 +378,7 @@ Remove this entire CSS block from the `<style>` section:
   }
 
   .project-title {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     font-size: 10.5pt;
     font-weight: 600;
     color: #000000;
@@ -407,7 +407,7 @@ Remove this entire CSS block from the `<style>` section:
   }
 
   .project-tech {
-    font-size: 10pt;
+    font-size: 9.75pt;
     color: #555555;
     margin-top: 2px;
     font-style: italic;

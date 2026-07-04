@@ -9,8 +9,12 @@ access, no LLM calls -- everything here is mechanically checkable.
 import re
 
 _METRIC_PATTERN = re.compile(r"\$?\d[\d,.]*[%MK]?\b", re.IGNORECASE)
-_PRONOUN_PATTERN = re.compile(r"\b(i|me|my|we|our)\b", re.IGNORECASE)
+_PRONOUN_PATTERN = re.compile(r"\b(i|me|my|we|our|she|her|hers|he|him|his)\b", re.IGNORECASE)
 _FIRST_WORD_PATTERN = re.compile(r"[^\w]*(\w+)")
+_TITLE_CASE_MINOR_WORDS = {
+    "a", "an", "and", "as", "at", "but", "by", "for", "in", "nor", "of",
+    "on", "or", "so", "the", "to", "up", "vs", "via", "with",
+}
 # A number directly preceded by "<letter>-" or "<letter>–" (e.g. the "12"
 # in "K-12" or "K–12") is part of a compound label, not a metric.
 _COMPOUND_LABEL_PREFIX = re.compile(r"[A-Za-z][-–—]$")
@@ -34,6 +38,15 @@ def _all_bullets(resume_data: dict) -> list[str]:
 
 
 def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
+    """
+    Word-boundary matching, not plain substring: a bare-substring check made
+    "leverage" flag "leveraged"/"leveraging" too, even though those inflected
+    forms are handled separately (and more leniently) by style_rules.yaml's
+    own vague_verbs guidance. The list already lists inflected forms it
+    actually wants caught as their own explicit entries (synergized, synergy,
+    synergies), so exact-word matching is the intended behavior, not a
+    loosening of it.
+    """
     violations = []
     phrases = [p.lower() for p in style_rules.get("forbidden_phrases", [])]
     haystacks = (
@@ -45,7 +58,7 @@ def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
     for text in haystacks:
         lowered = text.lower()
         for phrase in phrases:
-            if phrase in lowered:
+            if re.search(rf"\b{re.escape(phrase)}\b", lowered):
                 violations.append(f"Forbidden phrase '{phrase}' found in: {text!r}")
     return violations
 
@@ -107,7 +120,7 @@ def _check_tagline_length(resume_data: dict, style_rules: dict) -> list[str]:
     fitting one printed line at 14pt -- but a real 65-char tagline
     ("CAMPAIGN CRM STRATEGIST | CAMPAIGN STRATEGY & LIFECYCLE MARKETING")
     wrapped to 2 lines anyway. Empirically measured (Playwright, actual
-    Space Grotesk 14pt rendering at the real 7.5in content width): realistic
+    DM Sans 14pt rendering at the real 7.5in content width): realistic
     uppercase taglines run ~0.117-0.119in/char, so even 65 chars can exceed
     the available width. This uses a conservative 60-char cap with margin
     for that per-character variance.
@@ -156,6 +169,46 @@ def _check_skills_line_lengths(resume_data: dict, style_rules: dict) -> list[str
             violations.append(
                 f"Skills line is long enough to wrap to a 3rd line ({length} chars, more than "
                 f"double the {max_chars}-char limit) -- remove a skill or two: {line!r}"
+            )
+    return violations
+
+
+def _title_case_violations_in_phrase(phrase: str) -> list[str]:
+    """
+    Flags words (or hyphenated sub-parts, e.g. the "assisted" in "AI-assisted")
+    that aren't capitalized, skipping the standard lowercase minor words
+    (and, of, with, etc.) except when they open the phrase.
+    """
+    violations = []
+    words = phrase.strip().split()
+    for word_index, word in enumerate(words):
+        if word == "&":
+            continue
+        for part in word.split("-"):
+            core = part.strip("(),./")
+            if not core or not core[0].isalpha():
+                continue
+            if word_index > 0 and core.lower() in _TITLE_CASE_MINOR_WORDS:
+                continue
+            if not core[0].isupper():
+                violations.append(word)
+                break
+    return violations
+
+
+def _check_skills_title_case(resume_data: dict) -> list[str]:
+    violations = []
+    for line in resume_data.get("SKILLS", []):
+        match = re.match(r"^\*\*(.+?):\*\*\s*(.*)$", line)
+        if not match:
+            continue
+        label, items_text = match.groups()
+        bad_words = _title_case_violations_in_phrase(label)
+        for item in items_text.split(","):
+            bad_words.extend(_title_case_violations_in_phrase(item))
+        if bad_words:
+            violations.append(
+                f"Skills line has word(s) not in Title Case ({', '.join(bad_words)}): {line!r}"
             )
     return violations
 
@@ -236,6 +289,7 @@ def validate(resume_data: dict, style_rules: dict) -> list[str]:
     violations.extend(_check_tagline_length(resume_data, style_rules))
     violations.extend(_check_bullet_lengths(resume_data, style_rules))
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
+    violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_experience_completeness(resume_data))

@@ -290,8 +290,6 @@ buzzwords:
     - thought leader
     - synergy
     - synergies
-    - leverage
-    - utilized
 
   medium_risk:
 
@@ -302,6 +300,13 @@ buzzwords:
     - stakeholders
     - cross-functional
     - end-to-end ownership
+    # leverage/utilized moved down from high_risk -- unlike the cliches
+    # above, these are real verbs that can be the clearest, most specific
+    # way to describe actual tool usage, so they're no longer a style_rules
+    # forbidden_phrases hard gate. Still worth a softer nudge when they're
+    # genuinely lazy filler rather than accurate and specific.
+    - leverage
+    - utilized
 
 # --------------------------------------------------
 # GENERIC CLAIMS
@@ -373,8 +378,6 @@ ai_language_patterns:
     - dynamic professional
     - proven track record
     - passionate professional
-    - utilized
-    - leverage technology
 
   moderate:
 
@@ -384,6 +387,7 @@ ai_language_patterns:
     - strategic initiatives
     - business objectives
     - leverage technology
+    - utilized
 
   low:
 

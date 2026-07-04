@@ -13,16 +13,25 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Literal, Tuple
+
+# --- PATH RESOLUTION & ENV SETUP ---
+# Must run before any local import below: bullet_feedback -> rewrite_bullets
+# -> gemini_client, and gemini_client.py reads GEMINI_API_KEY at *import*
+# time. If .env hasn't been loaded yet, gemini_client latches onto whatever
+# stale key is already sitting in the shell's environment -- override=True
+# on load_dotenv() can't fix that after the fact, since it's a plain module
+# constant, not re-read per call. This caused every single API call in a run
+# to fail with 401 Unauthorized while silently ignoring a correct .env key.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+
 from render_html import render_html
 import normalize_resume
 import validate_resume
 import jd_manager
-
-
-# --- PATH RESOLUTION & ENV SETUP ---
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+import fixed_content
+import bullet_feedback
 
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -115,6 +124,7 @@ conservative and explain the limitation in context_gaps.
 CRITIQUE_SLEEP     = 4    # seconds between critique calls (free-tier: 15 RPM)
 REWRITE_SLEEP      = 4    # seconds before the rewrite call after a FAIL
 RESCORE_SLEEP      = 8    # seconds before the re-score call after a rewrite
+RECOMMENDATION_SLEEP = 8  # seconds between Step 5.5's one-recommendation-at-a-time calls
 # Step 3's audit loop makes up to 30 calls (several with large segment
 # bundles, 16k-24k tokens each per the logs), then Step 4 immediately fires
 # one ~105k-token builder call -- cumulative tokens across that window can
@@ -629,7 +639,7 @@ class ExperienceEntry(BaseModel):
 class TemplateSchema(BaseModel):
     """
     Flattened schema for the builder call.
-    NAME/PHONE/EMAIL/LINKEDIN_URL/LINKEDIN_DISPLAY/LOCATION are not builder
+    NAME/PHONE/EMAIL/LINKEDIN_DISPLAY/LOCATION are not builder
     fields -- contact info doesn't vary by JD, so it's hard-coded in
     fixed_content.CONTACT_INFO and force-applied by normalize_resume,
     same pattern as Certifications/Education/company facts. There is no
@@ -678,6 +688,26 @@ class TemplateSchema(BaseModel):
             "Leave blank ('') to omit the section entirely if it would push "
             "the resume to 3 pages."
         ),
+    )
+
+
+class RecommendationApplySchema(TemplateSchema):
+    """
+    Same shape as a normal builder/trim call (TemplateSchema), plus two
+    tracking lists so the holistic critique's recommendations can be acted
+    on without silently doing something the recommendation never asked for.
+    Only recommendations that are concrete edits to this resume's own
+    content belong in applied_recommendations -- anything describing an
+    action outside the document (networking, referrals, applying elsewhere)
+    must go in skipped_recommendations untouched.
+    """
+    applied_recommendations: List[str] = Field(
+        default_factory=list,
+        description="Exact text of each recommendation that was a resume-content edit and was applied.",
+    )
+    skipped_recommendations: List[str] = Field(
+        default_factory=list,
+        description="Exact text of each recommendation that was not a resume-content edit, so nothing was changed for it.",
     )
 
 
@@ -1172,6 +1202,13 @@ class ResumeEngine:
                                 print(f"   ✅ ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
                                 # Use the rescore data for the rewritten bullet
                                 critique_to_record = rescore_data
+                                try:
+                                    if bullet_feedback.queue_accepted_rewrite(
+                                        bullet, rewritten_bullet, company, tags, critique_to_record
+                                    ):
+                                        print("   📥 Queued for bank review (needs-review.csv)")
+                                except Exception as feedback_err:
+                                    print(f"   ⚠️  Could not queue bullet for bank review: {feedback_err}")
                             else:
                                 rewritten_bullet = bullet
                                 print(f"   🔄 KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
@@ -1509,7 +1546,7 @@ class ResumeEngine:
             resume_data = normalize_resume.normalize(resume_data)
 
             violations = validate_resume.validate(resume_data, style_rules_for_validation)
-            max_fix_attempts = 3
+            max_fix_attempts = 4
             fix_attempt = 0
             while violations and fix_attempt < max_fix_attempts:
                 fix_attempt += 1
@@ -1630,6 +1667,96 @@ class ResumeEngine:
             else:
                 print("  WARNING: Holistic critique returned empty.")
 
+        # --- Step 5.5: Apply actionable recommendations, one at a time ---
+        # Only recommendations that are concrete edits to this resume's own
+        # content get applied (e.g. "name the specific AI tools used" or
+        # "emphasize the target title in the summary") -- anything the
+        # holistic critique recommended that describes an action outside the
+        # document itself (networking, referrals, applying elsewhere) is left
+        # alone. Each recommendation gets its own call and its own
+        # validate-or-discard check (same safety net as the trim loop below)
+        # -- a violation introduced by one recommendation only throws away
+        # that one attempt, not the other recommendations already applied
+        # earlier in the same run.
+        recs = (resume_data.get("_critique") or {}).get("recommendations", [])
+        if recs:
+            state = checkpoint.get("recommendation_actions") or {
+                "resume_data": resume_data, "applied": [], "skipped": [], "next_index": 0,
+            }
+            start_index = state["next_index"]
+            if start_index >= len(recs):
+                print("\nStep 5.5: Resuming: recommendation pass already complete from checkpoint.")
+            else:
+                print(f"\nStep 5.5: Applying actionable recommendations one at a time "
+                      f"({start_index}/{len(recs)} already done)...")
+            resume_data = state["resume_data"]
+            applied, skipped = state["applied"], state["skipped"]
+
+            for i in range(start_index, len(recs)):
+                rec = recs[i]
+                if i > 0:
+                    time.sleep(RECOMMENDATION_SLEEP)
+                print(f"\n  [{i + 1}/{len(recs)}] {rec[:70]}...")
+                rec_contents = (
+                    f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+                    f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
+                    f"=== INSTRUCTIONS ===\n"
+                    f"Decide whether the recommendation above is a concrete, actionable edit to "
+                    f"THIS resume's own content (e.g. naming a specific tool, rewording a title/"
+                    f"summary/skills phrase to mirror the JD). If so, apply ONLY this one "
+                    f"recommendation and put its exact original text in applied_recommendations. "
+                    f"If it describes something outside the document itself -- networking, "
+                    f"referrals, applying elsewhere, or any action a person would take rather than "
+                    f"an edit to this resume's text -- change nothing and put its exact original "
+                    f"text in skipped_recommendations instead. Return the complete resume JSON with "
+                    f"every field -- change only what this one recommendation asked for, if "
+                    f"anything; leave everything else untouched."
+                )
+                rec_text, rec_usage = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    system_instruction=build_prompt,
+                    contents=rec_contents,
+                    response_schema=RecommendationApplySchema,
+                    temperature=0.0,
+                )
+                _log_cache_stats(rec_usage, 0, 0)
+                rec_result = GeminiClient.parse_json(rec_text or "")
+                if not rec_result:
+                    print("    WARNING: unparseable JSON; leaving resume as-is for this recommendation.")
+                else:
+                    this_applied = rec_result.pop("applied_recommendations", [])
+                    this_skipped = rec_result.pop("skipped_recommendations", [])
+                    candidate_resume_data = normalize_resume.normalize(rec_result)
+                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation)
+                    if rec_violations:
+                        print(f"    WARNING: introduced {len(rec_violations)} validator violation(s); "
+                              f"discarding just this recommendation:")
+                        for v in rec_violations:
+                            print(f"      - {v}")
+                        skipped.append(f"{rec} (attempted, discarded: introduced a validator violation)")
+                    elif this_applied:
+                        resume_data = candidate_resume_data
+                        applied.append(rec)
+                        print(f"    Applied.")
+                    else:
+                        skipped.append(rec)
+                        print(f"    Skipped (not a resume-content edit).")
+
+                checkpoint["recommendation_actions"] = {
+                    "resume_data": resume_data, "applied": applied, "skipped": skipped, "next_index": i + 1,
+                }
+                jd_manager.save_checkpoint(job_key, checkpoint)
+
+            resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped}
+            if applied:
+                print("\n  Applied:")
+                for a in applied:
+                    print(f"    - {a}")
+            if skipped:
+                print("  Skipped:")
+                for s in skipped:
+                    print(f"    - {s}")
+
         # --- Step 6: Save output ---
         output_path = os.path.join(self.output_json_dir, output_filename)
         try:
@@ -1663,6 +1790,7 @@ class ResumeEngine:
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
         page_count = None
+        dropped_optional_clients = False
 
         while True:
             pdf_result = subprocess.run(
@@ -1679,6 +1807,23 @@ class ResumeEngine:
 
             if page_count is None or page_count <= 2 or trim_attempt >= max_trim_attempts:
                 break
+
+            if not dropped_optional_clients:
+                dropped_optional_clients = True
+                has_optional_clients = any(
+                    fixed_content.CLIENTS.get(job.get("company"), {}).get("essential") is False
+                    and job.get("clients")
+                    for job in resume_data.get("EXPERIENCE", [])
+                )
+                if has_optional_clients:
+                    # Free, non-LLM trim step: drop the Inside Sales Team
+                    # client roster (fixed_content.CLIENTS marks it
+                    # non-essential) before spending an LLM-driven
+                    # trim_instructions attempt.
+                    print(f"  PDF is {page_count} pages, dropping optional client rosters...")
+                    resume_data = normalize_resume.normalize(resume_data, include_optional_clients=False)
+                    render_html(resume_data, html_out)
+                    continue
 
             print(f"  PDF is {page_count} pages, applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (

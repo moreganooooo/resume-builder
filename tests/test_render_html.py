@@ -80,6 +80,19 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         self.assertIn("linkedin.com/in/morganescott", html)
         self.assertNotIn('<a href="https://linkedin.com', html)
 
+    def test_tagline_pipe_is_wrapped_in_its_own_gray_separator_span(self):
+        # The tagline is a single hard-coded "[Role] | [Descriptor]" string
+        # with no per-segment markup, unlike contact-row/job-meta/cert-item,
+        # which already build their pipes as their own <span class="sep">.
+        data = _minimal_resume_data(TAGLINE="CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING")
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn(
+            'CAMPAIGN &amp; CRM STRATEGIST <span class="tagline-sep">|</span> LIFECYCLE MARKETING',
+            html,
+        )
+
     def test_education_renders_pipe_separated_meta_with_no_bold_location(self):
         data = _minimal_resume_data(EDUCATION=[{
             "degree": "Bachelor of Science, Journalism",
@@ -91,12 +104,28 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         render_html(data, self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
-        self.assertIn('<div class="edu-title">Bachelor of Science, Journalism</div>', html)
         self.assertIn(
-            '<div class="edu-meta">University of Kansas <span class="sep">|</span> '
-            'Lawrence, KS <span class="sep">|</span> 2006 – 2008</div>',
+            '<div class="edu-header"><span class="edu-title">Bachelor of Science, Journalism</span>'
+            '<span class="sep">|</span><span class="edu-meta-text">University of Kansas '
+            '<span class="sep">|</span> Lawrence, KS <span class="sep">|</span> 2006 – 2008</span></div>',
             html,
         )
+
+    def test_job_title_arrow_survives_as_html_entity_not_a_literal_codepoint(self):
+        # generate-pdf.mjs's ATS text normalizer strips a literal U+2192 arrow
+        # to " to " for ATS safety -- Element 8 / Strategy LLC's fixed title
+        # wants to keep a visible arrow, so render_html must emit the &rarr;
+        # entity reference instead of the raw arrow character, or the
+        # normalizer's raw-string regex would still catch and convert it.
+        data = _minimal_resume_data(EXPERIENCE=[{
+            "title": "Design Assistant → Lead Designer", "company": "Element 8 / Strategy LLC", "period": "01/2011 – 10/2011",
+            "achievements": ["Established the brand identity from scratch"],
+        }])
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("Design Assistant &rarr; Lead Designer", html)
+        self.assertNotIn("Design Assistant → Lead Designer", html)
 
     def test_career_note_renders_after_bullets_with_bold_label(self):
         data = _minimal_resume_data(EXPERIENCE=[{

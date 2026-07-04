@@ -1241,7 +1241,7 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
             "description": f"3.75 GPA, Full academic scholarship, Graduated with honors; {kckcc_bullet}",
         },
         {
-            "degree": "Relevant Coursework, Graphic Design",
+            "degree": "Coursework, Graphic Design",
             "institution": "Johnson County Community College",
             "year": "2010–2011",
             "description": "3.86 GPA, studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography",

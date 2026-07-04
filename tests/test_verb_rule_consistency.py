@@ -32,12 +32,22 @@ class TestVerbRuleConsistency(unittest.TestCase):
         for v in self.language_quality["elite_verbs"]:
             self.assertNotIn(v, self.vague_verbs)
 
-    def test_leverage_and_utilized_are_high_risk_not_medium_in_language_quality(self):
+    def test_leverage_and_utilized_are_medium_risk_not_high_in_language_quality(self):
+        # Reversed from an earlier decision that hard-banned these via
+        # style_rules.yaml's forbidden_phrases: a real run showed the hard
+        # gate discarding an otherwise-good, specific bullet ("Leveraged
+        # Claude to draft...") purely for containing "leveraged". Unlike the
+        # cliches elsewhere in high_risk/forbidden_phrases, these are real
+        # verbs that can be the clearest way to name actual tool usage, so
+        # they're a softer nudge (medium_risk) rather than an unconditional
+        # hard gate -- not absent from guidance entirely.
         buzzwords = self.language_quality["buzzwords"]
-        self.assertNotIn("leverage", buzzwords.get("medium_risk", []))
-        self.assertNotIn("utilized", buzzwords.get("medium_risk", []))
-        self.assertIn("leverage", buzzwords.get("high_risk", []))
-        self.assertIn("utilized", buzzwords.get("high_risk", []))
+        self.assertNotIn("leverage", buzzwords.get("high_risk", []))
+        self.assertNotIn("utilized", buzzwords.get("high_risk", []))
+        self.assertIn("leverage", buzzwords.get("medium_risk", []))
+        self.assertIn("utilized", buzzwords.get("medium_risk", []))
+        self.assertNotIn("leverage", self.style_rules["forbidden_phrases"])
+        self.assertNotIn("utilized", self.style_rules["forbidden_phrases"])
 
     def test_no_vague_verb_in_verb_taxonomy_positive_tiers(self):
         positive_tiers = (

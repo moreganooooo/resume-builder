@@ -22,9 +22,8 @@ CONTACT_INFO = {
     "NAME": "Morgan Escott",
     "PHONE": "716-352-9050",
     "EMAIL": "escott.morgan@gmail.com",
-    "LINKEDIN_URL": "https://linkedin.com/in/morganescott",
     "LINKEDIN_DISPLAY": "linkedin.com/in/morganescott",
-    "LOCATION": "Getzville, NY",
+    "LOCATION": "Getzville, NY (Buffalo Area)",
 }
 
 # Company facts (size, revenue, location/work-type) don't vary by JD --
@@ -55,14 +54,41 @@ COMPANY_TITLE_DESCRIPTOR = {
     "Callahan Creek": "Agency/Creative/Brand",
 }
 
+# Client rosters don't vary by JD either. VML and Callahan Creek are
+# "essential" -- always rendered.
+CLIENTS = {
+    "VML": {
+        "list": "SAP, Equinix, HughesNet, The Children's Place, Welch Allyn, Waste Management, Carlson Hotels, Gatorade",
+        "essential": True,
+    },
+    "Callahan Creek": {
+        "list": "Hill's Pet Nutrition, CommunityAmerica Credit Union, Sprint, Dave Ramsey, Free State Brewery, KC Ad Club",
+        "essential": True,
+    },
+}
+
+# Some former employers were later acquired/renamed -- note that in the
+# job-meta company line as "<Company> (Now <NewName>)", per resume_example.pdf.
+COMPANY_RENAME_NOTE = {
+    "Inside Sales Team": "Alleyoop",
+    "Callahan Creek": "BarkleyOKRP",
+}
+
+# Element 8 / Strategy LLC's title doesn't vary by JD -- it's fixed to show
+# the real in-role progression (Design Assistant promoted to Lead Designer)
+# rather than being left to the builder's Job Title Reframing judgment call.
+COMPANY_FIXED_TITLE = {
+    "Element 8 / Strategy LLC": "Design Assistant → Lead Designer",
+}
+
 # Deeply personal, sensitive content describing a real health/caregiving
 # situation -- hard-coded rather than left for an LLM to freshly paraphrase
 # every run, given the risk of mangling tone on something this sensitive.
 # Always follows the Treering Yearbooks entry, after its bullets.
 CAREER_NOTE = (
-    "After a fulfilling run at Treering, I took intentional time in 2024–25 to support a "
-    "loved one's health and invest in professional growth while searching for a role "
-    "aligned with my skills and values. I'm excited to return to work with renewed focus."
+    "After a fulfilling run at Treering, I took time in 2024–25 to support a loved one's "
+    "health and invest in my professional growth. I'm excited to return to work with "
+    "renewed focus."
 )
 
 CERTIFICATIONS = [
@@ -80,7 +106,7 @@ KU_ACHIEVEMENT_OPTIONS = {
 KCKCC_ACHIEVEMENT_OPTIONS = {
     "writing_content": "Editor-in-Chief, student newspaper for 1.5 years, assigned coverage, led editorial team, and managed weekly publication from story conception through print",
     "enablement_mgmt": "Editor-in-Chief, student newspaper, led a team of reporters and columnists, managed editorial calendar, and upheld writing and voice standards across all content",
-    "generalist":       "Editor-in-Chief, Kansas Colloquies student newspaper, managed publication end-to-end for 1.5 years while maintaining a full academic scholarship",
+    "generalist":      "Editor-in-Chief, Kansas Colloquies student newspaper, managed publication end-to-end for 1.5 years while maintaining a full academic scholarship",
 }
 
 
@@ -105,7 +131,7 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
     )
     return [
         {
-            "degree": "Bachelor of Science, Journalism + Strategic Communication",
+            "degree": "BS, Journalism + Strategic Communication",
             "institution": "University of Kansas",
             "location": "Lawrence, KS",
             "year": "2006 – 2008",
@@ -115,7 +141,7 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
             ],
         },
         {
-            "degree": "Associate of Arts, Journalism",
+            "degree": "AA, Journalism",
             "institution": "Kansas City Kansas Community College",
             "location": "Kansas City, KS",
             "year": "2004 – 2006",
@@ -125,7 +151,7 @@ def build_education(ku_achievement_key: str, kckcc_achievement_key: str) -> list
             ],
         },
         {
-            "degree": "Relevant Coursework, Graphic Design",
+            "degree": "Coursework, Graphic Design",
             "institution": "Johnson County Community College",
             "location": "Overland Park, KS",
             "year": "2010 – 2011",
