@@ -56,6 +56,35 @@ class TestNormalizeResume(unittest.TestCase):
         result = normalize_resume.normalize(data)
         self.assertNotIn("career_note", result["EXPERIENCE"][0])
 
+    def test_appends_company_rename_note_for_known_companies(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Inside Sales Team", "period": "10/2015 – 08/2016", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        self.assertEqual(result["EXPERIENCE"][0]["company"], "Inside Sales Team (Now Alleyoop)")
+
+    def test_forces_fixed_title_for_element_8_regardless_of_builder_output(self):
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "Whatever The Builder Made Up", "company": "Element 8 / Strategy LLC", "period": "01/2011 – 10/2011", "achievements": []}]
+        result = normalize_resume.normalize(data)
+        # The fixed title still gets the usual industry descriptor appended,
+        # same as every other company's title.
+        expected = f'{fixed_content.COMPANY_FIXED_TITLE["Element 8 / Strategy LLC"]} (Design/Agency/Startup)'
+        self.assertEqual(result["EXPERIENCE"][0]["title"], expected)
+
+    def test_renormalizing_an_already_renamed_company_stays_idempotent(self):
+        # normalize() runs multiple times over the same resume across
+        # validator-fix and trim retry loops -- a naive rename-append that
+        # used the already-mutated "company" field as its own lookup key
+        # would silently stop matching COMPANY_META/CLIENTS/etc. on the 2nd+
+        # pass, since "Callahan Creek (Now BarkleyOKRP)" isn't a dict key.
+        data = dict(self.raw)
+        data["EXPERIENCE"] = [{"title": "X", "company": "Callahan Creek", "period": "05/2009 – 05/2010", "achievements": []}]
+        once = normalize_resume.normalize(data)
+        twice = normalize_resume.normalize(once)
+        self.assertEqual(twice["EXPERIENCE"][0]["company"], "Callahan Creek (Now BarkleyOKRP)")
+        self.assertEqual(twice["EXPERIENCE"][0]["clients"], fixed_content.CLIENTS["Callahan Creek"]["list"])
+        self.assertEqual(twice["EXPERIENCE"][0]["size_revenue"], fixed_content.COMPANY_META["Callahan Creek"]["size_revenue"])
+
     def test_injects_fixed_contact_info(self):
         result = normalize_resume.normalize(self.raw)
         for key, value in fixed_content.CONTACT_INFO.items():
@@ -85,6 +114,14 @@ class TestNormalizeResume(unittest.TestCase):
         result = normalize_resume.normalize(self.raw)
         self.assertEqual(len(result["EDUCATION"]), 3)
         self.assertIn("800% social media follower growth", result["EDUCATION"][0]["bullets"][1])
+
+    def test_education_uses_abbreviated_degree_names_to_avoid_wrapping(self):
+        # "Bachelor of Science, Journalism + Strategic Communication" was
+        # long enough to wrap the KU education line to a 2nd line; BS/AA are
+        # equally valid, HR-acceptable degree abbreviations.
+        result = normalize_resume.normalize(self.raw)
+        self.assertEqual(result["EDUCATION"][0]["degree"], "BS, Journalism + Strategic Communication")
+        self.assertEqual(result["EDUCATION"][1]["degree"], "AA, Journalism")
 
     def test_forces_section_header_labels(self):
         result = normalize_resume.normalize(self.raw)

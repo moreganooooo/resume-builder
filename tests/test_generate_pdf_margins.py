@@ -19,5 +19,24 @@ class TestPdfMargins(unittest.TestCase):
             self.assertIn(f"{side}: '0.5in'", margin_block)
 
 
+class TestPdfFontEmbeddingLoadsViaRealFileNavigation(unittest.TestCase):
+    """
+    page.setContent() + baseURL resolves relative file:// URLs correctly but
+    does NOT grant the page file:// fetch privileges, so every @font-face
+    load silently failed ("Not allowed to load local resource") with no
+    visible error -- verified directly against a real generated PDF (fonts
+    fell back to Chromium's generic sans-serif instead of DM Sans).
+    Only an actual navigation to a file:// URL grants those privileges, so
+    generate-pdf.mjs must use page.goto('file://...') on a real temp file,
+    not setContent(). This guards against silently reverting to setContent().
+    """
+
+    def test_uses_page_goto_file_url_not_set_content(self):
+        with open(PDF_SCRIPT, "r", encoding="utf-8") as f:
+            source = f.read()
+        self.assertIn("page.goto(`file://", source)
+        self.assertNotIn("await page.setContent(", source)
+
+
 if __name__ == "__main__":
     unittest.main()

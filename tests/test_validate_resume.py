@@ -68,6 +68,24 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("results-driven" in v for v in violations))
 
+    def test_forbidden_phrase_matches_whole_word_not_a_substring(self):
+        # A plain substring check made "leverage" flag "leveraged"/"leveraging"
+        # too, even though those inflected forms are a separate, softer
+        # (non-blocking) vague_verbs concern -- not this hard gate's job.
+        style_rules = {**STYLE_RULES, "forbidden_phrases": ["leverage"]}
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"].append(
+            "Leveraged Claude to draft and iterate on high-conversion email copy"
+        )
+        violations = validate_resume.validate(resume, style_rules)
+        self.assertFalse(any("leverage" in v.lower() for v in violations),
+                          "must not flag 'leveraged' via the 'leverage' forbidden phrase")
+
+        resume["EXPERIENCE"][0]["achievements"][-1] = "Built a plan to leverage AI tools org-wide"
+        violations = validate_resume.validate(resume, style_rules)
+        self.assertTrue(any("leverage" in v.lower() for v in violations),
+                         "must still flag the exact word 'leverage' itself")
+
     def test_flags_forbidden_opener_in_bullet(self):
         resume = _valid_resume()
         resume["EXPERIENCE"][0]["achievements"].append("Responsible for CRM data hygiene")
@@ -112,6 +130,14 @@ class TestValidateResume(unittest.TestCase):
     def test_flags_pronoun_outside_why_section(self):
         resume = _valid_resume()
         resume["SUMMARY_TEXT"] = "<strong>I am a lifecycle marketer.</strong>"
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("pronoun" in v.lower() for v in violations))
+
+    def test_flags_third_person_pronoun_in_summary(self):
+        # The Summary should read as positioning, not third-person biography --
+        # "She specializes in..." is as much a violation as "I specialize in...".
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = "<strong>Morgan is a lifecycle marketer.</strong> She leads CRM strategy."
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("pronoun" in v.lower() for v in violations))
 
@@ -182,6 +208,24 @@ class TestValidateResume(unittest.TestCase):
         ]
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("innovated" in v.lower() and "unique" in v.lower() for v in violations))
+
+    def test_flags_skills_item_not_in_title_case(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**AI & Workflow Tools:** ChatGPT, Claude, AI-assisted workflows, Asana, CMS platforms"]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("title case" in v.lower() for v in violations))
+
+    def test_flags_skills_category_label_not_in_title_case(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**CRM and revenue operations:** Salesforce, Reporting"]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("title case" in v.lower() for v in violations))
+
+    def test_allows_title_case_skills_with_ampersand_and_acronyms(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**CRM & Revenue Operations:** Salesforce Administration, AI-Assisted Workflows, CMS Platforms"]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("title case" in v.lower() for v in violations))
 
     def test_flags_forbidden_phrase_in_skills_or_why_section(self):
         resume = _valid_resume()

@@ -64,11 +64,11 @@ option whose framing best matches the archetype you detected above.
 
 - Maximum 5 lines of text
 - First sentence MUST be wrapped in `<strong>` tags
-- First sentence states: who she is, years of experience, and core expertise using the JD's vocabulary
-- Remaining sentences: narrative bridge / exit story + 1–2 most relevant proof points (metrics or scope, not adjectives)
+- First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Campaign & CRM Strategist with 10+ years..." not "Morgan is a..." or "She is a...")
+- Remaining sentences: narrative bridge / exit story + 1–2 most relevant proof points (metrics or scope, not adjectives) — keep the same pronoun-free, name-free voice throughout (e.g. "Specializes in..." / "Transforms..." not "She specializes in..." / "Her background includes...")
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
 - BANNED words: passionate, driven, results-oriented, dynamic, synergy, best-in-class, seeking opportunities, visionary
-- No pronouns (I, my, me, we, our) anywhere except the Why section
+- No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to Morgan by name; the only section where pronouns are allowed at all is Why
 - No parentheses; replace with commas or semicolons
 
 # Skills Section Rules
@@ -97,6 +97,7 @@ option whose framing best matches the archetype you detected above.
   by the category
 - Items are comma-separated with a space after each comma; no bullets or pipes inside a category
 - Category labels are bold via the skill-category class; items are plain body font
+- Every category label and every item must be in Title Case (e.g. "AI-Assisted Workflows", "CMS Platforms"), regardless of how the JD capitalizes the term — mirror the JD's exact wording for ATS matching, but always normalize the casing to Title Case rather than copying the JD's lowercase/sentence-case styling verbatim
 - Archetype ordering:
   - Lifecycle roles: Lifecycle/Retention Marketing → CRM/Revenue Operations → Content/Enablement → Creative/Design
   - Copywriter/Comms roles: Content & Communications Strategy → Writing & Editing → CRM/Analytics → Creative
@@ -126,6 +127,10 @@ target archetype -- this is about emphasis, not fabrication. Company, dates, and
 never be altered. Do NOT append your own industry/role descriptor in parentheses -- a fixed one is
 appended automatically per company after generation (e.g. Mercor always gets "(AI Training)"
 appended); just produce the title itself.
+
+Element 8 / Strategy LLC's title is fixed and force-overwritten after generation regardless of what
+you output -- it always renders as `Design Assistant → Lead Designer` to show the real in-role
+promotion. Output any reasonable title for that entry; it will be replaced.
 
 Two formats for the title itself:
 - **Additive** (`Title A + Title B`): used when a role genuinely covered two distinct functions and
@@ -186,7 +191,7 @@ Only the certification name is bold; institution and year are regular weight.
 
 1. University of Kansas — BS, Journalism + Strategic Communication: exactly 2 bullets (GPA + scholarship; one action-verb achievement)
 2. Kansas City Kansas Community College — AA, Journalism: exactly 2 bullets (GPA + honors; one action-verb achievement)
-3. Johnson County Community College — Relevant Coursework, Graphic Design: exactly 1 bullet (GPA + coursework summary)
+3. Johnson County Community College — Coursework, Graphic Design: exactly 1 bullet (GPA + coursework summary)
 
 # Why [Company]? Section (include only when space allows on 2-page resume)
 
@@ -203,7 +208,7 @@ Only the certification name is bold; institution and year are regular weight.
 - Spell out whole numbers under 10 unless tied to a unit/metric ("six-email campaign" but "6% reply rate")
 - Always use numerals for: percentages, dollar figures ($3M, $1.1M), decimals (3.56 GPA), quantities over 10, date ranges
 - Use "&" in headings, labels, tagline, category names; use "and" in body prose and bullets
-- No pronouns in Summary, Skills, Work Experience, Training, or Education
+- No pronouns, first- or third-person (I, my, me, we, our, she, her, hers, he, him, his), in Summary, Skills, Work Experience, Training, or Education
 
 # Trimming Priority (when content exceeds 2 pages)
 
@@ -221,7 +226,7 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 ## Simple scalar fields
 
 - TAGLINE (string) — hard-coded UPPERCASE, max 80 chars
-- Do NOT output NAME, PHONE, EMAIL, LINKEDIN_URL, LINKEDIN_DISPLAY, or LOCATION -- contact info
+- Do NOT output NAME, PHONE, EMAIL, LINKEDIN_DISPLAY, or LOCATION -- contact info
   doesn't vary by JD and is filled in automatically after your output is generated. There is no
   portfolio link field at all; it's been removed resume-wide.
 - SECTION_SUMMARY = "Professional Summary"
@@ -231,7 +236,7 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 - SECTION_SKILLS = "Skills"
 
 ## SUMMARY_TEXT (string)
-Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns.
+Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns (first- or third-person), no naming Morgan by name.
 
 ## SKILLS (array of strings)
 Each string is one category line. Format: `**Category Label:** Item, Item, Item`

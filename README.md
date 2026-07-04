@@ -55,6 +55,35 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 - Interrupted runs resume automatically from
   `output/checkpoints/<job_key>.json` instead of restarting.
 
+## Bullet bank feedback loop
+
+The bullet bank isn't static. During every build, `orchestrator.py`'s
+bullet-audit step rewrites weak bullets and rescoring them; any rewrite that
+clears the bank's real "keeper" bar (`scripts/bullet_feedback.py`) is queued
+into `resume-engine/knowledge_base/needs-review.csv` automatically. Run
+`python scripts/triage_needs_review.py` periodically to route those queued
+rows into `bullet-bank-keepers.csv` (permanent), `rewrite-queue.csv`, or
+`retired-bullets.csv` — this is a separate, manual step, not automatic, so
+queued rows sit in `needs-review.csv` until you run it.
+
+## Fonts
+
+`resume-engine/fonts/DMSans-{Regular,ExtraBold,Italic}-static.ttf` are fixed
+(non-variable) instances baked from Google's DM Sans variable font via
+`fonttools varLib.instancer`. Don't swap these back for the raw variable
+font — Chromium's print-to-PDF path (used by `scripts/generate-pdf.mjs`)
+fragmented it into dozens of near-duplicate embedded font subsets and
+coincided with a real bug where the PDF's underlying text layer came out
+scrambled (visually correct on screen, but copy-pasted/ATS-extracted text
+read backwards). Static instances avoid that code path entirely.
+
+## Roadmap
+
+Future feature ideas (cover letter generation, situational work-history
+entries, multi-user support, a long-term merge with sibling projects) are
+tracked in `IDEAS.md`, organized by difficulty/scope. Nothing there is
+scheduled.
+
 ## Testing
 
 ```bash
