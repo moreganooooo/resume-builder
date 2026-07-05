@@ -95,9 +95,59 @@ def run_batch(master, pick, yes):
 
 
 @cli.command()
-@click.argument("jd_file", type=click.Path(exists=True))
-def coverletter(jd_file):
+@click.argument("jd_file", required=False, type=click.Path(exists=True))
+@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to generate a cover letter for")
+@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick")
+def coverletter(jd_file, pick, yes):
     """Generate + render a cover letter for a single JD file."""
+    if pick and jd_file:
+        cli_art.console.print(f"{cli_art.ERROR} Pass a JD file OR --pick, not both.")
+        raise SystemExit(1)
+    if not pick and not jd_file:
+        cli_art.console.print(f"{cli_art.ERROR} Pass a JD file, or use --pick to select interactively.")
+        raise SystemExit(1)
+
+    if pick:
+        pending = jd_manager.get_pending_jds()
+        if not pending:
+            cli_art.console.print("Nothing to pick from -- no pending JDs.")
+            return
+        if not _should_proceed(len(pending), yes):
+            cli_art.console.print("Aborted.")
+            return
+
+        cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s) for picker")
+        results = batch_evaluate.evaluate_all_pending(pending)
+        valid = [r for r in results if not r["error"]]
+        if not valid:
+            cli_art.console.print("Nothing could be evaluated -- no picker to show.")
+            return
+
+        choices = [
+            questionary.Choice(
+                title=f"{r['composite_score']}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
+                value=r["source_file"],
+            )
+            for r in valid
+        ]
+        selected_paths = questionary.checkbox("Select JD(s) to generate a cover letter for:", choices=choices).ask()
+        if not selected_paths:
+            cli_art.console.print("No jobs selected, nothing to do.")
+            return
+
+        engine = orchestrator.ResumeEngine()
+        completed = 0
+        failed = 0
+        for path in selected_paths:
+            cli_art.display_banner(f"Cover letter: {path}")
+            result = engine.build_tailored_coverletter(path)
+            if result:
+                completed += 1
+            else:
+                failed += 1
+        cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
+        return
+
     cli_art.display_banner(f"Cover letter: {jd_file}")
     engine = orchestrator.ResumeEngine()
     result = engine.build_tailored_coverletter(jd_file)
