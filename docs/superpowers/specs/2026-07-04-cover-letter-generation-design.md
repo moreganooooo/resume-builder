@@ -51,9 +51,15 @@ is a headless Gemini-API script) applies to that second pass, not this one.
 
 ```
 JD file → ResumeEngine.build_tailored_coverletter(jd_path)
-  → reuses existing background-context helpers (persona_context,
-    get_verified_claims_text, build_background_summary) -- no new
-    bullet-retrieval logic
+  → reuses ResumeEngine.build_audit_static_prefix() for background context
+    (verified facts/tools/projects + target-role profile slice, no
+    arguments needed, ~5-10k tokens) -- corrected 2026-07-04: the
+    originally-named persona_context/get_verified_claims_text/
+    build_background_summary helpers turned out to be tightly coupled to
+    the bullet-audit pipeline's tag-filtering (need a JD-tags string from a
+    prior keyword-extraction step first), not a simple drop-in;
+    build_audit_static_prefix() needs no tags argument and is already used
+    standalone elsewhere (orchestrator.py:1517)
   → one Gemini call: tailor_coverletter.md (new prompt) + JD text +
     background context → structured CoverLetterSchema output
   → validate_coverletter.py checks the result
