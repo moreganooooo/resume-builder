@@ -45,8 +45,10 @@ call `python scripts/cli.py <command>` under the hood.
 |---|---|
 | `resume run` | tailor + render every pending JD in `jds/` (batch mode), splitting any multi-job export into per-job files first |
 | `resume run jds/some_file.txt` | tailor + render one specific JD file |
+| `resume run --pick` | interactively select which pending JD(s) to tailor — see "Picking which JDs to tailor" below |
 | `resume coverletter jds/some_file.txt` | generate + render a cover letter for one JD — see "Generating cover letters" below |
 | `resume evaluate jds/some_file.txt` | score a JD's fit (go/no-go) *without* building a resume — see "Evaluating fit" below |
+| `resume evaluate` | score every pending JD at once — see "Evaluating fit" below |
 | `resume scan` | pull new postings from every configured source (JobRight, LinkedIn) into `jds/`, deduped against history |
 | `resume scan --source jobright` | pull from just one source (repeatable flag) |
 | `resume liveness` | check every pending JD's posting URL, moving confirmed-expired ones to `jds/expired/` — see "Checking posting liveness" below |
@@ -92,6 +94,13 @@ Skip), and hard blockers if any (e.g. onsite-only). It's read-only — no
 files are written, no resume is built. Useful for triaging a pile of scanned
 JDs before committing to a full tailor run.
 
+**`resume evaluate` (no file argument)** scores every pending JD in one go
+instead of one at a time — real cost: one Gemini call per pending JD, so it
+prints the pending count and asks for confirmation first (`--yes` skips the
+prompt). Prints a sorted summary table (score, recommendation, company,
+title, best-first); a JD that fails to evaluate shows `ERROR` and sorts to
+the bottom rather than crashing the whole batch.
+
 ## Scanning for new postings
 
 `resume scan` pulls job postings from JobRight (`--source jobright`) and/or
@@ -104,7 +113,20 @@ against `jd_tracker_log.csv` and `jds/` itself
 pending JD in `jds/`, so a scan that turns up dozens of postings means a
 real, uninterrupted batch of resume builds (real Gemini spend) if you run
 it right after. `resume evaluate` each one first, or thin the pile, before
-batch-running.
+batch-running — or use `resume run --pick` instead (below).
+
+## Picking which JDs to tailor
+
+`resume run --pick` is the middle ground between "tailor everything" and
+"tailor one named file": it evaluates every pending JD (same confirmation
+gate and real per-JD Gemini cost as batch `resume evaluate`, and `--yes`
+skips the prompt the same way), then shows an interactive checkbox list —
+sorted best-fit-first, each line reading `score/5 | recommendation |
+company | title` — for you to arrow through and select from. Space toggles
+a selection, enter confirms. Only the JD(s) you actually check get tailored
+(one at a time, through the normal pipeline); selecting nothing exits
+cleanly with no builds run. `resume run` (no `--pick`) is unaffected —
+still processes every pending JD, same as always.
 
 ## Checking posting liveness
 
