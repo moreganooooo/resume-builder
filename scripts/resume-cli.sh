@@ -20,10 +20,10 @@ resume() {
       ;;
     run)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate
-        if [ $# -gt 0 ]; then
+        if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
           python scripts/cli.py tailor "$@"
         else
-          python scripts/cli.py run
+          python scripts/cli.py run "$@"
         fi )
       ;;
     coverletter)

@@ -9,6 +9,8 @@ import click
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import questionary
+
 import cli_art
 import orchestrator
 import jd_manager
@@ -47,10 +49,49 @@ def tailor(jd_file, master, output):
 
 @cli.command(name="run")
 @click.option("--master", default=None, help="Path to master resume JSON (optional)")
-def run_batch(master):
+@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to tailor")
+@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick")
+def run_batch(master, pick, yes):
     """Batch-process every pending JD in jds/."""
-    cli_art.display_banner("Batch run: all pending JDs")
-    orchestrator.run_pipeline(master_resume_path=master)
+    if not pick:
+        cli_art.display_banner("Batch run: all pending JDs")
+        orchestrator.run_pipeline(master_resume_path=master)
+        return
+
+    pending = jd_manager.get_pending_jds()
+    if not pending:
+        cli_art.console.print("Nothing to pick from -- no pending JDs.")
+        return
+    if not _should_proceed(len(pending), yes):
+        cli_art.console.print("Aborted.")
+        return
+
+    cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s) for picker")
+    results = batch_evaluate.evaluate_all_pending(pending)
+    valid = [r for r in results if not r["error"]]
+    if not valid:
+        cli_art.console.print("Nothing could be evaluated -- no picker to show.")
+        return
+
+    choices = [
+        questionary.Choice(
+            title=f"{r['composite_score']}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
+            value=r["source_file"],
+        )
+        for r in valid
+    ]
+    selected_paths = questionary.checkbox("Select JD(s) to tailor:", choices=choices).ask()
+    if not selected_paths:
+        cli_art.console.print("No jobs selected, nothing to do.")
+        return
+
+    completed = 0
+    failed = 0
+    for path in selected_paths:
+        c, f = orchestrator.run_pipeline(jd_path=path, master_resume_path=master)
+        completed += c
+        failed += f
+    cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
 
 
 @cli.command()
