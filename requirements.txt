@@ -5,3 +5,10 @@ pydantic
 requests
 python-dotenv
 google-genai
+click
+rich
+linkedin-jobs-scraper
+selenium
+webdriver-manager
+beautifulsoup4
+browser_cookie3

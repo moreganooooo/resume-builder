@@ -576,6 +576,50 @@ class JDKeywordSchema(BaseModel):
     hard_skills:    List[str] = Field(description="Specific methodologies, metrics, and frameworks e.g., Lifecycle Marketing, A/B Testing, Pipeline Generation.")
     core_functions: List[str] = Field(description="Primary responsibilities and domain areas e.g., Content Governance, Enablement Training.")
 
+# Weights ported from career-ops's modes/offer.md weighted-match matrix.
+# The composite score is computed in Python (fit_composite_score below)
+# rather than trusted from the model, so a wrong LLM sum can't silently
+# skew the recommendation.
+FIT_DIMENSION_WEIGHTS = {
+    "cv_profile_match":     0.25,
+    "north_star_alignment": 0.20,
+    "remote_quality":       0.15,
+    "level_fit":            0.15,
+    "compensation":         0.10,
+    "growth":               0.05,
+    "time_to_offer":        0.05,
+    "tech_tool_relevance":  0.03,
+    "company_reputation":   0.01,
+    "cultural_signals":     0.01,
+}
+
+class FitDimensionScores(BaseModel):
+    cv_profile_match:     int = Field(description="1-5: direct match to core demonstrated work vs. weak/missing")
+    north_star_alignment: int = Field(description="1-5: fit to target role families vs. far from desired direction")
+    remote_quality:       int = Field(description="1-5: fully remote and workable vs. onsite/incompatible")
+    level_fit:            int = Field(description="1-5: screen risk, not prestige; overqualified is safer than underqualified")
+    compensation:         int = Field(description="1-5: vs. stated target/floor, or likely range if unstated")
+    growth:               int = Field(description="1-5: useful momentum/skill-building vs. likely dead end")
+    time_to_offer:        int = Field(description="1-5: likely process speed/friction")
+    tech_tool_relevance:  int = Field(description="1-5: overlap with JD's named tools/systems")
+    company_reputation:   int = Field(description="1-5: reputation/red flags")
+    cultural_signals:     int = Field(description="1-5: promising vs. concerning signals in the JD's own language")
+
+class FitEvaluationSchema(BaseModel):
+    archetype:        str                = Field(description="Best-matching role archetype, or closest hybrid of two")
+    hard_blockers:    List[str]          = Field(description="Explicit disqualifying constraints found; empty list if none")
+    dimension_scores: FitDimensionScores
+    recommendation:   Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
+    why:              str                = Field(description="2-4 plain-language sentences justifying the recommendation")
+
+
+def fit_composite_score(dimension_scores: dict) -> float:
+    """Weighted 1-5 composite from per-dimension scores, per FIT_DIMENSION_WEIGHTS."""
+    return round(
+        sum(dimension_scores.get(dim, 0) * weight for dim, weight in FIT_DIMENSION_WEIGHTS.items()),
+        2,
+    )
+
 class CritiqueSchema(BaseModel):
     accuracy_score:      int  = Field(description="0-100: specific, grounded, traceable claim")
     believability_score: int  = Field(description="0-100: would a skeptical hiring manager believe this?")
@@ -1371,6 +1415,37 @@ class ResumeEngine:
               f"({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).")
         return list(zip(bullets_out, company_out, tags_out))
 
+    def evaluate_fit(self, jd_path: str) -> dict:
+        """
+        Standalone go/no-go fit check for a JD -- independent of the tailor+
+        render pipeline (no checkpoint, no output files, no applications.md
+        write). Ports career-ops's weighted-match rubric (see
+        prompts/evaluate_fit.md); returns {} if the JD can't be read or the
+        model call fails to parse.
+        """
+        try:
+            with open(jd_path, "r", encoding="utf-8") as f:
+                jd_text = f.read()
+        except FileNotFoundError:
+            print(f"  ERROR: JD file not found: {jd_path}")
+            return {}
+
+        eval_prompt = self.load_prompt("evaluate_fit.md")
+        eval_text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=eval_prompt,
+            contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+            response_schema=FitEvaluationSchema,
+            temperature=0.0,
+        )
+        evaluation = GeminiClient.parse_json(eval_text or "")
+        if not evaluation:
+            print("  ERROR: Fit evaluation returned no parseable result.")
+            return {}
+
+        evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}))
+        return evaluation
+
     def build_tailored_resume(
         self,
         jd_path: str,
@@ -1881,6 +1956,97 @@ class ResumeEngine:
 # MAIN
 # ---------------------------------------------------------------------------
 
+def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
+    """Runs the tailor+render pipeline.
+
+    jd_path=None means batch mode (every pending JD in jds/). Returns
+    (completed_count, failed_count) rather than exiting, so callers other
+    than the CLI (e.g. scripts/cli.py) can decide how to report failure.
+    """
+    master_resume = {}
+    if master_resume_path:
+        try:
+            with open(master_resume_path, "r", encoding="utf-8") as f:
+                master_resume = json.load(f)
+            print(f"Loaded master resume from: {master_resume_path}")
+        except Exception as e:
+            print(f"WARNING: Could not load master resume: {e}. Proceeding with empty dict.")
+
+    engine = ResumeEngine()
+    tracker = jd_manager.JDTracker()
+
+    if jd_path:
+        jd_paths = [jd_path]
+    else:
+        jd_paths = jd_manager.get_pending_jds()
+        if not jd_paths:
+            print("\nNo pending JDs found in jds/. Nothing to do.")
+            return 0, 0
+
+    completed_count = 0
+    failed_count = 0
+
+    for path in jd_paths:
+        try:
+            job_key = jd_manager.compute_job_key(path)
+        except OSError as e:
+            print(f"  ERROR: Could not read JD file {path}: {e}")
+            tracker.mark_failed(
+                job_key=f"unreadable:{os.path.basename(path)}",
+                source_file=os.path.basename(path),
+                error_message=str(e),
+            )
+            failed_count += 1
+            continue
+
+        job_title, company_name = jd_manager.extract_job_meta(path)
+
+        try:
+            result = engine.build_tailored_resume(
+                jd_path=path,
+                master_resume=master_resume,
+                output_filename=output_filename if jd_path else None,
+                job_key=job_key,
+            )
+        except Exception as e:
+            result = None
+            print(f"  ERROR: Unhandled exception building resume for {path}: {e}")
+
+        if result:
+            output_paths = result.get("_output_paths", {})
+            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
+            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(path))
+            shutil.move(path, dest)
+            tracker.mark_completed(
+                job_key=job_key,
+                job_title=job_title,
+                company_name=company_name,
+                source_file=os.path.basename(path),
+                output_json=output_paths.get("json", ""),
+                output_pdf=output_paths.get("pdf", ""),
+            )
+            jd_manager.append_application_row(
+                company_name=company_name,
+                job_title=job_title,
+                has_pdf=bool(output_paths.get("pdf")),
+            )
+            completed_count += 1
+            print(f"\nDone! Resume built successfully for {path}.")
+        else:
+            tracker.mark_failed(
+                job_key=job_key,
+                job_title=job_title,
+                company_name=company_name,
+                source_file=os.path.basename(path),
+                error_message="Resume build failed. Check output above for details.",
+            )
+            failed_count += 1
+            print(f"\nERROR: Resume build failed for {path}. It stays pending and will be retried next run.")
+
+    print(f"\nBatch summary: {completed_count} completed, {failed_count} failed.")
+    return completed_count, failed_count
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Resume Builder Orchestrator")
@@ -1892,82 +2058,9 @@ def main():
     parser.add_argument("--output", default=None, help="Output JSON filename (single-JD mode only)")
     args = parser.parse_args()
 
-    master_resume = {}
-    if args.master:
-        try:
-            with open(args.master, "r", encoding="utf-8") as f:
-                master_resume = json.load(f)
-            print(f"Loaded master resume from: {args.master}")
-        except Exception as e:
-            print(f"WARNING: Could not load master resume: {e}. Proceeding with empty dict.")
-
-    engine = ResumeEngine()
-    tracker = jd_manager.JDTracker()
-
-    if args.jd:
-        jd_paths = [args.jd]
-    else:
-        jd_paths = jd_manager.get_pending_jds()
-        if not jd_paths:
-            print("\nNo pending JDs found in jds/. Nothing to do.")
-            return
-
-    completed_count = 0
-    failed_count = 0
-
-    for jd_path in jd_paths:
-        try:
-            job_key = jd_manager.compute_job_key(jd_path)
-        except OSError as e:
-            print(f"  ERROR: Could not read JD file {jd_path}: {e}")
-            tracker.mark_failed(
-                job_key=f"unreadable:{os.path.basename(jd_path)}",
-                source_file=os.path.basename(jd_path),
-                error_message=str(e),
-            )
-            failed_count += 1
-            continue
-
-        job_title, company_name = jd_manager.extract_job_meta(jd_path)
-
-        try:
-            result = engine.build_tailored_resume(
-                jd_path=jd_path,
-                master_resume=master_resume,
-                output_filename=args.output if args.jd else None,
-                job_key=job_key,
-            )
-        except Exception as e:
-            result = None
-            print(f"  ERROR: Unhandled exception building resume for {jd_path}: {e}")
-
-        if result:
-            output_paths = result.get("_output_paths", {})
-            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
-            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(jd_path))
-            shutil.move(jd_path, dest)
-            tracker.mark_completed(
-                job_key=job_key,
-                job_title=job_title,
-                company_name=company_name,
-                source_file=os.path.basename(jd_path),
-                output_json=output_paths.get("json", ""),
-                output_pdf=output_paths.get("pdf", ""),
-            )
-            completed_count += 1
-            print(f"\nDone! Resume built successfully for {jd_path}.")
-        else:
-            tracker.mark_failed(
-                job_key=job_key,
-                job_title=job_title,
-                company_name=company_name,
-                source_file=os.path.basename(jd_path),
-                error_message="Resume build failed. Check output above for details.",
-            )
-            failed_count += 1
-            print(f"\nERROR: Resume build failed for {jd_path}. It stays pending and will be retried next run.")
-
-    print(f"\nBatch summary: {completed_count} completed, {failed_count} failed.")
+    completed_count, failed_count = run_pipeline(
+        jd_path=args.jd, master_resume_path=args.master, output_filename=args.output,
+    )
 
     if args.jd and failed_count and not completed_count:
         raise SystemExit(1)
