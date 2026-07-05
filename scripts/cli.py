@@ -15,6 +15,15 @@ import scan as scan_module
 import liveness as liveness_module
 
 
+def _should_proceed(count: int, skip_confirm: bool) -> bool:
+    """Confirmation gate for anything that scores every pending JD (real
+    Gemini cost, one call per JD). skip_confirm=True (the --yes flag)
+    bypasses the prompt entirely."""
+    if skip_confirm:
+        return True
+    return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
+
+
 @click.group()
 def cli():
     """resume-builder: tailor and render resumes per job description."""
