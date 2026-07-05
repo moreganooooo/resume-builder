@@ -57,8 +57,10 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
 
             meta = fixed_content.COMPANY_META.get(company)
             if meta:
-                job["size_revenue"] = meta["size_revenue"]
-                job["location"] = meta["location"]
+                if "size_revenue" in meta:
+                    job["size_revenue"] = meta["size_revenue"]
+                if "location" in meta:
+                    job["location"] = meta["location"]
 
             rename_note = fixed_content.COMPANY_RENAME_NOTE.get(company)
             if rename_note:

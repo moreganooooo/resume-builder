@@ -6,6 +6,7 @@ import re
 import random
 import requests
 import company_research
+import situational_roles
 import numpy as np
 import pandas as pd
 import subprocess
@@ -1339,6 +1340,7 @@ class ResumeEngine:
         self,
         jd_text: str,
         master_resume: dict,
+        extra_company_minimums: dict = None,
     ) -> List[Tuple[str, str, str]]:
         """
         Semantic + gem-aware retrieval from bullet-bank-keepers-audited.csv, with
@@ -1428,7 +1430,8 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            for company, min_count in COMPANY_MIN_BULLETS.items():
+            combined_minimums = {**COMPANY_MIN_BULLETS, **(extra_company_minimums or {})}
+            for company, min_count in combined_minimums.items():
                 company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
                 taken = 0
                 for i in company_ranked:
@@ -1646,6 +1649,10 @@ class ResumeEngine:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
 
+        situational_candidates = situational_roles.detect_situational_candidates(jd_text)
+        if situational_candidates:
+            print(f"  Situational role candidate(s) cleared the keyword gate: {', '.join(situational_candidates)}")
+
         if job_key is None:
             job_key = jd_manager.compute_job_key(jd_path)
         checkpoint = jd_manager.load_checkpoint(job_key)
@@ -1681,7 +1688,10 @@ class ResumeEngine:
         if bullet_tuples is not None:
             print(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
         else:
-            bullet_tuples = self.mine_bullet_bank(jd_text, master_resume)
+            bullet_tuples = self.mine_bullet_bank(
+                jd_text, master_resume,
+                extra_company_minimums=situational_roles.bank_minimums_for(situational_candidates),
+            )
             checkpoint["bullet_tuples"] = bullet_tuples
             jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(bullet_tuples)} bullet tuples retrieved.")
@@ -1746,6 +1756,19 @@ class ResumeEngine:
             research = self.research_company(jd_data)
             research_block = format_company_research_block(research) if research else ""
 
+            situational_block = ""
+            if situational_candidates:
+                situational_block = (
+                    "\n\n=== SITUATIONAL ROLE CANDIDATES ===\n"
+                    f"The JD's language matched a deterministic keyword gate for: "
+                    f"{', '.join(situational_candidates)}. These are NOT automatically "
+                    "included -- use your own judgment on whether including ONE of them "
+                    "(as a small, 2-bullet supporting entry) would genuinely help this "
+                    "specific JD, per the Situational/Optional Work History Entries rules. "
+                    "If none would genuinely help, don't include any of them -- this "
+                    "should be rare by construction, not a default."
+                )
+
             # Gap 1: KB goes into system_instruction, not contents, so the
             # ~105k-token kb_context forms a stable, cacheable prefix if
             # Gemini's automatic caching kicks in across nearby calls (e.g.
@@ -1754,12 +1777,12 @@ class ResumeEngine:
             # retry/fix loop or trim loop below, both of which deliberately
             # use build_prompt alone (no kb_context) to keep those calls
             # cheap. The variable tail (JD + bullets) sits alone in
-            # combined_contents. research_block is appended after kb_context
-            # for the same reason -- it's per-JD variable content, but small
-            # enough that keeping it out of the cacheable prefix costs
-            # little and keeps the prefix identical across JDs targeting
-            # different companies.
-            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}"
+            # combined_contents. research_block/situational_block are
+            # appended after kb_context for the same reason -- they're
+            # per-JD variable content, but small enough that keeping them
+            # out of the cacheable prefix costs little and keeps the
+            # prefix identical across JDs targeting different companies.
+            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
 
             bullets_block = "\n".join(
                 f"- [{company or 'unknown company'}] {b}"
@@ -2125,6 +2148,11 @@ class ResumeEngine:
         if page_count is not None and page_count > 2:
             print(f"  ERROR: PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
             return {}
+
+        final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
+        fired_situational_roles = final_companies & set(situational_roles.SITUATIONAL_ROLES.keys())
+        if fired_situational_roles:
+            print(f"  🎯 Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
         print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)

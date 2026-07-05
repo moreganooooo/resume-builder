@@ -174,6 +174,26 @@ These are exact targets. Do not over-fill or under-fill any role. The total acro
 
 **Allocation logic:** Treering and Inside Sales Team are the highest-signal roles for most archetypes — weight them first. If the resume doesn't fit 2 pages, reduce Treering to 6 or Inside Sales Team to 4 before trimming any other role. Never drop Mercor below 2. Never drop Element 8 / Strategy LLC, VML, or Callahan Creek below 3, even under trimming pressure.
 
+# Situational/Optional Work History Entries (rare -- almost never applies)
+
+If a `=== SITUATIONAL ROLE CANDIDATES ===` block is present in the context, one or more of these companies genuinely matched a deterministic keyword scan of the JD:
+
+| Candidate company (use this exact name) | Title | Dates |
+| --- | --- | --- |
+| Humane Society of Greater Kansas City | Communications Intern | 05/2007 – 08/2007 |
+| Unisource Document Products | Marketing & Design Intern | 05/2008 – 08/2008 |
+| Kansas Colloquies | Editor-in-Chief / Reporter / Columnist | 02/2004 – 05/2006 |
+| KU Payroll Office | Payroll Assistant | 11/2006 – 05/2008 |
+| DeJoy, Knauff & Blood | Tax Administrative Assistant | 01/2012 – 04/2012 |
+| USitek | Administrative Marketing Assistant | 06/2015 – 10/2015 |
+
+**This block being present does not mean you should use one.** Only include a situational entry if it would genuinely, materially help this specific JD -- essentially never for most JDs, even when the block is present. If you do include one:
+
+- **Shrink-not-replace, not a swap.** Nobody disappears from the resume. Include exactly ONE situational entry, exactly 2 bullets, using the exact company name from the table above.
+- **Floor-of-2 exception, this scenario only.** Normally Element 8 / Strategy LLC, VML, and Callahan Creek never drop below 3 bullets (see the floor rule above). When a situational role is active, exactly ONE of those three may drop to a floor of 2 instead, to make room. Pick whichever of the three is least relevant to this specific JD.
+- **Never shrink Mercor, Treering, or Inside Sales Team for this, full stop** -- they keep their normal targets/floors regardless of whether a situational role is active.
+- If no `=== SITUATIONAL ROLE CANDIDATES ===` block is present, do not include any of these six companies at all.
+
 # Section Order (Page 1 → Page 2)
 
 Page 1: Header → Professional Summary → Skills → Work Experience (Mercor, Treering, Inside Sales Team)
