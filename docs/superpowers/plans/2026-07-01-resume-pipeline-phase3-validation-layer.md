@@ -5,6 +5,7 @@
 **Goal:** Stop trusting a single LLM call to follow `ResumeDesignSystem.md`'s formatting rules correctly. Move every rule that has zero legitimate per-JD variation into Python (never asked of the LLM at all, or forced as post-processing regardless of what it returns), and add a real deterministic validator that gates the rules which do require generated text (banned words, verb uniqueness, length limits) with a targeted-retry loop — instead of the current setup, where `ResumeDesignSystem.md` compliance rests entirely on prose instructions an LLM may or may not follow, with only an advisory critique afterward that doesn't block anything.
 
 **Architecture:** Three layers, built bottom-up across 8 tasks:
+
 1. **Rules consolidation** (Tasks 1-2, 8): one canonical machine-readable rules source (`style_rules.yaml`), with the stale/contradictory duplicates retired or reconciled. Task 8 folds in a gap discovered after Phase 2 shipped: banned-phrase lists (not just verbs) also differ across `style_rules.yaml`, `summary_score.yaml`, and `language_quality.yaml`.
 2. **Fixed-content ownership** (Tasks 3-4): content with zero legitimate variation (Certifications, most of Education, section header labels, tagline casing, date formatting, ampersand substitution) becomes Python constants and unconditional post-processing, never left to the LLM to get right.
 3. **Deterministic validation + retry** (Tasks 5-6): a pure-function validator checks the LLM-generated content (Summary, Skills, Bullets, Why) against `style_rules.yaml`; violations trigger a small targeted fix call (not a full regenerate), capped at 3 attempts, then a loud failure — never a silently-shipped bad PDF.
@@ -37,6 +38,7 @@ Keep per-task TDD discipline intact within each batch (failing test before imple
 ### Task 1: Retire formatting_rules.yaml and ats_rules.yaml
 
 **Files:**
+
 - Delete: `resume-engine/rules/formatting_rules.yaml`
 - Delete: `resume-engine/rules/ats_rules.yaml`
 - Modify: `scripts/orchestrator.py` (`audit_and_refine_bullets` — remove the live `ats_rules.yaml` load and its prompt block)
@@ -45,6 +47,7 @@ Keep per-task TDD discipline intact within each batch (failing test before imple
 - Test: Create `tests/test_rules_consolidation.py`
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces: `resume-engine/rules/` contains only `verb_taxonomy.yaml`, `truthfulness_rules.yaml`, `language_quality.yaml`, `formatting_rules.yaml`(deleted), `hard_failures.yaml`, `ats_rules.yaml`(deleted), `style_rules.yaml`, `verb_intent_mapping.yaml` minus the two deleted files. `audit_and_refine_bullets`'s `critique_system` string no longer contains an `ATS RULES:` block (its content is already present via the `style_rules` block, which includes an `ats_rules:` key).
 
@@ -190,9 +193,11 @@ Expected: PASS (3 tests)
 - [ ] **Step 8: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation -v
 ```
+
 Expected: all PASS. (This includes Phase 2's test files — Phase 3 assumes Phase 1 is merged; Phase 2 does not need to be merged first, since these two phases touch disjoint files, but if Phase 2 has also landed by the time this runs, its tests must still pass too.)
 
 - [ ] **Step 9: Commit**
@@ -219,6 +224,7 @@ EOF
 ### Task 2: Reconcile contradictory verb-rule files
 
 **Files:**
+
 - Modify: `resume-engine/rules/style_rules.yaml`
 - Modify: `resume-engine/rules/language_quality.yaml`
 - Modify: `resume-engine/rules/verb_taxonomy.yaml`
@@ -226,6 +232,7 @@ EOF
 - Test: Create `tests/test_verb_rule_consistency.py`
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces: a reusable regression test that mechanically verifies no verb in `style_rules.yaml`'s `vague_verbs` list is recommended as an upgrade, an elite verb, or a preferred verb anywhere in the other three files — this guards against the exact class of bug this task fixes ever recurring.
 
@@ -987,9 +994,11 @@ Expected: PASS (6 tests)
 - [ ] **Step 9: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency -v
 ```
+
 Expected: all PASS.
 
 - [ ] **Step 10: Commit**
@@ -1019,10 +1028,12 @@ EOF
 ### Task 3: Fix load_yaml's silent fallback
 
 **Files:**
+
 - Modify: `scripts/orchestrator.py` (`ResumeEngine.load_yaml`)
 - Test: extend `tests/test_orchestrator_load_prompt.py`
 
 **Interfaces:**
+
 - Consumes: `orchestrator.ResumeEngine()`.
 - Produces: `ResumeEngine.load_yaml(dir_path, filename) -> dict` now raises `FileNotFoundError` instead of silently returning `{}` on a missing file. Every current call site (`manager_test.yaml`, `believability.yaml`, `style_rules.yaml`, `language_quality.yaml`, `verb_taxonomy.yaml`, `verb_intent_mapping.yaml`, `hard_failures.yaml`, `truthfulness_rules.yaml`) points at a file that still exists after Tasks 1-2, so removing the fallback is safe.
 
@@ -1079,9 +1090,11 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency -v
 ```
+
 Expected: all PASS. (This is the critical check for this task — if any call site still references a deleted file, this run surfaces it immediately instead of silently degrading.)
 
 - [ ] **Step 6: Commit**
@@ -1107,11 +1120,13 @@ EOF
 ### Task 4: Make Certifications and Education fixed-content, remove them from the LLM's output schema
 
 **Files:**
+
 - Create: `scripts/fixed_content.py`
 - Test: Create `tests/test_fixed_content.py`
 - Modify: `scripts/orchestrator.py` (`TemplateSchema` — remove `CERTIFICATIONS`/`SECTION_CERTIFICATIONS`/`EDUCATION` free-form fields, add two achievement-key fields)
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces: `fixed_content.CERTIFICATIONS: list[dict]`, `fixed_content.build_education(ku_key: str, kckcc_key: str) -> list[dict]` — both return data shaped exactly as `render_html.py`'s `build_certifications_html`/`build_education_html` already expect (`title`/`org`/`year` dicts; `degree`/`institution`/`year`/`description` dicts). Task 5 consumes both of these to inject fixed content into `resume_data` after the builder call.
 
@@ -1297,6 +1312,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 6: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency tests.test_fixed_content -v
 ```
@@ -1329,11 +1345,13 @@ EOF
 ### Task 5: Force fixed content and formatting as unconditional post-processing
 
 **Files:**
+
 - Create: `scripts/normalize_resume.py`
 - Test: Create `tests/test_normalize_resume.py`
 - Modify: `scripts/orchestrator.py` (`build_tailored_resume` — call the new normalizer right after the builder call, before Step 5's critique)
 
 **Interfaces:**
+
 - Consumes: `fixed_content.CERTIFICATIONS`, `fixed_content.build_education(ku_key, kckcc_key)` (from Task 4).
 - Produces: `normalize_resume.normalize(resume_data: dict) -> dict` — a pure function, returns a new dict with `CERTIFICATIONS`/`EDUCATION` injected, `SECTION_*` labels forced to their canonical strings, `TAGLINE` forced uppercase, and `&`/`and` substitution applied to `TAGLINE` and `SECTION_*` values. Task 6's validator and Task 7's retry loop both operate on `normalize()`'s output, not the builder's raw output.
 
@@ -1494,6 +1512,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 6: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency tests.test_fixed_content tests.test_normalize_resume -v
 ```
@@ -1526,10 +1545,12 @@ EOF
 ### Task 6: Build the deterministic validator module
 
 **Files:**
+
 - Create: `scripts/validate_resume.py`
 - Test: Create `tests/test_validate_resume.py`
 
 **Interfaces:**
+
 - Consumes: a normalized `resume_data` dict (Task 5's `normalize()` output shape) and `style_rules.yaml` (loaded via the existing `ResumeEngine.load_yaml` pattern, but this module takes the already-loaded rules dict as a parameter rather than loading it itself, so it stays a pure, independently-testable function with no filesystem dependency).
 - Produces: `validate_resume.validate(resume_data: dict, style_rules: dict) -> list[str]` — a list of human-readable violation strings, empty if compliant. Task 7 consumes this list to decide whether to retry.
 
@@ -1800,14 +1821,17 @@ EOF
 ### Task 7: Wire the validator into the pipeline with targeted retry, page-count trim loop, and deterministic bullet ordering
 
 **Files:**
+
 - Modify: `scripts/orchestrator.py` (`build_tailored_resume` — add the validation/retry loop after Step 4's normalization, and the page-count trim loop after Step 7's PDF generation; `audit_and_refine_bullets` — sort refined bullets deterministically before they're handed to the builder)
 - Test: extend `tests/test_orchestrator_build_checkpoint.py`
 
 **Interfaces:**
+
 - Consumes: `validate_resume.validate(resume_data, style_rules) -> list[str]` (Task 6), `resume_data["_page_count"]` (Phase 1 Task 5).
 - Produces: `build_tailored_resume` now returns `{}` (not a partially-invalid resume) when the validator's targeted-retry loop is exhausted (3 attempts) or the page-count trim loop is exhausted (4 attempts, one per the spec's trim-priority step) — matching the existing PDF-failure return convention exactly, so `main()`'s generic `tracker.mark_failed(...)` on falsy return needs no changes.
 
 **Context:** This is the integration point that makes Tasks 5-6 actually enforce anything. Two loops:
+
 1. **Content violations** (Task 6's `validate()`): on failure, send only the flagged bullets/fields and their violation reasons back to Gemini in a small follow-up call ("fix only these issues, change nothing else"), re-validate, cap at 3 attempts.
 2. **Page count**: `generate-pdf.mjs` already computes this (Phase 1); if `_page_count > 2`, apply the spec's exact trim-priority order (trim Summary/Why to their line limits → tighten bullets → remove least-relevant bullets starting with Treering → drop Why entirely) as successive small follow-up calls, re-rendering and re-checking after each, capped at 4 attempts (one per trim step).
 
@@ -2181,9 +2205,11 @@ Expected: PASS (including the two new tests).
 - [ ] **Step 11: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency tests.test_fixed_content tests.test_normalize_resume tests.test_validate_resume -v
 ```
+
 Expected: all PASS.
 
 - [ ] **Step 12: Commit**
@@ -2213,12 +2239,14 @@ EOF
 ### Task 8: Unify banned-phrase lists across rule files
 
 **Files:**
+
 - Modify: `resume-engine/rules/style_rules.yaml` (expand `forbidden_phrases` to the complete union)
 - Modify: `resume-engine/scoring/summary_score.yaml` (no content change needed if already a subset — verify only)
 - Modify: `resume-engine/rules/language_quality.yaml` (no content change needed if already a subset after Task 2's edits — verify only)
 - Test: Create `tests/test_banned_phrase_consistency.py`
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces: a regression test mechanically verifying every phrase in `summary_score.yaml`'s `buzzword_openers`, `language_quality.yaml`'s `buzzwords.high_risk`, and `language_quality.yaml`'s `ai_language_patterns.severe` also appears in `style_rules.yaml`'s `forbidden_phrases` — the same "one canonical source, others are subsets" pattern Task 2 already established for verbs.
 
@@ -2348,9 +2376,11 @@ Expected: PASS (3 tests). No changes to `summary_score.yaml` or `language_qualit
 - [ ] **Step 5: Run the full suite**
 
 Run:
+
 ```bash
 /usr/local/bin/python3.13 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins tests.test_orchestrator_schema_cleanup tests.test_scoring_yaml_content tests.test_summary_score_yaml tests.test_rules_consolidation tests.test_verb_rule_consistency tests.test_banned_phrase_consistency -v
 ```
+
 Expected: all PASS.
 
 - [ ] **Step 6: Commit**

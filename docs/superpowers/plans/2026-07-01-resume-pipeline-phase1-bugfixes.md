@@ -39,12 +39,14 @@ Node/Playwright for PDF generation (no JS test runner configured — verify
 ### Task 1: Fix silent fallback for missing prompt files, finalize extract_keywords.md
 
 **Files:**
+
 - Modify: `scripts/orchestrator.py:657-663` (`ResumeEngine.load_prompt`)
 - Rename: `resume-engine/prompts/extract_keywords.DRAFT.md` →
   `resume-engine/prompts/extract_keywords.md`
 - Test: Create `tests/test_orchestrator_load_prompt.py`
 
 **Interfaces:**
+
 - Consumes: `orchestrator.ResumeEngine()` (existing constructor, no args).
 - Produces: `ResumeEngine.load_prompt(filename: str) -> str` now raises
   `FileNotFoundError` instead of returning the placeholder string
@@ -131,9 +133,11 @@ Expected: PASS (2 tests)
 - [ ] **Step 6: Run the full existing suite to confirm nothing else relied on the silent fallback**
 
 Run:
+
 ```bash
 python3 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt -v
 ```
+
 Expected: all PASS. (Confirmed safe ahead of time: `critique_bullet.md`,
 `tailor_resume.md`, and `critique_resume.md` — the other three files loaded
 via `load_prompt` — all already exist on disk, so removing the fallback
@@ -165,6 +169,7 @@ EOF
 ### Task 2: Delete PROJECTS and COMPETENCIES sections entirely
 
 **Files:**
+
 - Modify: `scripts/orchestrator.py:550-629` (`TemplateSchema`)
 - Modify: `scripts/render_html.py` (remove `build_competencies_html`,
   `build_projects_html`, their call sites, and their scalar defaults)
@@ -176,6 +181,7 @@ EOF
 - Test: Create `tests/test_render_html.py`
 
 **Interfaces:**
+
 - Consumes: `orchestrator.TemplateSchema` (Pydantic model), `render_html.render_html(resume_data: dict, output_path: str) -> str`.
 - Produces: `TemplateSchema` no longer has `COMPETENCIES`, `SECTION_COMPETENCIES`,
   `PROJECTS`, or `SECTION_PROJECTS` fields. `render_html()` output never
@@ -443,6 +449,7 @@ In `resume-engine/prompts/tailor_resume.md`, remove the lines:
 ```
 - SECTION_COMPETENCIES = "Core Competencies"
 ```
+
 ```
 - SECTION_PROJECTS = "Projects"
 ```
@@ -483,9 +490,11 @@ Expected: PASS (2 tests)
 - [ ] **Step 8: Run the full suite**
 
 Run:
+
 ```bash
 python3 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html -v
 ```
+
 Expected: all PASS.
 
 - [ ] **Step 9: Commit**
@@ -512,10 +521,12 @@ EOF
 ### Task 3: Fix "Core Skills" fallback default to "Skills"
 
 **Files:**
+
 - Modify: `scripts/render_html.py:193`
 - Test: Modify `tests/test_render_html.py` (add one test to the class from Task 2)
 
 **Interfaces:**
+
 - Consumes: `render_html.render_html(resume_data: dict, output_path: str) -> str` (unchanged signature).
 - Produces: no new interface; purely a default-value fix.
 
@@ -581,10 +592,12 @@ EOF
 ### Task 4: Fix PDF margin: 0.6in to 0.5in
 
 **Files:**
+
 - Modify: `scripts/generate-pdf.mjs`
 - Test: Create `tests/test_generate_pdf_margins.py`
 
 **Interfaces:**
+
 - Consumes: none (standalone Node script invoked via subprocess elsewhere).
 - Produces: no interface change — this is a literal-value fix. No JS test
   runner is configured in this repo (`package.json`'s `test` script is a
@@ -676,10 +689,12 @@ EOF
 ### Task 5: Capture real PDF page count instead of discarding it
 
 **Files:**
+
 - Modify: `scripts/orchestrator.py:1399-1424` (`build_tailored_resume`, Step 7)
 - Test: Modify `tests/test_orchestrator_build_checkpoint.py`
 
 **Interfaces:**
+
 - Consumes: `subprocess.run(["node", pdf_script, ...], capture_output=True, text=True)`
   (existing call; `pdf_result.stdout` now gets parsed, not just checked for
   return code).
@@ -805,9 +820,11 @@ Expected: PASS (3 tests in this file)
 - [ ] **Step 5: Run the full suite**
 
 Run:
+
 ```bash
 python3 -m unittest tests.test_jd_manager tests.test_orchestrator_audit_resume tests.test_orchestrator_build_checkpoint tests.test_orchestrator_main_batch tests.test_orchestrator_load_prompt tests.test_render_html tests.test_generate_pdf_margins -v
 ```
+
 Expected: all PASS.
 
 - [ ] **Step 6: Commit**

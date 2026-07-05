@@ -134,6 +134,7 @@ you output -- it always renders as `Design Assistant → Lead Designer` to show 
 promotion. Output any reasonable title for that entry; it will be replaced.
 
 Two formats for the title itself:
+
 - **Additive** (`Title A + Title B`): used when a role genuinely covered two distinct functions and
   the JD calls for emphasizing both. Examples already used and approved:
   - Inside Sales Team: `ABM Specialist + Business Development Representative`
@@ -258,18 +259,23 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 - SECTION_SKILLS = "Skills"
 
 ## SUMMARY_TEXT (string)
+
 Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns (first- or third-person), no naming Morgan by name.
 
 ## SKILLS (array of strings)
+
 Each string is one category line. Format: `**Category Label:** Item, Item, Item`
 Example:
+
 ```json
 ["**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns",
  "**CRM & Revenue Operations:** Salesforce Administration, Pipeline Hygiene, Territory Analytics"]
 ```
 
 ## EXPERIENCE (array of objects)
+
 Each object has these exact keys:
+
 ```json
 {
   "title": "Job Title",
@@ -280,13 +286,16 @@ Each object has these exact keys:
   "career_note": ""
 }
 ```
+
 Dates are always numeric MM/YYYY, never spelled-out months (e.g. `08/2016 – 08/2024`, not
 `August 2016 – August 2024`). `location` may be left as an empty string `""` if unknown.
 `achievements` is the array of bullet strings for that role. `career_note` is auto-filled after
 generation for the Treering Yearbooks entry -- always output `""` for this field, on every entry.
 
 ## EDUCATION (array of objects)
+
 Each object has these exact keys:
+
 ```json
 {
   "degree": "BS, Journalism + Strategic Communication",
@@ -295,12 +304,15 @@ Each object has these exact keys:
   "description": "3.56 GPA; Dean's List scholarship recipient"
 }
 ```
+
 - `year`: 4-digit graduation year or date range. Use `""` if unknown.
 - `description`: honors, GPA, relevant coursework, or the action-verb achievement bullet. Use `""` if none.
 - Output exactly 3 education items in the fixed order defined above.
 
 ## CERTIFICATIONS (array of exactly 3 objects)
+
 Each object has these exact keys:
+
 ```json
 {
   "title": "Email Marketing Software Certification",
@@ -308,14 +320,18 @@ Each object has these exact keys:
   "year": "2026"
 }
 ```
+
 Output exactly 3 certifications in the fixed order defined in "# Training & Certifications — Fixed Order" above.
 
 ## SECTION_WHY (string) and WHY_TEXT (string) — both optional
+
 Only set these if the "Why [Company]? Section" rules above say to include it; otherwise
 leave both as empty strings `""` and the section is omitted entirely from the rendered PDF.
+
 - `SECTION_WHY`: the literal header text, e.g. `"Why Abnormal Security?"`.
 - `WHY_TEXT`: raw HTML — two `<p>` tags, one per paragraph. Wrap the first sentence of the
   first paragraph and the last sentence of the last paragraph in `<em>` tags. No other HTML.
+
 ```json
 {
   "SECTION_WHY": "Why Abnormal Security?",
