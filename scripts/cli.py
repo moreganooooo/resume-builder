@@ -43,6 +43,17 @@ def run_batch(master):
 
 @cli.command()
 @click.argument("jd_file", type=click.Path(exists=True))
+def coverletter(jd_file):
+    """Generate + render a cover letter for a single JD file."""
+    cli_art.display_banner(f"Cover letter: {jd_file}")
+    engine = orchestrator.ResumeEngine()
+    result = engine.build_tailored_coverletter(jd_file)
+    if not result:
+        raise SystemExit(1)
+
+
+@cli.command()
+@click.argument("jd_file", type=click.Path(exists=True))
 def evaluate(jd_file):
     """Score a JD's fit (go/no-go) without building a resume."""
     cli_art.display_banner(f"Evaluating: {jd_file}")

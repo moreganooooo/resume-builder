@@ -26,6 +26,9 @@ resume() {
           python scripts/cli.py run
         fi )
       ;;
+    coverletter)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py coverletter "$@" )
+      ;;
     evaluate)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py evaluate "$@" )
       ;;
@@ -58,6 +61,7 @@ resume() {
       echo "  resume cd              just cd into the project"
       echo "  resume run             tailor+render every pending JD in jds/ (batch mode)"
       echo "  resume run jds/x.txt   tailor+render one specific JD file"
+      echo "  resume coverletter jds/x.txt   generate + render a cover letter for one JD"
       echo "  resume evaluate jds/x.txt   score a JD's fit (go/no-go) without building a resume"
       echo "  resume scan             pull new postings from all configured sources into jds/"
       echo "  resume scan --source jobright   pull from just one source (jobright, linkedin)"
