@@ -27,8 +27,10 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 from render_html import render_html
+from render_coverletter import render_coverletter
 import normalize_resume
 import validate_resume
+import validate_coverletter
 import jd_manager
 import fixed_content
 import bullet_feedback
@@ -619,6 +621,12 @@ def fit_composite_score(dimension_scores: dict) -> float:
         sum(dimension_scores.get(dim, 0) * weight for dim, weight in FIT_DIMENSION_WEIGHTS.items()),
         2,
     )
+
+class CoverLetterSchema(BaseModel):
+    company_name:    str       = Field(description="The hiring company's name, exactly as it appears in the job description.")
+    greeting:        str       = Field(description="e.g. 'Dear Hiring Team,' or a named hiring manager if the JD provides one.")
+    body_paragraphs: List[str] = Field(description="2-3 first-person paragraphs, each grounded in a real JD requirement and a real fact from the background context.")
+    sign_off:        str       = Field(description="e.g. 'Sincerely,'")
 
 class CritiqueSchema(BaseModel):
     accuracy_score:      int  = Field(description="0-100: specific, grounded, traceable claim")
@@ -1445,6 +1453,94 @@ class ResumeEngine:
 
         evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}))
         return evaluation
+
+    def build_tailored_coverletter(self, jd_path: str) -> dict:
+        """
+        Standalone cover letter generation -- independent of
+        build_tailored_resume (no checkpoint, no resume required to exist
+        first, no page-fit trim loop -- a cover letter has none of the
+        resume's page-count constraints). One Gemini call, validated by
+        validate_coverletter.py, with one automatic retry on violations.
+        Company research is out of scope for this pass (see
+        docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md).
+        Returns the filled cover letter dict plus _output_paths
+        (json/html/pdf), or {} on failure.
+        """
+        try:
+            with open(jd_path, "r", encoding="utf-8") as f:
+                jd_text = f.read()
+        except FileNotFoundError:
+            print(f"  ERROR: JD file not found: {jd_path}")
+            return {}
+
+        coverletter_prompt = self.load_prompt("tailor_coverletter.md")
+        background_context = self.build_audit_static_prefix()
+        system_instruction = f"{coverletter_prompt}\n\n{background_context}"
+
+        letter_text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=system_instruction,
+            contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+            response_schema=CoverLetterSchema,
+            temperature=0.0,
+        )
+        letter_data = GeminiClient.parse_json(letter_text or "")
+        if not letter_data:
+            print("  ERROR: Cover letter generation returned no parseable result.")
+            return {}
+
+        style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
+        violations = validate_coverletter.validate(letter_data, style_rules)
+
+        if violations:
+            print(f"  Validator found {len(violations)} issue(s), retrying once:")
+            for v in violations:
+                print(f"    - {v}")
+            fix_contents = (
+                f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
+                f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
+            )
+            fix_text, _ = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=system_instruction,
+                contents=fix_contents,
+                response_schema=CoverLetterSchema,
+                temperature=0.0,
+            )
+            fixed_data = GeminiClient.parse_json(fix_text or "")
+            if fixed_data:
+                letter_data = fixed_data
+                violations = validate_coverletter.validate(letter_data, style_rules)
+            if violations:
+                print(f"  WARNING: {len(violations)} issue(s) remain after retry, proceeding anyway:")
+                for v in violations:
+                    print(f"    - {v}")
+
+        jd_stem  = Path(jd_path).stem
+        json_out = os.path.join(self.output_json_dir, f"{jd_stem}_coverletter.json")
+        html_out = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_coverletter.html")
+        pdf_out  = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_coverletter.pdf")
+
+        os.makedirs(os.path.dirname(json_out), exist_ok=True)
+        with open(json_out, "w", encoding="utf-8") as f:
+            json.dump(letter_data, f, indent=2, ensure_ascii=False)
+        print(f"  Cover letter saved to: {json_out}")
+
+        render_coverletter(letter_data, html_out)
+
+        pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+        pdf_result = subprocess.run(
+            ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+            capture_output=True, text=True
+        )
+        if pdf_result.returncode != 0:
+            print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+            return {}
+        print(pdf_result.stdout)
+
+        letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
+        print(f"  🎉 Cover letter complete! PDF → {pdf_out}")
+        return letter_data
 
     def build_tailored_resume(
         self,
