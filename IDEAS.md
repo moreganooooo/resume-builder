@@ -84,7 +84,7 @@ Sanity-checked against the real code in job_automater/career-ops on
   Morgan actually uses before picking what to port first, since the real
   menu is much bigger than assumed.
 
-| 2 | Situational role-swap logic | Medium | Fully designed 2026-07-04, self-contained, no merge dependency |
+| 2 | Situational role-swap logic | Medium | **Done 2026-07-05.** See the Situational/optional work history entries section below. |
 | 3 | Cover letter generation | Medium | **Done 2026-07-04.** See the Cover letter generation section below. |
 | 4 | Engine/profile rules audit + split | Medium-Hard | Unblocks all multi-user work |
 | 5 | Evidence bank extension | Hard | Foundational for tone-mirroring and Dom's onboarding |
@@ -238,12 +238,37 @@ misrepresentation.
 
 ## Hard
 
-### Situational/optional work history entries
+### Situational/optional work history entries -- done 2026-07-05
 
-**Scope note:** the wiring itself (new `fixed_content.py` entries, a new
-prompt section) is Easy -- mechanically identical to the existing six roles.
-The bump-priority design question below was brainstormed and resolved
-2026-07-04 (still not built).
+Built exactly per the bump-priority design resolved 2026-07-04, no
+re-brainstorming needed. `scripts/situational_roles.py` (deterministic
+keyword gate, TDD-tested), `fixed_content.py` entries for the 6 companies,
+`mine_bullet_bank()` extended with `extra_company_minimums` to guarantee 2
+real bullets per cleared candidate, `build_tailored_resume()` folds
+candidates into the builder's context, `tailor_resume.md` gets the
+shrink-not-replace + floor-of-2-exception section, and an audit log line
+fires whenever a situational role survives into the final resume.
+
+**Real finding during build:** `bullet-bank-keepers-audited.csv` tags KU
+Payroll Office and DeJoy, Knauff & Blood more tersely ("Payroll", "DeJoy")
+than their proper resume display names -- `situational_roles.py`'s
+`bank_tag` field bridges this. Also caught and fixed a real bug live:
+`normalize_resume.py` assumed every `COMPANY_META` entry has both
+`size_revenue` and `location`, crashing on the new entries that only have
+`location` (no real size/revenue data exists for a 3-month internship).
+
+**Live-verified both directions:** a deliberately animal-welfare-flavored
+test JD correctly cleared the Humane Society keyword gate and
+guaranteed-mined real bullets, but the LLM judged the entry wasn't worth
+including here -- instead reframing existing strong content (Hill's Pet
+Nutrition) to speak to the JD's angle. That's the "essentially never"
+guardrail working as intended, not a failure. A second run on an ordinary
+JD showed zero situational-role activity, confirming no regression.
+
+**Scope note (historical):** the wiring itself (new `fixed_content.py`
+entries, a new prompt section) was Easy -- mechanically identical to the
+existing six roles. The bump-priority design question below was
+brainstormed and resolved 2026-07-04.
 
 Let the builder swap in one of Morgan's other real roles when a JD is
 specifically relevant to it, instead of always using the same fixed six
@@ -304,7 +329,7 @@ from-scratch content-gathering project).
   role actually fires, so "rare" stays a checkable fact across real runs
   instead of an assumption.
 
-No implementation has started; this is a brainstormed direction, not a plan.
+Implementation complete as of 2026-07-05 (see above).
 
 ## Very Hard / Long-term
 
