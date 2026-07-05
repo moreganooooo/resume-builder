@@ -47,6 +47,7 @@ call `python scripts/cli.py <command>` under the hood.
 | `resume run jds/some_file.txt` | tailor + render one specific JD file |
 | `resume run --pick` | interactively select which pending JD(s) to tailor — see "Picking which JDs to tailor" below |
 | `resume coverletter jds/some_file.txt` | generate + render a cover letter for one JD — see "Generating cover letters" below |
+| `resume coverletter --pick` | interactively select which pending JD(s) to generate a cover letter for — see "Picking which JDs to tailor" below |
 | `resume evaluate jds/some_file.txt` | score a JD's fit (go/no-go) *without* building a resume — see "Evaluating fit" below |
 | `resume evaluate` | score every pending JD at once — see "Evaluating fit" below |
 | `resume scan` | pull new postings from every configured source (JobRight, LinkedIn) into `jds/`, deduped against history |
@@ -127,6 +128,14 @@ a selection, enter confirms. Only the JD(s) you actually check get tailored
 (one at a time, through the normal pipeline); selecting nothing exits
 cleanly with no builds run. `resume run` (no `--pick`) is unaffected —
 still processes every pending JD, same as always.
+
+`resume coverletter --pick` is the exact same mechanism applied to cover
+letters instead of resumes: same confirmation gate, same scored/sorted
+checkbox list, same `--yes` — but generates a cover letter for each
+selected JD instead of tailoring a resume. `resume coverletter <file>`
+(a named file, no `--pick`) is unaffected — still generates a cover letter
+for just that one JD, same as always. Passing both a file and `--pick`
+(or neither) is a usage error rather than an ambiguous default.
 
 ## Checking posting liveness
 
