@@ -38,6 +38,16 @@ COMPANY_META = {
     "Element 8 / Strategy LLC": {"size_revenue": "~10–15 employees; ~$1M+ revenue", "location": "Lenexa, KS"},
     "VML": {"size_revenue": "~600+ employees; ~$75M+ revenue", "location": "Kansas City, MO"},
     "Callahan Creek": {"size_revenue": "~30 employees; ~$5M revenue", "location": "Lawrence, KS"},
+    # Situational/optional entries -- rare, deliberate use only (see
+    # tailor_resume.md's "Situational/Optional Work History Entries"
+    # section). No size_revenue: cv.md doesn't record it for these roles
+    # either, so omitting rather than guessing.
+    "Humane Society of Greater Kansas City": {"location": "Kansas City, MO"},
+    "Unisource Document Products": {},
+    "Kansas Colloquies": {"location": "Bonner Springs, KS"},
+    "KU Payroll Office": {"location": "Lawrence, KS"},
+    "DeJoy, Knauff & Blood": {"location": "Rochester, NY"},
+    "USitek": {},
 }
 
 # Job-title parenthetical industry/role-type descriptors don't vary by JD --
@@ -52,6 +62,12 @@ COMPANY_TITLE_DESCRIPTOR = {
     "Element 8 / Strategy LLC": "Design/Agency/Startup",
     "VML": "Agency/Digital/Brand",
     "Callahan Creek": "Agency/Creative/Brand",
+    "Humane Society of Greater Kansas City": "Nonprofit/Animal Welfare",
+    "Unisource Document Products": "Print/Document Solutions",
+    "Kansas Colloquies": "Student Journalism",
+    "KU Payroll Office": "Higher Ed/Payroll",
+    "DeJoy, Knauff & Blood": "Tax/Accounting",
+    "USitek": "Clerical/Graphic Design",
 }
 
 # Client rosters don't vary by JD either. VML and Callahan Creek are
