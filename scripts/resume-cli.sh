@@ -19,7 +19,18 @@ resume() {
       cd "$_RESUME_BUILDER_DIR"
       ;;
     run)
-      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/orchestrator.py "$@" )
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate
+        if [ $# -gt 0 ]; then
+          python scripts/cli.py tailor "$@"
+        else
+          python scripts/cli.py run
+        fi )
+      ;;
+    evaluate)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py evaluate "$@" )
+      ;;
+    scan)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py scan "$@" )
       ;;
     test)
       # unittest's own pass/fail reporting goes to stderr; the app code under
@@ -45,8 +56,11 @@ resume() {
       echo "resume-builder shortcuts:"
       echo "  resume activate        cd into the project and activate the venv (stays active in this shell)"
       echo "  resume cd              just cd into the project"
-      echo "  resume run             run orchestrator.py in batch mode (processes every pending JD)"
-      echo "  resume run jds/x.txt   run orchestrator.py in single-file mode"
+      echo "  resume run             tailor+render every pending JD in jds/ (batch mode)"
+      echo "  resume run jds/x.txt   tailor+render one specific JD file"
+      echo "  resume evaluate jds/x.txt   score a JD's fit (go/no-go) without building a resume"
+      echo "  resume scan             pull new postings from all configured sources into jds/"
+      echo "  resume scan --source jobright   pull from just one source (jobright, linkedin)"
       echo "  resume test            run the full test suite (compact: dots + summary)"
       echo "  resume test -v         same, but lists every test by name"
       echo "  resume test -vv        same, but shows the app's own logging too"

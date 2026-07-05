@@ -169,6 +169,77 @@ class JDTracker:
         })
 
 
+APPLICATIONS_MD = os.path.join(PROJECT_ROOT, "data", "applications.md")
+
+_APPLICATIONS_HEADER = (
+    "# Applications Tracker\n\n"
+    "| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n"
+    "|---|------|---------|------|-------|--------|-----|--------|-------|\n"
+)
+
+
+def _next_application_row_number(path: str) -> int:
+    if not os.path.exists(path):
+        return 1
+    with open(path, "r", encoding="utf-8") as f:
+        data_rows = [
+            line for line in f
+            if line.startswith("| ") and not line.startswith("| #") and not line.startswith("|---")
+        ]
+    return len(data_rows) + 1
+
+
+def append_application_row(company_name: str, job_title: str, has_pdf: bool, path: str = None) -> None:
+    """Appends one row to data/applications.md, in career-ops's markdown-table
+    tracker format (# | Date | Company | Role | Score | Status | PDF | Report | Notes).
+
+    Score/Report are placeholders ("NA"/"—") until the evaluate stage exists.
+    No dedup/merge logic (career-ops's merge-tracker.mjs/dedup-tracker.mjs) --
+    resume-builder is the only writer to this file today.
+    """
+    path = path or APPLICATIONS_MD
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(_APPLICATIONS_HEADER)
+
+    row_number = _next_application_row_number(path)
+    date_str = datetime.date.today().isoformat()
+    pdf_cell = "✅" if has_pdf else "❌"
+    company = company_name or "unknown"
+    role = job_title or "unknown"
+
+    row = f"| {row_number} | {date_str} | {company} | {role} | NA | Tailored | {pdf_cell} | — |  |\n"
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(row)
+
+
+def job_key_known(job_key: str, tracker: "JDTracker" = None) -> bool:
+    """True if job_key is already completed in the tracker, or a JD file for
+    it already exists in jds/ (pending) or jds/completed/. Used by scan.py
+    to avoid writing duplicate JD files across repeated scan runs."""
+    tracker = tracker or JDTracker(TRACKER_CSV)
+    if tracker.is_completed(job_key):
+        return True
+
+    tracker_filename = os.path.basename(TRACKER_CSV)
+    for base_dir in (JDS_DIR, COMPLETED_DIR):
+        if not os.path.isdir(base_dir):
+            continue
+        for name in os.listdir(base_dir):
+            if name == tracker_filename or name.startswith("."):
+                continue
+            path = os.path.join(base_dir, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                if compute_job_key(path) == job_key:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
 def _checkpoint_path(job_key: str) -> str:
     return os.path.join(CHECKPOINTS_DIR, f"{_sanitize_for_filename(job_key)}.json")
 
