@@ -11,6 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import cli_art
 import orchestrator
+import jd_manager
+import batch_evaluate
 import scan as scan_module
 import liveness as liveness_module
 
@@ -63,9 +65,30 @@ def coverletter(jd_file):
 
 
 @cli.command()
-@click.argument("jd_file", type=click.Path(exists=True))
-def evaluate(jd_file):
-    """Score a JD's fit (go/no-go) without building a resume."""
+@click.argument("jd_file", required=False, type=click.Path(exists=True))
+@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for batch mode")
+def evaluate(jd_file, yes):
+    """Score a JD's fit (go/no-go) without building a resume. Omit JD_FILE to evaluate every pending JD."""
+    if jd_file is None:
+        pending = jd_manager.get_pending_jds()
+        if not pending:
+            cli_art.console.print("Nothing to evaluate -- no pending JDs.")
+            return
+        if not _should_proceed(len(pending), yes):
+            cli_art.console.print("Aborted.")
+            return
+
+        cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s)")
+        results = batch_evaluate.evaluate_all_pending(pending)
+
+        cli_art.console.print(f"\n{'#':<4}{'Score':<8}{'Rec.':<20}{'Company':<25}{'Title'}")
+        for i, r in enumerate(results, 1):
+            score_str = "ERROR" if r["error"] else f"{r['composite_score']}/5"
+            rec_str = r["recommendation"] or "-"
+            cli_art.console.print(f"{i:<4}{score_str:<8}{rec_str:<20}{r['company_name']:<25}{r['job_title']}")
+        cli_art.console.print()
+        return
+
     cli_art.display_banner(f"Evaluating: {jd_file}")
     engine = orchestrator.ResumeEngine()
     result = engine.evaluate_fit(jd_file)
