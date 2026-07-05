@@ -36,7 +36,7 @@ resume() {
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py scan "$@" )
       ;;
     liveness)
-      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py liveness )
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py liveness "$@" )
       ;;
     test)
       # unittest's own pass/fail reporting goes to stderr; the app code under
