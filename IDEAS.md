@@ -92,7 +92,7 @@ Sanity-checked against the real code in job_automater/career-ops on
 | 7 | Per-user secrets (`.env` per profile) | Easy | Quick prerequisite right before Dom's onboarding |
 | 8 | Dominick's onboarding | Hard | Depends on #4 and #7 existing first |
 | 9 | Scheduler + notifications | Hard | **Unblocked 2026-07-04** -- 1.4's `scan` and 1.3's `evaluate` both exist now. Scheduler itself not started. |
-| 10 | Mongo migration + liveness check | Medium | Needs 1.2's `track` stage and career-ops's liveness checker absorbed first |
+| 10 | ~~Mongo migration~~ + liveness check | Medium | **Liveness check done 2026-07-05, decoupled from Mongo.** Investigation found career-ops's actual liveness checker (`liveness-core.mjs`/`liveness-browser.mjs`) needs zero MongoDB -- pure Playwright + deterministic classification, no LLM calls. Built: ported verbatim (`scripts/liveness-core.mjs`, `scripts/liveness-browser.mjs`) + adapted `scripts/check-liveness.mjs` (new `--json-file` batch mode) + `scripts/liveness.py` (gathers pending JDs' `source_url`, moves confirmed-`expired` ones to `jds/expired/`) + `resume liveness` CLI command. Live-verified against all 208 real pending JDs: 166 active, 7 likely active, 35 uncertain, 0 expired, zero crashes. Spec: `docs/superpowers/specs/2026-07-05-liveness-checker-design.md`. **Mongo migration itself remains undone** -- a separate, much bigger question tied to the long-term three-way merge, not needed for anything built so far. |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
 (porting career-ops's `modes/interview-prep.md`) -- Morgan's call, not
