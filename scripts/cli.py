@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cli_art
 import orchestrator
 import scan as scan_module
+import liveness as liveness_module
 
 
 @click.group()
@@ -87,6 +88,13 @@ def scan_cmd(sources):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")
     scan_module.run_scan(list(sources) if sources else None)
+
+
+@cli.command(name="liveness")
+def liveness_cmd():
+    """Check every pending JD's source_url, moving expired ones to jds/expired/."""
+    cli_art.display_banner("Checking posting liveness")
+    liveness_module.run_liveness_check()
 
 
 if __name__ == "__main__":
