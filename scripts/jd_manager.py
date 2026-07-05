@@ -18,6 +18,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 JDS_DIR = os.path.join(PROJECT_ROOT, "jds")
 COMPLETED_DIR = os.path.join(JDS_DIR, "completed")
+EXPIRED_DIR = os.path.join(JDS_DIR, "expired")
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "output", "checkpoints")
 TRACKER_CSV = os.path.join(JDS_DIR, "jd_tracker_log.csv")
 
