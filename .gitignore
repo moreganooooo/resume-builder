@@ -18,9 +18,19 @@ audit-discrepancies.csv
 audit-rewrite-queue.csv
 *_log.csv
 *_log.json
+data/applications.md
 output/
 logs/
 *.log
+
+
+# === SCANNED JD POSTINGS (real company data + PII -- JobRight/LinkedIn
+# results can include social_connections with real people's names and
+# LinkedIn URLs) -- only the code that produces/consumes these is tracked,
+# never the postings themselves. dummy_jd.txt is the one deliberate,
+# already-tracked exception (a real fixture, and a .txt not .json). ===
+jds/*.json
+jds/completed/*.json
 
 
 # === RESUME OUTPUT FILES ===
