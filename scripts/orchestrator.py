@@ -1742,6 +1742,10 @@ class ResumeEngine:
         else:
             kb_context = self.load_knowledge_base()
 
+            jd_data = _parse_jd_data(jd_text)
+            research = self.research_company(jd_data)
+            research_block = format_company_research_block(research) if research else ""
+
             # Gap 1: KB goes into system_instruction, not contents, so the
             # ~105k-token kb_context forms a stable, cacheable prefix if
             # Gemini's automatic caching kicks in across nearby calls (e.g.
@@ -1750,8 +1754,12 @@ class ResumeEngine:
             # retry/fix loop or trim loop below, both of which deliberately
             # use build_prompt alone (no kb_context) to keep those calls
             # cheap. The variable tail (JD + bullets) sits alone in
-            # combined_contents.
-            builder_system = f"{build_prompt}\n\n{kb_context}"
+            # combined_contents. research_block is appended after kb_context
+            # for the same reason -- it's per-JD variable content, but small
+            # enough that keeping it out of the cacheable prefix costs
+            # little and keeps the prefix identical across JDs targeting
+            # different companies.
+            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}"
 
             bullets_block = "\n".join(
                 f"- [{company or 'unknown company'}] {b}"

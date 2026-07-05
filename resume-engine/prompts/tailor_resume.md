@@ -67,6 +67,7 @@ option whose framing best matches the archetype you detected above.
 - First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Campaign & CRM Strategist with 10+ years..." not "Morgan is a..." or "She is a...")
 - Remaining sentences: narrative bridge / exit story + 1–2 most relevant proof points (metrics or scope, not adjectives) — keep the same pronoun-free, name-free voice throughout (e.g. "Specializes in..." / "Transforms..." not "She specializes in..." / "Her background includes...")
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
+- Use the `=== COMPANY RESEARCH ===` context block (if present) as the actual source for this tone-mirroring — its tone_register/pronoun_framing/jargon_density/recurring_keywords fields describe the real signal to match. If no such block is present, skip tone-mirroring entirely rather than guessing from the JD text alone
 - BANNED words: passionate, driven, results-oriented, dynamic, synergy, best-in-class, seeking opportunities, visionary
 - No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to Morgan by name; the only section where pronouns are allowed at all is Why
 - No parentheses; replace with commas or semicolons
@@ -201,6 +202,7 @@ Only the certification name is bold; institution and year are regular weight.
 - Only the first and last sentences of the entire section are italicized
 - Voice: first-person (I, my, me) — the ONLY section where pronouns are allowed
 - Must reference specific company research details and connect each to verified facts from Morgan's history
+- Source those "specific company research details" ONLY from the `=== COMPANY RESEARCH ===` context block's `company_facts` field, if present. If no such block is present, do not include this Why section at all — set SECTION_WHY and WHY_TEXT to empty strings rather than inventing research-sounding details to satisfy this rule
 - If including this section pushes the PDF to 3 pages, remove it entirely
 
 # Number and Style Rules
