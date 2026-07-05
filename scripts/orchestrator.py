@@ -5,6 +5,7 @@ import json
 import re
 import random
 import requests
+import company_research
 import numpy as np
 import pandas as pd
 import subprocess
@@ -627,6 +628,41 @@ class CoverLetterSchema(BaseModel):
     greeting:        str       = Field(description="e.g. 'Dear Hiring Team,' or a named hiring manager if the JD provides one.")
     body_paragraphs: List[str] = Field(description="2-3 first-person paragraphs, each grounded in a real JD requirement and a real fact from the background context.")
     sign_off:        str       = Field(description="e.g. 'Sincerely,'")
+
+class CompanyResearchSchema(BaseModel):
+    overall_tone_adjective: str       = Field(description="One short phrase describing the company's overall voice.")
+    tone_register:          Literal["formal", "conversational", "mixed"]
+    pronoun_framing:        Literal["we-centric", "you-centric", "mixed"]
+    sentence_style:         Literal["short and punchy", "long and flowing", "mixed"]
+    jargon_density:         Literal["high", "moderate", "low"]
+    recurring_keywords:     List[str] = Field(description="1-3 brand words/phrases that genuinely repeat in the source text.")
+    company_facts:          List[str] = Field(description="2-3 short, factual statements traceable directly to the source text.")
+
+
+def _parse_jd_data(jd_text: str) -> dict:
+    """Best-effort parse of a JD file's raw text as JSON; {} if it isn't
+    (e.g. a plain-text JD, or one without a company_website field)."""
+    try:
+        data = json.loads(jd_text)
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {}
+
+
+def format_company_research_block(research: dict) -> str:
+    """Formats a CompanyResearchSchema-shaped dict into the
+    '=== COMPANY RESEARCH ===' context block both build_tailored_coverletter
+    and build_tailored_resume fold into their system-instruction context."""
+    return (
+        "\n\n=== COMPANY RESEARCH ===\n"
+        f"Overall tone: {research.get('overall_tone_adjective', '')}\n"
+        f"Register: {research.get('tone_register', '')} | Framing: {research.get('pronoun_framing', '')} | "
+        f"Sentence style: {research.get('sentence_style', '')} | Jargon: {research.get('jargon_density', '')}\n"
+        f"Recurring brand words: {', '.join(research.get('recurring_keywords', []))}\n"
+        "Company facts (use at most 1-2, never fabricate beyond these):\n"
+        + "\n".join(f"- {fact}" for fact in research.get('company_facts', []))
+    )
+
 
 class CritiqueSchema(BaseModel):
     accuracy_score:      int  = Field(description="0-100: specific, grounded, traceable claim")
@@ -1453,6 +1489,43 @@ class ResumeEngine:
 
         evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}))
         return evaluation
+
+    def research_company(self, jd_data: dict) -> dict | None:
+        """
+        Fetches a company's About/Mission/Careers pages (if a
+        company_website is known in jd_data) and extracts tone signals +
+        traceable facts via one Gemini call. Returns None (with a printed,
+        non-alarming notice) if no website is known, pages are
+        unreachable/too thin, or the model response can't be parsed --
+        callers must treat None as "proceed exactly as if this feature
+        didn't exist." See
+        docs/superpowers/specs/2026-07-04-company-research-design.md.
+        """
+        company_website = jd_data.get("company_website")
+        if not company_website:
+            print("  ℹ️  Company research skipped: no company website known for this JD.")
+            return None
+
+        scraped_text = company_research.fetch_company_pages(company_website)
+        if len(scraped_text) < company_research.MIN_USEFUL_CHARS:
+            print(f"  ℹ️  Company research skipped: couldn't find enough usable content on {company_website}.")
+            return None
+
+        research_prompt = self.load_prompt("research_company.md")
+        research_text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=research_prompt,
+            contents=f"=== SCRAPED COMPANY PAGE TEXT ===\n{scraped_text}",
+            response_schema=CompanyResearchSchema,
+            temperature=0.0,
+        )
+        research_data = GeminiClient.parse_json(research_text or "")
+        if not research_data:
+            print("  ℹ️  Company research skipped: model response couldn't be parsed.")
+            return None
+
+        print(f"  ✅ Company research complete for {company_website}.")
+        return research_data
 
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
