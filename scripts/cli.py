@@ -1,0 +1,82 @@
+"""resume-builder CLI -- a Click skin over the existing tailor+render
+pipeline (scripts/orchestrator.py). No pipeline internals live here; every
+command just calls orchestrator.run_pipeline()."""
+
+import os
+import sys
+
+import click
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import cli_art
+import orchestrator
+import scan as scan_module
+
+
+@click.group()
+def cli():
+    """resume-builder: tailor and render resumes per job description."""
+
+
+@cli.command()
+@click.argument("jd_file", type=click.Path(exists=True))
+@click.option("--master", default=None, help="Path to master resume JSON (optional)")
+@click.option("--output", default=None, help="Output JSON filename (optional)")
+def tailor(jd_file, master, output):
+    """Tailor + render a resume for a single JD file."""
+    cli_art.display_banner(f"Tailoring: {jd_file}")
+    completed, failed = orchestrator.run_pipeline(
+        jd_path=jd_file, master_resume_path=master, output_filename=output,
+    )
+    if failed and not completed:
+        raise SystemExit(1)
+
+
+@cli.command(name="run")
+@click.option("--master", default=None, help="Path to master resume JSON (optional)")
+def run_batch(master):
+    """Batch-process every pending JD in jds/."""
+    cli_art.display_banner("Batch run: all pending JDs")
+    orchestrator.run_pipeline(master_resume_path=master)
+
+
+@cli.command()
+@click.argument("jd_file", type=click.Path(exists=True))
+def evaluate(jd_file):
+    """Score a JD's fit (go/no-go) without building a resume."""
+    cli_art.display_banner(f"Evaluating: {jd_file}")
+    engine = orchestrator.ResumeEngine()
+    result = engine.evaluate_fit(jd_file)
+    if not result:
+        cli_art.console.print(f"{cli_art.ERROR} Evaluation failed -- no parseable result.")
+        raise SystemExit(1)
+
+    scores = result.get("dimension_scores", {})
+    cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
+    cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
+    cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")
+
+    for dim, weight in orchestrator.FIT_DIMENSION_WEIGHTS.items():
+        cli_art.console.print(f"  {dim:<22} {scores.get(dim, '-')}/5  (weight {weight:.0%})")
+
+    blockers = result.get("hard_blockers") or []
+    if blockers:
+        cli_art.console.print(f"\n{cli_art.WARNING} Hard blockers:")
+        for b in blockers:
+            cli_art.console.print(f"  - {b}")
+
+    cli_art.console.print(f"\n[bold]Why:[/bold] {result.get('why', '')}\n")
+
+
+@cli.command(name="scan")
+@click.option("--source", "sources", multiple=True, default=None,
+              help="Source to scan (jobright, linkedin). Repeatable. Default: all configured sources.")
+def scan_cmd(sources):
+    """Scan configured sources and write new postings into jds/."""
+    cli_art.display_banner("Scanning for new postings")
+    scan_module.run_scan(list(sources) if sources else None)
+
+
+if __name__ == "__main__":
+    cli()
