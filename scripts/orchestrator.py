@@ -1534,9 +1534,10 @@ class ResumeEngine:
         first, no page-fit trim loop -- a cover letter has none of the
         resume's page-count constraints). One Gemini call, validated by
         validate_coverletter.py, with one automatic retry on violations.
-        Company research is out of scope for this pass (see
-        docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md).
-        Returns the filled cover letter dict plus _output_paths
+        Folds in company research (see
+        docs/superpowers/specs/2026-07-04-company-research-design.md) when
+        available; falls back to the original, pre-research behavior
+        otherwise. Returns the filled cover letter dict plus _output_paths
         (json/html/pdf), or {} on failure.
         """
         try:
@@ -1546,9 +1547,13 @@ class ResumeEngine:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
 
+        jd_data = _parse_jd_data(jd_text)
+        research = self.research_company(jd_data)
+        research_block = format_company_research_block(research) if research else ""
+
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
         background_context = self.build_audit_static_prefix()
-        system_instruction = f"{coverletter_prompt}\n\n{background_context}"
+        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}"
 
         letter_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
