@@ -21,8 +21,10 @@ the difficulty tiers -- this is *which order*, the tiers below are still
 *how hard*. Ordered by dependency, with Morgan's explicit call that the CLI
 goes first; item 1 is broken into sub-steps reflecting "fastest payoff
 first, biggest lift last" within that phase. **Update 2026-07-04: all of
-1.1-1.4 are now built** (see the per-row notes below) -- items 2-10 are
-still unscheduled/not started.
+1.1-1.4 are now built** (see the per-row notes below). **Update
+2026-07-05: items 3 (cover letter generation) and 6 (company-values/
+tone-mirroring) are also done** -- items 2, 4, 5, 7, 8, 10 are still
+unscheduled/not started; item 9 (scheduler) is unblocked but not started.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
@@ -83,13 +85,13 @@ Sanity-checked against the real code in job_automater/career-ops on
   menu is much bigger than assumed.
 
 | 2 | Situational role-swap logic | Medium | Fully designed 2026-07-04, self-contained, no merge dependency |
-| 3 | Cover letter generation | Medium | Template already built, mostly plumbing |
+| 3 | Cover letter generation | Medium | **Done 2026-07-04.** See the Cover letter generation section below. |
 | 4 | Engine/profile rules audit + split | Medium-Hard | Unblocks all multi-user work |
 | 5 | Evidence bank extension | Hard | Foundational for tone-mirroring and Dom's onboarding |
-| 6 | Company-values/tone-mirroring | Medium-Hard | Blocked on the still-open company-research architecture question |
+| 6 | Company-values/tone-mirroring | Medium-Hard | **Done 2026-07-05.** The company-research architecture question is resolved; see the Company-values/terminology mirroring section below. |
 | 7 | Per-user secrets (`.env` per profile) | Easy | Quick prerequisite right before Dom's onboarding |
 | 8 | Dominick's onboarding | Hard | Depends on #4 and #7 existing first |
-| 9 | Scheduler + notifications | Hard | Needs 1.4's `scan`/1.3's `evaluate` to exist first |
+| 9 | Scheduler + notifications | Hard | **Unblocked 2026-07-04** -- 1.4's `scan` and 1.3's `evaluate` both exist now. Scheduler itself not started. |
 | 10 | Mongo migration + liveness check | Medium | Needs 1.2's `track` stage and career-ops's liveness checker absorbed first |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
@@ -108,13 +110,27 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Medium
 
-### Cover letter generation
+### Cover letter generation -- done 2026-07-04
 
-**Scope note:** the template already exists fully built; this is mostly
-"build the missing plumbing" (a prompt, a render function, an orchestrator
-hook) rather than open design work. The one piece that pushes toward the
-harder end is the company-research step (see below) -- worth doing the
-letter without it first, then layering research in.
+Built in two passes, per the sequencing decided at the time: first the
+letter itself (no company research), then company research layered in as
+a second pass (2026-07-05, see below). `resume coverletter <jd_file>` is
+a fully separate, opt-in command -- never auto-triggered by `tailor`/`run`,
+since plenty of real postings don't accept a cover letter at all.
+
+Built: `resume-engine/prompts/tailor_coverletter.md`, `CoverLetterSchema`,
+`ResumeEngine.build_tailored_coverletter()`, `scripts/validate_coverletter.py`
+(forbidden phrases, paragraph count, third-person-slip checks, one
+automatic retry on violations), `scripts/render_coverletter.py`, and the
+CLI/shell-shortcut wiring. Specs:
+`docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md` and
+`docs/superpowers/specs/2026-07-04-company-research-design.md`.
+
+**Scope note (historical):** the template already existed fully built;
+this was mostly "build the missing plumbing" (a prompt, a render function,
+an orchestrator hook) rather than open design work. The one piece that
+pushed toward the harder end was the company-research step (see below) --
+done as a second pass, per plan.
 
 Generate a matching cover letter alongside the resume, using the same JD input.
 
@@ -184,12 +200,25 @@ playful startup -> sharper, slightly more personality; conventional B2B SaaS
 paragraph that ties one specific researched fact to Morgan's history,
 explicitly guarding against fake flattery.
 
-### Company-values/terminology mirroring in the resume itself (later, after cover letters)
+### Company-values/terminology mirroring in the resume itself -- done 2026-07-05
 
-**Scope note:** depends on the cover letter's company-research step existing
-first (same architecture-mismatch question applies here too). Once that's
-solved, this part itself is close to Easy -- career-ops already has a
-working, narrowly-scoped blueprint to port almost as-is.
+Built alongside company research (see
+`docs/superpowers/specs/2026-07-04-company-research-design.md`): a real
+gap was found and fixed along the way -- `tailor_resume.md` already had
+instructions assuming company research existed (Summary Rules' tone-mirror
+line, the Why section's "specific company research details" line), with
+nothing ever having fed them. Both now source real data from a
+`=== COMPANY RESEARCH ===` context block when available (via
+`scripts/company_research.py`'s plain requests/BeautifulSoup scraper +
+`ResumeEngine.research_company()`), and explicitly skip rather than
+fabricate when it isn't -- no `company_website` known, pages unreachable,
+or content too thin all fall back to pre-feature behavior with a printed
+notice, never a guess.
+
+**Scope note (historical):** depended on the cover letter's company-research
+step existing first (same architecture-mismatch question applied here
+too). Once that was solved, this part itself was close to Easy -- career-ops
+already had a working, narrowly-scoped blueprint, ported almost as-is.
 
 Once cover-letter company research exists, reuse it to also tone-match the
 resume's Summary and (when present) Why section to the target company's
