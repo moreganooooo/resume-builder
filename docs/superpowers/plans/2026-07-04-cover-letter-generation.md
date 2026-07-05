@@ -210,37 +210,18 @@ EOF
 
 **Files:**
 - Create: `scripts/render_coverletter.py`
-- Modify: `resume-engine/templates/coverletter-template.html:114` (add `.letter-recipient` CSS rule after `.letter-date`)
+- No template CSS changes needed — **correction found during execution
+  2026-07-04:** the template already has a `.letter-address` CSS rule
+  (lines 116-121) positioned exactly between `.letter-date` and
+  `.letter-greeting`, evidently built for this exact purpose. Reuse it
+  instead of adding a new `.letter-recipient` rule.
 - Test: `tests/test_render_coverletter.py`
 
 **Interfaces:**
 - Consumes: `fixed_content.CONTACT_INFO` dict (keys `NAME`, `PHONE`, `EMAIL`, `LINKEDIN_DISPLAY`, `LOCATION` — already exists, `scripts/fixed_content.py:21`).
 - Produces: `render_coverletter.render_coverletter(cover_letter_data: dict, output_path: str) -> str` — fills the template, writes to `output_path`, returns `output_path`. `cover_letter_data` has the same shape as Task 1 (`company_name`, `greeting`, `body_paragraphs`, `sign_off`). Task 3 calls this exact function with this exact shape.
 
-- [ ] **Step 1: Add the missing CSS rule to the template**
-
-In `resume-engine/templates/coverletter-template.html`, find this block (around line 109-115):
-
-```css
-  .letter-date {
-    margin-top: 28px;
-    font-size: 10.5pt;
-    font-weight: 400;
-    line-height: 1.4;
-  }
-```
-
-Add immediately after it:
-
-```css
-
-  .letter-recipient {
-    margin-top: 20px;
-    font-size: 10.5pt;
-    font-weight: 400;
-    line-height: 1.4;
-  }
-```
+- [ ] **Step 1: (skipped — no CSS change needed, see correction above)**
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -292,7 +273,7 @@ class TestRenderCoverLetter(unittest.TestCase):
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
         self.assertIn("Widget Co", html)
-        self.assertIn('class="letter-recipient"', html)
+        self.assertIn('class="letter-address"', html)
 
     def test_body_paragraphs_each_wrapped_in_p_tag(self):
         render_coverletter(_minimal_letter_data(), self.out_path)
@@ -343,7 +324,7 @@ TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "coverl
 
 
 def build_recipient_block_html(company_name: str) -> str:
-    return f'<div class="letter-recipient">{escape(company_name)}</div>'
+    return f'<div class="letter-address">{escape(company_name)}</div>'
 
 
 def build_body_paragraphs_html(paragraphs: list) -> str:
@@ -415,11 +396,13 @@ Expected: `OK`, test count increased by 4 more from Task 1's total.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/render_coverletter.py tests/test_render_coverletter.py resume-engine/templates/coverletter-template.html
+git add scripts/render_coverletter.py tests/test_render_coverletter.py
 git commit -m "$(cat <<'EOF'
-Add cover letter renderer, add missing .letter-recipient CSS rule
+Add cover letter renderer
 
-Part of cover letter generation (see docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md).
+Reuses the template's existing .letter-address CSS rule for the recipient
+block -- no new CSS needed. Part of cover letter generation (see
+docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md).
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
