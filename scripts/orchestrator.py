@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import subprocess
 import shutil
-from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Literal, Tuple
@@ -648,6 +647,22 @@ def _parse_jd_data(jd_text: str) -> dict:
         return data if isinstance(data, dict) else {}
     except (json.JSONDecodeError, UnicodeDecodeError):
         return {}
+
+
+def _build_output_stem(jd_path: str) -> str:
+    """Returns 'MorganEscott[_Title][_Company]' for resume/cover-letter
+    output filenames. Role title and company segments are each included
+    only when known -- omitted entirely (not a placeholder like
+    "Unknown") when missing, since a filename with a placeholder in it
+    would always need fixing before sending, whereas e.g.
+    "MorganEscott_CampaignManager_Resume" is still sendable as-is."""
+    job_title, company_name = jd_manager.extract_job_meta(jd_path)
+    parts = ["MorganEscott"]
+    if job_title:
+        parts.append(jd_manager.sanitize_for_filename(job_title))
+    if company_name:
+        parts.append(jd_manager.sanitize_for_filename(company_name))
+    return "_".join(parts)
 
 
 def format_company_research_block(research: dict) -> str:
@@ -1597,10 +1612,10 @@ class ResumeEngine:
                 for v in violations:
                     print(f"    - {v}")
 
-        jd_stem  = Path(jd_path).stem
-        json_out = os.path.join(self.output_json_dir, f"{jd_stem}_coverletter.json")
-        html_out = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_coverletter.html")
-        pdf_out  = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_coverletter.pdf")
+        stem     = _build_output_stem(jd_path)
+        json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
+        html_out = os.path.join(PROJECT_ROOT, "output", "html", f"{stem}_CoverLetter.html")
+        pdf_out  = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{stem}_CoverLetter.pdf")
 
         os.makedirs(os.path.dirname(json_out), exist_ok=True)
         with open(json_out, "w", encoding="utf-8") as f:
@@ -1658,8 +1673,7 @@ class ResumeEngine:
         checkpoint = jd_manager.load_checkpoint(job_key)
 
         if output_filename is None:
-            jd_stem = Path(jd_path).stem
-            output_filename = f"{jd_stem}_resume.json"
+            output_filename = f"{_build_output_stem(jd_path)}_Resume.json"
 
         # --- Step 1: Extract JD keywords ---
         print("\nStep 1: Extracting JD keywords...")
@@ -2048,9 +2062,9 @@ class ResumeEngine:
 
         # --- Step 7: Render HTML + Generate PDF ---
         print("\nStep 7: Rendering HTML and generating PDF...")
-        jd_stem    = Path(jd_path).stem
-        html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{jd_stem}_resume.html")
-        pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{jd_stem}_resume.pdf")
+        stem       = _build_output_stem(jd_path)
+        html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{stem}_Resume.html")
+        pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{stem}_Resume.pdf")
         pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
 
         os.makedirs(os.path.dirname(html_out), exist_ok=True)
