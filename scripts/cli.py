@@ -15,6 +15,7 @@ import cli_art
 import orchestrator
 import jd_manager
 import batch_evaluate
+import picker
 import scan as scan_module
 import liveness as liveness_module
 
@@ -58,40 +59,11 @@ def run_batch(master, pick, yes):
         orchestrator.run_pipeline(master_resume_path=master)
         return
 
-    pending = jd_manager.get_pending_jds()
-    if not pending:
-        cli_art.console.print("Nothing to pick from -- no pending JDs.")
-        return
-    if not _should_proceed(len(pending), yes):
-        cli_art.console.print("Aborted.")
-        return
+    def _process_one(path):
+        completed, failed = orchestrator.run_pipeline(jd_path=path, master_resume_path=master)
+        return completed > 0
 
-    cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s) for picker")
-    results = batch_evaluate.evaluate_all_pending(pending)
-    valid = [r for r in results if not r["error"]]
-    if not valid:
-        cli_art.console.print("Nothing could be evaluated -- no picker to show.")
-        return
-
-    choices = [
-        questionary.Choice(
-            title=f"{r['composite_score']}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
-            value=r["source_file"],
-        )
-        for r in valid
-    ]
-    selected_paths = questionary.checkbox("Select JD(s) to tailor:", choices=choices).ask()
-    if not selected_paths:
-        cli_art.console.print("No jobs selected, nothing to do.")
-        return
-
-    completed = 0
-    failed = 0
-    for path in selected_paths:
-        c, f = orchestrator.run_pipeline(jd_path=path, master_resume_path=master)
-        completed += c
-        failed += f
-    cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
+    picker.pick_and_process(jd_manager.get_pending_jds(), _process_one, "tailor", skip_confirm=yes)
 
 
 @cli.command()
@@ -107,49 +79,19 @@ def coverletter(jd_file, pick, yes):
         cli_art.console.print(f"{cli_art.ERROR} Pass a JD file, or use --pick to select interactively.")
         raise SystemExit(1)
 
+    engine = orchestrator.ResumeEngine()
+
     if pick:
-        pending = jd_manager.get_pending_jds()
-        if not pending:
-            cli_art.console.print("Nothing to pick from -- no pending JDs.")
-            return
-        if not _should_proceed(len(pending), yes):
-            cli_art.console.print("Aborted.")
-            return
-
-        cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s) for picker")
-        results = batch_evaluate.evaluate_all_pending(pending)
-        valid = [r for r in results if not r["error"]]
-        if not valid:
-            cli_art.console.print("Nothing could be evaluated -- no picker to show.")
-            return
-
-        choices = [
-            questionary.Choice(
-                title=f"{r['composite_score']}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
-                value=r["source_file"],
-            )
-            for r in valid
-        ]
-        selected_paths = questionary.checkbox("Select JD(s) to generate a cover letter for:", choices=choices).ask()
-        if not selected_paths:
-            cli_art.console.print("No jobs selected, nothing to do.")
-            return
-
-        engine = orchestrator.ResumeEngine()
-        completed = 0
-        failed = 0
-        for path in selected_paths:
+        def _process_one(path):
             cli_art.display_banner(f"Cover letter: {path}")
-            result = engine.build_tailored_coverletter(path)
-            if result:
-                completed += 1
-            else:
-                failed += 1
-        cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
+            return bool(engine.build_tailored_coverletter(path))
+
+        picker.pick_and_process(
+            jd_manager.get_pending_jds(), _process_one, "generate a cover letter for", skip_confirm=yes,
+        )
         return
 
     cli_art.display_banner(f"Cover letter: {jd_file}")
-    engine = orchestrator.ResumeEngine()
     result = engine.build_tailored_coverletter(jd_file)
     if not result:
         raise SystemExit(1)
