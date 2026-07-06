@@ -113,13 +113,7 @@ def evaluate(jd_file, yes):
 
         cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s)")
         results = batch_evaluate.evaluate_all_pending(pending)
-
-        cli_art.console.print(f"\n{'#':<4}{'Score':<8}{'Rec.':<20}{'Company':<25}{'Title'}")
-        for i, r in enumerate(results, 1):
-            score_str = "ERROR" if r["error"] else f"{r['composite_score']}/5"
-            rec_str = r["recommendation"] or "-"
-            cli_art.console.print(f"{i:<4}{score_str:<8}{rec_str:<20}{r['company_name']:<25}{r['job_title']}")
-        cli_art.console.print()
+        cli_art.render_fit_table(results)
         return
 
     cli_art.display_banner(f"Evaluating: {jd_file}")
