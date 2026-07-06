@@ -61,7 +61,7 @@ def extract_job_meta(jd_path: str) -> tuple:
     return "", ""
 
 
-def _sanitize_for_filename(text: str) -> str:
+def sanitize_for_filename(text: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "", text or "")
     return cleaned or "Unknown"
 
@@ -92,7 +92,7 @@ def split_batch_jds(jd_path: str) -> list:
 
     for job in data:
         job_title, company_name = _meta_from_dict(job) if isinstance(job, dict) else ("", "")
-        filename = f"{today}_{_sanitize_for_filename(company_name)}_{_sanitize_for_filename(job_title)}.json"
+        filename = f"{today}_{sanitize_for_filename(company_name)}_{sanitize_for_filename(job_title)}.json"
         dest = os.path.join(JDS_DIR, filename)
 
         counter = 1
@@ -242,7 +242,7 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None) -> bool:
 
 
 def _checkpoint_path(job_key: str) -> str:
-    return os.path.join(CHECKPOINTS_DIR, f"{_sanitize_for_filename(job_key)}.json")
+    return os.path.join(CHECKPOINTS_DIR, f"{sanitize_for_filename(job_key)}.json")
 
 
 def load_checkpoint(job_key: str) -> dict:
