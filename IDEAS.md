@@ -429,6 +429,47 @@ resume-generation features of both `/Users/morganescott/career-ops` and
     checkpoints. Three different persistence philosophies across the three
     projects -- the merge needs one, not an integration layer across all
     three.
+
+    **Pros/cons discussed 2026-07-06, not yet decided:**
+    - *CSV + JSON (resume-builder today):* zero infrastructure, human-
+      inspectable, already proven at real scale (209+ JDs). Cons: no real
+      query/indexing (dedup is hand-rolled Python, not a query), weak
+      concurrent-write safety, schema changes mean touching every read/
+      write site by hand.
+    - *Markdown/YAML (career-ops):* maximally human-readable/editable,
+      fits the "human eyes on every application" philosophy best, diffs
+      read like prose. Cons: same lack of querying as CSV, and more
+      fragile to parse back into structured data reliably; career-ops's
+      own file-based system/data boundary already failed once in
+      practice (the auto-update incident) -- not a persistence-format
+      bug specifically, but a reminder that "just files" isn't
+      automatically safe.
+    - *MongoDB (job_automater):* real queries/filtering/sorting, genuine
+      multi-writer concurrency safety, flexible schema, already proven
+      with 83 real records. Cons: the only option needing a background
+      service (Docker) running at all times; not human-inspectable
+      without separate tooling (mongosh/Compass), cutting against this
+      project's consistent inspectable-by-default pattern.
+    - *SQLite (not one of the three above, floated as a possible
+      fourth path):* real transactional safety and queries without a
+      daemon/Docker -- a single portable file, `sqlite3` is in Python's
+      stdlib. Solves the scheduler's concurrent-write concern
+      reasonably well (WAL mode lets readers and a writer coexist,
+      though it's still single-writer-at-a-time, not true multi-writer
+      concurrency). Cons: loses inspectability too (a `.db` file needs
+      the `sqlite3` CLI or a GUI tool, not a text editor); not
+      git-diffable (less of a loss here since these trackers are
+      already gitignored for PII); real schema/migration discipline
+      instead of freeform files; a new SQL-query paradigm in a codebase
+      that's been 100% pandas/CSV/JSON manipulation so far; and it may
+      be solving a concurrency problem that doesn't fully exist yet --
+      the benefit mainly kicks in once the scheduler (#9) is actually
+      running unattended, not at today's scale.
+    - **Leaning:** keep the human-facing tracker as markdown/YAML (or
+      CSV) for inspectability; revisit SQLite specifically for the
+      scheduler's concurrent-write needs when that build actually
+      starts, rather than adopting it preemptively. Still not decided --
+      reference material for when this choice actually gets made.
   - **Interview setup** -- confirmed again against the fresh ZIP: **doesn't
     exist in job_automater**, not even a partial version. The likely source
     of the mix-up: `RESEARCH_FINDINGS_COMPETITORS.md` (a competitive-analysis
@@ -526,11 +567,12 @@ reaction converged on a combination rather than picking just one:
   pipeline). **Decided against, not deferred:** ATS auto-apply/auto-submit
   and LaTeX rendering (see above).
 
-Still fully unresolved and *not* covered by the brainstorm above: how the
-email digest actually gets sent (likely `smtplib` + a Gmail app password in
-`.env`, consistent with this repo's existing patterns, but not confirmed),
-and the exact launchd job layout (one job per saved search vs. one
-dispatcher job iterating all of them).
+**Confirmed 2026-07-06:** the email digest sends via `smtplib` + a Gmail
+app password in `.env`, consistent with this repo's existing patterns.
+
+Still fully unresolved and *not* covered by the brainstorm above: the
+exact launchd job layout (one job per saved search vs. one dispatcher job
+iterating all of them).
 
 No implementation has started; this is scope-awareness plus an agreed
 direction for when that build actually begins, not a plan with a start
