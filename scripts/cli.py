@@ -16,6 +16,7 @@ import orchestrator
 import jd_manager
 import batch_evaluate
 import picker
+import menu
 import scan as scan_module
 import liveness as liveness_module
 
@@ -29,9 +30,12 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
     return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """resume-builder: tailor and render resumes per job description."""
+    if ctx.invoked_subcommand is None:
+        menu.run_interactive_menu()
 
 
 @cli.command()
