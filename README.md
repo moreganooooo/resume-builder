@@ -43,6 +43,7 @@ call `python scripts/cli.py <command>` under the hood.
 
 | Command | What it does |
 |---|---|
+| `resume` (no arguments) | launch the interactive menu — see "Interactive menu" below |
 | `resume run` | tailor + render every pending JD in `jds/` (batch mode), splitting any multi-job export into per-job files first |
 | `resume run jds/some_file.txt` | tailor + render one specific JD file |
 | `resume run --pick` | interactively select which pending JD(s) to tailor — see "Picking which JDs to tailor" below |
@@ -58,7 +59,7 @@ call `python scripts/cli.py <command>` under the hood.
 | `resume test` | run the full test suite (compact: dots + summary, no app-log noise) |
 | `resume test -v` | same, but lists every test by name |
 | `resume test -vv` | same, but shows the app's own operational logging too |
-| `resume` (no arguments) | print this list of commands |
+| `resume help` | print this list of commands (no menu launch) |
 
 Source `scripts/resume-cli.sh` from your shell profile (e.g. `~/.zshrc`) to
 get the `resume` command usable from any directory, with the venv handled
@@ -83,6 +84,23 @@ source /path/to/resume-builder/scripts/resume-cli.sh
   see "Checking posting liveness" below.
 - Interrupted runs resume automatically from
   `output/checkpoints/<job_key>.json` instead of restarting.
+
+## Interactive menu
+
+Just typing `resume` (or `python scripts/cli.py` directly) launches an
+interactive menu instead of running any single command — an arrow-key
+list covering every action below: scan, liveness, evaluate (all pending
+or one specific JD), tailor (pick from a list, batch everything, or one
+specific JD), and generate a cover letter (pick from a list or one
+specific JD). Select an action, it runs, then the menu reappears until
+you choose Exit (or cancel out with Ctrl-C). Single-file actions prompt
+for a path with tab-completion.
+
+This is purely a navigation layer over the same commands documented
+below — nothing here does anything a direct command couldn't already do,
+it just means never having to remember or type a specific invocation.
+Modeled on (and borrowing the color theme and scored-table styling from)
+the sibling job_automater project's own interactive menu.
 
 ## Evaluating fit
 
