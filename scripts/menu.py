@@ -37,8 +37,21 @@ _CHOICES = [
 ]
 
 
+_SCAN_SOURCE_CHOICES = [
+    questionary.Choice(title="Both (default)", value="both"),
+    questionary.Choice(title="JobRight only", value="jobright"),
+    questionary.Choice(title="LinkedIn only", value="linkedin"),
+]
+
+
 def _handle_scan() -> bool:
-    written = scan_module.run_scan(None)
+    choice = questionary.select(
+        "Which source(s)?", choices=_SCAN_SOURCE_CHOICES, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not choice:
+        return False
+    sources = None if choice == "both" else [choice]
+    written = scan_module.run_scan(sources)
     return written > 0
 
 
