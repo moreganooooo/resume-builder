@@ -200,6 +200,7 @@ KB_ALLOWLIST = sorted([
     # Including it here blew the builder call past the free-tier's 250k
     # input-tokens-per-minute cap on every single run.
     "cv.md",
+    "detective-findings-trimmed.csv",
     "evidence-guide.csv",
     "evidence_graph.json",
     "extracted-screenshot-metrics.csv",
@@ -214,6 +215,7 @@ KB_ALLOWLIST = sorted([
     "verified_metrics.json",
     "verified_projects.json",
     "verified_tools.json",
+    "voice-anchors.md",
 ])
 
 # --- TIER 2 FILTERING CONSTANTS ---
@@ -876,11 +878,16 @@ class ResumeEngine:
                     print(f"  WARNING: Could not load KB file {filename}: {e}")
         return master_context
 
-    def build_audit_static_prefix(self) -> str:
+    def build_audit_static_prefix(self, include_evidence_guide: bool = False) -> str:
         """
-        Builds the slim Tier-1 context prefix for the audit loop.
-        Mirrors rewrite_bullets.py _build_static_prefix() exactly.
-        ~5-10k tokens vs ~457k for the full KB.
+        Builds the slim Tier-1 context prefix for the audit loop and (with
+        include_evidence_guide=True) cover letters. Mirrors
+        rewrite_bullets.py _build_static_prefix() exactly for the base
+        profile/verified_* sections. ~5-10k tokens vs ~457k for the full KB
+        -- include_evidence_guide adds ~17k tokens more, only when the
+        caller opts in (cover letters), never for the per-bullet audit
+        loop, which reuses this same function across many calls per resume
+        build and must not have that cost multiply across them.
         """
         print("\n📚 Loading knowledge base context (Tier 1)...")
         sections = []
@@ -933,6 +940,27 @@ class ResumeEngine:
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
                     print(f"  WARNING: build_audit_static_prefix: could not load {fname}: {e}")
+
+        voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
+        if os.path.exists(voice_anchors_path):
+            try:
+                with open(voice_anchors_path, "r", encoding="utf-8") as f:
+                    data = f.read()
+                print(f"   ✅ Loaded voice-anchors.md ({len(data):,} chars)")
+                sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
+            except Exception as e:
+                print(f"  WARNING: build_audit_static_prefix: could not load voice-anchors.md: {e}")
+
+        if include_evidence_guide:
+            evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
+            if os.path.exists(evidence_guide_path):
+                try:
+                    with open(evidence_guide_path, "r", encoding="utf-8") as f:
+                        data = f.read()
+                    print(f"   ✅ Loaded evidence-guide.csv ({len(data):,} chars)")
+                    sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
+                except Exception as e:
+                    print(f"  WARNING: build_audit_static_prefix: could not load evidence-guide.csv: {e}")
 
         return "\n\n".join(sections)
 
@@ -1570,7 +1598,7 @@ class ResumeEngine:
         research_block = format_company_research_block(research) if research else ""
 
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
-        background_context = self.build_audit_static_prefix()
+        background_context = self.build_audit_static_prefix(include_evidence_guide=True)
         system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}"
 
         letter_text, _ = GeminiClient.generate(
