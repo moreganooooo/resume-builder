@@ -98,6 +98,26 @@ def read_evaluation(jd_path: str) -> dict | None:
     return data.get("_evaluation")
 
 
+def read_jd_text(jd_path: str) -> str:
+    """Reads a JD file's content for prompt use, stripping the persisted
+    _evaluation key (see save_evaluation()) if present so a prior
+    evaluation's score/recommendation never leaks into a Gemini prompt as
+    if it were job-description content. Passes plain-text (or otherwise
+    non-JSON-dict) JDs through unchanged. Raises FileNotFoundError exactly
+    like a raw open() would, so existing call-site error handling needs no
+    changes."""
+    with open(jd_path, "r", encoding="utf-8") as f:
+        raw_text = f.read()
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return raw_text
+    if isinstance(data, dict) and "_evaluation" in data:
+        data = {k: v for k, v in data.items() if k != "_evaluation"}
+        return json.dumps(data, indent=2)
+    return raw_text
+
+
 def sanitize_for_filename(text: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "", text or "")
     return cleaned or "Unknown"

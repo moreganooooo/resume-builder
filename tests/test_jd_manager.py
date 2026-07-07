@@ -488,5 +488,47 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         self.assertIsNone(jd_manager.read_evaluation(path))
 
 
+class TestReadJdText(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_read_jd_text")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_jd_without_evaluation_returns_raw_text_unchanged(self):
+        raw = json.dumps({"job_title": "Role", "company_name": "Acme"})
+        path = self._write("a.json", raw)
+        self.assertEqual(jd_manager.read_jd_text(path), raw)
+
+    def test_jd_with_evaluation_strips_only_that_key(self):
+        path = self._write("a.json", json.dumps({
+            "job_title": "Role", "company_name": "Acme",
+            "_evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+        }))
+        result = jd_manager.read_jd_text(path)
+        parsed = json.loads(result)
+        self.assertNotIn("_evaluation", parsed)
+        self.assertEqual(parsed["job_title"], "Role")
+        self.assertEqual(parsed["company_name"], "Acme")
+
+    def test_plain_text_jd_returns_raw_text_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting.")
+        self.assertEqual(jd_manager.read_jd_text(path), "Just a plain text job posting.")
+
+    def test_missing_file_raises_file_not_found_error(self):
+        with self.assertRaises(FileNotFoundError):
+            jd_manager.read_jd_text(os.path.join(self.tmp_dir, "does_not_exist.json"))
+
+
 if __name__ == "__main__":
     unittest.main()

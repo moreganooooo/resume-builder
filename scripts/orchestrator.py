@@ -1615,8 +1615,7 @@ class ResumeEngine:
         model call fails to parse.
         """
         try:
-            with open(jd_path, "r", encoding="utf-8") as f:
-                jd_text = f.read()
+            jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
@@ -1688,8 +1687,7 @@ class ResumeEngine:
         (json/html/pdf), or {} on failure.
         """
         try:
-            with open(jd_path, "r", encoding="utf-8") as f:
-                jd_text = f.read()
+            jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
@@ -1787,8 +1785,7 @@ class ResumeEngine:
         print(f"\nBuilding tailored resume for: {jd_path}")
 
         try:
-            with open(jd_path, "r", encoding="utf-8") as f:
-                jd_text = f.read()
+            jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
             print(f"  ERROR: JD file not found: {jd_path}")
             return {}
