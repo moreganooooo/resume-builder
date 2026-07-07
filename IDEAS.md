@@ -22,9 +22,12 @@ the difficulty tiers -- this is *which order*, the tiers below are still
 goes first; item 1 is broken into sub-steps reflecting "fastest payoff
 first, biggest lift last" within that phase. **Update 2026-07-04: all of
 1.1-1.4 are now built** (see the per-row notes below). **Update
-2026-07-05: items 3 (cover letter generation) and 6 (company-values/
-tone-mirroring) are also done** -- items 2, 4, 5, 7, 8, 10 are still
-unscheduled/not started; item 9 (scheduler) is unblocked but not started.
+2026-07-05: items 2 (situational role-swap), 3 (cover letter generation),
+6 (company-values/tone-mirroring), and 10 (liveness check, Mongo migration
+still undone) are also done.** **Update 2026-07-07: item 5 (evidence bank
+extension) Phase 1 is done** -- see its row below; the full multi-type
+generalization remains unscheduled. Items 4, 7, 8 are still unscheduled/
+not started; item 9 (scheduler) is unblocked but not started.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
@@ -87,7 +90,7 @@ Sanity-checked against the real code in job_automater/career-ops on
 | 2 | Situational role-swap logic | Medium | **Done 2026-07-05.** See the Situational/optional work history entries section below. |
 | 3 | Cover letter generation | Medium | **Done 2026-07-04.** See the Cover letter generation section below. |
 | 4 | Engine/profile rules audit + split | Medium-Hard | Unblocks all multi-user work |
-| 5 | Evidence bank extension | Hard | Foundational for tone-mirroring and Dom's onboarding |
+| 5 | Evidence bank extension | Hard | **Phase 1 done 2026-07-07** (voice-anchors.md, trimmed detective-findings, evidence-guide.csv for cover letters, style guide distillation). Full multi-type generalization + career-ops data reconciliation still unscheduled -- see the Long-term merge section below. |
 | 6 | Company-values/tone-mirroring | Medium-Hard | **Done 2026-07-05.** The company-research architecture question is resolved; see the Company-values/terminology mirroring section below. |
 | 7 | Per-user secrets (`.env` per profile) | Easy | Quick prerequisite right before Dom's onboarding |
 | 8 | Dominick's onboarding | Hard | Depends on #4 and #7 existing first |
@@ -541,7 +544,7 @@ reaction converged on a combination rather than picking just one:
 **2026-07-07 -- Sparkle critique signals + evidence bank scoping
 conversation.** Two threads, connected:
 
-1. **Sparkle critique signals (spec done, not yet built):** an external
+1. **Sparkle critique signals -- built 2026-07-07.** an external
    brainstorm doc (`SparkleConcept.docx`) proposed scoring resumes for
    warmth/memorability/distinctiveness. Investigation found this project
    already does much of this piecemeal (`forbidden_phrases` in
@@ -676,11 +679,11 @@ files literally prefixed "ERIKA_") is genuine but needs its own curation
 pass before it's usable, same as the original bullet bank did -- **filed
 here as a future follow-up, not part of Phase 1.**
 
-Phase 1 spec written and scoped around Morgan's hard constraint (a real
-past incident: including `bullet-bank-keepers-audited.csv` in `KB_ALLOWLIST`
-once blew a run past the free tier's 250k-tokens/minute cap) -- nothing
-gets wired in without being measured first:
-- Distill `MorganWritingStyleGuide.txt` directly into `style_rules.yaml`/
+**Phase 1 -- built 2026-07-07**, scoped around Morgan's hard constraint (a
+real past incident: including `bullet-bank-keepers-audited.csv` in
+`KB_ALLOWLIST` once blew a run past the free tier's 250k-tokens/minute cap)
+-- nothing got wired in without being measured first:
+- Distilled `MorganWritingStyleGuide.txt` directly into `style_rules.yaml`/
   prompts (zero runtime cost, one-time content migration).
 - New curated `voice-anchors.md` from `Application_Answers_Index.csv`
   (measured: ~1,011 tokens -- trivially safe everywhere).
@@ -688,12 +691,15 @@ gets wired in without being measured first:
   ~57,850 -> ~29,983 tokens, 48.2% smaller) added to `KB_ALLOWLIST` in
   place of the raw file.
 - `build_audit_static_prefix(include_evidence_guide=False)` parameterized
-  so cover letters can get `evidence-guide.csv` (~17,329 tokens) without
+  so cover letters now get `evidence-guide.csv` (~17,329 tokens) without
   that cost multiplying across Step 3's per-bullet audit loop, which
-  reuses the same function today.
+  reuses the same function.
 
 Spec: `docs/superpowers/specs/2026-07-07-evidence-bank-phase1-design.md`.
-Not yet built.
+Plan (combined with Sparkle critique signals, built together for
+coordination): `docs/superpowers/plans/2026-07-07-sparkle-and-evidence-bank-phase1.md`.
+Tier 2 (raw "Treering Sequences" archive curation, `BestCopySamples`/
+`Master Cover Letters` skim) remains unscheduled, tracked above.
 
 - **Pipeline + CLI.** Each stage (`scan`, `evaluate`, `tailor`, `render`,
   `track`, `interview-prep`) is a Python module with a defined in/out
