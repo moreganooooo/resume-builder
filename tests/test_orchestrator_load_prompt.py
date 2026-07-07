@@ -34,5 +34,32 @@ class TestLoadPromptFailsLoudly(unittest.TestCase):
         self.assertIn("vague_verbs", data)
 
 
+class TestKbAllowlistAndAuditPrefix(unittest.TestCase):
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+
+    def test_kb_allowlist_includes_new_curated_files(self):
+        self.assertIn("voice-anchors.md", orchestrator.KB_ALLOWLIST)
+        self.assertIn("detective-findings-trimmed.csv", orchestrator.KB_ALLOWLIST)
+
+    def test_kb_allowlist_excludes_raw_detective_findings(self):
+        # The raw file stays on disk as the trim script's source of truth,
+        # but must never be wired in directly -- only the trimmed companion.
+        self.assertNotIn("detective-findings.csv", orchestrator.KB_ALLOWLIST)
+
+    def test_audit_prefix_default_excludes_evidence_guide(self):
+        prefix = self.engine.build_audit_static_prefix()
+        self.assertNotIn("EVIDENCE GUIDE", prefix)
+
+    def test_audit_prefix_opt_in_includes_evidence_guide(self):
+        prefix = self.engine.build_audit_static_prefix(include_evidence_guide=True)
+        self.assertIn("EVIDENCE GUIDE", prefix)
+
+    def test_audit_prefix_always_includes_voice_anchors(self):
+        prefix = self.engine.build_audit_static_prefix()
+        self.assertIn("VOICE ANCHORS", prefix)
+
+
 if __name__ == "__main__":
     unittest.main()
