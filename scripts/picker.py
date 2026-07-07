@@ -15,15 +15,18 @@ import batch_evaluate
 import jd_manager
 
 
-def should_proceed(count: int, skip_confirm: bool) -> bool:
+def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> bool:
     """Standalone copy of cli._should_proceed's exact logic -- duplicated
     rather than imported, since cli.py will import menu.py (for the bare-
     invocation menu launch) which imports this module; cli.py importing
     picker.py directly too is fine, but picker.py must not import cli.py
-    back, to avoid a cycle."""
+    back, to avoid a cycle. action customizes the confirmation's verb --
+    "evaluate" (default) fits evaluate-then-pick flows; pass a different
+    verb (e.g. "tailor") for a batch action that doesn't itself evaluate
+    anything, so the prompt doesn't imply a Gemini call that isn't real."""
     if skip_confirm:
         return True
-    return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
+    return click.confirm(f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?")
 
 
 def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_confirm: bool = False) -> tuple:
@@ -53,7 +56,7 @@ def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_co
 
     choices = [
         questionary.Choice(
-            title=f"{r['composite_score']}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
+            title=f"{r['composite_score']:.2f}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
             value=r["source_file"],
         )
         for r in valid
@@ -125,7 +128,7 @@ def pick_one_evaluated_jd(pending_paths: list) -> str | None:
     choices = [
         questionary.Choice(
             title=(
-                f"{evaluation.get('composite_score')}/5 | {evaluation.get('recommendation')} | "
+                f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')} | "
                 f"{company or '?'} | {title or os.path.basename(path)}"
             ),
             value=path,

@@ -84,7 +84,7 @@ def _handle_tailor_all() -> bool:
     if not pending:
         cli_art.console.print("Nothing to tailor -- no pending JDs.")
         return False
-    if not picker.should_proceed(len(pending), skip_confirm=False):
+    if not picker.should_proceed(len(pending), skip_confirm=False, action="tailor"):
         cli_art.console.print("Aborted.")
         return False
     completed, _failed = orchestrator.run_pipeline()

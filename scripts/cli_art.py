@@ -97,7 +97,7 @@ def render_fit_table(results: list) -> None:
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
         table.add_row(
             str(i),
-            f"[{color}]{r['composite_score']}/5[/{color}]",
+            f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
             f"[{color}]{r['recommendation']}[/{color}]",
             r["company_name"],
             r["job_title"],
