@@ -169,5 +169,85 @@ class TestHandlePolish(unittest.TestCase):
         self.assertFalse(menu._handle_polish())
 
 
+class TestChainContent(unittest.TestCase):
+
+    def test_chain_matches_the_designed_pipeline_order(self):
+        self.assertEqual(menu._CHAIN["scan"], [("Check Liveness", "liveness")])
+        self.assertEqual(menu._CHAIN["liveness"], [("Evaluate All JDs", "evaluate_all")])
+        self.assertEqual(menu._CHAIN["evaluate_all"], [("Customize Resume", "tailor_all")])
+        self.assertEqual(menu._CHAIN["evaluate_one"], [("Customize Resume", "tailor_all")])
+        self.assertEqual(
+            menu._CHAIN["tailor_all"],
+            [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
+        )
+        self.assertEqual(
+            menu._CHAIN["tailor_one"],
+            [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
+        )
+        self.assertEqual(menu._CHAIN["coverletter_one"], [("Polish with Gemini", "polish")])
+
+    def test_polish_has_no_chain_entry(self):
+        self.assertNotIn("polish", menu._CHAIN)
+
+
+class TestRunWithChain(unittest.TestCase):
+
+    @patch("menu.questionary.select")
+    def test_no_op_handler_skips_the_prompt(self, mock_select):
+        with patch.dict(menu._HANDLERS, {"fake": lambda: False}, clear=False), \
+             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+            menu._run_with_chain("fake")
+        mock_select.assert_not_called()
+
+    @patch("menu.questionary.select")
+    def test_handler_with_no_chain_entry_skips_the_prompt(self, mock_select):
+        with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False):
+            menu._run_with_chain("fake")
+        mock_select.assert_not_called()
+
+    @patch("menu.questionary.select")
+    def test_chain_prompt_appends_back_to_menu_choice(self, mock_select):
+        mock_select.return_value.ask.return_value = "__back__"
+        with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False), \
+             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+            menu._run_with_chain("fake")
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual([c.title for c in choices], ["Next", "Back to Menu"])
+        self.assertEqual([c.value for c in choices], ["somewhere", "__back__"])
+
+    @patch("menu.questionary.select")
+    def test_back_to_menu_stops_recursion(self, mock_select):
+        calls = []
+        mock_select.return_value.ask.return_value = "__back__"
+        with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
+             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+            menu._run_with_chain("fake")
+        self.assertEqual(calls, ["fake"])
+
+    @patch("menu.questionary.select")
+    def test_cancelled_prompt_stops_recursion(self, mock_select):
+        calls = []
+        mock_select.return_value.ask.return_value = None
+        with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
+             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+            menu._run_with_chain("fake")
+        self.assertEqual(calls, ["fake"])
+
+    @patch("menu.questionary.select")
+    def test_picking_a_next_step_recurses_into_it(self, mock_select):
+        calls = []
+        mock_select.return_value.ask.return_value = "second"
+        with patch.dict(
+            menu._HANDLERS,
+            {
+                "first": lambda: calls.append("first") or True,
+                "second": lambda: calls.append("second") or False,
+            },
+            clear=False,
+        ), patch.dict(menu._CHAIN, {"first": [("Do Second", "second")]}, clear=False):
+            menu._run_with_chain("first")
+        self.assertEqual(calls, ["first", "second"])
+
+
 if __name__ == "__main__":
     unittest.main()
