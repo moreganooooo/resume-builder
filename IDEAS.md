@@ -537,6 +537,61 @@ reaction converged on a combination rather than picking just one:
   same audited pool, filtered by which evidence rows are tagged applicable
   to that output type. This is also the piece that directly informs
   Dominick's onboarding -- see the Multi-user support section below.
+
+**2026-07-07 -- Sparkle critique signals + evidence bank scoping
+conversation.** Two threads, connected:
+
+1. **Sparkle critique signals (spec done, not yet built):** an external
+   brainstorm doc (`SparkleConcept.docx`) proposed scoring resumes for
+   warmth/memorability/distinctiveness. Investigation found this project
+   already does much of this piecemeal (`forbidden_phrases` in
+   `style_rules.yaml`, `hidden_gem_score`/`hidden_gem_flag` in the
+   bullet-bank scripts, mandatory first-person warmth in `WHY_TEXT`).
+   Scoped down from the doc's full multi-stage-pipeline vision to a small,
+   zero-new-API-call extension of the *existing* critique/recommendation-
+   apply loop: `ResumeCritiqueSchema` gains `distinctive_moments`/
+   `flat_sections`, and the recommendation-apply loop protects
+   `distinctive_moments` verbatim + routes reflective-question
+   recommendations it can't ground in real context to a new
+   `needs_personal_input` bucket (surfaced as "try `resume polish` for
+   these" rather than fabricated). Spec:
+   `docs/superpowers/specs/2026-07-07-sparkle-critique-signals-design.md`.
+2. **This surfaced item 5 (evidence bank extension) as a real dependency**
+   -- `distinctive_moments` are currently rediscovered fresh on every
+   resume build; a real evidence bank would let that signal persist and
+   feed back into curation instead. Investigating scope turned up more
+   complexity than expected:
+   - Of the ~18 CSVs in `resume-engine/knowledge_base/`, **only one or two
+     are actually wired into the live resume/cover-letter pipeline today**
+     -- most of the rest are different stages/snapshots of the *same*
+     bullet-bank pipeline (`needs-review` -> `triage_needs_review.py` ->
+     `bullet-bank-keepers.csv`/`rewrite-queue.csv`/retired), not
+     independent systems. The other, non-bullet-bank CSVs
+     (`evidence-guide.csv`, `detective-findings.csv`, `verified-claims.csv`,
+     `summaries-and-skills-clean.csv`, etc.) are each their own thing and
+     may or may not be wired into anything live -- unconfirmed as of this
+     writing.
+   - `career-ops/data/` shares several filenames with resume-builder's
+     `knowledge_base/` (`bullet-bank-clean.csv`, `evidence-guide.csv`,
+     `detective-findings.csv`, `verified-claims.csv`,
+     `summaries-and-skills-clean.csv`) -- these look like a one-time copy
+     that's since diverged, since resume-builder built real pipeline logic
+     (clustering, auditing, hidden-gem scoring) on top of its copies that
+     career-ops's versions never received.
+   - `career-ops` also has evidence-relevant material **resume-builder has
+     none of at all**: `interview-prep/story-bank.md` (STAR+R interview
+     stories) and `writing-samples/` (Master Cover Letters, Application
+     Answers, LinkedIn Tone & Style Examples) -- real past writing samples,
+     currently untouched by any tooling, that could ground voice/tone work
+     directly.
+   - **Decision:** reconciling two diverged data directories across repos
+     plus adding new evidence types is genuinely "Very Hard/Long-term"
+     scope, not a single-session spec. Next concrete step (in progress):
+     a research pass (no code changes) to map (a) what's actually wired
+     into the live resume/cover-letter pipeline today, (b) what exists in
+     `knowledge_base/` but isn't wired into anything, and (c) what's in
+     career-ops that resume-builder doesn't have -- before deciding what,
+     if anything, to build.
 - **Pipeline + CLI.** Each stage (`scan`, `evaluate`, `tailor`, `render`,
   `track`, `interview-prep`) is a Python module with a defined in/out
   contract, runnable standalone or chained. The CLI itself gets
