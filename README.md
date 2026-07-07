@@ -49,6 +49,8 @@ call `python scripts/cli.py <command>` under the hood.
 | `resume run --pick` | interactively select which pending JD(s) to tailor — see "Picking which JDs to tailor" below |
 | `resume coverletter jds/some_file.txt` | generate + render a cover letter for one JD — see "Generating cover letters" below |
 | `resume coverletter --pick` | interactively select which pending JD(s) to generate a cover letter for — see "Picking which JDs to tailor" below |
+| `resume polish` | interactively chat-edit an already-generated resume or cover letter — see "Polishing a resume or cover letter" below |
+| `resume polish output/json/some_file_Resume.json` | polish that specific file directly, skipping the picker |
 | `resume evaluate jds/some_file.txt` | score a JD's fit (go/no-go) *without* building a resume — see "Evaluating fit" below |
 | `resume evaluate` | score every pending JD at once — see "Evaluating fit" below |
 | `resume scan` | pull new postings from every configured source (JobRight, LinkedIn) into `jds/`, deduped against history |
@@ -88,13 +90,33 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 ## Interactive menu
 
 Just typing `resume` (or `python scripts/cli.py` directly) launches an
-interactive menu instead of running any single command — an arrow-key
-list covering every action below: scan, liveness, evaluate (all pending
-or one specific JD), tailor (pick from a list, batch everything, or one
-specific JD), and generate a cover letter (pick from a list or one
-specific JD). Select an action, it runs, then the menu reappears until
-you choose Exit (or cancel out with Ctrl-C). Single-file actions prompt
-for a path with tab-completion.
+interactive menu instead of running any single command, opening with a
+block-letter title screen before the first arrow-key list. Options are
+named after the pipeline stage they support:
+
+- Scan for New Postings
+- Check Posting Liveness
+- Evaluate ALL Pending JDs / Evaluate a Specific JD
+- Customize Resume for ALL Pending JDs (batch) / Customize Resume for a
+  Specific JD
+- Write cover letter for a Specific JD
+- Polish a resume or cover letter — see "Polishing a resume or cover
+  letter" below
+
+"For a Specific JD" options use a lightweight picker over pending JDs
+(labeled by company/title, no fit-scoring, no extra Gemini cost) — a
+different, cheaper mechanism than `resume run --pick`/`resume coverletter
+--pick`'s evaluate-then-checkbox flow (see "Picking which JDs to tailor"
+below), reserved for when you already know which one you want.
+
+After an action that actually did something, a "What's next?" prompt
+offers the natural next step in the pipeline (e.g. Scan → Check Liveness →
+Evaluate All JDs → Customize Resume → Write Cover Letter / Polish with
+Gemini), always with "Back to Menu" as an escape hatch — nothing chains
+automatically without you choosing it, and a no-op action (nothing found,
+declined confirmation) skips the prompt entirely rather than asking about
+a step that has nothing to act on. Select Exit (or cancel with Ctrl-C) to
+leave.
 
 This is purely a navigation layer over the same commands documented
 below — nothing here does anything a direct command couldn't already do,
@@ -196,6 +218,26 @@ under the sign-off. If that file doesn't exist yet, the PDF still renders
 fine — you'll just see a blank space where the image would go until you
 drop a real signature file at that path.
 
+## Polishing a resume or cover letter
+
+`resume polish [file]` opens an interactive terminal chat against an
+already-generated resume or cover letter's JSON — for the small personal
+touch-ups that don't warrant a full re-tailor. Type a plain-English
+request ("make the tagline punchier," "drop the second Treering bullet"),
+and each turn works like this:
+
+1. Gemini returns the complete updated document (same schema/model the
+   builder already uses — no separate chat-history plumbing, since the
+   JSON file itself already encodes every previously-accepted edit).
+2. A field-level diff is shown — exactly what changed, nothing hidden.
+3. You accept (saves the JSON, re-renders HTML, regenerates the PDF),
+   reject (discard, rephrase and try again), or quit.
+
+No file argument launches a picker over `output/json/*.json` (newest
+first); passing a path skips straight to that file. Type `done`, `exit`,
+or an empty line (or Ctrl-D/Ctrl-C) to leave the chat cleanly at any
+point.
+
 ## Company research
 
 Both `resume coverletter` and `resume tailor`/`run` automatically attempt
@@ -231,6 +273,34 @@ This should be rare by construction: clearing the keyword gate doesn't
 mean it gets used, and for most JDs nothing changes at all. No CLI flag —
 this is always on, and inert unless a JD's language genuinely triggers it.
 
+## Voice, distinctiveness & the holistic critique
+
+Every `resume tailor`/`run` build runs a holistic critique after the
+resume is drafted (scores, flags, and actionable recommendations against
+the JD). Two things happen with that critique's output beyond the score:
+
+- It identifies **distinctive moments** (2-3 sentences already in the
+  resume that read as memorable rather than generic) and **flat sections**
+  (parts that read competent but interchangeable with any other
+  candidate's), printed alongside the usual scores/flags. Distinctive
+  moments are then protected verbatim through the automatic
+  recommendation-apply pass that follows — an edit can't accidentally
+  flatten the one line that actually sounds like you.
+- A recommendation phrased as a reflective question about personal
+  motivation ("what made this project satisfying to you?") only gets
+  auto-applied if the answer is already grounded in your verified
+  background — never invented. Otherwise it's printed under "Needs your
+  input" as a good candidate for a `resume polish` session instead.
+
+This calibration draws on a small curated voice reference
+(`resume-engine/knowledge_base/voice-anchors.md`, generated from real past
+application answers via `scripts/build_voice_anchors.py`) that both the
+per-bullet audit step and cover-letter generation see, plus Morgan's own
+established writing-style rubric folded directly into `style_rules.yaml`
+and `critique_resume.md`. Cover letters also now see `evidence-guide.csv`
+(thematic career-proof clusters), which previously only reached full
+resume builds.
+
 ## Tracking applications
 
 Every completed build appends a row to two places: `jds/jd_tracker_log.csv`
@@ -265,11 +335,16 @@ read backwards). Static instances avoid that code path entirely.
 ## Roadmap
 
 The full `scan` → `liveness` → `evaluate` → `tailor`/`coverletter` →
-`render` → `track` pipeline described above is built as of 2026-07-05,
-including company research and the (rare, automatic) situational
-work-history entries. Further feature ideas (multi-user support, a
-scheduler, a long-term merge with sibling projects) are tracked in
-`IDEAS.md`, organized by difficulty/scope. Nothing there is scheduled.
+`render` → `track` pipeline is built, including company research, the
+(rare, automatic) situational work-history entries, the interactive
+menu's pipeline-ordered chain flow, `resume polish`, and (as of
+2026-07-07) the holistic critique's distinctiveness signals plus Phase 1
+of the evidence-bank extension (voice anchors, a trimmed detective-findings
+companion file, and cover letters gaining `evidence-guide.csv`). Further
+feature ideas (multi-user support, a scheduler, the full multi-type
+evidence-bank generalization, a long-term merge with sibling projects) are
+tracked in `IDEAS.md`, organized by difficulty/scope. Nothing there is
+scheduled.
 
 ## Testing
 
