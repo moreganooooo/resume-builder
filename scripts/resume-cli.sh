@@ -39,6 +39,9 @@ resume() {
     liveness)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py liveness "$@" )
       ;;
+    polish)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py polish "$@" )
+      ;;
     test)
       # unittest's own pass/fail reporting goes to stderr; the app code under
       # test prints a lot of its own operational logging (Step 1/2/3..., batch
@@ -74,6 +77,7 @@ resume() {
       echo "  resume scan             pull new postings from all configured sources into jds/"
       echo "  resume scan --source jobright   pull from just one source (jobright, linkedin)"
       echo "  resume liveness         check every pending JD's posting URL, move expired ones out"
+      echo "  resume polish           interactively polish an already-generated resume/cover letter"
       echo "  resume test            run the full test suite (compact: dots + summary)"
       echo "  resume test -v         same, but lists every test by name"
       echo "  resume test -vv        same, but shows the app's own logging too"
