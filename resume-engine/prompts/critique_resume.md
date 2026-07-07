@@ -113,6 +113,24 @@ Using `top_third_score.yaml`:
   `differentiation` per the rubric's weights
 - Flag `weak_top_section` if the strongest evidence is buried below the fold
 
+### Step 9.5 -- Identify Distinctive Moments and Flat Sections
+
+- Scan the resume for 2-3 EXACT sentences or bullets (quoted verbatim) that
+  already read as memorable, personality-forward, or distinctive rather
+  than generic/interchangeable with other candidates' resumes. List these
+  as `distinctive_moments`. See "Voice Calibration Reference" below for
+  contrast examples and per-section calibration.
+- Identify which sections (by name) read as competent but generic -- the
+  kind of writing that could describe thousands of other candidates just
+  as easily. List these as `flat_sections`.
+- When a recommendation in TOP 3 RECOMMENDATIONS is about voice,
+  personality, or distinctiveness (not accuracy, JD-keyword alignment, or
+  ATS formatting), phrase it as a reflective question aimed at Morgan
+  rather than a directive -- e.g. "What made this project personally
+  satisfying to you?" rather than "Add more personality here."
+  Recommendations about factual accuracy, keyword coverage, or formatting
+  stay as direct instructions.
+
 ---
 
 ## Output Format
@@ -148,6 +166,12 @@ OVERALL SCORE: [x/100]
 
 FLAGS
   [List all active flags from all scoring files]
+
+DISTINCTIVE MOMENTS (protect these)
+  [List of exact quoted sentences]
+
+FLAT SECTIONS
+  [List of section names reading generic]
 
 TOP 3 RECOMMENDATIONS
   1. [Most impactful fix]

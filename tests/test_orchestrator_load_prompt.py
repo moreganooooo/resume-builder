@@ -65,6 +65,13 @@ class TestKbAllowlistAndAuditPrefix(unittest.TestCase):
         self.assertIn("Voice Calibration Reference", content)
         self.assertIn("It felt like more than an opportunity", content)
 
+    def test_critique_prompt_has_distinctive_moments_step(self):
+        content = self.engine.load_prompt("critique_resume.md")
+        self.assertIn("Identify Distinctive Moments and Flat Sections", content)
+        self.assertIn("distinctive_moments", content)
+        self.assertIn("flat_sections", content)
+        self.assertIn("Voice Calibration Reference", content)
+
 
 if __name__ == "__main__":
     unittest.main()
