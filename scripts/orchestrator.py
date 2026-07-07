@@ -2036,9 +2036,15 @@ class ResumeEngine:
         # that one attempt, not the other recommendations already applied
         # earlier in the same run.
         recs = (resume_data.get("_critique") or {}).get("recommendations", [])
+        distinctive_moments = (resume_data.get("_critique") or {}).get("distinctive_moments", [])
+        protected_block = (
+            "=== PROTECTED DISTINCTIVE MOMENTS (preserve verbatim unless THIS "
+            "recommendation specifically targets them) ===\n"
+            + "\n".join(f"- {m}" for m in distinctive_moments) + "\n\n"
+        ) if distinctive_moments else ""
         if recs:
             state = checkpoint.get("recommendation_actions") or {
-                "resume_data": resume_data, "applied": [], "skipped": [], "next_index": 0,
+                "resume_data": resume_data, "applied": [], "skipped": [], "needs_polish": [], "next_index": 0,
             }
             start_index = state["next_index"]
             if start_index >= len(recs):
@@ -2048,6 +2054,7 @@ class ResumeEngine:
                       f"({start_index}/{len(recs)} already done)...")
             resume_data = state["resume_data"]
             applied, skipped = state["applied"], state["skipped"]
+            needs_polish = state.get("needs_polish", [])
 
             for i in range(start_index, len(recs)):
                 rec = recs[i]
@@ -2056,6 +2063,7 @@ class ResumeEngine:
                 print(f"\n  [{i + 1}/{len(recs)}] {rec[:70]}...")
                 rec_contents = (
                     f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+                    f"{protected_block}"
                     f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
                     f"=== INSTRUCTIONS ===\n"
                     f"Decide whether the recommendation above is a concrete, actionable edit to "
@@ -2065,9 +2073,13 @@ class ResumeEngine:
                     f"If it describes something outside the document itself -- networking, "
                     f"referrals, applying elsewhere, or any action a person would take rather than "
                     f"an edit to this resume's text -- change nothing and put its exact original "
-                    f"text in skipped_recommendations instead. Return the complete resume JSON with "
-                    f"every field -- change only what this one recommendation asked for, if "
-                    f"anything; leave everything else untouched."
+                    f"text in skipped_recommendations instead. If the recommendation asks you to "
+                    f"reveal something personal (e.g. why a project mattered, what felt "
+                    f"satisfying) and the provided background context does NOT already contain a "
+                    f"grounded, verified answer, do not invent one -- change nothing and put its "
+                    f"exact original text in needs_personal_input instead. Return the complete "
+                    f"resume JSON with every field -- change only what this one recommendation "
+                    f"asked for, if anything; leave everything else untouched."
                 )
                 rec_text, rec_usage = GeminiClient.generate(
                     model=BUILDER_MODEL,
@@ -2083,6 +2095,7 @@ class ResumeEngine:
                 else:
                     this_applied = rec_result.pop("applied_recommendations", [])
                     this_skipped = rec_result.pop("skipped_recommendations", [])
+                    this_needs_input = rec_result.pop("needs_personal_input", [])
                     candidate_resume_data = normalize_resume.normalize(rec_result)
                     rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation)
                     if rec_violations:
@@ -2095,16 +2108,20 @@ class ResumeEngine:
                         resume_data = candidate_resume_data
                         applied.append(rec)
                         print(f"    Applied.")
+                    elif this_needs_input:
+                        needs_polish.append(rec)
+                        print(f"    Needs your input -- left unchanged (try `resume polish`).")
                     else:
                         skipped.append(rec)
                         print(f"    Skipped (not a resume-content edit).")
 
                 checkpoint["recommendation_actions"] = {
-                    "resume_data": resume_data, "applied": applied, "skipped": skipped, "next_index": i + 1,
+                    "resume_data": resume_data, "applied": applied, "skipped": skipped,
+                    "needs_polish": needs_polish, "next_index": i + 1,
                 }
                 jd_manager.save_checkpoint(job_key, checkpoint)
 
-            resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped}
+            resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped, "needs_polish": needs_polish}
             if applied:
                 print("\n  Applied:")
                 for a in applied:
@@ -2113,6 +2130,10 @@ class ResumeEngine:
                 print("  Skipped:")
                 for s in skipped:
                     print(f"    - {s}")
+            if needs_polish:
+                print("  Needs your input -- good candidates for `resume polish`:")
+                for n in needs_polish:
+                    print(f"    - {n}")
 
         # --- Step 6: Save output ---
         output_path = os.path.join(self.output_json_dir, output_filename)

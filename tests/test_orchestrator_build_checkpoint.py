@@ -900,6 +900,112 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_needs_personal_input_lands_in_needs_polish_bucket(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
+            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                return (json.dumps({
+                    **base_resume,
+                    "applied_recommendations": [],
+                    "skipped_recommendations": [],
+                    "needs_personal_input": ["What made this project personally satisfying to you?"],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90, "overall_fit_score": 90,
+                    "top_third_score": 90, "flags": [],
+                    "recommendations": ["What made this project personally satisfying to you?"],
+                    "distinctive_moments": [], "flat_sections": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        actions = result["_recommendation_actions"]
+        self.assertEqual(actions["needs_polish"], ["What made this project personally satisfying to you?"])
+        self.assertEqual(actions["applied"], [])
+        self.assertEqual(actions["skipped"], [])
+        self.assertEqual(result["SUMMARY_TEXT"], base_resume["SUMMARY_TEXT"], "unchanged -- nothing was fabricated")
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_distinctive_moments_are_injected_into_recommendation_prompt(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
+            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+        }
+        captured_contents = {}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                captured_contents["value"] = kwargs.get("contents", "")
+                return (json.dumps({
+                    **base_resume,
+                    "applied_recommendations": ["Name the specific AI tools used."],
+                    "skipped_recommendations": [],
+                    "needs_personal_input": [],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90, "overall_fit_score": 90,
+                    "top_third_score": 90, "flags": [],
+                    "recommendations": ["Name the specific AI tools used."],
+                    "distinctive_moments": ["I love building systems that work quietly in the background."],
+                    "flat_sections": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        self.assertIn("PROTECTED DISTINCTIVE MOMENTS", captured_contents["value"])
+        self.assertIn("I love building systems that work quietly in the background.", captured_contents["value"])
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_recommendation_pass_resumes_from_checkpoint_without_a_new_api_call(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):
