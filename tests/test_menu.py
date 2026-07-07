@@ -82,22 +82,19 @@ class TestHandleEvaluateAll(unittest.TestCase):
 
 class TestHandleEvaluateOne(unittest.TestCase):
 
-    @patch("menu.questionary.path")
-    def test_returns_false_when_no_path(self, mock_path):
-        mock_path.return_value.ask.return_value = None
+    @patch("menu.picker.pick_one_pending_jd", return_value=None)
+    def test_returns_false_when_no_path(self, mock_pick):
         self.assertFalse(menu._handle_evaluate_one())
 
     @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.questionary.path")
-    def test_returns_false_when_result_falsy(self, mock_path, mock_engine_cls):
-        mock_path.return_value.ask.return_value = "jds/a.json"
+    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
+    def test_returns_false_when_result_falsy(self, mock_pick, mock_engine_cls):
         mock_engine_cls.return_value.evaluate_fit.return_value = {}
         self.assertFalse(menu._handle_evaluate_one())
 
     @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.questionary.path")
-    def test_returns_true_when_result_truthy(self, mock_path, mock_engine_cls):
-        mock_path.return_value.ask.return_value = "jds/a.json"
+    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
+    def test_returns_true_when_result_truthy(self, mock_pick, mock_engine_cls):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
             "archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue",
         }
@@ -105,9 +102,8 @@ class TestHandleEvaluateOne(unittest.TestCase):
 
     @patch("menu.jd_manager.save_evaluation")
     @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.questionary.path")
-    def test_persists_evaluation_on_success(self, mock_path, mock_engine_cls, mock_save):
-        mock_path.return_value.ask.return_value = "jds/a.json"
+    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
+    def test_persists_evaluation_on_success(self, mock_pick, mock_engine_cls, mock_save):
         result = {"archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue"}
         mock_engine_cls.return_value.evaluate_fit.return_value = result
         menu._handle_evaluate_one()
