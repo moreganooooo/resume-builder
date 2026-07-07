@@ -34,5 +34,28 @@ class TestParsePdfResult(unittest.TestCase):
         self.assertEqual(size_str, "unknown size")
 
 
+class TestSummarizeKeywords(unittest.TestCase):
+
+    def test_summarizes_three_categories(self):
+        result = orchestrator._summarize_keywords({
+            "tools": ["LinkedIn", "Figma", "Adobe Creative Cloud"],
+            "hard_skills": ["A", "B", "C", "D", "E", "F", "G", "H"],
+            "core_functions": ["X", "Y", "Z"],
+        })
+        self.assertEqual(result, "3 tools, 8 hard skills, 3 core functions")
+
+    def test_omits_empty_categories(self):
+        result = orchestrator._summarize_keywords({
+            "tools": ["LinkedIn"],
+            "hard_skills": [],
+            "core_functions": ["X"],
+        })
+        self.assertEqual(result, "1 tools, 1 core functions")
+
+    def test_all_empty_returns_none_found(self):
+        result = orchestrator._summarize_keywords({"tools": [], "hard_skills": [], "core_functions": []})
+        self.assertEqual(result, "none found")
+
+
 if __name__ == "__main__":
     unittest.main()

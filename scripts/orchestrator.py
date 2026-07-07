@@ -619,6 +619,15 @@ def _parse_pdf_result(stdout: str) -> tuple:
     return page_count, size_str
 
 
+def _summarize_keywords(jd_keywords: dict) -> str:
+    """One-line count summary of a JDKeywordSchema-shaped dict (tools,
+    hard_skills, core_functions today, but iterates generically over
+    whatever keys are present). Full values remain in the checkpoint JSON
+    for anyone who needs them."""
+    parts = [f"{len(v)} {k.replace('_', ' ')}" for k, v in jd_keywords.items() if v]
+    return ", ".join(parts) if parts else "none found"
+
+
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
@@ -1814,7 +1823,7 @@ class ResumeEngine:
                 print("  WARNING: JD keyword extraction returned empty. Proceeding with empty keywords.")
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
-        print(f"  Keywords extracted: {json.dumps(jd_keywords, indent=2)[:400]}")
+        print(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
 
         # --- Step 2: Mine bullet bank ---
         print("\nStep 2: Mining bullet bank...")
