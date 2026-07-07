@@ -145,8 +145,9 @@ def _run_with_chain(value: str) -> None:
 
     choices = [questionary.Choice(title=label, value=v) for label, v in next_options]
     choices.append(questionary.Choice(title="Back to Menu", value="__back__"))
+    cli_art.display_whats_next_panel()
     choice = questionary.select(
-        "What's next?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+        "Choose one:", choices=choices, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
 
     if not choice or choice == "__back__":

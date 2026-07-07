@@ -3,6 +3,7 @@ cli_art.py style (rich Console/Panel) but trimmed down -- no hand-drawn ASCII
 block art, just a clean styled banner."""
 
 from questionary import Style
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -33,7 +34,7 @@ QUESTIONARY_STYLE = Style([
 # BUILDER" is too long for one line at this scale (each line is 53 columns,
 # safe for any real terminal width).
 MAIN_BANNER = """
-[bold cyan]
+[bold #4dabf7]
 ██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗
 ██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝
 ██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗
@@ -47,13 +48,17 @@ MAIN_BANNER = """
 ██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗
 ██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║
 ╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝
-[/bold cyan]
+[/bold #4dabf7]
 [dim]          Tailored resumes & cover letters, powered by Gemini[/dim]
 """
 
 
 def display_main_banner() -> None:
-    console.print(MAIN_BANNER)
+    console.print(Panel(MAIN_BANNER, border_style="#4caf50", box=box.DOUBLE, padding=(1, 2)))
+
+
+def display_whats_next_panel() -> None:
+    console.print(Panel("What's next?", border_style="#4caf50", box=box.ROUNDED, padding=(0, 2)))
 
 
 # Recommendation values match orchestrator.py's FitEvaluationSchema Literal
