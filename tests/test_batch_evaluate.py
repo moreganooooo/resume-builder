@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -49,3 +50,28 @@ class TestSortKey(unittest.TestCase):
         results.sort(key=batch_evaluate._sort_key)
         self.assertFalse(results[0]["error"])
         self.assertTrue(results[1]["error"])
+
+
+class TestEvaluateAllPendingPersistsEvaluations(unittest.TestCase):
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_successful_evaluation_gets_persisted(self, mock_engine_cls, mock_key, mock_meta, mock_save):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_save.assert_called_once_with("jds/a.json", {
+            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+        })
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_errored_evaluation_is_not_persisted(self, mock_engine_cls, mock_key, mock_meta, mock_save):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {}
+        batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_save.assert_not_called()
