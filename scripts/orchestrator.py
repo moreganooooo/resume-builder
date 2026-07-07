@@ -2008,6 +2008,16 @@ class ResumeEngine:
                     print("  Recommendations:")
                     for rec in recs:
                         print(f"    - {rec}")
+                moments = critique_data.get("distinctive_moments", [])
+                if moments:
+                    print("  Distinctive moments (protected):")
+                    for m in moments:
+                        print(f"    - {m}")
+                flat = critique_data.get("flat_sections", [])
+                if flat:
+                    print("  Flat sections:")
+                    for f in flat:
+                        print(f"    - {f}")
                 resume_data["_critique"] = critique_data
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
