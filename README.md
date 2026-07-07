@@ -164,9 +164,13 @@ extraction or resume content.
 **`resume evaluate` (no file argument)** scores every pending JD in one go
 instead of one at a time — real cost: one Gemini call per pending JD, so it
 prints the pending count and asks for confirmation first (`--yes` skips the
-prompt). Prints a sorted summary table (score, recommendation, company,
-title, best-first); a JD that fails to evaluate shows `ERROR` and sorts to
-the bottom rather than crashing the whole batch.
+prompt). Calls are paced (a few seconds apart) to stay under this
+account's requests-per-minute tier instead of bursting all of them at
+once and hitting HTTP 429s — the same pacing also applies to `resume run
+--pick`/`resume coverletter --pick`, since both share this same
+evaluation loop. Prints a sorted summary table (score, recommendation,
+company, title, best-first); a JD that fails to evaluate shows `ERROR`
+and sorts to the bottom rather than crashing the whole batch.
 
 ## Scanning for new postings
 
