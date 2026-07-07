@@ -37,3 +37,57 @@ def stem_from_json_path(path: str, doc_type: str) -> str:
     name = os.path.basename(path)
     suffix = RESUME_SUFFIX if doc_type == "resume" else COVERLETTER_SUFFIX
     return name[: -len(suffix)]
+
+
+def _diff_list(label: str, old_list: list, new_list: list) -> list[str]:
+    lines = []
+    for i in range(max(len(old_list), len(new_list))):
+        old_item = old_list[i] if i < len(old_list) else None
+        new_item = new_list[i] if i < len(new_list) else None
+        if old_item != new_item:
+            lines.append(f"{label}[{i}]:\n  - {old_item!r}\n  + {new_item!r}")
+    return lines
+
+
+def _diff_experience(old_jobs: list, new_jobs: list) -> list[str]:
+    lines = []
+    scalar_fields = ("title", "company", "period", "location", "career_note")
+    for i in range(max(len(old_jobs), len(new_jobs))):
+        old_job = old_jobs[i] if i < len(old_jobs) else {}
+        new_job = new_jobs[i] if i < len(new_jobs) else {}
+        if old_job == new_job:
+            continue
+        for field in scalar_fields:
+            if old_job.get(field) != new_job.get(field):
+                lines.append(
+                    f"EXPERIENCE[{i}].{field}:\n  - {old_job.get(field)!r}\n  + {new_job.get(field)!r}"
+                )
+        lines.extend(_diff_list(
+            f"EXPERIENCE[{i}].achievements",
+            old_job.get("achievements", []),
+            new_job.get("achievements", []),
+        ))
+    return lines
+
+
+def diff_documents(old: dict, new: dict, keys: list[str]) -> list[str]:
+    """Field-by-field diff restricted to `keys` (a schema's own field
+    list -- contact info/certifications/education/_recommendation_actions
+    are never in `keys`, so they never surface here, since a polish turn
+    can't touch them anyway). EXPERIENCE gets element-and-field-level
+    treatment via _diff_experience; other list fields (e.g.
+    body_paragraphs) via _diff_list; everything else is a plain scalar
+    comparison."""
+    lines = []
+    for key in keys:
+        old_val = old.get(key)
+        new_val = new.get(key)
+        if old_val == new_val:
+            continue
+        if key == "EXPERIENCE" and isinstance(old_val, list) and isinstance(new_val, list):
+            lines.extend(_diff_experience(old_val, new_val))
+        elif isinstance(old_val, list) and isinstance(new_val, list):
+            lines.extend(_diff_list(key, old_val, new_val))
+        else:
+            lines.append(f"{key}:\n  - {old_val!r}\n  + {new_val!r}")
+    return lines
