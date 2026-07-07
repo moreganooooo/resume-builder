@@ -75,3 +75,34 @@ class TestEvaluateAllPendingPersistsEvaluations(unittest.TestCase):
         mock_engine_cls.return_value.evaluate_fit.return_value = {}
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_save.assert_not_called()
+
+
+class TestEvaluateAllPendingPacesCalls(unittest.TestCase):
+
+    @patch("batch_evaluate.time.sleep")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_sleeps_between_calls_but_not_before_the_first(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_sleep,
+    ):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(["jds/a.json", "jds/b.json", "jds/c.json"])
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @patch("batch_evaluate.time.sleep")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_never_sleeps_for_a_single_jd(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_sleep,
+    ):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_sleep.assert_not_called()

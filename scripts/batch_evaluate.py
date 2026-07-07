@@ -5,8 +5,15 @@ interactive picker). Real Gemini cost: one call per pending JD. See
 docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 
+import time
+
 import jd_manager
 import orchestrator
+
+# Keeps evaluate_fit() calls under this account's Gemini API tier (15 RPM
+# for gemini-3.1-flash-lite): 60s / 15 = 4.0s minimum spacing, plus a
+# buffer so a rolling-window quota counter doesn't still trip it.
+SECONDS_BETWEEN_CALLS = 4.5
 
 
 def _sort_key(result: dict) -> tuple:
@@ -31,7 +38,9 @@ def evaluate_all_pending(pending_paths: list = None) -> list:
     engine = orchestrator.ResumeEngine()
     results = []
 
-    for path in pending_paths:
+    for i, path in enumerate(pending_paths):
+        if i > 0:
+            time.sleep(SECONDS_BETWEEN_CALLS)
         job_title, company_name = jd_manager.extract_job_meta(path)
         evaluation = engine.evaluate_fit(path)
 
