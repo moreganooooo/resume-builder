@@ -41,7 +41,22 @@ against first, persisted into each JD's own JSON so re-displaying a score
 never costs another Gemini call; spec:
 `docs/superpowers/specs/2026-07-07-evaluated-resume-picker-design.md`).
 See the README's "Interactive menu" and "Evaluating fit" sections for the
-user-facing behavior.
+user-facing behavior. **Update 2026-07-07 (evening):** a live scan run
+surfaced a real crash (`scan.py`'s `_write_jd_file()` called a
+never-defined `jd_manager._sanitize_for_filename` instead of the real
+`sanitize_for_filename` -- present since the scan stage was first built
+2026-07-04, only triggered once a scan actually had a genuinely new job
+to write; fixed, and `tests/test_scan.py` now exists to cover the gap
+that let it slip through untested). Also added: batch-evaluate call
+pacing (15 RPM Gemini tier limit was being hit instantly on a fresh
+batch), a `[i/N]` progress counter for batch evaluate, a "please wait"
+notice for liveness checks, 2-decimal score formatting and tier-colored
+scores in the resume picklist, a corrected confirmation message on
+"Customize Resume for ALL Pending JDs" (it never actually evaluates
+anything, despite previously saying "About to evaluate..."), and a
+JobRight/LinkedIn/Both source picker for the menu's "Scan for New
+Postings" (the CLI's `--source` flag already supported this; the menu
+just hardcoded both with no prompt).
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|

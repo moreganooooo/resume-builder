@@ -179,6 +179,8 @@ LinkedIn (`--source linkedin`) and writes new ones straight into `jds/` as
 JD files, ready for `resume run`/`resume tailor`. No database — dedup is
 against `jd_tracker_log.csv` and `jds/` itself
 (`jd_manager.job_key_known()`), keyed by each posting's source job ID.
+The interactive menu's "Scan for New Postings" asks the same question
+(JobRight only / LinkedIn only / Both), defaulting to Both.
 
 **Careful with `resume run` after a scan** — batch mode processes every
 pending JD in `jds/`, so a scan that turns up dozens of postings means a
