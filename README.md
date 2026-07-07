@@ -91,8 +91,9 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 
 Just typing `resume` (or `python scripts/cli.py` directly) launches an
 interactive menu instead of running any single command, opening with a
-block-letter title screen before the first arrow-key list. Options are
-named after the pipeline stage they support:
+block-letter title screen (bordered panel, blue title on a green border —
+see "Colors" below) before the first arrow-key list. Options are named
+after the pipeline stage they support:
 
 - Scan for New Postings
 - Check Posting Liveness
@@ -103,20 +104,39 @@ named after the pipeline stage they support:
 - Polish a resume or cover letter — see "Polishing a resume or cover
   letter" below
 
-"For a Specific JD" options use a lightweight picker over pending JDs
-(labeled by company/title, no fit-scoring, no extra Gemini cost) — a
-different, cheaper mechanism than `resume run --pick`/`resume coverletter
---pick`'s evaluate-then-checkbox flow (see "Picking which JDs to tailor"
-below), reserved for when you already know which one you want.
+"Evaluate a Specific JD" and "Write cover letter for a Specific JD" use a
+lightweight picker over pending/completed JDs (labeled by company/title,
+no fit-scoring, no extra Gemini cost) — a different, cheaper mechanism
+than `resume run --pick`/`resume coverletter --pick`'s evaluate-then-
+checkbox flow (see "Picking which JDs to tailor" below), reserved for
+when you already know which one you want.
 
-After an action that actually did something, a "What's next?" prompt
-offers the natural next step in the pipeline (e.g. Scan → Check Liveness →
-Evaluate All JDs → Customize Resume → Write Cover Letter / Polish with
-Gemini), always with "Back to Menu" as an escape hatch — nothing chains
-automatically without you choosing it, and a no-op action (nothing found,
-declined confirmation) skips the prompt entirely rather than asking about
-a step that has nothing to act on. Select Exit (or cancel with Ctrl-C) to
-leave.
+**"Customize Resume for a Specific JD" is different: it only lists
+already-evaluated JDs**, sorted best-fit first and labeled with each
+one's score (`4.8/5 | Strong pursue | Acme | Content Strategist`) — since
+building a resume for a role you haven't screened first rarely makes
+sense. Evaluating (either menu option, or `resume evaluate`) persists its
+score into the JD's own JSON file the first time, so this list doesn't
+need a fresh Gemini call just to redisplay it. Nothing evaluated yet?
+The picker prints a hint pointing at "Evaluate ALL Pending JDs"/"Evaluate
+a Specific JD" instead of showing an empty list.
+
+After an action that actually did something, a bordered "What's next?"
+panel offers the natural next step in the pipeline (e.g. Scan → Check
+Liveness → Evaluate All JDs → Customize Resume → Write Cover Letter /
+Polish with Gemini), always with "Back to Menu" as an escape hatch —
+nothing chains automatically without you choosing it, and a no-op action
+(nothing found, declined confirmation) skips the prompt entirely rather
+than asking about a step that has nothing to act on. Select Exit (or
+cancel with Ctrl-C) to leave.
+
+**Colors:** the title banner and the "What's next?" panel use explicit
+hex colors (blue `#4dabf7` text, green `#4caf50` borders) rather than
+named ANSI colors like `cyan` — named colors get remapped by whatever
+terminal theme is active, and on a dark-teal background theme, `cyan`
+rendered as a washed-out, nearly invisible gray. Explicit hex sidesteps
+that entirely. Purple stays for questionary's own prompt pointer/qmark
+(unchanged, already vivid); green also still marks the `✓` success symbol.
 
 This is purely a navigation layer over the same commands documented
 below — nothing here does anything a direct command couldn't already do,
@@ -131,9 +151,15 @@ rubric (ported from career-ops: CV match, North Star alignment, remote
 quality, level fit, comp, growth, time-to-offer, tool relevance, company
 reputation, cultural signals) and prints a composite score out of 5, a
 recommendation (Strong pursue / Selective pursue / Low-priority pursue /
-Skip), and hard blockers if any (e.g. onsite-only). It's read-only — no
-files are written, no resume is built. Useful for triaging a pile of scanned
-JDs before committing to a full tailor run.
+Skip), and hard blockers if any (e.g. onsite-only). No resume is built.
+Useful for triaging a pile of scanned JDs before committing to a full
+tailor run. A successful evaluation does write one thing: the score and
+recommendation get saved into the JD's own JSON file (an `_evaluation`
+key), so "Customize Resume for a Specific JD" can filter/sort/label by it
+later without spending another Gemini call — see "Interactive menu"
+above. This metadata is automatically stripped back out before the JD's
+text ever reaches a Gemini prompt again, so it never leaks into keyword
+extraction or resume content.
 
 **`resume evaluate` (no file argument)** scores every pending JD in one go
 instead of one at a time — real cost: one Gemini call per pending JD, so it
@@ -340,11 +366,16 @@ The full `scan` → `liveness` → `evaluate` → `tailor`/`coverletter` →
 menu's pipeline-ordered chain flow, `resume polish`, and (as of
 2026-07-07) the holistic critique's distinctiveness signals plus Phase 1
 of the evidence-bank extension (voice anchors, a trimmed detective-findings
-companion file, and cover letters gaining `evidence-guide.csv`). Further
-feature ideas (multi-user support, a scheduler, the full multi-type
-evidence-bank generalization, a long-term merge with sibling projects) are
-tracked in `IDEAS.md`, organized by difficulty/scope. Nothing there is
-scheduled.
+companion file, and cover letters gaining `evidence-guide.csv`). Also as
+of 2026-07-07: the interactive menu's console output is quieter (the
+trim-loop's PDF block and the keyword-extraction dump no longer repeat in
+full every step) and its colors are theme-safe (see "Colors" above), and
+"Customize Resume for a Specific JD" only surfaces already-evaluated,
+scored, sorted JDs instead of an unfiltered list of everything pending.
+Further feature ideas (multi-user support, a scheduler, the full
+multi-type evidence-bank generalization, a long-term merge with sibling
+projects) are tracked in `IDEAS.md`, organized by difficulty/scope.
+Nothing there is scheduled.
 
 ## Testing
 
