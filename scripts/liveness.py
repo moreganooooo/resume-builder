@@ -59,6 +59,11 @@ def run_liveness_check() -> dict:
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
+    print(
+        f"Checking {len(candidates)} JD(s) via headless browser -- this can "
+        "take a minute or two depending on the count, please wait..."
+    )
+
     try:
         script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
         proc = subprocess.run(

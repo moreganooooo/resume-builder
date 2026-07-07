@@ -14,6 +14,17 @@ import cli_art
 import batch_evaluate
 import jd_manager
 
+# Explicit hex, not named ANSI colors -- named colors get remapped by
+# whatever terminal theme is active (see cli_art.MAIN_BANNER's own fix for
+# the same issue), so hex is the only way to guarantee these actually read
+# as distinct colors rather than blending into a dark background.
+_RECOMMENDATION_STYLES = {
+    "Strong pursue": "fg:#4caf50 bold",
+    "Selective pursue": "fg:#4dabf7 bold",
+    "Low-priority pursue": "fg:#f5c542 bold",
+    "Skip": "fg:#c96a6a",
+}
+
 
 def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> bool:
     """Standalone copy of cli._should_proceed's exact logic -- duplicated
@@ -125,16 +136,15 @@ def pick_one_evaluated_jd(pending_paths: list) -> str | None:
 
     evaluated.sort(key=lambda item: -(item[0].get("composite_score") or 0))
 
-    choices = [
-        questionary.Choice(
-            title=(
-                f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')} | "
-                f"{company or '?'} | {title or os.path.basename(path)}"
-            ),
-            value=path,
-        )
-        for evaluation, path, title, company in evaluated
-    ]
+    choices = []
+    for evaluation, path, title, company in evaluated:
+        score_style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
+        label = [
+            (score_style, f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')}"),
+            ("", f" | {company or '?'} | {title or os.path.basename(path)}"),
+        ]
+        choices.append(questionary.Choice(title=label, value=path))
+
     return questionary.select(
         "Which JD?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
     ).ask()

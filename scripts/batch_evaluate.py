@@ -5,6 +5,7 @@ interactive picker). Real Gemini cost: one call per pending JD. See
 docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 
+import os
 import time
 
 import jd_manager
@@ -42,6 +43,7 @@ def evaluate_all_pending(pending_paths: list = None) -> list:
         if i > 0:
             time.sleep(SECONDS_BETWEEN_CALLS)
         job_title, company_name = jd_manager.extract_job_meta(path)
+        print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...")
         evaluation = engine.evaluate_fit(path)
 
         if not evaluation:
