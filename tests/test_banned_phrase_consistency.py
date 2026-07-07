@@ -32,6 +32,12 @@ class TestBannedPhraseConsistency(unittest.TestCase):
         missing = set(self.language_quality["ai_language_patterns"]["severe"]) - self.master_list
         self.assertEqual(missing, set(), f"language_quality.yaml's severe ai_language_patterns ban phrases not in style_rules.yaml: {missing}")
 
+    def test_style_guide_derived_phrases_are_present(self):
+        # From MorganWritingStyleGuide.txt's "Anti-Voice Red Flags",
+        # distilled 2026-07-07 -- not already covered by the pre-existing list.
+        self.assertIn("wear many hats", self.style_rules["forbidden_phrases"])
+        self.assertIn("to whom it may concern", self.style_rules["forbidden_phrases"])
+
 
 if __name__ == "__main__":
     unittest.main()

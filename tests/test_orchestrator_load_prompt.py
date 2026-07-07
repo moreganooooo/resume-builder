@@ -60,6 +60,11 @@ class TestKbAllowlistAndAuditPrefix(unittest.TestCase):
         prefix = self.engine.build_audit_static_prefix()
         self.assertIn("VOICE ANCHORS", prefix)
 
+    def test_critique_prompt_has_voice_calibration_reference(self):
+        content = self.engine.load_prompt("critique_resume.md")
+        self.assertIn("Voice Calibration Reference", content)
+        self.assertIn("It felt like more than an opportunity", content)
+
 
 if __name__ == "__main__":
     unittest.main()

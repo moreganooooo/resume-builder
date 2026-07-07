@@ -19,7 +19,9 @@ Using the job description and the background context provided, write:
 - Ground every claim in the background context provided -- never invent a metric, tool, or achievement not present there.
 - If a `=== COMPANY RESEARCH ===` block is present in the context, use it for exactly two things: (1) the Company Connection -- tie **one** researched fact to a real piece of Morgan's background, avoiding generic flattery ("I've always admired your innovative culture") in favor of something specific and true; (2) tone-matching per this register: mission-driven org -> warmer, more resonant; playful startup -> sharper, slightly more personality; conventional B2B SaaS -> measured, crisp, lightly distinctive; advocacy/impact org -> purposeful, human, values-aware. Never copy the company's own phrases verbatim.
 - If no `=== COMPANY RESEARCH ===` block is present, do not claim to know anything about the company's culture, mission, or values beyond what's stated in the JD text itself -- proceed without it, exactly as before.
-- Keep each paragraph to 3-5 sentences -- a cover letter, not an essay.
+- Keep each paragraph to 4-6 lines, 400-450 words total across the whole
+  letter -- warmly strategic, not an essay (per Morgan's own established
+  platform-specific style rule).
 
 # Output
 
