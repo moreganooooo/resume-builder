@@ -304,5 +304,138 @@ class TestGetPendingJds(unittest.TestCase):
         self.assertEqual(pending, [])
 
 
+class TestGetCompletedJds(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_completed")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
+        self._real_jds_dir = jd_manager.JDS_DIR
+        self._real_completed_dir = jd_manager.COMPLETED_DIR
+        self._real_tracker_csv = jd_manager.TRACKER_CSV
+        jd_manager.JDS_DIR = self.tmp_dir
+        jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
+        jd_manager.TRACKER_CSV = os.path.join(self.tmp_dir, "tracker.csv")
+
+    def tearDown(self):
+        jd_manager.JDS_DIR = self._real_jds_dir
+        jd_manager.COMPLETED_DIR = self._real_completed_dir
+        jd_manager.TRACKER_CSV = self._real_tracker_csv
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_completed(self, name, content):
+        path = os.path.join(jd_manager.COMPLETED_DIR, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_returns_files_in_completed_dir(self):
+        self._write_completed("done.json", json.dumps({"job_title": "A", "company_name": "X"}))
+        completed = jd_manager.get_completed_jds()
+        self.assertEqual(len(completed), 1)
+        self.assertTrue(completed[0].endswith("done.json"))
+
+    def test_ignores_hidden_files(self):
+        with open(os.path.join(jd_manager.COMPLETED_DIR, ".DS_Store"), "wb") as f:
+            f.write(b"\x00\x00\x00\x01Bud1\x86not valid utf-8")
+        self._write_completed("done.json", json.dumps({"job_title": "A"}))
+        completed = jd_manager.get_completed_jds()
+        self.assertEqual(len(completed), 1)
+        self.assertTrue(completed[0].endswith("done.json"))
+
+    def test_empty_when_nothing_completed(self):
+        self.assertEqual(jd_manager.get_completed_jds(), [])
+
+    def test_pending_jds_are_not_included(self):
+        with open(os.path.join(self.tmp_dir, "still_pending.json"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"job_title": "A"}))
+        self._write_completed("done.json", json.dumps({"job_title": "B"}))
+        completed = jd_manager.get_completed_jds()
+        self.assertEqual(len(completed), 1)
+        self.assertTrue(completed[0].endswith("done.json"))
+
+
+class TestJobKeyKnown(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_job_key_known")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
+        self._real_jds_dir = jd_manager.JDS_DIR
+        self._real_completed_dir = jd_manager.COMPLETED_DIR
+        self._real_tracker_csv = jd_manager.TRACKER_CSV
+        jd_manager.JDS_DIR = self.tmp_dir
+        jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
+        jd_manager.TRACKER_CSV = os.path.join(self.tmp_dir, "tracker.csv")
+
+    def tearDown(self):
+        jd_manager.JDS_DIR = self._real_jds_dir
+        jd_manager.COMPLETED_DIR = self._real_completed_dir
+        jd_manager.TRACKER_CSV = self._real_tracker_csv
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_pending(self, name, data):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return path
+
+    def test_true_when_already_completed_in_tracker(self):
+        jd_manager.JDTracker().mark_completed("abc123")
+        self.assertTrue(jd_manager.job_key_known("abc123"))
+
+    def test_true_when_matching_job_key_file_exists_pending(self):
+        self._write_pending("a.json", {"source_job_id": "abc123", "company_name": "Acme"})
+        self.assertTrue(jd_manager.job_key_known("abc123"))
+
+    def test_false_when_nothing_matches(self):
+        self._write_pending("a.json", {"source_job_id": "other", "company_name": "Acme"})
+        self.assertFalse(jd_manager.job_key_known("abc123"))
+
+    def test_true_for_same_source_url_and_company_name_despite_different_job_key(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Abnormal AI",
+            "source_url": "https://boards.greenhouse.io/embed/job_app?token=123",
+        })
+        result = jd_manager.job_key_known(
+            "new-different-id",
+            source_url="https://boards.greenhouse.io/embed/job_app?token=123",
+            company_name="Abnormal AI",
+        )
+        self.assertTrue(result)
+
+    def test_false_for_same_source_url_but_different_company_name(self):
+        # Sibling brands can share application infrastructure (e.g. the
+        # same Workday tenant) without being the same posting.
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Cambium Assessment",
+            "source_url": "https://cambiumlearning.wd1.myworkdayjobs.com/camb/job/REQ-1",
+        })
+        result = jd_manager.job_key_known(
+            "new-different-id",
+            source_url="https://cambiumlearning.wd1.myworkdayjobs.com/camb/job/REQ-1",
+            company_name="Lexia Learning",
+        )
+        self.assertFalse(result)
+
+    def test_source_url_check_skipped_when_not_provided(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Acme",
+            "source_url": "https://example.com/job/1",
+        })
+        result = jd_manager.job_key_known("new-different-id")
+        self.assertFalse(result)
+
+
 if __name__ == "__main__":
     unittest.main()
