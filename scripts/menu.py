@@ -64,7 +64,7 @@ def _handle_evaluate_all() -> bool:
 
 
 def _handle_evaluate_one() -> bool:
-    path = questionary.path("Path to the JD file:", style=cli_art.QUESTIONARY_STYLE).ask()
+    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
     if not path:
         return False
     engine = orchestrator.ResumeEngine()
