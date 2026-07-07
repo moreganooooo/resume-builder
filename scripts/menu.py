@@ -99,7 +99,10 @@ def _handle_tailor_one() -> bool:
 
 
 def _handle_coverletter_one() -> bool:
-    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
+    # Sources from completed JDs (a resume already built), not pending --
+    # a cover letter gets written after its resume the overwhelming
+    # majority of the time.
+    path = picker.pick_one_pending_jd(jd_manager.get_completed_jds())
     if not path:
         return False
     engine = orchestrator.ResumeEngine()

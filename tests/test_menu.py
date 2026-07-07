@@ -161,6 +161,14 @@ class TestHandleCoverletterOne(unittest.TestCase):
         mock_engine_cls.return_value.build_tailored_coverletter.return_value = {}
         self.assertFalse(menu._handle_coverletter_one())
 
+    @patch("menu.picker.pick_one_pending_jd", return_value=None)
+    @patch("menu.jd_manager.get_completed_jds", return_value=["jds/completed/a.json"])
+    @patch("menu.jd_manager.get_pending_jds", return_value=["jds/still_pending.json"])
+    def test_picks_from_completed_jds_not_pending(self, mock_pending, mock_completed, mock_pick):
+        menu._handle_coverletter_one()
+        mock_pick.assert_called_once_with(["jds/completed/a.json"])
+        mock_pending.assert_not_called()
+
 
 class TestHandlePolish(unittest.TestCase):
 
