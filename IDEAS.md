@@ -125,6 +125,10 @@ Sanity-checked against the real code in job_automater/career-ops on
 | 8 | Dominick's onboarding | Hard | Depends on #4 and #7 existing first |
 | 9 | Scheduler + notifications | Hard | **Unblocked 2026-07-04** -- 1.4's `scan` and 1.3's `evaluate` both exist now. Scheduler itself not started. |
 | 10 | ~~Mongo migration~~ + liveness check | Medium | **Liveness check done 2026-07-05, decoupled from Mongo.** Investigation found career-ops's actual liveness checker (`liveness-core.mjs`/`liveness-browser.mjs`) needs zero MongoDB -- pure Playwright + deterministic classification, no LLM calls. Built: ported verbatim (`scripts/liveness-core.mjs`, `scripts/liveness-browser.mjs`) + adapted `scripts/check-liveness.mjs` (new `--json-file` batch mode) + `scripts/liveness.py` (gathers pending JDs' `source_url`, moves confirmed-`expired` ones to `jds/expired/`) + `resume liveness` CLI command. Live-verified against all 208 real pending JDs: 166 active, 7 likely active, 35 uncertain, 0 expired, zero crashes. Spec: `docs/superpowers/specs/2026-07-05-liveness-checker-design.md`. **Mongo migration itself remains undone** -- a separate, much bigger question tied to the long-term three-way merge, not needed for anything built so far. |
+| 11 | Multi-select "Specific JD" pickers (space-bar toggle) | Medium-Hard | Real open design question: how it coexists with `resume run --pick`'s existing evaluate-then-checkbox flow. See the Multi-select pickers section below. |
+| 12 | Help command in the interactive menu | Easy | `resume help` already exists as a shell shortcut; just needs a menu entry. See the Help command section below. |
+| 13 | "Doctor" script (dependency/asset checks + test run) | Medium | job_automater already has prior art for this exact pattern (see the Long-term merge section's job_automater notes). See the Doctor script section below. |
+| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | None of the bullet-bank curation pipeline is wired into the menu today, and the pipeline itself has at least one already-discovered, unresolved inconsistency. See the Bullet-bank reintegration section below. |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
 (porting career-ops's `modes/interview-prep.md`) -- Morgan's call, not
@@ -140,7 +144,68 @@ real capability worth having eventually, just not part of this ordering.
   shortening their degree names) -- low priority, not something Morgan has
   flagged as a problem.
 
+### Help command in the interactive menu
+
+`resume help` already exists -- but only as a shell shortcut
+(`scripts/resume-cli.sh`'s `help)` case, a hardcoded list of `echo` lines
+describing every command). It isn't reachable from inside the interactive
+menu itself, and Click's own auto-generated `--help` flag on
+`scripts/cli.py` is a separate, third copy of similar information. Adding
+a "Help" entry to `menu.py`'s `_CHOICES` that prints an equivalent summary
+closes that gap. Mechanical, no open design question -- the only minor
+wrinkle is that the content would then live in two (arguably three)
+places unless something shares a single source of truth between the
+shell script's static text and whatever the menu option prints.
+
 ## Medium
+
+### Multi-select pickers for "Specific JD" actions
+
+Today, `picker.pick_one_pending_jd()` and `picker.pick_one_evaluated_jd()`
+(used by "Evaluate a Specific JD," "Write cover letter for a Specific
+JD," and "Customize Resume for a Specific JD") are single-select
+(`questionary.select()`) -- pick exactly one JD, act on it, done. The
+ask: let these toggle multiple selections via the space bar (like
+`questionary.checkbox()`, which `pick_and_process()` -- the
+evaluate-then-checkbox flow behind `resume run --pick`/`resume
+coverletter --pick` -- already uses) and act on every checked JD in one go.
+
+**The open design question:** this would functionally overlap with what
+`--pick` already does, just without `--pick`'s fresh full-batch
+evaluation step first. Worth deciding explicitly: does the "Specific JD"
+picker become multi-select and subsume single-select (space to check one
+or many, enter confirms), or does it stay single-select with a separate,
+new multi-select entry point alongside it? The former is probably the
+more natural fit for how these are actually used, but changes an existing
+interaction pattern people already have muscle memory for. Whichever
+direction, the mechanics themselves are well-understood
+(`questionary.checkbox()` is already proven in this codebase) -- the
+three menu handlers (`_handle_evaluate_one`, `_handle_coverletter_one`,
+`_handle_tailor_one`) would need to loop over a list of paths instead of
+handling exactly one, and their "one" naming would need revisiting.
+
+### "Doctor" script -- dependency/asset checks + test run
+
+job_automater already has real prior art for this exact pattern (see the
+Long-term merge section below): `system_checker.py` (Python version,
+MongoDB, pdflatex, pip) plus `config_validator.py` (API keys, contact
+fields, etc.) together form its "doctor" equivalent, run via its `setup`/
+`validate-config` commands. resume-builder's own version would check
+things specific to this pipeline instead: Python 3.10+, `.venv/` exists
+with `requirements.txt` installed, Node + Playwright's Chromium browser
+installed, `GEMINI_API_KEY` (and `JOBRIGHT_COOKIE_STRING` if scan is used)
+present in `.env`, the static DM Sans font files exist at
+`resume-engine/fonts/`, `docs/MorganEscottSignature2025.png` exists (the
+README already documents this one degrading gracefully if missing, but a
+doctor script could flag it proactively instead), and the `KB_ALLOWLIST`
+files `orchestrator.py` references are all actually present on disk.
+Ending with a real test-suite run
+(`python -m unittest discover -s tests`) and a plain-English summary of
+what passed/failed/is missing, with a one-line suggested fix per problem
+found, completes the picture. No genuinely open design question here --
+it's broad (touches the Python env, Node env, filesystem, API keys, and
+tests) but every individual check is a simple, well-understood
+existence/version check.
 
 ### Cover letter generation -- done 2026-07-04
 
@@ -269,6 +334,50 @@ good, already-tested guardrail against tone-matching sliding into
 misrepresentation.
 
 ## Hard
+
+### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu)
+
+The bullet-bank feedback loop (README's "Bullet bank feedback loop"
+section) already queues rewrites automatically during every build into
+`needs-review.csv`, and `scripts/triage_needs_review.py` already routes
+those queued rows into `bullet-bank-keepers.csv` (permanent),
+`rewrite-queue.csv`, or `retired-bullets.csv` -- but it's a separate,
+manual script today, unreachable from the interactive menu, and
+(confirmed while scoping this idea) not the *complete* path back into the
+live pipeline. Step 2 of a real resume build reads **only**
+`bullet-bank-keepers-audited.csv` plus its precomputed embeddings
+(`bullet_vectors_ge2_d768.npy`, built by `embed_bullet_bank.py`) --
+neither of which `triage_needs_review.py` touches (it writes
+`bullet-bank-keepers.csv`, not the `-audited` file, and doesn't call
+`score_keeper_gems.py` or `embed_bullet_bank.py` itself). So a genuinely
+complete "work newly-reviewed bullets back into the live bank" flow needs
+at least `triage_needs_review.py` -> `score_keeper_gems.py` ->
+`embed_bullet_bank.py`, run in that order -- and **that chain isn't fully
+verified yet**: `score_keeper_gems.py`'s own default `--input` points at
+`bullet-bank-keepers-audited.csv` (the stage's *output*, per the naming),
+not `bullet-bank-keepers.csv` (what `triage_needs_review.py` actually
+writes) -- meaning either there's an already-existing manual step between
+the two that hasn't been found yet, or the real data flow here isn't what
+the file names imply. This needs actually tracing through before wiring
+anything, the same way the `cluster_bullet_bank.py` ->
+`bullet-bank-clustered.csv` mismatch was flagged earlier rather than
+assumed (see the wiring/gap research pass above). That open question --
+what the real, correct script order and arguments are -- is exactly why
+this is Hard, not Medium: the menu wiring itself (one new option,
+shelling out to a script or three) would be easy once the actual pipeline
+is confirmed.
+
+**The "Maintenance" submenu idea:** rather than bolting bullet-bank
+triage directly onto the main menu list, Morgan's suggestion is a
+dedicated "Maintenance" entry leading to its own submenu of
+background/administrative tasks (this bullet-bank reintegration flow,
+and eventually the doctor script above, maybe others later) -- each
+showing something like "Last run: 2026-07-07, 3 days ago." That needs a
+small persisted "when did this last run" marker per task (a gitignored
+JSON/text file per task, following this project's existing tracker-file
+conventions, is probably the simplest option) -- not itself hard, but
+worth designing once there's more than one maintenance task to actually
+house in it.
 
 ### Situational/optional work history entries -- done 2026-07-05
 
