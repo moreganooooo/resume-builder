@@ -10,6 +10,7 @@ PDF immediately, same as the main tailoring pipeline.
 
 import json
 import os
+import subprocess
 
 import cli_art
 import normalize_resume
@@ -17,6 +18,8 @@ import validate_coverletter
 import validate_resume
 from gemini_client import GeminiClient
 from orchestrator import BUILDER_MODEL, CoverLetterSchema, ResumeEngine, TemplateSchema
+from render_coverletter import render_coverletter
+from render_html import render_html
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -155,3 +158,37 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
             cli_art.console.print(f"  - {v}")
 
     return candidate
+
+
+def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
+    """Saves `doc` to json_path, re-renders its HTML, and regenerates its
+    PDF via generate-pdf.mjs. Returns {"json": ..., "html": ..., "pdf":
+    ...} -- "pdf" is None if PDF generation failed (JSON/HTML are still
+    saved in that case; the caller decides what to tell the user)."""
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=2, ensure_ascii=False)
+
+    stem = stem_from_json_path(json_path, doc_type)
+    suffix = "_Resume" if doc_type == "resume" else "_CoverLetter"
+    html_path = os.path.join(OUTPUT_HTML_DIR, f"{stem}{suffix}.html")
+    pdf_path = os.path.join(OUTPUT_PDF_DIR, f"{stem}{suffix}.pdf")
+    os.makedirs(os.path.dirname(html_path), exist_ok=True)
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+
+    if doc_type == "resume":
+        render_html(doc, html_path)
+    else:
+        render_coverletter(doc, html_path)
+
+    pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+    result = subprocess.run(
+        ["node", pdf_script, html_path, pdf_path, "--format=letter"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        cli_art.console.print(
+            f"{cli_art.WARNING} PDF generation failed (JSON/HTML were still saved):\n{result.stderr}"
+        )
+        return {"json": json_path, "html": html_path, "pdf": None}
+
+    return {"json": json_path, "html": html_path, "pdf": pdf_path}
