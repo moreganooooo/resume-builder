@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -223,6 +224,51 @@ class TestSaveAndRender(unittest.TestCase):
         expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_CoverLetter.html")
         mock_render.assert_called_once_with({"greeting": "Hi,"}, expected_html)
         self.assertEqual(result["html"], expected_html)
+
+
+class TestPickPolishTarget(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_picker")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._real_json_dir = polish.OUTPUT_JSON_DIR
+        polish.OUTPUT_JSON_DIR = self.tmp_dir
+
+    def tearDown(self):
+        polish.OUTPUT_JSON_DIR = self._real_json_dir
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _touch(self, name, mtime_offset):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w") as f:
+            f.write("{}")
+        now = time.time()
+        os.utime(path, (now + mtime_offset, now + mtime_offset))
+        return path
+
+    def test_empty_dir_returns_none(self):
+        self.assertIsNone(polish.pick_polish_target())
+
+    def test_unrecognized_files_are_excluded(self):
+        self._touch("random.json", 0)
+        self.assertIsNone(polish.pick_polish_target())
+
+    @patch("polish.questionary.select")
+    def test_newest_first_and_labeled(self, mock_select):
+        older = self._touch("A_Resume.json", -10)
+        newer = self._touch("B_CoverLetter.json", 0)
+        mock_select.return_value.ask.return_value = newer
+
+        result = polish.pick_polish_target()
+
+        self.assertEqual(result, newer)
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(choices[0].value, newer)
+        self.assertEqual(choices[0].title, "[Cover Letter] B_CoverLetter.json")
+        self.assertEqual(choices[1].value, older)
+        self.assertEqual(choices[1].title, "[Resume] A_Resume.json")
 
 
 if __name__ == "__main__":

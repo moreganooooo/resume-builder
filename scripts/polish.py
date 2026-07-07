@@ -8,9 +8,12 @@ anything is saved. Accepting a turn re-renders HTML and regenerates the
 PDF immediately, same as the main tailoring pipeline.
 """
 
+import glob
 import json
 import os
 import subprocess
+
+import questionary
 
 import cli_art
 import normalize_resume
@@ -192,3 +195,25 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         return {"json": json_path, "html": html_path, "pdf": None}
 
     return {"json": json_path, "html": html_path, "pdf": pdf_path}
+
+
+def pick_polish_target() -> str | None:
+    """Interactive picker over every recognized output/json file, newest
+    first. Returns None if there's nothing to pick (empty dir, or the
+    user cancels)."""
+    paths = sorted(
+        glob.glob(os.path.join(OUTPUT_JSON_DIR, "*.json")),
+        key=os.path.getmtime, reverse=True,
+    )
+    choices = []
+    for p in paths:
+        doc_type = detect_doc_type(p)
+        if doc_type is None:
+            continue
+        label = "Resume" if doc_type == "resume" else "Cover Letter"
+        choices.append(questionary.Choice(title=f"[{label}] {os.path.basename(p)}", value=p))
+    if not choices:
+        return None
+    return questionary.select(
+        "Which document do you want to polish?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
