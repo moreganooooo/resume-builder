@@ -28,6 +28,34 @@ QUESTIONARY_STYLE = Style([
     ('text', ''),
 ])
 
+# Block-letter title banner, same ansi_shadow-style box-drawing glyphs as
+# job_automater-main's MAIN_BANNER -- stacked on two lines since "RESUME
+# BUILDER" is too long for one line at this scale (each line is 53 columns,
+# safe for any real terminal width).
+MAIN_BANNER = """
+[bold cyan]
+██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗
+██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝
+██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗
+██╔══██╗██╔══╝  ╚════██║██║   ██║██║╚██╔╝██║██╔══╝
+██║  ██║███████╗███████║╚██████╔╝██║ ╚═╝ ██║███████╗
+╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝
+
+██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗
+██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗
+██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝
+██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗
+██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║
+╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+[/bold cyan]
+[dim]          Tailored resumes & cover letters, powered by Gemini[/dim]
+"""
+
+
+def display_main_banner() -> None:
+    console.print(MAIN_BANNER)
+
+
 # Recommendation values match orchestrator.py's FitEvaluationSchema Literal
 # exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".
 _RECOMMENDATION_COLORS = {

@@ -130,7 +130,7 @@ _HANDLERS = {
 
 
 def run_interactive_menu() -> None:
-    cli_art.display_banner("Interactive Menu")
+    cli_art.display_main_banner()
 
     while True:
         cli_art.console.print()
