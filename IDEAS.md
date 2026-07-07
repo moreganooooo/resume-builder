@@ -659,6 +659,42 @@ code, not assumed):**
     referenced by any prompt). Most other writing-samples files are
     binary (PDF/docx/PNG) and would need conversion (same `textutil`
     approach already used for `SparkleConcept.docx`) to be machine-usable.
+
+**2026-07-07 -- Deeper dig + spec (Phase 1 scoped and written).** Follow-up
+investigation confirmed: `coverage-tracker.csv` (802 rows), `detective-
+findings.csv`'s sibling process-tracking file `screenshot-review-log.csv`,
+and the `.csv` twin of `treering-archive-readme` are audit-*process*
+tracking artifacts (file review status, completion tracking), not evidence
+content themselves -- not worth wiring in. `detective-findings.csv` itself
+*is* real evidence content (its own README calls it a companion file) but
+was missing from `KB_ALLOWLIST`, apparently by oversight. Also dug into
+career-ops's `writing-samples/Application Answers/` -- a small (14-row),
+already-curated index with themes and "Quote Worth Pulling" lines, real
+value, nothing else covering it. The raw "Treering Sequences" archive
+(140+ files, heavy duplication, some not even Morgan's own authorship --
+files literally prefixed "ERIKA_") is genuine but needs its own curation
+pass before it's usable, same as the original bullet bank did -- **filed
+here as a future follow-up, not part of Phase 1.**
+
+Phase 1 spec written and scoped around Morgan's hard constraint (a real
+past incident: including `bullet-bank-keepers-audited.csv` in `KB_ALLOWLIST`
+once blew a run past the free tier's 250k-tokens/minute cap) -- nothing
+gets wired in without being measured first:
+- Distill `MorganWritingStyleGuide.txt` directly into `style_rules.yaml`/
+  prompts (zero runtime cost, one-time content migration).
+- New curated `voice-anchors.md` from `Application_Answers_Index.csv`
+  (measured: ~1,011 tokens -- trivially safe everywhere).
+- New `detective-findings-trimmed.csv` (5 of 14 columns kept -- measured:
+  ~57,850 -> ~29,983 tokens, 48.2% smaller) added to `KB_ALLOWLIST` in
+  place of the raw file.
+- `build_audit_static_prefix(include_evidence_guide=False)` parameterized
+  so cover letters can get `evidence-guide.csv` (~17,329 tokens) without
+  that cost multiplying across Step 3's per-bullet audit loop, which
+  reuses the same function today.
+
+Spec: `docs/superpowers/specs/2026-07-07-evidence-bank-phase1-design.md`.
+Not yet built.
+
 - **Pipeline + CLI.** Each stage (`scan`, `evaluate`, `tailor`, `render`,
   `track`, `interview-prep`) is a Python module with a defined in/out
   contract, runnable standalone or chained. The CLI itself gets
