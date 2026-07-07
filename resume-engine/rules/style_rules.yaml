@@ -203,6 +203,8 @@ forbidden_phrases:
   - thrives in fast-paced environments
   - world-class
   - cutting-edge
+  - wear many hats
+  - to whom it may concern
 
 # "leverage"/"leverage technology"/"utilized" were removed from the hard-gate
 # forbidden_phrases list above -- unlike the cliches above them, these are

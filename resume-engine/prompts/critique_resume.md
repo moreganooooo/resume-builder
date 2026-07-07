@@ -157,6 +157,31 @@ TOP 3 RECOMMENDATIONS
 
 ---
 
+## Voice Calibration Reference
+
+From Morgan's own established writing-style rubric -- use these as
+calibration examples when judging whether a section reads as
+distinctive/flat, and how much personality is appropriate per section:
+
+**Contrast examples (same underlying idea, different execution):**
+- Generic/Professional: "I'm writing to express my interest in the role."
+  (too stiff, no personality)
+- Try-Hard/Creative: "I'm a unicorn who eats KPIs for breakfast."
+  (performative, lacks depth)
+- Morgan's actual voice: "It felt like more than an opportunity -- it felt
+  like alignment." (human, reflective, quietly compelling)
+
+**Sparkle calibration by section (dial personality up or down, don't
+apply one flat level everywhere):**
+- Resume Summary: keep sparkle low, structure high -- one standout phrase
+  is the ceiling, not a target to exceed.
+- Cover letter: warmer and more room for story-driven phrasing than a
+  resume summary.
+- Corporate/formal-toned JDs: subtle sparkle only -- one voice-y line is
+  enough; match the JD's own register first.
+
+---
+
 ## Constraints
 
 - Do not invent metrics or accomplishments not present in the resume or `profile.yml`
