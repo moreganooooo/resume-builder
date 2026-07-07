@@ -33,12 +33,44 @@ class TestChoicesAndHandlers(unittest.TestCase):
 class TestHandleScan(unittest.TestCase):
 
     @patch("menu.scan_module.run_scan", return_value=3)
-    def test_returns_true_when_postings_written(self, mock_run):
+    @patch("menu.questionary.select")
+    def test_returns_true_when_postings_written(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "both"
         self.assertTrue(menu._handle_scan())
 
     @patch("menu.scan_module.run_scan", return_value=0)
-    def test_returns_false_when_nothing_written(self, mock_run):
+    @patch("menu.questionary.select")
+    def test_returns_false_when_nothing_written(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "both"
         self.assertFalse(menu._handle_scan())
+
+    @patch("menu.scan_module.run_scan")
+    @patch("menu.questionary.select")
+    def test_returns_false_without_scanning_when_cancelled(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = None
+        self.assertFalse(menu._handle_scan())
+        mock_run.assert_not_called()
+
+    @patch("menu.scan_module.run_scan", return_value=1)
+    @patch("menu.questionary.select")
+    def test_both_choice_passes_none_to_run_scan(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "both"
+        menu._handle_scan()
+        mock_run.assert_called_once_with(None)
+
+    @patch("menu.scan_module.run_scan", return_value=1)
+    @patch("menu.questionary.select")
+    def test_jobright_choice_passes_single_source_list(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "jobright"
+        menu._handle_scan()
+        mock_run.assert_called_once_with(["jobright"])
+
+    @patch("menu.scan_module.run_scan", return_value=1)
+    @patch("menu.questionary.select")
+    def test_linkedin_choice_passes_single_source_list(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "linkedin"
+        menu._handle_scan()
+        mock_run.assert_called_once_with(["linkedin"])
 
 
 class TestHandleLiveness(unittest.TestCase):
