@@ -103,6 +103,16 @@ class TestHandleEvaluateOne(unittest.TestCase):
         }
         self.assertTrue(menu._handle_evaluate_one())
 
+    @patch("menu.jd_manager.save_evaluation")
+    @patch("menu.orchestrator.ResumeEngine")
+    @patch("menu.questionary.path")
+    def test_persists_evaluation_on_success(self, mock_path, mock_engine_cls, mock_save):
+        mock_path.return_value.ask.return_value = "jds/a.json"
+        result = {"archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue"}
+        mock_engine_cls.return_value.evaluate_fit.return_value = result
+        menu._handle_evaluate_one()
+        mock_save.assert_called_once_with("jds/a.json", result)
+
 
 class TestHandleTailorAll(unittest.TestCase):
 

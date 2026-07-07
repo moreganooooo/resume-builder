@@ -72,6 +72,7 @@ def _handle_evaluate_one() -> bool:
     if not result:
         cli_art.console.print(f"{cli_art.ERROR} Evaluation failed -- no parseable result.")
         return False
+    jd_manager.save_evaluation(path, result)
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")

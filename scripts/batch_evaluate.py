@@ -48,6 +48,8 @@ def evaluate_all_pending(pending_paths: list = None) -> list:
             })
             continue
 
+        jd_manager.save_evaluation(path, evaluation)
+
         results.append({
             "job_key": jd_manager.compute_job_key(path),
             "source_file": path,
