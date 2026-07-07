@@ -191,4 +191,18 @@ class TestPickOneEvaluatedJd(unittest.TestCase):
         mock_select.return_value.ask.return_value = "jds/a.json"
         picker.pick_one_evaluated_jd(["jds/a.json"])
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(choices[0].title, "4.80/5 | Strong pursue | Acme | Content Strategist")
+        combined_text = "".join(part[1] for part in choices[0].title)
+        self.assertEqual(combined_text, "4.80/5 | Strong pursue | Acme | Content Strategist")
+
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Content Strategist", "Acme"))
+    @patch("picker.jd_manager.read_evaluation", return_value={
+        "composite_score": 4.8, "recommendation": "Strong pursue",
+    })
+    @patch("picker.questionary.select")
+    def test_label_colors_the_score_segment_by_recommendation_tier(self, mock_select, mock_read, mock_meta):
+        mock_select.return_value.ask.return_value = "jds/a.json"
+        picker.pick_one_evaluated_jd(["jds/a.json"])
+        choices = mock_select.call_args.kwargs["choices"]
+        score_style, score_text = choices[0].title[0]
+        self.assertEqual(score_style, "fg:#4caf50 bold")
+        self.assertEqual(score_text, "4.80/5 | Strong pursue")
