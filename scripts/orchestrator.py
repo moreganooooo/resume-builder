@@ -552,6 +552,62 @@ def _sanitize_none_for_prompt(value):
     return value
 
 
+def _short_widow_bullets(resume_data: dict, companies: set, style_rules: dict) -> list[str]:
+    """
+    Returns bullets (verbatim achievement text) belonging to `companies`
+    that wrap to a second line but leave a short widow there -- the same
+    "short widow" concept validate_resume.py's skills-line check already
+    enforces, applied here to bullets instead. The trim call never sees
+    the rendered PDF, so it can't visually judge which bullets wrap with a
+    short widow -- this computes it deterministically from
+    bullet_structure's one_liner_max_chars/two_liner_max_chars/
+    widow_min_words (style_rules.yaml), same character-count-approximation
+    approach the skills-line widow check already uses, rather than asking
+    the model to guess.
+    """
+    limits = style_rules.get("bullet_structure", {})
+    one_liner_max = limits.get("one_liner_max_chars", 120)
+    two_liner_max = limits.get("two_liner_max_chars", 220)
+    widow_min_words = limits.get("widow_min_words", 5)
+
+    candidates = []
+    for job in resume_data.get("EXPERIENCE", []):
+        if job.get("company") not in companies:
+            continue
+        for bullet in job.get("achievements", []):
+            length = len(bullet)
+            if one_liner_max < length <= two_liner_max:
+                overflow_words = len(bullet[one_liner_max:].split())
+                if overflow_words < widow_min_words:
+                    candidates.append(bullet)
+    return candidates
+
+
+def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
+    """
+    Builds the trim-step instruction for tightening Treering/Inside Sales
+    Team bullets that wrap to a short widow second line -- the specific
+    bullets are named explicitly so the model tightens only those, not a
+    guess at which ones might wrap.
+    """
+    widow_bullets = _short_widow_bullets(
+        resume_data, {"Treering Yearbooks", "Inside Sales Team"}, style_rules,
+    )
+    if not widow_bullets:
+        return (
+            "No Treering/Inside Sales Team bullets currently wrap to a short "
+            "widow second line -- leave every bullet exactly as-is and change "
+            "nothing for this step."
+        )
+    return (
+        "Tighten ONLY these specific bullets, which wrap to a short widow "
+        "second line on the rendered PDF: trim adjectives, front-load "
+        "keywords, collapse redundant clauses so each either fits on one "
+        "line or wraps to a fuller second line. Leave every other bullet "
+        "exactly as-is.\n" + "\n".join(f"- {b}" for b in widow_bullets)
+    )
+
+
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
@@ -2157,13 +2213,18 @@ class ResumeEngine:
         render_html(resume_data, html_out)
 
         trim_instructions = [
-            "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings). "
-            "It only belongs on the resume if it fits without pushing the page count past 2 -- "
-            "when space is tight, it is the first thing to go.",
-            "Trim the Summary to its 5-line limit.",
-            "Tighten bullets: trim adjectives, front-load keywords, collapse redundant clauses.",
-            "Remove the least-relevant bullets, starting with Treering, while protecting the "
-            "Outreach.io implementation and CRM-hygiene bullets.",
+            lambda rd: (
+                "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings). "
+                "It only belongs on the resume if it fits without pushing the page count past 2 -- "
+                "when space is tight, it is the first thing to go."
+            ),
+            lambda rd: "Trim the Summary to its 5-line limit.",
+            lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
+            lambda rd: (
+                "Remove the least-relevant bullets, starting with Inside Sales Team (can go "
+                "down to 4 bullets total), then Treering Yearbooks (can go down to 6 bullets "
+                "total), while protecting the Outreach.io implementation and CRM-hygiene bullets."
+            ),
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
@@ -2206,7 +2267,7 @@ class ResumeEngine:
             print(f"  PDF is {page_count} pages, applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (
                 f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt]}"
+                f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
             )
             trim_text, trim_usage = GeminiClient.generate(
                 model=BUILDER_MODEL,
