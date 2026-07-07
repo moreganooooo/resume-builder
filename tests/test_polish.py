@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -163,6 +163,66 @@ class TestGenerateCandidate(unittest.TestCase):
         )
         self.assertEqual(candidate["greeting"], "Dear Hiring Team,")
         self.assertNotIn("NAME", candidate)
+
+
+class TestSaveAndRender(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_save")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.resume_json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_Resume.json")
+        self.coverletter_json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_CoverLetter.json")
+
+        self._real_html_dir = polish.OUTPUT_HTML_DIR
+        self._real_pdf_dir = polish.OUTPUT_PDF_DIR
+        polish.OUTPUT_HTML_DIR = os.path.join(self.tmp_dir, "html")
+        polish.OUTPUT_PDF_DIR = os.path.join(self.tmp_dir, "pdf")
+
+    def tearDown(self):
+        polish.OUTPUT_HTML_DIR = self._real_html_dir
+        polish.OUTPUT_PDF_DIR = self._real_pdf_dir
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(self.tmp_dir)
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_html")
+    def test_resume_paths_and_success(self, mock_render, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+
+        self.assertTrue(os.path.exists(self.resume_json_path))
+        expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_Resume.html")
+        expected_pdf = os.path.join(polish.OUTPUT_PDF_DIR, "MorganEscott_Title_Company_Resume.pdf")
+        self.assertEqual(result, {"json": self.resume_json_path, "html": expected_html, "pdf": expected_pdf})
+        mock_render.assert_called_once_with({"TAGLINE": "X"}, expected_html)
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_html")
+    def test_pdf_failure_returns_none_pdf_but_keeps_json_and_html(self, mock_render, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+
+        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+
+        self.assertTrue(os.path.exists(self.resume_json_path))
+        self.assertIsNone(result["pdf"])
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_coverletter")
+    def test_coverletter_uses_coverletter_renderer(self, mock_render, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = polish.save_and_render(
+            {"greeting": "Hi,"}, "coverletter", self.coverletter_json_path,
+        )
+
+        expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_CoverLetter.html")
+        mock_render.assert_called_once_with({"greeting": "Hi,"}, expected_html)
+        self.assertEqual(result["html"], expected_html)
 
 
 if __name__ == "__main__":
