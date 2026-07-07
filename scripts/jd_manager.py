@@ -215,10 +215,32 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool, pat
         f.write(row)
 
 
-def job_key_known(job_key: str, tracker: "JDTracker" = None) -> bool:
-    """True if job_key is already completed in the tracker, or a JD file for
-    it already exists in jds/ (pending) or jds/completed/. Used by scan.py
-    to avoid writing duplicate JD files across repeated scan runs."""
+def _read_source_url_and_company(path: str) -> tuple:
+    """Returns (source_url, company_name) for a JD file, or (None, None)
+    if it's not a JSON object or reading fails."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.loads(f.read())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None, None
+    if isinstance(data, dict):
+        return data.get("source_url"), data.get("company_name")
+    return None, None
+
+
+def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = None,
+                   company_name: str = None) -> bool:
+    """True if job_key is already completed in the tracker, or a JD file
+    for it already exists in jds/ (pending) or jds/completed/ -- matched
+    either by job_key, or (when both source_url and company_name are
+    given) by an existing file sharing the same source_url AND
+    company_name. JobRight sometimes assigns a new source_job_id to a
+    posting it's already surfaced once, under an identical apply URL and
+    company name -- the company_name check guards against merging two
+    genuinely different companies that happen to share application
+    infrastructure (e.g. sibling brands on the same Workday tenant).
+    Used by scan.py to avoid writing duplicate JD files across repeated
+    scan runs."""
     tracker = tracker or JDTracker(TRACKER_CSV)
     if tracker.is_completed(job_key):
         return True
@@ -238,6 +260,10 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None) -> bool:
                     return True
             except OSError:
                 continue
+            if source_url and company_name:
+                existing_url, existing_company = _read_source_url_and_company(path)
+                if existing_url == source_url and existing_company == company_name:
+                    return True
     return False
 
 
@@ -294,3 +320,22 @@ def get_pending_jds() -> list:
         all_paths.extend(split_batch_jds(path))
 
     return [p for p in all_paths if not tracker.is_completed(compute_job_key(p))]
+
+
+def get_completed_jds() -> list:
+    """
+    Lists JD files sitting in COMPLETED_DIR -- every one of these has a
+    successfully-built resume (run_pipeline only moves a JD there on
+    success; failures stay in JDS_DIR for retry). Used by the menu's
+    "Write cover letter for a Specific JD" entry, since a cover letter is
+    written after its resume the overwhelming majority of the time.
+    """
+    os.makedirs(COMPLETED_DIR, exist_ok=True)
+    tracker_filename = os.path.basename(TRACKER_CSV)
+    return sorted(
+        os.path.join(COMPLETED_DIR, name)
+        for name in os.listdir(COMPLETED_DIR)
+        if os.path.isfile(os.path.join(COMPLETED_DIR, name))
+        and name != tracker_filename
+        and not name.startswith(".")
+    )

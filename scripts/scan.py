@@ -62,7 +62,10 @@ def run_scan(sources: list = None) -> int:
         for job in jobs:
             job_id = job.get("source_job_id")
             job_key = str(job_id) if job_id else None
-            if job_key and jd_manager.job_key_known(job_key, tracker=tracker):
+            if job_key and jd_manager.job_key_known(
+                job_key, tracker=tracker,
+                source_url=job.get("source_url"), company_name=job.get("company_name"),
+            ):
                 continue
 
             dest = _write_jd_file(job)
