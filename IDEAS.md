@@ -27,7 +27,21 @@ first, biggest lift last" within that phase. **Update 2026-07-04: all of
 still undone) are also done.** **Update 2026-07-07: item 5 (evidence bank
 extension) Phase 1 is done** -- see its row below; the full multi-type
 generalization remains unscheduled. Items 4, 7, 8 are still unscheduled/
-not started; item 9 (scheduler) is unblocked but not started.
+not started; item 9 (scheduler) is unblocked but not started. **Update
+2026-07-07 (later the same day): two off-backlog quality-of-life items
+also shipped, surfaced by live usage rather than originally planned --
+console output polish (theme-safe blue/green colors replacing
+theme-dependent `cyan`, bordered panels for the title banner and "What's
+next?" prompt, a collapsed trim-loop PDF block, a one-line
+keyword-extraction summary, Step-header dividers; spec:
+`docs/superpowers/specs/2026-07-07-console-polish-design.md`) and an
+evaluated-only, scored, sorted resume picker ("Customize Resume for a
+Specific JD" now only lists JDs someone has actually run "Evaluate"
+against first, persisted into each JD's own JSON so re-displaying a score
+never costs another Gemini call; spec:
+`docs/superpowers/specs/2026-07-07-evaluated-resume-picker-design.md`).
+See the README's "Interactive menu" and "Evaluating fit" sections for the
+user-facing behavior.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
