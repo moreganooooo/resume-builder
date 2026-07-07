@@ -26,8 +26,8 @@ SOURCE_FETCHERS = {
 def _write_jd_file(job: dict) -> str:
     os.makedirs(jd_manager.JDS_DIR, exist_ok=True)
     today = datetime.date.today().isoformat()
-    company = jd_manager._sanitize_for_filename(job.get("company_name", ""))
-    title = jd_manager._sanitize_for_filename(job.get("job_title", ""))
+    company = jd_manager.sanitize_for_filename(job.get("company_name", ""))
+    title = jd_manager.sanitize_for_filename(job.get("job_title", ""))
     filename = f"{today}_{company}_{title}.json"
     dest = os.path.join(jd_manager.JDS_DIR, filename)
 
