@@ -16,6 +16,7 @@ import batch_evaluate
 import picker
 import scan as scan_module
 import liveness as liveness_module
+import polish as polish_module
 
 _CHOICES = [
     questionary.Choice(title="Scan for new postings", value="scan"),
@@ -27,6 +28,7 @@ _CHOICES = [
     questionary.Choice(title="Tailor a specific JD", value="tailor_one"),
     questionary.Choice(title="Generate cover letter -- pick from list", value="coverletter_pick"),
     questionary.Choice(title="Generate cover letter for a specific JD", value="coverletter_one"),
+    questionary.Choice(title="Polish a resume or cover letter", value="polish"),
     questionary.Choice(title="Exit", value="exit"),
 ]
 
@@ -109,6 +111,10 @@ def _handle_coverletter_one():
     engine.build_tailored_coverletter(path)
 
 
+def _handle_polish():
+    polish_module.run(None)
+
+
 _HANDLERS = {
     "scan": _handle_scan,
     "liveness": _handle_liveness,
@@ -119,6 +125,7 @@ _HANDLERS = {
     "tailor_one": _handle_tailor_one,
     "coverletter_pick": _handle_coverletter_pick,
     "coverletter_one": _handle_coverletter_one,
+    "polish": _handle_polish,
 }
 
 

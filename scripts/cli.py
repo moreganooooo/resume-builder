@@ -19,6 +19,7 @@ import picker
 import menu
 import scan as scan_module
 import liveness as liveness_module
+import polish as polish_module
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -158,6 +159,13 @@ def liveness_cmd():
     """Check every pending JD's source_url, moving expired ones to jds/expired/."""
     cli_art.display_banner("Checking posting liveness")
     liveness_module.run_liveness_check()
+
+
+@cli.command()
+@click.argument("file", required=False, type=click.Path(exists=True))
+def polish(file):
+    """Interactively polish an already-generated resume or cover letter."""
+    polish_module.run(file)
 
 
 if __name__ == "__main__":
