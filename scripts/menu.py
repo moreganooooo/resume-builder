@@ -5,6 +5,12 @@ interactive() menu (job_automater/cli.py:954-1011): a while-loop
 presenting a questionary.select() of every available action, dispatching
 to the same underlying modules the Click commands already call, looping
 back after each action until Exit (or a cancelled top-level prompt).
+
+Each _handle_* function returns a bool: whether it did something worth
+offering a "what's next" chain prompt for (see _CHAIN/_run_with_chain in
+the next section of this file) -- a no-op (nothing pending, declined
+confirmation, zero results) returns False and goes straight back to the
+main menu instead.
 """
 
 import questionary
@@ -19,100 +25,90 @@ import liveness as liveness_module
 import polish as polish_module
 
 _CHOICES = [
-    questionary.Choice(title="Scan for new postings", value="scan"),
-    questionary.Choice(title="Check posting liveness", value="liveness"),
-    questionary.Choice(title="Evaluate all pending JDs", value="evaluate_all"),
-    questionary.Choice(title="Evaluate a specific JD", value="evaluate_one"),
-    questionary.Choice(title="Tailor -- pick from list", value="tailor_pick"),
-    questionary.Choice(title="Tailor ALL pending JDs (batch)", value="tailor_all"),
-    questionary.Choice(title="Tailor a specific JD", value="tailor_one"),
-    questionary.Choice(title="Generate cover letter -- pick from list", value="coverletter_pick"),
-    questionary.Choice(title="Generate cover letter for a specific JD", value="coverletter_one"),
+    questionary.Choice(title="Scan for New Postings", value="scan"),
+    questionary.Choice(title="Check Posting Liveness", value="liveness"),
+    questionary.Choice(title="Evaluate ALL Pending JDs", value="evaluate_all"),
+    questionary.Choice(title="Evaluate a Specific JD", value="evaluate_one"),
+    questionary.Choice(title="Customize Resume for ALL Pending JDs (batch)", value="tailor_all"),
+    questionary.Choice(title="Customize Resume for a Specific JD", value="tailor_one"),
+    questionary.Choice(title="Write cover letter for a Specific JD", value="coverletter_one"),
     questionary.Choice(title="Polish a resume or cover letter", value="polish"),
     questionary.Choice(title="Exit", value="exit"),
 ]
 
 
-def _handle_scan():
-    scan_module.run_scan(None)
+def _handle_scan() -> bool:
+    written = scan_module.run_scan(None)
+    return written > 0
 
 
-def _handle_liveness():
-    liveness_module.run_liveness_check()
+def _handle_liveness() -> bool:
+    summary = liveness_module.run_liveness_check()
+    if summary.get("error"):
+        return False
+    checked = summary["active"] + summary["likely_active"] + summary["expired"] + summary["uncertain"]
+    return checked > 0
 
 
-def _handle_evaluate_all():
+def _handle_evaluate_all() -> bool:
     pending = jd_manager.get_pending_jds()
     if not pending:
         cli_art.console.print("Nothing to evaluate -- no pending JDs.")
-        return
+        return False
     if not picker.should_proceed(len(pending), skip_confirm=False):
         cli_art.console.print("Aborted.")
-        return
+        return False
     results = batch_evaluate.evaluate_all_pending(pending)
     cli_art.render_fit_table(results)
+    return bool(results)
 
 
-def _handle_evaluate_one():
+def _handle_evaluate_one() -> bool:
     path = questionary.path("Path to the JD file:", style=cli_art.QUESTIONARY_STYLE).ask()
     if not path:
-        return
+        return False
     engine = orchestrator.ResumeEngine()
     result = engine.evaluate_fit(path)
     if not result:
         cli_art.console.print(f"{cli_art.ERROR} Evaluation failed -- no parseable result.")
-        return
+        return False
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")
+    return True
 
 
-def _handle_tailor_pick():
-    def _process_one(path):
-        completed, _failed = orchestrator.run_pipeline(jd_path=path)
-        return completed > 0
-
-    picker.pick_and_process(jd_manager.get_pending_jds(), _process_one, "tailor")
-
-
-def _handle_tailor_all():
+def _handle_tailor_all() -> bool:
     pending = jd_manager.get_pending_jds()
     if not pending:
         cli_art.console.print("Nothing to tailor -- no pending JDs.")
-        return
+        return False
     if not picker.should_proceed(len(pending), skip_confirm=False):
         cli_art.console.print("Aborted.")
-        return
-    orchestrator.run_pipeline()
+        return False
+    completed, _failed = orchestrator.run_pipeline()
+    return completed > 0
 
 
-def _handle_tailor_one():
-    path = questionary.path("Path to the JD file:", style=cli_art.QUESTIONARY_STYLE).ask()
+def _handle_tailor_one() -> bool:
+    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
     if not path:
-        return
-    orchestrator.run_pipeline(jd_path=path)
+        return False
+    completed, _failed = orchestrator.run_pipeline(jd_path=path)
+    return completed > 0
 
 
-def _handle_coverletter_pick():
-    engine = orchestrator.ResumeEngine()
-
-    def _process_one(path):
-        cli_art.display_banner(f"Cover letter: {path}")
-        return bool(engine.build_tailored_coverletter(path))
-
-    picker.pick_and_process(jd_manager.get_pending_jds(), _process_one, "generate a cover letter for")
-
-
-def _handle_coverletter_one():
-    path = questionary.path("Path to the JD file:", style=cli_art.QUESTIONARY_STYLE).ask()
+def _handle_coverletter_one() -> bool:
+    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
     if not path:
-        return
+        return False
     engine = orchestrator.ResumeEngine()
-    engine.build_tailored_coverletter(path)
+    return bool(engine.build_tailored_coverletter(path))
 
 
-def _handle_polish():
+def _handle_polish() -> bool:
     polish_module.run(None)
+    return False
 
 
 _HANDLERS = {
@@ -120,10 +116,8 @@ _HANDLERS = {
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
     "evaluate_one": _handle_evaluate_one,
-    "tailor_pick": _handle_tailor_pick,
     "tailor_all": _handle_tailor_all,
     "tailor_one": _handle_tailor_one,
-    "coverletter_pick": _handle_coverletter_pick,
     "coverletter_one": _handle_coverletter_one,
     "polish": _handle_polish,
 }
