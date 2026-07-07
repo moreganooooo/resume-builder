@@ -123,6 +123,34 @@ _HANDLERS = {
 }
 
 
+_CHAIN = {
+    "scan": [("Check Liveness", "liveness")],
+    "liveness": [("Evaluate All JDs", "evaluate_all")],
+    "evaluate_all": [("Customize Resume", "tailor_all")],
+    "evaluate_one": [("Customize Resume", "tailor_all")],
+    "tailor_all": [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
+    "tailor_one": [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
+    "coverletter_one": [("Polish with Gemini", "polish")],
+}
+
+
+def _run_with_chain(value: str) -> None:
+    did_something = _HANDLERS[value]()
+    next_options = _CHAIN.get(value)
+    if not did_something or not next_options:
+        return
+
+    choices = [questionary.Choice(title=label, value=v) for label, v in next_options]
+    choices.append(questionary.Choice(title="Back to Menu", value="__back__"))
+    choice = questionary.select(
+        "What's next?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if not choice or choice == "__back__":
+        return
+    _run_with_chain(choice)
+
+
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
 
@@ -136,4 +164,4 @@ def run_interactive_menu() -> None:
             cli_art.console.print("\n[cyan]Goodbye![/cyan]\n")
             break
 
-        _HANDLERS[choice]()
+        _run_with_chain(choice)
