@@ -76,3 +76,42 @@ class TestPickAndProcess(unittest.TestCase):
              patch("picker.questionary.checkbox", return_value=mock_question):
             picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor", skip_confirm=True)
         mock_confirm.assert_not_called()
+
+
+class TestPickOnePendingJd(unittest.TestCase):
+
+    def test_empty_list_returns_none_without_prompting(self):
+        with patch("picker.questionary.select") as mock_select:
+            result = picker.pick_one_pending_jd([])
+        self.assertIsNone(result)
+        mock_select.assert_not_called()
+
+    @patch("picker.jd_manager.extract_job_meta")
+    @patch("picker.questionary.select")
+    def test_label_uses_company_and_title_when_present(self, mock_select, mock_meta):
+        mock_meta.return_value = ("Campaign Manager", "4MINDS")
+        mock_select.return_value.ask.return_value = "jds/a.json"
+
+        result = picker.pick_one_pending_jd(["jds/a.json"])
+
+        self.assertEqual(result, "jds/a.json")
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(choices[0].title, "4MINDS - Campaign Manager")
+        self.assertEqual(choices[0].value, "jds/a.json")
+
+    @patch("picker.jd_manager.extract_job_meta", return_value=("", ""))
+    @patch("picker.questionary.select")
+    def test_label_falls_back_to_filename_when_meta_is_empty(self, mock_select, mock_meta):
+        mock_select.return_value.ask.return_value = "jds/some_file.json"
+
+        picker.pick_one_pending_jd(["jds/some_file.json"])
+
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(choices[0].title, "some_file.json")
+
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Title", "Company"))
+    @patch("picker.questionary.select")
+    def test_returns_the_users_selection(self, mock_select, mock_meta):
+        mock_select.return_value.ask.return_value = "jds/b.json"
+        result = picker.pick_one_pending_jd(["jds/a.json", "jds/b.json"])
+        self.assertEqual(result, "jds/b.json")
