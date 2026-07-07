@@ -1805,7 +1805,8 @@ class ResumeEngine:
             output_filename = f"{_build_output_stem(jd_path)}_Resume.json"
 
         # --- Step 1: Extract JD keywords ---
-        print("\nStep 1: Extracting JD keywords...")
+        print(f"\n{'─'*60}")
+        print("Step 1: Extracting JD keywords...")
         jd_keywords = checkpoint.get("jd_keywords")
         if jd_keywords is not None:
             print("  Resuming: using JD keywords from checkpoint.")
@@ -1826,7 +1827,8 @@ class ResumeEngine:
         print(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
 
         # --- Step 2: Mine bullet bank ---
-        print("\nStep 2: Mining bullet bank...")
+        print(f"\n{'─'*60}")
+        print("Step 2: Mining bullet bank...")
         bullet_tuples = checkpoint.get("bullet_tuples")
         if bullet_tuples is not None:
             print(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
@@ -1840,7 +1842,8 @@ class ResumeEngine:
         print(f"  {len(bullet_tuples)} bullet tuples retrieved.")
 
         # --- Step 3: Audit and refine bullets ---
-        print("\nStep 3: Auditing bullets...")
+        print(f"\n{'─'*60}")
+        print("Step 3: Auditing bullets...")
         static_prefix = self.build_audit_static_prefix()
 
         def _save_bullets_checkpoint(partial_bullets):
@@ -1868,7 +1871,8 @@ class ResumeEngine:
         bullet_companies = [company for (_, company, _) in bullet_tuples[:len(refined_bullets)]]
 
         # --- Step 4: Build resume ---
-        print("\nStep 4: Building resume...")
+        print(f"\n{'─'*60}")
+        print("Step 4: Building resume...")
         # BUG: this was loading "build_resume.md", which does not exist in
         # resume-engine/prompts/ -- load_prompt() was silently falling back
         # to the placeholder string "Process the text." on every run, so the
@@ -2042,7 +2046,8 @@ class ResumeEngine:
             jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 5: Post-build holistic critique ---
-        print("\nStep 5: Running holistic resume critique...")
+        print(f"\n{'─'*60}")
+        print("Step 5: Running holistic resume critique...")
         critique_data = checkpoint.get("critique_data")
         if critique_data is not None:
             print("  Resuming: using holistic critique from checkpoint.")
@@ -2124,9 +2129,11 @@ class ResumeEngine:
             }
             start_index = state["next_index"]
             if start_index >= len(recs):
-                print("\nStep 5.5: Resuming: recommendation pass already complete from checkpoint.")
+                print(f"\n{'─'*60}")
+                print("Step 5.5: Resuming: recommendation pass already complete from checkpoint.")
             else:
-                print(f"\nStep 5.5: Applying actionable recommendations one at a time "
+                print(f"\n{'─'*60}")
+                print(f"Step 5.5: Applying actionable recommendations one at a time "
                       f"({start_index}/{len(recs)} already done)...")
             resume_data = state["resume_data"]
             applied, skipped = state["applied"], state["skipped"]
@@ -2221,7 +2228,8 @@ class ResumeEngine:
             print(f"  WARNING: Could not save resume JSON: {e}")
 
         # --- Step 7: Render HTML + Generate PDF ---
-        print("\nStep 7: Rendering HTML and generating PDF...")
+        print(f"\n{'─'*60}")
+        print("Step 7: Rendering HTML and generating PDF...")
         stem       = _build_output_stem(jd_path)
         html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{stem}_Resume.html")
         pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{stem}_Resume.pdf")
