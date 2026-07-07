@@ -95,3 +95,43 @@ def pick_one_pending_jd(pending_paths: list) -> str | None:
     return questionary.select(
         "Which JD?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
+
+
+def pick_one_evaluated_jd(pending_paths: list) -> str | None:
+    """Single-choice picker restricted to pending JDs carrying a persisted
+    _evaluation (jd_manager.save_evaluation(), written by a prior
+    "Evaluate" run) -- sorted best composite_score first, each choice
+    labeled with its score/recommendation. A JD with no _evaluation simply
+    isn't eligible; it needs to be evaluated first."""
+    evaluated = []
+    for path in pending_paths:
+        evaluation = jd_manager.read_evaluation(path)
+        if not evaluation:
+            continue
+        title, company = jd_manager.extract_job_meta(path)
+        evaluated.append((evaluation, path, title, company))
+
+    if not evaluated:
+        cli_art.console.print(
+            "Nothing to pick from -- no evaluated JDs yet.\n"
+            "Hint: Don't see the role you're expecting? Run an evaluation "
+            "on it first (Evaluate ALL Pending JDs or Evaluate a Specific "
+            "JD) -- then it'll appear in this list."
+        )
+        return None
+
+    evaluated.sort(key=lambda item: -(item[0].get("composite_score") or 0))
+
+    choices = [
+        questionary.Choice(
+            title=(
+                f"{evaluation.get('composite_score')}/5 | {evaluation.get('recommendation')} | "
+                f"{company or '?'} | {title or os.path.basename(path)}"
+            ),
+            value=path,
+        )
+        for evaluation, path, title, company in evaluated
+    ]
+    return questionary.select(
+        "Which JD?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()

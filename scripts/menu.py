@@ -92,7 +92,7 @@ def _handle_tailor_all() -> bool:
 
 
 def _handle_tailor_one() -> bool:
-    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
+    path = picker.pick_one_evaluated_jd(jd_manager.get_pending_jds())
     if not path:
         return False
     completed, _failed = orchestrator.run_pipeline(jd_path=path)

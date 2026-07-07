@@ -115,3 +115,67 @@ class TestPickOnePendingJd(unittest.TestCase):
         mock_select.return_value.ask.return_value = "jds/b.json"
         result = picker.pick_one_pending_jd(["jds/a.json", "jds/b.json"])
         self.assertEqual(result, "jds/b.json")
+
+
+class TestPickOneEvaluatedJd(unittest.TestCase):
+
+    def test_empty_list_returns_none_without_prompting(self):
+        with patch("picker.questionary.select") as mock_select:
+            result = picker.pick_one_evaluated_jd([])
+        self.assertIsNone(result)
+        mock_select.assert_not_called()
+
+    @patch("picker.jd_manager.read_evaluation", return_value=None)
+    def test_no_evaluated_jds_prints_hint_and_returns_none(self, mock_read):
+        with patch("picker.questionary.select") as mock_select, \
+             patch("picker.cli_art.console.print") as mock_print:
+            result = picker.pick_one_evaluated_jd(["jds/a.json"])
+        self.assertIsNone(result)
+        mock_select.assert_not_called()
+        printed = mock_print.call_args[0][0]
+        self.assertIn("Hint", printed)
+
+    @patch("picker.jd_manager.extract_job_meta")
+    @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.questionary.select")
+    def test_excludes_jds_with_no_evaluation(self, mock_select, mock_read, mock_meta):
+        mock_read.side_effect = lambda path: {
+            "jds/a.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/b.json": None,
+        }[path]
+        mock_meta.return_value = ("Role", "Acme")
+        mock_select.return_value.ask.return_value = "jds/a.json"
+
+        picker.pick_one_evaluated_jd(["jds/a.json", "jds/b.json"])
+
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(len(choices), 1)
+        self.assertEqual(choices[0].value, "jds/a.json")
+
+    @patch("picker.jd_manager.extract_job_meta")
+    @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.questionary.select")
+    def test_sorts_best_score_first_regardless_of_input_order(self, mock_select, mock_read, mock_meta):
+        mock_read.side_effect = lambda path: {
+            "jds/low.json": {"composite_score": 2.5, "recommendation": "Low-priority pursue"},
+            "jds/high.json": {"composite_score": 4.8, "recommendation": "Strong pursue"},
+        }[path]
+        mock_meta.return_value = ("Role", "Company")
+        mock_select.return_value.ask.return_value = "jds/high.json"
+
+        picker.pick_one_evaluated_jd(["jds/low.json", "jds/high.json"])
+
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(choices[0].value, "jds/high.json")
+        self.assertEqual(choices[1].value, "jds/low.json")
+
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Content Strategist", "Acme"))
+    @patch("picker.jd_manager.read_evaluation", return_value={
+        "composite_score": 4.8, "recommendation": "Strong pursue",
+    })
+    @patch("picker.questionary.select")
+    def test_label_includes_score_and_recommendation(self, mock_select, mock_read, mock_meta):
+        mock_select.return_value.ask.return_value = "jds/a.json"
+        picker.pick_one_evaluated_jd(["jds/a.json"])
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertEqual(choices[0].title, "4.8/5 | Strong pursue | Acme | Content Strategist")

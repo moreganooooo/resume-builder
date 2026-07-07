@@ -142,12 +142,12 @@ class TestHandleTailorAll(unittest.TestCase):
 
 class TestHandleTailorOne(unittest.TestCase):
 
-    @patch("menu.picker.pick_one_pending_jd", return_value=None)
+    @patch("menu.picker.pick_one_evaluated_jd", return_value=None)
     def test_returns_false_when_no_path_picked(self, mock_pick):
         self.assertFalse(menu._handle_tailor_one())
 
     @patch("menu.orchestrator.run_pipeline", return_value=(1, 0))
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
+    @patch("menu.picker.pick_one_evaluated_jd", return_value="jds/a.json")
     def test_returns_true_when_completed(self, mock_pick, mock_run):
         self.assertTrue(menu._handle_tailor_one())
         mock_run.assert_called_once_with(jd_path="jds/a.json")
