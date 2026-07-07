@@ -9,6 +9,19 @@ sys.path.insert(0, SCRIPTS_DIR)
 import picker  # noqa: E402
 
 
+class TestShouldProceed(unittest.TestCase):
+
+    def test_defaults_to_evaluate_wording(self):
+        with patch("picker.click.confirm", return_value=True) as mock_confirm:
+            picker.should_proceed(5, skip_confirm=False)
+        mock_confirm.assert_called_once_with("About to evaluate 5 pending JD(s) -- one real Gemini call each. Continue?")
+
+    def test_custom_action_wording(self):
+        with patch("picker.click.confirm", return_value=True) as mock_confirm:
+            picker.should_proceed(5, skip_confirm=False, action="tailor")
+        mock_confirm.assert_called_once_with("About to tailor 5 pending JD(s) -- one real Gemini call each. Continue?")
+
+
 class TestPickAndProcess(unittest.TestCase):
 
     def test_empty_pending_returns_zero_zero_without_confirming(self):
@@ -178,4 +191,4 @@ class TestPickOneEvaluatedJd(unittest.TestCase):
         mock_select.return_value.ask.return_value = "jds/a.json"
         picker.pick_one_evaluated_jd(["jds/a.json"])
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(choices[0].title, "4.8/5 | Strong pursue | Acme | Content Strategist")
+        self.assertEqual(choices[0].title, "4.80/5 | Strong pursue | Acme | Content Strategist")
