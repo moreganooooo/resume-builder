@@ -47,6 +47,7 @@ bullet_structure:
   mix: "~70% one-liners, ~30% two-liners"
   max_printed_lines: 2
   widow_rule: "Never wrap to a second line with fewer than 5 words"
+  widow_min_words: 5
 
 verb_rules:
   - Open every bullet with a strong specific past-tense action verb
