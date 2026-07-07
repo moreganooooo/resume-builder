@@ -217,3 +217,85 @@ def pick_polish_target() -> str | None:
     return questionary.select(
         "Which document do you want to polish?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
+
+
+_EXIT_WORDS = {"", "done", "exit", "quit"}
+
+
+def run_polish_session(json_path: str) -> None:
+    """Runs the interactive polish loop against json_path until the user
+    exits. Each turn: prompt for an instruction, generate a candidate,
+    show its diff, then accept (save + re-render) / reject (discard,
+    keep chatting) / quit."""
+    doc_type = detect_doc_type(json_path)
+    if doc_type is None:
+        cli_art.console.print(
+            f"{cli_art.ERROR} {json_path} doesn't end in {RESUME_SUFFIX} or {COVERLETTER_SUFFIX} -- "
+            "can't tell which schema to polish against."
+        )
+        return
+    if not os.path.exists(json_path):
+        cli_art.console.print(f"{cli_art.ERROR} File not found: {json_path}")
+        return
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+
+    engine = ResumeEngine()
+    fields = RESUME_FIELDS if doc_type == "resume" else COVERLETTER_FIELDS
+
+    cli_art.console.print(f"\nPolishing {os.path.basename(json_path)}. Type 'done' to finish.\n")
+
+    while True:
+        try:
+            instruction = questionary.text("polish>", style=cli_art.QUESTIONARY_STYLE).ask()
+        except (KeyboardInterrupt, EOFError):
+            instruction = None
+
+        if instruction is None or instruction.strip().lower() in _EXIT_WORDS:
+            break
+
+        candidate = generate_candidate(doc, instruction, doc_type, engine)
+        if candidate is None:
+            cli_art.console.print(f"{cli_art.WARNING} No parseable response -- try rephrasing.")
+            continue
+
+        diff_lines = diff_documents(doc, candidate, fields)
+        if not diff_lines:
+            cli_art.console.print("Nothing changed -- try rephrasing.")
+            continue
+
+        cli_art.console.print("\n".join(diff_lines))
+        decision = questionary.select(
+            "Apply this change?",
+            choices=[
+                questionary.Choice(title="Accept", value="accept"),
+                questionary.Choice(title="Reject and rephrase", value="reject"),
+                questionary.Choice(title="Quit", value="quit"),
+            ],
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if decision == "quit" or decision is None:
+            break
+        if decision == "reject":
+            continue
+
+        doc = candidate
+        paths = save_and_render(doc, doc_type, json_path)
+        cli_art.console.print(f"{cli_art.SUCCESS} Saved -> {paths['json']}")
+        if paths["pdf"]:
+            cli_art.console.print(f"{cli_art.SUCCESS} PDF -> {paths['pdf']}")
+
+    cli_art.console.print("\nDone polishing.\n")
+
+
+def run(file: str | None = None) -> None:
+    """Entry point wired from cli.py's `resume polish [FILE]` command and
+    menu.py's interactive-menu entry. Uses `file` if given, otherwise
+    launches the interactive picker."""
+    json_path = file or pick_polish_target()
+    if not json_path:
+        cli_art.console.print("Nothing to polish -- no output/json files found.")
+        return
+    run_polish_session(json_path)

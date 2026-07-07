@@ -271,5 +271,125 @@ class TestPickPolishTarget(unittest.TestCase):
         self.assertEqual(choices[1].title, "[Resume] A_Resume.json")
 
 
+class TestRunPolishSession(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_session")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_Resume.json")
+        with open(self.json_path, "w") as f:
+            json.dump({"TAGLINE": "OLD"}, f)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def test_unrecognized_suffix_does_not_enter_loop(self):
+        bad_path = os.path.join(self.tmp_dir, "not_a_recognized_name.json")
+        with open(bad_path, "w") as f:
+            f.write("{}")
+        with patch("polish.questionary.text") as mock_text:
+            polish.run_polish_session(bad_path)
+        mock_text.assert_not_called()
+
+    def test_missing_file_does_not_enter_loop(self):
+        with patch("polish.questionary.text") as mock_text:
+            polish.run_polish_session(os.path.join(self.tmp_dir, "Nope_Resume.json"))
+        mock_text.assert_not_called()
+
+    @patch("polish.questionary.text")
+    def test_exit_word_ends_loop_without_calling_gemini(self, mock_text):
+        mock_text.return_value.ask.return_value = "done"
+        with patch("polish.generate_candidate") as mock_generate:
+            polish.run_polish_session(self.json_path)
+        mock_generate.assert_not_called()
+
+    @patch("polish.questionary.text")
+    def test_none_from_ask_ends_loop_like_exit(self, mock_text):
+        mock_text.return_value.ask.return_value = None
+        with patch("polish.generate_candidate") as mock_generate:
+            polish.run_polish_session(self.json_path)
+        mock_generate.assert_not_called()
+
+    @patch("polish.questionary.text")
+    @patch("polish.generate_candidate")
+    def test_unparseable_candidate_reprompts_without_saving(self, mock_generate, mock_text):
+        mock_text.return_value.ask.side_effect = ["do a thing", "done"]
+        mock_generate.return_value = None
+        with patch("polish.save_and_render") as mock_save:
+            polish.run_polish_session(self.json_path)
+        mock_save.assert_not_called()
+
+    @patch("polish.questionary.text")
+    @patch("polish.generate_candidate")
+    def test_no_diff_reprompts_without_saving(self, mock_generate, mock_text):
+        mock_text.return_value.ask.side_effect = ["do a thing", "done"]
+        mock_generate.return_value = {"TAGLINE": "OLD"}  # identical to what's on disk
+        with patch("polish.save_and_render") as mock_save:
+            polish.run_polish_session(self.json_path)
+        mock_save.assert_not_called()
+
+    @patch("polish.questionary.select")
+    @patch("polish.questionary.text")
+    @patch("polish.generate_candidate")
+    def test_reject_keeps_state_and_does_not_save(self, mock_generate, mock_text, mock_select):
+        mock_text.return_value.ask.side_effect = ["make it punchier", "done"]
+        mock_generate.return_value = {"TAGLINE": "NEW"}
+        mock_select.return_value.ask.return_value = "reject"
+        with patch("polish.save_and_render") as mock_save:
+            polish.run_polish_session(self.json_path)
+        mock_save.assert_not_called()
+
+    @patch("polish.questionary.select")
+    @patch("polish.questionary.text")
+    @patch("polish.generate_candidate")
+    def test_accept_saves_the_candidate(self, mock_generate, mock_text, mock_select):
+        mock_text.return_value.ask.side_effect = ["make it punchier", "done"]
+        mock_generate.return_value = {"TAGLINE": "NEW"}
+        mock_select.return_value.ask.return_value = "accept"
+        with patch(
+            "polish.save_and_render",
+            return_value={"json": self.json_path, "html": "h", "pdf": "p"},
+        ) as mock_save:
+            polish.run_polish_session(self.json_path)
+        mock_save.assert_called_once_with({"TAGLINE": "NEW"}, "resume", self.json_path)
+
+    @patch("polish.questionary.select")
+    @patch("polish.questionary.text")
+    @patch("polish.generate_candidate")
+    def test_quit_choice_ends_loop(self, mock_generate, mock_text, mock_select):
+        mock_text.return_value.ask.return_value = "make it punchier"
+        mock_generate.return_value = {"TAGLINE": "NEW"}
+        mock_select.return_value.ask.return_value = "quit"
+        with patch("polish.save_and_render") as mock_save:
+            polish.run_polish_session(self.json_path)
+        mock_save.assert_not_called()
+
+
+class TestRun(unittest.TestCase):
+
+    @patch("polish.run_polish_session")
+    @patch("polish.pick_polish_target")
+    def test_uses_given_file_without_picker(self, mock_pick, mock_session):
+        polish.run("some/path_Resume.json")
+        mock_pick.assert_not_called()
+        mock_session.assert_called_once_with("some/path_Resume.json")
+
+    @patch("polish.run_polish_session")
+    @patch("polish.pick_polish_target")
+    def test_uses_picker_when_no_file_given(self, mock_pick, mock_session):
+        mock_pick.return_value = "picked_Resume.json"
+        polish.run(None)
+        mock_session.assert_called_once_with("picked_Resume.json")
+
+    @patch("polish.run_polish_session")
+    @patch("polish.pick_polish_target")
+    def test_nothing_to_pick_does_not_enter_session(self, mock_pick, mock_session):
+        mock_pick.return_value = None
+        polish.run(None)
+        mock_session.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
