@@ -8,7 +8,15 @@ anything is saved. Accepting a turn re-renders HTML and regenerates the
 PDF immediately, same as the main tailoring pipeline.
 """
 
+import json
 import os
+
+import cli_art
+import normalize_resume
+import validate_coverletter
+import validate_resume
+from gemini_client import GeminiClient
+from orchestrator import BUILDER_MODEL, CoverLetterSchema, ResumeEngine, TemplateSchema
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -18,6 +26,9 @@ OUTPUT_PDF_DIR = os.path.join(PROJECT_ROOT, "output", "pdf")
 
 RESUME_SUFFIX = "_Resume.json"
 COVERLETTER_SUFFIX = "_CoverLetter.json"
+
+RESUME_FIELDS = list(TemplateSchema.model_fields.keys())
+COVERLETTER_FIELDS = list(CoverLetterSchema.model_fields.keys())
 
 
 def detect_doc_type(path: str) -> str | None:
@@ -91,3 +102,56 @@ def diff_documents(old: dict, new: dict, keys: list[str]) -> list[str]:
         else:
             lines.append(f"{key}:\n  - {old_val!r}\n  + {new_val!r}")
     return lines
+
+
+def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: ResumeEngine) -> dict | None:
+    """Sends the current document's schema-relevant fields plus one
+    instruction to Gemini and returns the complete updated document, or
+    None if the response was unparseable. Resume responses are re-run
+    through normalize_resume.normalize() (idempotent -- reapplies fixed
+    contact/cert/education fields and formatting rules) and have
+    _recommendation_actions (not part of TemplateSchema) reattached
+    unchanged if the original had it."""
+    if doc_type == "resume":
+        schema = TemplateSchema
+        prompt_file = "polish_resume.md"
+        fields = RESUME_FIELDS
+    else:
+        schema = CoverLetterSchema
+        prompt_file = "polish_coverletter.md"
+        fields = COVERLETTER_FIELDS
+
+    sendable = {k: doc.get(k) for k in fields}
+    system_instruction = engine.load_prompt(prompt_file)
+    contents = (
+        f"=== CURRENT DOCUMENT JSON ===\n{json.dumps(sendable, indent=2)}\n\n"
+        f"=== REQUESTED EDIT ===\n{instruction}"
+    )
+
+    text, _usage = GeminiClient.generate(
+        model=BUILDER_MODEL,
+        system_instruction=system_instruction,
+        contents=contents,
+        response_schema=schema,
+        temperature=0.0,
+    )
+    result = GeminiClient.parse_json(text or "")
+    if not result:
+        return None
+
+    style_rules = engine.load_yaml(engine.rules_dir, "style_rules.yaml")
+    if doc_type == "resume":
+        candidate = normalize_resume.normalize(result)
+        if "_recommendation_actions" in doc:
+            candidate["_recommendation_actions"] = doc["_recommendation_actions"]
+        violations = validate_resume.validate(candidate, style_rules)
+    else:
+        candidate = result
+        violations = validate_coverletter.validate(candidate, style_rules)
+
+    if violations:
+        cli_art.console.print(f"{cli_art.WARNING} Validator found {len(violations)} issue(s) in this edit:")
+        for v in violations:
+            cli_art.console.print(f"  - {v}")
+
+    return candidate
