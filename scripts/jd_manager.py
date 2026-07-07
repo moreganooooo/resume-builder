@@ -61,6 +61,43 @@ def extract_job_meta(jd_path: str) -> tuple:
     return "", ""
 
 
+def save_evaluation(jd_path: str, evaluation: dict) -> None:
+    """Persists an evaluate_fit() result into the JD's own JSON file under
+    an _evaluation key, so a later picker can filter/sort/label by it
+    without re-running the (real, costly) Gemini evaluation call. No-ops
+    silently for non-JSON-dict JDs (e.g. plain-text fixtures) -- they
+    simply never become eligible for the evaluated-only picker."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_evaluation"] = {
+        "composite_score": evaluation.get("composite_score"),
+        "recommendation": evaluation.get("recommendation"),
+        "hard_blockers": evaluation.get("hard_blockers") or [],
+        "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(jd_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_evaluation(jd_path: str) -> dict | None:
+    """Reads back a persisted _evaluation (see save_evaluation()), or None
+    if the JD isn't a JSON dict or has never been evaluated."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_evaluation")
+
+
 def sanitize_for_filename(text: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9]+", "", text or "")
     return cleaned or "Unknown"

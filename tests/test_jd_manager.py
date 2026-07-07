@@ -437,5 +437,56 @@ class TestJobKeyKnown(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestSaveAndReadEvaluation(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_evaluation")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_save_then_read_round_trips_score_and_recommendation(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_evaluation(path, {
+            "composite_score": 4.2, "recommendation": "Strong pursue", "hard_blockers": [],
+        })
+        result = jd_manager.read_evaluation(path)
+        self.assertEqual(result["composite_score"], 4.2)
+        self.assertEqual(result["recommendation"], "Strong pursue")
+        self.assertIn("evaluated_at", result)
+
+    def test_save_preserves_the_rest_of_the_jd_content(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["job_title"], "Role")
+        self.assertEqual(data["company_name"], "Acme")
+
+    def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
+        jd_manager.save_evaluation(path, {"composite_score": 4.0, "recommendation": "Strong pursue"})
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+    def test_read_evaluation_returns_none_when_never_evaluated(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        self.assertIsNone(jd_manager.read_evaluation(path))
+
+    def test_read_evaluation_returns_none_for_plain_text_jd(self):
+        path = self._write("dummy.txt", "Just plain text.")
+        self.assertIsNone(jd_manager.read_evaluation(path))
+
+
 if __name__ == "__main__":
     unittest.main()
