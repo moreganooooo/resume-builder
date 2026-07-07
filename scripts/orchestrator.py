@@ -708,6 +708,17 @@ class ResumeCritiqueSchema(BaseModel):
     top_third_score:         int       = Field(description="0-100: does the top third of page one alone communicate fit within a 15-30 second first read (first-impression / above-the-fold test)?")
     flags:                   List[str] = Field(description="Specific issues found")
     recommendations:         List[str] = Field(description="Actionable fixes, one per flag")
+    distinctive_moments:     List[str] = Field(description=(
+        "2-3 EXACT sentences or achievement bullets already present in the "
+        "resume, quoted verbatim, that read as memorable and "
+        "personality-forward rather than generic. Protected from later "
+        "automated recommendation edits."
+    ))
+    flat_sections:           List[str] = Field(description=(
+        "Section names (e.g. 'Professional Summary', 'VML experience') "
+        "that read as competent but generic -- interchangeable with other "
+        "candidates' resumes."
+    ))
 
 class CertItem(BaseModel):
     title: str = Field(description="Full certification or training name.")
@@ -799,13 +810,16 @@ class TemplateSchema(BaseModel):
 
 class RecommendationApplySchema(TemplateSchema):
     """
-    Same shape as a normal builder/trim call (TemplateSchema), plus two
+    Same shape as a normal builder/trim call (TemplateSchema), plus three
     tracking lists so the holistic critique's recommendations can be acted
     on without silently doing something the recommendation never asked for.
     Only recommendations that are concrete edits to this resume's own
     content belong in applied_recommendations -- anything describing an
     action outside the document (networking, referrals, applying elsewhere)
-    must go in skipped_recommendations untouched.
+    must go in skipped_recommendations untouched. A recommendation phrased
+    as a reflective question about personal motivation/meaning that can't
+    be grounded in the provided background context goes in
+    needs_personal_input instead of being fabricated.
     """
     applied_recommendations: List[str] = Field(
         default_factory=list,
@@ -814,6 +828,17 @@ class RecommendationApplySchema(TemplateSchema):
     skipped_recommendations: List[str] = Field(
         default_factory=list,
         description="Exact text of each recommendation that was not a resume-content edit, so nothing was changed for it.",
+    )
+    needs_personal_input: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Recommendations that ARE actionable edits to this resume's own "
+            "content, phrased as a reflective question about personal "
+            "motivation/meaning, but for which the provided background context "
+            "does not already contain a grounded, verified answer. Left "
+            "unapplied rather than inventing an answer -- exact original text "
+            "here so Morgan can address it herself (e.g. via `resume polish`)."
+        ),
     )
 
 

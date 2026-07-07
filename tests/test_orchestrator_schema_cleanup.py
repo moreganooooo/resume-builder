@@ -97,6 +97,15 @@ class TestSchemaCleanup(unittest.TestCase):
         self.assertIn("title", sanitized["properties"])
         self.assertEqual(sanitized["properties"]["title"], {"type": "string"})
 
+    def test_resume_critique_schema_has_sparkle_fields(self):
+        fields = orchestrator.ResumeCritiqueSchema.model_fields
+        self.assertIn("distinctive_moments", fields)
+        self.assertIn("flat_sections", fields)
+
+    def test_recommendation_apply_schema_has_needs_personal_input(self):
+        fields = orchestrator.RecommendationApplySchema.model_fields
+        self.assertIn("needs_personal_input", fields)
+
 
 class TestSanitizeNoneForPrompt(unittest.TestCase):
     """
