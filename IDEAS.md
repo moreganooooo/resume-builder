@@ -592,6 +592,73 @@ conversation.** Two threads, connected:
      `knowledge_base/` but isn't wired into anything, and (c) what's in
      career-ops that resume-builder doesn't have -- before deciding what,
      if anything, to build.
+
+**2026-07-07 -- Wiring/gap research pass (findings, verified against real
+code, not assumed):**
+
+- **What's actually live-wired into resume building today (all confirmed
+  by tracing `orchestrator.py`, not guessed):**
+  - Step 2 (mine bullet bank): reads **only** `bullet-bank-keepers-audited.csv`
+    + its precomputed embeddings (`bullet_vectors_ge2_d768.npy`, built by
+    `embed_bullet_bank.py`) -- confirms Morgan's instinct that only one or
+    two bullet-bank CSVs are truly live-wired; everything else in the
+    `bullet-bank-*` family is an earlier curation stage feeding toward that
+    one file (`bullet-bank-clean` -> `audit_bullet_bank.py` ->
+    `bullet-bank-audited` -> `cluster_bullet_bank.py` -> cluster map ->
+    `triage_needs_review.py` -> `bullet-bank-keepers.csv` ->
+    `score_keeper_gems.py` -> `bullet-bank-keepers-audited.csv`).
+  - Step 3 (audit bullets) **and** cover-letter generation both use
+    `build_audit_static_prefix()` -- a slim ~5-10k-token context of
+    `profile.yml` (trimmed) + `verified_facts.json` + `verified_tools.json`
+    + `verified_projects.json` only.
+  - Step 4 (build resume, fresh builds only) additionally pulls in the full
+    ~457k-token `KB_ALLOWLIST` (`load_knowledge_base()`):
+    `article-digest.md`, `bullet-bank.md`, `cv.md`, `evidence-guide.csv`,
+    `evidence_graph.json`, `extracted-screenshot-metrics.csv`,
+    `morgan-background-guide.md`, `portals.yml`, `profile.yml`,
+    `recruiter_memory_patterns.json`, `summaries-and-skills-clean.csv`,
+    `treering-archive-readme.md`, `verified-claims.csv`,
+    `verified_metrics.json`, plus the three verified_*.json above.
+  - **Real finding:** cover letters get the slim Tier-1 context ONLY --
+    none of the Step-4-only KB_ALLOWLIST files (`evidence-guide.csv`,
+    `verified-claims.csv`, `bullet-bank.md`, `summaries-and-skills-clean.csv`,
+    `recruiter_memory_patterns.json`, etc.) ever reach cover-letter
+    generation today.
+- **Confirmed genuinely orphaned within resume-builder's own codebase**
+  (zero references anywhere in `scripts/*.py`, verified by exact-filename
+  grep, not substring-matched): `active-inventory.csv` (444KB),
+  `bullet-bank-deduplicated.csv` (478KB), `bullet-bank-gems-report.csv`
+  (191KB), `coverage-tracker.csv` (699KB), `detective-findings.csv`
+  (232KB), `screenshot-review-log.csv`, and `treering-archive-readme.csv`
+  (only the `.md` twin is wired; the `.csv` version of the same content
+  isn't referenced anywhere).
+- **A real pipeline mismatch, found by accident:** `cluster_bullet_bank.py`
+  is currently configured to write `bullet-bank-clustered.csv`, but no
+  such file exists anywhere in `knowledge_base/` -- only
+  `bullet-bank-cluster-map.csv`/`-cluster-map-updated.csv` exist (which
+  `audit_keepers.py`/`rewrite_bullets.py` do read). Either those cluster-map
+  files came from an earlier version of the script before a rename, or
+  running `cluster_bullet_bank.py` today would silently produce a file
+  nothing downstream reads. Not investigated further; flagged for whoever
+  picks up bullet-bank pipeline work next.
+- **What's in career-ops that resume-builder has none of:**
+  - `interview-prep/story-bank.md` -- turned out to be an **empty
+    template** (26 lines, all placeholder comments, zero actual stories
+    filled in yet). Nothing to port content-wise; only the STAR+R format
+    is worth reusing conceptually, later.
+  - `writing-samples/` (291 files) -- **real, substantial, mostly
+    untapped.** Actual past cover letters (PDF/docx), "BestCopySamples"
+    (newsletter samples, an IT sequence, headline copy), ~20 LinkedIn
+    tone/style screenshots, and **`MorganWritingStyleGuide.txt`** (246
+    lines, saved as RTF) -- which opens with *"Morgan Escott writes with
+    what can only be described as **strategic sparkle**"* and goes on to
+    define tone/energy, sentence rhythm, word choice, and power words in
+    real detail. This directly predates and validates the Sparkle work
+    above -- it's Morgan's own pre-existing voice rubric, currently wired
+    into nothing at all in resume-builder (not in `KB_ALLOWLIST`, not
+    referenced by any prompt). Most other writing-samples files are
+    binary (PDF/docx/PNG) and would need conversion (same `textutil`
+    approach already used for `SparkleConcept.docx`) to be machine-usable.
 - **Pipeline + CLI.** Each stage (`scan`, `evaluate`, `tailor`, `render`,
   `track`, `interview-prep`) is a Python module with a defined in/out
   contract, runnable standalone or chained. The CLI itself gets
