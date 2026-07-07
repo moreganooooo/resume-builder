@@ -608,6 +608,17 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
     )
 
 
+def _parse_pdf_result(stdout: str) -> tuple:
+    """Extracts (page_count, size_str) from generate-pdf.mjs's stdout --
+    page_count is None and size_str is "unknown size" if either line
+    isn't found."""
+    page_count_match = re.search(r"Pages:\s*(\d+)", stdout)
+    page_count = int(page_count_match.group(1)) if page_count_match else None
+    size_match = re.search(r"Size:\s*([\d.]+\s*\w+)", stdout)
+    size_str = size_match.group(1) if size_match else "unknown size"
+    return page_count, size_str
+
+
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
 # ---------------------------------------------------------------------------
@@ -2240,11 +2251,10 @@ class ResumeEngine:
                 print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
                 return {}
 
-            print(pdf_result.stdout)
-            page_count_match = re.search(r"Pages:\s*(\d+)", pdf_result.stdout)
-            page_count = int(page_count_match.group(1)) if page_count_match else None
-
-            if page_count is None or page_count <= 2 or trim_attempt >= max_trim_attempts:
+            page_count, size_str = _parse_pdf_result(pdf_result.stdout)
+            is_final = page_count is None or page_count <= 2 or trim_attempt >= max_trim_attempts
+            if is_final:
+                print(pdf_result.stdout)
                 break
 
             if not dropped_optional_clients:
@@ -2259,12 +2269,12 @@ class ResumeEngine:
                     # client roster (fixed_content.CLIENTS marks it
                     # non-essential) before spending an LLM-driven
                     # trim_instructions attempt.
-                    print(f"  PDF is {page_count} pages, dropping optional client rosters...")
+                    print(f"  PDF is {page_count} pages ({size_str}), dropping optional client rosters...")
                     resume_data = normalize_resume.normalize(resume_data, include_optional_clients=False)
                     render_html(resume_data, html_out)
                     continue
 
-            print(f"  PDF is {page_count} pages, applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
+            print(f"  PDF is {page_count} pages ({size_str}), applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (
                 f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                 f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
