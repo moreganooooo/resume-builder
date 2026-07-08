@@ -87,6 +87,36 @@ class TestExtractJobMeta(unittest.TestCase):
         self.assertEqual(jd_manager.extract_job_meta(path), ("", ""))
 
 
+class TestExtractSourceUrl(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_jd_manager_url")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_reads_source_url_from_json(self):
+        path = self._write("job.json", json.dumps({"source_url": "https://example.com/job/1"}))
+        self.assertEqual(jd_manager.extract_source_url(path), "https://example.com/job/1")
+
+    def test_missing_source_url_returns_empty_string(self):
+        path = self._write("job.json", json.dumps({"job_title": "Role"}))
+        self.assertEqual(jd_manager.extract_source_url(path), "")
+
+    def test_plain_text_returns_empty_string(self):
+        path = self._write("job.txt", "Just a plain job description with no JSON.")
+        self.assertEqual(jd_manager.extract_source_url(path), "")
+
+
 class TestSplitBatchJds(unittest.TestCase):
 
     def setUp(self):
