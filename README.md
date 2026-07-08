@@ -353,9 +353,12 @@ resume builds.
 Every completed build appends a row to two places: `jds/jd_tracker_log.csv`
 (machine-readable, drives dedup/resume logic) and `data/applications.md`
 (career-ops's markdown-table format — `# | Date | Company | Role | Score |
-Status | PDF | Report | Notes` — for human review). Both are gitignored.
-`Score`/`Report` are placeholders until an evaluate/scan result is wired
-into a given row.
+Status | PDF | Link | Report | Notes` — for human review). Both are
+gitignored. **`Link` is a clickable `[Apply](source_url)`** — the actual
+posting, so you have somewhere to go apply once a resume's built.
+`Score`/`Report` are still placeholders until an evaluate/scan result is
+wired into a given row (a JD's own persisted `_evaluation`, see
+"Evaluating fit" above, isn't currently threaded into this specific file).
 
 ## Bullet bank feedback loop
 
