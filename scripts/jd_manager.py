@@ -61,6 +61,21 @@ def extract_job_meta(jd_path: str) -> tuple:
     return "", ""
 
 
+def extract_source_url(jd_path: str) -> str:
+    """Returns the source_url for a JD file, or "" if it's not a JSON
+    object, the field is absent, or reading fails. This is where you'd
+    go to actually view the posting and start an application -- surfaced
+    in data/applications.md's Link column."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.loads(f.read())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return ""
+    if isinstance(data, dict):
+        return data.get("source_url") or ""
+    return ""
+
+
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
     """Persists an evaluate_fit() result into the JD's own JSON file under
     an _evaluation key, so a later picker can filter/sort/label by it
@@ -231,8 +246,8 @@ APPLICATIONS_MD = os.path.join(PROJECT_ROOT, "data", "applications.md")
 
 _APPLICATIONS_HEADER = (
     "# Applications Tracker\n\n"
-    "| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n"
-    "|---|------|---------|------|-------|--------|-----|--------|-------|\n"
+    "| # | Date | Company | Role | Score | Status | PDF | Link | Report | Notes |\n"
+    "|---|------|---------|------|-------|--------|-----|------|--------|-------|\n"
 )
 
 
@@ -247,9 +262,14 @@ def _next_application_row_number(path: str) -> int:
     return len(data_rows) + 1
 
 
-def append_application_row(company_name: str, job_title: str, has_pdf: bool, path: str = None) -> None:
+def append_application_row(company_name: str, job_title: str, has_pdf: bool,
+                            source_url: str = "", path: str = None) -> None:
     """Appends one row to data/applications.md, in career-ops's markdown-table
-    tracker format (# | Date | Company | Role | Score | Status | PDF | Report | Notes).
+    tracker format (# | Date | Company | Role | Score | Status | PDF | Link |
+    Report | Notes). Link is a clickable "[Apply](source_url)" -- this is
+    where to actually go read the posting and start an application once a
+    resume's built; "—" when no source_url is known (e.g. a manually
+    dropped-in JD).
 
     Score/Report are placeholders ("NA"/"—") until the evaluate stage exists.
     No dedup/merge logic (career-ops's merge-tracker.mjs/dedup-tracker.mjs) --
@@ -266,8 +286,9 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool, pat
     pdf_cell = "✅" if has_pdf else "❌"
     company = company_name or "unknown"
     role = job_title or "unknown"
+    link_cell = f"[Apply]({source_url})" if source_url else "—"
 
-    row = f"| {row_number} | {date_str} | {company} | {role} | NA | Tailored | {pdf_cell} | — |  |\n"
+    row = f"| {row_number} | {date_str} | {company} | {role} | NA | Tailored | {pdf_cell} | {link_cell} | — |  |\n"
     with open(path, "a", encoding="utf-8") as f:
         f.write(row)
 
