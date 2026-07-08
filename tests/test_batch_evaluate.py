@@ -149,3 +149,22 @@ class TestEvaluateAllPendingSkipsAlreadyEvaluated(unittest.TestCase):
             ["jds/scored.json", "jds/unscored.json"], skip_evaluated=False,
         )
         self.assertEqual(mock_engine_cls.return_value.evaluate_fit.call_count, 2)
+
+
+class TestSplitEvaluated(unittest.TestCase):
+
+    @patch("batch_evaluate.jd_manager.read_evaluation")
+    def test_splits_into_already_evaluated_and_unevaluated(self, mock_read_eval):
+        mock_read_eval.side_effect = lambda path: {
+            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/unscored.json": None,
+        }[path]
+        already, unevaluated = batch_evaluate.split_evaluated(["jds/scored.json", "jds/unscored.json"])
+        self.assertEqual(already, ["jds/scored.json"])
+        self.assertEqual(unevaluated, ["jds/unscored.json"])
+
+    @patch("batch_evaluate.jd_manager.read_evaluation", return_value=None)
+    def test_all_unevaluated(self, mock_read_eval):
+        already, unevaluated = batch_evaluate.split_evaluated(["jds/a.json", "jds/b.json"])
+        self.assertEqual(already, [])
+        self.assertEqual(unevaluated, ["jds/a.json", "jds/b.json"])

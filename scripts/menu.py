@@ -68,10 +68,16 @@ def _handle_evaluate_all() -> bool:
     if not pending:
         cli_art.console.print("Nothing to evaluate -- no pending JDs.")
         return False
-    if not picker.should_proceed(len(pending), skip_confirm=False):
+    already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
+    if not to_evaluate:
+        cli_art.console.print(f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a score.")
+        return False
+    if not picker.should_proceed(len(to_evaluate), skip_confirm=False):
         cli_art.console.print("Aborted.")
         return False
-    results = batch_evaluate.evaluate_all_pending(pending)
+    if already_evaluated:
+        cli_art.console.print(f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)")
+    results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
     cli_art.render_fit_table(results)
     return bool(results)
 

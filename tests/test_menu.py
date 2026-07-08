@@ -111,6 +111,25 @@ class TestHandleEvaluateAll(unittest.TestCase):
     def test_returns_true_when_results_returned(self, mock_pending, mock_proceed, mock_eval, mock_table):
         self.assertTrue(menu._handle_evaluate_all())
 
+    @patch("menu.cli_art.render_fit_table")
+    @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[])
+    @patch("menu.picker.should_proceed", return_value=True)
+    @patch("menu.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], ["jds/b.json"]))
+    @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"])
+    def test_confirms_against_and_evaluates_only_unscored(
+        self, mock_pending, mock_split, mock_proceed, mock_eval, mock_table,
+    ):
+        menu._handle_evaluate_all()
+        mock_proceed.assert_called_once_with(1, skip_confirm=False)
+        mock_eval.assert_called_once_with(["jds/b.json"], skip_evaluated=False)
+
+    @patch("menu.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], []))
+    @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
+    def test_nothing_new_to_evaluate_returns_false_without_confirming(self, mock_pending, mock_split):
+        with patch("menu.picker.should_proceed") as mock_proceed:
+            self.assertFalse(menu._handle_evaluate_all())
+        mock_proceed.assert_not_called()
+
 
 class TestHandleEvaluateOne(unittest.TestCase):
 

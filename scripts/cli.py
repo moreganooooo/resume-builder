@@ -114,12 +114,27 @@ def evaluate(jd_file, yes, refresh):
         if not pending:
             cli_art.console.print("Nothing to evaluate -- no pending JDs.")
             return
-        if not _should_proceed(len(pending), yes):
+
+        if refresh:
+            to_evaluate = pending
+            already_evaluated = []
+        else:
+            already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
+            if not to_evaluate:
+                cli_art.console.print(
+                    f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a "
+                    "score. Use --refresh to re-evaluate everything."
+                )
+                return
+
+        if not _should_proceed(len(to_evaluate), yes):
             cli_art.console.print("Aborted.")
             return
+        if already_evaluated:
+            cli_art.console.print(f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)")
 
-        cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s)")
-        results = batch_evaluate.evaluate_all_pending(pending, skip_evaluated=not refresh)
+        cli_art.display_banner(f"Evaluating {len(to_evaluate)} pending JD(s)")
+        results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
         cli_art.render_fit_table(results)
         return
 

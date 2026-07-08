@@ -24,6 +24,17 @@ def _sort_key(result: dict) -> tuple:
     return (1 if result.get("error") else 0, -(result.get("composite_score") or 0))
 
 
+def split_evaluated(pending_paths: list) -> tuple:
+    """Splits pending_paths into (already_evaluated, unevaluated), based on
+    whether each already carries a persisted _evaluation
+    (jd_manager.read_evaluation()). Lets a caller show an accurate
+    confirmation count *before* asking to proceed, instead of confirming
+    against the full pending count and only filtering afterward."""
+    already_evaluated = [p for p in pending_paths if jd_manager.read_evaluation(p)]
+    unevaluated = [p for p in pending_paths if not jd_manager.read_evaluation(p)]
+    return already_evaluated, unevaluated
+
+
 def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True) -> list:
     """
     Runs ResumeEngine.evaluate_fit() over every path in pending_paths
@@ -42,10 +53,9 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
         pending_paths = jd_manager.get_pending_jds()
 
     if skip_evaluated:
-        already_evaluated = sum(1 for p in pending_paths if jd_manager.read_evaluation(p))
+        already_evaluated, pending_paths = split_evaluated(pending_paths)
         if already_evaluated:
-            pending_paths = [p for p in pending_paths if not jd_manager.read_evaluation(p)]
-            print(f"Skipping {already_evaluated} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
+            print(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
 
     engine = orchestrator.ResumeEngine()
     results = []
