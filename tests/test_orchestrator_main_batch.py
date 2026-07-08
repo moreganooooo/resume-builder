@@ -28,8 +28,16 @@ class TestMainBatchMode(unittest.TestCase):
         self._real_completed_dir = orchestrator.jd_manager.COMPLETED_DIR
         orchestrator.jd_manager.COMPLETED_DIR = self.completed_dir
 
+        # Without this, a successful build's real append_application_row()
+        # call (never mocked below) writes a real row into the actual
+        # data/applications.md on every test run -- this file was the
+        # undetected source of dozens of stray "unknown/unknown" rows.
+        self._real_applications_md = orchestrator.jd_manager.APPLICATIONS_MD
+        orchestrator.jd_manager.APPLICATIONS_MD = os.path.join(self.tmp_dir, "applications.md")
+
     def tearDown(self):
         orchestrator.jd_manager.COMPLETED_DIR = self._real_completed_dir
+        orchestrator.jd_manager.APPLICATIONS_MD = self._real_applications_md
         for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
             for name in files:
                 os.remove(os.path.join(root, name))
