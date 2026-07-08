@@ -29,20 +29,38 @@ class TestEvaluateBatchMode(unittest.TestCase):
         self.assertIn("Aborted", result.output)
         mock_evaluate.assert_not_called()
 
-    def test_default_skips_already_evaluated(self):
+    def test_default_confirms_and_evaluates_only_unscored(self):
+        runner = CliRunner()
+        with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
+             patch("cli.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], ["jds/b.json"])), \
+             patch("cli.click.confirm", return_value=True) as mock_confirm, \
+             patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+            result = runner.invoke(cli.cli, ["evaluate"])
+        # Confirms against the real, post-filter count (1), not the raw pending count (2).
+        self.assertIn("About to evaluate 1 pending", mock_confirm.call_args[0][0])
+        mock_evaluate.assert_called_once_with(["jds/b.json"], skip_evaluated=False)
+        self.assertIn("1 already-evaluated JD(s) will be skipped", result.output)
+
+    def test_nothing_new_to_evaluate_exits_cleanly_without_confirming(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
-             patch("cli.click.confirm", return_value=True), \
-             patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
-            runner.invoke(cli.cli, ["evaluate"])
-        mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=True)
+             patch("cli.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], [])), \
+             patch("cli.click.confirm") as mock_confirm, \
+             patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+            result = runner.invoke(cli.cli, ["evaluate"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Nothing new to evaluate", result.output)
+        mock_confirm.assert_not_called()
+        mock_evaluate.assert_not_called()
 
     def test_refresh_flag_forces_reevaluation(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
+             patch("cli.batch_evaluate.split_evaluated") as mock_split, \
              patch("cli.click.confirm", return_value=True), \
              patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
             runner.invoke(cli.cli, ["evaluate", "--refresh"])
+        mock_split.assert_not_called()
         mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=False)
 
     def test_yes_flag_skips_confirmation(self):
