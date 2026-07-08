@@ -105,7 +105,9 @@ def coverletter(jd_file, pick, yes):
 @cli.command()
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
 @click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for batch mode")
-def evaluate(jd_file, yes):
+@click.option("--refresh", is_flag=True, default=False,
+              help="Re-evaluate every pending JD in batch mode, even ones already scored")
+def evaluate(jd_file, yes, refresh):
     """Score a JD's fit (go/no-go) without building a resume. Omit JD_FILE to evaluate every pending JD."""
     if jd_file is None:
         pending = jd_manager.get_pending_jds()
@@ -117,7 +119,7 @@ def evaluate(jd_file, yes):
             return
 
         cli_art.display_banner(f"Evaluating {len(pending)} pending JD(s)")
-        results = batch_evaluate.evaluate_all_pending(pending)
+        results = batch_evaluate.evaluate_all_pending(pending, skip_evaluated=not refresh)
         cli_art.render_fit_table(results)
         return
 
@@ -127,6 +129,7 @@ def evaluate(jd_file, yes):
     if not result:
         cli_art.console.print(f"{cli_art.ERROR} Evaluation failed -- no parseable result.")
         raise SystemExit(1)
+    jd_manager.save_evaluation(jd_file, result)
 
     scores = result.get("dimension_scores", {})
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")

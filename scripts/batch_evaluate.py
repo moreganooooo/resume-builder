@@ -24,7 +24,7 @@ def _sort_key(result: dict) -> tuple:
     return (1 if result.get("error") else 0, -(result.get("composite_score") or 0))
 
 
-def evaluate_all_pending(pending_paths: list = None) -> list:
+def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True) -> list:
     """
     Runs ResumeEngine.evaluate_fit() over every path in pending_paths
     (defaults to jd_manager.get_pending_jds() if None). Returns a list of
@@ -32,9 +32,20 @@ def evaluate_all_pending(pending_paths: list = None) -> list:
     recommendation, hard_blockers, error} sorted via _sort_key() --
     highest score first, errored entries always last. A JD that fails to
     evaluate gets error=True instead of crashing the whole batch.
+
+    skip_evaluated=True (default) skips any JD that already carries a
+    persisted _evaluation (jd_manager.save_evaluation() from a prior run)
+    -- pass False to force re-evaluating everything, overwriting existing
+    scores.
     """
     if pending_paths is None:
         pending_paths = jd_manager.get_pending_jds()
+
+    if skip_evaluated:
+        already_evaluated = sum(1 for p in pending_paths if jd_manager.read_evaluation(p))
+        if already_evaluated:
+            pending_paths = [p for p in pending_paths if not jd_manager.read_evaluation(p)]
+            print(f"Skipping {already_evaluated} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
 
     engine = orchestrator.ResumeEngine()
     results = []
