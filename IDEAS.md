@@ -124,7 +124,12 @@ somewhere to click through to the real posting once a resume's done --
 new `jd_manager.extract_source_url()`, extracted before the JD file
 moves to `jds/completed/` (extracting after the move would read a path
 that no longer exists). `tests/test_applications_md.py` is new (zero
-coverage existed on `append_application_row()` before this).
+coverage existed on `append_application_row()` before this). **Also
+added the same day:** a "View Application Tracker" menu option
+(`cli_art.display_applications_tracker()`) that renders
+`data/applications.md` directly in the terminal via Rich's built-in
+Markdown renderer -- table and clickable links included, no custom
+parsing needed since the file is already valid GFM markdown.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
