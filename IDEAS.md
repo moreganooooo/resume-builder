@@ -169,6 +169,8 @@ Sanity-checked against the real code in job_automater/career-ops on
 | 12 | Help command in the interactive menu | Easy | `resume help` already exists as a shell shortcut; just needs a menu entry. See the Help command section below. |
 | 13 | "Doctor" script (dependency/asset checks + test run) | Medium | job_automater already has prior art for this exact pattern (see the Long-term merge section's job_automater notes). See the Doctor script section below. |
 | 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | None of the bullet-bank curation pipeline is wired into the menu today, and the pipeline itself has at least one already-discovered, unresolved inconsistency. See the Bullet-bank reintegration section below. |
+| 15 | "List Jobs" / "View Pipeline" browsing command | Hard | Several genuinely open questions (archive as a new state, whether eval notes need richer persistence, a new multi-level browse/detail/act UI pattern). See the List Jobs / View Pipeline section below. |
+| 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | Medium | Close parallel to the evaluate skip-by-default feature already built 2026-07-08 -- same pattern, plus a time-window twist. See the Liveness skip-by-recency section below. |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
 (porting career-ops's `modes/interview-prep.md`) -- Morgan's call, not
@@ -198,6 +200,33 @@ places unless something shares a single source of truth between the
 shell script's static text and whatever the menu option prints.
 
 ## Medium
+
+### Liveness skip-by-recency (persist a check date, skip if checked recently)
+
+A close parallel to the evaluate skip-by-default feature built
+2026-07-08 (`batch_evaluate.split_evaluated()`/`save_evaluation()`) --
+same shape, applied to `liveness.py` instead. Today,
+`run_liveness_check()` persists nothing for `active`/`likely_active`/
+`uncertain` results (only `expired` triggers a real action, moving the
+file to `jds/expired/`) -- every result is printed once and forgotten, so
+re-running liveness re-checks every pending JD's URL every time, even one
+confirmed `active` five minutes ago. The ask: persist a `_liveness` block
+(result, reason, `checked_at`) into each JD's own JSON, matching
+`_evaluation`'s existing pattern, and skip re-checking any JD whose
+`_liveness.checked_at` is within some recency window (Morgan suggested 24
+hours) by default.
+
+**The one real twist vs. evaluate's skip logic:** evaluate's skip is
+permanent (a JD either has been evaluated or hasn't -- no expiry), while
+this needs an actual time comparison (`checked_at` newer than N hours ago
+-> skip; older -> re-check). Otherwise the same shape applies: a
+`--refresh`-style escape hatch to force-recheck everything, and the
+confirmation-prompt-accuracy lesson from the evaluate fix (show the real
+count of JDs *about to be checked* after the skip filter, not the raw
+pending count, learned the hard way on 2026-07-08). Also needs
+`jd_manager.read_jd_text()`'s same underscore-key-stripping treatment if
+liveness's checker ever reads JD content directly rather than just the
+`source_url` field it already extracts today.
 
 ### Multi-select pickers for "Specific JD" actions
 
@@ -374,6 +403,44 @@ good, already-tested guardrail against tone-matching sliding into
 misrepresentation.
 
 ## Hard
+
+### "List Jobs" / "View Pipeline" browsing command
+
+A menu option listing every evaluated job at once (score, recommendation,
+last liveness check date if #16 above exists, Completed/Pending status),
+with a "View More Details" drill-in (full JD text + the evaluation's
+reasoning) and a manual Skip/Archive action per role. Genuinely more than
+a picker -- it's a new interaction shape (browse a list -> drill into one
+item -> take an action on it) that nothing in `menu.py` does today; every
+existing picker is a single pick-and-immediately-act flow, not a
+browse-then-decide one.
+
+**Several real open questions, not just engineering:**
+- **Archive as a new state.** Skipping/archiving a role needs somewhere
+  to live that isn't "pending" (would keep resurfacing) or "completed"
+  (no resume was built) or "expired" (liveness didn't decide this, a
+  person did). A new `jds/archived/` folder mirroring the existing
+  `completed/`/`expired/` pattern is the obvious shape, but worth
+  confirming rather than assuming -- e.g. should an archived JD ever be
+  un-archived, and does `get_pending_jds()` need to explicitly exclude it
+  (the way it already excludes `completed/`)?
+- **Eval "notes" may need richer persistence than exists today.**
+  `save_evaluation()` currently only persists `composite_score`,
+  `recommendation`, `hard_blockers`, and `evaluated_at` -- not the
+  model's per-dimension reasoning from `evaluate_fit()`'s full
+  `FitEvaluationSchema` result (`dimension_scores`, `archetype`, etc.).
+  "Read eval rating notes" implies persisting more of that structure,
+  which is a real (if modest) schema change to `_evaluation`, not free.
+- **Last liveness check date** depends on #16 (Liveness skip-by-recency)
+  existing first -- there's nothing to show here until that's built.
+- **The browse/detail/act UI pattern itself** needs its own design pass:
+  paginated vs. scrollable for 300+ pending JDs, how "View More Details"
+  composes with questionary's existing single-screen-per-prompt model
+  (probably a sub-menu loop: list -> select one -> action menu -> back to
+  list), and whether this subsumes or complements the existing evaluated
+  picker (#11's multi-select idea above is closely related -- worth
+  designing these together rather than separately, since both are about
+  browsing/acting on the same underlying pending-JD pile).
 
 ### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu)
 
