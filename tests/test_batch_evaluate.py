@@ -106,3 +106,46 @@ class TestEvaluateAllPendingPacesCalls(unittest.TestCase):
         }
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_sleep.assert_not_called()
+
+
+class TestEvaluateAllPendingSkipsAlreadyEvaluated(unittest.TestCase):
+
+    @patch("batch_evaluate.time.sleep")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.jd_manager.read_evaluation")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_skips_already_evaluated_jds_by_default(
+        self, mock_engine_cls, mock_read_eval, mock_key, mock_meta, mock_save, mock_sleep,
+    ):
+        mock_read_eval.side_effect = lambda path: {
+            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/unscored.json": None,
+        }[path]
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 3.0, "recommendation": "Selective pursue", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(["jds/scored.json", "jds/unscored.json"])
+        mock_engine_cls.return_value.evaluate_fit.assert_called_once_with("jds/unscored.json")
+
+    @patch("batch_evaluate.time.sleep")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.jd_manager.read_evaluation")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_skip_evaluated_false_reevaluates_everything(
+        self, mock_engine_cls, mock_read_eval, mock_key, mock_meta, mock_save, mock_sleep,
+    ):
+        mock_read_eval.side_effect = lambda path: {
+            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/unscored.json": None,
+        }[path]
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 3.0, "recommendation": "Selective pursue", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(
+            ["jds/scored.json", "jds/unscored.json"], skip_evaluated=False,
+        )
+        self.assertEqual(mock_engine_cls.return_value.evaluate_fit.call_count, 2)
