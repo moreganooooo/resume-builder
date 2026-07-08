@@ -272,35 +272,52 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool, pat
         f.write(row)
 
 
-def _read_source_url_and_company(path: str) -> tuple:
-    """Returns (source_url, company_name) for a JD file, or (None, None)
-    if it's not a JSON object or reading fails."""
+def _read_dedup_fields(path: str) -> tuple:
+    """Returns (source_url, company_name, job_title) for a JD file, or
+    (None, None, None) if it's not a JSON object or reading fails."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.loads(f.read())
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-        return None, None
+        return None, None, None
     if isinstance(data, dict):
-        return data.get("source_url"), data.get("company_name")
-    return None, None
+        return data.get("source_url"), data.get("company_name"), data.get("job_title")
+    return None, None, None
+
+
+def _normalize_for_match(text: str) -> str:
+    """Lowercase, alphanumeric-only normalization for comparing values
+    that may differ cosmetically (case, punctuation, whitespace) but
+    represent the same real thing -- e.g. a job title scraped from two
+    different platforms."""
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
 
 
 def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = None,
-                   company_name: str = None) -> bool:
+                   company_name: str = None, job_title: str = None) -> bool:
     """True if job_key is already completed in the tracker, or a JD file
     for it already exists in jds/ (pending) or jds/completed/ -- matched
-    either by job_key, or (when both source_url and company_name are
-    given) by an existing file sharing the same source_url AND
-    company_name. JobRight sometimes assigns a new source_job_id to a
-    posting it's already surfaced once, under an identical apply URL and
-    company name -- the company_name check guards against merging two
-    genuinely different companies that happen to share application
-    infrastructure (e.g. sibling brands on the same Workday tenant).
-    Used by scan.py to avoid writing duplicate JD files across repeated
-    scan runs."""
+    by any of: job_key; (when both source_url and company_name are given)
+    an existing file sharing the same source_url AND company_name; or
+    (when both company_name and job_title are given) an existing file
+    whose company_name and job_title normalize to the same thing. JobRight
+    sometimes assigns a new source_job_id to a posting it's already
+    surfaced once, under an identical apply URL and company name -- the
+    company_name check guards against merging two genuinely different
+    companies that happen to share application infrastructure (e.g.
+    sibling brands on the same Workday tenant). The normalized
+    company+title check separately catches the same real job cross-posted
+    across two different scan sources entirely (e.g. JobRight's aggregated
+    ATS URL vs. a separate LinkedIn scrape of the same opening) -- these
+    share no source_job_id or source_url at all, so only company+title
+    can catch them. Used by scan.py to avoid writing duplicate JD files
+    across repeated scan runs."""
     tracker = tracker or JDTracker(TRACKER_CSV)
     if tracker.is_completed(job_key):
         return True
+
+    normalized_company = _normalize_for_match(company_name) if company_name else None
+    normalized_title = _normalize_for_match(job_title) if job_title else None
 
     tracker_filename = os.path.basename(TRACKER_CSV)
     for base_dir in (JDS_DIR, COMPLETED_DIR):
@@ -317,10 +334,16 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = N
                     return True
             except OSError:
                 continue
-            if source_url and company_name:
-                existing_url, existing_company = _read_source_url_and_company(path)
-                if existing_url == source_url and existing_company == company_name:
-                    return True
+
+            existing_url, existing_company, existing_title = _read_dedup_fields(path)
+
+            if source_url and company_name and existing_url == source_url and existing_company == company_name:
+                return True
+
+            if (normalized_company and normalized_title
+                    and _normalize_for_match(existing_company) == normalized_company
+                    and _normalize_for_match(existing_title) == normalized_title):
+                return True
     return False
 
 

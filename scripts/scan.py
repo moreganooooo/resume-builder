@@ -65,6 +65,7 @@ def run_scan(sources: list = None) -> int:
             if job_key and jd_manager.job_key_known(
                 job_key, tracker=tracker,
                 source_url=job.get("source_url"), company_name=job.get("company_name"),
+                job_title=job.get("job_title"),
             ):
                 continue
 

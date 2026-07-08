@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -40,6 +41,26 @@ class TestWriteJdFile(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertTrue(os.path.exists(first))
         self.assertTrue(os.path.exists(second))
+
+
+class TestRunScanDedup(unittest.TestCase):
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_passes_job_title_to_dedup_check(self, mock_tracker_cls, mock_known):
+        job = {
+            "source_job_id": "abc123", "company_name": "Acme",
+            "job_title": "Content Strategist", "source_url": "https://example.com/job/1",
+        }
+        with patch.dict(scan.SOURCE_FETCHERS, {"jobright": lambda: [job]}, clear=True), \
+             patch("scan.scan_jobright.fetch_jobright_jobs"), \
+             patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
+            scan.run_scan(["jobright"])
+        mock_known.assert_called_once_with(
+            "abc123", tracker=mock_tracker_cls.return_value,
+            source_url="https://example.com/job/1", company_name="Acme",
+            job_title="Content Strategist",
+        )
 
 
 if __name__ == "__main__":
