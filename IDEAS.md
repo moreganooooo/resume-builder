@@ -56,7 +56,20 @@ scores in the resume picklist, a corrected confirmation message on
 anything, despite previously saying "About to evaluate..."), and a
 JobRight/LinkedIn/Both source picker for the menu's "Scan for New
 Postings" (the CLI's `--source` flag already supported this; the menu
-just hardcoded both with no prompt).
+just hardcoded both with no prompt). **Next-day follow-up:** "Evaluate
+ALL Pending JDs"/`resume evaluate` now skip any JD that's already been
+evaluated by default (a real Gemini call was being re-spent re-scoring
+already-scored JDs every run) -- `resume evaluate --refresh` forces a
+full re-evaluation when actually wanted. `resume run --pick`/`resume
+coverletter --pick` deliberately keep their own always-fresh-evaluate
+behavior (their whole point is a complete, current checkbox list, not
+one silently missing anything already scored) -- caught and fixed a real
+near-miss where `pick_and_process()` would have quietly inherited the
+new skip-by-default instead. Also fixed a related inconsistency:
+`resume evaluate <jd_file>` (the single-file CLI path) never persisted
+its score at all, unlike the interactive menu's "Evaluate a Specific
+JD" -- both now save consistently. `tests/test_cli_evaluate.py` is new
+(zero coverage existed on the `evaluate` CLI command before this).
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
