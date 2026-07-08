@@ -103,6 +103,10 @@ after the pipeline stage they support:
 - Write cover letter for a Specific JD
 - Polish a resume or cover letter — see "Polishing a resume or cover
   letter" below
+- View Application Tracker — renders `data/applications.md` (see
+  "Tracking applications" below) right in the terminal via Rich's
+  Markdown renderer, table and clickable `Apply` links included, no need
+  to open the file yourself
 
 "Evaluate a Specific JD" and "Write cover letter for a Specific JD" use a
 lightweight picker over pending/completed JDs (labeled by company/title,
