@@ -98,6 +98,34 @@ deliberately no confirmation step, per Morgan's call, since a company
 posting two genuinely distinct open roles under the identical title is
 rare enough not to warrant one.
 
+**Same-day, unrelated but important finding: a real test-isolation bug had
+been silently corrupting `data/applications.md` on every test-suite run.**
+Morgan asked for a posting-link feature ("where would I go to review the
+job post and start an application?"), and checking the tracker file to
+plan it surfaced something worse -- 63 fresh "unknown/unknown" rows had
+already accumulated in the 2 days since the file was fully reset
+2026-07-07, despite `jds/completed/` being empty and `jd_tracker_log.csv`
+not even existing (i.e. zero real resume builds had happened in that
+window). Root cause: `tests/test_orchestrator_main_batch.py` calls the
+real `orchestrator.main()` with `COMPLETED_DIR` safely redirected to a
+temp dir, but never redirected `APPLICATIONS_MD` or mocked
+`append_application_row()` -- so every real test-suite run (and this
+session ran the full suite dozens of times today alone, verifying each
+fix) silently appended a fake row using the fake `good.txt`/`bad.txt`
+fixture paths' empty company/title. **This means the 2026-07-07
+"unknown/unknown" investigation's conclusion was wrong** -- those weren't
+historical `dummy_jd.txt`/smoketest-fixture leftovers as assumed at the
+time, they were this same leak, already active before it was ever found.
+Fixed by redirecting `APPLICATIONS_MD` to a temp path in that test's
+`setUp`/`tearDown`, matching the existing `COMPLETED_DIR` pattern; the
+real file was reset again afterward. Built alongside: `data/applications.md`
+now has a `Link` column (`[Apply](source_url)`) so there's actually
+somewhere to click through to the real posting once a resume's done --
+new `jd_manager.extract_source_url()`, extracted before the JD file
+moves to `jds/completed/` (extracting after the move would read a path
+that no longer exists). `tests/test_applications_md.py` is new (zero
+coverage existed on `append_application_row()` before this).
+
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
 | 1.1 | **CLI skin over existing tailor+render** -- **done 2026-07-04** | Easy-Medium | Built: `scripts/cli.py` (Click, `tailor <jd_file>`/`run`) + `scripts/cli_art.py` (rich banner), calling `orchestrator.run_pipeline()` (extracted from `main()`, behavior-preserving -- all 162 tests still pass). `resume run` shell shortcut now routes through it too. `click`/`rich` added to `requirements.txt`. |
