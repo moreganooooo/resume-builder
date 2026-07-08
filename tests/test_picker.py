@@ -48,6 +48,12 @@ class TestPickAndProcess(unittest.TestCase):
         self.assertEqual(result, (0, 0))
         mock_checkbox.assert_not_called()
 
+    def test_always_evaluates_fresh_not_skip_by_default(self):
+        with patch("picker.click.confirm", return_value=True), \
+             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+            picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
+        mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=False)
+
     def test_nothing_selected_returns_zero_zero(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = None
