@@ -83,6 +83,20 @@ while debugging this (mocking the Gemini call but not the file write)
 briefly wrote fake placeholder scores into 56 real JD files -- caught
 immediately and fully reverted, but a reminder to mock `save_evaluation`
 too next time, not just the API call, when testing against real files.
+**Separate follow-up the same day:** Morgan spotted real duplicates
+still showing up in the resume picklist after asking scanning to dedupe
+better -- traced to a genuinely different case than the one already
+fixed (JobRight assigning two IDs to the same posting). This one is the
+same real job cross-posted on *two entirely different platforms* (e.g.
+the company's own ATS/Workday/Rippling listing via JobRight, and a
+separate LinkedIn scrape of the same opening) -- no source_job_id or
+source_url in common at all between the two, so neither existing check
+could catch it. Confirmed against 4 real duplicate pairs already sitting
+in `jds/` before fixing. `job_key_known()` now also matches on an exact
+normalized (lowercase, alphanumeric-only) company name + job title --
+deliberately no confirmation step, per Morgan's call, since a company
+posting two genuinely distinct open roles under the identical title is
+rare enough not to warrant one.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
