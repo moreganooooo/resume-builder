@@ -436,6 +436,61 @@ class TestJobKeyKnown(unittest.TestCase):
         result = jd_manager.job_key_known("new-different-id")
         self.assertFalse(result)
 
+    def test_true_for_same_company_and_title_despite_completely_different_source(self):
+        # The same real job cross-posted on two different platforms (e.g.
+        # JobRight's aggregated ATS URL vs. a separate LinkedIn scrape) has
+        # no source_job_id or source_url in common at all.
+        self._write_pending("a.json", {
+            "source_job_id": "gem-abc123", "company_name": "Function Health",
+            "job_title": "Lifecycle Coordinator -- Acquisition",
+            "source_url": "https://jobs.gem.com/function-health/xyz",
+        })
+        result = jd_manager.job_key_known(
+            "linkedin-4408958099",
+            source_url="https://www.linkedin.com/jobs/view/4408958099/",
+            company_name="Function Health",
+            job_title="Lifecycle Coordinator -- Acquisition",
+        )
+        self.assertTrue(result)
+
+    def test_true_for_same_company_and_title_despite_case_and_punctuation_differences(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "function health",
+            "job_title": "Lifecycle Coordinator, Acquisition!",
+        })
+        result = jd_manager.job_key_known(
+            "new-id", company_name="FUNCTION HEALTH", job_title="lifecycle coordinator acquisition",
+        )
+        self.assertTrue(result)
+
+    def test_false_for_same_company_but_different_title(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Acme",
+            "job_title": "Content Marketing Manager",
+        })
+        result = jd_manager.job_key_known(
+            "new-id", company_name="Acme", job_title="Content Marketing Specialist",
+        )
+        self.assertFalse(result)
+
+    def test_false_for_same_title_but_different_company(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Acme",
+            "job_title": "Content Marketing Manager",
+        })
+        result = jd_manager.job_key_known(
+            "new-id", company_name="Widgets Inc", job_title="Content Marketing Manager",
+        )
+        self.assertFalse(result)
+
+    def test_company_and_title_check_skipped_when_not_provided(self):
+        self._write_pending("a.json", {
+            "source_job_id": "existing-id", "company_name": "Acme",
+            "job_title": "Content Marketing Manager",
+        })
+        result = jd_manager.job_key_known("new-different-id")
+        self.assertFalse(result)
+
 
 class TestSaveAndReadEvaluation(unittest.TestCase):
 
