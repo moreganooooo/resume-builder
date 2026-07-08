@@ -314,5 +314,35 @@ class TestRunWithChain(unittest.TestCase):
         self.assertEqual(calls, ["first", "second"])
 
 
+class TestHandleViewApplications(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_view_applications")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.path = os.path.join(self.tmp_dir, "applications.md")
+        self._real_applications_md = menu.jd_manager.APPLICATIONS_MD
+        menu.jd_manager.APPLICATIONS_MD = self.path
+
+    def tearDown(self):
+        menu.jd_manager.APPLICATIONS_MD = self._real_applications_md
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def test_returns_false_when_no_tracker_file_exists(self):
+        with patch("menu.cli_art.display_applications_tracker") as mock_display:
+            result = menu._handle_view_applications()
+        self.assertFalse(result)
+        mock_display.assert_not_called()
+
+    def test_displays_content_and_returns_true_when_file_exists(self):
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write("# Applications Tracker\n\n| # | Company |\n|---|---------|\n| 1 | Acme |\n")
+        with patch("menu.cli_art.display_applications_tracker") as mock_display:
+            result = menu._handle_view_applications()
+        self.assertTrue(result)
+        mock_display.assert_called_once_with("# Applications Tracker\n\n| # | Company |\n|---|---------|\n| 1 | Acme |\n")
+
+
 if __name__ == "__main__":
     unittest.main()

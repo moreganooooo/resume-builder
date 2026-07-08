@@ -13,6 +13,8 @@ confirmation, zero results) returns False and goes straight back to the
 main menu instead.
 """
 
+import os
+
 import questionary
 
 import cli_art
@@ -33,6 +35,7 @@ _CHOICES = [
     questionary.Choice(title="Customize Resume for a Specific JD", value="tailor_one"),
     questionary.Choice(title="Write cover letter for a Specific JD", value="coverletter_one"),
     questionary.Choice(title="Polish a resume or cover letter", value="polish"),
+    questionary.Choice(title="View Application Tracker", value="view_applications"),
     questionary.Choice(title="Exit", value="exit"),
 ]
 
@@ -134,6 +137,16 @@ def _handle_polish() -> bool:
     return False
 
 
+def _handle_view_applications() -> bool:
+    if not os.path.exists(jd_manager.APPLICATIONS_MD):
+        cli_art.console.print("No applications tracked yet -- nothing to view.")
+        return False
+    with open(jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+        content = f.read()
+    cli_art.display_applications_tracker(content)
+    return True
+
+
 _HANDLERS = {
     "scan": _handle_scan,
     "liveness": _handle_liveness,
@@ -143,6 +156,7 @@ _HANDLERS = {
     "tailor_one": _handle_tailor_one,
     "coverletter_one": _handle_coverletter_one,
     "polish": _handle_polish,
+    "view_applications": _handle_view_applications,
 }
 
 

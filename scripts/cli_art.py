@@ -5,6 +5,7 @@ block art, just a clean styled banner."""
 from questionary import Style
 from rich import box
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
@@ -104,3 +105,11 @@ def render_fit_table(results: list) -> None:
         )
 
     console.print(table)
+
+
+def display_applications_tracker(content: str) -> None:
+    """Renders data/applications.md's raw markdown content directly in the
+    terminal via Rich's built-in Markdown renderer -- the table and each
+    row's clickable "[Apply](source_url)" link render as-is, no custom
+    parsing needed since the file is already valid GFM markdown."""
+    console.print(Markdown(content))
