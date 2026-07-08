@@ -57,7 +57,11 @@ def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_co
         return (0, 0)
 
     cli_art.display_banner(f"Evaluating {len(pending_paths)} pending JD(s) for picker")
-    results = batch_evaluate.evaluate_all_pending(pending_paths)
+    # Always evaluates everything fresh here, unlike "Evaluate ALL Pending
+    # JDs"'s skip-already-evaluated default -- this picker's whole point is
+    # a complete, current checkbox list, not one silently missing anything
+    # already scored from a previous run.
+    results = batch_evaluate.evaluate_all_pending(pending_paths, skip_evaluated=False)
     valid = [r for r in results if not r["error"]]
     if not valid:
         cli_art.console.print("Nothing could be evaluated -- no picker to show.")
