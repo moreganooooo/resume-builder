@@ -70,6 +70,19 @@ new skip-by-default instead. Also fixed a related inconsistency:
 its score at all, unlike the interactive menu's "Evaluate a Specific
 JD" -- both now save consistently. `tests/test_cli_evaluate.py` is new
 (zero coverage existed on the `evaluate` CLI command before this).
+**Same-day follow-up:** the skip filter itself worked, but the
+confirmation prompt shown *before* it ran still said "About to evaluate
+302 pending JD(s)..." (the raw, unfiltered pending count) rather than the
+56 actually about to get a real Gemini call -- easily read as "it's not
+skipping anything." New `batch_evaluate.split_evaluated()` lets both
+`menu._handle_evaluate_all()` and `cli.py`'s `evaluate` command filter
+*before* confirming, so the number shown now matches the real work about
+to happen, with an explicit "(N already-evaluated JD(s) will be
+skipped.)" line. Also: a manual dry-run test against real pending JDs
+while debugging this (mocking the Gemini call but not the file write)
+briefly wrote fake placeholder scores into 56 real JD files -- caught
+immediately and fully reverted, but a reminder to mock `save_evaluation`
+too next time, not just the API call, when testing against real files.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|

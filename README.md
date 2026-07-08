@@ -162,14 +162,16 @@ text ever reaches a Gemini prompt again, so it never leaks into keyword
 extraction or resume content.
 
 **`resume evaluate` (no file argument)** scores every pending JD in one go
-instead of one at a time — real cost: one Gemini call per pending JD, so it
-prints the pending count and asks for confirmation first (`--yes` skips the
-prompt). **Skips any JD that's already been evaluated by default** — a
-successful evaluation persists its score into the JD's own file (see
-below), so re-running this doesn't re-spend a Gemini call re-scoring
-something already scored; it prints how many were skipped vs. newly
-evaluated. Pass `--refresh` to force re-evaluating everything anyway
-(overwriting existing scores). Calls are paced (a few seconds apart) to
+instead of one at a time — real cost: one Gemini call per pending JD.
+**Skips any JD that's already been evaluated by default** — a successful
+evaluation persists its score into the JD's own file (see below), so
+re-running this doesn't re-spend a Gemini call re-scoring something
+already scored. The confirmation prompt (`--yes` skips it) asks against
+the real count of JDs actually about to be evaluated (the unscored ones),
+not the full pending count, and a line above it reports how many
+already-evaluated JDs are being skipped. Pass `--refresh` to force
+re-evaluating everything anyway (overwriting existing scores). Calls are
+paced (a few seconds apart) to
 stay under this account's requests-per-minute tier instead of bursting
 all of them at once and hitting HTTP 429s — the same pacing also applies
 to `resume run --pick`/`resume coverletter --pick`, since both share this
