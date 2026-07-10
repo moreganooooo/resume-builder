@@ -2,7 +2,7 @@
 # Source of truth for resume bullet selection.
 # AI: always read this file before writing {{EXPERIENCE}}. Select the most
 # relevant bullets for the specific JD. Prefer metric-bearing options.
-# Tags: [email] [enablement] [content] [ops] [mgmt] [writing] [generalist]
+# Tags: [email] [enablement] [content] [ops] [mgmt] [writing] [brand] [design] [generalist]
 #
 # To add your own variations: paste them under the right role with a tag.
 # Format: - [tags] Bullet text. *(source/note if relevant)*
