@@ -16,3 +16,4 @@ questionary
 python-docx
 python-pptx
 odfpy
+openpyxl
