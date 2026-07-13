@@ -14,6 +14,7 @@ console = Console()
 SUCCESS = "[bold green]✓[/bold green]"
 ERROR = "[bold red]✗[/bold red]"
 WARNING = "[bold yellow]⚠[/bold yellow]"
+HINT = "[bold cyan]💡[/bold cyan]"
 
 # Ported from job_automater/cli.py:47-57 (its `custom_style`) so every
 # questionary prompt in this project -- old (--pick checkboxes) and new
@@ -26,6 +27,7 @@ QUESTIONARY_STYLE = Style([
     ('highlighted', 'fg:#673ab7 bold'),
     ('selected', 'fg:#4caf50'),
     ('separator', 'fg:#cc5454'),
+    ('new_user', 'fg:#4caf50 bold'),
     ('instruction', ''),
     ('text', ''),
 ])
@@ -60,6 +62,20 @@ def display_main_banner() -> None:
 
 def display_whats_next_panel() -> None:
     console.print(Panel("What's next?", border_style="#4caf50", box=box.ROUNDED, padding=(0, 2)))
+
+
+def display_bootstrap_intro(doc_count: int) -> None:
+    body = (
+        f"Here's what's about to happen:\n\n"
+        f"I'll read through your {doc_count} document(s) and pull out real "
+        f"achievements, figure out which company each one belongs to, tag "
+        f"them by skill area, then run them through a quality-check, "
+        f"cleanup, and rewrite pipeline so you end up with a polished "
+        f"bullet bank.\n\n"
+        f"Two of these steps make real API calls and can take a few "
+        f"minutes — I'll let you know before each one."
+    )
+    console.print(Panel(body, title="New User Bootstrap", border_style="#4caf50", box=box.ROUNDED, padding=(1, 2)))
 
 
 # Recommendation values match orchestrator.py's FitEvaluationSchema Literal
