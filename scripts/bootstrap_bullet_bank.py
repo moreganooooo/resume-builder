@@ -251,3 +251,94 @@ def print_ingestion_summary(summary: dict) -> None:
         f"{summary['flagged']} flagged for review, "
         f"{summary['certificates']} certificate(s) found."
     )
+
+
+import argparse
+import subprocess
+
+import questionary
+
+PIPELINE_STAGES = [
+    "audit_bullet_bank.py",
+    "cluster_bullet_bank.py",
+    "rewrite_bullets.py",
+    "audit_keepers.py",
+    "score_keeper_gems.py",
+    "embed_bullet_bank.py",
+]
+
+# Gate before index 0 (audit_bullet_bank.py) and index 2 (rewrite_bullets.py)
+# -- the two stages that make a real API call per bullet.
+_CONFIRMATION_GATES = {
+    0: "Ready to run the quality-audit stage? This calls the API once per "
+       "bullet and may take a while.",
+    2: "Ready to run the rewrite stage? This is the other API-heavy step "
+       "and may take a while.",
+}
+
+_STAGE_HINTS = {
+    0: "\U0001F4A1 Quality check time — every bullet gets scored the way a "
+       "skeptical hiring manager would read it. This is the first API-heavy step.",
+    1: "\U0001F4A1 Grouping near-duplicate bullets and keeping only the "
+       "strongest version of each.",
+    2: "\U0001F4A1 Rewriting anything that didn't pass the quality check — "
+       "the other API-heavy step.",
+    3: "\U0001F4A1 Quick re-check on the rewritten bullets to make sure they "
+       "actually improved.",
+    4: "\U0001F4A1 Flagging standout 'hidden gem' bullets — the ones a "
+       "hiring manager would specifically remember.",
+    5: "\U0001F4A1 Last step — converting everything into a format the "
+       "system can use to intelligently match bullets to a job description "
+       "later.",
+}
+
+
+def run_stage(script_name: str) -> bool:
+    """Runs one existing pipeline script, unmodified, as its own
+    subprocess. Returns True if it exited successfully."""
+    script_path = os.path.join(SCRIPT_DIR, script_name)
+    result = subprocess.run([sys.executable, script_path])
+    return result.returncode == 0
+
+
+def run_full_pipeline(skip_confirm: bool = False) -> bool:
+    """Runs all six existing pipeline stages in order, with a confirmation
+    gate before each of the two API-heavy stages. Stops immediately (and
+    does not continue to later stages) the moment any stage fails or a
+    gate is declined. Since each stage already checkpoints internally,
+    simply re-running this function later resumes correctly."""
+    for i, script_name in enumerate(PIPELINE_STAGES):
+        if i in _CONFIRMATION_GATES and not skip_confirm:
+            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True).ask()
+            if not proceed:
+                print("Stopped. Re-run this same command later to continue from here.")
+                return False
+
+        print(f"\n{_STAGE_HINTS[i]}")
+        print(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {script_name}...")
+        if not run_stage(script_name):
+            print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.")
+            return False
+
+    print("\n\U0001F389 All done! Your bullet bank is ready.")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--yes", action="store_true", help="Skip confirmation gates and run the full pipeline unattended.")
+    parser.add_argument("--dry-run", action="store_true", help="Print prompts instead of calling the API, and skip the real six-stage pipeline entirely.")
+    args = parser.parse_args()
+
+    summary = run_ingestion(dry_run=args.dry_run)
+    print_ingestion_summary(summary)
+
+    if args.dry_run:
+        print("\n--dry-run set: skipping the six-stage pipeline.")
+        return
+
+    run_full_pipeline(skip_confirm=args.yes)
+
+
+if __name__ == "__main__":
+    main()
