@@ -13,6 +13,9 @@ class TestBootstrapDependenciesImportable(unittest.TestCase):
         from odf.opendocument import load  # noqa: F401
         from odf import text, teletype  # noqa: F401
 
+    def test_openpyxl_importable(self):
+        import openpyxl  # noqa: F401
+
 
 if __name__ == "__main__":
     unittest.main()
