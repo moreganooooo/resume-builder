@@ -14,9 +14,12 @@ main menu instead.
 """
 
 import os
+import subprocess
+import sys
 
 import questionary
 
+import bootstrap_bullet_bank
 import cli_art
 import orchestrator
 import jd_manager
@@ -27,6 +30,8 @@ import liveness as liveness_module
 import polish as polish_module
 
 _CHOICES = [
+    questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
+    questionary.Separator(),
     questionary.Choice(title="Scan for New Postings", value="scan"),
     questionary.Choice(title="Check Posting Liveness", value="liveness"),
     questionary.Choice(title="Evaluate ALL Pending JDs", value="evaluate_all"),
@@ -45,6 +50,36 @@ _SCAN_SOURCE_CHOICES = [
     questionary.Choice(title="JobRight only", value="jobright"),
     questionary.Choice(title="LinkedIn only", value="linkedin"),
 ]
+
+
+def _handle_bootstrap() -> bool:
+    os.makedirs(bootstrap_bullet_bank.SOURCE_DOCS_DIR, exist_ok=True)
+    files = [
+        f for f in os.listdir(bootstrap_bullet_bank.SOURCE_DOCS_DIR)
+        if os.path.isfile(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, f))
+    ]
+
+    if not files:
+        cli_art.console.print(
+            "Looks like there's nothing in the source_documents folder yet. "
+            "Drop in your resume, LinkedIn export, certificates, "
+            "recommendation letters, or notes — then come back and select "
+            "this again when you're ready!"
+        )
+        return False
+
+    proceed = questionary.confirm(
+        f"Looks like you've got {len(files)} document(s) to process. Ready to get started?",
+        default=True,
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not proceed:
+        return False
+
+    cli_art.display_bootstrap_intro(len(files))
+    script_path = os.path.join(bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py")
+    result = subprocess.run([sys.executable, script_path])
+    return result.returncode == 0
 
 
 def _handle_scan() -> bool:
@@ -148,6 +183,7 @@ def _handle_view_applications() -> bool:
 
 
 _HANDLERS = {
+    "bootstrap": _handle_bootstrap,
     "scan": _handle_scan,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
