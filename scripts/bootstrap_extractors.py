@@ -358,3 +358,177 @@ def extract_resume_timeline_and_achievements(
         )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return ResumeExtraction(**data) if data else ResumeExtraction(experience=[], certifications=[])
+
+
+class ContactInfo(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+
+
+class RecommendationQuote(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    quote: Optional[str] = None
+
+
+class RoleSuggestions(BaseModel):
+    secondary_roles: list[str] = Field(default_factory=list)
+
+
+class LedgerEntry(BaseModel):
+    label: str
+    value: str
+
+
+class LedgerExtraction(BaseModel):
+    metrics: list[LedgerEntry] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
+
+
+_CONTACT_INFO_PROMPT = """
+Extract this person's contact/identity information from the document text:
+full name, email, phone, location (city/state), LinkedIn profile URL, and
+portfolio/personal website URL if present. Use null for any field not
+explicitly present in the text -- never invent a value.
+"""
+
+_RECOMMENDATION_QUOTE_PROMPT = """
+This document is a letter of recommendation written about this person by
+someone else. Extract the single strongest, most specific endorsing quote
+from the letter, along with the name and title of the person who wrote it,
+if stated. Use null for any field not explicitly present -- never invent
+a name, title, or quote that isn't really in the letter.
+"""
+
+_SECONDARY_ROLES_PROMPT = """
+Given a person's primary target job titles and a sample of their real
+achievements, suggest 2-3 adjacent job titles they could also reasonably
+target -- roles that draw on the same underlying skills but aren't
+identical to the primary titles. Only suggest real, standard job titles;
+do not invent a title that wouldn't make sense to a recruiter.
+"""
+
+_BACKGROUND_GUIDE_PROMPT = """
+You are drafting a short narrative career-background guide from this
+person's own resume/LinkedIn summary, recommendation-letter excerpts, and
+achievement notes. Write 2-4 short paragraphs in third person describing
+how their background/skills came together and what makes their combination
+of experience distinctive. Only describe things directly supported by the
+source text -- do not invent employers, dates, or accomplishments not
+present in the source. If the source material is too thin to say anything
+specific, write a short, honest, general paragraph instead of padding it
+with invented detail.
+"""
+
+_LEDGER_PROMPT = """
+Given a list of resume achievement bullets, extract three things:
+- metrics: every quantified result mentioned, as a (label, value) pair
+  where value is the number/stat exactly as written (e.g. "22% reply rate")
+- tools: every named tool, platform, or piece of software mentioned
+- projects: every named project or initiative mentioned
+Only include things explicitly stated in the text. Do not invent numbers,
+tool names, or project names that aren't there.
+"""
+
+
+def extract_contact_info(
+    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+) -> ContactInfo:
+    """Extracts identity/contact fields from a resume or LinkedIn export's
+    text. Exactly one of text or upload_path must be set."""
+    if (text is None) == (upload_path is None):
+        raise ValueError("extract_contact_info requires exactly one of text or upload_path")
+
+    if dry_run:
+        print("[DRY RUN] would extract contact info.")
+        return ContactInfo()
+
+    if upload_path is not None:
+        raw = _generate_from_upload(upload_path, _CONTACT_INFO_PROMPT, ContactInfo)
+    else:
+        raw, _ = GeminiClient.generate(
+            model=EXTRACTION_MODEL, system_instruction=_CONTACT_INFO_PROMPT,
+            contents=text, response_schema=ContactInfo, temperature=0.0,
+        )
+    data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
+    return ContactInfo(**data) if data else ContactInfo()
+
+
+def extract_recommendation_quote(
+    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+) -> RecommendationQuote | None:
+    """Extracts a real quote + attribution from a recommendation letter.
+    Returns None if no usable quote was found. Exactly one of text or
+    upload_path must be set."""
+    if (text is None) == (upload_path is None):
+        raise ValueError("extract_recommendation_quote requires exactly one of text or upload_path")
+
+    if dry_run:
+        print("[DRY RUN] would extract a recommendation quote.")
+        return None
+
+    if upload_path is not None:
+        raw = _generate_from_upload(upload_path, _RECOMMENDATION_QUOTE_PROMPT, RecommendationQuote)
+    else:
+        raw, _ = GeminiClient.generate(
+            model=EXTRACTION_MODEL, system_instruction=_RECOMMENDATION_QUOTE_PROMPT,
+            contents=text, response_schema=RecommendationQuote, temperature=0.0,
+        )
+    data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
+    if not data.get("quote"):
+        return None
+    return RecommendationQuote(**data)
+
+
+def suggest_secondary_roles(
+    primary_roles: list[str], achievements_text: str, dry_run: bool = False,
+) -> list[str]:
+    """Suggests 2-3 adjacent target job titles based on confirmed primary
+    roles and a sample of real achievement text."""
+    if dry_run:
+        print("[DRY RUN] would suggest secondary target roles.")
+        return []
+
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL, system_instruction=_SECONDARY_ROLES_PROMPT,
+        contents=f"Primary roles: {', '.join(primary_roles)}\n\nAchievements:\n{achievements_text[:4000]}",
+        response_schema=RoleSuggestions, temperature=0.0,
+    )
+    data = GeminiClient.parse_json(raw)
+    return data.get("secondary_roles", [])
+
+
+def draft_background_guide(source_texts: list[str], dry_run: bool = False) -> str:
+    """Synthesizes a short narrative background guide from resume/rec-letter/
+    achievement-notes text already gathered during bootstrap ingestion."""
+    if dry_run:
+        print("[DRY RUN] would draft a background guide.")
+        return ""
+
+    combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL, system_instruction=_BACKGROUND_GUIDE_PROMPT,
+        contents=combined, temperature=0.4,
+    )
+    return (raw or "").strip()
+
+
+def extract_ledger_entries(achievements_text: str, dry_run: bool = False) -> LedgerExtraction:
+    """Derives simple metrics/tools/projects lists from already-extracted
+    achievement bullets, for the verified_metrics/tools/projects.json
+    ledger files."""
+    if dry_run:
+        print("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        return LedgerExtraction()
+
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL, system_instruction=_LEDGER_PROMPT,
+        contents=achievements_text[:6000], response_schema=LedgerExtraction, temperature=0.0,
+    )
+    data = GeminiClient.parse_json(raw)
+    return LedgerExtraction(**data) if data else LedgerExtraction()
