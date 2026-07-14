@@ -252,5 +252,102 @@ class TestWriteVerifiedLedger(BootstrapProfileTestCase):
         self.assertEqual(patterns["patterns"], [])
 
 
+class TestWriteCvMd(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_accept_writes_header_and_per_role_sections(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([
+            {"company": "Acme Corp", "title": "Marketing Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None},
+        ])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew email list by 40%", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "Grew the email list by 40% through segmentation."}
+        mock_select.return_value.ask.return_value = "accept"
+
+        identity = {
+            "full_name": "Jamie Rivera", "email": "jamie@example.com", "phone": "",
+            "location": "Austin, TX", "linkedin_url": "", "portfolio_url": "", "extra_link": "",
+            "primary_roles": [], "secondary_roles": [], "remote_preference": False,
+        }
+
+        bootstrap_profile.write_cv_md(identity)
+
+        with open(bootstrap_profile.CV_MD_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Jamie Rivera", content)
+        self.assertIn("Marketing Manager", content)
+        self.assertIn("Acme Corp", content)
+        self.assertIn("Grew the email list by 40% through segmentation.", content)
+        mock_process_bullet.assert_called_once()
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_builds_rules_and_kb_once_not_per_bullet(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([{"company": "Acme Corp", "title": "Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None}])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- First bullet", "source_file": "resume.txt", "source_type": "resume"})
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Second bullet", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "polished"}
+        mock_select.return_value.ask.return_value = "accept"
+        identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+
+        bootstrap_profile.write_cv_md(identity)
+
+        self.assertEqual(mock_rules_cls.call_count, 1)
+        self.assertEqual(mock_kb_cls.call_count, 1)
+        self.assertEqual(mock_process_bullet.call_count, 2)
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_skip_writes_empty_file(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([{"company": "Acme Corp", "title": "Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None}])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- First bullet", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "polished"}
+        mock_select.return_value.ask.return_value = "skip"
+        identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+
+        bootstrap_profile.write_cv_md(identity)
+
+        with open(bootstrap_profile.CV_MD_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "")
+
+    def test_dry_run_writes_without_prompting(self):
+        with patch("bootstrap_profile.questionary.select") as mock_select, \
+             patch("bootstrap_profile.RulesBundle"), patch("bootstrap_profile.KnowledgeBase"), \
+             patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys")), \
+             patch("bootstrap_profile.process_bullet", return_value={"final_bullet": "polished"}):
+            identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+            bootstrap_profile.write_cv_md(identity, dry_run=True)
+            mock_select.assert_not_called()
+        self.assertTrue(os.path.exists(bootstrap_profile.CV_MD_PATH))
+
+
 if __name__ == "__main__":
     unittest.main()

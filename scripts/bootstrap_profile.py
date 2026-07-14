@@ -36,9 +36,12 @@ RECRUITER_PATTERNS_PATH = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
+import pandas as pd
+
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import cli_art  # noqa: E402
+from rewrite_bullets import RulesBundle, KnowledgeBase, build_system_prompts, process_bullet, RULES_DIR  # noqa: E402
 
 
 def _load_checkpoint() -> dict:
@@ -435,3 +438,95 @@ def write_verified_ledger(dry_run: bool = False) -> None:
     }
     with open(RECRUITER_PATTERNS_PATH, "w", encoding="utf-8") as f:
         json.dump(empty_recruiter_patterns, f, indent=2)
+
+
+def _build_cv_draft_rows() -> list:
+    timeline = _load_timeline()
+    if not os.path.exists(bootstrap_bullet_bank.DRAFT_CSV_PATH):
+        return []
+    with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    by_company = {}
+    for row in rows:
+        by_company.setdefault(row["Role / Company"], []).append(row["Bullet Point"])
+
+    ordered = sorted(timeline, key=lambda e: e.get("end_date") or "", reverse=True)
+    result = []
+    seen_companies = set()
+    for entry in ordered:
+        company = entry["company"]
+        seen_companies.add(company)
+        result.append({
+            "company": company, "title": entry.get("title") or "",
+            "start_date": entry.get("start_date") or "", "end_date": entry.get("end_date") or "",
+            "bullets": by_company.get(company, []),
+        })
+    for company, bullets in by_company.items():
+        if company not in seen_companies and company != "Misc. / Unassigned":
+            result.append({"company": company, "title": "", "start_date": "", "end_date": "", "bullets": bullets})
+    return result
+
+
+def _polish_bullet(bullet: str, role_company: str, kb, rewrite_system: str, score_system: str, dry_run: bool = False) -> str:
+    row = pd.Series({"Bullet Point": bullet, "Tags": "", "Role / Company": role_company, "weaknesses": ""})
+    result = process_bullet(row, kb, rewrite_system, score_system, dry_run)
+    return result.get("final_bullet", bullet)
+
+
+def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, score_system: str, dry_run: bool) -> str:
+    lines = [f"# {identity['full_name']}", ""]
+    contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
+    if contact_parts:
+        lines.append(" | ".join(contact_parts))
+        lines.append("")
+
+    for role in rows:
+        header = f"## {role['title']} — {role['company']}" if role["title"] else f"## {role['company']}"
+        date_range = f" ({role['start_date']} - {role['end_date']})" if role["start_date"] else ""
+        lines.append(header + date_range)
+        for bullet in role["bullets"]:
+            polished = _polish_bullet(bullet, role["company"], kb, rewrite_system, score_system, dry_run)
+            lines.append(f"- {polished}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def write_cv_md(identity: dict, dry_run: bool = False) -> None:
+    rows = _build_cv_draft_rows()
+    rules = RulesBundle(RULES_DIR)
+    kb = KnowledgeBase()
+    rewrite_system, score_system = build_system_prompts(rules, kb)
+
+    if dry_run:
+        print("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.")
+        content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+        os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
+        with open(CV_MD_PATH, "w", encoding="utf-8") as f:
+            f.write(content)
+        return
+
+    content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+    choice = "skip"
+    while True:
+        print("\n--- Draft cv.md ---\n")
+        print(content)
+        print("\n--- End draft ---\n")
+        choice = questionary.select(
+            "What would you like to do with this draft?",
+            choices=[
+                questionary.Choice(title="Accept it as-is", value="accept"),
+                questionary.Choice(title="Regenerate", value="regenerate"),
+                questionary.Choice(title="Skip -- I'll write my own later", value="skip"),
+            ],
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if choice == "regenerate":
+            content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+            continue
+        break
+
+    os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
+    with open(CV_MD_PATH, "w", encoding="utf-8") as f:
+        f.write(content if choice == "accept" else "")
