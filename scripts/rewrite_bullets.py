@@ -40,7 +40,7 @@ Cache observability:
 
 Knowledge base files loaded at startup:
   - cv.md                          → role section matching bullet's company only
-  - morgan-background-guide.md     → tag-keyed summary
+  - user-background-guide.md       → tag-keyed summary
   - profile.yml                    → target roles, superpowers, deal-breakers (trimmed)
   - verified-claims.csv            → tag-filtered rows (Treering bullets only, max 15)
   - extracted-screenshot-metrics.csv → screenshot-sourced metrics (Treering only)
@@ -115,7 +115,7 @@ CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
 KEEPERS_OUT     = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 
 KB_CV               = os.path.join(KB_DIR, "cv.md")
-KB_BACKGROUND       = os.path.join(KB_DIR, "morgan-background-guide.md")
+KB_BACKGROUND       = os.path.join(KB_DIR, "user-background-guide.md")
 KB_PROFILE          = os.path.join(KB_DIR, "profile.yml")
 KB_VERIFIED_CLAIMS  = os.path.join(KB_DIR, "verified-claims.csv")
 KB_SCREENSHOT_METRICS = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv")
@@ -406,9 +406,6 @@ class RulesBundle:
             "TRUTHFULNESS TESTS — fail any bullet that does not pass all four:",
             _yaml_to_str(tr),
             "",
-            "ATS VALUE — use these weights when scoring ats_value:",
-            _yaml_to_str(ats),
-            "",
             "MANAGER TEST:",
             _yaml_to_str(lq.get("manager_test", {})),
         ])
@@ -562,7 +559,7 @@ class KnowledgeBase:
     def __init__(self):
         print("\n📚 Loading knowledge base context...")
         self.cv_full           = load_text_file(KB_CV,               "cv.md")
-        self.bg_raw            = load_text_file(KB_BACKGROUND,        "morgan-background-guide.md")
+        self.bg_raw            = load_text_file(KB_BACKGROUND,        "user-background-guide.md")
         raw_profile            = load_text_file(KB_PROFILE,           "profile.yml")
         self.profile           = trim_profile_yml(raw_profile)
         self.df_claims         = load_verified_claims(KB_VERIFIED_CLAIMS)

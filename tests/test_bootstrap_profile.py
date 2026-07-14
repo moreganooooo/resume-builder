@@ -1,0 +1,419 @@
+import csv
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+sys.path.insert(0, SCRIPTS_DIR)
+
+import bootstrap_bullet_bank  # noqa: E402
+import bootstrap_extractors  # noqa: E402
+import bootstrap_profile  # noqa: E402
+
+
+class BootstrapProfileTestCase(unittest.TestCase):
+    """Redirects every relevant path constant to a fresh temp dir per test."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.bootstrap_dir = os.path.join(self.tmp_dir, "bootstrap")
+        bootstrap_bullet_bank.BOOTSTRAP_DIR = self.bootstrap_dir
+        bootstrap_bullet_bank.SOURCE_DOCS_DIR = os.path.join(self.bootstrap_dir, "source_documents")
+        bootstrap_bullet_bank.TIMELINE_PATH = os.path.join(self.bootstrap_dir, "timeline.json")
+        bootstrap_bullet_bank.CHECKPOINT_PATH = os.path.join(self.bootstrap_dir, "checkpoint.json")
+        bootstrap_bullet_bank.DRAFT_CSV_PATH = os.path.join(self.bootstrap_dir, "bullet-bank-draft.csv")
+        os.makedirs(bootstrap_bullet_bank.SOURCE_DOCS_DIR, exist_ok=True)
+
+        bootstrap_profile.PROFILE_YML_PATH = os.path.join(self.tmp_dir, "profile.yml")
+        bootstrap_profile.PORTALS_YML_PATH = os.path.join(self.tmp_dir, "portals.yml")
+        bootstrap_profile.CV_MD_PATH = os.path.join(self.tmp_dir, "cv.md")
+        bootstrap_profile.BACKGROUND_GUIDE_PATH = os.path.join(self.tmp_dir, "user-background-guide.md")
+        bootstrap_profile.VERIFIED_METRICS_PATH = os.path.join(self.tmp_dir, "verified_metrics.json")
+        bootstrap_profile.VERIFIED_TOOLS_PATH = os.path.join(self.tmp_dir, "verified_tools.json")
+        bootstrap_profile.VERIFIED_PROJECTS_PATH = os.path.join(self.tmp_dir, "verified_projects.json")
+        bootstrap_profile.VERIFIED_FACTS_PATH = os.path.join(self.tmp_dir, "verified_facts.json")
+        bootstrap_profile.VERIFIED_CLAIMS_PATH = os.path.join(self.tmp_dir, "verified-claims.csv")
+        bootstrap_profile.EVIDENCE_GRAPH_PATH = os.path.join(self.tmp_dir, "evidence_graph.json")
+        bootstrap_profile.EVIDENCE_GUIDE_PATH = os.path.join(self.tmp_dir, "evidence-guide.csv")
+        bootstrap_profile.SCREENSHOT_METRICS_PATH = os.path.join(self.tmp_dir, "extracted-screenshot-metrics.csv")
+        bootstrap_profile.RECRUITER_PATTERNS_PATH = os.path.join(self.tmp_dir, "recruiter_memory_patterns.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _write_checkpoint(self, data: dict) -> None:
+        with open(bootstrap_bullet_bank.CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def _write_timeline(self, entries: list) -> None:
+        with open(bootstrap_bullet_bank.TIMELINE_PATH, "w", encoding="utf-8") as f:
+            json.dump(entries, f)
+
+    def _touch_source(self, filename: str) -> None:
+        with open(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename), "w", encoding="utf-8") as f:
+            f.write("placeholder")
+
+
+class TestGuessContactInfo(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.bootstrap_extractors.extract_contact_info")
+    def test_finds_info_from_resume_file(self, mock_extract):
+        self._touch_source("resume.txt")
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        mock_extract.return_value = bootstrap_extractors.ContactInfo(full_name="Jamie Rivera", email="jamie@example.com")
+
+        info = bootstrap_profile._guess_contact_info(bootstrap_profile._load_checkpoint())
+
+        self.assertEqual(info.full_name, "Jamie Rivera")
+
+    def test_returns_blank_when_no_resume_file(self):
+        self._write_checkpoint({"notes.txt": {"status": "done", "doc_type": "achievement_notes"}})
+        info = bootstrap_profile._guess_contact_info(bootstrap_profile._load_checkpoint())
+        self.assertIsNone(info.full_name)
+
+
+class TestGuessPrimaryRoles(unittest.TestCase):
+
+    def test_returns_recent_titles_most_recent_first(self):
+        timeline = [
+            {"company": "Old Co", "title": "Coordinator", "start_date": "2015", "end_date": "2018"},
+            {"company": "Acme Corp", "title": "Marketing Manager", "start_date": "2019", "end_date": "2022"},
+        ]
+        roles = bootstrap_profile._guess_primary_roles(timeline)
+        self.assertEqual(roles[0], "Marketing Manager")
+
+
+class TestGuessRecommendations(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.bootstrap_extractors.extract_recommendation_quote")
+    def test_collects_quotes_from_recommendation_letters(self, mock_extract):
+        self._touch_source("letter.txt")
+        self._write_checkpoint({"letter.txt": {"status": "done", "doc_type": "recommendation_letter"}})
+        mock_extract.return_value = bootstrap_extractors.RecommendationQuote(
+            name="Alex Chen", title="VP Marketing", quote="Excellent writer."
+        )
+
+        quotes = bootstrap_profile._guess_recommendations(bootstrap_profile._load_checkpoint())
+
+        self.assertEqual(len(quotes), 1)
+        self.assertEqual(quotes[0].name, "Alex Chen")
+
+    def test_returns_empty_list_when_no_recommendation_letters(self):
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        quotes = bootstrap_profile._guess_recommendations(bootstrap_profile._load_checkpoint())
+        self.assertEqual(quotes, [])
+
+
+class TestCollectIdentityDryRun(BootstrapProfileTestCase):
+
+    def test_dry_run_returns_guesses_without_prompting(self):
+        self._write_timeline([{"company": "Acme Corp", "title": "Marketing Manager", "start_date": "2019", "end_date": "2022"}])
+        self._write_checkpoint({})
+
+        with patch("bootstrap_profile.questionary.text") as mock_text, \
+             patch("bootstrap_profile.questionary.checkbox") as mock_checkbox, \
+             patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            identity = bootstrap_profile.collect_identity(dry_run=True)
+            mock_text.assert_not_called()
+            mock_checkbox.assert_not_called()
+            mock_confirm.assert_not_called()
+
+        self.assertEqual(identity["primary_roles"], ["Marketing Manager"])
+        self.assertEqual(identity["secondary_roles"], [])
+
+
+class TestWriteProfileYml(BootstrapProfileTestCase):
+
+    def test_writes_candidate_and_target_roles(self):
+        import yaml
+        identity = {
+            "full_name": "Jamie Rivera", "email": "jamie@example.com", "phone": "555-0100",
+            "location": "Austin, TX", "linkedin_url": "linkedin.com/in/jamierivera",
+            "portfolio_url": "", "extra_link": "", "primary_roles": ["Marketing Manager"],
+            "secondary_roles": ["Customer Education Specialist"], "remote_preference": True,
+        }
+
+        bootstrap_profile.write_profile_yml(identity, recommendations=[])
+
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["candidate"]["full_name"], "Jamie Rivera")
+        self.assertEqual(data["target_roles"]["primary"], ["Marketing Manager"])
+        self.assertEqual(data["target_roles"]["secondary"], ["Customer Education Specialist"])
+        self.assertEqual(data["location"]["remote_required"], True)
+
+    def test_auto_fills_key_recommendations_when_present(self):
+        import yaml
+        identity = {
+            "full_name": "Jamie Rivera", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
+            "remote_preference": False,
+        }
+        recs = [bootstrap_extractors.RecommendationQuote(name="Alex Chen", title="VP Marketing", quote="Excellent writer.")]
+
+        bootstrap_profile.write_profile_yml(identity, recommendations=recs)
+
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["key_recommendations"][0]["name"], "Alex Chen")
+        self.assertEqual(data["key_recommendations"][0]["quote"], "Excellent writer.")
+
+    def test_scaffolds_deep_sections_empty(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
+            "remote_preference": False,
+        }
+        bootstrap_profile.write_profile_yml(identity, recommendations=[])
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["narrative"]["headline"], "")
+        self.assertEqual(data["deal_breakers"], [""])
+        self.assertEqual(data["management_evidence"], [])
+
+
+class TestWritePortalsYml(BootstrapProfileTestCase):
+
+    def test_seeds_title_filter_from_target_roles(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "",
+            "primary_roles": ["Marketing Manager"], "secondary_roles": ["Customer Education Specialist"],
+            "remote_preference": True,
+        }
+
+        bootstrap_profile.write_portals_yml(identity)
+
+        with open(bootstrap_profile.PORTALS_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertIn("Marketing Manager", data["title_filter"]["positive"])
+        self.assertIn("Customer Education Specialist", data["title_filter"]["positive"])
+        self.assertIn("Remote", data["location_filter"]["always_allow"])
+
+    def test_scaffolds_block_and_seniority_boost_empty(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
+            "remote_preference": False,
+        }
+        bootstrap_profile.write_portals_yml(identity)
+        with open(bootstrap_profile.PORTALS_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["seniority_boost"], [])
+
+
+class TestWriteVerifiedLedger(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries")
+    def test_derives_metrics_tools_projects_from_achievements(self, mock_extract):
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew reply rate to 22% using Outreach.io", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_extract.return_value = bootstrap_extractors.LedgerExtraction(
+            metrics=[bootstrap_extractors.LedgerEntry(label="Reply rate", value="22%")],
+            tools=["Outreach.io"], projects=[],
+        )
+
+        bootstrap_profile.write_verified_ledger()
+
+        with open(bootstrap_profile.VERIFIED_METRICS_PATH, encoding="utf-8") as f:
+            metrics = json.load(f)
+        self.assertEqual(metrics["metrics"][0]["value"], "22%")
+        with open(bootstrap_profile.VERIFIED_TOOLS_PATH, encoding="utf-8") as f:
+            tools = json.load(f)
+        self.assertEqual(tools["tools"][0]["name"], "Outreach.io")
+
+    def test_scaffolds_cross_source_files_empty(self):
+        bootstrap_profile.write_verified_ledger(dry_run=True)
+
+        with open(bootstrap_profile.VERIFIED_FACTS_PATH, encoding="utf-8") as f:
+            facts = json.load(f)
+        self.assertEqual(facts["facts"], [])
+
+        with open(bootstrap_profile.EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
+            graph = json.load(f)
+        self.assertEqual(graph["nodes"], [])
+
+        with open(bootstrap_profile.VERIFIED_CLAIMS_PATH, encoding="utf-8") as f:
+            header = f.readline().strip()
+        self.assertEqual(header, "Claim / Finding,Verification Status,Source File,Evidence / Detail,Metric(s),Confidence,Use in Resume?,Use in Portfolio?,Next Follow-Up")
+
+        with open(bootstrap_profile.RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
+            patterns = json.load(f)
+        self.assertEqual(patterns["patterns"], [])
+
+
+class TestWriteCvMd(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_accept_writes_header_and_per_role_sections(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([
+            {"company": "Acme Corp", "title": "Marketing Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None},
+        ])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew email list by 40%", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "Grew the email list by 40% through segmentation."}
+        mock_select.return_value.ask.return_value = "accept"
+
+        identity = {
+            "full_name": "Jamie Rivera", "email": "jamie@example.com", "phone": "",
+            "location": "Austin, TX", "linkedin_url": "", "portfolio_url": "", "extra_link": "",
+            "primary_roles": [], "secondary_roles": [], "remote_preference": False,
+        }
+
+        bootstrap_profile.write_cv_md(identity)
+
+        with open(bootstrap_profile.CV_MD_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Jamie Rivera", content)
+        self.assertIn("Marketing Manager", content)
+        self.assertIn("Acme Corp", content)
+        self.assertIn("Grew the email list by 40% through segmentation.", content)
+        mock_process_bullet.assert_called_once()
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_builds_rules_and_kb_once_not_per_bullet(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([{"company": "Acme Corp", "title": "Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None}])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- First bullet", "source_file": "resume.txt", "source_type": "resume"})
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Second bullet", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "polished"}
+        mock_select.return_value.ask.return_value = "accept"
+        identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+
+        bootstrap_profile.write_cv_md(identity)
+
+        self.assertEqual(mock_rules_cls.call_count, 1)
+        self.assertEqual(mock_kb_cls.call_count, 1)
+        self.assertEqual(mock_process_bullet.call_count, 2)
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_skip_writes_empty_file(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        self._write_timeline([{"company": "Acme Corp", "title": "Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None}])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- First bullet", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_process_bullet.return_value = {"final_bullet": "polished"}
+        mock_select.return_value.ask.return_value = "skip"
+        identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+
+        bootstrap_profile.write_cv_md(identity)
+
+        with open(bootstrap_profile.CV_MD_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "")
+
+    def test_dry_run_writes_without_prompting(self):
+        with patch("bootstrap_profile.questionary.select") as mock_select, \
+             patch("bootstrap_profile.RulesBundle"), patch("bootstrap_profile.KnowledgeBase"), \
+             patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys")), \
+             patch("bootstrap_profile.process_bullet", return_value={"final_bullet": "polished"}):
+            identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+            bootstrap_profile.write_cv_md(identity, dry_run=True)
+            mock_select.assert_not_called()
+        self.assertTrue(os.path.exists(bootstrap_profile.CV_MD_PATH))
+
+
+class TestWriteBackgroundGuide(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_background_guide")
+    def test_accepts_draft_and_writes_file(self, mock_draft, mock_select):
+        self._touch_source("resume.txt")
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        mock_draft.return_value = "A marketer who blends writing and systems thinking."
+        mock_select.return_value.ask.return_value = "accept"
+
+        bootstrap_profile.write_background_guide(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "A marketer who blends writing and systems thinking.")
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_background_guide")
+    def test_skip_writes_empty_file(self, mock_draft, mock_select):
+        self._touch_source("resume.txt")
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        mock_draft.return_value = "Some draft text."
+        mock_select.return_value.ask.return_value = "skip"
+
+        bootstrap_profile.write_background_guide(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "")
+
+    def test_dry_run_writes_without_prompting(self):
+        with patch("bootstrap_profile.questionary.select") as mock_select, \
+             patch("bootstrap_profile.bootstrap_extractors.draft_background_guide", return_value="") as mock_draft:
+            bootstrap_profile.write_background_guide({}, dry_run=True)
+            mock_select.assert_not_called()
+            mock_draft.assert_called_once()
+
+
+class TestRunProfileSetup(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.write_background_guide")
+    @patch("bootstrap_profile.write_cv_md")
+    @patch("bootstrap_profile.write_verified_ledger")
+    @patch("bootstrap_profile.write_portals_yml")
+    @patch("bootstrap_profile.write_profile_yml")
+    @patch("bootstrap_profile.collect_identity")
+    @patch("bootstrap_profile._guess_recommendations", return_value=[])
+    def test_calls_every_writer_in_order(
+        self, mock_guess_recs, mock_collect_identity, mock_write_profile,
+        mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
+    ):
+        mock_collect_identity.return_value = {
+            "full_name": "Jamie Rivera", "primary_roles": ["Marketing Manager"], "secondary_roles": [],
+        }
+
+        summary = bootstrap_profile.run_profile_setup()
+
+        mock_write_profile.assert_called_once()
+        mock_write_portals.assert_called_once()
+        mock_write_ledger.assert_called_once()
+        mock_write_cv.assert_called_once()
+        mock_write_bg.assert_called_once()
+        self.assertEqual(summary["full_name"], "Jamie Rivera")
+        self.assertEqual(summary["primary_roles"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

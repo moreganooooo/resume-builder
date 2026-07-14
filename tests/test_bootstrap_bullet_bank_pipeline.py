@@ -92,23 +92,61 @@ class TestMainDryRun(unittest.TestCase):
     pipeline -- running those scripts for real would defeat the point of a
     dry run."""
 
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
     @patch("bootstrap_bullet_bank.run_full_pipeline")
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py", "--dry-run"])
-    def test_dry_run_skips_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline):
+    def test_dry_run_skips_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup):
         mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once_with(dry_run=True)
         mock_run_full_pipeline.assert_not_called()
 
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
     @patch("bootstrap_bullet_bank.run_full_pipeline", return_value=True)
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py"])
-    def test_without_dry_run_calls_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline):
+    def test_without_dry_run_calls_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup):
         mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once_with(dry_run=False)
         mock_run_full_pipeline.assert_called_once()
+
+
+class TestMainCallsProfileSetup(unittest.TestCase):
+
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
+    @patch("bootstrap_bullet_bank.run_full_pipeline")
+    @patch("bootstrap_bullet_bank.run_ingestion")
+    @patch("sys.argv", ["bootstrap_bullet_bank.py"])
+    def test_profile_setup_runs_between_ingestion_and_pipeline(
+        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup,
+    ):
+        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+
+        bootstrap_bullet_bank.main()
+
+        mock_profile_setup.assert_called_once_with(dry_run=False)
+        mock_run_ingestion.assert_called_once()
+        mock_run_full_pipeline.assert_called_once()
+
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
+    @patch("bootstrap_bullet_bank.run_full_pipeline")
+    @patch("bootstrap_bullet_bank.run_ingestion")
+    @patch("sys.argv", ["bootstrap_bullet_bank.py", "--dry-run"])
+    def test_profile_setup_receives_dry_run_flag(
+        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup,
+    ):
+        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+
+        bootstrap_bullet_bank.main()
+
+        mock_profile_setup.assert_called_once_with(dry_run=True)
+        mock_run_full_pipeline.assert_not_called()
 
 
 if __name__ == "__main__":
