@@ -76,3 +76,6 @@ yarn-error.log*
 
 # === CLAUDE LOCAL NOTES (personal, machine-specific) ===
 .claude.local.md
+
+# === PERSONAL CONVERSATION EXPORTS (not project code) ===
+resume-builder-conversations-perplexity/
