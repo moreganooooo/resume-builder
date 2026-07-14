@@ -406,9 +406,6 @@ class RulesBundle:
             "TRUTHFULNESS TESTS — fail any bullet that does not pass all four:",
             _yaml_to_str(tr),
             "",
-            "ATS VALUE — use these weights when scoring ats_value:",
-            _yaml_to_str(ats),
-            "",
             "MANAGER TEST:",
             _yaml_to_str(lq.get("manager_test", {})),
         ])
