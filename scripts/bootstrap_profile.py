@@ -530,3 +530,70 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
     os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
     with open(CV_MD_PATH, "w", encoding="utf-8") as f:
         f.write(content if choice == "accept" else "")
+
+
+def _gather_background_source_texts(checkpoint: dict) -> list:
+    texts = []
+    for filename, result in sorted(checkpoint.items()):
+        if result.get("status") != "done":
+            continue
+        if result.get("doc_type") not in ("resume", "linkedin_export", "recommendation_letter", "achievement_notes"):
+            continue
+        path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
+        text, _upload_path = _resolve_text_or_upload(path)
+        if text:
+            texts.append(text)
+    return texts
+
+
+def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
+    source_texts = _gather_background_source_texts(checkpoint)
+
+    if dry_run:
+        print("[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip.")
+        draft = bootstrap_extractors.draft_background_guide(source_texts, dry_run=dry_run)
+        os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
+        with open(BACKGROUND_GUIDE_PATH, "w", encoding="utf-8") as f:
+            f.write(draft)
+        return
+
+    draft = bootstrap_extractors.draft_background_guide(source_texts) if source_texts else ""
+    choice = "skip"
+    while True:
+        print("\n--- Draft background guide ---\n")
+        print(draft or "(nothing drafted -- no usable source text found)")
+        print("\n--- End draft ---\n")
+        choice = questionary.select(
+            "What would you like to do with this draft?",
+            choices=[
+                questionary.Choice(title="Accept it as-is", value="accept"),
+                questionary.Choice(title="Regenerate", value="regenerate"),
+                questionary.Choice(title="Skip -- I'll write my own later", value="skip"),
+            ],
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if choice == "regenerate":
+            draft = bootstrap_extractors.draft_background_guide(source_texts)
+            continue
+        break
+
+    os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
+    with open(BACKGROUND_GUIDE_PATH, "w", encoding="utf-8") as f:
+        f.write(draft if choice == "accept" else "")
+
+
+def run_profile_setup(dry_run: bool = False) -> dict:
+    checkpoint = _load_checkpoint()
+    identity = collect_identity(dry_run=dry_run)
+    recommendations = _guess_recommendations(checkpoint, dry_run=dry_run)
+    write_profile_yml(identity, recommendations)
+    write_portals_yml(identity)
+    write_verified_ledger(dry_run=dry_run)
+    write_cv_md(identity, dry_run=dry_run)
+    write_background_guide(checkpoint, dry_run=dry_run)
+    return {
+        "full_name": identity["full_name"],
+        "primary_roles": len(identity["primary_roles"]),
+        "secondary_roles": len(identity["secondary_roles"]),
+        "recommendations_found": len(recommendations),
+    }
