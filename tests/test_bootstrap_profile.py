@@ -349,5 +349,71 @@ class TestWriteCvMd(BootstrapProfileTestCase):
         self.assertTrue(os.path.exists(bootstrap_profile.CV_MD_PATH))
 
 
+class TestWriteBackgroundGuide(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_background_guide")
+    def test_accepts_draft_and_writes_file(self, mock_draft, mock_select):
+        self._touch_source("resume.txt")
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        mock_draft.return_value = "A marketer who blends writing and systems thinking."
+        mock_select.return_value.ask.return_value = "accept"
+
+        bootstrap_profile.write_background_guide(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "A marketer who blends writing and systems thinking.")
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_background_guide")
+    def test_skip_writes_empty_file(self, mock_draft, mock_select):
+        self._touch_source("resume.txt")
+        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        mock_draft.return_value = "Some draft text."
+        mock_select.return_value.ask.return_value = "skip"
+
+        bootstrap_profile.write_background_guide(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "")
+
+    def test_dry_run_writes_without_prompting(self):
+        with patch("bootstrap_profile.questionary.select") as mock_select, \
+             patch("bootstrap_profile.bootstrap_extractors.draft_background_guide", return_value="") as mock_draft:
+            bootstrap_profile.write_background_guide({}, dry_run=True)
+            mock_select.assert_not_called()
+            mock_draft.assert_called_once()
+
+
+class TestRunProfileSetup(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.write_background_guide")
+    @patch("bootstrap_profile.write_cv_md")
+    @patch("bootstrap_profile.write_verified_ledger")
+    @patch("bootstrap_profile.write_portals_yml")
+    @patch("bootstrap_profile.write_profile_yml")
+    @patch("bootstrap_profile.collect_identity")
+    @patch("bootstrap_profile._guess_recommendations", return_value=[])
+    def test_calls_every_writer_in_order(
+        self, mock_guess_recs, mock_collect_identity, mock_write_profile,
+        mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
+    ):
+        mock_collect_identity.return_value = {
+            "full_name": "Jamie Rivera", "primary_roles": ["Marketing Manager"], "secondary_roles": [],
+        }
+
+        summary = bootstrap_profile.run_profile_setup()
+
+        mock_write_profile.assert_called_once()
+        mock_write_portals.assert_called_once()
+        mock_write_ledger.assert_called_once()
+        mock_write_cv.assert_called_once()
+        mock_write_bg.assert_called_once()
+        self.assertEqual(summary["full_name"], "Jamie Rivera")
+        self.assertEqual(summary["primary_roles"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
