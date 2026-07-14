@@ -45,6 +45,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import bootstrap_extractors  # noqa: E402
+import bootstrap_profile  # noqa: E402
 import bootstrap_timeline  # noqa: E402
 import tag_bullet_bank  # noqa: E402
 
@@ -332,6 +333,8 @@ def main():
 
     summary = run_ingestion(dry_run=args.dry_run)
     print_ingestion_summary(summary)
+
+    bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
 
     if args.dry_run:
         print("\n--dry-run set: skipping the six-stage pipeline.")
