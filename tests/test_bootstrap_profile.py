@@ -176,5 +176,37 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
         self.assertEqual(data["management_evidence"], [])
 
 
+class TestWritePortalsYml(BootstrapProfileTestCase):
+
+    def test_seeds_title_filter_from_target_roles(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "",
+            "primary_roles": ["Marketing Manager"], "secondary_roles": ["Customer Education Specialist"],
+            "remote_preference": True,
+        }
+
+        bootstrap_profile.write_portals_yml(identity)
+
+        with open(bootstrap_profile.PORTALS_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertIn("Marketing Manager", data["title_filter"]["positive"])
+        self.assertIn("Customer Education Specialist", data["title_filter"]["positive"])
+        self.assertIn("Remote", data["location_filter"]["always_allow"])
+
+    def test_scaffolds_block_and_seniority_boost_empty(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
+            "remote_preference": False,
+        }
+        bootstrap_profile.write_portals_yml(identity)
+        with open(bootstrap_profile.PORTALS_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["seniority_boost"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
