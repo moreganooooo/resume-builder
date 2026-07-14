@@ -11,14 +11,14 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 # Import shared objects from orchestrator
 import sys
 sys.path.insert(0, SCRIPT_DIR)
-from orchestrator import client, CritiqueSchema, GeminiClient, ResumeEngine
+from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
 
 SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
 
 engine = ResumeEngine()
-critique_prompt = engine._load_prompt("critique_bullet.md")
-manager_test_rules = json.dumps(engine._load_yaml(engine.scoring_dir, "manager_test.yaml"))
-believability_rules = json.dumps(engine._load_yaml(engine.scoring_dir, "believability.yaml"))
+critique_prompt = engine.load_prompt("critique_bullet.md")
+manager_test_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "manager_test.yaml"))
+believability_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "believability.yaml"))
 
 critique_system = (
     f"\n\n{critique_prompt}"
@@ -74,7 +74,7 @@ for i, row in df.iterrows():
     print(f"Auditing bullet {i+1}/{total} (scored {len(results)+1} total): {bullet[:60]}...")
 
     try:
-        critique_text = client.generate(
+        critique_text, usage = GeminiClient.generate(
             model="gemini-3.1-flash-lite",
             system_instruction=critique_system,
             contents=bullet,

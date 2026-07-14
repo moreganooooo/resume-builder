@@ -81,6 +81,7 @@ SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
+SCORING_DIR  = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
@@ -790,7 +791,7 @@ def main():
     )
 
     if needs_api:
-        rules = RulesBundle(RULES_DIR)
+        rules = RulesBundle(RULES_DIR, SCORING_DIR)
         kb    = KnowledgeBase()
 
         # Warm segment cache over the full keepers set (cheapest: one pass)

@@ -102,7 +102,13 @@ def main():
     print(f"  Wrote {GEMS_CSV}")
 
     # Preview top 5
-    bullet_col = "bullet" if "bullet" in gems.columns else gems.columns[0]
+    bullet_col = None
+    for candidate in ("Bullet Point", "bullet", "achievement"):
+        if candidate in gems.columns:
+            bullet_col = candidate
+            break
+    if bullet_col is None:
+        bullet_col = gems.columns[0]
     print("\n  Top Hidden Gems:")
     for i, (_, row) in enumerate(gems.head(5).iterrows(), 1):
         gem_score = row.get("hidden_gem_score", "?")
