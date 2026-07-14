@@ -353,3 +353,85 @@ def write_portals_yml(identity: dict) -> None:
     os.makedirs(os.path.dirname(PORTALS_YML_PATH), exist_ok=True)
     with open(PORTALS_YML_PATH, "w", encoding="utf-8") as f:
         f.write(content)
+
+
+def write_verified_ledger(dry_run: bool = False) -> None:
+    achievements_text = _achievements_summary_text()
+    extraction = (
+        bootstrap_extractors.extract_ledger_entries(achievements_text, dry_run=dry_run)
+        if achievements_text else bootstrap_extractors.LedgerExtraction()
+    )
+
+    os.makedirs(os.path.dirname(VERIFIED_METRICS_PATH), exist_ok=True)
+
+    metrics_json = {
+        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.metrics)},
+        "metrics": [
+            {"id": f"metric_{i + 1:03d}", "label": m.label, "value": m.value}
+            for i, m in enumerate(extraction.metrics)
+        ],
+    }
+    with open(VERIFIED_METRICS_PATH, "w", encoding="utf-8") as f:
+        json.dump(metrics_json, f, indent=2)
+
+    tools_json = {
+        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.tools)},
+        "tools": [{"id": f"tool_{i + 1:03d}", "name": t} for i, t in enumerate(extraction.tools)],
+    }
+    with open(VERIFIED_TOOLS_PATH, "w", encoding="utf-8") as f:
+        json.dump(tools_json, f, indent=2)
+
+    projects_json = {
+        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.projects)},
+        "projects": [{"id": f"proj_{i + 1:03d}", "name": p} for i, p in enumerate(extraction.projects)],
+    }
+    with open(VERIFIED_PROJECTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(projects_json, f, indent=2)
+
+    empty_facts = {
+        "_meta": {"source": "", "total_entries": 0,
+                  "note": "Add facts here as you cross-reference multiple sources over time."},
+        "facts": [],
+    }
+    with open(VERIFIED_FACTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(empty_facts, f, indent=2)
+
+    empty_graph = {
+        "_meta": {
+            "source": "",
+            "description": "Relationship graph connecting metrics, facts, projects, tools. Build this up as your evidence grows.",
+            "node_types": ["metric", "fact", "project", "tool"],
+        },
+        "nodes": [], "edges": [],
+    }
+    with open(EVIDENCE_GRAPH_PATH, "w", encoding="utf-8") as f:
+        json.dump(empty_graph, f, indent=2)
+
+    with open(VERIFIED_CLAIMS_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "Claim / Finding", "Verification Status", "Source File", "Evidence / Detail",
+            "Metric(s)", "Confidence", "Use in Resume?", "Use in Portfolio?", "Next Follow-Up",
+        ])
+
+    with open(EVIDENCE_GUIDE_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "Evidence Cluster", "Finding", "Source File(s)", "Best Detail / Quote", "Best Metric",
+            "What This Proves About You", "Where to Use It", "Confidence", "Source URL / Notes",
+        ])
+
+    with open(SCREENSHOT_METRICS_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "Source Batch", "Campaign / Screenshot Title", "Screenshot File(s)", "Contacted",
+            "Reached", "Reached %", "Opened", "Open %", "Replied", "Reply %", "Clicked %",
+            "Bounced", "Bounce %", "Opted Out", "Opt-Out %", "Best Detail / Notes", "Confidence", "Reviewed",
+        ])
+
+    empty_recruiter_patterns = {
+        "_meta": {"note": "Builds up over real recruiter feedback and application outcomes."},
+        "patterns": [],
+    }
+    with open(RECRUITER_PATTERNS_PATH, "w", encoding="utf-8") as f:
+        json.dump(empty_recruiter_patterns, f, indent=2)

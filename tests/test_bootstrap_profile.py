@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import shutil
@@ -206,6 +207,49 @@ class TestWritePortalsYml(BootstrapProfileTestCase):
         with open(bootstrap_profile.PORTALS_YML_PATH, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         self.assertEqual(data["seniority_boost"], [])
+
+
+class TestWriteVerifiedLedger(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries")
+    def test_derives_metrics_tools_projects_from_achievements(self, mock_extract):
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew reply rate to 22% using Outreach.io", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_extract.return_value = bootstrap_extractors.LedgerExtraction(
+            metrics=[bootstrap_extractors.LedgerEntry(label="Reply rate", value="22%")],
+            tools=["Outreach.io"], projects=[],
+        )
+
+        bootstrap_profile.write_verified_ledger()
+
+        with open(bootstrap_profile.VERIFIED_METRICS_PATH, encoding="utf-8") as f:
+            metrics = json.load(f)
+        self.assertEqual(metrics["metrics"][0]["value"], "22%")
+        with open(bootstrap_profile.VERIFIED_TOOLS_PATH, encoding="utf-8") as f:
+            tools = json.load(f)
+        self.assertEqual(tools["tools"][0]["name"], "Outreach.io")
+
+    def test_scaffolds_cross_source_files_empty(self):
+        bootstrap_profile.write_verified_ledger(dry_run=True)
+
+        with open(bootstrap_profile.VERIFIED_FACTS_PATH, encoding="utf-8") as f:
+            facts = json.load(f)
+        self.assertEqual(facts["facts"], [])
+
+        with open(bootstrap_profile.EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
+            graph = json.load(f)
+        self.assertEqual(graph["nodes"], [])
+
+        with open(bootstrap_profile.VERIFIED_CLAIMS_PATH, encoding="utf-8") as f:
+            header = f.readline().strip()
+        self.assertEqual(header, "Claim / Finding,Verification Status,Source File,Evidence / Detail,Metric(s),Confidence,Use in Resume?,Use in Portfolio?,Next Follow-Up")
+
+        with open(bootstrap_profile.RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
+            patterns = json.load(f)
+        self.assertEqual(patterns["patterns"], [])
 
 
 if __name__ == "__main__":
