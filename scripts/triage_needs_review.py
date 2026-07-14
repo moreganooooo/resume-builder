@@ -26,7 +26,12 @@ import csv
 import os
 from datetime import date
 
-KB_BASE        = "resume-engine/knowledge_base"
+# bullet_feedback.py (which writes needs-review.csv) resolves this path from
+# the script's own location, not the caller's cwd — match that here so this
+# script finds the same file regardless of where it's invoked from.
+SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT   = os.path.dirname(SCRIPT_DIR)
+KB_BASE        = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 NEEDS_REVIEW   = os.path.join(KB_BASE, "needs-review.csv")
 KEEPERS_CSV    = os.path.join(KB_BASE, "bullet-bank-keepers.csv")
 REWRITE_QUEUE  = os.path.join(KB_BASE, "rewrite-queue.csv")

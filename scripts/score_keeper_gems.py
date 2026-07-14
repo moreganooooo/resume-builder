@@ -48,7 +48,7 @@ GEMS_OUTPUT    = KB_DIR / "hidden-gems.csv"
 
 GEM_THRESHOLD  = 90    # hidden_gem_score >= 90 → hidden_gem_flag = True
 SLEEP_SECONDS  = 4     # politeness delay between API calls
-MODEL          = "gemma-4-27b-it"   # Gemma 4 31B — best free-tier allotment
+MODEL          = "gemma-4-31b-it"   # Gemma 4 31B — best free-tier allotment
 
 BULLET_COL     = "Bullet Point"
 FALLBACK_COLS  = ["bullet", "achievement", "text", "Bullet", "Achievement"]

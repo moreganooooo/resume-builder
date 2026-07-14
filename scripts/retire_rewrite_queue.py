@@ -15,8 +15,14 @@ import csv
 import os
 from datetime import date
 
-REWRITE_QUEUE  = "resume-engine/knowledge_base/rewrite-queue.csv"
-RETIRED_PATH   = "resume-engine/knowledge_base/retired-bullets.csv"
+# Resolved from the script's own location, not the caller's cwd — matches
+# every other script in this pipeline (cluster_bullet_bank.py, which writes
+# rewrite-queue.csv, included).
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
+KB_DIR        = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
+RETIRED_PATH  = os.path.join(KB_DIR, "retired-bullets.csv")
 
 REWRITE_HEADER = [
     "cluster_id","cluster_size","is_representative","next_action",

@@ -124,14 +124,13 @@ def main():
     df = pd.read_csv(CSV_PATH)
 
     bullet_col = None
-    for candidate in ("bullet", "achievement"):
+    for candidate in ("Bullet Point", "bullet", "achievement"):
         if candidate in df.columns:
             bullet_col = candidate
             break
     if bullet_col is None:
-        bullets = [" ".join(str(v) for v in row.values) for _, row in df.iterrows()]
-    else:
-        bullets = df[bullet_col].astype(str).tolist()
+        raise ValueError(f"No known bullet column found. Columns: {list(df.columns)}")
+    bullets = df[bullet_col].astype(str).tolist()
 
     total = len(bullets)
     print(f"📄 Loaded {total} bullets from {CSV_PATH}")

@@ -102,6 +102,7 @@ SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))   # resume-builder/scr
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                   # resume-builder/
 KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
+SCORING_DIR  = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
@@ -124,6 +125,7 @@ KB_VERIFIED_METRICS = os.path.join(KB_DIR, "verified_metrics.json")
 KB_VERIFIED_PROJECTS = os.path.join(KB_DIR, "verified_projects.json")
 KB_VERIFIED_TOOLS   = os.path.join(KB_DIR, "verified_tools.json")
 KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
+KB_VOICE_ANCHORS    = os.path.join(KB_DIR, "voice-anchors.md")
 
 # ---------------------------------------------------------------------------
 # MODEL STRATEGY
@@ -343,8 +345,14 @@ def _yaml_to_str(data: dict) -> str:
 
 
 class RulesBundle:
-    def __init__(self, rules_dir: str):
+    def __init__(self, rules_dir: str, scoring_dir: str = None):
         print("\n📋 Loading rules bundle...")
+
+        # scoring_dir defaults to the sibling "scoring" dir next to rules_dir
+        # (resume-engine/rules -> resume-engine/scoring), matching every
+        # caller in this codebase; only override for tests/custom layouts.
+        if scoring_dir is None:
+            scoring_dir = os.path.join(os.path.dirname(rules_dir), "scoring")
 
         lq  = _load_yaml_safe(os.path.join(rules_dir, "language_quality.yaml"),    "language_quality")
         vt  = _load_yaml_safe(os.path.join(rules_dir, "verb_taxonomy.yaml"),        "verb_taxonomy")
@@ -352,6 +360,20 @@ class RulesBundle:
         hf  = _load_yaml_safe(os.path.join(rules_dir, "hard_failures.yaml"),        "hard_failures")
         tr  = _load_yaml_safe(os.path.join(rules_dir, "truthfulness_rules.yaml"),   "truthfulness_rules")
         sr  = _load_yaml_safe(os.path.join(rules_dir, "style_rules.yaml"),          "style_rules")
+        # ats_rules.yaml is documented (see module docstring) but was never
+        # created — score_rules_block below references it regardless via
+        # `ats`, so load it defensively the same way as the other files;
+        # _load_yaml_safe degrades to {} (empty ATS section) if it's absent.
+        ats = _load_yaml_safe(os.path.join(rules_dir, "ats_rules.yaml"),            "ats_rules")
+        # manager_test.yaml (full scoring/ rubric — hard_fail_conditions incl.
+        # scope_inflation, protected_bullets) and believability.yaml (realism/
+        # human_language criteria with worked bad-example patterns) were never
+        # loaded here even though audit_bullet_bank.py and orchestrator.py's
+        # critique loop both correctly pull them from scoring/ — meaning the
+        # rewrite step's own accept/reject judgment ran on a much thinner
+        # rubric than everything scoring bullets elsewhere in the pipeline.
+        mt  = _load_yaml_safe(os.path.join(scoring_dir, "manager_test.yaml"),       "manager_test (scoring)")
+        bel = _load_yaml_safe(os.path.join(scoring_dir, "believability.yaml"),      "believability")
 
         self.rewrite_rules_block = "\n".join([
             "=== VERB INTENT MAP ===",
@@ -383,6 +405,18 @@ class RulesBundle:
             "Apply these four tests before finalising any bullet:",
             _yaml_to_str(tr),
             "",
+            "=== SCOPE & BELIEVABILITY GUARDRAILS ===",
+            "A rewrite must keep the SAME underlying achievement, scope, ownership, and",
+            "seniority as the original bullet — only the phrasing may improve. Making a bullet",
+            "sound more impressive by inflating scope, ownership, or scale (even without",
+            "inventing a fact) is a hard failure, not a style win. Study the bad-example",
+            "patterns below and never produce phrasing that reads like them:",
+            _yaml_to_str({"hard_fail_conditions": mt.get("hard_fail_conditions", []),
+                          "protected_bullets":    mt.get("protected_bullets", [])}),
+            _yaml_to_str({"believability_criteria_and_examples": bel.get("criteria", {}),
+                          "believability_penalties":              bel.get("penalties", {}),
+                          "context_anchoring":                    bel.get("context_anchoring", {})}),
+            "",
             "=== STYLE RULES ===",
             _yaml_to_str(sr),
         ])
@@ -408,6 +442,15 @@ class RulesBundle:
             "",
             "MANAGER TEST:",
             _yaml_to_str(lq.get("manager_test", {})),
+            "",
+            "SCOPE & BELIEVABILITY — a bullet can be technically true and still fail",
+            "believability_score if it inflates scope, ownership, or seniority beyond what",
+            "the original supported. Any hard_fail_condition below is an automatic",
+            "manager_test=FAIL regardless of other scores:",
+            _yaml_to_str(mt),
+            _yaml_to_str({"believability_criteria_and_examples": bel.get("criteria", {}),
+                          "believability_penalties":              bel.get("penalties", {}),
+                          "context_anchoring":                    bel.get("context_anchoring", {})}),
         ])
 
         print(f"   📐 Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
@@ -569,6 +612,7 @@ class KnowledgeBase:
         self.verified_projects = load_json_file(KB_VERIFIED_PROJECTS, "verified_projects.json")
         self.verified_tools    = load_json_file(KB_VERIFIED_TOOLS,    "verified_tools.json")
         self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
+        self.voice_anchors      = load_text_file(KB_VOICE_ANCHORS,    "voice-anchors.md")
 
         print(f"   💥 profile.yml trimmed to {len(self.profile):,} chars")
 
@@ -604,6 +648,11 @@ class KnowledgeBase:
                 "=== VERIFIED PROJECTS ===\n"
                 "Use these to add accurate project detail and scope.\n"
                 + self.verified_projects
+            )
+        if self.voice_anchors:
+            sections.append(
+                "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
+                + self.voice_anchors
             )
         return "\n\n".join(sections)
 
@@ -1187,7 +1236,7 @@ def main():
         print("✅ Nothing to process. All bullets are already done.")
         return
 
-    rules      = RulesBundle(RULES_DIR)
+    rules      = RulesBundle(RULES_DIR, SCORING_DIR)
     kb         = KnowledgeBase()
     kb.warm_segment_cache(df_todo)
     rewrite_system, score_system = build_system_prompts(rules, kb)
