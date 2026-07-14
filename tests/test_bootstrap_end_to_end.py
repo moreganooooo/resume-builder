@@ -125,5 +125,52 @@ class TestMultiDocumentConsolidation(BootstrapEndToEndTestCase):
         self.assertEqual(certs[0]["name"], "PMP Certification")
 
 
+import bootstrap_profile  # noqa: E402
+
+
+class TestPhaseZeroPointFiveDryRunEndToEnd(BootstrapEndToEndTestCase):
+    """Runs Phase 0 then Phase 0.5, both under dry_run=True, over real
+    fixture files -- proving the whole chain (ingestion -> checkpoint ->
+    timeline -> identity guessing -> file writing) doesn't crash and
+    produces every expected file, with zero API calls and zero prompts."""
+
+    def setUp(self):
+        super().setUp()
+        self.profile_yml_path = os.path.join(self.tmp_dir, "profile.yml")
+        self.portals_yml_path = os.path.join(self.tmp_dir, "portals.yml")
+        self.cv_md_path = os.path.join(self.tmp_dir, "cv.md")
+        self.background_guide_path = os.path.join(self.tmp_dir, "user-background-guide.md")
+        bootstrap_profile.PROFILE_YML_PATH = self.profile_yml_path
+        bootstrap_profile.PORTALS_YML_PATH = self.portals_yml_path
+        bootstrap_profile.CV_MD_PATH = self.cv_md_path
+        bootstrap_profile.BACKGROUND_GUIDE_PATH = self.background_guide_path
+        bootstrap_profile.VERIFIED_METRICS_PATH = os.path.join(self.tmp_dir, "verified_metrics.json")
+        bootstrap_profile.VERIFIED_TOOLS_PATH = os.path.join(self.tmp_dir, "verified_tools.json")
+        bootstrap_profile.VERIFIED_PROJECTS_PATH = os.path.join(self.tmp_dir, "verified_projects.json")
+        bootstrap_profile.VERIFIED_FACTS_PATH = os.path.join(self.tmp_dir, "verified_facts.json")
+        bootstrap_profile.VERIFIED_CLAIMS_PATH = os.path.join(self.tmp_dir, "verified-claims.csv")
+        bootstrap_profile.EVIDENCE_GRAPH_PATH = os.path.join(self.tmp_dir, "evidence_graph.json")
+        bootstrap_profile.EVIDENCE_GUIDE_PATH = os.path.join(self.tmp_dir, "evidence-guide.csv")
+        bootstrap_profile.SCREENSHOT_METRICS_PATH = os.path.join(self.tmp_dir, "extracted-screenshot-metrics.csv")
+        bootstrap_profile.RECRUITER_PATTERNS_PATH = os.path.join(self.tmp_dir, "recruiter_memory_patterns.json")
+
+    def test_full_dry_run_flow_writes_every_phase_0_5_file(self):
+        with open(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, "My_Resume.txt"), "w", encoding="utf-8") as f:
+            f.write("Jamie Rivera\njamie@example.com\nAcme Corp, Marketing Manager, 2019-2022\n- Grew email list by 40%")
+
+        bootstrap_bullet_bank.run_ingestion(dry_run=True)
+        bootstrap_profile.run_profile_setup(dry_run=True)
+
+        for path in (
+            self.profile_yml_path, self.portals_yml_path, self.cv_md_path, self.background_guide_path,
+            bootstrap_profile.VERIFIED_METRICS_PATH, bootstrap_profile.VERIFIED_TOOLS_PATH,
+            bootstrap_profile.VERIFIED_PROJECTS_PATH, bootstrap_profile.VERIFIED_FACTS_PATH,
+            bootstrap_profile.VERIFIED_CLAIMS_PATH, bootstrap_profile.EVIDENCE_GRAPH_PATH,
+            bootstrap_profile.EVIDENCE_GUIDE_PATH, bootstrap_profile.SCREENSHOT_METRICS_PATH,
+            bootstrap_profile.RECRUITER_PATTERNS_PATH,
+        ):
+            self.assertTrue(os.path.exists(path), f"expected {path} to exist")
+
+
 if __name__ == "__main__":
     unittest.main()
