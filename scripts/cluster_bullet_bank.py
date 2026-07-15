@@ -43,9 +43,12 @@ Algorithm
 Usage:
   python cluster_bullet_bank.py
 
-Note: Embeddings are cached in bullet_vectors_ge2_d768.npy so you can
-re-run the clustering step without re-embedding.  Delete the .npy file to
-force a fresh embed pass.
+Note: Embeddings are cached in bullet_vectors_ge2_d768_cluster.npy so you
+can re-run the clustering step without re-embedding. Delete the .npy file
+to force a fresh embed pass. If interrupted mid-embedding (rate limit,
+Ctrl-C), progress is checkpointed after every batch of 20 --
+re-running this script resumes from where it left off instead of
+starting over.
 """
 
 import os
@@ -53,7 +56,7 @@ import json
 import time
 import numpy as np
 import pandas as pd
-import urllib.request
+import requests
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -65,12 +68,13 @@ KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
-RAW_CSV         = os.path.join(KB_DIR, "bullet-bank-clean.csv")
-AUDITED_CSV     = os.path.join(KB_DIR, "bullet-bank-audited.csv")
-CLUSTER_MAP_CSV = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
-CLUSTER_MAP     = os.path.join(KB_DIR, "cluster-map.json")
-REWRITE_QUEUE   = os.path.join(KB_DIR, "rewrite-queue.csv")
-VECTOR_CACHE    = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.npy")
+RAW_CSV                 = os.path.join(KB_DIR, "bullet-bank-clean.csv")
+AUDITED_CSV             = os.path.join(KB_DIR, "bullet-bank-audited.csv")
+CLUSTER_MAP_CSV         = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
+CLUSTER_MAP             = os.path.join(KB_DIR, "cluster-map.json")
+REWRITE_QUEUE           = os.path.join(KB_DIR, "rewrite-queue.csv")
+VECTOR_CACHE            = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.npy")
+CLUSTER_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz")
 
 AUDIT_SCORE_COLS = [
     "accuracy_score", "believability_score", "clarity_score",
@@ -83,7 +87,9 @@ AUDIT_SCORE_COLS = [
 SIMILARITY_THRESHOLD = 0.75   # cosine >= this => same cluster
 EMBED_MODEL          = "gemini-embedding-2"
 EMBED_DIM            = 768    # gemini-embedding-2 native dimension
-EMBED_SLEEP          = 1.2    # seconds between embed calls (free-tier rate limit)
+BATCH_SIZE           = 20     # batchEmbedContents supports up to ~20 requests per call
+EMBED_SLEEP          = 20     # seconds between batch calls -- matches embed_bullet_bank.py's proven interval
+MAX_RETRIES          = 4
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -92,32 +98,62 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 # EMBEDDING
 # ---------------------------------------------------------------------------
 
-def embed_text(text: str) -> list[float] | None:
-    url = f"{BASE_URL}/{EMBED_MODEL}:embedContent?key={API_KEY}"
-    payload = {
-        "model": f"models/{EMBED_MODEL}",
-        "content": {"parts": [{"text": text}]},
-        "outputDimensionality": EMBED_DIM,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+def embed_batch(texts: list) -> list:
+    url = f"{BASE_URL}/{EMBED_MODEL}:batchEmbedContents?key={API_KEY}"
+    requests_payload = [
+        {
+            "model": f"models/{EMBED_MODEL}",
+            "content": {"parts": [{"text": t}]},
+            "outputDimensionality": EMBED_DIM,
+            "taskType": "RETRIEVAL_DOCUMENT",
+        }
+        for t in texts
+    ]
+    body = {"requests": requests_payload}
+
+    for attempt in range(MAX_RETRIES):
+        resp = requests.post(url, json=body, timeout=120)
+        if resp.status_code == 429:
+            wait = 10 * (2 ** attempt)
+            print(f"    Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        embeddings = resp.json().get("embeddings", [])
+        return [e["values"] for e in embeddings]
+
+    raise RuntimeError(
+        f"embed_batch failed after {MAX_RETRIES} retries -- still rate-limited. "
+        "Swap GEMINI_API_KEY in .env and re-run this script; it will resume "
+        "from the last saved checkpoint."
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return body.get("embedding", {}).get("values")
-    except Exception as e:
-        print(f"    Embed error: {e}")
-        return None
+
+
+def load_checkpoint() -> tuple:
+    if os.path.exists(CLUSTER_CHECKPOINT_PATH):
+        data = np.load(CLUSTER_CHECKPOINT_PATH, allow_pickle=False)
+        vectors = list(data["vectors"])
+        next_index = int(data["next_index"])
+        print(f"  Resuming from checkpoint: {next_index} bullets already embedded.")
+        return vectors, next_index
+    return [], 0
+
+
+def save_checkpoint(vectors: list, next_index: int, total: int) -> None:
+    np.savez(
+        CLUSTER_CHECKPOINT_PATH,
+        vectors=np.array(vectors, dtype=np.float32),
+        next_index=np.array(next_index),
+        total=np.array(total),
+    )
 
 
 def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
     """
     Load cached vectors if they exist and match the current bullet count;
-    otherwise re-embed all bullets and save to cache.
+    otherwise embed in batches of BATCH_SIZE, checkpointing after every
+    batch so an interruption (rate limit, Ctrl-C) can resume instead of
+    re-embedding from scratch.
     """
     if os.path.exists(VECTOR_CACHE):
         cached = np.load(VECTOR_CACHE)
@@ -127,21 +163,25 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
         else:
             print(f"  Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding...")
 
-    print(f"  Embedding {len(bullets)} bullets via {EMBED_MODEL}...")
-    vectors = []
-    for i, bullet in enumerate(bullets):
-        if i > 0 and i % 10 == 0:
-            print(f"    {i}/{len(bullets)}...")
-        vec = embed_text(bullet)
-        if vec is None or len(vec) != EMBED_DIM:
-            print(f"    Warning: bad embedding for bullet {i}, using zeros.")
-            vec = [0.0] * EMBED_DIM
-        vectors.append(vec)
-        time.sleep(EMBED_SLEEP)
+    total = len(bullets)
+    vectors, start_index = load_checkpoint()
+    print(f"  Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})...")
+
+    for batch_start in range(start_index, total, BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE, total)
+        batch = bullets[batch_start:batch_end]
+        print(f"    {batch_end}/{total}...")
+        vecs = embed_batch(batch)
+        vectors.extend(vecs)
+        save_checkpoint(vectors, batch_end, total)
+        if batch_end < total:
+            time.sleep(EMBED_SLEEP)
 
     matrix = np.array(vectors, dtype=np.float32)
     np.save(VECTOR_CACHE, matrix)
-    print(f"  Saved {len(bullets)} vectors to {VECTOR_CACHE}")
+    print(f"  Saved {total} vectors to {VECTOR_CACHE}")
+    if os.path.exists(CLUSTER_CHECKPOINT_PATH):
+        os.remove(CLUSTER_CHECKPOINT_PATH)
     return matrix
 
 
