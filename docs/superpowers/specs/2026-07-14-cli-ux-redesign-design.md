@@ -197,8 +197,9 @@ plain).
   "typing/fade-in" effect, expressed as a diagonal wipe rather than literal
   left-to-right character typing (which reads oddly against solid
   block-letter glyphs) or true alpha-fade (which most terminals can't do).
-  Roughly 15-20 frames over ~300-500ms total — enough to register as an
-  entrance without slowing down repeat launches.
+  Roughly 30 frames over ~1.6s total (tuned up from an initial ~500ms
+  after seeing it live felt more like a flash than a reveal) — enough to
+  actually register as a reveal without dragging on repeat launches.
   **Non-interactive fallback**: gated on `cli_art.console.is_terminal` —
   when `False` (piped output, redirected, running under a test), skip
   `Live` and print the fully-revealed grid in one shot. Keeps this
