@@ -42,9 +42,9 @@ grade CLI with real personality — not just functional.
 3. A real error/success visual language (bordered panel for failures; a
    consistent glyph+color treatment for success) instead of a bare prefixed
    string.
-4. A first-launch splash that's genuinely more polished (two-tone/gradient
-   treatment) than a mid-session return-to-menu moment, plus a session-end
-   summary instead of a bare "Goodbye!".
+4. A first-launch splash that's genuinely more polished (an animated
+   diagonal-gradient reveal) than a mid-session return-to-menu moment, plus
+   a session-end summary instead of a bare "Goodbye!".
 5. A live, real-data stats readout (pending JD count, all-time tailored
    count) on the splash — no new persistence, sourced from existing data.
 6. Menu items visually grouped by category (icon + labeled separators), and
@@ -61,9 +61,8 @@ grade CLI with real personality — not just functional.
   spec's territory and stays as-is.
 - No `--quiet`/plain-output scripting mode yet (noted as a future concept
   once `theme.py` exists to gate against — not built now).
-- No `rich.live` typing/fade-in animation, no per-company/archetype accent
-  badges in the fit table, no diagonal/lolcat-style gradient — these are
-  explicitly stretch ideas (see below), not part of this pass.
+- No per-company/archetype accent badges in the fit table — still a
+  stretch idea (see below), not part of this pass.
 - No historical/cross-session stats beyond what's derivable from existing
   data (`jd_manager.get_pending_jds()`, `jds/completed/` file count) — no
   new tracking file or schema.
@@ -153,12 +152,25 @@ plain).
 
 ### 4. Splash, session flow & stats
 
-- **Gradient splash** (first launch only): new helper in `cli_art.py`,
-  `_gradient_lines(lines: list[str], start_hex: str, end_hex: str) ->
-  list[Text]` — interpolates `theme.BRAND` → `theme.BRAND_ACCENT` linearly
-  per row down `MAIN_BANNER`'s block-letter lines, returning styled
-  `rich.text.Text` objects. Vertical/row-based, not per-character — clean
-  against solid ASCII-block glyphs, no risk of a noisy per-character sweep.
+- **Diagonal-gradient splash with progressive reveal** (first launch only):
+  new helper in `cli_art.py`, `_gradient_grid(lines: list[str], start_hex:
+  str, end_hex: str) -> list[Text]` — interpolates `theme.BRAND` →
+  `theme.BRAND_ACCENT` **per character**, keyed by `(row + col) / (max_row +
+  max_col)`, giving a true diagonal sweep from the top-left corner to the
+  bottom-right rather than a flat top-to-bottom gradient.
+  A second helper, `_reveal_banner(grid: list[Text]) -> None`, drives a
+  `rich.live.Live` loop: each frame reveals more of the grid following that
+  same diagonal threshold (cells past the threshold render blank/space,
+  cells at or before it render their final gradient color) — this is the
+  "typing/fade-in" effect, expressed as a diagonal wipe rather than literal
+  left-to-right character typing (which reads oddly against solid
+  block-letter glyphs) or true alpha-fade (which most terminals can't do).
+  Roughly 15-20 frames over ~300-500ms total — enough to register as an
+  entrance without slowing down repeat launches.
+  **Non-interactive fallback**: gated on `cli_art.console.is_terminal` —
+  when `False` (piped output, redirected, running under a test), skip
+  `Live` and print the fully-revealed grid in one shot. Keeps this
+  invisible to tests and non-interactive use.
 - **Stats line**, shown once under the splash on real launch:
   `f"{pending_count} pending · {tailored_count} tailored all-time"`, where
   `pending_count = len(jd_manager.get_pending_jds())` and `tailored_count =
@@ -236,9 +248,14 @@ resume  (bare invocation)
   (`monkeypatch`/`patch.dict(os.environ, ...)`); `RECOMMENDATION_COLORS`
   keys match the four literal strings `orchestrator.FitEvaluationSchema`
   actually produces (guards against typo drift between the two files).
-- `cli_art._gradient_lines()`: unit test — given N lines and two hex
-  colors, returns N styled `Text` objects; first line's style resolves to
-  `start_hex`, last line's to `end_hex`.
+- `cli_art._gradient_grid()`: unit test — given N lines and two hex colors,
+  returns N styled `Text` objects; the top-left cell's style resolves to
+  `start_hex`, the bottom-right cell's to `end_hex`.
+- `cli_art._reveal_banner()`: unit test with `console.is_terminal` patched
+  to `False` — confirms it prints the fully-revealed grid once and never
+  touches `Live` (no hang, no delay, in a piped/test context). A patched
+  `is_terminal=True` case (with `Live` itself mocked) confirms the frame
+  count is > 1 and the final frame matches the fully-revealed grid.
 - `cli_art.display_error`/`display_success`: existing convention (per the
   prior spec) is no dedicated test for static rendering — covered by
   whichever call site already has tests mocking `cli_art` (per this
@@ -248,18 +265,17 @@ resume  (bare invocation)
 - `menu.run_interactive_menu()`'s session-summary tally: unit test — a
   sequence of mocked `_HANDLERS` returns (`True`/`False` across a couple of
   actions) produces the expected counter dict/summary string.
-- Live verification: run `resume` bare, confirm the gradient splash renders
-  without misalignment, the stats line shows real pending/tailored counts,
-  a tip appears, the menu shows grouped separators + icons, run one action
-  and confirm the compact breadcrumb (not a full banner) appears on
+- Live verification: run `resume` bare, confirm the diagonal-gradient splash
+  reveals smoothly (no flicker, no misalignment, finishes in well under a
+  second) in a real terminal, the stats line shows real pending/tailored
+  counts, a tip appears, the menu shows grouped separators + icons, run one
+  action and confirm the compact breadcrumb (not a full banner) appears on
   return-to-menu, then `Exit` and confirm the session summary line reflects
-  what was actually done.
+  what was actually done. Separately, confirm piping `resume`'s output
+  (e.g. `resume | cat`) still shows the static fully-revealed banner with no
+  hang or animation artifacts.
 
 ## Stretch Ideas (explicitly out of scope for this pass)
 
-- `rich.live`-driven typing/fade-in for the splash (vs. this pass's static
-  gradient).
-- Diagonal/lolcat-style gradient sweep instead of row-based, if the vertical
-  version feels too tame once seen live.
 - Per-company/archetype accent-colored mini badges in the fit table.
 - A `--quiet`/plain-output escape hatch for scripting.
