@@ -8,6 +8,7 @@ docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 import os
 import time
 
+import cli_art
 import jd_manager
 import orchestrator
 
@@ -65,7 +66,8 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
             time.sleep(SECONDS_BETWEEN_CALLS)
         job_title, company_name = jd_manager.extract_job_meta(path)
         print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...")
-        evaluation = engine.evaluate_fit(path)
+        with cli_art.console.status(f"Weighing the fit for {company_name or os.path.basename(path)}...", spinner="dots"):
+            evaluation = engine.evaluate_fit(path)
 
         if not evaluation:
             results.append({

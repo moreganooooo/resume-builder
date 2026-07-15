@@ -129,7 +129,8 @@ def _handle_evaluate_one() -> bool:
     if not path:
         return False
     engine = orchestrator.ResumeEngine()
-    result = engine.evaluate_fit(path)
+    with cli_art.console.status("Weighing the fit...", spinner="dots"):
+        result = engine.evaluate_fit(path)
     if not result:
         cli_art.display_error("Evaluation failed -- no parseable result.")
         return False
