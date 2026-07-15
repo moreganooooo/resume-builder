@@ -135,6 +135,29 @@ def display_main_banner() -> None:
     console.print(SUBTITLE, style="dim")
 
 
+def display_stats_line() -> None:
+    """Real, live data -- no new persistence. pending count comes from
+    jd_manager.get_pending_jds(); tailored count is jds/completed/'s file
+    count (both already create their directory if missing)."""
+    pending = len(jd_manager.get_pending_jds())
+    tailored = len(jd_manager.get_completed_jds())
+    console.print(f"{pending} pending · {tailored} tailored all-time", style=theme.INFO)
+
+
+TIPS = [
+    "resume run --pick lets you interactively choose which pending JDs to tailor, instead of the whole batch.",
+    "resume test -v lists every test by name instead of just dots.",
+    "New here? The menu's top \"New User? Start Here!\" option bootstraps a bullet bank from your existing resume or LinkedIn export.",
+    "resume polish lets you conversationally tweak an already-generated resume or cover letter.",
+    "Evaluating a JD persists its score onto the file itself, so \"Customize Resume for a Specific JD\" never re-scores it.",
+]
+
+
+def display_tip() -> None:
+    tip = random.choice(TIPS)
+    console.print(f"{theme.ICONS['hint']}  Did you know? {tip}", style="dim")
+
+
 def display_whats_next_panel() -> None:
     console.print(Panel("What's next?", border_style="#4caf50", box=box.ROUNDED, padding=(0, 2)))
 
