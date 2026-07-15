@@ -261,13 +261,13 @@ class TestRunWithChain(unittest.TestCase):
     def test_no_op_handler_skips_the_prompt(self, mock_select):
         with patch.dict(menu._HANDLERS, {"fake": lambda: False}, clear=False), \
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
-            menu._run_with_chain("fake")
+            menu._run_with_chain("fake", {})
         mock_select.assert_not_called()
 
     @patch("menu.questionary.select")
     def test_handler_with_no_chain_entry_skips_the_prompt(self, mock_select):
         with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False):
-            menu._run_with_chain("fake")
+            menu._run_with_chain("fake", {})
         mock_select.assert_not_called()
 
     @patch("menu.questionary.select")
@@ -275,7 +275,7 @@ class TestRunWithChain(unittest.TestCase):
         mock_select.return_value.ask.return_value = "__back__"
         with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False), \
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
-            menu._run_with_chain("fake")
+            menu._run_with_chain("fake", {})
         choices = mock_select.call_args.kwargs["choices"]
         self.assertEqual([c.title for c in choices], ["Next", "Back to Menu"])
         self.assertEqual([c.value for c in choices], ["somewhere", "__back__"])
@@ -286,7 +286,7 @@ class TestRunWithChain(unittest.TestCase):
         mock_select.return_value.ask.return_value = "__back__"
         with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
-            menu._run_with_chain("fake")
+            menu._run_with_chain("fake", {})
         self.assertEqual(calls, ["fake"])
 
     @patch("menu.questionary.select")
@@ -295,7 +295,7 @@ class TestRunWithChain(unittest.TestCase):
         mock_select.return_value.ask.return_value = None
         with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
-            menu._run_with_chain("fake")
+            menu._run_with_chain("fake", {})
         self.assertEqual(calls, ["fake"])
 
     @patch("menu.questionary.select")
@@ -310,8 +310,42 @@ class TestRunWithChain(unittest.TestCase):
             },
             clear=False,
         ), patch.dict(menu._CHAIN, {"first": [("Do Second", "second")]}, clear=False):
-            menu._run_with_chain("first")
+            menu._run_with_chain("first", {})
         self.assertEqual(calls, ["first", "second"])
+
+
+class TestSessionSummary(unittest.TestCase):
+
+    @patch("menu.questionary.select")
+    def test_successful_action_increments_its_labeled_count(self, mock_select):
+        session_stats = {}
+        with patch.dict(menu._HANDLERS, {"tailor_all": lambda: True}, clear=False), \
+             patch.dict(menu._CHAIN, {}, clear=True):
+            menu._run_with_chain("tailor_all", session_stats)
+        self.assertEqual(session_stats, {"resumes tailored": 1})
+
+    @patch("menu.questionary.select")
+    def test_no_op_action_does_not_increment(self, mock_select):
+        session_stats = {}
+        with patch.dict(menu._HANDLERS, {"tailor_all": lambda: False}, clear=False):
+            menu._run_with_chain("tailor_all", session_stats)
+        self.assertEqual(session_stats, {})
+
+    @patch("menu.questionary.select")
+    def test_unlabeled_action_does_not_increment(self, mock_select):
+        session_stats = {}
+        with patch.dict(menu._HANDLERS, {"polish": lambda: True}, clear=False):
+            menu._run_with_chain("polish", session_stats)
+        self.assertEqual(session_stats, {})
+
+    def test_empty_summary_string(self):
+        self.assertEqual(menu._session_summary({}), "No actions taken this session.")
+
+    def test_summary_joins_multiple_labels(self):
+        summary = menu._session_summary({"resumes tailored": 3, "cover letters written": 2})
+        self.assertIn("3 resumes tailored", summary)
+        self.assertIn("2 cover letters written", summary)
+        self.assertIn("Nice work.", summary)
 
 
 class TestHandleViewApplications(unittest.TestCase):

@@ -206,9 +206,23 @@ _CHAIN = {
     "coverletter_one": [("Polish with Gemini", "polish")],
 }
 
+# Labels for the session-end summary -- only actions worth reporting on
+# exit get an entry; anything absent here (e.g. "polish", "scan",
+# "liveness") just isn't tallied.
+_SESSION_LABELS = {
+    "tailor_all": "resumes tailored",
+    "tailor_one": "resumes tailored",
+    "coverletter_one": "cover letters written",
+}
 
-def _run_with_chain(value: str) -> None:
+
+def _run_with_chain(value: str, session_stats: dict) -> None:
     did_something = _HANDLERS[value]()
+    if did_something:
+        label = _SESSION_LABELS.get(value)
+        if label:
+            session_stats[label] = session_stats.get(label, 0) + 1
+
     next_options = _CHAIN.get(value)
     if not did_something or not next_options:
         return
@@ -222,20 +236,36 @@ def _run_with_chain(value: str) -> None:
 
     if not choice or choice == "__back__":
         return
-    _run_with_chain(choice)
+    _run_with_chain(choice, session_stats)
+
+
+def _session_summary(session_stats: dict) -> str:
+    if not session_stats:
+        return "No actions taken this session."
+    parts = [f"{count} {label}" for label, count in session_stats.items()]
+    return f"{cli_art.SUCCESS} " + " · ".join(parts) + " · Nice work."
 
 
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
+    cli_art.display_stats_line()
+    cli_art.display_tip()
+
+    session_stats = {}
+    first_loop = True
 
     while True:
+        if first_loop:
+            first_loop = False
+        else:
+            cli_art.display_breadcrumb()
         cli_art.console.print()
         choice = questionary.select(
             "What would you like to do?", choices=_CHOICES, style=cli_art.QUESTIONARY_STYLE,
         ).ask()
 
         if choice == "exit" or not choice:
-            cli_art.console.print("\n[cyan]Goodbye![/cyan]\n")
+            cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
             break
 
-        _run_with_chain(choice)
+        _run_with_chain(choice, session_stats)
