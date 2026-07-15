@@ -124,6 +124,15 @@ constants become thin wrappers around `theme.ICONS` + the matching color.
 implementation (this spec fixes the *mechanism* — token name → glyph
 mapping, with a working fallback — not the final glyph choices).
 
+**Fit table polish**: `cli_art.render_fit_table` currently renders a bare
+`box=None` table with no visual framing and one remaining named-color
+holdout (`"[red]ERROR[/red]"` on a failed row, missed by the original
+hex-only pass). Wrap it in a titled, bordered `Panel` (real `box` style,
+not `None`) showing the result count, with a compact color-key legend
+(one colored glyph per recommendation tier) as the panel's subtitle — so
+someone seeing the score coloring for the first time doesn't have to
+guess what a color means. The stray `"red"` becomes `theme.ERROR`.
+
 ### 2. Progress motion for real API calls
 
 Verified against the actual code: `build_tailored_resume()` (used by
