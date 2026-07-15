@@ -381,6 +381,43 @@ posting, so you have somewhere to go apply once a resume's built.
 wired into a given row (a JD's own persisted `_evaluation`, see
 "Evaluating fit" above, isn't currently threaded into this specific file).
 
+## Bullet Bank Management
+
+The menu's "Manage Bullet Bank" entry (separate from "New User? Start
+Here!", which is the full first-time ingestion+profile+pipeline flow) is
+for anyone already set up who just needs to run one stage of the
+rebuild pipeline at a time. It shows a status table (never run / stale /
+up to date, with a timestamp) computed from each stage's actual output
+file — no separate tracking file to fall out of sync.
+
+The 6 stages, in the only order that makes sense to run them:
+
+1. **Audit Bullet Bank** (`audit_bullet_bank.py`) — scores every bullet
+   (real Gemini calls) → `bullet-bank-audited.csv`
+2. **Cluster & Classify** (`cluster_bullet_bank.py`) — embeds + clusters
+   near-duplicates, joins audit scores, assigns `next_action` and elects
+   `is_representative` per cluster → `bullet-bank-cluster-map.csv`
+3. **Rewrite Weak Bullets** (`rewrite_bullets.py`) — rewrites every
+   `is_representative=True` row whose `next_action` is `REWRITE` or
+   `REVIEW` → `bullet-bank-keepers.csv`
+4. **Re-Audit Keepers** (`audit_keepers.py`) — re-scores keepers, diffs
+   against the cluster map, builds a triage queue → `bullet-bank-keepers-audited.csv`
+5. **Score Hidden Gems** (`score_keeper_gems.py`) — flags standout
+   bullets in place on the same file
+6. **Embed Bullet Bank** (`embed_bullet_bank.py`) — final embeddings used
+   by `orchestrator.py` at runtime to match bullets to a job description
+
+Each stage already checkpoints/resumes internally (same as the full
+bootstrap flow) — re-running a stage after an interruption picks up where
+it left off.
+
+Two more entries handle the ongoing (non-sequential) feedback loop:
+**Triage Needs-Review Queue** (`triage_needs_review.py`) routes rows
+`orchestrator.py` queued during a regular resume build into keepers,
+the rewrite queue, or retirement; **Retire Abandoned Rewrite-Queue
+Bullets** (`retire_rewrite_queue.py`) closes out non-representative rows
+still sitting in `rewrite-queue.csv`.
+
 ## Bullet bank feedback loop
 
 The bullet bank isn't static. During every build, `orchestrator.py`'s
