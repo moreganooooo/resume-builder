@@ -40,32 +40,99 @@ def display_success(message: str) -> None:
     bordered panel for every success would get old fast."""
     console.print(f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}] {message}")
 
-# Block-letter title banner, same ansi_shadow-style box-drawing glyphs as
-# job_automater-main's MAIN_BANNER -- stacked on two lines since "RESUME
-# BUILDER" is too long for one line at this scale (each line is 53 columns,
-# safe for any real terminal width).
-MAIN_BANNER = """
-[bold #4dabf7]
-██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗
-██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝
-██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗
-██╔══██╗██╔══╝  ╚════██║██║   ██║██║╚██╔╝██║██╔══╝
-██║  ██║███████╗███████║╚██████╔╝██║ ╚═╝ ██║███████╗
-╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝
+# Raw block-letter lines, no markup -- color now comes from the diagonal
+# gradient applied per-character in display_main_banner(), not a blanket
+# style wrapper.
+MAIN_BANNER_LINES = [
+    "██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗",
+    "██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝",
+    "██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗  ",
+    "██╔══██╗██╔══╝  ╚════██║██║   ██║██║╚██╔╝██║██╔══╝  ",
+    "██║  ██║███████╗███████║╚██████╔╝██║ ╚═╝ ██║███████╗",
+    "╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝",
+    "",
+    "██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗ ",
+    "██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗",
+    "██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝",
+    "██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗",
+    "██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║",
+    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
+]
 
-██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗
-██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗
-██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝
-██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗
-██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║
-╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝
-[/bold #4dabf7]
-[dim]          Tailored resumes & cover letters, powered by Gemini[/dim]
-"""
+SUBTITLE = "Tailored resumes & cover letters, powered by Gemini"
+
+
+def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
+    """Linearly interpolates between two '#rrggbb' colors at t in [0, 1]."""
+    start_rgb = tuple(int(start_hex[i:i + 2], 16) for i in (1, 3, 5))
+    end_rgb = tuple(int(end_hex[i:i + 2], 16) for i in (1, 3, 5))
+    mixed = tuple(round(start_rgb[c] + (end_rgb[c] - start_rgb[c]) * t) for c in range(3))
+    return "#{:02x}{:02x}{:02x}".format(*mixed)
+
+
+def _gradient_grid(lines: list, start_hex: str, end_hex: str) -> list:
+    """Returns a per-character color grid (list of list of hex strings,
+    parallel to `lines`) -- a diagonal sweep from start_hex (top-left) to
+    end_hex (bottom-right), keyed by (row + col) / (max_row + max_col)."""
+    max_row = max(len(lines) - 1, 1)
+    max_col = max((len(line) for line in lines), default=1)
+    max_col = max(max_col - 1, 1)
+    denom = max_row + max_col
+
+    grid = []
+    for row, line in enumerate(lines):
+        grid.append([_lerp_hex(start_hex, end_hex, (row + col) / denom) for col in range(len(line))])
+    return grid
+
+
+def _render_grid(lines: list, grid: list, threshold: int = None) -> Text:
+    """Builds one multi-line Rich Text from lines/grid. threshold is the
+    max (row + col) diagonal index to reveal; None reveals everything."""
+    text = Text()
+    for row, line in enumerate(lines):
+        for col, ch in enumerate(line):
+            if threshold is not None and (row + col) > threshold:
+                text.append(" ")
+            else:
+                text.append(ch, style=grid[row][col])
+        text.append("\n")
+    return text
+
+
+def _reveal_banner(lines: list, grid: list, render_frame) -> None:
+    """Drives a rich.live.Live diagonal-wipe reveal. render_frame(threshold)
+    returns the Rich renderable for a given frame (threshold=None means
+    fully revealed). Falls back to a single fully-revealed print when
+    stdout isn't a real terminal (piped output, non-interactive contexts,
+    tests) -- Live's redraws don't compose safely with non-TTY output."""
+    if not console.is_terminal:
+        console.print(render_frame(None))
+        return
+
+    max_row = max(len(lines) - 1, 1)
+    max_col = max((len(line) for line in lines), default=1)
+    max_col = max(max_col - 1, 1)
+    max_threshold = max_row + max_col
+
+    frame_count = 18
+    with Live(console=console, refresh_per_second=30, transient=False) as live:
+        for frame in range(frame_count + 1):
+            threshold = round(max_threshold * frame / frame_count)
+            live.update(render_frame(threshold))
+            time.sleep(0.5 / frame_count)
 
 
 def display_main_banner() -> None:
-    console.print(Panel(MAIN_BANNER, border_style="#4caf50", box=box.DOUBLE, padding=(1, 2)))
+    grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
+
+    def render_frame(threshold):
+        return Panel(
+            _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold),
+            border_style=theme.SUCCESS, box=box.DOUBLE, padding=(1, 2),
+        )
+
+    _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)
+    console.print(SUBTITLE, style="dim")
 
 
 def display_whats_next_panel() -> None:
