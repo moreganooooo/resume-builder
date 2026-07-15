@@ -202,7 +202,7 @@ def render_fit_table(results: list) -> None:
     Rich Table, colored by recommendation tier (modeled on job_automater's
     display_job_table(), cli.py:73-142). results is expected pre-sorted
     (evaluate_all_pending() already sorts best-first, errors-last)."""
-    table = Table(box=None, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
     table.add_column("Recommendation")
@@ -211,7 +211,7 @@ def render_fit_table(results: list) -> None:
 
     for i, r in enumerate(results, 1):
         if r["error"]:
-            table.add_row(str(i), "[red]ERROR[/red]", "-", r["company_name"], r["job_title"])
+            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"])
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
         table.add_row(
@@ -222,7 +222,11 @@ def render_fit_table(results: list) -> None:
             r["job_title"],
         )
 
-    console.print(table)
+    legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
+    console.print(Panel(
+        table, title=f"{len(results)} JD(s) evaluated", subtitle=legend,
+        border_style=theme.BRAND, box=box.ROUNDED,
+    ))
 
 
 def display_applications_tracker(content: str) -> None:
