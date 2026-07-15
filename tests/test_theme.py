@@ -32,6 +32,16 @@ class TestIconSwitch(unittest.TestCase):
         self.assertEqual(reloaded.ICONS["success"], "")
         importlib.reload(theme)
 
+    def test_bullet_bank_icon_exists_in_both_sets(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RESUME_BUILDER_ICONS", None)
+            nerd = importlib.reload(theme)
+        self.assertIn("bullet_bank", nerd.ICONS)
+        with patch.dict(os.environ, {"RESUME_BUILDER_ICONS": "unicode"}):
+            unicode_theme = importlib.reload(theme)
+        self.assertIn("bullet_bank", unicode_theme.ICONS)
+        importlib.reload(theme)
+
 
 class TestRecommendationColors(unittest.TestCase):
 
