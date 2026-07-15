@@ -12,6 +12,11 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Chromium browser installed.
 - Bare `python3` on this machine may resolve to an unrelated stray venv —
   always activate `.venv/` first (see `.claude.local.md`).
+- The interactive menu's icons default to Nerd Font glyphs — if your
+  terminal doesn't have one active, set `RESUME_BUILDER_ICONS=unicode` in
+  your shell profile (or before invoking `resume`) to fall back to plain
+  Unicode symbols. See README's "Colors" section for how to enable a
+  Nerd Font instead.
 
 ## Shortcuts
 - `resume run` / `resume run jds/some_file.txt` — batch or single-file mode
