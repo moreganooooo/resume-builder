@@ -13,6 +13,18 @@ import re
 import time
 
 import requests
+from dotenv import load_dotenv
+
+# Resolved from this file's own location, matching every other script in
+# this pipeline (cluster_bullet_bank.py, audit_keepers.py,
+# score_keeper_gems.py, embed_bullet_bank.py all do the same). override=True
+# is the important part -- without it, a GEMINI_API_KEY already exported in
+# the shell (e.g. from an earlier manual export while juggling API keys)
+# silently wins over whatever's actually in .env, since dotenv's default
+# behavior is to never overwrite an existing environment variable.
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
