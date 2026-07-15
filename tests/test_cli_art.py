@@ -120,5 +120,36 @@ class TestDisplayMainBanner(unittest.TestCase):
         self.assertIn(cli_art.SUBTITLE, output)
 
 
+class TestDisplayStatsLine(unittest.TestCase):
+
+    @patch("cli_art.jd_manager.get_completed_jds", return_value=["a.json", "b.json"])
+    @patch("cli_art.jd_manager.get_pending_jds", return_value=["c.json"])
+    def test_prints_real_pending_and_tailored_counts(self, mock_pending, mock_completed):
+        console = Console(record=True, width=100)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_stats_line()
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertIn("1 pending", output)
+        self.assertIn("2 tailored all-time", output)
+
+
+class TestDisplayTip(unittest.TestCase):
+
+    def test_prints_one_of_the_known_tips(self):
+        console = Console(record=True, width=200)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_tip()
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertTrue(any(tip in output for tip in cli_art.TIPS))
+
+
 if __name__ == "__main__":
     unittest.main()
