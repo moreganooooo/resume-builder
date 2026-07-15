@@ -140,7 +140,8 @@ def evaluate(jd_file, yes, refresh):
 
     cli_art.display_banner(f"Evaluating: {jd_file}")
     engine = orchestrator.ResumeEngine()
-    result = engine.evaluate_fit(jd_file)
+    with cli_art.console.status("Weighing the fit...", spinner="dots"):
+        result = engine.evaluate_fit(jd_file)
     if not result:
         cli_art.display_error("Evaluation failed -- no parseable result.")
         raise SystemExit(1)
