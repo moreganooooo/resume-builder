@@ -115,6 +115,8 @@ CLUSTER_MAP_IN     = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 DISCREPANCIES_OUT  = os.path.join(KB_DIR, "audit-discrepancies.csv")
 REWRITE_QUEUE_OUT  = os.path.join(KB_DIR, "audit-rewrite-queue.csv")
 
+AUDIT_FLUSH_EVERY = 5
+
 # ---------------------------------------------------------------------------
 # STARTUP SNAPSHOT
 # ---------------------------------------------------------------------------
@@ -280,6 +282,47 @@ def _safe_str(v) -> str:
 # STAGE 1: AUDIT KEEPERS
 # ---------------------------------------------------------------------------
 
+def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
+    """Merges in audit_status/scores from an existing keepers-audited.csv
+    for any bullet that's already been scored there -- independent of
+    --from-audited, which has its own separate meaning (trust CLEAN rows,
+    skip cluster-map Source B). This is what makes an interrupted Stage 1
+    run resume correctly without needing to remember a flag."""
+    if not os.path.exists(KEEPERS_AUDITED):
+        return df_keepers
+
+    try:
+        df_prior = pd.read_csv(KEEPERS_AUDITED)
+    except Exception:
+        return df_keepers
+
+    if "Bullet Point" not in df_prior.columns or "audit_status" not in df_prior.columns:
+        return df_keepers
+
+    prior_scored = df_prior[df_prior["audit_status"].astype(str).str.strip() != ""]
+    if prior_scored.empty:
+        return df_keepers
+
+    prior_scored = prior_scored.drop_duplicates(subset="Bullet Point", keep="first")
+    prior_lookup = prior_scored.set_index(prior_scored["Bullet Point"].astype(str).str.strip())
+
+    merge_cols = [c for c in (["audit_status"] + SCORE_COLS + ["weaknesses"]) if c in prior_lookup.columns]
+
+    restored = 0
+    for idx, row in df_keepers.iterrows():
+        bp = str(row.get("Bullet Point", "")).strip()
+        if bp in prior_lookup.index and str(row.get("audit_status", "")).strip() == "":
+            prior_row = prior_lookup.loc[bp]
+            for col in merge_cols:
+                df_keepers.loc[idx, col] = prior_row[col]
+            restored += 1
+
+    if restored:
+        print(f"   ♻️  Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
+
+    return df_keepers
+
+
 def stage1_audit_keepers(
     df_keepers: pd.DataFrame,
     score_system: str,
@@ -306,6 +349,8 @@ def stage1_audit_keepers(
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
+
+    df_keepers = _merge_prior_audited_progress(df_keepers)
 
     # When loading from the audited file, rows already marked CLEAN are
     # trusted as-is — no need to re-score or reclassify them.
@@ -338,6 +383,7 @@ def stage1_audit_keepers(
             df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
     else:
         total = len(to_score)
+        bullets_since_flush = 0
         for i, (idx, row) in enumerate(to_score.iterrows(), 1):
             bullet = str(row.get("Bullet Point", "")).strip()
             tags   = str(row.get("Tags", ""))
@@ -362,6 +408,13 @@ def stage1_audit_keepers(
                 f"cla={scores.get('clarity_score')}  "
                 f"ats={scores.get('ats_value')}"
             )
+
+            bullets_since_flush += 1
+            is_last = (i == total)
+            if bullets_since_flush >= AUDIT_FLUSH_EVERY or is_last:
+                df_keepers.to_csv(KEEPERS_AUDITED, index=False)
+                bullets_since_flush = 0
+                print(f"   💾 Flushed audited keepers ({i}/{total} scored so far).")
 
             if i < total:
                 time.sleep(SLEEP_BETWEEN_BULLETS)
