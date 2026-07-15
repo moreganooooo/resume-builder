@@ -247,16 +247,18 @@ GeminiClient.generate() called from:
   with every other standalone bullet-bank pipeline script — verified
   live, not unit tested). This design follows that same convention for
   those three files.
-- `gemini_client.py` likewise has no existing dedicated test file. Given
-  `SustainedFailureError` is new, class-level, shared state with real
-  behavioral consequences (an uncaught exception that changes a script's
-  exit code), it gets a new `tests/test_gemini_client.py`: a mocked
-  `requests.post` returning 429 on every call verifies `generate()`
-  returns `(None, {})` on the first exhaustion and raises
-  `SustainedFailureError` on the second consecutive exhaustion; a
-  successful call between two exhaustions resets the counter so a third
-  exhaustion afterward does *not* immediately raise (needs its own two
-  in a row).
+- `gemini_client.py` already has `tests/test_gemini_client.py` (mocks
+  `gemini_client.requests.post`/`gemini_client.time.sleep`, covers the
+  existing model-fallback behavior). `SustainedFailureError` is new,
+  class-level, shared state with real behavioral consequences (an
+  uncaught exception that changes a script's exit code), so it gets new
+  test classes added to that same file, following its existing
+  mocking conventions: a mocked `requests.post` returning 429 on every
+  call verifies `generate()` returns `(None, {})` on the first
+  exhaustion and raises `SustainedFailureError` on the second
+  consecutive exhaustion; a successful call between two exhaustions
+  resets the counter so a third exhaustion afterward does *not*
+  immediately raise (needs its own two in a row).
 - Live verification: since these are real, billed API scripts, live
   end-to-end verification (deliberately triggering an actual sustained
   429) is impractical to force on demand. Verification here is the
