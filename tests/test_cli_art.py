@@ -108,7 +108,9 @@ class TestRevealBanner(unittest.TestCase):
 
 class TestDisplayMainBanner(unittest.TestCase):
 
-    def test_runs_without_error_in_non_terminal_mode(self):
+    @patch("cli_art.jd_manager.get_completed_jds", return_value=["a.json"])
+    @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json", "c.json"])
+    def test_runs_without_error_in_non_terminal_mode(self, mock_pending, mock_completed):
         console = Console(record=True, width=100, force_terminal=False)
         original = cli_art.console
         cli_art.console = console
@@ -121,6 +123,8 @@ class TestDisplayMainBanner(unittest.TestCase):
         # substring's own trailing newline never lines up exactly -- strip
         # it before checking containment.
         self.assertIn(cli_art.SUBTITLE.strip(), output)
+        self.assertIn("2 Roles Currently Awaiting Resume Creation", output)
+        self.assertIn("1 Resumes Customized All-Time", output)
 
 
 class TestDisplayStatsLine(unittest.TestCase):

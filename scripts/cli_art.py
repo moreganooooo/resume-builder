@@ -127,24 +127,29 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
             time.sleep(total_seconds / frame_count)
 
 
+def _stats_line_text() -> str:
+    """Real, live data -- no new persistence. pending count comes from
+    jd_manager.get_pending_jds(); tailored count is jds/completed/'s file
+    count (both already create their directory if missing)."""
+    pending = len(jd_manager.get_pending_jds())
+    tailored = len(jd_manager.get_completed_jds())
+    return f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
+
+
 def display_main_banner() -> None:
     grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
 
     def render_frame(threshold):
         body = _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold)
         body.append(SUBTITLE, style="bold")
+        body.append(_stats_line_text(), style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
     _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)
 
 
 def display_stats_line() -> None:
-    """Real, live data -- no new persistence. pending count comes from
-    jd_manager.get_pending_jds(); tailored count is jds/completed/'s file
-    count (both already create their directory if missing)."""
-    pending = len(jd_manager.get_pending_jds())
-    tailored = len(jd_manager.get_completed_jds())
-    console.print(f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time\n", style=theme.INFO)
+    console.print(_stats_line_text(), style=theme.INFO)
 
 
 TIPS = [
