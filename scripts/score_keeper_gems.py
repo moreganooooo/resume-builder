@@ -22,11 +22,11 @@ import argparse
 import csv
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from google import genai
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,11 @@ SCORING_DIR  = PROJECT_ROOT / "resume-engine" / "scoring"
 
 load_dotenv(PROJECT_ROOT / ".env")
 
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from gemini_client import GeminiClient  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
@@ -48,6 +53,7 @@ GEMS_OUTPUT    = KB_DIR / "hidden-gems.csv"
 
 GEM_THRESHOLD  = 90    # hidden_gem_score >= 90 → hidden_gem_flag = True
 SLEEP_SECONDS  = 4     # politeness delay between API calls
+GEM_FLUSH_EVERY = 5    # flush scored CSV to disk every N bullets
 MODEL          = "gemma-4-31b-it"   # Gemma 4 31B — best free-tier allotment
 
 BULLET_COL     = "Bullet Point"
@@ -107,25 +113,30 @@ Return ONLY valid JSON matching the schema. Be strict — most bullets are NOT h
 """
 
 
-def score_bullet(client: genai.Client, system_prompt: str, bullet: str) -> dict | None:
-    """Score a single bullet. Returns a dict or None on failure."""
-    from google.genai import types
-    try:
-        config = types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            response_mime_type="application/json",
-            response_schema=HiddenGemSchema,
-            temperature=0.0,
-        )
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=bullet,
-            config=config,
-        )
-        return json.loads(response.text)
-    except Exception as e:
-        print(f"    ⚠️  API error: {e}")
+def score_bullet(system_prompt: str, bullet: str) -> dict | None:
+    """Score a single bullet. Returns a dict or None on failure. Uses the
+    shared GeminiClient (gemini_client.py) instead of a separate client
+    library -- inherits its retry/backoff/model-fallback/sustained-
+    failure detection for free. SustainedFailureError is intentionally
+    not caught here -- it should propagate straight up."""
+    raw, _usage = GeminiClient.generate(
+        model=MODEL,
+        system_instruction=system_prompt,
+        contents=bullet,
+        response_schema=HiddenGemSchema,
+        temperature=0.0,
+    )
+    if raw is None:
         return None
+    return GeminiClient.parse_json(raw)
+
+
+def _write_scored_csv(path: str, rows: list, final_headers: list) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -175,14 +186,17 @@ def main():
         print("✅  All rows already scored. Nothing to do.")
         return
 
-    # Init client
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    client  = genai.Client(api_key=api_key)
     system_prompt = build_system_prompt()
+
+    # Build final header (add new cols if not present) -- computed before
+    # the loop so the incremental flush below can use the same headers.
+    new_cols = ["hidden_gem_score", "hidden_gem_flag", "hidden_gem_reason"]
+    final_headers = list(headers) + [c for c in new_cols if c not in headers]
 
     gem_count    = 0
     strong_count = 0
     error_count  = 0
+    scored_since_flush = 0
 
     for n, i in enumerate(to_score_idx, start=1):
         bullet = rows[i].get(bullet_col, "").strip()
@@ -197,7 +211,7 @@ def main():
         if n > 1:
             time.sleep(SLEEP_SECONDS)
 
-        result = score_bullet(client, system_prompt, bullet)
+        result = score_bullet(system_prompt, bullet)
         if result:
             score  = result.get("hidden_gem_score", 0)
             flag   = score >= GEM_THRESHOLD
@@ -221,16 +235,12 @@ def main():
             rows[i]["hidden_gem_reason"] = "ERROR: scoring failed"
             error_count += 1
 
-    # Build final header (add new cols if not present)
-    new_cols = ["hidden_gem_score", "hidden_gem_flag", "hidden_gem_reason"]
-    final_headers = list(headers) + [c for c in new_cols if c not in headers]
-
-    # Write main output
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(rows)
+        scored_since_flush += 1
+        is_last = (n == len(to_score_idx))
+        if scored_since_flush >= GEM_FLUSH_EVERY or is_last:
+            _write_scored_csv(args.output, rows, final_headers)
+            scored_since_flush = 0
+            print(f"    💾 Flushed scored CSV ({n}/{len(to_score_idx)} processed).")
 
     print(f"\n✅ Scored CSV saved: {args.output}")
     print(f"   💎 Hidden Gems:  {gem_count}")
