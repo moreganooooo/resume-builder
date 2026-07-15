@@ -27,6 +27,19 @@ HINT = f"[bold {theme.INFO}]{theme.ICONS['hint']}[/bold {theme.INFO}]"
 # references keep working unchanged.
 QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 
+
+def display_error(message: str) -> None:
+    """A failure reads with real visual weight -- a bordered panel, not a
+    bare icon-prefixed line."""
+    body = f"[bold {theme.ERROR}]{theme.ICONS['error']}[/bold {theme.ERROR}] {message}"
+    console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
+
+
+def display_success(message: str) -> None:
+    """Stays lightweight (no border) -- this is the common case and a
+    bordered panel for every success would get old fast."""
+    console.print(f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}] {message}")
+
 # Block-letter title banner, same ansi_shadow-style box-drawing glyphs as
 # job_automater-main's MAIN_BANNER -- stacked on two lines since "RESUME
 # BUILDER" is too long for one line at this scale (each line is 53 columns,
