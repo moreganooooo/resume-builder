@@ -28,20 +28,24 @@ import picker
 import scan as scan_module
 import liveness as liveness_module
 import polish as polish_module
+import theme
 
 _CHOICES = [
     questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
-    questionary.Separator(),
-    questionary.Choice(title="Scan for New Postings", value="scan"),
-    questionary.Choice(title="Check Posting Liveness", value="liveness"),
-    questionary.Choice(title="Evaluate ALL Pending JDs", value="evaluate_all"),
-    questionary.Choice(title="Evaluate a Specific JD", value="evaluate_one"),
-    questionary.Choice(title="Customize Resume for ALL Pending JDs (batch)", value="tailor_all"),
-    questionary.Choice(title="Customize Resume for a Specific JD", value="tailor_one"),
-    questionary.Choice(title="Write cover letter for a Specific JD", value="coverletter_one"),
-    questionary.Choice(title="Polish a resume or cover letter", value="polish"),
-    questionary.Choice(title="View Application Tracker", value="view_applications"),
-    questionary.Choice(title="Exit", value="exit"),
+    questionary.Separator("── Discovery ──"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  Scan for New Postings", value="scan"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  Check Posting Liveness", value="liveness"),
+    questionary.Separator("── Evaluation ──"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending JDs", value="evaluate_all"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate a Specific JD", value="evaluate_one"),
+    questionary.Separator("── Build ──"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending JDs (batch)", value="tailor_all"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for a Specific JD", value="tailor_one"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Write cover letter for a Specific JD", value="coverletter_one"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Polish a resume or cover letter", value="polish"),
+    questionary.Separator("── Utility ──"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  View Application Tracker", value="view_applications"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Exit", value="exit"),
 ]
 
 
