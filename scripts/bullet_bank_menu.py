@@ -115,3 +115,24 @@ def _column_completeness_status(csv_path: str, columns: list) -> tuple:
         if any(not (row.get(col) or "").strip() for row in rows):
             return ("Stale", "")
     return ("Up to date", "")
+
+
+def _maintenance_status(entry: dict) -> str:
+    path = entry["watched_file"]
+
+    if entry["key"] == "triage":
+        if not os.path.exists(path):
+            return "empty -- nothing to triage"
+        with open(path, newline="", encoding="utf-8") as f:
+            count = sum(1 for _ in csv.DictReader(f))
+        return "empty -- nothing to triage" if count == 0 else f"{count} row(s) waiting"
+
+    if entry["key"] == "retire":
+        if not os.path.exists(path):
+            return "none pending"
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        pending = sum(1 for row in rows if (row.get("is_representative") or "").strip().lower() == "false")
+        return "none pending" if pending == 0 else f"{pending} bullet(s) pending retirement"
+
+    return ""

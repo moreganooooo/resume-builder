@@ -126,5 +126,49 @@ class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
         self.assertEqual([m["key"] for m in bullet_bank_menu.MAINTENANCE], ["triage", "retire"])
 
 
+class TestMaintenanceStatus(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.csv_path = os.path.join(self.tmp_dir, "watched.csv")
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_csv(self, rows, fieldnames):
+        with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def test_triage_missing_file_is_empty(self):
+        entry = {"key": "triage", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing to triage")
+
+    def test_triage_reports_row_count(self):
+        self._write_csv([{"Bullet Point": "a"}, {"Bullet Point": "b"}], ["Bullet Point"])
+        entry = {"key": "triage", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 row(s) waiting")
+
+    def test_retire_missing_file_is_none_pending(self):
+        entry = {"key": "retire", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none pending")
+
+    def test_retire_counts_only_non_representative_rows(self):
+        self._write_csv(
+            [{"is_representative": "True"}, {"is_representative": "False"}, {"is_representative": "False"}],
+            ["is_representative"],
+        )
+        entry = {"key": "retire", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 bullet(s) pending retirement")
+
+    def test_retire_none_pending_when_all_representative(self):
+        self._write_csv([{"is_representative": "True"}], ["is_representative"])
+        entry = {"key": "retire", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none pending")
+
+
 if __name__ == "__main__":
     unittest.main()
