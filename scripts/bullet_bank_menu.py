@@ -136,3 +136,46 @@ def _maintenance_status(entry: dict) -> str:
         return "none pending" if pending == 0 else f"{pending} bullet(s) pending retirement"
 
     return ""
+
+
+def _confirm(label: str) -> bool:
+    return bool(questionary.confirm(
+        f'Ready to run "{label}"? This calls the Gemini API and may take a while.',
+        default=True, style=cli_art.QUESTIONARY_STYLE,
+    ).ask())
+
+
+def _handle_choice(choice: str) -> None:
+    entry = _ALL_ENTRIES[choice]
+    if entry.get("api_cost") and not _confirm(entry["label"]):
+        return
+    script_path = os.path.join(SCRIPT_DIR, entry["script"])
+    result = subprocess.run([sys.executable, script_path])
+    if result.returncode != 0:
+        cli_art.display_error(f"{entry['script']} exited with an error -- check the output above.")
+
+
+def _build_choices() -> list:
+    choices = [
+        questionary.Choice(title=f"{stage['number']}. {stage['label']}", value=stage["key"])
+        for stage in STAGES
+    ]
+    choices.append(questionary.Separator())
+    choices += [questionary.Choice(title=entry["label"], value=entry["key"]) for entry in MAINTENANCE]
+    choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
+    return choices
+
+
+def run_bullet_bank_menu() -> None:
+    while True:
+        stage_rows = [(s["number"], s["label"], *_stage_status(s)) for s in STAGES]
+        maintenance_rows = [(m["label"], _maintenance_status(m)) for m in MAINTENANCE]
+        cli_art.render_bullet_bank_status(stage_rows, maintenance_rows)
+
+        choice = questionary.select(
+            "Bullet Bank Management:", choices=_build_choices(), style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if not choice or choice == "__back__":
+            return
+        _handle_choice(choice)
