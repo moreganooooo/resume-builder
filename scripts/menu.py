@@ -31,21 +31,21 @@ import polish as polish_module
 import theme
 
 _CHOICES = [
-    questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
+    questionary.Choice(title=[("class:new_user", "--> New User? Start Here!\n")], value="bootstrap"),
     questionary.Separator("── Discovery ──"),
     questionary.Choice(title=f"{theme.ICONS['discovery']}  Scan for New Postings", value="scan"),
-    questionary.Choice(title=f"{theme.ICONS['discovery']}  Check Posting Liveness", value="liveness"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  Check Posting Liveness\n", value="liveness"),
     questionary.Separator("── Evaluation ──"),
-    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending JDs", value="evaluate_all"),
-    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate a Specific JD", value="evaluate_one"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending Roles", value="evaluate_all"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate a Specific Role\n", value="evaluate_one"),
     questionary.Separator("── Build ──"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending JDs (batch)", value="tailor_all"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for a Specific JD", value="tailor_one"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Write cover letter for a Specific JD", value="coverletter_one"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Polish a resume or cover letter", value="polish"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending Roles (batch)", value="tailor_all"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for a Specific Role", value="tailor_one"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter to Match a Resume", value="coverletter_one"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini\n", value="polish"),
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  View Application Tracker", value="view_applications"),
-    questionary.Choice(title=f"{theme.ICONS['utility']}  Exit", value="exit"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
 ]
 
 
@@ -253,7 +253,6 @@ def _session_summary(session_stats: dict) -> str:
 
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
-    cli_art.display_stats_line()
     cli_art.display_tip()
 
     session_stats = {}
