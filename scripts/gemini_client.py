@@ -229,7 +229,7 @@ class GeminiClient:
             if resp.status_code in SERVER_ERRORS:
                 failure_streak += 1
             elif resp.status_code == 429:
-                failure_streak = max(failure_streak, 1)
+                failure_streak += 1
 
             if resp.status_code == HIGH_DEMAND_STATUS:
                 print("    WARNING: Model high demand (503). Treating as transient.")
