@@ -31,6 +31,11 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("Write Cover Letter to Match a Resume", labels["coverletter_one"])
         self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
 
+    def test_bullet_bank_entry_is_registered(self):
+        values = [c.value for c in menu._CHOICES]
+        self.assertIn("bullet_bank", values)
+        self.assertIn("bullet_bank", menu._HANDLERS)
+
     def test_choices_are_grouped_with_labeled_separators(self):
         separator_lines = [c.line for c in menu._CHOICES if isinstance(c, questionary.Separator)]
         self.assertTrue(any("Discovery" in line for line in separator_lines))
@@ -240,6 +245,14 @@ class TestHandlePolish(unittest.TestCase):
     @patch("menu.polish_module.run")
     def test_always_returns_false(self, mock_run):
         self.assertFalse(menu._handle_polish())
+
+
+class TestHandleBulletBank(unittest.TestCase):
+
+    @patch("menu.bullet_bank_menu.run_bullet_bank_menu")
+    def test_always_returns_false(self, mock_run):
+        self.assertFalse(menu._handle_bullet_bank())
+        mock_run.assert_called_once()
 
 
 class TestChainContent(unittest.TestCase):

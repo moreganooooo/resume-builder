@@ -20,6 +20,7 @@ import sys
 import questionary
 
 import bootstrap_bullet_bank
+import bullet_bank_menu
 import cli_art
 import orchestrator
 import jd_manager
@@ -46,6 +47,8 @@ _CHOICES = [
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  View Application Tracker", value="view_applications"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
+    questionary.Separator("── Bullet Bank ──"),
+    questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank", value="bullet_bank"),
 ]
 
 
@@ -177,6 +180,11 @@ def _handle_polish() -> bool:
     return False
 
 
+def _handle_bullet_bank() -> bool:
+    bullet_bank_menu.run_bullet_bank_menu()
+    return False
+
+
 def _handle_view_applications() -> bool:
     if not os.path.exists(jd_manager.APPLICATIONS_MD):
         cli_art.console.print("No applications tracked yet -- nothing to view.")
@@ -198,6 +206,7 @@ _HANDLERS = {
     "coverletter_one": _handle_coverletter_one,
     "polish": _handle_polish,
     "view_applications": _handle_view_applications,
+    "bullet_bank": _handle_bullet_bank,
 }
 
 
