@@ -49,6 +49,7 @@ _NERD_ICONS = {
     "evaluate": "",    # nf-fa-bar_chart
     "build": "",       # nf-fa-wrench
     "utility": "",     # nf-fa-cog
+    "bullet_bank": "", # nf-fa-database
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -62,6 +63,7 @@ _UNICODE_ICONS = {
     "evaluate": "\U0001F4CA",   # 📊
     "build": "\U0001F6E0",      # 🛠
     "utility": "⚙",        # ⚙
+    "bullet_bank": "\U0001F5C3",  # 🗃
 }
 
 # Nerd Font is the default -- set RESUME_BUILDER_ICONS=unicode (exact,
@@ -78,7 +80,7 @@ QUESTIONARY_STYLE = Style([
     ("pointer", f"fg:{BRAND_ACCENT} bold"),
     ("highlighted", f"fg:{BRAND_ACCENT} bold"),
     ("selected", f"fg:{SUCCESS}"),
-    ("separator", f"fg:{BRAND_ACCENT} dim"),
+    ("separator", f"fg:{INFO} bold"),
     ("new_user", f"fg:{SUCCESS} bold"),
     ("instruction", ""),
     ("text", ""),
