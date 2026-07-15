@@ -84,7 +84,7 @@ AUDIT_SCORE_COLS = [
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-SIMILARITY_THRESHOLD = 0.75   # cosine >= this => same cluster
+SIMILARITY_THRESHOLD = 0.92   # cosine >= this => same cluster
 EMBED_MODEL          = "gemini-embedding-2"
 EMBED_DIM            = 768    # gemini-embedding-2 native dimension
 BATCH_SIZE           = 20     # batchEmbedContents supports up to ~20 requests per call
