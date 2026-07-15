@@ -151,5 +151,22 @@ class TestDisplayTip(unittest.TestCase):
         self.assertTrue(any(tip in output for tip in cli_art.TIPS))
 
 
+class TestDisplayBreadcrumb(unittest.TestCase):
+
+    def test_prints_a_one_line_rule_not_a_full_panel(self):
+        console = Console(record=True, width=100)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_breadcrumb()
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertIn("resume-builder", output)
+        # A breadcrumb rule is one line of dashes + text -- a full banner
+        # box would include multiple '=' or '═' (double-line) rows.
+        self.assertNotIn("═", output)
+
+
 if __name__ == "__main__":
     unittest.main()

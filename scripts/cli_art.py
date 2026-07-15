@@ -158,8 +158,14 @@ def display_tip() -> None:
     console.print(f"{theme.ICONS['hint']}  Did you know? {tip}", style="dim")
 
 
+def display_breadcrumb() -> None:
+    """Replaces a full banner repaint on menu loop-back -- one line, not
+    another full-width panel every time an action finishes."""
+    console.rule(f"[bold {theme.BRAND}]›[/bold {theme.BRAND}] resume-builder", style="dim", align="left")
+
+
 def display_whats_next_panel() -> None:
-    console.print(Panel("What's next?", border_style="#4caf50", box=box.ROUNDED, padding=(0, 2)))
+    console.print(f"\n[bold {theme.BRAND}]What's next?[/bold {theme.BRAND}]")
 
 
 def display_bootstrap_intro(doc_count: int) -> None:
