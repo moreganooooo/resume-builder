@@ -114,12 +114,13 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
     max_col = max(max_col - 1, 1)
     max_threshold = max_row + max_col
 
-    frame_count = 18
+    frame_count = 30
+    total_seconds = 1.6
     with Live(console=console, refresh_per_second=30, transient=False) as live:
         for frame in range(frame_count + 1):
             threshold = round(max_threshold * frame / frame_count)
             live.update(render_frame(threshold))
-            time.sleep(0.5 / frame_count)
+            time.sleep(total_seconds / frame_count)
 
 
 def display_main_banner() -> None:
