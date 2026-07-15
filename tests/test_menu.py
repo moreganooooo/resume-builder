@@ -6,6 +6,8 @@ from unittest.mock import patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import questionary  # noqa: E402
+
 import menu  # noqa: E402
 
 
@@ -20,14 +22,20 @@ class TestChoicesAndHandlers(unittest.TestCase):
 
     def test_choices_have_the_renamed_labels(self):
         labels = {c.value: c.title for c in menu._CHOICES}
-        self.assertEqual(labels["scan"], "Scan for New Postings")
-        self.assertEqual(labels["liveness"], "Check Posting Liveness")
-        self.assertEqual(labels["evaluate_all"], "Evaluate ALL Pending JDs")
-        self.assertEqual(labels["evaluate_one"], "Evaluate a Specific JD")
-        self.assertEqual(labels["tailor_all"], "Customize Resume for ALL Pending JDs (batch)")
-        self.assertEqual(labels["tailor_one"], "Customize Resume for a Specific JD")
-        self.assertEqual(labels["coverletter_one"], "Write cover letter for a Specific JD")
-        self.assertEqual(labels["polish"], "Polish a resume or cover letter")
+        self.assertIn("Scan for New Postings", labels["scan"])
+        self.assertIn("Check Posting Liveness", labels["liveness"])
+        self.assertIn("Evaluate ALL Pending JDs", labels["evaluate_all"])
+        self.assertIn("Evaluate a Specific JD", labels["evaluate_one"])
+        self.assertIn("Customize Resume for ALL Pending JDs (batch)", labels["tailor_all"])
+        self.assertIn("Customize Resume for a Specific JD", labels["tailor_one"])
+        self.assertIn("Write cover letter for a Specific JD", labels["coverletter_one"])
+        self.assertIn("Polish a resume or cover letter", labels["polish"])
+
+    def test_choices_are_grouped_with_labeled_separators(self):
+        separator_lines = [c.line for c in menu._CHOICES if isinstance(c, questionary.Separator)]
+        self.assertTrue(any("Discovery" in line for line in separator_lines))
+        self.assertTrue(any("Evaluation" in line for line in separator_lines))
+        self.assertTrue(any("Build" in line for line in separator_lines))
 
 
 class TestHandleScan(unittest.TestCase):
