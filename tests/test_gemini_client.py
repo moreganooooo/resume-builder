@@ -8,7 +8,7 @@ import requests
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from gemini_client import GeminiClient, MODEL_FALLBACKS  # noqa: E402
+from gemini_client import GeminiClient, MODEL_FALLBACKS, SustainedFailureError  # noqa: E402
 
 
 def _success_response():
@@ -71,6 +71,74 @@ class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
         self.assertEqual(text, "ok")
         third_call_url = mock_post.call_args_list[2].args[0]
         self.assertIn("gemini-3.1-flash-lite", third_call_url)
+
+
+class TestSustainedFailureDetection(unittest.TestCase):
+
+    def setUp(self):
+        # Class-level counter persists across tests in the same process --
+        # reset before and after every test in this class for isolation.
+        GeminiClient._consecutive_full_failures = 0
+
+    def tearDown(self):
+        GeminiClient._consecutive_full_failures = 0
+
+    def _rate_limited_response(self):
+        resp = MagicMock()
+        resp.status_code = 429
+        return resp
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_first_full_exhaustion_returns_none_without_raising(self, mock_post):
+        mock_post.return_value = self._rate_limited_response()
+        text, usage = GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=2,
+        )
+        self.assertIsNone(text)
+        self.assertEqual(usage, {})
+        self.assertEqual(GeminiClient._consecutive_full_failures, 1)
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_second_consecutive_full_exhaustion_raises(self, mock_post):
+        mock_post.return_value = self._rate_limited_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite", system_instruction="sys",
+            contents="do the thing", max_retries=2,
+        )
+        with self.assertRaises(SustainedFailureError):
+            GeminiClient.generate(
+                model="gemini-3.1-flash-lite", system_instruction="sys",
+                contents="do the thing", max_retries=2,
+            )
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_success_between_exhaustions_resets_the_counter(self, mock_post):
+        mock_post.side_effect = [
+            self._rate_limited_response(), self._rate_limited_response(),  # exhaustion 1 (max_retries=2)
+            _success_response(),                                          # success -- resets counter
+            self._rate_limited_response(), self._rate_limited_response(),  # exhaustion again -- only #1 now
+        ]
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite", system_instruction="sys",
+            contents="do the thing", max_retries=2,
+        )
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite", system_instruction="sys",
+            contents="do the thing", max_retries=2,
+        )
+        text, usage = GeminiClient.generate(
+            model="gemini-3.1-flash-lite", system_instruction="sys",
+            contents="do the thing", max_retries=2,
+        )
+        self.assertIsNone(text)
+        self.assertEqual(GeminiClient._consecutive_full_failures, 1)
 
 
 if __name__ == "__main__":
