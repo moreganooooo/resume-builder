@@ -57,8 +57,11 @@ grade CLI with real personality — not just functional.
 ## Non-Goals
 
 - No change to the menu's actual actions, labels, merge logic, or chain
-  mechanism (`_HANDLERS`, `_CHAIN`, `_run_with_chain`) — that's the prior
-  spec's territory and stays as-is.
+  *routing* (the `_HANDLERS`/`_CHAIN` mappings, which action leads to which
+  next-step choices) — that's the prior spec's territory and stays as-is.
+  `_run_with_chain` does gain an additive `session_stats` parameter to
+  support this spec's session-end summary (below), but its control flow
+  (when it recurses, when it stops) is unchanged.
 - No `--quiet`/plain-output scripting mode yet (noted as a future concept
   once `theme.py` exists to gate against — not built now).
 - No per-company/archetype accent badges in the fit table — still a
@@ -123,16 +126,36 @@ mapping, with a working fallback — not the final glyph choices).
 
 ### 2. Progress motion for real API calls
 
-Wrap each currently-silent long operation in `rich.status.Status`, using
-`theme`'s tokens for consistent spinner coloring:
+Verified against the actual code: `build_tailored_resume()` (used by
+`orchestrator.run_pipeline`) already prints `Step 1…Step 7` progress via
+bare `print()`, `build_tailored_coverletter()` already prints
+research/validator-retry status the same way, and `bootstrap_bullet_bank.py`
+runs as a subprocess (`menu._handle_bootstrap`) whose own stdout already
+streams straight through. Wrapping any of these in a `rich.status.Status`
+would fight that existing output — Rich's `Live`-based rendering and raw
+`print()` calls to the same terminal don't compose safely, so this would
+corrupt output that already works, not fix a hang.
 
-- `bootstrap_bullet_bank.py`'s pipeline: one status per phase, message drawn
-  from a small per-phase phrase list (e.g. "Extracting achievements…",
-  "Tagging by skill area…") — this is where transient personality lives.
-- `batch_evaluate.evaluate_all_pending`: one status per JD being scored, or
-  one aggregate status with a running count ("Evaluating 4/12…").
-- `orchestrator.run_pipeline` (batch tailor): same pattern, one status per
-  JD.
+The one call that's genuinely, entirely silent on its success path is
+`ResumeEngine.evaluate_fit()` (`orchestrator.py:1609`) — no `print()` at all
+between the Gemini call starting and returning. Wrap its three real call
+sites in `cli_art.console.status(...)` (using `theme`'s tokens for
+consistent spinner coloring), with a message drawn from a small phrase list
+(e.g. "Weighing the fit…") — this is where transient personality lives:
+
+- `batch_evaluate.evaluate_all_pending()`'s loop (`batch_evaluate.py:68`) —
+  status wraps just the `engine.evaluate_fit(path)` call, after the existing
+  `print(f"  [{i+1}/{n}] Evaluating {company}...")` line (which stays as-is;
+  the spinner fills the silent gap *within* that already-announced item, it
+  doesn't replace the per-item announcement).
+- `menu._handle_evaluate_one()`'s `engine.evaluate_fit(path)` call
+  (`menu.py:128`).
+- `cli.py`'s `evaluate` command's single-JD branch (`cli.py:143`).
+
+`build_tailored_coverletter()`, `run_pipeline`/`build_tailored_resume`, and
+the bootstrap subprocess pipeline are explicitly left alone — they already
+have their own (non-spinner) progress reporting, and that's fine as-is for
+this pass.
 
 Rule carried over from the voice discussion: wit lives only in transient
 status text, never in data (scores, company names, error detail stay
