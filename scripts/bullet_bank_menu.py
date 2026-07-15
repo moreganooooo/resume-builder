@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 
+import numpy as np
 import questionary
 
 import cli_art
@@ -30,6 +31,7 @@ KEEPERS_AUDITED_CSV = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
 NPY_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.npy")
 NEEDS_REVIEW_CSV = os.path.join(KB_DIR, "needs-review.csv")
 REWRITE_QUEUE_CSV = os.path.join(KB_DIR, "rewrite-queue.csv")
+CLUSTER_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz")
 
 # Verified directly against each script's own path constants -- see
 # docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md's
@@ -43,7 +45,7 @@ STAGES = [
     {
         "key": "cluster", "number": 2, "label": "Cluster & Classify Bullets",
         "script": "cluster_bullet_bank.py", "inputs": [RAW_CSV, AUDITED_CSV], "output": CLUSTER_MAP_CSV,
-        "api_cost": True, "status_mode": "mtime",
+        "api_cost": True, "status_mode": "mtime", "checkpoint": CLUSTER_CHECKPOINT_PATH,
     },
     {
         "key": "rewrite", "number": 3, "label": "Rewrite Weak Bullets",
@@ -87,12 +89,17 @@ def _stage_status(stage: dict) -> tuple:
     stages, each with a distinct input/output file) compares mtimes.
     status_mode='columns' (score_keeper_gems.py, which updates its file
     in place -- same file in and out, so an mtime comparison against
-    itself is meaningless) checks column completeness instead."""
+    itself is meaningless) checks column completeness instead. A stage
+    with a 'checkpoint' key reports in-progress resume state when its
+    real output doesn't exist yet."""
     if stage.get("status_mode") == "columns":
         return _column_completeness_status(stage["output"], stage["status_columns"])
 
     output = stage["output"]
     if not os.path.exists(output):
+        checkpoint = stage.get("checkpoint")
+        if checkpoint and os.path.exists(checkpoint):
+            return _checkpoint_progress_status(checkpoint)
         return ("Never run", "")
 
     output_mtime = os.path.getmtime(output)
@@ -102,6 +109,13 @@ def _stage_status(stage: dict) -> tuple:
 
     timestamp = datetime.datetime.fromtimestamp(output_mtime).strftime("%Y-%m-%d %H:%M")
     return ("Up to date", f"as of {timestamp}")
+
+
+def _checkpoint_progress_status(checkpoint_path: str) -> tuple:
+    data = np.load(checkpoint_path, allow_pickle=False)
+    next_index = int(data["next_index"])
+    total = int(data["total"])
+    return ("Never run", f"checkpoint at bullet {next_index}/{total} -- resumable")
 
 
 def _column_completeness_status(csv_path: str, columns: list) -> tuple:

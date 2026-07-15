@@ -113,6 +113,65 @@ class TestStageStatusColumns(unittest.TestCase):
         self.assertEqual(status, "Never run")
 
 
+class TestStageStatusChecksCheckpoint(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.checkpoint_path = os.path.join(self.tmp_dir, "checkpoint.npz")
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_checkpoint(self, next_index, total):
+        import numpy as np
+        np.savez(
+            self.checkpoint_path,
+            vectors=np.zeros((next_index, 4), dtype=np.float32),
+            next_index=np.array(next_index),
+            total=np.array(total),
+        )
+
+    def test_missing_output_with_checkpoint_reports_progress(self):
+        self._write_checkpoint(next_index=1035, total=1431)
+        stage = {
+            "output": os.path.join(self.tmp_dir, "missing.csv"),
+            "inputs": [], "status_mode": "mtime",
+            "checkpoint": self.checkpoint_path,
+        }
+        status, detail = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Never run")
+        self.assertEqual(detail, "checkpoint at bullet 1035/1431 -- resumable")
+
+    def test_missing_output_without_checkpoint_key_is_unaffected(self):
+        stage = {
+            "output": os.path.join(self.tmp_dir, "missing.csv"),
+            "inputs": [], "status_mode": "mtime",
+        }
+        status, detail = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Never run")
+        self.assertEqual(detail, "")
+
+    def test_missing_output_with_checkpoint_key_but_no_file_is_unaffected(self):
+        stage = {
+            "output": os.path.join(self.tmp_dir, "missing.csv"),
+            "inputs": [], "status_mode": "mtime",
+            "checkpoint": os.path.join(self.tmp_dir, "no_such_checkpoint.npz"),
+        }
+        status, detail = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Never run")
+        self.assertEqual(detail, "")
+
+
+class TestClusterStageHasCheckpointKey(unittest.TestCase):
+
+    def test_cluster_stage_has_checkpoint_key(self):
+        cluster_stage = next(s for s in bullet_bank_menu.STAGES if s["key"] == "cluster")
+        self.assertIn("checkpoint", cluster_stage)
+        self.assertTrue(cluster_stage["checkpoint"].endswith("_cluster.checkpoint.npz"))
+
+
 class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
 
     def test_six_stages_in_pipeline_order(self):
