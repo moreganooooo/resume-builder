@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -37,6 +38,86 @@ class TestDisplaySuccess(unittest.TestCase):
         self.assertIn(cli_art.theme.ICONS["success"], output)
         # No panel border characters -- success stays lightweight.
         self.assertNotIn("╭", output)  # ╭ (rounded-panel corner)
+
+
+class TestLerpHex(unittest.TestCase):
+
+    def test_t_zero_returns_start(self):
+        self.assertEqual(cli_art._lerp_hex("#000000", "#ffffff", 0.0), "#000000")
+
+    def test_t_one_returns_end(self):
+        self.assertEqual(cli_art._lerp_hex("#000000", "#ffffff", 1.0), "#ffffff")
+
+    def test_t_half_returns_midpoint(self):
+        self.assertEqual(cli_art._lerp_hex("#000000", "#ffffff", 0.5), "#808080")
+
+
+class TestGradientGrid(unittest.TestCase):
+
+    def test_top_left_is_start_color(self):
+        grid = cli_art._gradient_grid(["AB", "CD"], "#000000", "#ffffff")
+        self.assertEqual(grid[0][0], "#000000")
+
+    def test_bottom_right_is_end_color(self):
+        grid = cli_art._gradient_grid(["AB", "CD"], "#000000", "#ffffff")
+        self.assertEqual(grid[-1][-1], "#ffffff")
+
+    def test_handles_empty_lines_without_crashing(self):
+        grid = cli_art._gradient_grid(["AB", "", "CD"], "#000000", "#ffffff")
+        self.assertEqual(grid[1], [])
+
+
+class TestRevealBanner(unittest.TestCase):
+
+    def test_non_terminal_prints_once_fully_revealed(self):
+        console = Console(record=True, width=100, force_terminal=False)
+        original = cli_art.console
+        cli_art.console = console
+        calls = []
+
+        def render_frame(threshold):
+            calls.append(threshold)
+            return cli_art.Text(f"threshold={threshold}")
+
+        try:
+            cli_art._reveal_banner(["AB"], [["#000000", "#111111"]], render_frame)
+        finally:
+            cli_art.console = original
+
+        self.assertEqual(calls, [None])
+        self.assertIn("threshold=None", console.export_text())
+
+    @patch("cli_art.Live")
+    def test_terminal_drives_multiple_frames(self, mock_live_cls):
+        console = Console(record=True, width=100, force_terminal=True)
+        original = cli_art.console
+        cli_art.console = console
+        mock_live = mock_live_cls.return_value.__enter__.return_value
+
+        def render_frame(threshold):
+            return cli_art.Text(f"threshold={threshold}")
+
+        try:
+            with patch("cli_art.time.sleep"):
+                cli_art._reveal_banner(["AB", "CD"], [["#000000", "#111111"], ["#222222", "#ffffff"]], render_frame)
+        finally:
+            cli_art.console = original
+
+        self.assertGreater(mock_live.update.call_count, 1)
+
+
+class TestDisplayMainBanner(unittest.TestCase):
+
+    def test_runs_without_error_in_non_terminal_mode(self):
+        console = Console(record=True, width=100, force_terminal=False)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_main_banner()
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertIn(cli_art.SUBTITLE, output)
 
 
 if __name__ == "__main__":
