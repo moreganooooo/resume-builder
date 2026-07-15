@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -168,6 +169,68 @@ class TestMaintenanceStatus(unittest.TestCase):
         self._write_csv([{"is_representative": "True"}], ["is_representative"])
         entry = {"key": "retire", "watched_file": self.csv_path}
         self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none pending")
+
+
+class TestHandleChoice(unittest.TestCase):
+
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=False)
+    def test_declined_confirm_skips_subprocess(self, mock_confirm, mock_run):
+        bullet_bank_menu._handle_choice("audit")
+        mock_run.assert_not_called()
+
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=True)
+    def test_confirmed_api_stage_runs_subprocess(self, mock_confirm, mock_run, mock_error):
+        mock_run.return_value.returncode = 0
+        bullet_bank_menu._handle_choice("audit")
+        mock_run.assert_called_once()
+        mock_error.assert_not_called()
+
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=True)
+    def test_nonzero_exit_displays_error(self, mock_confirm, mock_run, mock_error):
+        mock_run.return_value.returncode = 1
+        bullet_bank_menu._handle_choice("audit")
+        mock_error.assert_called_once()
+
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm")
+    def test_maintenance_entry_skips_confirmation(self, mock_confirm, mock_run, mock_error):
+        mock_run.return_value.returncode = 0
+        bullet_bank_menu._handle_choice("triage")
+        mock_confirm.assert_not_called()
+        mock_run.assert_called_once()
+
+
+class TestRunBulletBankMenu(unittest.TestCase):
+
+    @patch("bullet_bank_menu.cli_art.render_bullet_bank_status")
+    @patch("bullet_bank_menu.questionary.select")
+    def test_back_returns_without_handling_a_choice(self, mock_select, mock_render):
+        mock_select.return_value.ask.return_value = "__back__"
+        with patch("bullet_bank_menu._handle_choice") as mock_handle:
+            bullet_bank_menu.run_bullet_bank_menu()
+        mock_handle.assert_not_called()
+
+    @patch("bullet_bank_menu.cli_art.render_bullet_bank_status")
+    @patch("bullet_bank_menu.questionary.select")
+    def test_cancelled_prompt_returns_without_handling_a_choice(self, mock_select, mock_render):
+        mock_select.return_value.ask.return_value = None
+        with patch("bullet_bank_menu._handle_choice") as mock_handle:
+            bullet_bank_menu.run_bullet_bank_menu()
+        mock_handle.assert_not_called()
+
+    @patch("bullet_bank_menu.cli_art.render_bullet_bank_status")
+    @patch("bullet_bank_menu.questionary.select")
+    def test_choosing_a_stage_then_back_handles_it_once(self, mock_select, mock_render):
+        mock_select.return_value.ask.side_effect = ["audit", "__back__"]
+        with patch("bullet_bank_menu._handle_choice") as mock_handle:
+            bullet_bank_menu.run_bullet_bank_menu()
+        mock_handle.assert_called_once_with("audit")
 
 
 if __name__ == "__main__":
