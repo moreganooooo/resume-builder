@@ -2,35 +2,30 @@
 cli_art.py style (rich Console/Panel) but trimmed down -- no hand-drawn ASCII
 block art, just a clean styled banner."""
 
-from questionary import Style
+import random
+import time
+
 from rich import box
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
+
+import jd_manager
+import theme
 
 console = Console()
 
-SUCCESS = "[bold green]✓[/bold green]"
-ERROR = "[bold red]✗[/bold red]"
-WARNING = "[bold yellow]⚠[/bold yellow]"
-HINT = "[bold cyan]💡[/bold cyan]"
+SUCCESS = f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}]"
+ERROR = f"[bold {theme.ERROR}]{theme.ICONS['error']}[/bold {theme.ERROR}]"
+WARNING = f"[bold {theme.WARNING}]{theme.ICONS['warning']}[/bold {theme.WARNING}]"
+HINT = f"[bold {theme.INFO}]{theme.ICONS['hint']}[/bold {theme.INFO}]"
 
-# Ported from job_automater/cli.py:47-57 (its `custom_style`) so every
-# questionary prompt in this project -- old (--pick checkboxes) and new
-# (the interactive menu) -- shares one consistent theme.
-QUESTIONARY_STYLE = Style([
-    ('qmark', 'fg:#673ab7 bold'),
-    ('question', 'bold'),
-    ('answer', 'fg:#2196f3 bold'),
-    ('pointer', 'fg:#673ab7 bold'),
-    ('highlighted', 'fg:#673ab7 bold'),
-    ('selected', 'fg:#4caf50'),
-    ('separator', 'fg:#cc5454'),
-    ('new_user', 'fg:#4caf50 bold'),
-    ('instruction', ''),
-    ('text', ''),
-])
+# Re-exported so menu.py/picker.py's existing `cli_art.QUESTIONARY_STYLE`
+# references keep working unchanged.
+QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 
 # Block-letter title banner, same ansi_shadow-style box-drawing glyphs as
 # job_automater-main's MAIN_BANNER -- stacked on two lines since "RESUME
@@ -78,14 +73,12 @@ def display_bootstrap_intro(doc_count: int) -> None:
     console.print(Panel(body, title="New User Bootstrap", border_style="#4caf50", box=box.ROUNDED, padding=(1, 2)))
 
 
-# Recommendation values match orchestrator.py's FitEvaluationSchema Literal
-# exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".
-_RECOMMENDATION_COLORS = {
-    "Strong pursue": "green",
-    "Selective pursue": "cyan",
-    "Low-priority pursue": "yellow",
-    "Skip": "red dim",
-}
+# Same four tiers as orchestrator.FitEvaluationSchema's `recommendation`
+# Literal -- sourced from theme.py so this table and picker.py's checkbox
+# list are provably one palette, not two hand-maintained copies. "Skip"
+# is intentionally not dimmed here (it was previously "red dim" in this
+# file only) -- unified to match picker.py's plain-hex treatment.
+_RECOMMENDATION_COLORS = theme.RECOMMENDATION_COLORS
 
 
 def display_banner(subtitle: str = "") -> None:

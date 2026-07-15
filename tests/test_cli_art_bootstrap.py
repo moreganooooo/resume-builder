@@ -10,9 +10,9 @@ import cli_art  # noqa: E402
 
 class TestHintConstant(unittest.TestCase):
 
-    def test_hint_constant_exists_and_is_styled(self):
-        self.assertIn("\U0001F4A1", cli_art.HINT)
-        self.assertIn("[bold cyan]", cli_art.HINT)
+    def test_hint_uses_theme_icon_and_color_by_default(self):
+        self.assertIn(cli_art.theme.ICONS["hint"], cli_art.HINT)
+        self.assertIn(cli_art.theme.INFO, cli_art.HINT)
 
 
 class TestNewUserStyleToken(unittest.TestCase):
