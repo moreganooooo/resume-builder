@@ -44,9 +44,17 @@ EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM   = 768   # gemini-embedding-2 native dimension
 
 
+class SustainedFailureError(RuntimeError):
+    """Raised when GeminiClient.generate() has exhausted retries and the
+    model fallback on SUSTAINED_FAILURE_THRESHOLD consecutive calls --
+    a signal this is a quota-level issue, not a transient blip."""
+
+
 class GeminiClient:
 
     _timeout = 90
+    _consecutive_full_failures = 0
+    SUSTAINED_FAILURE_THRESHOLD = 2
 
     @staticmethod
     def resolve_refs(schema: dict) -> dict:
@@ -263,8 +271,18 @@ class GeminiClient:
             # concatenate only the non-thought parts to get the actual response.
             text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
             failure_streak = 0
+            GeminiClient._consecutive_full_failures = 0
             return text, usage
 
+        GeminiClient._consecutive_full_failures += 1
+        if GeminiClient._consecutive_full_failures >= GeminiClient.SUSTAINED_FAILURE_THRESHOLD:
+            failures = GeminiClient._consecutive_full_failures
+            GeminiClient._consecutive_full_failures = 0
+            raise SustainedFailureError(
+                f"GeminiClient.generate() exhausted retries on {failures} consecutive "
+                f"calls (model={model}) -- this looks like a sustained quota issue, not "
+                "a transient blip. Swap GEMINI_API_KEY/GOOGLE_API_KEY in .env and re-run."
+            )
         return None, {}
 
     @staticmethod
