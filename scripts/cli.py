@@ -78,10 +78,10 @@ def run_batch(master, pick, yes):
 def coverletter(jd_file, pick, yes):
     """Generate + render a cover letter for a single JD file."""
     if pick and jd_file:
-        cli_art.console.print(f"{cli_art.ERROR} Pass a JD file OR --pick, not both.")
+        cli_art.display_error("Pass a JD file OR --pick, not both.")
         raise SystemExit(1)
     if not pick and not jd_file:
-        cli_art.console.print(f"{cli_art.ERROR} Pass a JD file, or use --pick to select interactively.")
+        cli_art.display_error("Pass a JD file, or use --pick to select interactively.")
         raise SystemExit(1)
 
     engine = orchestrator.ResumeEngine()
@@ -142,7 +142,7 @@ def evaluate(jd_file, yes, refresh):
     engine = orchestrator.ResumeEngine()
     result = engine.evaluate_fit(jd_file)
     if not result:
-        cli_art.console.print(f"{cli_art.ERROR} Evaluation failed -- no parseable result.")
+        cli_art.display_error("Evaluation failed -- no parseable result.")
         raise SystemExit(1)
     jd_manager.save_evaluation(jd_file, result)
 
