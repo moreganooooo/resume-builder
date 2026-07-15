@@ -59,6 +59,59 @@ class TestStageStatusMtime(unittest.TestCase):
         self.assertEqual(status, "Up to date")
 
 
+class TestStageStatusColumns(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.csv_path = os.path.join(self.tmp_dir, "keepers.csv")
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_csv(self, rows, fieldnames):
+        with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def test_missing_file_is_never_run(self):
+        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        status, _ = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Never run")
+
+    def test_missing_column_entirely_is_stale(self):
+        self._write_csv([{"Bullet Point": "x"}], ["Bullet Point"])
+        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        status, _ = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Stale")
+
+    def test_blank_value_in_column_is_stale(self):
+        self._write_csv(
+            [{"Bullet Point": "a", "hidden_gem_score": "90"}, {"Bullet Point": "b", "hidden_gem_score": ""}],
+            ["Bullet Point", "hidden_gem_score"],
+        )
+        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        status, _ = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Stale")
+
+    def test_fully_populated_column_is_up_to_date(self):
+        self._write_csv(
+            [{"Bullet Point": "a", "hidden_gem_score": "90"}, {"Bullet Point": "b", "hidden_gem_score": "10"}],
+            ["Bullet Point", "hidden_gem_score"],
+        )
+        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        status, _ = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Up to date")
+
+    def test_empty_csv_is_never_run(self):
+        self._write_csv([], ["Bullet Point", "hidden_gem_score"])
+        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        status, _ = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Never run")
+
+
 class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
 
     def test_six_stages_in_pipeline_order(self):
