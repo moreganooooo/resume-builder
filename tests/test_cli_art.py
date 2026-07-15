@@ -151,6 +151,28 @@ class TestDisplayTip(unittest.TestCase):
         self.assertTrue(any(tip in output for tip in cli_art.TIPS))
 
 
+class TestRenderFitTable(unittest.TestCase):
+
+    def test_shows_count_title_and_recommendation_legend(self):
+        results = [
+            {"error": False, "composite_score": 4.5, "recommendation": "Strong pursue",
+             "company_name": "Acme", "job_title": "Writer"},
+            {"error": True, "composite_score": None, "recommendation": None,
+             "company_name": "Bad Co", "job_title": "Unknown"},
+        ]
+        console = Console(record=True, width=120)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.render_fit_table(results)
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertIn("2 JD(s) evaluated", output)
+        self.assertIn("Strong pursue", output)
+        self.assertIn("ERROR", output)
+
+
 class TestDisplayBreadcrumb(unittest.TestCase):
 
     def test_prints_a_one_line_rule_not_a_full_panel(self):
