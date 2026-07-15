@@ -86,7 +86,11 @@ def _stage_status(stage: dict) -> tuple:
     """Returns (status_label, detail). status_mode='mtime' (5 of the 6
     stages, each with a distinct input/output file) compares mtimes.
     status_mode='columns' (score_keeper_gems.py, which updates its file
-    in place -- see Task 3) is handled separately."""
+    in place -- same file in and out, so an mtime comparison against
+    itself is meaningless) checks column completeness instead."""
+    if stage.get("status_mode") == "columns":
+        return _column_completeness_status(stage["output"], stage["status_columns"])
+
     output = stage["output"]
     if not os.path.exists(output):
         return ("Never run", "")
@@ -98,3 +102,16 @@ def _stage_status(stage: dict) -> tuple:
 
     timestamp = datetime.datetime.fromtimestamp(output_mtime).strftime("%Y-%m-%d %H:%M")
     return ("Up to date", f"as of {timestamp}")
+
+
+def _column_completeness_status(csv_path: str, columns: list) -> tuple:
+    if not os.path.exists(csv_path):
+        return ("Never run", "")
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return ("Never run", "")
+    for col in columns:
+        if any(not (row.get(col) or "").strip() for row in rows):
+            return ("Stale", "")
+    return ("Up to date", "")
