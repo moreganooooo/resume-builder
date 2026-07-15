@@ -197,5 +197,31 @@ class TestDisplayBreadcrumb(unittest.TestCase):
         self.assertNotIn("═", output)
 
 
+class TestRenderBulletBankStatus(unittest.TestCase):
+
+    def test_shows_stage_numbers_labels_status_and_maintenance_rows(self):
+        stage_rows = [
+            (1, "Audit Bullet Bank (Score Quality)", "Up to date", "as of 2026-07-15 10:00"),
+            (2, "Cluster & Classify Bullets", "Stale", ""),
+            (3, "Rewrite Weak Bullets", "Never run", ""),
+        ]
+        maintenance_rows = [("Triage Needs-Review Queue", "3 row(s) waiting")]
+
+        console = Console(record=True, width=120)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.render_bullet_bank_status(stage_rows, maintenance_rows)
+        finally:
+            cli_art.console = original
+        output = console.export_text()
+        self.assertIn("Audit Bullet Bank (Score Quality)", output)
+        self.assertIn("Up to date", output)
+        self.assertIn("Stale", output)
+        self.assertIn("Never run", output)
+        self.assertIn("Triage Needs-Review Queue", output)
+        self.assertIn("3 row(s) waiting", output)
+
+
 if __name__ == "__main__":
     unittest.main()

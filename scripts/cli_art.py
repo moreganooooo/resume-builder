@@ -242,6 +242,31 @@ def render_fit_table(results: list) -> None:
     ))
 
 
+_STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING}
+
+
+def render_bullet_bank_status(stage_rows: list, maintenance_rows: list) -> None:
+    """stage_rows: (number, label, status, detail) tuples, in pipeline
+    order. maintenance_rows: (label, detail) tuples for the non-sequential
+    triage/retire scripts."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Stage")
+    table.add_column("Status")
+
+    for number, label, status, detail in stage_rows:
+        color = _STAGE_STATUS_COLORS.get(status)
+        status_text = f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
+        if detail:
+            status_text += f" ({detail})"
+        table.add_row(str(number), label, status_text)
+
+    for label, detail in maintenance_rows:
+        table.add_row("-", label, detail)
+
+    console.print(Panel(table, title="Bullet Bank Pipeline Status", border_style=theme.BRAND, box=box.ROUNDED))
+
+
 def display_applications_tracker(content: str) -> None:
     """Renders data/applications.md's raw markdown content directly in the
     terminal via Rich's built-in Markdown renderer -- the table and each
