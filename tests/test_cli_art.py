@@ -117,7 +117,10 @@ class TestDisplayMainBanner(unittest.TestCase):
         finally:
             cli_art.console = original
         output = console.export_text()
-        self.assertIn(cli_art.SUBTITLE, output)
+        # Panel rendering right-pads each line before the border, so the
+        # substring's own trailing newline never lines up exactly -- strip
+        # it before checking containment.
+        self.assertIn(cli_art.SUBTITLE.strip(), output)
 
 
 class TestDisplayStatsLine(unittest.TestCase):
@@ -133,8 +136,8 @@ class TestDisplayStatsLine(unittest.TestCase):
         finally:
             cli_art.console = original
         output = console.export_text()
-        self.assertIn("1 pending", output)
-        self.assertIn("2 tailored all-time", output)
+        self.assertIn("1 Roles Currently Awaiting Resume Creation", output)
+        self.assertIn("2 Resumes Customized All-Time", output)
 
 
 class TestDisplayTip(unittest.TestCase):

@@ -24,12 +24,12 @@ class TestChoicesAndHandlers(unittest.TestCase):
         labels = {c.value: c.title for c in menu._CHOICES}
         self.assertIn("Scan for New Postings", labels["scan"])
         self.assertIn("Check Posting Liveness", labels["liveness"])
-        self.assertIn("Evaluate ALL Pending JDs", labels["evaluate_all"])
-        self.assertIn("Evaluate a Specific JD", labels["evaluate_one"])
-        self.assertIn("Customize Resume for ALL Pending JDs (batch)", labels["tailor_all"])
-        self.assertIn("Customize Resume for a Specific JD", labels["tailor_one"])
-        self.assertIn("Write cover letter for a Specific JD", labels["coverletter_one"])
-        self.assertIn("Polish a resume or cover letter", labels["polish"])
+        self.assertIn("Evaluate ALL Pending Roles", labels["evaluate_all"])
+        self.assertIn("Evaluate a Specific Role", labels["evaluate_one"])
+        self.assertIn("Customize Resume for ALL Pending Roles (batch)", labels["tailor_all"])
+        self.assertIn("Customize Resume for a Specific Role", labels["tailor_one"])
+        self.assertIn("Write Cover Letter to Match a Resume", labels["coverletter_one"])
+        self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
 
     def test_choices_are_grouped_with_labeled_separators(self):
         separator_lines = [c.line for c in menu._CHOICES if isinstance(c, questionary.Separator)]

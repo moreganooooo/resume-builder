@@ -12,11 +12,16 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.theme import Theme as RichTheme
 
 import jd_manager
 import theme
 
-console = Console()
+# Overrides Rich's automatic quoted-text highlighting (its default
+# "repr.str" is a dim ANSI green, distinct from -- and clashing with --
+# theme.SUCCESS's brighter flat green) so any auto-highlighted quoted
+# substring anywhere in this app's output stays on-palette.
+console = Console(theme=RichTheme({"repr.str": theme.SUCCESS}))
 
 SUCCESS = f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}]"
 ERROR = f"[bold {theme.ERROR}]{theme.ICONS['error']}[/bold {theme.ERROR}]"
@@ -56,10 +61,9 @@ MAIN_BANNER_LINES = [
     "██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝",
     "██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗",
     "██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║",
-    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
-]
+    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",]
 
-SUBTITLE = "Tailored resumes & cover letters, powered by Gemini"
+SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
 
 
 def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
@@ -127,13 +131,11 @@ def display_main_banner() -> None:
     grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
 
     def render_frame(threshold):
-        return Panel(
-            _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold),
-            border_style=theme.SUCCESS, box=box.DOUBLE, padding=(1, 2),
-        )
+        body = _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold)
+        body.append(SUBTITLE, style="bold")
+        return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
     _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)
-    console.print(SUBTITLE, style="dim")
 
 
 def display_stats_line() -> None:
@@ -142,7 +144,7 @@ def display_stats_line() -> None:
     count (both already create their directory if missing)."""
     pending = len(jd_manager.get_pending_jds())
     tailored = len(jd_manager.get_completed_jds())
-    console.print(f"{pending} pending · {tailored} tailored all-time", style=theme.INFO)
+    console.print(f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time\n", style=theme.INFO)
 
 
 TIPS = [
@@ -155,8 +157,13 @@ TIPS = [
 
 
 def display_tip() -> None:
+    """Boxed and shown last in the launch sequence -- reads as a distinct
+    callout rather than blending into the stats line above it."""
     tip = random.choice(TIPS)
-    console.print(f"{theme.ICONS['hint']}  Did you know? {tip}", style="dim")
+    console.print(Panel(
+        f"{theme.ICONS['hint']}  Did you know? {tip}",
+        border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2),
+    ))
 
 
 def display_breadcrumb() -> None:
