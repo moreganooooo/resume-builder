@@ -78,7 +78,7 @@ QUESTIONARY_STYLE = Style([
     ("pointer", f"fg:{BRAND_ACCENT} bold"),
     ("highlighted", f"fg:{BRAND_ACCENT} bold"),
     ("selected", f"fg:{SUCCESS}"),
-    ("separator", "fg:#cc5454"),
+    ("separator", f"fg:{BRAND_ACCENT} dim"),
     ("new_user", f"fg:{SUCCESS} bold"),
     ("instruction", ""),
     ("text", ""),
