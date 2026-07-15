@@ -13,17 +13,12 @@ import questionary
 import cli_art
 import batch_evaluate
 import jd_manager
+import theme
 
-# Explicit hex, not named ANSI colors -- named colors get remapped by
-# whatever terminal theme is active (see cli_art.MAIN_BANNER's own fix for
-# the same issue), so hex is the only way to guarantee these actually read
-# as distinct colors rather than blending into a dark background.
-_RECOMMENDATION_STYLES = {
-    "Strong pursue": "fg:#4caf50 bold",
-    "Selective pursue": "fg:#4dabf7 bold",
-    "Low-priority pursue": "fg:#f5c542 bold",
-    "Skip": "fg:#c96a6a",
-}
+# Sourced from theme.py so picker.py's checkbox list and cli_art.py's fit
+# table are provably one palette -- see theme.RECOMMENDATION_STYLES for
+# the exact values ("Skip" stays unbolded, deliberately de-emphasized).
+_RECOMMENDATION_STYLES = theme.RECOMMENDATION_STYLES
 
 
 def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> bool:
