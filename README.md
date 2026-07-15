@@ -33,6 +33,13 @@ than trusting the model to follow formatting instructions on its own.
      `browser_cookie3` on every run, so just be logged into LinkedIn in
      Chrome when you run it. The cookie is never written to disk. This also
      needs a real local Chrome install (Selenium drives it headlessly).
+6. Optional, for the best icon experience: enable a [Nerd Font](https://www.nerdfonts.com/)
+   in your terminal profile (iTerm2: Preferences → Profiles → Text → Font;
+   Terminal.app: Preferences → Profiles → Text → Font). The menu's icons
+   default to Nerd Font glyphs; without one active they'll render as
+   blank boxes in that terminal window. No Nerd Font handy? Set
+   `RESUME_BUILDER_ICONS=unicode` to use plain Unicode symbols instead —
+   works everywhere, no special font required.
 
 ## CLI
 
@@ -91,9 +98,10 @@ source /path/to/resume-builder/scripts/resume-cli.sh
 
 Just typing `resume` (or `python scripts/cli.py` directly) launches an
 interactive menu instead of running any single command, opening with a
-block-letter title screen (bordered panel, blue title on a green border —
-see "Colors" below) before the first arrow-key list. Options are named
-after the pipeline stage they support:
+block-letter title screen (bordered panel, diagonal blue-to-purple
+gradient reveal — see "Colors" below) before the first arrow-key list.
+Options are grouped (Discovery / Evaluation / Build / Utility) with a
+category icon per item, and named after the pipeline stage they support:
 
 - Scan for New Postings
 - Check Posting Liveness
@@ -107,6 +115,14 @@ after the pipeline stage they support:
   "Tracking applications" below) right in the terminal via Rich's
   Markdown renderer, table and clickable `Apply` links included, no need
   to open the file yourself
+
+On launch, the title banner sweeps in with a diagonal blue-to-purple
+gradient, followed by a live stats line (how many JDs are pending, how
+many have been tailored all-time) and a rotating "did you know?" tip.
+Returning to this menu after an action shows a compact one-line breadcrumb
+instead of repainting the full banner. Choosing Exit prints a one-line
+summary of what you actually did that session (e.g. "3 resumes tailored ·
+2 cover letters written").
 
 "Evaluate a Specific JD" and "Write cover letter for a Specific JD" use a
 lightweight picker over pending/completed JDs (labeled by company/title,
@@ -125,8 +141,8 @@ need a fresh Gemini call just to redisplay it. Nothing evaluated yet?
 The picker prints a hint pointing at "Evaluate ALL Pending JDs"/"Evaluate
 a Specific JD" instead of showing an empty list.
 
-After an action that actually did something, a bordered "What's next?"
-panel offers the natural next step in the pipeline (e.g. Scan → Check
+After an action that actually did something, a "What's next?" prompt
+offers the natural next step in the pipeline (e.g. Scan → Check
 Liveness → Evaluate All JDs → Customize Resume → Write Cover Letter /
 Polish with Gemini), always with "Back to Menu" as an escape hatch —
 nothing chains automatically without you choosing it, and a no-op action
@@ -134,13 +150,14 @@ nothing chains automatically without you choosing it, and a no-op action
 than asking about a step that has nothing to act on. Select Exit (or
 cancel with Ctrl-C) to leave.
 
-**Colors:** the title banner and the "What's next?" panel use explicit
-hex colors (blue `#4dabf7` text, green `#4caf50` borders) rather than
-named ANSI colors like `cyan` — named colors get remapped by whatever
-terminal theme is active, and on a dark-teal background theme, `cyan`
-rendered as a washed-out, nearly invisible gray. Explicit hex sidesteps
-that entirely. Purple stays for questionary's own prompt pointer/qmark
-(unchanged, already vivid); green also still marks the `✓` success symbol.
+**Colors & icons:** every color and icon in the interactive menu is
+sourced from one place, `scripts/theme.py` — explicit hex colors (blue
+`#4dabf7`, purple `#673ab7`, green `#4caf50`, etc.) rather than named ANSI
+colors like `cyan`, since named colors get remapped by whatever terminal
+theme is active (on a dark-teal theme, `cyan` used to render as a washed-
+out, nearly invisible gray). Icons default to Nerd Font glyphs (see
+Setup above); set `RESUME_BUILDER_ICONS=unicode` to use plain Unicode
+symbols instead if you haven't enabled one.
 
 This is purely a navigation layer over the same commands documented
 below — nothing here does anything a direct command couldn't already do,
