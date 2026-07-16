@@ -560,7 +560,7 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
     return cv_text
 
 
-def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
+def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS) -> pd.DataFrame:
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
@@ -573,7 +573,7 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
                 break
             keywords.extend(kws)
     if include_all or not keywords:
-        return df_claims.head(MAX_CLAIMS_ROWS)
+        return df_claims.head(max_rows)
     text_cols = [c for c in df_claims.columns if df_claims[c].dtype == object]
     pattern = "|".join(re.escape(k) for k in keywords)
     mask = df_claims[text_cols].apply(
@@ -581,8 +581,8 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
     ).any(axis=1)
     filtered = df_claims[mask]
     if len(filtered) < 3:
-        filtered = df_claims.head(MAX_CLAIMS_ROWS)
-    return filtered.head(MAX_CLAIMS_ROWS)
+        filtered = df_claims.head(max_rows)
+    return filtered.head(max_rows)
 
 
 def build_background_summary(tags: str) -> str:
