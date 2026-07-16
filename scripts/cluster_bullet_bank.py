@@ -93,13 +93,14 @@ MAX_RETRIES          = 4
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 
 # ---------------------------------------------------------------------------
 # EMBEDDING
 # ---------------------------------------------------------------------------
 
 def embed_batch(texts: list) -> list:
-    url = f"{BASE_URL}/{EMBED_MODEL}:batchEmbedContents?key={API_KEY}"
+    url = f"{BASE_URL}/{EMBED_MODEL}:batchEmbedContents"
     requests_payload = [
         {
             "model": f"models/{EMBED_MODEL}",
@@ -112,7 +113,7 @@ def embed_batch(texts: list) -> list:
     body = {"requests": requests_payload}
 
     for attempt in range(MAX_RETRIES):
-        resp = requests.post(url, json=body, timeout=120)
+        resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2 ** attempt)
             print(f"    Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...")
