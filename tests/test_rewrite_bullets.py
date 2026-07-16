@@ -105,6 +105,20 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
     def test_gemma_static_prefix_smaller_than_full(self):
         self.assertLess(len(self.kb.gemma_static_prefix), len(self.kb.static_prefix))
 
+    def test_gemma_segment_excludes_projects_for_non_treering_bullets(self):
+        # verified_projects.json is 10/12 Treering-employer entries --
+        # tag-only filtering (no company check) let Treering project
+        # detail leak into non-Treering bullets on keyword overlap alone.
+        # Gemma's segment for a non-Treering company must never include
+        # the "VERIFIED PROJECTS" section at all.
+        df = pd.DataFrame({
+            "Role / Company": ["Inside Sales Team"],
+            "Tags": ["[email]"],
+        })
+        self.kb.warm_segment_cache(df)
+        gemma_block = self.kb.context_block_for_bullet_gemma("Inside Sales Team", "[email]")
+        self.assertNotIn("VERIFIED PROJECTS", gemma_block)
+
     def test_context_block_for_bullet_gemma_returns_slim_segment(self):
         df = pd.DataFrame({
             "Role / Company": ["Treering Yearbooks"],

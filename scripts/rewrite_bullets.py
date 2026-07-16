@@ -748,7 +748,17 @@ class KnowledgeBase:
         summary are unchanged (already small); verified_projects and, for
         Treering bullets, claims/metrics/screenshots are tag-filtered to
         MAX_GEMMA_FILTER_ROWS instead of included whole or at the looser
-        MAX_CLAIMS_ROWS cap."""
+        MAX_CLAIMS_ROWS cap.
+
+        verified_projects.json is 10/12 Treering-employer entries (the
+        other 2 are VML/Element8) -- filtering it by TAG alone (no company
+        check) let Treering-specific project detail leak into non-Treering
+        bullets purely on keyword overlap (e.g. an "Inside Sales Team"
+        bullet tagged [email] still matched Treering's "Outreach.io
+        Platform Rollout" project). Gating it behind is_treering_bullet,
+        same as claims/metrics/screenshots below, avoids that cross-
+        contamination -- it's excluded for the 2 non-Treering entries too,
+        but that matches how narrowly this file actually applies."""
         sections = []
         cv_section = extract_cv_section(self.cv_full, role_company)
         if cv_section:
@@ -759,15 +769,15 @@ class KnowledgeBase:
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
 
-        filtered_projects = filter_json_entries_by_tags(self.projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
-        if filtered_projects:
-            sections.append(
-                "=== VERIFIED PROJECTS (tag-filtered) ===\n"
-                "Use these to add accurate project detail and scope.\n"
-                + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
-            )
-
         if is_treering_bullet(role_company):
+            filtered_projects = filter_json_entries_by_tags(self.projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
+            if filtered_projects:
+                sections.append(
+                    "=== VERIFIED PROJECTS (tag-filtered) ===\n"
+                    "Use these to add accurate project detail and scope.\n"
+                    + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+                )
+
             filtered_claims = filter_claims_by_tags(self.df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
             claims_text = get_verified_claims_text(filtered_claims)
             if claims_text:
