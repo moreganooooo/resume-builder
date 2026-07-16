@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -12,6 +13,7 @@ from rewrite_bullets import (  # noqa: E402
     filter_claims_by_tags,
     filter_json_entries_by_tags,
     load_json_entries,
+    process_bullet,
 )
 
 
@@ -113,6 +115,58 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         full_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
         self.assertIsInstance(gemma_block, str)
         self.assertLessEqual(len(gemma_block), len(full_block))
+
+
+class TestProcessBulletGemmaHandoff(unittest.TestCase):
+
+    def setUp(self):
+        self.kb = KnowledgeBase()
+        df = pd.DataFrame({
+            "Role / Company": ["Acme Corp"],
+            "Tags": ["[content]"],
+        })
+        self.kb.warm_segment_cache(df)
+        self.row = pd.Series({
+            "Bullet Point": "Wrote content for a team.",
+            "Role / Company": "Acme Corp",
+            "Tags": "[content]",
+            "weaknesses": "",
+            "accuracy_score": None, "believability_score": None,
+            "clarity_score": None, "ats_value": None, "manager_test": None,
+        })
+
+    @patch("rewrite_bullets.time.sleep", lambda *a, **kw: None)
+    @patch("rewrite_bullets.score_bullet")
+    @patch("rewrite_bullets.GeminiClient.generate")
+    def test_gemma_exhaustion_falls_back_to_flash_lite_with_full_context(self, mock_generate, mock_score):
+        # First call (Gemma) exhausts and returns None; second call
+        # (flash-lite) succeeds. Assert: exactly 2 generate() calls, the
+        # first targets gemma-4-31b-it with model_fallback=False, the
+        # second targets gemini-3.1-flash-lite with the FULL context
+        # (longer than Gemma's slim one).
+        mock_generate.side_effect = [
+            (None, {}),
+            ('{"rewritten_bullet": "Authored content for a cross-functional team.", "reasoning": "", "context_gaps": ""}', {}),
+        ]
+        mock_score.return_value = {
+            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
+            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+        }
+
+        result = process_bullet(self.row, self.kb, rewrite_system="sys", score_system="score-sys", dry_run=False)
+
+        self.assertEqual(mock_generate.call_count, 2)
+        first_call_kwargs = mock_generate.call_args_list[0].kwargs
+        second_call_kwargs = mock_generate.call_args_list[1].kwargs
+
+        self.assertEqual(first_call_kwargs["model"], "gemma-4-31b-it")
+        self.assertEqual(first_call_kwargs["model_fallback"], False)
+
+        self.assertEqual(second_call_kwargs["model"], "gemini-3.1-flash-lite")
+        self.assertGreater(
+            len(second_call_kwargs["contents"]), len(first_call_kwargs["contents"])
+        )
+        self.assertEqual(result["rewrite_status"], "KEEP")
 
 
 if __name__ == "__main__":

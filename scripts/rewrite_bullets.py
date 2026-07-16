@@ -1215,8 +1215,8 @@ def process_bullet(
     role_company    = str(row.get("Role / Company", ""))
     original_scores = {col: row.get(col) for col in SCORE_COLS + ["weaknesses"]}
 
-    kb_context = kb.context_block_for_bullet(role_company, tags)
-    kb_context_chars = len(kb_context)
+    kb_context_gemma = kb.context_block_for_bullet_gemma(role_company, tags)
+    kb_context_full  = kb.context_block_for_bullet(role_company, tags)
 
     current_bullet = original_bullet
     current_scores = original_scores.copy()
@@ -1227,7 +1227,10 @@ def process_bullet(
     for attempt in range(1, MAX_ATTEMPTS + 1):
         print(f"   🖊  Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
 
-        use_minimal_schema = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
+        is_gemma_attempt = "gemma" in active_rewrite_model.lower()
+        kb_context = kb_context_gemma if is_gemma_attempt else kb_context_full
+
+        use_minimal_schema = GEMMA_MINIMAL_JSON and is_gemma_attempt
         runner_schema = RewriteOutputMinimalSchema if use_minimal_schema else RewriteOutputSchema
 
         prompt = build_rewrite_prompt(
@@ -1253,8 +1256,21 @@ def process_bullet(
                     contents=prompt,
                     temperature=0.7,
                     response_schema=runner_schema,
+                    model_fallback=not is_gemma_attempt,
                 )
-                _log_cache_stats(usage, kb_context_chars, attempt)
+                _log_cache_stats(usage, len(kb_context), attempt)
+
+                if raw is None and is_gemma_attempt:
+                    # Gemma exhausted its own retries (model_fallback=False,
+                    # so no internal swap happened) -- a confirmed capacity
+                    # exhaustion, not a one-off parse hiccup. Hand off to
+                    # flash-lite with the FULL context immediately rather
+                    # than retrying Gemma again with the same slim context.
+                    print(f"   🔄 Gemma exhausted retries — switching to fallback model: {REWRITE_FALLBACK_MODEL}")
+                    active_rewrite_model = REWRITE_FALLBACK_MODEL
+                    time.sleep(SLEEP_ON_RETRY)
+                    continue
+
                 parsed = GeminiClient.parse_json(raw)
                 rewritten = str(parsed.get("rewritten_bullet", "")).strip()
                 reasoning = str(parsed.get("reasoning", "")).strip()
