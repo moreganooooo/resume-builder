@@ -69,7 +69,12 @@ class SustainedFailureError(RuntimeError):
 
 class GeminiClient:
 
-    _timeout = 90
+    # Was 90 -- verified live (2026-07-16) that large-context calls to
+    # gemini-3.1-flash-lite can genuinely take 100-140+s to respond right
+    # now (confirmed by re-running an identical payload with a 180s cap,
+    # which succeeded at 138s). 90s was cutting off requests that would
+    # otherwise have completed, not detecting genuinely stuck ones.
+    _timeout = 180
     _consecutive_full_failures = 0
     SUSTAINED_FAILURE_THRESHOLD = 2
 
