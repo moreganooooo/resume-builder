@@ -141,5 +141,54 @@ class TestSustainedFailureDetection(unittest.TestCase):
         self.assertEqual(GeminiClient._consecutive_full_failures, 1)
 
 
+class TestModelFallbackOptOut(unittest.TestCase):
+
+    def setUp(self):
+        GeminiClient._consecutive_full_failures = 0
+
+    def tearDown(self):
+        GeminiClient._consecutive_full_failures = 0
+
+    def _rate_limited_response(self):
+        resp = MagicMock()
+        resp.status_code = 429
+        return resp
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_no_swap_when_model_fallback_false(self, mock_post):
+        mock_post.return_value = self._rate_limited_response()
+        text, usage = GeminiClient.generate(
+            model="gemma-4-31b-it",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=3,
+            model_fallback=False,
+        )
+        self.assertIsNone(text)
+        self.assertEqual(usage, {})
+        # Every call must still target the original model -- no silent swap.
+        for call in mock_post.call_args_list:
+            self.assertIn("gemma-4-31b-it", call.args[0])
+        self.assertEqual(mock_post.call_count, 3)
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_default_still_swaps_after_two_failures(self, mock_post):
+        mock_post.side_effect = [
+            self._rate_limited_response(),
+            self._rate_limited_response(),
+            _success_response(),
+        ]
+        text, usage = GeminiClient.generate(
+            model="gemma-4-31b-it",
+            system_instruction="sys",
+            contents="do the thing",
+        )
+        self.assertEqual(text, "ok")
+        third_call_url = mock_post.call_args_list[2].args[0]
+        self.assertIn("gemini-3.1-flash-lite", third_call_url)
+
+
 if __name__ == "__main__":
     unittest.main()
