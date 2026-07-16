@@ -649,9 +649,12 @@ class KnowledgeBase:
         self.profile           = trim_profile_yml(raw_profile)
         self.df_claims         = load_verified_claims(KB_VERIFIED_CLAIMS)
         self.screenshot_metrics = load_screenshot_metrics(KB_SCREENSHOT_METRICS)
+        self.screenshot_df      = load_verified_claims(KB_SCREENSHOT_METRICS)  # same CSV, DataFrame form for Gemma-tier filtering
         self.verified_facts    = load_json_file(KB_VERIFIED_FACTS,    "verified_facts.json")
         self.verified_metrics  = load_json_file(KB_VERIFIED_METRICS,  "verified_metrics.json")
+        self.metrics_entries   = load_json_entries(KB_VERIFIED_METRICS, "metrics")
         self.verified_projects = load_json_file(KB_VERIFIED_PROJECTS, "verified_projects.json")
+        self.projects_entries  = load_json_entries(KB_VERIFIED_PROJECTS, "projects")
         self.verified_tools    = load_json_file(KB_VERIFIED_TOOLS,    "verified_tools.json")
         self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
         self.voice_anchors      = load_text_file(KB_VOICE_ANCHORS,    "voice-anchors.md")
@@ -661,7 +664,11 @@ class KnowledgeBase:
         self.static_prefix = self._build_static_prefix()
         print(f"   📌 Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets")
 
+        self.gemma_static_prefix = self._build_gemma_static_prefix()
+        print(f"   📌 Gemma static prefix (slim): {len(self.gemma_static_prefix):,} chars — Gemma-only, flash-lite keeps the full tier")
+
         self._segment_cache: dict = {}
+        self._gemma_segment_cache: dict = {}
         print("   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n")
 
     def _build_static_prefix(self) -> str:
@@ -698,6 +705,83 @@ class KnowledgeBase:
             )
         return "\n\n".join(sections)
 
+    def _build_gemma_static_prefix(self) -> str:
+        """Slim static tier for Gemma only -- see docs/superpowers/specs/
+        2026-07-15-gemma-slim-context-design.md. Keeps only guardrails
+        (verified_facts, verified_tools) and voice_anchors (small, directly
+        serves rewrite quality). Drops profile.yml entirely -- that's
+        strategic career-positioning content, not needed to rewrite a
+        single existing bullet."""
+        sections = []
+        if self.verified_facts:
+            sections.append(
+                "=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
+                "These are the only facts about Morgan's career that are evidence-backed.\n"
+                "Do NOT invent facts outside this list.\n"
+                + self.verified_facts
+            )
+        if self.verified_tools:
+            sections.append(
+                "=== VERIFIED TOOLS (HF002 guard — only claim tools listed here) ===\n"
+                "Never claim proficiency with any tool not present in this list.\n"
+                + self.verified_tools
+            )
+        if self.voice_anchors:
+            sections.append(
+                "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
+                + self.voice_anchors
+            )
+        return "\n\n".join(sections)
+
+    def _build_gemma_segment_bundle(self, role_company: str, tags: str) -> str:
+        """Slim segment bundle for Gemma only. cv excerpt and background
+        summary are unchanged (already small); verified_projects and, for
+        Treering bullets, claims/metrics/screenshots are tag-filtered to
+        MAX_GEMMA_FILTER_ROWS instead of included whole or at the looser
+        MAX_CLAIMS_ROWS cap."""
+        sections = []
+        cv_section = extract_cv_section(self.cv_full, role_company)
+        if cv_section:
+            label = ("ROLE CONTEXT (cv.md excerpt)"
+                     if cv_section != self.cv_full else "CAREER OVERVIEW (cv.md)")
+            sections.append(f"=== {label} ===\n{cv_section}")
+        bg_summary = build_background_summary(tags)
+        if bg_summary:
+            sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
+        filtered_projects = filter_json_entries_by_tags(self.projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
+        if filtered_projects:
+            sections.append(
+                "=== VERIFIED PROJECTS (tag-filtered) ===\n"
+                "Use these to add accurate project detail and scope.\n"
+                + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+            )
+
+        if is_treering_bullet(role_company):
+            filtered_claims = filter_claims_by_tags(self.df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+            claims_text = get_verified_claims_text(filtered_claims)
+            if claims_text:
+                sections.append(
+                    "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                    "Use these to inject real, verified metrics where appropriate. "
+                    "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
+                    + claims_text
+                )
+            filtered_screenshots = filter_claims_by_tags(self.screenshot_df, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+            if not filtered_screenshots.empty:
+                sections.append(
+                    "=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n"
+                    + filtered_screenshots.to_csv(index=False)
+                )
+            filtered_metrics = filter_json_entries_by_tags(self.metrics_entries, tags, MAX_GEMMA_FILTER_ROWS)
+            if filtered_metrics:
+                sections.append(
+                    "=== VERIFIED METRICS (authoritative — tag-filtered) ===\n"
+                    "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                    + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
+                )
+        return "\n\n".join(sections)
+
     def _build_segment_bundle(self, role_company: str, tags: str) -> str:
         sections = []
         cv_section = extract_cv_section(self.cv_full, role_company)
@@ -730,6 +814,7 @@ class KnowledgeBase:
 
     def warm_segment_cache(self, df: pd.DataFrame) -> None:
         self._segment_cache = {}
+        self._gemma_segment_cache = {}
         pairs = df[["Role / Company", "Tags"]].drop_duplicates()
         print(f"\n🔥 Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         for _, row in pairs.iterrows():
@@ -738,8 +823,10 @@ class KnowledgeBase:
             key  = (rc, tags)
             bundle = self._build_segment_bundle(rc, tags)
             self._segment_cache[key] = bundle
+            gemma_bundle = self._build_gemma_segment_bundle(rc, tags)
+            self._gemma_segment_cache[key] = gemma_bundle
             treering_flag = " [Treering+claims]" if is_treering_bullet(rc) else ""
-            print(f"   📦 ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag}")
+            print(f"   📦 ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag} (Gemma: {len(gemma_bundle):,} chars)")
         print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
 
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
@@ -749,6 +836,14 @@ class KnowledgeBase:
             self._segment_cache[key] = self._build_segment_bundle(role_company, tags)
         segment = self._segment_cache[key]
         return f"{self.static_prefix}\n\n{segment}" if segment else self.static_prefix
+
+    def context_block_for_bullet_gemma(self, role_company: str, tags: str) -> str:
+        key = (role_company, tags)
+        if key not in self._gemma_segment_cache:
+            print(f"   ⚠️ Gemma cache miss for {key} — building segment on demand.")
+            self._gemma_segment_cache[key] = self._build_gemma_segment_bundle(role_company, tags)
+        segment = self._gemma_segment_cache[key]
+        return f"{self.gemma_static_prefix}\n\n{segment}" if segment else self.gemma_static_prefix
 
     def recruiter_context_block(self) -> str:
         if not self.recruiter_patterns:

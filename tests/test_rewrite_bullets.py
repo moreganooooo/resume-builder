@@ -7,7 +7,12 @@ import pandas as pd
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from rewrite_bullets import filter_claims_by_tags, filter_json_entries_by_tags, load_json_entries  # noqa: E402
+from rewrite_bullets import (  # noqa: E402
+    KnowledgeBase,
+    filter_claims_by_tags,
+    filter_json_entries_by_tags,
+    load_json_entries,
+)
 
 
 def _claims_df():
@@ -73,6 +78,41 @@ class TestFilterJsonEntriesByTags(unittest.TestCase):
         self.assertIsInstance(entries, list)
         self.assertGreater(len(entries), 0)
         self.assertIn("category", entries[0])
+
+
+class TestKnowledgeBaseGemmaTier(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.kb = KnowledgeBase()
+
+    def test_gemma_static_prefix_excludes_profile(self):
+        # profile.yml is dropped entirely from Gemma's tier -- its trimmed
+        # content includes "target_roles:" per trim_profile_yml's KEEP_SECTIONS.
+        if self.kb.profile:
+            self.assertNotIn(self.kb.profile, self.kb.gemma_static_prefix)
+
+    def test_gemma_static_prefix_includes_guardrails_and_voice(self):
+        if self.kb.verified_facts:
+            self.assertIn("VERIFIED FACTS", self.kb.gemma_static_prefix)
+        if self.kb.verified_tools:
+            self.assertIn("VERIFIED TOOLS", self.kb.gemma_static_prefix)
+        if self.kb.voice_anchors:
+            self.assertIn("VOICE ANCHORS", self.kb.gemma_static_prefix)
+
+    def test_gemma_static_prefix_smaller_than_full(self):
+        self.assertLess(len(self.kb.gemma_static_prefix), len(self.kb.static_prefix))
+
+    def test_context_block_for_bullet_gemma_returns_slim_segment(self):
+        df = pd.DataFrame({
+            "Role / Company": ["Treering Yearbooks"],
+            "Tags": ["[email]"],
+        })
+        self.kb.warm_segment_cache(df)
+        gemma_block = self.kb.context_block_for_bullet_gemma("Treering Yearbooks", "[email]")
+        full_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
+        self.assertIsInstance(gemma_block, str)
+        self.assertLessEqual(len(gemma_block), len(full_block))
 
 
 if __name__ == "__main__":
