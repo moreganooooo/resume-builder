@@ -167,7 +167,8 @@ STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
 
 DONE_STATUSES      = {"KEEP", "MANUAL"}
 TREERING_KEYWORDS  = ["treering", "tree ring", "yearbook"]
-MAX_CLAIMS_ROWS    = 12
+MAX_CLAIMS_ROWS         = 12
+MAX_GEMMA_FILTER_ROWS   = 5   # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
 
 TAG_CONTEXT = {
     "[content]":   "content marketing, editorial strategy, brand voice, or copywriting roles",
@@ -484,6 +485,22 @@ def load_json_file(path: str, label: str) -> str:
         return ""
 
 
+def load_json_entries(path: str, list_key: str) -> list:
+    """Loads a KB file shaped like {"_meta": {...}, "<list_key>": [...]}
+    and returns the parsed list of entry dicts -- unlike load_json_file,
+    which returns a pre-serialized compact JSON string for direct prompt
+    injection, this keeps the structure so callers can filter entries."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        entries = data.get(list_key, []) if isinstance(data, dict) else []
+        print(f"   ✅ Loaded {list_key} entries ({len(entries)} rows)")
+        return entries
+    except Exception as e:
+        print(f"   ⚠️ Could not load {list_key} entries: {e}")
+        return []
+
+
 def trim_profile_yml(raw: str) -> str:
     KEEP_SECTIONS = ["target_roles:", "archetypes:", "narrative:", "superpowers:",
                      "background_context:", "deal_breakers:"]
@@ -583,6 +600,31 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MA
     if len(filtered) < 3:
         filtered = df_claims.head(max_rows)
     return filtered.head(max_rows)
+
+
+def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list:
+    if not entries:
+        return entries
+    tags_lower = tags.lower() if isinstance(tags, str) else ""
+    keywords = []
+    include_all = False
+    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+        if tag in tags_lower:
+            if not kws:
+                include_all = True
+                break
+            keywords.extend(kws)
+    if include_all or not keywords:
+        return entries[:max_rows]
+
+    def _entry_matches(entry: dict) -> bool:
+        haystack = " ".join(str(v) for v in entry.values() if isinstance(v, str)).lower()
+        return any(kw in haystack for kw in keywords)
+
+    filtered = [e for e in entries if _entry_matches(e)]
+    if len(filtered) < 3:
+        filtered = entries[:max_rows]
+    return filtered[:max_rows]
 
 
 def build_background_summary(tags: str) -> str:
