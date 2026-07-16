@@ -78,6 +78,18 @@ class GeminiClient:
     _consecutive_full_failures = 0
     SUSTAINED_FAILURE_THRESHOLD = 2
 
+    # gemma-4-31b-it's TPM cap is 16k tokens/minute (confirmed 2026-07-16),
+    # and a single call's context now regularly runs 12k-17k tokens even
+    # after slimming -- close enough to the full budget that two Gemma
+    # calls landing in the same rolling minute can collide even though
+    # each one alone would have fit. Spacing successive Gemma calls this
+    # far apart lets the token bucket clear before the next one arrives,
+    # rather than gambling on retry/backoff to recover an avoidable 429.
+    # Lives here (not in rewrite_bullets.py) so orchestrator.py's Gemma
+    # calls -- which go through this same shared client -- get it too.
+    GEMMA_MIN_INTERVAL_SECS = 65
+    _last_gemma_call_ts = 0.0
+
     @staticmethod
     def resolve_refs(schema: dict) -> dict:
         """
@@ -143,6 +155,30 @@ class GeminiClient:
         return cleaned
 
     @staticmethod
+    def _salvage_fields(cleaned: str) -> dict:
+        """
+        Recovers top-level "key": value pairs by regex when json.loads()
+        fails outright -- observed cause: the model produces a valid answer
+        up front, then degenerates into repeating a phrase (e.g. echoing an
+        instruction back at itself) until it runs out of output tokens,
+        leaving the JSON string unterminated. The early, valid field(s)
+        are still intact in the text even though the object as a whole
+        never closes, so a full-string json.loads() throwing away
+        everything is losing a real answer, not just discarding garbage.
+        Only recovers string/number leaf values -- not lists/objects,
+        which can't be delimited reliably without a real parser.
+        """
+        salvaged = {}
+        for key, str_val in re.findall(r'"(\w+)"\s*:\s*"((?:\\.|[^"\\])*)"', cleaned):
+            try:
+                salvaged[key] = json.loads(f'"{str_val}"')
+            except json.JSONDecodeError:
+                continue
+        for key, num_val in re.findall(r'"(\w+)"\s*:\s*(-?\d+(?:\.\d+)?)', cleaned):
+            salvaged.setdefault(key, json.loads(num_val))
+        return salvaged
+
+    @staticmethod
     def parse_json(text: str) -> dict:
         if not text:
             return {}
@@ -154,7 +190,7 @@ class GeminiClient:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            return {}
+            return GeminiClient._salvage_fields(cleaned)
 
     @staticmethod
     def generate(
@@ -178,6 +214,14 @@ class GeminiClient:
         failure_streak = 0
 
         for attempt in range(max_retries):
+            if "gemma" in model.lower():
+                elapsed = time.time() - GeminiClient._last_gemma_call_ts
+                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
+                    wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
+                    print(f"    ⏳ Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...")
+                    time.sleep(wait)
+                GeminiClient._last_gemma_call_ts = time.time()
+
             current_temp = 0.0 if response_schema is not None else temperature
 
             generation_config: dict = {"temperature": current_temp}

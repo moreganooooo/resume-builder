@@ -256,7 +256,7 @@ class TestWriteCvMd(BootstrapProfileTestCase):
 
     @patch("bootstrap_profile.questionary.select")
     @patch("bootstrap_profile.process_bullet")
-    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
     @patch("bootstrap_profile.KnowledgeBase")
     @patch("bootstrap_profile.RulesBundle")
     def test_accept_writes_header_and_per_role_sections(
@@ -291,7 +291,7 @@ class TestWriteCvMd(BootstrapProfileTestCase):
 
     @patch("bootstrap_profile.questionary.select")
     @patch("bootstrap_profile.process_bullet")
-    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
     @patch("bootstrap_profile.KnowledgeBase")
     @patch("bootstrap_profile.RulesBundle")
     def test_builds_rules_and_kb_once_not_per_bullet(
@@ -316,7 +316,7 @@ class TestWriteCvMd(BootstrapProfileTestCase):
 
     @patch("bootstrap_profile.questionary.select")
     @patch("bootstrap_profile.process_bullet")
-    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys"))
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
     @patch("bootstrap_profile.KnowledgeBase")
     @patch("bootstrap_profile.RulesBundle")
     def test_skip_writes_empty_file(
@@ -341,7 +341,7 @@ class TestWriteCvMd(BootstrapProfileTestCase):
     def test_dry_run_writes_without_prompting(self):
         with patch("bootstrap_profile.questionary.select") as mock_select, \
              patch("bootstrap_profile.RulesBundle"), patch("bootstrap_profile.KnowledgeBase"), \
-             patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "score sys")), \
+             patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys")), \
              patch("bootstrap_profile.process_bullet", return_value={"final_bullet": "polished"}):
             identity = {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
             bootstrap_profile.write_cv_md(identity, dry_run=True)

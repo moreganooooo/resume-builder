@@ -37,6 +37,12 @@ class TestModelFallbacks(unittest.TestCase):
 
 class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
 
+    def setUp(self):
+        GeminiClient._last_gemma_call_ts = 0.0
+
+    def tearDown(self):
+        GeminiClient._last_gemma_call_ts = 0.0
+
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
     def test_switches_to_gemma_after_two_flash_lite_timeouts(self, mock_post):
@@ -145,9 +151,11 @@ class TestModelFallbackOptOut(unittest.TestCase):
 
     def setUp(self):
         GeminiClient._consecutive_full_failures = 0
+        GeminiClient._last_gemma_call_ts = 0.0
 
     def tearDown(self):
         GeminiClient._consecutive_full_failures = 0
+        GeminiClient._last_gemma_call_ts = 0.0
 
     def _rate_limited_response(self):
         resp = MagicMock()
@@ -188,6 +196,50 @@ class TestModelFallbackOptOut(unittest.TestCase):
         self.assertEqual(text, "ok")
         third_call_url = mock_post.call_args_list[2].args[0]
         self.assertIn("gemini-3.1-flash-lite", third_call_url)
+
+
+class TestGemmaPacing(unittest.TestCase):
+
+    def setUp(self):
+        GeminiClient._last_gemma_call_ts = 0.0
+
+    def tearDown(self):
+        GeminiClient._last_gemma_call_ts = 0.0
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.time.time")
+    @patch("gemini_client.requests.post")
+    def test_waits_out_the_remainder_when_last_gemma_call_was_recent(self, mock_post, mock_time, mock_sleep):
+        mock_post.return_value = _success_response()
+        GeminiClient._last_gemma_call_ts = 1000.0
+        mock_time.return_value = 1010.0  # only 10s since the last Gemma call
+
+        GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+
+        mock_sleep.assert_called_once()
+        self.assertAlmostEqual(mock_sleep.call_args.args[0], 55.0)  # 65s cap - 10s elapsed
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.time.time")
+    @patch("gemini_client.requests.post")
+    def test_no_wait_once_the_interval_has_already_elapsed(self, mock_post, mock_time, mock_sleep):
+        mock_post.return_value = _success_response()
+        GeminiClient._last_gemma_call_ts = 1000.0
+        mock_time.return_value = 1070.0  # 70s since the last Gemma call -- past the 65s floor
+
+        GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+
+        mock_sleep.assert_not_called()
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_flash_lite_calls_are_never_paced(self, mock_post, mock_sleep):
+        mock_post.return_value = _success_response()
+        GeminiClient._last_gemma_call_ts = 0.0  # as if a Gemma call just happened at epoch 0
+
+        GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="do the thing")
+
+        mock_sleep.assert_not_called()
 
 
 if __name__ == "__main__":

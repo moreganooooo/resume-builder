@@ -161,6 +161,18 @@ GEMMA_MINIMAL_JSON    = True
 # 2-consecutive-failure fallback used to provide.
 GEMMA_MAX_RETRIES     = 2
 
+# Observed failure mode (2026-07-16): with no cap, a model can produce a
+# valid answer up front, then degenerate into repeating a phrase (e.g.
+# echoing an instruction back at itself) until it exhausts its output
+# budget -- one repro hit 65,520 output tokens on a 3-field JSON schema
+# that normally needs ~150. The unterminated JSON was unparseable even
+# though the real answer was intact near the start (see parse_json's
+# salvage fallback in gemini_client.py). This cap bounds the wasted
+# tokens/latency on that failure mode; it does not by itself guarantee
+# parseable output, since a capped response can still be truncated
+# mid-loop -- the salvage fallback is what actually recovers the answer.
+REWRITE_MAX_OUTPUT_TOKENS = 2048
+
 # ---------------------------------------------------------------------------
 # SLEEP CONSTANTS
 # ---------------------------------------------------------------------------
@@ -386,51 +398,127 @@ class RulesBundle:
         mt  = _load_yaml_safe(os.path.join(scoring_dir, "manager_test.yaml"),       "manager_test (scoring)")
         bel = _load_yaml_safe(os.path.join(scoring_dir, "believability.yaml"),      "believability")
 
-        self.rewrite_rules_block = "\n".join([
-            "=== VERB INTENT MAP ===",
-            "Before choosing a verb, identify the accomplishment intent (creation, implementation,",
-            "optimization, automation, analysis, revenue_generation, training, leadership, etc.)",
-            "and select from the matching preferred_verbs list below.",
-            _yaml_to_str(vim),
-            "",
-            "=== VERB TAXONOMY (priority tiers) ===",
-            "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
-            _yaml_to_str({"priority_tiers": vt.get("priority_tiers", {}), "avoid": vt.get("avoid", [])}),
-            "",
-            "=== LANGUAGE QUALITY RULES ===",
-            "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
-            "Verb scoring: elite=100, strong=85, acceptable=70, weak=40, generic=20.",
-            _yaml_to_str({
-                "weak_verbs":           lq.get("weak_verbs", {}),
-                "buzzwords":            lq.get("buzzwords", {}),
-                "ai_language_patterns": lq.get("ai_language_patterns", {}),
-                "specificity_checks":   lq.get("specificity_checks", {}),
-                "final_principle":      lq.get("final_principle", ""),
-            }),
-            "",
-            "=== HARD FAILURE CONDITIONS ===",
-            "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
-            _yaml_to_str(hf),
-            "",
-            "=== TRUTHFULNESS RULES ===",
-            "Apply these four tests before finalising any bullet:",
-            _yaml_to_str(tr),
-            "",
-            "=== SCOPE & BELIEVABILITY GUARDRAILS ===",
-            "A rewrite must keep the SAME underlying achievement, scope, ownership, and",
-            "seniority as the original bullet — only the phrasing may improve. Making a bullet",
-            "sound more impressive by inflating scope, ownership, or scale (even without",
-            "inventing a fact) is a hard failure, not a style win. Study the bad-example",
-            "patterns below and never produce phrasing that reads like them:",
-            _yaml_to_str({"hard_fail_conditions": mt.get("hard_fail_conditions", []),
-                          "protected_bullets":    mt.get("protected_bullets", [])}),
-            _yaml_to_str({"believability_criteria_and_examples": bel.get("criteria", {}),
-                          "believability_penalties":              bel.get("penalties", {}),
-                          "context_anchoring":                    bel.get("context_anchoring", {})}),
-            "",
-            "=== STYLE RULES ===",
-            _yaml_to_str(sr),
-        ])
+        # Truthfulness/anti-fabrication guardrails (hard_failures,
+        # truthfulness_rules, scope & believability) are identical in both
+        # the full and Gemma-slim blocks below -- these are the rules where
+        # a miss costs the most (a fabricated or inflated claim reaching a
+        # real resume), so they're never candidates for trimming. Only the
+        # verb-intent and style-rules payloads vary between variants.
+        def _build_rewrite_block(verb_intent_data: dict, style_rules_data: dict, style_heading: str) -> str:
+            return "\n".join([
+                "=== VERB INTENT MAP ===",
+                "Before choosing a verb, identify the accomplishment intent (creation, implementation,",
+                "optimization, automation, analysis, revenue_generation, training, leadership, etc.)",
+                "and select from the matching preferred_verbs list below.",
+                _yaml_to_str(verb_intent_data),
+                "",
+                "=== VERB TAXONOMY (priority tiers) ===",
+                "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+                _yaml_to_str({"priority_tiers": vt.get("priority_tiers", {}), "avoid": vt.get("avoid", [])}),
+                "",
+                "=== LANGUAGE QUALITY RULES ===",
+                "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
+                "Verb scoring: elite=100, strong=85, acceptable=70, weak=40, generic=20.",
+                _yaml_to_str({
+                    "weak_verbs":           lq.get("weak_verbs", {}),
+                    "buzzwords":            lq.get("buzzwords", {}),
+                    "ai_language_patterns": lq.get("ai_language_patterns", {}),
+                    "specificity_checks":   lq.get("specificity_checks", {}),
+                    "final_principle":      lq.get("final_principle", ""),
+                }),
+                "",
+                "=== HARD FAILURE CONDITIONS ===",
+                "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
+                _yaml_to_str(hf),
+                "",
+                "=== TRUTHFULNESS RULES ===",
+                "Apply these four tests before finalising any bullet:",
+                _yaml_to_str(tr),
+                "",
+                "=== SCOPE & BELIEVABILITY GUARDRAILS ===",
+                "A rewrite must keep the SAME underlying achievement, scope, ownership, and",
+                "seniority as the original bullet — only the phrasing may improve. Making a bullet",
+                "sound more impressive by inflating scope, ownership, or scale (even without",
+                "inventing a fact) is a hard failure, not a style win. Study the bad-example",
+                "patterns below and never produce phrasing that reads like them:",
+                _yaml_to_str({"hard_fail_conditions": mt.get("hard_fail_conditions", []),
+                              "protected_bullets":    mt.get("protected_bullets", [])}),
+                _yaml_to_str({"believability_criteria_and_examples": bel.get("criteria", {}),
+                              "believability_penalties":              bel.get("penalties", {}),
+                              "context_anchoring":                    bel.get("context_anchoring", {})}),
+                "",
+                style_heading,
+                _yaml_to_str(style_rules_data),
+            ])
+
+        self.rewrite_rules_block = _build_rewrite_block(vim, sr, "=== STYLE RULES ===")
+
+        # Gemma-slim variant: gemma-4-31b-it has a 16k TPM cap (confirmed
+        # 2026-07-16, not the "unlimited" this account used to have) --
+        # the KB static prefix plus the largest per-company segment alone
+        # already runs ~10k tokens, leaving only ~4k tokens of headroom
+        # for the system prompt before a request exceeds the entire
+        # per-minute budget in one shot (verified: Treering [email][brand]
+        # at ~16,814 estimated tokens 429'd on every retry across 128s+ of
+        # backoff -- not a transient/velocity issue, the request is simply
+        # bigger than the whole budget). The full rules block is ~2x that
+        # headroom on its own.
+        #
+        # Cuts below are confined to two categories, NOT to the
+        # truthfulness/believability content above:
+        #   1. Document-layout rules (typography, page layout, tagline,
+        #      skills-section positioning, page-level ATS formatting) --
+        #      dead weight for a single bullet-text rewrite regardless of
+        #      model; a rewrite call cannot act on "page_count: 2" or
+        #      "name_font: DM Serif Display".
+        #   2. Verb guidance duplicated elsewhere in this same prompt --
+        #      verb_intent_mapping's per-category prose (description +
+        #      weak/strong examples) restates what VERB TAXONOMY's
+        #      elite/strong tiers and LANGUAGE QUALITY's weak_verbs already
+        #      cover structurally; style_rules' domain-organized
+        #      verb_upgrades tables (data_and_ops, content_and_comms, etc.)
+        #      are the same swap logic VERB INTENT MAP already encodes via
+        #      accomplishment-intent -> preferred_verbs.
+        def _rule_text(item) -> str:
+            # A couple of style_rules.yaml list entries contain an unintended
+            # colon (e.g. "Recommended verbs: Architected, Authored, ..."),
+            # which YAML parses as a {key: value} dict instead of a plain
+            # string like their neighbors. Filtering below needs to match
+            # against the text regardless of which shape a given entry took.
+            if isinstance(item, dict):
+                return next(iter(item.keys()), "")
+            return str(item)
+
+        gemma_verb_intent = {
+            "intent_categories": {
+                intent: {
+                    "signals":         data.get("signals", []),
+                    "preferred_verbs": data.get("preferred_verbs", {}),
+                }
+                for intent, data in vim.get("intent_categories", {}).items()
+            },
+            "selection_rules":   vim.get("selection_rules", {}),
+            "verb_replacements": vim.get("verb_replacements", {}),
+            "final_principle":   vim.get("final_principle", ""),
+        }
+        gemma_style_rules = {
+            "philosophy": [
+                p for p in sr.get("philosophy", [])
+                if any(kw in _rule_text(p).lower() for kw in ("bullet", "metric", "verb", "cares test", "systems not tasks"))
+            ],
+            "writing_style":     sr.get("writing_style", {}),
+            "bullet_structure":  sr.get("bullet_structure", {}),
+            "verb_rules":        [r for r in sr.get("verb_rules", []) if not _rule_text(r).startswith("Recommended verbs")],
+            "vague_verbs":       sr.get("vague_verbs", []),
+            "forbidden_openers": sr.get("forbidden_openers", []),
+            "forbidden_phrases": sr.get("forbidden_phrases", []),
+            "punctuation_rules": sr.get("punctuation_rules", []),
+            "metrics_rules":     sr.get("metrics_rules", {}),
+            "tool_mention_rules": sr.get("tool_mention_rules", {}),
+        }
+        self.rewrite_rules_block_gemma = _build_rewrite_block(
+            gemma_verb_intent, gemma_style_rules, "=== STYLE RULES (bullet-level subset) ==="
+        )
 
         self.score_rules_block = "\n".join([
             "=== SCORING CRITERIA ===",
@@ -465,6 +553,7 @@ class RulesBundle:
         ])
 
         print(f"   📐 Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
+        print(f"   📐 Gemma rules block (slim): {len(self.rewrite_rules_block_gemma):,} chars")
         print(f"   💯 Score rules block:   {len(self.score_rules_block):,} chars\n")
 
 
@@ -931,14 +1020,16 @@ Respond ONLY with valid JSON, no markdown fences:
 
 
 def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
-    rewrite_system = REWRITE_SYSTEM_BASE.format(rules_block=rules.rewrite_rules_block)
+    rewrite_system       = REWRITE_SYSTEM_BASE.format(rules_block=rules.rewrite_rules_block)
+    rewrite_system_gemma = REWRITE_SYSTEM_BASE.format(rules_block=rules.rewrite_rules_block_gemma)
     score_system   = SCORE_SYSTEM_BASE.format(
         rules_block=rules.score_rules_block,
         recruiter_block=kb.recruiter_context_block(),
     )
     print(f"   🖊  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+    print(f"   🖊  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
     print(f"   💯 Score system prompt:   {len(score_system):,} chars")
-    return rewrite_system, score_system
+    return rewrite_system, rewrite_system_gemma, score_system
 
 
 # ---------------------------------------------------------------------------
@@ -1226,6 +1317,7 @@ def process_bullet(
     row: pd.Series,
     kb: KnowledgeBase,
     rewrite_system: str,
+    rewrite_system_gemma: str,
     score_system: str,
     dry_run: bool,
 ) -> dict:
@@ -1249,6 +1341,7 @@ def process_bullet(
 
         is_gemma_attempt = "gemma" in active_rewrite_model.lower()
         kb_context = kb_context_gemma if is_gemma_attempt else kb_context_full
+        active_rewrite_system = rewrite_system_gemma if is_gemma_attempt else rewrite_system
 
         use_minimal_schema = GEMMA_MINIMAL_JSON and is_gemma_attempt
         runner_schema = RewriteOutputMinimalSchema if use_minimal_schema else RewriteOutputSchema
@@ -1272,7 +1365,7 @@ def process_bullet(
             try:
                 raw, usage = GeminiClient.generate(
                     model=active_rewrite_model,
-                    system_instruction=rewrite_system,
+                    system_instruction=active_rewrite_system,
                     contents=prompt,
                     temperature=0.7,
                     response_schema=runner_schema,
@@ -1286,6 +1379,7 @@ def process_bullet(
                     # that's allowed to switch models for this call.
                     model_fallback=False,
                     max_retries=GEMMA_MAX_RETRIES if is_gemma_attempt else 6,
+                    max_output_tokens=REWRITE_MAX_OUTPUT_TOKENS,
                 )
                 _log_cache_stats(usage, len(kb_context), attempt)
 
@@ -1423,7 +1517,7 @@ def main():
     rules      = RulesBundle(RULES_DIR, SCORING_DIR)
     kb         = KnowledgeBase()
     kb.warm_segment_cache(df_todo)
-    rewrite_system, score_system = build_system_prompts(rules, kb)
+    rewrite_system, rewrite_system_gemma, score_system = build_system_prompts(rules, kb)
 
     if os.path.exists(CLUSTER_MAP_OUT):
         df_out = pd.read_csv(CLUSTER_MAP_OUT)
@@ -1449,7 +1543,7 @@ def main():
         print(f"[{i}/{total}] {bullet_preview}...")
         print(f"   Tags: {row.get('Tags', '')}  |  Action: {row.get('next_action', '')}")
 
-        result = process_bullet(row, kb, rewrite_system, score_system, dry_run=args.dry_run)
+        result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run=args.dry_run)
 
         out_mask = df_out["Bullet Point"].str.strip() == str(row["Bullet Point"]).strip()
         for col, val in result.items():

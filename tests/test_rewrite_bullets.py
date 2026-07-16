@@ -167,7 +167,11 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
             "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
         }
 
-        result = process_bullet(self.row, self.kb, rewrite_system="sys", score_system="score-sys", dry_run=False)
+        result = process_bullet(
+            self.row, self.kb,
+            rewrite_system="sys", rewrite_system_gemma="sys-gemma",
+            score_system="score-sys", dry_run=False,
+        )
 
         self.assertEqual(mock_generate.call_count, 2)
         first_call_kwargs = mock_generate.call_args_list[0].kwargs
@@ -175,6 +179,9 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
         self.assertEqual(first_call_kwargs["model"], "gemma-4-31b-it")
         self.assertEqual(first_call_kwargs["model_fallback"], False)
+        # Gemma must get the slim system prompt, not the full one -- see
+        # rewrite_rules_block_gemma in RulesBundle.
+        self.assertEqual(first_call_kwargs["system_instruction"], "sys-gemma")
         # Gemma's own retry ladder must stay short -- model_fallback=False
         # means GeminiClient.generate() won't internally bail early after 2
         # consecutive failures anymore, so process_bullet() must cap
@@ -186,6 +193,7 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
         # MODEL_FALLBACKS is bidirectional -- flash-lite must never be
         # allowed to internally bounce back to Gemma with the full context.
         self.assertEqual(second_call_kwargs["model_fallback"], False)
+        self.assertEqual(second_call_kwargs["system_instruction"], "sys")
         self.assertGreater(
             len(second_call_kwargs["contents"]), len(first_call_kwargs["contents"])
         )

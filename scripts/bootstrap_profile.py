@@ -468,13 +468,13 @@ def _build_cv_draft_rows() -> list:
     return result
 
 
-def _polish_bullet(bullet: str, role_company: str, kb, rewrite_system: str, score_system: str, dry_run: bool = False) -> str:
+def _polish_bullet(bullet: str, role_company: str, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool = False) -> str:
     row = pd.Series({"Bullet Point": bullet, "Tags": "", "Role / Company": role_company, "weaknesses": ""})
-    result = process_bullet(row, kb, rewrite_system, score_system, dry_run)
+    result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
     return result.get("final_bullet", bullet)
 
 
-def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, score_system: str, dry_run: bool) -> str:
+def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
     lines = [f"# {identity['full_name']}", ""]
     contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
     if contact_parts:
@@ -486,7 +486,7 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, scor
         date_range = f" ({role['start_date']} - {role['end_date']})" if role["start_date"] else ""
         lines.append(header + date_range)
         for bullet in role["bullets"]:
-            polished = _polish_bullet(bullet, role["company"], kb, rewrite_system, score_system, dry_run)
+            polished = _polish_bullet(bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
             lines.append(f"- {polished}")
         lines.append("")
 
@@ -497,17 +497,17 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
     rows = _build_cv_draft_rows()
     rules = RulesBundle(RULES_DIR)
     kb = KnowledgeBase()
-    rewrite_system, score_system = build_system_prompts(rules, kb)
+    rewrite_system, rewrite_system_gemma, score_system = build_system_prompts(rules, kb)
 
     if dry_run:
         print("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.")
-        content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+        content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
         os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
         with open(CV_MD_PATH, "w", encoding="utf-8") as f:
             f.write(content)
         return
 
-    content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+    content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
     choice = "skip"
     while True:
         print("\n--- Draft cv.md ---\n")
@@ -523,7 +523,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
             style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if choice == "regenerate":
-            content = _assemble_cv_draft(identity, rows, kb, rewrite_system, score_system, dry_run)
+            content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
             continue
         break
 
