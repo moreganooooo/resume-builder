@@ -151,6 +151,16 @@ MAX_ATTEMPTS          = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON    = True
 
+# Gemma calls use model_fallback=False (see process_bullet) so flash-lite
+# never inherits Gemma's slim context via GeminiClient's internal swap.
+# That means GeminiClient.generate()'s own max_retries=6 default -- with
+# its escalating 8/16/32/64/90/90s backoff -- would burn ~5 minutes of
+# guaranteed-fail waiting on any bullet still too large for the 16k TPM
+# cap after slimming, before process_bullet()'s own handoff ever fires.
+# A tight cap here restores the fast-fail speed the old internal
+# 2-consecutive-failure fallback used to provide.
+GEMMA_MAX_RETRIES     = 2
+
 # ---------------------------------------------------------------------------
 # SLEEP CONSTANTS
 # ---------------------------------------------------------------------------
@@ -1257,6 +1267,7 @@ def process_bullet(
                     temperature=0.7,
                     response_schema=runner_schema,
                     model_fallback=not is_gemma_attempt,
+                    max_retries=GEMMA_MAX_RETRIES if is_gemma_attempt else 6,
                 )
                 _log_cache_stats(usage, len(kb_context), attempt)
 
