@@ -183,6 +183,9 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
         self.assertEqual(first_call_kwargs["max_retries"], 2)
 
         self.assertEqual(second_call_kwargs["model"], "gemini-3.1-flash-lite")
+        # MODEL_FALLBACKS is bidirectional -- flash-lite must never be
+        # allowed to internally bounce back to Gemma with the full context.
+        self.assertEqual(second_call_kwargs["model_fallback"], False)
         self.assertGreater(
             len(second_call_kwargs["contents"]), len(first_call_kwargs["contents"])
         )

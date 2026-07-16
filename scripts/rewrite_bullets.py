@@ -1276,7 +1276,15 @@ def process_bullet(
                     contents=prompt,
                     temperature=0.7,
                     response_schema=runner_schema,
-                    model_fallback=not is_gemma_attempt,
+                    # False for BOTH models here, not just Gemma's attempt --
+                    # MODEL_FALLBACKS is bidirectional (flash-lite -> Gemma
+                    # too), and a flash-lite call that internally bounced to
+                    # Gemma on a transport error would hand Gemma the FULL
+                    # context it was built with, right back into the same
+                    # oversized-prompt problem this whole feature exists to
+                    # prevent. The explicit handoff above is the only path
+                    # that's allowed to switch models for this call.
+                    model_fallback=False,
                     max_retries=GEMMA_MAX_RETRIES if is_gemma_attempt else 6,
                 )
                 _log_cache_stats(usage, len(kb_context), attempt)
