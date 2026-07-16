@@ -161,6 +161,12 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
         self.assertEqual(first_call_kwargs["model"], "gemma-4-31b-it")
         self.assertEqual(first_call_kwargs["model_fallback"], False)
+        # Gemma's own retry ladder must stay short -- model_fallback=False
+        # means GeminiClient.generate() won't internally bail early after 2
+        # consecutive failures anymore, so process_bullet() must cap
+        # max_retries itself or a still-oversized bullet burns the full
+        # 6-attempt backoff ladder (~5 minutes) before handing off.
+        self.assertEqual(first_call_kwargs["max_retries"], 2)
 
         self.assertEqual(second_call_kwargs["model"], "gemini-3.1-flash-lite")
         self.assertGreater(
