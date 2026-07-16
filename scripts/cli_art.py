@@ -192,7 +192,7 @@ def display_bootstrap_intro(doc_count: int) -> None:
         f"Two of these steps make real API calls and can take a few "
         f"minutes — I'll let you know before each one."
     )
-    console.print(Panel(body, title="New User Bootstrap", border_style="#4caf50", box=box.ROUNDED, padding=(1, 2)))
+    console.print(Panel(body, title="New User Bootstrap", border_style=theme.SUCCESS, box=box.ROUNDED, padding=(1, 2)))
 
 
 # Same four tiers as orchestrator.FitEvaluationSchema's `recommendation`
@@ -204,10 +204,15 @@ _RECOMMENDATION_COLORS = theme.RECOMMENDATION_COLORS
 
 
 def display_banner(subtitle: str = "") -> None:
-    body = "[bold cyan]RESUME BUILDER[/bold cyan]"
+    """Direct single-command invocations (e.g. `resume tailor file.json`)
+    get the same lightweight rule-line treatment as menu loop-backs
+    (display_breadcrumb()) rather than a full boxed panel -- consistent
+    with "don't repaint a whole banner for one action", and theme.BRAND
+    instead of a hardcoded "cyan"."""
+    title = f"[bold {theme.BRAND}]›[/bold {theme.BRAND}] resume-builder"
     if subtitle:
-        body += f"\n[dim]{subtitle}[/dim]"
-    console.print(Panel(body, border_style="cyan"))
+        title += f" [dim]— {subtitle}[/dim]"
+    console.rule(title, style="dim", align="left")
 
 
 def render_fit_table(results: list) -> None:
@@ -242,7 +247,7 @@ def render_fit_table(results: list) -> None:
     ))
 
 
-_STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING}
+_STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
 
 
 def render_bullet_bank_status(stage_rows: list, maintenance_rows: list) -> None:

@@ -694,6 +694,7 @@ def stage4_auto_rewrite(
     df_queue: pd.DataFrame,
     kb: KnowledgeBase,
     rewrite_system: str,
+    rewrite_system_gemma: str,
     score_system: str,
     df_keepers: pd.DataFrame,
     limit: int = None,
@@ -734,6 +735,7 @@ def stage4_auto_rewrite(
             row=row,
             kb=kb,
             rewrite_system=rewrite_system,
+            rewrite_system_gemma=rewrite_system_gemma,
             score_system=score_system,
             dry_run=dry_run,
         )
@@ -836,7 +838,7 @@ def main():
           f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed")
 
     # --- Load rules + KB only when scoring is needed ---
-    rules = kb = rewrite_system = score_system = None
+    rules = kb = rewrite_system = rewrite_system_gemma = score_system = None
 
     needs_api = (
         (not args.skip_rescore)
@@ -849,7 +851,7 @@ def main():
 
         # Warm segment cache over the full keepers set (cheapest: one pass)
         kb.warm_segment_cache(df_keepers)
-        rewrite_system, score_system = build_system_prompts(rules, kb)
+        rewrite_system, rewrite_system_gemma, score_system = build_system_prompts(rules, kb)
 
     # ── Stage 1 ───────────────────────────────────────────────────────────────
     df_keepers = stage1_audit_keepers(
@@ -885,6 +887,7 @@ def main():
                 df_queue=df_queue,
                 kb=kb,
                 rewrite_system=rewrite_system,
+                rewrite_system_gemma=rewrite_system_gemma,
                 score_system=score_system,
                 df_keepers=df_keepers,
                 limit=args.limit,

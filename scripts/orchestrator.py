@@ -83,6 +83,16 @@ EMBED_DIM              = 768   # gemini-embedding-2 native dimension
 GEMMA_MINIMAL_JSON         = True
 MAX_REWRITE_PARSE_FAILURES = 2
 
+# Matches rewrite_bullets.py's REWRITE_MAX_OUTPUT_TOKENS exactly -- bounds
+# wasted cost/latency on a real failure mode (2026-07-16) where a model
+# produces a valid answer up front, then degenerates into repeating a
+# phrase until it exhausts its output budget without ever closing the
+# JSON. This alone does not fix parsing (a capped response can still be
+# truncated mid-loop) -- GeminiClient.parse_json()'s salvage-fields
+# fallback (gemini_client.py, shared by both scripts) is what actually
+# recovers the answer from otherwise-unparseable output.
+REWRITE_MAX_OUTPUT_TOKENS = 2048
+
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPT BASE  (mirrors rewrite_bullets.py exactly)
 # ---------------------------------------------------------------------------
@@ -223,6 +233,7 @@ KB_ALLOWLIST = sorted([
 # the segment bundle small and relevant instead of a raw file dump.
 TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
 MAX_CLAIMS_ROWS   = 12
+MAX_GEMMA_FILTER_ROWS = 5   # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
 
 # TAG_CONTEXT maps bracketed bullet tags (e.g. "[ops]") to the persona
 # roles they target, used by persona_context() below. Bracketed form
@@ -410,7 +421,7 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
     return cv_text
 
 
-def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
+def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS) -> pd.DataFrame:
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
@@ -423,7 +434,7 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
                 break
             keywords.extend(kws)
     if include_all or not keywords:
-        return df_claims.head(MAX_CLAIMS_ROWS)
+        return df_claims.head(max_rows)
     text_cols = [c for c in df_claims.columns if df_claims[c].dtype == object]
     pattern = "|".join(re.escape(k) for k in keywords)
     mask = df_claims[text_cols].apply(
@@ -431,8 +442,37 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str) -> pd.DataFrame:
     ).any(axis=1)
     filtered = df_claims[mask]
     if len(filtered) < 3:
-        filtered = df_claims.head(MAX_CLAIMS_ROWS)
-    return filtered.head(MAX_CLAIMS_ROWS)
+        filtered = df_claims.head(max_rows)
+    return filtered.head(max_rows)
+
+
+def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list:
+    """Ported verbatim from rewrite_bullets.py -- same tag-keyword logic as
+    filter_claims_by_tags, but for a list of dicts (verified_metrics.json's
+    "metrics" list, verified_projects.json's "projects" list) rather than
+    a DataFrame."""
+    if not entries:
+        return entries
+    tags_lower = tags.lower() if isinstance(tags, str) else ""
+    keywords = []
+    include_all = False
+    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+        if tag in tags_lower:
+            if not kws:
+                include_all = True
+                break
+            keywords.extend(kws)
+    if include_all or not keywords:
+        return entries[:max_rows]
+
+    def _entry_matches(entry: dict) -> bool:
+        haystack = " ".join(str(v) for v in entry.values() if isinstance(v, str)).lower()
+        return any(kw in haystack for kw in keywords)
+
+    filtered = [e for e in entries if _entry_matches(e)]
+    if len(filtered) < 3:
+        filtered = entries[:max_rows]
+    return filtered[:max_rows]
 
 
 def build_background_summary(tags: str) -> str:
@@ -948,6 +988,7 @@ class ResumeEngine:
         self.jds_dir         = os.path.join(PROJECT_ROOT, "jds")
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
+        self._gemma_segment_cache: dict = {}
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
@@ -1062,6 +1103,45 @@ class ResumeEngine:
                     sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
                 except Exception as e:
                     print(f"  WARNING: build_audit_static_prefix: could not load evidence-guide.csv: {e}")
+
+        return "\n\n".join(sections)
+
+    def build_audit_static_prefix_gemma(self) -> str:
+        """Slim static tier for Gemma only -- mirrors rewrite_bullets.py's
+        KnowledgeBase._build_gemma_static_prefix() exactly (2026-07-16).
+        Keeps only guardrails (verified_facts, verified_tools) and
+        voice_anchors (small, directly serves rewrite quality). Drops
+        profile.yml (strategic career-positioning content, not needed to
+        rewrite a single existing bullet) and verified_projects.json
+        (re-added tag-filtered, at MAX_GEMMA_FILTER_ROWS, in
+        _build_audit_segment_bundle_gemma() instead of included whole)."""
+        sections = []
+
+        for fname, header, note in [
+            ("verified_facts.json",
+             "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
+             "These are the only facts about Morgan's career that are evidence-backed.\nDo NOT invent facts outside this list."),
+            ("verified_tools.json",
+             "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
+             "Never claim proficiency with any tool not present in this list."),
+        ]:
+            fpath = os.path.join(self.kb_dir, fname)
+            if os.path.exists(fpath):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                    sections.append(f"{header}\n{note}\n{data}")
+                except Exception as e:
+                    print(f"  WARNING: build_audit_static_prefix_gemma: could not load {fname}: {e}")
+
+        voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
+        if os.path.exists(voice_anchors_path):
+            try:
+                with open(voice_anchors_path, "r", encoding="utf-8") as f:
+                    data = f.read()
+                sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
+            except Exception as e:
+                print(f"  WARNING: build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}")
 
         return "\n\n".join(sections)
 
@@ -1196,6 +1276,101 @@ class ResumeEngine:
 
         return "\n\n".join(sections)
 
+    def _build_audit_segment_bundle_gemma(self, company: str, tags: str) -> str:
+        """Slim segment bundle for Gemma only -- mirrors rewrite_bullets.py's
+        KnowledgeBase._build_gemma_segment_bundle() (2026-07-16). cv excerpt
+        and background summary are unchanged (already small); claims and,
+        for Treering bullets, screenshot metrics + verified metrics are
+        tag-filtered to MAX_GEMMA_FILTER_ROWS instead of included at the
+        looser MAX_CLAIMS_ROWS cap or (screenshots/metrics) unfiltered.
+        verified_projects.json, dropped entirely from the Gemma static
+        prefix, is added back here tag-filtered rather than as the full
+        12-entry file."""
+        sections = []
+
+        cv_path = os.path.join(self.kb_dir, "cv.md")
+        cv_full = ""
+        if os.path.exists(cv_path):
+            try:
+                with open(cv_path, "r", encoding="utf-8") as f:
+                    cv_full = f.read()
+            except Exception as e:
+                print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load cv.md: {e}")
+
+        cv_section = extract_cv_section(cv_full, company)
+        if cv_section:
+            label = ("ROLE CONTEXT (cv.md excerpt)"
+                     if cv_section != cv_full else "CAREER OVERVIEW (cv.md)")
+            sections.append(f"=== {label} ===\n{cv_section}")
+
+        bg_summary = build_background_summary(tags)
+        if bg_summary:
+            sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
+        if is_treering_bullet(company):
+            projects_path = os.path.join(self.kb_dir, "verified_projects.json")
+            if os.path.exists(projects_path):
+                try:
+                    with open(projects_path, "r", encoding="utf-8") as f:
+                        projects_entries = json.load(f).get("projects", [])
+                    filtered_projects = filter_json_entries_by_tags(projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
+                    if filtered_projects:
+                        sections.append(
+                            "=== VERIFIED PROJECTS (tag-filtered) ===\n"
+                            "Use these to add accurate project detail and scope.\n"
+                            + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+                        )
+                except Exception as e:
+                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}")
+
+            claims_path = os.path.join(self.kb_dir, "verified-claims.csv")
+            if os.path.exists(claims_path):
+                try:
+                    df_claims = pd.read_csv(claims_path)
+                    if "Use in Resume?" in df_claims.columns:
+                        df_claims = df_claims[
+                            df_claims["Use in Resume?"].str.strip().str.lower().str.startswith("yes")
+                        ]
+                    filtered_claims = filter_claims_by_tags(df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+                    claims_text = get_verified_claims_text(filtered_claims)
+                    if claims_text:
+                        sections.append(
+                            "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                            "Use these to inject real, verified metrics where appropriate. "
+                            "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
+                            + claims_text
+                        )
+                except Exception as e:
+                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}")
+
+            screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
+            if os.path.exists(screenshot_path):
+                try:
+                    df_screens = pd.read_csv(screenshot_path)
+                    filtered_screens = filter_claims_by_tags(df_screens, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+                    screenshot_text = filtered_screens.to_csv(index=False)
+                    if screenshot_text:
+                        sections.append(f"=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n{screenshot_text}")
+                except Exception as e:
+                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}")
+
+            metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
+            if os.path.exists(metrics_path):
+                try:
+                    with open(metrics_path, "r", encoding="utf-8") as f:
+                        metrics_entries = json.load(f).get("metrics", [])
+                    filtered_metrics = filter_json_entries_by_tags(metrics_entries, tags, MAX_GEMMA_FILTER_ROWS)
+                    if filtered_metrics:
+                        sections.append(
+                            "=== VERIFIED METRICS (authoritative — tag-filtered) ===\n"
+                            "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                            + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
+                        )
+                except Exception as e:
+                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}")
+
+        return "\n\n".join(sections)
+
     def audit_segment_bundle_for(self, company: str, tags: str) -> str:
         """
         Memoized accessor for _build_audit_segment_bundle (Tier 2), keyed by
@@ -1209,6 +1384,16 @@ class ResumeEngine:
             self._segment_cache[key] = self._build_audit_segment_bundle(company, tags)
         return self._segment_cache[key]
 
+    def audit_segment_bundle_for_gemma(self, company: str, tags: str) -> str:
+        """Memoized accessor for _build_audit_segment_bundle_gemma (Tier 2,
+        Gemma-slim) -- mirrors rewrite_bullets.py's
+        context_block_for_bullet_gemma()."""
+        key = (company, tags)
+        if key not in self._gemma_segment_cache:
+            print(f"   ⚠️ Gemma cache miss for {key} — building segment on demand.")
+            self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, tags)
+        return self._gemma_segment_cache[key]
+
     def warm_segment_cache(self, bullet_tuples: List[Tuple[str, str, str]]) -> None:
         """
         Mirrors rewrite_bullets.py's KnowledgeBase.warm_segment_cache(): pre-builds
@@ -1217,13 +1402,16 @@ class ResumeEngine:
         I/O mid-loop, and the terminal report shows what's cached upfront.
         """
         self._segment_cache = {}
+        self._gemma_segment_cache = {}
         pairs = sorted({(company, tags) for _, company, tags in bullet_tuples})
         print(f"\n🔥 Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
+            gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
+            self._gemma_segment_cache[(company, tags)] = gemma_bundle
             treering_flag = " [Treering+claims]" if is_treering_bullet(company) else ""
-            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag}")
+            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag} (Gemma: {len(gemma_bundle):,} chars)")
         print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
 
     @staticmethod
@@ -1264,44 +1452,136 @@ class ResumeEngine:
         critique_system = self.build_bullet_critique_system()
         print("   ✅ Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
 
-        # Load rules needed for rewrite prompt
-        verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
-        verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
-        language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
-        hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
-        truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
-        style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
+        # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
+        # to build (2 small JSON files + voice-anchors.md), so it's built
+        # here rather than threaded through as another caller-supplied
+        # parameter the way static_prefix is.
+        static_prefix_gemma = self.build_audit_static_prefix_gemma()
+        print(f"📌 Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
 
-        rewrite_rules_block = "\n".join([
-            "=== VERB INTENT MAP ===",
-            "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
-            verb_intent_mapping,
-            "",
-            "=== VERB TAXONOMY (priority tiers) ===",
-            "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
-            verb_taxonomy,
-            "",
-            "=== LANGUAGE QUALITY RULES ===",
-            "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
-            language_quality,
-            "",
-            "=== HARD FAILURE CONDITIONS ===",
-            "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
-            hard_failures,
-            "",
-            "=== TRUTHFULNESS RULES ===",
-            "Apply these four tests before finalising any bullet:",
-            truthfulness_rules,
-            "",
-            "=== STYLE RULES ===",
-            style_rules,
-        ])
+        # Load rules needed for rewrite prompt
+        verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
+        verb_taxonomy       = self.load_yaml(self.rules_dir, "verb_taxonomy.yaml")
+        language_quality    = self.load_yaml(self.rules_dir, "language_quality.yaml")
+        hard_failures       = self.load_yaml(self.rules_dir, "hard_failures.yaml")
+        truthfulness_rules  = self.load_yaml(self.rules_dir, "truthfulness_rules.yaml")
+        style_rules         = self.load_yaml(self.rules_dir, "style_rules.yaml")
+
+        # Curated subsets mirror rewrite_bullets.py's RulesBundle exactly
+        # (2026-07-16) -- this block used to json.dumps() each YAML file's
+        # FULL raw contents, including large sections (verb_taxonomy's
+        # complete per-role verb library, language_quality's verb_scoring/
+        # manager_test blocks that are only used by the *scoring* prompt
+        # elsewhere) never actually referenced by the instruction text
+        # immediately above them -- "Use elite > strong > acceptable.
+        # NEVER use verbs in the avoid list." only needs priority_tiers +
+        # avoid, not the whole ~10KB file. That drift was inflating every
+        # rewrite call's token count well past what the prompt's own
+        # instructions needed, a real contributor to Gemma's 16k TPM cap
+        # getting blown -- not just a cosmetic difference from
+        # rewrite_bullets.py.
+        verb_taxonomy_curated = {
+            "priority_tiers": verb_taxonomy.get("priority_tiers", {}),
+            "avoid":          verb_taxonomy.get("avoid", []),
+        }
+        language_quality_curated = {
+            "weak_verbs":           language_quality.get("weak_verbs", {}),
+            "buzzwords":            language_quality.get("buzzwords", {}),
+            "ai_language_patterns": language_quality.get("ai_language_patterns", {}),
+            "specificity_checks":   language_quality.get("specificity_checks", {}),
+            "final_principle":      language_quality.get("final_principle", ""),
+        }
+
+        def _rewrite_block(verb_intent_data: dict, style_data: dict, style_heading: str) -> str:
+            return "\n".join([
+                "=== VERB INTENT MAP ===",
+                "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
+                json.dumps(verb_intent_data),
+                "",
+                "=== VERB TAXONOMY (priority tiers) ===",
+                "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+                json.dumps(verb_taxonomy_curated),
+                "",
+                "=== LANGUAGE QUALITY RULES ===",
+                "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
+                json.dumps(language_quality_curated),
+                "",
+                "=== HARD FAILURE CONDITIONS ===",
+                "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
+                json.dumps(hard_failures),
+                "",
+                "=== TRUTHFULNESS RULES ===",
+                "Apply these four tests before finalising any bullet:",
+                json.dumps(truthfulness_rules),
+                "",
+                style_heading,
+                json.dumps(style_data),
+            ])
+
+        rewrite_rules_block = _rewrite_block(verb_intent_mapping, style_rules, "=== STYLE RULES ===")
+
+        # Gemma-slim variant -- mirrors rewrite_bullets.py's
+        # rewrite_rules_block_gemma (2026-07-16): gemma-4-31b-it's 16k TPM
+        # cap leaves little headroom once the KB context is added, so this
+        # additionally drops (a) document-layout style_rules content
+        # (typography/page layout/tagline/skills-section/ATS formatting),
+        # a no-op for rewriting one bullet's text regardless of model, and
+        # (b) verb_intent_mapping's per-category prose (description +
+        # weak/strong examples), which restates what VERB TAXONOMY's
+        # elite/strong tiers already cover structurally. Truthfulness/
+        # anti-fabrication content (HARD FAILURE CONDITIONS, TRUTHFULNESS
+        # RULES) is byte-identical between variants -- never a candidate
+        # for trimming.
+        def _rule_text(item) -> str:
+            # Guards a real YAML quirk in style_rules.yaml: a couple of
+            # list entries contain an unintended colon (e.g. "Recommended
+            # verbs: Architected, ..."), which YAML parses as a
+            # {key: value} dict instead of a plain string like their
+            # neighbors.
+            if isinstance(item, dict):
+                return next(iter(item.keys()), "")
+            return str(item)
+
+        gemma_verb_intent = {
+            "intent_categories": {
+                intent: {
+                    "signals":         data.get("signals", []),
+                    "preferred_verbs": data.get("preferred_verbs", {}),
+                }
+                for intent, data in verb_intent_mapping.get("intent_categories", {}).items()
+            },
+            "selection_rules":   verb_intent_mapping.get("selection_rules", {}),
+            "verb_replacements": verb_intent_mapping.get("verb_replacements", {}),
+            "final_principle":   verb_intent_mapping.get("final_principle", ""),
+        }
+        gemma_style_rules = {
+            "philosophy": [
+                p for p in style_rules.get("philosophy", [])
+                if any(kw in _rule_text(p).lower() for kw in ("bullet", "metric", "verb", "cares test", "systems not tasks"))
+            ],
+            "writing_style":      style_rules.get("writing_style", {}),
+            "bullet_structure":   style_rules.get("bullet_structure", {}),
+            "verb_rules":         [r for r in style_rules.get("verb_rules", []) if not _rule_text(r).startswith("Recommended verbs")],
+            "vague_verbs":        style_rules.get("vague_verbs", []),
+            "forbidden_openers":  style_rules.get("forbidden_openers", []),
+            "forbidden_phrases":  style_rules.get("forbidden_phrases", []),
+            "punctuation_rules":  style_rules.get("punctuation_rules", []),
+            "metrics_rules":      style_rules.get("metrics_rules", {}),
+            "tool_mention_rules": style_rules.get("tool_mention_rules", {}),
+        }
+        rewrite_rules_block_gemma = _rewrite_block(
+            gemma_verb_intent, gemma_style_rules, "=== STYLE RULES (bullet-level subset) ==="
+        )
+
         # FIX: use .replace() instead of .format() to avoid ValueError when
         # rules YAML content contains literal curly braces { } (e.g. JSON examples).
-        rewrite_system = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
+        rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
+        rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
 
         print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
+        print(f"📐 Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
         print(f"✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+        print(f"✏️  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
         print(f"💯 Score system prompt:   {len(critique_system):,} chars")
 
         self.warm_segment_cache(bullet_tuples)
@@ -1366,22 +1646,32 @@ class ResumeEngine:
                     print(f"   ✏️  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
-                    segment_bundle = self.audit_segment_bundle_for(company, tags)
+                    segment_bundle       = self.audit_segment_bundle_for(company, tags)
+                    segment_bundle_gemma = self.audit_segment_bundle_for_gemma(company, tags)
                     if segment_bundle:
-                        print(f"   📦 segment bundle (Tier 2): {len(segment_bundle):,} chars")
+                        print(f"   📦 segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
                     rewritten_bullet       = bullet
 
                     for rw_attempt in range(MAX_REWRITE_PARSE_FAILURES + 1):
-                        use_minimal   = GEMMA_MINIMAL_JSON and "gemma" in active_rewrite_model.lower()
-                        runner_schema = RewriteMinimalSchema if use_minimal else RewriteSchema
+                        is_gemma_attempt = "gemma" in active_rewrite_model.lower()
+                        use_minimal      = GEMMA_MINIMAL_JSON and is_gemma_attempt
+                        runner_schema    = RewriteMinimalSchema if use_minimal else RewriteSchema
+                        active_rewrite_system = rewrite_system_gemma if is_gemma_attempt else rewrite_system
 
                         # Tier 1 + Tier 2 -> kb_context. build_rewrite_prompt() appends
                         # the Tier 3 tail (persona + weaknesses + bullet + JSON reminder),
-                        # exactly like rewrite_bullets.py's process_bullet() does.
-                        context_block = f"{static_prefix}\n{segment_bundle}" if segment_bundle else static_prefix
+                        # exactly like rewrite_bullets.py's process_bullet() does. Gemma
+                        # gets the slim static prefix + slim segment bundle (2026-07-16
+                        # fix for its 16k TPM cap); flash-lite keeps the full tier.
+                        active_static_prefix = static_prefix_gemma if is_gemma_attempt else static_prefix
+                        active_segment_bundle = segment_bundle_gemma if is_gemma_attempt else segment_bundle
+                        context_block = (
+                            f"{active_static_prefix}\n{active_segment_bundle}"
+                            if active_segment_bundle else active_static_prefix
+                        )
 
                         rewrite_contents = build_rewrite_prompt(
                             bullet=bullet,
@@ -1392,17 +1682,24 @@ class ResumeEngine:
                         )
 
                         try:
-                            # No max_output_tokens cap here -- matches rewrite_bullets.py's
-                            # rewrite call exactly. Gemma doesn't reliably respect "no
-                            # preamble" instructions, so a tight cap (160/300 tokens) was
-                            # truncating the JSON mid-object before the closing brace,
-                            # which is what produced the non-JSON / empty rewrites.
+                            # model_fallback=False: active_rewrite_system was just
+                            # picked to match active_rewrite_model (slim for Gemma,
+                            # full for flash-lite). GeminiClient's own internal
+                            # fallback swaps models mid-call without knowing which
+                            # system_instruction was sent -- an internal swap here
+                            # would hand the wrong-sized context to whichever model
+                            # actually ends up serving the request. The explicit
+                            # rewrite_parse_failures handoff below is the only path
+                            # allowed to switch models for this call. Matches
+                            # rewrite_bullets.py's process_bullet() exactly.
                             rewrite_text, rw_usage = GeminiClient.generate(
                                 model=active_rewrite_model,
-                                system_instruction=rewrite_system,
+                                system_instruction=active_rewrite_system,
                                 contents=rewrite_contents,
                                 response_schema=runner_schema,
                                 temperature=0.7,
+                                max_output_tokens=REWRITE_MAX_OUTPUT_TOKENS,
+                                model_fallback=False,
                             )
 
                             if not rewrite_text:

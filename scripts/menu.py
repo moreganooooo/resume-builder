@@ -53,9 +53,9 @@ _CHOICES = [
 
 
 _SCAN_SOURCE_CHOICES = [
-    questionary.Choice(title="Both (default)", value="both"),
-    questionary.Choice(title="JobRight only", value="jobright"),
-    questionary.Choice(title="LinkedIn only", value="linkedin"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  Both (default)", value="both"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  JobRight only", value="jobright"),
+    questionary.Choice(title=f"{theme.ICONS['discovery']}  LinkedIn only", value="linkedin"),
 ]
 
 
@@ -220,6 +220,17 @@ _CHAIN = {
     "coverletter_one": [("Polish with Gemini", "polish")],
 }
 
+# Same icon per destination value as _CHOICES above, so the "what's next"
+# chain prompt stays visually consistent with the main menu instead of
+# falling back to plain text.
+_CHAIN_ICONS = {
+    "liveness":        theme.ICONS["discovery"],
+    "evaluate_all":    theme.ICONS["evaluate"],
+    "tailor_all":      theme.ICONS["build"],
+    "coverletter_one": theme.ICONS["build"],
+    "polish":          theme.ICONS["build"],
+}
+
 # Labels for the session-end summary -- only actions worth reporting on
 # exit get an entry; anything absent here (e.g. "polish", "scan",
 # "liveness") just isn't tallied.
@@ -241,8 +252,12 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     if not did_something or not next_options:
         return
 
-    choices = [questionary.Choice(title=label, value=v) for label, v in next_options]
-    choices.append(questionary.Choice(title="Back to Menu", value="__back__"))
+    def _choice_title(label: str, value: str) -> str:
+        icon = _CHAIN_ICONS.get(value)
+        return f"{icon}  {label}" if icon else label
+
+    choices = [questionary.Choice(title=_choice_title(label, v), value=v) for label, v in next_options]
+    choices.append(questionary.Choice(title=f"{theme.ICONS['utility']}  Back to Menu", value="__back__"))
     cli_art.display_whats_next_panel()
     choice = questionary.select(
         "Choose one:", choices=choices, style=cli_art.QUESTIONARY_STYLE,

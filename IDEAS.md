@@ -232,6 +232,31 @@ wrinkle is that the content would then live in two (arguably three)
 places unless something shares a single source of truth between the
 shell script's static text and whatever the menu option prints.
 
+### Rename the `resume` CLI alias
+
+"Resume" is ambiguous in a way that's mildly confusing in context --
+`resume tailor`, `resume run`, etc. read fine on their own, but the name
+overloads with "resume [a paused process]" (e.g. "This process is
+paused. Would you like to resume?"). The shell wrapper
+(`scripts/resume-cli.sh`, sourced from `~/.zshrc`) and every reference to
+it in `README.md`/`CLAUDE.md` would need updating to the new name.
+Mechanically small -- the only open question is picking the actual
+name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
+`rbuild`, `jobkit`. Pull this into a real change the moment a name is
+chosen.
+
+### Modernize emojis in rewrite_bullets.py / orchestrator.py
+
+The interactive menu's icons went through a real design pass
+(`theme.py`'s `ICONS` dict, Nerd Font default + plain-Unicode fallback
+via `RESUME_BUILDER_ICONS=unicode`), but `rewrite_bullets.py` and
+`orchestrator.py`'s print statements still use the older, ad-hoc emoji
+set (📥📋✅⚠️📌🔥📦🖊️💫💯✏️🔧 etc.) picked before that system existed. No
+open design question -- swap each emoji for its `theme.ICONS` equivalent
+where one exists, framework-consistent print styling otherwise -- but
+real volume: two large files, dozens of print statements each, worth
+its own focused pass rather than folding into an unrelated change.
+
 ## Medium
 
 ### Liveness skip-by-recency (persist a check date, skip if checked recently)
@@ -518,6 +543,24 @@ JSON/text file per task, following this project's existing tracker-file
 conventions, is probably the simplest option) -- not itself hard, but
 worth designing once there's more than one maintenance task to actually
 house in it.
+
+### Repo reorganization / cleanup pass
+
+As the project's grown, the highest-traffic folders (`scripts/`,
+`resume-engine/knowledge_base/`) have gotten harder to scan -- worth a
+real subfolder pass plus archiving/deleting whatever's actually outdated
+or unused. **Why this is Hard, not Easy/Medium:** files here are
+referenced by path from many different scripts (constants scattered
+across `rewrite_bullets.py`, `orchestrator.py`, `bullet_bank_menu.py`,
+`audit_keepers.py`, etc.), so moving anything without first tracing
+every reference risks silently breaking an import or a runtime file
+lookup -- and "what's actually outdated vs. still load-bearing" isn't
+safe to guess at; it needs a real audit (grep every file for
+cross-references, check git log recency, check what the test suite
+actually exercises) before anything gets moved or deleted. Deleting/
+moving is also much harder to walk back than most changes in this repo,
+which argues for a proposed structure + audit findings reviewed before
+executing, not folding straight into implementation.
 
 ### Situational/optional work history entries -- done 2026-07-05
 

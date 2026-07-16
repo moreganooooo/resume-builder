@@ -21,6 +21,17 @@ def _pass_critique_json():
     })
 
 
+def _fail_critique_json():
+    return json.dumps({
+        "manager_test": "FAIL",
+        "believability_score": 50,
+        "hidden_gem_score": 0,
+        "hidden_gem_flag": False,
+        "hidden_gem_reason": "",
+        "weaknesses": "too vague",
+    })
+
+
 class TestAuditResume(unittest.TestCase):
 
     def setUp(self):
@@ -128,6 +139,48 @@ class TestAuditResume(unittest.TestCase):
             orchestrator._bullet_sort_key(higher),
             orchestrator._bullet_sort_key(lower),
         )
+
+
+class TestAuditResumeRewritePath(unittest.TestCase):
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.bullet_tuples = [("Managed stuff.", "CompanyA", "sales")]
+        self.static_prefix = "STATIC PREFIX FOR TEST"
+
+    @patch("orchestrator.bullet_feedback.queue_accepted_rewrite", return_value=False)
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    @patch("orchestrator.GeminiClient.generate")
+    def test_gemma_rewrite_gets_slim_prompt_flash_lite_gets_full(self, mock_generate, mock_queue):
+        # A FAIL critique triggers the rewrite loop. Two empty Gemma
+        # responses exhaust MAX_REWRITE_PARSE_FAILURES and hand off to
+        # flash-lite (mirrors rewrite_bullets.py's process_bullet()), which
+        # then succeeds. Verifies (1) Gemma gets the slim rules block,
+        # flash-lite the full one -- the 2026-07-16 fix for Gemma's 16k TPM
+        # cap -- and (2) the model_fallback/max_output_tokens guards match
+        # rewrite_bullets.py exactly.
+        mock_generate.side_effect = [
+            (_fail_critique_json(), {}),                                      # critique -> FAIL
+            ("", {}),                                                         # rewrite attempt 0 (gemma) -> empty
+            ("", {}),                                                         # rewrite attempt 1 (gemma) -> empty, triggers fallback
+            (json.dumps({"rewritten_bullet": "Directed 5 initiatives."}), {}),  # rewrite attempt 2 (flash-lite)
+            (_pass_critique_json(), {}),                                      # rescore -> PASS, accepted
+        ]
+
+        self.engine.audit_and_refine_bullets(self.bullet_tuples, self.static_prefix)
+
+        calls = mock_generate.call_args_list
+        gemma_call = calls[1]
+        flash_call = calls[3]
+
+        self.assertEqual(gemma_call.kwargs["model"], "gemma-4-31b-it")
+        self.assertEqual(flash_call.kwargs["model"], "gemini-3.1-flash-lite")
+        self.assertLess(
+            len(gemma_call.kwargs["system_instruction"]),
+            len(flash_call.kwargs["system_instruction"]),
+        )
+        self.assertFalse(gemma_call.kwargs["model_fallback"])
+        self.assertEqual(gemma_call.kwargs["max_output_tokens"], orchestrator.REWRITE_MAX_OUTPUT_TOKENS)
 
 
 if __name__ == "__main__":

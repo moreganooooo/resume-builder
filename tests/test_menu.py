@@ -298,7 +298,9 @@ class TestRunWithChain(unittest.TestCase):
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
             menu._run_with_chain("fake", {})
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual([c.title for c in choices], ["Next", "Back to Menu"])
+        # "somewhere" has no _CHAIN_ICONS entry -> falls back to plain
+        # label; "__back__" always gets the utility icon.
+        self.assertEqual([c.title for c in choices], ["Next", f"{menu.theme.ICONS['utility']}  Back to Menu"])
         self.assertEqual([c.value for c in choices], ["somewhere", "__back__"])
 
     @patch("menu.questionary.select")
