@@ -7,7 +7,7 @@ import pandas as pd
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from rewrite_bullets import filter_claims_by_tags  # noqa: E402
+from rewrite_bullets import filter_claims_by_tags, filter_json_entries_by_tags, load_json_entries  # noqa: E402
 
 
 def _claims_df():
@@ -36,6 +36,43 @@ class TestFilterClaimsByTagsMaxRows(unittest.TestCase):
         df = pd.concat([_claims_df()] * 5, ignore_index=True)
         filtered = filter_claims_by_tags(df, "[email]", max_rows=5)
         self.assertLessEqual(len(filtered), 5)
+
+
+def _metric_entries():
+    return [
+        {"id": "m1", "category": "campaign_performance", "label": "Email open rate", "context": "PTA sequence, 74% open"},
+        {"id": "m2", "category": "campaign_performance", "label": "Email reply rate", "context": "Hot Zone sequence, 39% reply"},
+        {"id": "m3", "category": "ops", "label": "CRM pipeline scrub", "context": "Uncovered $3M+ in stale Salesforce pipeline"},
+        {"id": "m4", "category": "design", "label": "Brand flyer", "context": "COVID response flyer, Illustrator"},
+    ]
+
+
+class TestFilterJsonEntriesByTags(unittest.TestCase):
+
+    def test_keyword_match_filters_to_relevant_entries(self):
+        filtered = filter_json_entries_by_tags(_metric_entries(), "[email]", max_rows=5)
+        ids = {e["id"] for e in filtered}
+        self.assertIn("m1", ids)
+        self.assertIn("m2", ids)
+
+    def test_respects_max_rows_cap(self):
+        entries = _metric_entries() * 3  # 12 entries, all [ops]-matchable via "salesforce"/"crm"
+        filtered = filter_json_entries_by_tags(entries, "[ops]", max_rows=3)
+        self.assertLessEqual(len(filtered), 3)
+
+    def test_too_few_matches_falls_back_to_head(self):
+        # "[generalist]" has no keywords in CLAIM_TAG_KEYWORDS -> include_all -> head(max_rows)
+        filtered = filter_json_entries_by_tags(_metric_entries(), "[generalist]", max_rows=2)
+        self.assertEqual(len(filtered), 2)
+
+    def test_load_json_entries_reads_list_under_key(self):
+        entries = load_json_entries(
+            os.path.join(SCRIPTS_DIR, "..", "resume-engine", "knowledge_base", "verified_metrics.json"),
+            "metrics",
+        )
+        self.assertIsInstance(entries, list)
+        self.assertGreater(len(entries), 0)
+        self.assertIn("category", entries[0])
 
 
 if __name__ == "__main__":
