@@ -28,6 +28,11 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+# x-goog-api-key header, not ?key= query param -- current docs (ai.google.dev)
+# only show the header form; query params also risk landing in server/proxy
+# logs. Doesn't affect ACCESS_TOKEN_TYPE_UNSUPPORTED (verified: identical 401
+# with either transport) -- this is a hygiene/future-proofing change only.
+AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 
 RETRYABLE          = {429, 500, 502, 503, 504}
 SERVER_ERRORS      = {500, 502, 503, 504}
@@ -156,8 +161,9 @@ class GeminiClient:
         max_retries: int = 6,
         max_output_tokens: int = None,
         service_tier: str = "standard",
+        model_fallback: bool = True,
     ) -> tuple[str | None, dict]:
-        url = f"{BASE_URL}/{model}:generateContent?key={API_KEY}"
+        url = f"{BASE_URL}/{model}:generateContent"
 
         valid_tiers = {"standard", "priority", "flex"}
         tier = (service_tier or "standard").strip().lower()
@@ -172,6 +178,13 @@ class GeminiClient:
             generation_config: dict = {"temperature": current_temp}
             if max_output_tokens is not None:
                 generation_config["maxOutputTokens"] = int(max_output_tokens)
+
+            if "gemma" in model.lower():
+                # Gemma 4 emits a "thought" reasoning preamble by default
+                # (see the thought-part filter below) -- those tokens are
+                # discarded but still billed against the 16k TPM cap.
+                # thinkingLevel: "minimal" suppresses them at the source.
+                generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
 
             raw_schema = None
             if response_schema is not None:
@@ -195,30 +208,27 @@ class GeminiClient:
                         GeminiClient.resolve_refs(raw_schema)
                     )
 
-            if "gemma" in model.lower():
-                merged_contents = f"{system_instruction}\n\n---\n{contents}"
-                body = {
-                    "contents": [{"role": "user", "parts": [{"text": merged_contents}]}],
-                    "generationConfig": generation_config,
-                    "serviceTier": tier,
-                }
-            else:
-                body = {
-                    "systemInstruction": {"parts": [{"text": system_instruction}]},
-                    "contents": [{"role": "user", "parts": [{"text": contents}]}],
-                    "generationConfig": generation_config,
-                    "serviceTier": tier,
-                }
+            # systemInstruction as its own top-level field, same shape for
+            # every model -- current Gemma-4-on-Gemini-API docs show it
+            # supported natively; the earlier manual merge into `contents`
+            # was a workaround for older Gemma versions that didn't respect
+            # a separate systemInstruction field.
+            body = {
+                "systemInstruction": {"parts": [{"text": system_instruction}]},
+                "contents": [{"role": "user", "parts": [{"text": contents}]}],
+                "generationConfig": generation_config,
+                "serviceTier": tier,
+            }
 
             try:
-                resp = requests.post(url, json=body, timeout=GeminiClient._timeout)
+                resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
-                if failure_streak >= 2 and model in MODEL_FALLBACKS:
+                if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
                     print(f"    WARNING: Transport failures — falling back to {fallback_model}...")
                     model = fallback_model
-                    url = f"{BASE_URL}/{model}:generateContent?key={API_KEY}"
+                    url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
                 print(f"    WARNING: Network error ({GeminiClient._timeout}s): {str(e).split()[-1].strip()}. "
@@ -235,11 +245,11 @@ class GeminiClient:
                 print("    WARNING: Model high demand (503). Treating as transient.")
 
             if resp.status_code in RETRYABLE:
-                if failure_streak >= 2 and model in MODEL_FALLBACKS:
+                if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
                     print(f"    WARNING: Server failures — falling back to {fallback_model}...")
                     model = fallback_model
-                    url = f"{BASE_URL}/{model}:generateContent?key={API_KEY}"
+                    url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
                 print(f"    WARNING: HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...")
@@ -304,14 +314,14 @@ class GeminiClient:
         Used by orchestrator.py's mine_bullet_bank() for semantic similarity.
         Native output dimension: 768 (gemini-embedding-2).
         """
-        url = f"{BASE_URL}/{EMBED_MODEL}:embedContent?key={API_KEY}"
+        url = f"{BASE_URL}/{EMBED_MODEL}:embedContent"
         payload = {
             "model": f"models/{EMBED_MODEL}",
             "content": {"parts": [{"text": text}]},
             "outputDimensionality": EMBED_DIM,
         }
         try:
-            resp = requests.post(url, json=payload, timeout=30)
+            resp = requests.post(url, json=payload, headers=AUTH_HEADERS, timeout=30)
             resp.raise_for_status()
             return resp.json().get("embedding", {}).get("values")
         except Exception as e:
