@@ -1020,6 +1020,71 @@ class ResumeEngine:
                     print(f"  WARNING: Could not load KB file {filename}: {e}")
         return master_context
 
+    def build_role_rules_block(self, profile_data: dict) -> str:
+        """Formats profile.yml's roles/protected_bullets/fixed_credentials/
+        voice_calibration_example into the '=== ROLE RULES ===' context
+        block tailor_resume.md references generically. Returns "" if the
+        profile has no roles: defined yet (e.g. a freshly-bootstrapped
+        profile) -- tailor_resume.md falls back to general judgment in
+        that case."""
+        roles = profile_data.get("roles") or []
+        protected = profile_data.get("protected_bullets") or []
+        credentials = profile_data.get("fixed_credentials") or {}
+        certs = credentials.get("certifications") or []
+        education = credentials.get("education") or []
+        voice_example = profile_data.get("voice_calibration_example")
+
+        if not roles and not protected and not certs and not education and not voice_example:
+            return ""
+
+        lines = ["\n\n=== ROLE RULES ==="]
+
+        if roles:
+            lines.append("Per-Role Bullet Count Targets:")
+            lines.append("| Company | Min | Target | Page |")
+            lines.append("| --- | --- | --- | --- |")
+            for role in roles:
+                lines.append(f"| {role['name']} | {role['min_bullets']} | {role['target_bullets']} | {role['page']} |")
+
+            must_fit_page_1 = [r["name"] for r in roles if r.get("must_fit_page_1")]
+            if must_fit_page_1:
+                lines.append(f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}.")
+
+            flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
+            lines.append(
+                "\nTrim priority (lowest-priority roles trimmed toward their Min first, before any "
+                f"higher-priority role loses a bullet): {', '.join(r['name'] for r in flex_order)}."
+            )
+
+        if protected:
+            lines.append("\nProtected Bullets -- Do Not Aggressively Shorten:")
+            for bullet in protected:
+                lines.append(f"- {bullet}")
+
+        if certs:
+            lines.append("\nTraining & Certifications -- Fixed Order:")
+            for i, cert in enumerate(certs, 1):
+                lines.append(f"{i}. {cert['name']} | {cert['issuer']} | {cert['year']}")
+
+        if education:
+            lines.append("\nEducation -- Fixed Order and Bullet Counts:")
+            for i, ed in enumerate(education, 1):
+                lines.append(f"{i}. {ed['institution']} -- {ed['credential']}: exactly {ed['bullet_count']} bullet(s)")
+
+        if roles:
+            page_1_roles = [r["name"] for r in roles if r.get("page") == 1]
+            page_2_roles = [r["name"] for r in roles if r.get("page") == 2]
+            if page_1_roles or page_2_roles:
+                lines.append(
+                    f"\nSection Order (Page 1 -> Page 2): Page 1 Work Experience: {', '.join(page_1_roles)}. "
+                    f"Page 2 Work Experience: {', '.join(page_2_roles)}."
+                )
+
+        if voice_example:
+            lines.append(f"\nVoice Calibration Example (this candidate's authentic voice): \"{voice_example}\"")
+
+        return "\n".join(lines)
+
     def build_audit_static_prefix(self, include_evidence_guide: bool = False) -> str:
         """
         Builds the slim Tier-1 context prefix for the audit loop and (with
@@ -2210,6 +2275,8 @@ class ResumeEngine:
                     "should be rare by construction, not a default."
                 )
 
+            role_rules_block = self.build_role_rules_block(self.load_yaml(self.kb_dir, "profile.yml"))
+
             # Gap 1: KB goes into system_instruction, not contents, so the
             # ~105k-token kb_context forms a stable, cacheable prefix if
             # Gemini's automatic caching kicks in across nearby calls (e.g.
@@ -2223,7 +2290,7 @@ class ResumeEngine:
             # per-JD variable content, but small enough that keeping them
             # out of the cacheable prefix costs little and keeps the
             # prefix identical across JDs targeting different companies.
-            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
+            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}{role_rules_block}"
 
             bullets_block = "\n".join(
                 f"- [{company or 'unknown company'}] {b}"
