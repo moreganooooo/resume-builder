@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import questionary
+
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
@@ -412,6 +414,46 @@ class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
         for entry in bullet_bank_menu.STAGES + bullet_bank_menu.MAINTENANCE:
             self.assertIn("description", entry)
             self.assertTrue(entry["description"])
+
+    def test_retire_and_auto_rewrite_are_pinned_to_their_stage(self):
+        by_key = {m["key"]: m for m in bullet_bank_menu.MAINTENANCE}
+        self.assertEqual(by_key["retire"]["after_stage"], "rewrite")
+        self.assertEqual(by_key["auto_rewrite"]["after_stage"], "audit_keepers")
+        self.assertIsNone(by_key["triage"]["after_stage"])
+
+
+class TestBuildChoicesOrdering(unittest.TestCase):
+
+    def _choices_only(self):
+        return [c for c in bullet_bank_menu._build_choices() if isinstance(c, questionary.Choice)]
+
+    def _rendered_text(self, choice):
+        if isinstance(choice.title, list):
+            return "".join(text for _, text in choice.title)
+        return choice.title
+
+    def test_retire_immediately_follows_rewrite_stage(self):
+        keys = [c.value for c in self._choices_only()]
+        self.assertEqual(keys.index("retire"), keys.index("rewrite") + 1)
+
+    def test_auto_rewrite_immediately_follows_audit_keepers_stage(self):
+        keys = [c.value for c in self._choices_only()]
+        self.assertEqual(keys.index("auto_rewrite"), keys.index("audit_keepers") + 1)
+
+    def test_triage_appears_after_all_six_stages_and_their_follow_ups(self):
+        keys = [c.value for c in self._choices_only()]
+        self.assertGreater(keys.index("triage"), keys.index("embed"))
+
+    def test_optional_follow_ups_are_labeled_as_such(self):
+        by_value = {c.value: self._rendered_text(c) for c in self._choices_only()}
+        self.assertIn("optional", by_value["retire"].lower())
+        self.assertIn("optional", by_value["auto_rewrite"].lower())
+
+    def test_ongoing_maintenance_section_has_its_own_labeled_separator(self):
+        separators = [
+            c.line for c in bullet_bank_menu._build_choices() if isinstance(c, questionary.Separator)
+        ]
+        self.assertTrue(any(s and "Ongoing Maintenance" in s for s in separators))
 
     def test_resumable_stages_use_progress_mode_not_mtime(self):
         # audit, rewrite, audit_keepers, and embed all flush partial
