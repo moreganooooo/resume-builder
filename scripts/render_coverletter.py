@@ -14,7 +14,7 @@ import json
 import os
 from html import escape
 
-import fixed_content
+import profile_paths
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
@@ -41,8 +41,8 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
         html = f.read()
 
     company_name = cover_letter_data.get("company_name", "")
-    contact = fixed_content.CONTACT_INFO
-    title = f"{company_name} Cover Letter - Morgan Escott" if company_name else "Cover Letter - Morgan Escott"
+    contact = profile_paths.fixed_content_module().CONTACT_INFO
+    title = f"{company_name} Cover Letter - {contact['NAME']}" if company_name else f"Cover Letter - {contact['NAME']}"
 
     scalars = {
         "LANG":             "en",

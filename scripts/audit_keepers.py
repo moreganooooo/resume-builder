@@ -47,7 +47,7 @@ Four stages:
     Records source_cluster_id on saved keeper rows so Stage 3 can
     exclude them by ID on the next run.
 
-Outputs (resume-engine/knowledge_base/):
+Outputs (profiles/<profile>/knowledge_base/):
   bullet-bank-keepers-audited.csv    keepers with refreshed scores + audit_status
   audit-discrepancies.csv            cluster-map / keeper mismatches
   audit-rewrite-queue.csv            ranked rewrite queue (Stage 3) — always

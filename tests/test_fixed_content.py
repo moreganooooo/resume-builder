@@ -5,8 +5,10 @@ import unittest
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-import fixed_content  # noqa: E402
+import profile_paths  # noqa: E402
 import orchestrator  # noqa: E402
+
+fixed_content = profile_paths.fixed_content_module("morgan")
 
 
 class TestFixedContent(unittest.TestCase):
