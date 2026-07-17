@@ -17,6 +17,7 @@ import questionary
 
 import cli_art
 import normalize_resume
+import profile_paths
 import validate_coverletter
 import validate_resume
 from gemini_client import GeminiClient
@@ -26,9 +27,9 @@ from render_html import render_html
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-OUTPUT_JSON_DIR = os.path.join(PROJECT_ROOT, "output", "json")
-OUTPUT_HTML_DIR = os.path.join(PROJECT_ROOT, "output", "html")
-OUTPUT_PDF_DIR = os.path.join(PROJECT_ROOT, "output", "pdf")
+OUTPUT_JSON_DIR = os.path.join(profile_paths.output_dir(), "json")
+OUTPUT_HTML_DIR = os.path.join(profile_paths.output_dir(), "html")
+OUTPUT_PDF_DIR = os.path.join(profile_paths.output_dir(), "pdf")
 
 RESUME_SUFFIX = "_Resume.json"
 COVERLETTER_SUFFIX = "_CoverLetter.json"
