@@ -1,10 +1,11 @@
 """bullet_bank_menu.py -- the "Manage Bullet Bank" submenu: shows
 staleness/last-run status for the 6 rebuild-pipeline stages
 (audit_bullet_bank.py -> cluster_bullet_bank.py -> rewrite_bullets.py ->
-audit_keepers.py -> score_keeper_gems.py -> embed_bullet_bank.py) plus the
-2 needs-review/rewrite-queue maintenance scripts, and runs any one of them
-individually as a subprocess -- unmodified, exactly as
-bootstrap_bullet_bank.py's own run_stage() does. See
+audit_keepers.py -> score_keeper_gems.py -> embed_bullet_bank.py) plus 3
+maintenance scripts (needs-review triage, rewrite-queue retirement, and
+audit_keepers.py --auto-rewrite for bullets still MANUAL after re-audit),
+and runs any one of them individually as a subprocess -- unmodified,
+exactly as bootstrap_bullet_bank.py's own run_stage() does. See
 docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md.
 """
 
@@ -33,6 +34,7 @@ KEEPERS_AUDITED_CSV = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
 NPY_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.npy")
 NEEDS_REVIEW_CSV = os.path.join(KB_DIR, "needs-review.csv")
 REWRITE_QUEUE_CSV = os.path.join(KB_DIR, "rewrite-queue.csv")
+AUDIT_REWRITE_QUEUE_CSV = os.path.join(KB_DIR, "audit-rewrite-queue.csv")
 CLUSTER_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz")
 EMBED_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.checkpoint.npz")
 
@@ -144,32 +146,38 @@ def _embed_progress():
 STAGES = [
     {
         "key": "audit", "number": 1, "label": "Audit Bullet Bank (Score Quality)",
+        "description": "scores every raw bullet for accuracy, clarity, and impact",
         "script": "audit_bullet_bank.py", "inputs": [RAW_CSV], "output": AUDITED_CSV,
         "api_cost": True, "status_mode": "progress", "progress_fn": _audit_progress,
     },
     {
         "key": "cluster", "number": 2, "label": "Cluster & Classify Bullets",
+        "description": "groups near-duplicate bullets, flags which ones need rewriting",
         "script": "cluster_bullet_bank.py", "inputs": [RAW_CSV, AUDITED_CSV], "output": CLUSTER_MAP_CSV,
         "api_cost": True, "status_mode": "mtime", "checkpoint": CLUSTER_CHECKPOINT_PATH,
     },
     {
         "key": "rewrite", "number": 3, "label": "Rewrite Weak Bullets",
+        "description": "rewrites flagged bullets via Gemini until each one passes",
         "script": "rewrite_bullets.py", "inputs": [CLUSTER_MAP_CSV], "output": KEEPERS_CSV,
         "api_cost": True, "status_mode": "progress", "progress_fn": _rewrite_progress,
     },
     {
         "key": "audit_keepers", "number": 4, "label": "Re-Audit Keepers",
+        "description": "rescores keepers, builds a queue of bullets still needing work",
         "script": "audit_keepers.py", "inputs": [KEEPERS_CSV], "output": KEEPERS_AUDITED_CSV,
         "api_cost": True, "status_mode": "progress", "progress_fn": _audit_keepers_progress,
     },
     {
         "key": "score_gems", "number": 5, "label": "Score Hidden Gems",
+        "description": "flags standout bullets worth surfacing more often",
         "script": "score_keeper_gems.py", "inputs": [KEEPERS_AUDITED_CSV], "output": KEEPERS_AUDITED_CSV,
         "api_cost": True, "status_mode": "columns",
         "status_columns": ["hidden_gem_score", "hidden_gem_flag"],
     },
     {
         "key": "embed", "number": 6, "label": "Embed Bullet Bank (Final Step)",
+        "description": "builds the embeddings real resume builds match against",
         "script": "embed_bullet_bank.py", "inputs": [KEEPERS_AUDITED_CSV], "output": NPY_PATH,
         "api_cost": True, "status_mode": "progress", "progress_fn": _embed_progress,
     },
@@ -178,11 +186,19 @@ STAGES = [
 MAINTENANCE = [
     {
         "key": "triage", "label": "Triage Needs-Review Queue",
+        "description": "routes bullets queued during real resume builds into keepers/rewrite/retired",
         "script": "triage_needs_review.py", "watched_file": NEEDS_REVIEW_CSV, "api_cost": False,
     },
     {
         "key": "retire", "label": "Retire Abandoned Rewrite-Queue Bullets",
+        "description": "clears out bullets that ran out of rewrite attempts without becoming keepers",
         "script": "retire_rewrite_queue.py", "watched_file": REWRITE_QUEUE_CSV, "api_cost": False,
+    },
+    {
+        "key": "auto_rewrite", "label": "Auto-Rewrite Manual Bullets",
+        "description": "retries bullets still MANUAL after re-audit through the rewriter again",
+        "script": "audit_keepers.py", "args": ["--auto-rewrite"],
+        "watched_file": AUDIT_REWRITE_QUEUE_CSV, "api_cost": True,
     },
 ]
 
@@ -266,6 +282,17 @@ def _maintenance_status(entry: dict) -> str:
         pending = sum(1 for row in rows if (row.get("is_representative") or "").strip().lower() == "false")
         return "none pending" if pending == 0 else f"{pending} bullet(s) pending retirement"
 
+    if entry["key"] == "auto_rewrite":
+        # audit-rewrite-queue.csv is overwritten (even when empty) by every
+        # plain "Re-Audit Keepers" run -- see audit_keepers.py's own Stage 3
+        # docstring -- so an empty/missing file genuinely means nothing is
+        # queued, not just "never checked."
+        if not os.path.exists(path):
+            return "empty -- nothing queued"
+        with open(path, newline="", encoding="utf-8") as f:
+            count = sum(1 for _ in csv.DictReader(f))
+        return "empty -- nothing queued" if count == 0 else f"{count} bullet(s) queued for auto-rewrite"
+
     return ""
 
 
@@ -281,18 +308,33 @@ def _handle_choice(choice: str) -> None:
     if entry.get("api_cost") and not _confirm(entry["label"]):
         return
     script_path = os.path.join(SCRIPT_DIR, entry["script"])
-    result = subprocess.run([sys.executable, script_path])
+    result = subprocess.run([sys.executable, script_path, *entry.get("args", [])])
     if result.returncode != 0:
         cli_art.display_error(f"{entry['script']} exited with an error -- check the output above.")
 
 
 def _build_choices() -> list:
     choices = [
-        questionary.Choice(title=f"{stage['number']}. {stage['label']}", value=stage["key"])
+        questionary.Choice(
+            title=[
+                ("class:text", f"{stage['number']}. {stage['label']}  "),
+                ("class:description", f"({stage['description']})"),
+            ],
+            value=stage["key"],
+        )
         for stage in STAGES
     ]
     choices.append(questionary.Separator())
-    choices += [questionary.Choice(title=entry["label"], value=entry["key"]) for entry in MAINTENANCE]
+    choices += [
+        questionary.Choice(
+            title=[
+                ("class:text", f"{entry['label']}  "),
+                ("class:description", f"({entry['description']})"),
+            ],
+            value=entry["key"],
+        )
+        for entry in MAINTENANCE
+    ]
     choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
     return choices
 

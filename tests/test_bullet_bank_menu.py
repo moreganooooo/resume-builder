@@ -397,8 +397,21 @@ class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
     def test_all_stages_cost_api(self):
         self.assertTrue(all(s["api_cost"] for s in bullet_bank_menu.STAGES))
 
-    def test_two_maintenance_scripts(self):
-        self.assertEqual([m["key"] for m in bullet_bank_menu.MAINTENANCE], ["triage", "retire"])
+    def test_three_maintenance_scripts(self):
+        self.assertEqual(
+            [m["key"] for m in bullet_bank_menu.MAINTENANCE], ["triage", "retire", "auto_rewrite"],
+        )
+
+    def test_auto_rewrite_costs_api_and_passes_the_flag(self):
+        auto_rewrite = next(m for m in bullet_bank_menu.MAINTENANCE if m["key"] == "auto_rewrite")
+        self.assertTrue(auto_rewrite["api_cost"])
+        self.assertEqual(auto_rewrite["args"], ["--auto-rewrite"])
+        self.assertEqual(auto_rewrite["script"], "audit_keepers.py")
+
+    def test_every_stage_and_maintenance_entry_has_a_description(self):
+        for entry in bullet_bank_menu.STAGES + bullet_bank_menu.MAINTENANCE:
+            self.assertIn("description", entry)
+            self.assertTrue(entry["description"])
 
     def test_resumable_stages_use_progress_mode_not_mtime(self):
         # audit, rewrite, audit_keepers, and embed all flush partial
@@ -459,6 +472,20 @@ class TestMaintenanceStatus(unittest.TestCase):
         entry = {"key": "retire", "watched_file": self.csv_path}
         self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none pending")
 
+    def test_auto_rewrite_missing_file_is_empty(self):
+        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+
+    def test_auto_rewrite_reports_row_count(self):
+        self._write_csv([{"Bullet Point": "a"}, {"Bullet Point": "b"}, {"Bullet Point": "c"}], ["Bullet Point"])
+        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "3 bullet(s) queued for auto-rewrite")
+
+    def test_auto_rewrite_empty_csv_is_empty(self):
+        self._write_csv([], ["Bullet Point"])
+        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+
 
 class TestHandleChoice(unittest.TestCase):
 
@@ -493,6 +520,24 @@ class TestHandleChoice(unittest.TestCase):
         bullet_bank_menu._handle_choice("triage")
         mock_confirm.assert_not_called()
         mock_run.assert_called_once()
+
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=True)
+    def test_auto_rewrite_passes_the_flag_to_the_subprocess(self, mock_confirm, mock_run, mock_error):
+        mock_run.return_value.returncode = 0
+        bullet_bank_menu._handle_choice("auto_rewrite")
+        called_args = mock_run.call_args[0][0]
+        self.assertTrue(called_args[-1] == "--auto-rewrite")
+
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=True)
+    def test_entry_without_args_passes_no_extra_argv(self, mock_confirm, mock_run, mock_error):
+        mock_run.return_value.returncode = 0
+        bullet_bank_menu._handle_choice("audit")
+        called_args = mock_run.call_args[0][0]
+        self.assertEqual(len(called_args), 2)  # [sys.executable, script_path], no extra flags
 
 
 class TestRunBulletBankMenu(unittest.TestCase):
