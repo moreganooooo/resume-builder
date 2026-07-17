@@ -9,71 +9,64 @@ actual go/no-go call among cleared candidates -- this module never decides
 whether a situational role actually gets used, only whether it's even a
 candidate worth mentioning.
 
-bank_tag values must match bullet-bank-keepers-audited.csv's "Role /
-Company" column exactly -- confirmed 2026-07-05 that KU Payroll Office and
-DeJoy, Knauff & Blood are tagged more tersely there ("Payroll", "DeJoy")
-than their proper display names used on the actual resume.
+Situational-role data lives per-profile at profiles/<name>/situational_roles.yaml
+(not hardcoded here) -- see profile_paths.situational_roles_path(). bank_tag
+values must match that profile's bullet-bank-keepers-audited.csv's "Role /
+Company" column exactly.
 """
 
+import os
 import re
 
-SITUATIONAL_MIN_BULLETS = 2
+import yaml
 
-SITUATIONAL_ROLES = {
-    "Humane Society of Greater Kansas City": {
-        "bank_tag": "Humane Society of Greater Kansas City",
-        "trigger_keywords": [r"animal welfare", r"animal shelter", r"animal rescue", r"humane society", r"veterinary"],
-    },
-    "Unisource Document Products": {
-        "bank_tag": "Unisource Document Products",
-        "trigger_keywords": [r"print production", r"document management", r"print services", r"document solutions"],
-    },
-    "Kansas Colloquies": {
-        "bank_tag": "Kansas Colloquies",
-        "trigger_keywords": [r"journalism", r"newspaper", r"editorial", r"\breporter\b", r"news writing"],
-    },
-    "KU Payroll Office": {
-        "bank_tag": "Payroll",
-        "trigger_keywords": [r"payroll processing", r"payroll administration", r"\bpayroll\b"],
-    },
-    "DeJoy, Knauff & Blood": {
-        "bank_tag": "DeJoy",
-        "trigger_keywords": [r"tax preparation", r"tax compliance", r"bookkeeping", r"\baudit\b", r"accounting clerk"],
-    },
-    # USitek is a deliberate blend (clerical + graphic design) -- neither
-    # signal alone is specific enough (generic admin roles and generic
-    # design roles are both common and unrelated to this niche combo), so
-    # detection requires both an admin-ish AND a design-ish term present.
-    "USitek": {
-        "bank_tag": "USitek",
-        "admin_keywords": [r"clerical", r"administrative support", r"administrative assistant"],
-        "design_keywords": [r"graphic design"],
-    },
-}
+import profile_paths
+
+
+def load_situational_roles(profile: str = None) -> dict:
+    """Reads profiles/<profile>/situational_roles.yaml. Returns
+    {"situational_min_bullets": int, "roles": {display_name: config_dict}}
+    -- an empty {"situational_min_bullets": 2, "roles": {}} if the file
+    doesn't exist yet (e.g. a freshly-bootstrapped profile with no
+    situational roles defined)."""
+    path = profile_paths.situational_roles_path(profile)
+    if not os.path.exists(path):
+        return {"situational_min_bullets": 2, "roles": {}}
+    with open(path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    roles = {entry["display_name"]: entry for entry in data.get("roles", [])}
+    return {"situational_min_bullets": data.get("situational_min_bullets", 2), "roles": roles}
 
 
 def _any_match(patterns: list, text_lower: str) -> bool:
     return any(re.search(pattern, text_lower) for pattern in patterns)
 
 
-def detect_situational_candidates(jd_text: str) -> list:
+def detect_situational_candidates(jd_text: str, roles_data: dict = None) -> list:
     """Returns the list of situational-role display names whose keyword
     gate matched jd_text; [] if none did."""
+    if roles_data is None:
+        roles_data = load_situational_roles()
+    roles = roles_data["roles"]
     text_lower = (jd_text or "").lower()
     candidates = []
 
-    for display_name, config in SITUATIONAL_ROLES.items():
-        if display_name == "USitek":
+    for display_name, config in roles.items():
+        if "admin_keywords" in config and "design_keywords" in config:
             if _any_match(config["admin_keywords"], text_lower) and _any_match(config["design_keywords"], text_lower):
                 candidates.append(display_name)
             continue
-        if _any_match(config["trigger_keywords"], text_lower):
+        if _any_match(config.get("trigger_keywords", []), text_lower):
             candidates.append(display_name)
 
     return candidates
 
 
-def bank_minimums_for(candidates: list) -> dict:
-    """Maps each candidate's bank_tag to SITUATIONAL_MIN_BULLETS, for
+def bank_minimums_for(candidates: list, roles_data: dict = None) -> dict:
+    """Maps each candidate's bank_tag to the situational minimum, for
     mine_bullet_bank()'s extra_company_minimums parameter."""
-    return {SITUATIONAL_ROLES[name]["bank_tag"]: SITUATIONAL_MIN_BULLETS for name in candidates}
+    if roles_data is None:
+        roles_data = load_situational_roles()
+    roles = roles_data["roles"]
+    min_bullets = roles_data["situational_min_bullets"]
+    return {roles[name]["bank_tag"]: min_bullets for name in candidates}
