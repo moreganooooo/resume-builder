@@ -19,6 +19,7 @@ SUCCESS = "#4caf50"
 ERROR = "#c96a6a"
 WARNING = "#f5c542"
 INFO = "#2196f3"
+MUTED = "#888888"
 
 # Values match orchestrator.FitEvaluationSchema's `recommendation` Literal
 # exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".
@@ -84,4 +85,5 @@ QUESTIONARY_STYLE = Style([
     ("new_user", f"fg:{SUCCESS} bold"),
     ("instruction", ""),
     ("text", ""),
+    ("description", f"fg:{MUTED} italic"),
 ])
