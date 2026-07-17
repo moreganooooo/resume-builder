@@ -2,11 +2,16 @@
 staleness/last-run status for the 6 rebuild-pipeline stages
 (audit_bullet_bank.py -> cluster_bullet_bank.py -> rewrite_bullets.py ->
 audit_keepers.py -> score_keeper_gems.py -> embed_bullet_bank.py) plus 3
-maintenance scripts (needs-review triage, rewrite-queue retirement, and
-audit_keepers.py --auto-rewrite for bullets still MANUAL after re-audit),
-and runs any one of them individually as a subprocess -- unmodified,
-exactly as bootstrap_bullet_bank.py's own run_stage() does. See
-docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md.
+maintenance scripts, and runs any one of them individually as a
+subprocess -- unmodified, exactly as bootstrap_bullet_bank.py's own
+run_stage() does. Two maintenance scripts are optional follow-ups tied to
+a specific stage and render directly under it in the menu (rewrite-queue
+retirement under Rewrite Weak Bullets; audit_keepers.py --auto-rewrite,
+which retries bullets still MANUAL after re-audit, under Re-Audit
+Keepers). The third (needs-review triage) isn't tied to the rebuild
+pipeline at all -- it clears a queue that fills up from everyday resume
+builds -- so it renders in its own "Ongoing Maintenance" section instead.
+See docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md.
 """
 
 import csv
@@ -183,19 +188,25 @@ STAGES = [
     },
 ]
 
+# Each entry's "after_stage" (a STAGES key, or None) says where it renders
+# in _build_choices(): right under that stage as an optional follow-up, or
+# -- when None -- down in the standalone "Ongoing Maintenance" section,
+# for the one entry (triage) that isn't tied to a specific pipeline stage
+# at all (needs-review.csv fills up from everyday resume builds, not from
+# running the 6-stage rebuild).
 MAINTENANCE = [
     {
-        "key": "triage", "label": "Triage Needs-Review Queue",
+        "key": "triage", "label": "Triage Needs-Review Queue", "after_stage": None,
         "description": "routes bullets queued during real resume builds into keepers/rewrite/retired",
         "script": "triage_needs_review.py", "watched_file": NEEDS_REVIEW_CSV, "api_cost": False,
     },
     {
-        "key": "retire", "label": "Retire Abandoned Rewrite-Queue Bullets",
+        "key": "retire", "label": "Retire Abandoned Rewrite-Queue Bullets", "after_stage": "rewrite",
         "description": "clears out bullets that ran out of rewrite attempts without becoming keepers",
         "script": "retire_rewrite_queue.py", "watched_file": REWRITE_QUEUE_CSV, "api_cost": False,
     },
     {
-        "key": "auto_rewrite", "label": "Auto-Rewrite Manual Bullets",
+        "key": "auto_rewrite", "label": "Auto-Rewrite Manual Bullets", "after_stage": "audit_keepers",
         "description": "retries bullets still MANUAL after re-audit through the rewriter again",
         "script": "audit_keepers.py", "args": ["--auto-rewrite"],
         "watched_file": AUDIT_REWRITE_QUEUE_CSV, "api_cost": True,
@@ -314,27 +325,39 @@ def _handle_choice(choice: str) -> None:
 
 
 def _build_choices() -> list:
-    choices = [
-        questionary.Choice(
+    choices = []
+    for stage in STAGES:
+        choices.append(questionary.Choice(
             title=[
                 ("class:text", f"{stage['number']}. {stage['label']}  "),
                 ("class:description", f"({stage['description']})"),
             ],
             value=stage["key"],
-        )
-        for stage in STAGES
-    ]
-    choices.append(questionary.Separator())
-    choices += [
-        questionary.Choice(
-            title=[
-                ("class:text", f"{entry['label']}  "),
-                ("class:description", f"({entry['description']})"),
-            ],
-            value=entry["key"],
-        )
-        for entry in MAINTENANCE
-    ]
+        ))
+        for entry in MAINTENANCE:
+            if entry["after_stage"] == stage["key"]:
+                choices.append(questionary.Choice(
+                    title=[
+                        ("class:description", f"      ↳ {entry['label']} (optional follow-up: "),
+                        ("class:description", f"{entry['description']})"),
+                    ],
+                    value=entry["key"],
+                ))
+
+    standalone = [entry for entry in MAINTENANCE if entry["after_stage"] is None]
+    if standalone:
+        choices.append(questionary.Separator(
+            "── Ongoing Maintenance (optional, run anytime -- not tied to a full rebuild) ──"
+        ))
+        for entry in standalone:
+            choices.append(questionary.Choice(
+                title=[
+                    ("class:text", f"{entry['label']}  "),
+                    ("class:description", f"({entry['description']})"),
+                ],
+                value=entry["key"],
+            ))
+
     choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
     return choices
 
