@@ -13,7 +13,7 @@ actionable report.
 
 Load and apply all of the following scoring files before evaluating:
 
-1. `profile.yml` — Morgan's canonical background, verified metrics, and constraints
+1. `profile.yml` — the candidate's canonical background, verified metrics, and constraints
 2. `style_rules.yaml` — Formatting, length, section order, and archetype-specific rules
 3. `professional_identity_score.yaml` — Detect primary identity; set archetype for all downstream scoring
 4. `resume_cohesion_score.yaml` — Cross-section narrative alignment and identity consistency
@@ -125,9 +125,9 @@ Using `top_third_score.yaml`:
   as easily. List these as `flat_sections`.
 - When a recommendation in TOP 3 RECOMMENDATIONS is about voice,
   personality, or distinctiveness (not accuracy, JD-keyword alignment, or
-  ATS formatting), phrase it as a reflective question aimed at Morgan
-  rather than a directive -- e.g. "What made this project personally
-  satisfying to you?" rather than "Add more personality here."
+  ATS formatting), phrase it as a reflective question aimed at the
+  candidate rather than a directive -- e.g. "What made this project
+  personally satisfying to you?" rather than "Add more personality here."
   Recommendations about factual accuracy, keyword coverage, or formatting
   stay as direct instructions.
 
@@ -183,17 +183,20 @@ TOP 3 RECOMMENDATIONS
 
 ## Voice Calibration Reference
 
-From Morgan's own established writing-style rubric -- use these as
-calibration examples when judging whether a section reads as
-distinctive/flat, and how much personality is appropriate per section:
+Use this candidate's `voice_calibration_example` (in profile.yml, provided
+in your knowledge base context) as the calibration anchor for judging
+whether a section reads as distinctive/flat, and how much personality is
+appropriate per section -- contrast it against these two illustrative
+extremes to judge where a given section falls:
 
 **Contrast examples (same underlying idea, different execution):**
 - Generic/Professional: "I'm writing to express my interest in the role."
   (too stiff, no personality)
 - Try-Hard/Creative: "I'm a unicorn who eats KPIs for breakfast."
   (performative, lacks depth)
-- Morgan's actual voice: "It felt like more than an opportunity -- it felt
-  like alignment." (human, reflective, quietly compelling)
+- This candidate's actual voice: see their `voice_calibration_example`.
+  (human, reflective, quietly compelling is the general target register --
+  but defer to their own example over this description)
 
 **Sparkle calibration by section (dial personality up or down, don't
 apply one flat level everywhere):**
@@ -209,7 +212,7 @@ apply one flat level everywhere):**
 ## Constraints
 
 - Do not invent metrics or accomplishments not present in the resume or `profile.yml`
-- Do not suggest removing Morgan's canonical certifications
+- Do not suggest removing the candidate's canonical certifications
 - Do not reorder skills categories away from the `style_rules_archetype` ordering
   unless flagging it as a structural issue
 - Flag but do not auto-correct AI-risk patterns — surface them for review

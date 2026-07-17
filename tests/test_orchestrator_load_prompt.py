@@ -63,7 +63,7 @@ class TestKbAllowlistAndAuditPrefix(unittest.TestCase):
     def test_critique_prompt_has_voice_calibration_reference(self):
         content = self.engine.load_prompt("critique_resume.md")
         self.assertIn("Voice Calibration Reference", content)
-        self.assertIn("It felt like more than an opportunity", content)
+        self.assertIn("voice_calibration_example", content)
 
     def test_critique_prompt_has_distinctive_moments_step(self):
         content = self.engine.load_prompt("critique_resume.md")
