@@ -6,7 +6,9 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import normalize_resume  # noqa: E402
-import fixed_content  # noqa: E402
+import profile_paths  # noqa: E402
+
+fixed_content = profile_paths.fixed_content_module("morgan")
 
 
 class TestNormalizeResume(unittest.TestCase):
@@ -145,6 +147,24 @@ class TestNormalizeResume(unittest.TestCase):
         data["TAGLINE"] = "Lifecycle Marketing Manager And CRM Strategist"
         result = normalize_resume.normalize(data)
         self.assertEqual(result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST")
+
+
+class TestNormalizeUsesActiveProfilesFixedContent(unittest.TestCase):
+
+    def setUp(self):
+        self._orig = os.environ.get("RESUME_PROFILE")
+        os.environ["RESUME_PROFILE"] = "morgan"
+
+    def tearDown(self):
+        if self._orig is None:
+            os.environ.pop("RESUME_PROFILE", None)
+        else:
+            os.environ["RESUME_PROFILE"] = self._orig
+
+    def test_normalize_applies_morgans_contact_info(self):
+        result = normalize_resume.normalize({})
+        self.assertEqual(result["NAME"], "Morgan Escott")
+        self.assertEqual(result["EMAIL"], "escott.morgan@gmail.com")
 
 
 if __name__ == "__main__":

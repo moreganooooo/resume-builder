@@ -67,7 +67,7 @@ Usage:
   python rewrite_bullets.py --retry-manual     # re-run all MANUAL bullets
   python rewrite_bullets.py --retry-manual --model gemini-2.5-pro
 
-Outputs (resume-engine/knowledge_base/):
+Outputs (profiles/<profile>/knowledge_base/):
   bullet-bank-cluster-map-updated.csv   updated cluster map with rewrite results
   bullet-bank-keepers.csv               bullets that achieved KEEP + PASS
 """

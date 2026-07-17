@@ -3,10 +3,10 @@
 Run this script whenever bullet-bank-keepers-audited.csv is updated.
 It embeds every bullet using gemini-embedding-2 and saves:
 
-  resume-engine/knowledge_base/bullet_vectors_ge2_d768.npy
+  profiles/<profile>/knowledge_base/bullet_vectors_ge2_d768.npy
       Shape: (N, 768) float32 array, one row per bullet.
 
-  resume-engine/knowledge_base/bullet_vectors_ge2_d768.meta
+  profiles/<profile>/knowledge_base/bullet_vectors_ge2_d768.meta
       JSON sidecar: model name, dimension, row count, CSV path.
 
 The .npy file is loaded at runtime by mine_bullet_bank() in

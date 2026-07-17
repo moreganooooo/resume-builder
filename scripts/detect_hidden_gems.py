@@ -6,10 +6,10 @@ Reads a scored bullets JSON file (or CSV) and flags bullets that meet the
 "Hidden Gem" criteria: high believability, specific evidence, and memorable
 impact that most candidates would overlook.
 
-Inputs  (resume-engine/knowledge_base/):
+Inputs  (profiles/<profile>/knowledge_base/):
   bullet-bank-keepers.csv     keeper bullets with critique scores
 
-Outputs (resume-engine/knowledge_base/):
+Outputs (profiles/<profile>/knowledge_base/):
   hidden-gems.csv             subset of keepers flagged as Hidden Gems
 
 Hidden Gem criteria (any one sufficient, all ideal):
