@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import os
 import sys
 import unittest
@@ -70,6 +71,31 @@ class TestMainBatchMode(unittest.TestCase):
         self.assertFalse(os.path.exists(self.good_path))
         # A failed JD stays in place (pending) for the next run to retry.
         self.assertTrue(os.path.exists(self.bad_path))
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch("orchestrator.jd_manager.get_pending_jds")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    def test_completed_row_carries_the_jd_s_persisted_evaluation(
+        self, mock_build, mock_get_pending, mock_tracker_cls
+    ):
+        evaluated_path = os.path.join(self.tmp_dir, "evaluated.json")
+        with open(evaluated_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "company_name": "Acme",
+                "job_title": "Content Strategist",
+                "_evaluation": {"composite_score": 4.8, "recommendation": "Strong pursue"},
+            }, f)
+
+        mock_get_pending.return_value = [evaluated_path]
+        mock_build.return_value = {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+
+        with patch.object(sys, "argv", ["orchestrator.py"]):
+            orchestrator.main()
+
+        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+            data_row = [line for line in f if line.startswith("| 1 |")][0]
+        self.assertIn("| 4.80/5 |", data_row)
+        self.assertIn("| Strong pursue |", data_row)
 
     @patch("orchestrator.jd_manager.JDTracker")
     @patch("orchestrator.jd_manager.get_pending_jds")

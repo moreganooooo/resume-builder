@@ -2691,6 +2691,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
 
         job_title, company_name = jd_manager.extract_job_meta(path)
         source_url = jd_manager.extract_source_url(path)
+        evaluation = jd_manager.read_evaluation(path)
 
         try:
             result = engine.build_tailored_resume(
@@ -2721,6 +2722,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 job_title=job_title,
                 has_pdf=bool(output_paths.get("pdf")),
                 source_url=source_url,
+                evaluation=evaluation,
             )
             completed_count += 1
             print(f"\nDone! Resume built successfully for {path}.")

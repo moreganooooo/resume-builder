@@ -56,6 +56,32 @@ class TestAppendApplicationRow(unittest.TestCase):
         self.assertTrue(lines[0].startswith("| 1 |"))
         self.assertTrue(lines[1].startswith("| 2 |"))
 
+    def test_row_shows_na_and_placeholder_when_no_evaluation_given(self):
+        jd_manager.append_application_row("Acme", "Role", True, path=self.path)
+        with open(self.path, "r", encoding="utf-8") as f:
+            data_row = f.readlines()[-1]
+        self.assertIn("| NA |", data_row)
+        self.assertIn("| — |  |", data_row)
+
+    def test_row_uses_score_and_recommendation_from_evaluation(self):
+        jd_manager.append_application_row(
+            "Acme", "Role", True, path=self.path,
+            evaluation={"composite_score": 4.8, "recommendation": "Strong pursue"},
+        )
+        with open(self.path, "r", encoding="utf-8") as f:
+            data_row = f.readlines()[-1]
+        self.assertIn("| 4.80/5 |", data_row)
+        self.assertIn("| Strong pursue |", data_row)
+
+    def test_row_handles_evaluation_missing_score_or_recommendation(self):
+        jd_manager.append_application_row(
+            "Acme", "Role", True, path=self.path, evaluation={"hard_blockers": ["No visa sponsorship"]},
+        )
+        with open(self.path, "r", encoding="utf-8") as f:
+            data_row = f.readlines()[-1]
+        self.assertIn("| NA |", data_row)
+        self.assertIn("| — |  |", data_row)
+
 
 if __name__ == "__main__":
     unittest.main()

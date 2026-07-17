@@ -263,7 +263,8 @@ def _next_application_row_number(path: str) -> int:
 
 
 def append_application_row(company_name: str, job_title: str, has_pdf: bool,
-                            source_url: str = "", path: str = None) -> None:
+                            source_url: str = "", path: str = None,
+                            evaluation: dict = None) -> None:
     """Appends one row to data/applications.md, in career-ops's markdown-table
     tracker format (# | Date | Company | Role | Score | Status | PDF | Link |
     Report | Notes). Link is a clickable "[Apply](source_url)" -- this is
@@ -271,7 +272,11 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
     resume's built; "—" when no source_url is known (e.g. a manually
     dropped-in JD).
 
-    Score/Report are placeholders ("NA"/"—") until the evaluate stage exists.
+    Score/Report are filled from a persisted evaluation (see
+    save_evaluation()/read_evaluation()) when one is passed in -- Score as
+    "X.XX/5", Report as the recommendation label (e.g. "Strong pursue").
+    Both fall back to "NA"/"—" when no evaluation exists, e.g. a JD tailored
+    without ever running through `resume evaluate` first.
     No dedup/merge logic (career-ops's merge-tracker.mjs/dedup-tracker.mjs) --
     resume-builder is the only writer to this file today.
     """
@@ -288,7 +293,14 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
     role = job_title or "unknown"
     link_cell = f"[Apply]({source_url})" if source_url else "—"
 
-    row = f"| {row_number} | {date_str} | {company} | {role} | NA | Tailored | {pdf_cell} | {link_cell} | — |  |\n"
+    composite_score = (evaluation or {}).get("composite_score")
+    score_cell = f"{composite_score:.2f}/5" if isinstance(composite_score, (int, float)) else "NA"
+    report_cell = (evaluation or {}).get("recommendation") or "—"
+
+    row = (
+        f"| {row_number} | {date_str} | {company} | {role} | {score_cell} | "
+        f"Tailored | {pdf_cell} | {link_cell} | {report_cell} |  |\n"
+    )
     with open(path, "a", encoding="utf-8") as f:
         f.write(row)
 
