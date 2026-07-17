@@ -49,13 +49,24 @@ this boundary needs to be structurally enforced, not just documented.
 - Give bootstrap a "new profile" entry point so a second user's onboarding
   creates `profiles/<name>/` fresh, with sane scaffolded defaults for the
   new schema fields rather than demanding a fully-tuned setup on day one.
+- **Update 2026-07-17:** a lightweight profile confirm/select gate — a
+  `--profile` CLI flag plus a one-time interactive prompt at the top of
+  `menu.py`'s session. Originally scoped out (see the superseded Non-Goal
+  below) on the assumption that Morgan and Dom would each set
+  `RESUME_PROFILE` once in their own shell profile on separate machines.
+  Morgan flagged that they may actually share one computer, which makes
+  that assumption unsafe: whoever's shell last exported `RESUME_PROFILE`
+  silently determines whose data gets read/written next, with no
+  in-session signal that it's wrong. The gate is deliberately minimal —
+  not a switcher UI, just a tripwire against silent misattribution — and
+  stays invisible for Morgan's solo daily use until a second profile
+  actually exists (see Components below).
 
 ## Non-Goals
 
-- Interactive profile-switching inside `menu.py`. The model is: each
-  person sets `RESUME_PROFILE` once in their own shell profile, matching
-  the existing `RESUME_BUILDER_ICONS` precedent already documented in
-  `CLAUDE.md` — not two people juggling profiles in one session.
+- A full profile-management CLI (create/list/delete profiles) beyond the
+  minimal bootstrap "new profile" entry point and the lightweight
+  confirm/select gate below.
 - The career-ops/job_automater merge itself (tracked separately in
   `docs/superpowers/plans/2026-07-16-three-repo-merge-punchlist.md`, item
   2) — this spec is that punchlist item's own design.
@@ -63,8 +74,6 @@ this boundary needs to be structurally enforced, not just documented.
   (`profile.yml`, `cv.md`, `bullet-bank-clean.csv`, etc.) is currently
   tracked in git, unrelated to this split. Flagged as a separate decision
   for Morgan; not addressed as a side effect of this work.
-- A full profile-management CLI (create/list/delete profiles) beyond the
-  minimal bootstrap "new profile" entry point.
 - Per-user secrets / `.env` per profile (tracked separately as punchlist
   item 2's other half, IDEAS.md item #7).
 
@@ -243,6 +252,29 @@ instead of two files that could silently diverge.
 → reuses `protected_bullets:`), `critique_resume.md` (voice quote → new
 `voice_calibration_example`), `polish_resume.md`/`polish_coverletter.md`/
 `tailor_coverletter.md` (cosmetic "Morgan" mentions → "the candidate").
+
+### Profile confirm/select gate (shared-computer safety)
+
+- **`cli.py`'s `@click.group()` gains a `--profile NAME` option**, applied
+  in the group's callback by setting `os.environ["RESUME_PROFILE"]` before
+  any subcommand's `ResumeEngine()`/`profile_paths` calls run. An explicit
+  per-invocation override for scripted/CLI use — no prompt, no behavior
+  change if omitted.
+- **`menu.py`'s `run_interactive_menu()` gains an always-on gate** right
+  after the banner, before the main loop — **updated 2026-07-17: it always
+  confirms, even when only `profiles/morgan/` exists**, rather than
+  skipping silently below two profiles. A `questionary.select()` lists
+  every existing profile plus an **"I'm new here"** option. Picking an
+  existing name sets `RESUME_PROFILE` for that session and proceeds
+  straight to the main menu, unchanged from before. Picking "I'm new
+  here" asks one follow-up: jump into new-user setup now (calls the
+  existing bootstrap handler directly), or look around the main menu
+  first. "Look around" is a real guest mode, not just a cosmetic label —
+  every menu choice except bootstrap/exit is blocked with a short message
+  until real setup happens, so a guest can browse without a default
+  profile getting silently assigned (which would otherwise mean quietly
+  acting as Morgan, defeating the point of the gate). Nothing here writes
+  to a shell rc file or persists past the process.
 
 ### Bootstrap additions
 
