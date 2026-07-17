@@ -35,6 +35,7 @@ import validate_coverletter
 import jd_manager
 import fixed_content
 import bullet_feedback
+import profile_paths
 
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -982,10 +983,10 @@ class ResumeEngine:
         self.prompts_dir     = os.path.join(self.engine_dir, "prompts")
         self.rules_dir       = os.path.join(self.engine_dir, "rules")
         self.scoring_dir     = os.path.join(self.engine_dir, "scoring")
-        self.kb_dir          = os.path.join(self.engine_dir, "knowledge_base")
+        self.kb_dir          = profile_paths.kb_dir()
         self.templates_dir   = os.path.join(self.engine_dir, "templates")
-        self.output_json_dir = os.path.join(PROJECT_ROOT, "output", "json")
-        self.jds_dir         = os.path.join(PROJECT_ROOT, "jds")
+        self.output_json_dir = os.path.join(profile_paths.output_dir(), "json")
+        self.jds_dir         = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}

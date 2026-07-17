@@ -210,5 +210,27 @@ class TestMainBatchMode(unittest.TestCase):
         mock_tracker_cls.return_value.mark_completed.assert_not_called()
 
 
+class TestResumeEnginePathsAreProfileScoped(unittest.TestCase):
+
+    def setUp(self):
+        self._orig = os.environ.get("RESUME_PROFILE")
+        os.environ["RESUME_PROFILE"] = "morgan"
+
+    def tearDown(self):
+        if self._orig is None:
+            os.environ.pop("RESUME_PROFILE", None)
+        else:
+            os.environ["RESUME_PROFILE"] = self._orig
+
+    def test_kb_dir_is_profile_scoped(self):
+        engine = orchestrator.ResumeEngine()
+        self.assertTrue(engine.kb_dir.endswith(os.path.join("profiles", "morgan", "knowledge_base")))
+
+    def test_engine_dir_stays_shared(self):
+        engine = orchestrator.ResumeEngine()
+        self.assertTrue(engine.engine_dir.endswith("resume-engine"))
+        self.assertNotIn("profiles", engine.engine_dir)
+
+
 if __name__ == "__main__":
     unittest.main()
