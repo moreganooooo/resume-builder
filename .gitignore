@@ -19,6 +19,7 @@ audit-rewrite-queue.csv
 *_log.csv
 *_log.json
 data/applications.md
+data/**/applications.md
 output/
 logs/
 *.log
@@ -28,9 +29,11 @@ logs/
 # results can include social_connections with real people's names and
 # LinkedIn URLs) -- only the code that produces/consumes these is tracked,
 # never the postings themselves. dummy_jd.txt is the one deliberate,
-# already-tracked exception (a real fixture, and a .txt not .json). ===
-jds/*.json
-jds/completed/*.json
+# already-tracked exception (a real fixture, and a .txt not .json).
+# ** matches any depth so this still covers jds/<profile>/... and
+# jds/<profile>/completed|expired/... after the engine/profile split,
+# not just the pre-split top-level/completed/ locations. ===
+jds/**/*.json
 
 
 # === RESUME OUTPUT FILES ===
