@@ -13,6 +13,7 @@ Usage:
 
 import csv
 import os
+import sys
 from datetime import date
 
 # Resolved from the script's own location, not the caller's cwd — matches
@@ -20,7 +21,12 @@ from datetime import date
 # rewrite-queue.csv, included).
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
-KB_DIR        = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_DIR        = profile_paths.kb_dir()
 REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
 RETIRED_PATH  = os.path.join(KB_DIR, "retired-bullets.csv")
 

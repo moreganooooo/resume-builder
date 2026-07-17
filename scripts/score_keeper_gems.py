@@ -34,7 +34,12 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 SCRIPT_DIR   = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-KB_DIR       = PROJECT_ROOT / "resume-engine" / "knowledge_base"
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+import profile_paths  # noqa: E402
+
+KB_DIR       = Path(profile_paths.kb_dir())
 SCORING_DIR  = PROJECT_ROOT / "resume-engine" / "scoring"
 
 load_dotenv(PROJECT_ROOT / ".env")
