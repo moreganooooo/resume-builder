@@ -131,7 +131,6 @@ deal_breakers:
   - "Front-end HTML/CSS coding required for email templates, familiar with HTML but not production-ready"
   - "Roles requiring deep production-level HTML/CSS coding for custom email template development"
   - "Full graphic design role, skills present but not current-industry-competitive"
-...
 
 proof_points:
   # Campaign performance (Morgan-only, cold outbound unless noted)
@@ -310,3 +309,66 @@ location:
 cv:
   output_format: "html"
   page_size: "letter"
+
+roles:
+  - name: "Mercor"
+    min_bullets: 2
+    target_bullets: 3
+    page: 1
+    flex_priority: 2
+  - name: "Treering Yearbooks"
+    min_bullets: 6
+    target_bullets: 7
+    page: 1
+    flex_priority: 1
+  - name: "Inside Sales Team"
+    min_bullets: 4
+    target_bullets: 5
+    page: 1
+    flex_priority: 1
+    must_fit_page_1: true
+  - name: "Element 8 / Strategy LLC"
+    min_bullets: 3
+    target_bullets: 4
+    page: 2
+    flex_priority: 2
+  - name: "VML"
+    min_bullets: 3
+    target_bullets: 4
+    page: 2
+    flex_priority: 2
+  - name: "Callahan Creek"
+    min_bullets: 3
+    target_bullets: 4
+    page: 2
+    flex_priority: 2
+
+protected_bullets:
+  - "Outreach.io full platform ownership (vendor eval, Salesforce integration, migration, adoption training, ongoing stewardship)"
+  - "CRM scrub: scale (thousands of accounts), systematic audit, verified $3M pipeline recovery"
+  - "Content Committee: founded and chaired, 100+ assets, 129 sequences, QA process, voice/tone guidelines"
+  - "SDR Process Map: 8-step website used as official onboarding asset years after creation"
+
+fixed_credentials:
+  certifications:
+    - name: "Email Marketing Software Certification"
+      issuer: "HubSpot"
+      year: 2026
+    - name: "Video for Sales Certification"
+      issuer: "Vidyard"
+      year: 2021
+    - name: "Camp Portfolio"
+      issuer: "Bernstein Rein, Kansas City"
+      year: 2008
+  education:
+    - institution: "University of Kansas"
+      credential: "BS, Journalism + Strategic Communication"
+      bullet_count: 2
+    - institution: "Kansas City Kansas Community College"
+      credential: "AA, Journalism"
+      bullet_count: 2
+    - institution: "Johnson County Community College"
+      credential: "Coursework, Graphic Design"
+      bullet_count: 1
+
+voice_calibration_example: "It felt like more than an opportunity -- it felt like alignment."
