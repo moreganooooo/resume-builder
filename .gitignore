@@ -73,6 +73,7 @@ yarn-error.log*
 
 # === CLAUDE SUPERPOWERS SCRATCH ===
 .superpowers/
+.worktrees/
 
 # === CLAUDE LOCAL NOTES (personal, machine-specific) ===
 .claude.local.md
