@@ -31,14 +31,14 @@ have been moved to the archive, so the sequence below starts at 4.
 | 4 | Engine/profile rules audit + split | Medium-Hard | Unblocks all multi-user work. See Multi-user support below. |
 | 5 | Evidence bank extension (Tier 2) | Hard | Phase 1 shipped 2026-07-07 (archived). Tier 2 -- raw "Treering Sequences" archive curation, `BestCopySamples`/`Master Cover Letters` skim -- still unscheduled. |
 | 7 | Per-user secrets (`.env` per profile) | Easy | Quick prerequisite right before Dom's onboarding. |
-| 8 | Dominick's onboarding | Hard | Depends on #4 and #7 existing first. See Multi-user support below. |
+| 8 | Dominick's onboarding | Hard | The onboarding wizard's own logic (extraction + profile personalization) shipped 2026-07-12/13 -- see the Multi-user support section below. Still blocked on #4 (no `profiles/<name>/` isolation yet -- a second user would overwrite Morgan's files today) and #7. |
 | 9 | Scheduler + notifications | Hard | Unblocked -- `scan` and `evaluate` stages both exist. Not started. See the Long-term merge section below. |
 | 10 | Mongo migration | Medium | The liveness-check half of this item is done (archived). Migration itself still undone -- tied to the long-term three-way merge. |
 | 11 | Multi-select "Specific JD" pickers (space-bar toggle) | Medium-Hard | Real open design question: how it coexists with `resume run --pick`'s existing evaluate-then-checkbox flow. See below. |
 | 12 | Help command in the interactive menu | Easy | `resume help` already exists as a shell shortcut; just needs a menu entry. See below. |
 | 13 | "Doctor" script (dependency/asset checks + test run) | Medium | See below. |
-| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | See below. |
-| 15 | "List Jobs" / "View Pipeline" browsing command | Hard | See below. |
+| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | Bullet-bank menu done 2026-07-15, including a real maintenance section inside it. Still open: a top-level, cross-feature "Maintenance" submenu (would also house #13's doctor script). See below. |
+| 15 | "List Jobs" / "View Pipeline" browsing command | Hard | A real first step already exists ("View Application Tracker," 2026-07-08) and `Score`/`Report` are now wired to the real `evaluate` stage (2026-07-16). Still covers a narrower slice -- no drill-in or Skip/Archive action. See below. |
 | 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | Medium | Close parallel to the evaluate skip-by-default feature (archived) -- same pattern, plus a time-window twist. See below. |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
@@ -183,6 +183,18 @@ existence/version check.
 
 ### "List Jobs" / "View Pipeline" browsing command
 
+**A real first step already exists.** "View Application Tracker" (built
+2026-07-08) renders `data/applications.md` as a Rich-Markdown table in the
+terminal, satisfying the "browse a list" half in miniature, and its
+`Score`/`Report` columns are now wired to the real `evaluate` stage
+(done 2026-07-16, see `IDEAS_ARCHIVE.md`). It's still a narrower feature,
+not an early version of this one: it only lists JDs that reached a
+completed/tailored build (this idea wants *every evaluated job*, pending
+or completed), and there's no drill-in or Skip/Archive action at all --
+just a flat printed table. Everything below (archive state, richer
+eval-notes persistence, the browse/detail/act UI pattern) is still fully
+open.
+
 A menu option listing every evaluated job at once (score, recommendation,
 last liveness check date if the liveness skip-by-recency item above
 exists, Completed/Pending status), with a "View More Details" drill-in
@@ -220,37 +232,24 @@ pick-and-immediately-act flow, not a browse-then-decide one.
   worth designing these together rather than separately, since both are
   about browsing/acting on the same underlying pending-JD pile).
 
-### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu)
+### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu) -- menu done 2026-07-15
 
-The bullet-bank feedback loop (README's "Bullet bank feedback loop"
-section) already queues rewrites automatically during every build into
-`needs-review.csv`, and `scripts/triage_needs_review.py` already routes
-those queued rows into `bullet-bank-keepers.csv` (permanent),
-`rewrite-queue.csv`, or `retired-bullets.csv` -- but it's a separate,
-manual script today, unreachable from the interactive menu, and
-(confirmed while scoping this idea) not the *complete* path back into the
-live pipeline. Step 2 of a real resume build reads **only**
-`bullet-bank-keepers-audited.csv` plus its precomputed embeddings
-(`bullet_vectors_ge2_d768.npy`, built by `embed_bullet_bank.py`) --
-neither of which `triage_needs_review.py` touches (it writes
-`bullet-bank-keepers.csv`, not the `-audited` file, and doesn't call
-`score_keeper_gems.py` or `embed_bullet_bank.py` itself). So a genuinely
-complete "work newly-reviewed bullets back into the live bank" flow needs
-at least `triage_needs_review.py` -> `score_keeper_gems.py` ->
-`embed_bullet_bank.py`, run in that order -- and **that chain isn't fully
-verified yet**: `score_keeper_gems.py`'s own default `--input` points at
-`bullet-bank-keepers-audited.csv` (the stage's *output*, per the naming),
-not `bullet-bank-keepers.csv` (what `triage_needs_review.py` actually
-writes) -- meaning either there's an already-existing manual step between
-the two that hasn't been found yet, or the real data flow here isn't what
-the file names imply. This needs actually tracing through before wiring
-anything, the same way the `cluster_bullet_bank.py` ->
-`bullet-bank-clustered.csv` mismatch was flagged rather than assumed (see
-the wiring/gap research pass in `IDEAS_ARCHIVE.md`). That open question --
-what the real, correct script order and arguments are -- is exactly why
-this is Hard, not Medium: the menu wiring itself (one new option,
-shelling out to a script or three) would be easy once the actual pipeline
-is confirmed.
+Built (`docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md`,
+archived): a "Manage Bullet Bank" entry in the main interactive menu
+(`scripts/bullet_bank_menu.py`), surfacing a status table across all 6
+pipeline stages plus the `triage_needs_review.py`/`retire_rewrite_queue.py`
+maintenance scripts. The open pipeline-order question this section used to
+flag (whether `triage_needs_review.py` -> `score_keeper_gems.py` ->
+`embed_bullet_bank.py` was the real, correct chain) got resolved as a side
+effect of the same build, alongside the `cluster_bullet_bank.py` ->
+`bullet-bank-clustered.csv` naming mismatch -- see `IDEAS_ARCHIVE.md`'s
+daily build log and Evidence bank Phase 1 section for full detail.
+
+**Still open, not part of that build:** the broader "Maintenance" submenu
+idea below (grouping this alongside a future doctor script and anything
+else administrative) -- today maintenance only exists nested inside
+"Manage Bullet Bank," scoped to the bullet bank specifically, not as its
+own general category one level up in the main menu.
 
 **The "Maintenance" submenu idea:** rather than bolting bullet-bank
 triage directly onto the main menu list, Morgan's suggestion is a
@@ -285,6 +284,11 @@ executing, not folding straight into implementation.
 ## Very Hard / Long-term
 
 ### Long-term: merge with career-ops and job_automater
+
+**Punchlist:** `docs/superpowers/plans/2026-07-16-three-repo-merge-punchlist.md`
+turns the narrative below into an ordered, actionable list (with
+dependencies/blockers noted) -- this section stays the "why," that file is
+the "what's next."
 
 **Scope note:** the biggest item on this list. Spans three separate
 codebases (this project plus two mature sibling projects). A brainstorming
@@ -429,6 +433,26 @@ direction for when that build actually begins, not a plan with a start
 date.
 
 ### Multi-user support -- let other people (starting with Dominick) use this
+
+**Update 2026-07-16: the "harder problem" below (raw material -> first-draft
+bullets) is genuinely solved -- but shipped a materially different shape
+than the 2026-07-04 brainstorm decided on.** `bootstrap_extractors.py`/
+`bootstrap_timeline.py`/`bootstrap_profile.py`, built 2026-07-12/13, extract
+achievements from arbitrary uploaded documents into
+`bullet-bank-clean.csv` and draft `cv.md`/`user-background-guide.md`,
+reachable self-serve via a "New User? Start Here!" menu entry
+(`bootstrap_bullet_bank.py`). What's different from the brainstormed
+sequence below: it asks guess-confirm-or-edit questions immediately after
+ingestion rather than surfacing gaps only after a first thin resume, has no
+lenient onboarding-specific quality bar or top-2-3-gap cap, and never
+generates an actual resume -- so the "watch it come alive" garnish Morgan
+was most specific about didn't make it in. Full comparison in
+`IDEAS_ARCHIVE.md`'s daily build log. Worth a conscious call on whether the
+shipped version is good enough as-is before Dom's actual onboarding
+session. **Still true regardless:** point 1 below (engine/profile split) is
+unbuilt -- bootstrap writes into Morgan's own single-user file layout, so
+Dom can't actually use this today without either overwriting her live
+files or #4/#7 landing first.
 
 **Scope note:** roughly tied with the merge as the biggest item here --
 and this has a real name and real deadline pressure attached rather than
