@@ -9,6 +9,7 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 from rewrite_bullets import (  # noqa: E402
+    KB_DIR,
     KnowledgeBase,
     filter_claims_by_tags,
     filter_json_entries_by_tags,
@@ -74,7 +75,7 @@ class TestFilterJsonEntriesByTags(unittest.TestCase):
 
     def test_load_json_entries_reads_list_under_key(self):
         entries = load_json_entries(
-            os.path.join(SCRIPTS_DIR, "..", "resume-engine", "knowledge_base", "verified_metrics.json"),
+            os.path.join(KB_DIR, "verified_metrics.json"),
             "metrics",
         )
         self.assertIsInstance(entries, list)

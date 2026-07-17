@@ -22,6 +22,7 @@ Usage:
 """
 
 import os
+import sys
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -30,7 +31,12 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_DIR       = profile_paths.kb_dir()
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 

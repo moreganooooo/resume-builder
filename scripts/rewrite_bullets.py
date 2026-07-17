@@ -100,15 +100,17 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))   # resume-builder/scripts
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                   # resume-builder/
-KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_DIR       = profile_paths.kb_dir()
 RULES_DIR    = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 SCORING_DIR  = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
-
 from gemini_client import GeminiClient, SustainedFailureError  # noqa: E402
 
 CLUSTER_MAP_IN  = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")

@@ -38,6 +38,7 @@ Dependencies:
 import os
 import time
 import json
+import sys
 import requests
 import numpy as np
 import pandas as pd
@@ -46,6 +47,11 @@ from dotenv import load_dotenv
 # --- PATH SETUP ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
 API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -58,7 +64,7 @@ BATCH_SIZE   = 20    # batchEmbedContents supports up to ~20 requests per call
 EMBED_SLEEP  = 20     # seconds between batch calls → ~15 RPM
 MAX_RETRIES  = 4
 
-KB_DIR           = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+KB_DIR           = profile_paths.kb_dir()
 CSV_PATH         = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
 NPY_PATH         = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.npy")
 META_PATH        = os.path.join(KB_DIR, f"bullet_vectors_ge2_d{EMBED_DIM}.meta")
