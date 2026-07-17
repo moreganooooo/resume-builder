@@ -4,7 +4,7 @@
 
 **Goal:** Separate Morgan's personalization data and hardcoded business rules from the shared resume-tailoring engine, so a second profile (`profiles/dominick/`) can use the same pipeline without colliding with or overwriting her data.
 
-**Architecture:** A new `scripts/profile_paths.py` module centralizes "which profile is active" (env-var driven, default `"morgan"`) and every path derived from it. Morgan's data migrates into `profiles/morgan/`. `tailor_resume.md`'s hardcoded business rules (bullet floors, protected bullets, page assignment, fixed credentials) move into `profile.yml` and get injected as a dynamic `=== ROLE RULES ===` context block at request time, mirroring the existing `situational_roles.py` pattern exactly.
+**Architecture:** A new `scripts/profile_paths.py` module centralizes "which profile is active" (env-var driven, default `"morgan"`) and every path derived from it. Morgan's data migrates into `profiles/morgan/`. `tailor_resume.md`'s hardcoded business rules (bullet floors, protected bullets, page assignment, fixed credentials) move into `profile.yml` and get injected as a dynamic `=== ROLE RULES ===` context block at request time, mirroring the existing `situational_roles.py` pattern exactly. Task 15 adds a lightweight confirm/select gate (`cli.py --profile` flag, a one-time `menu.py` prompt) since Morgan and Dom may share one computer, not just one repo.
 
 **Tech Stack:** Python 3.10+, PyYAML, `importlib` (dynamic per-profile module loading), stdlib `unittest`.
 
@@ -2429,9 +2429,337 @@ git commit -m "Final regression fixes from engine/profile split acceptance pass"
 
 ---
 
+### Task 15: Profile confirm/select gate + guest "look around" mode (shared-computer safety)
+
+**Why this task exists:** added 2026-07-17, revised the same day after
+feedback. The original design assumed Morgan and Dom would each set
+`RESUME_PROFILE` on separate machines, so Tasks 1-14 deliberately left
+interactive switching out of scope. Morgan flagged they may share one
+computer, which makes the shell-only model unsafe — whoever's shell last
+exported `RESUME_PROFILE` silently decides whose data gets used. First
+draft of this task only prompted once 2+ profiles existed; revised so the
+gate **always** confirms who's using the tool, and a self-identified new
+person gets an explicit choice between jumping straight into setup or
+browsing the menu first as a guest — without ever silently defaulting to
+Morgan's profile while browsing. See the design spec's "Profile
+confirm/select gate" section
+(`docs/superpowers/specs/2026-07-16-engine-profile-split-design.md`).
+
+**Files:**
+- Modify: `scripts/cli.py` (the `@click.group()` at line 34, `cli(ctx)`)
+- Modify: `scripts/menu.py` (`run_interactive_menu()` at line 278, `_handle_bootstrap()`)
+- Test: `tests/test_profile_gate.py` (new)
+
+**Interfaces:**
+- Consumes: `profile_paths.PROFILES_DIR`, `profile_paths.active_profile()` (Task 1), `menu._handle_bootstrap()` (Task 13)
+- Produces: `cli.py`'s `--profile` flag and `menu.py`'s `_confirm_active_profile()` gate both work by setting `os.environ["RESUME_PROFILE"]` (and, for guest browsing, `os.environ["RESUME_GUEST_MODE"]`) before any later `profile_paths`/`ResumeEngine` call or menu dispatch runs — no new function surface other consuming code needs to know about.
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# tests/test_profile_gate.py
+import os
+import shutil
+import sys
+import unittest
+from unittest.mock import patch
+
+SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+sys.path.insert(0, SCRIPTS_DIR)
+
+from click.testing import CliRunner  # noqa: E402
+
+import cli  # noqa: E402
+import menu  # noqa: E402
+import profile_paths  # noqa: E402
+
+
+class TestCliProfileFlag(unittest.TestCase):
+
+    def setUp(self):
+        self._orig = os.environ.get("RESUME_PROFILE")
+
+    def tearDown(self):
+        if self._orig is None:
+            os.environ.pop("RESUME_PROFILE", None)
+        else:
+            os.environ["RESUME_PROFILE"] = self._orig
+
+    def test_profile_flag_sets_env_var_before_subcommand_runs(self):
+        runner = CliRunner()
+        with patch("cli.tailor.callback"):
+            runner.invoke(cli.cli, ["--profile", "morgan", "tailor", "jds/dummy_jd.txt"])
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "morgan")
+
+    def test_no_profile_flag_leaves_env_var_untouched(self):
+        os.environ.pop("RESUME_PROFILE", None)
+        runner = CliRunner()
+        with patch("cli.tailor.callback"):
+            runner.invoke(cli.cli, ["tailor", "jds/dummy_jd.txt"])
+        self.assertIsNone(os.environ.get("RESUME_PROFILE"))
+
+
+class TestMenuProfileGate(unittest.TestCase):
+
+    def setUp(self):
+        self._orig_profile = os.environ.get("RESUME_PROFILE")
+        self._orig_guest = os.environ.get("RESUME_GUEST_MODE")
+        os.environ.pop("RESUME_PROFILE", None)
+        os.environ.pop("RESUME_GUEST_MODE", None)
+
+    def tearDown(self):
+        for var, orig in (("RESUME_PROFILE", self._orig_profile), ("RESUME_GUEST_MODE", self._orig_guest)):
+            if orig is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = orig
+
+    def test_gate_always_shown_even_with_a_single_profile(self):
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.return_value = "morgan"
+            menu._confirm_active_profile()
+        mock_select.assert_called_once()
+
+    def test_choosing_existing_profile_sets_it_for_session(self):
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.return_value = "morgan"
+            menu._confirm_active_profile()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "morgan")
+        self.assertIsNone(os.environ.get("RESUME_GUEST_MODE"))
+
+    def test_im_new_here_then_start_setup_calls_bootstrap(self):
+        with patch("questionary.select") as mock_select, \
+             patch("menu._handle_bootstrap") as mock_bootstrap:
+            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+            menu._confirm_active_profile()
+        mock_bootstrap.assert_called_once()
+
+    def test_im_new_here_then_look_around_sets_guest_mode(self):
+        with patch("questionary.select") as mock_select, \
+             patch("menu._handle_bootstrap") as mock_bootstrap:
+            mock_select.return_value.ask.side_effect = ["I'm new here", "Look around the main menu first"]
+            menu._confirm_active_profile()
+        mock_bootstrap.assert_not_called()
+        self.assertEqual(os.environ.get("RESUME_GUEST_MODE"), "1")
+        self.assertIsNone(os.environ.get("RESUME_PROFILE"))
+
+
+class TestGuestModeBlocksRealActions(unittest.TestCase):
+
+    def setUp(self):
+        self._orig_guest = os.environ.get("RESUME_GUEST_MODE")
+        os.environ["RESUME_GUEST_MODE"] = "1"
+
+    def tearDown(self):
+        if self._orig_guest is None:
+            os.environ.pop("RESUME_GUEST_MODE", None)
+        else:
+            os.environ["RESUME_GUEST_MODE"] = self._orig_guest
+
+    def test_non_bootstrap_choice_is_blocked_in_guest_mode(self):
+        with patch("menu.questionary.select") as mock_select, \
+             patch("menu._run_with_chain") as mock_run:
+            mock_select.return_value.ask.side_effect = ["evaluate_all", "exit"]
+            menu.run_interactive_menu()
+        mock_run.assert_not_called()
+
+    def test_bootstrap_choice_is_allowed_in_guest_mode(self):
+        with patch("menu.questionary.select") as mock_select, \
+             patch("menu._run_with_chain") as mock_run, \
+             patch("menu._confirm_active_profile"):
+            mock_select.return_value.ask.side_effect = ["bootstrap", "exit"]
+            menu.run_interactive_menu()
+        mock_run.assert_called_once_with("bootstrap", unittest.mock.ANY)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd /Users/morganescott/resume-builder && source .venv/bin/activate && python -m unittest tests.test_profile_gate -v`
+Expected: FAIL/ERROR — `cli.cli` has no `--profile` option yet; `menu` has no `_confirm_active_profile` attribute yet.
+
+- [ ] **Step 3: Add the `--profile` option to `scripts/cli.py`'s group**
+
+Read the current `cli(ctx)` callback first: `sed -n '30,42p' scripts/cli.py`. Add the option and set the env var inside the callback, before `ctx.invoke`/subcommand dispatch happens (Click runs the group callback before the subcommand regardless of `invoke_without_command`):
+
+```python
+@click.group(invoke_without_command=True)
+@click.option("--profile", default=None, help="Override RESUME_PROFILE for this invocation only.")
+@click.pass_context
+def cli(ctx, profile):
+    if profile:
+        os.environ["RESUME_PROFILE"] = profile
+```
+(Keep whatever the existing callback body already does below this point — check `sed -n '34,42p' scripts/cli.py` for the current body before editing, since this plan was written before this task existed and may not reflect the exact current lines.)
+
+- [ ] **Step 4: Add `_confirm_active_profile()` to `scripts/menu.py`**
+
+Add near the top of the file, after the existing imports (and after `_handle_bootstrap()` is defined, or forward-reference it — Python resolves the name at call time, not definition time, so ordering relative to `_handle_bootstrap()` doesn't matter):
+
+```python
+def _confirm_active_profile() -> None:
+    """Startup gate -- always runs, so nobody silently inherits whoever's
+    shell last set RESUME_PROFILE on a shared computer. A self-identified
+    new person chooses between jumping into real setup now or browsing
+    the menu first as a guest (see run_interactive_menu()'s guest-mode
+    guard for what "browsing" actually allows)."""
+    import profile_paths
+
+    names = sorted(
+        n for n in os.listdir(profile_paths.PROFILES_DIR)
+        if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
+    )
+    current = profile_paths.active_profile()
+    choice = questionary.select(
+        f"Who's using resume-builder? (currently: {current})",
+        choices=names + ["I'm new here"],
+        default=current if current in names else names[0],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if choice in names:
+        os.environ["RESUME_PROFILE"] = choice
+        return
+
+    # "I'm new here"
+    path = questionary.select(
+        "Welcome! Jump into new-user setup now, or look around the main menu first?",
+        choices=["Start new user setup now", "Look around the main menu first"],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if path == "Start new user setup now":
+        _handle_bootstrap()
+        return
+
+    # "Look around the main menu first" -- guest mode. Deliberately does
+    # NOT set RESUME_PROFILE (which would default-resolve to "morgan" and
+    # silently act as her); run_interactive_menu()'s guard blocks every
+    # choice except bootstrap/exit until real setup happens instead.
+    os.environ["RESUME_GUEST_MODE"] = "1"
+```
+
+- [ ] **Step 5: Wire the gate and the guest-mode guard into `run_interactive_menu()`**
+
+Modify lines 278-299 (the full current function body):
+```python
+def run_interactive_menu() -> None:
+    cli_art.display_main_banner()
+    cli_art.display_tip()
+
+    session_stats = {}
+    first_loop = True
+
+    while True:
+        if first_loop:
+            first_loop = False
+        else:
+            cli_art.display_breadcrumb()
+        cli_art.console.print()
+        choice = questionary.select(
+            "What would you like to do?", choices=_CHOICES, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if choice == "exit" or not choice:
+            cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
+            break
+
+        _run_with_chain(choice, session_stats)
+```
+to:
+```python
+def run_interactive_menu() -> None:
+    cli_art.display_main_banner()
+    _confirm_active_profile()
+    cli_art.display_tip()
+
+    session_stats = {}
+    first_loop = True
+
+    while True:
+        if first_loop:
+            first_loop = False
+        else:
+            cli_art.display_breadcrumb()
+        cli_art.console.print()
+        choice = questionary.select(
+            "What would you like to do?", choices=_CHOICES, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if choice == "exit" or not choice:
+            cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
+            break
+
+        if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
+            cli_art.console.print(
+                "[yellow]Take a look around! Choose \"New User? Start Here!\" when you're "
+                "ready to set up your own profile -- nothing else runs until then.[/yellow]"
+            )
+            continue
+
+        _run_with_chain(choice, session_stats)
+
+        if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
+            os.environ.pop("RESUME_GUEST_MODE", None)
+```
+(The trailing `if` clears guest mode once bootstrap actually creates a
+profile — `_handle_bootstrap()` already sets `RESUME_PROFILE` itself on
+success per Task 13, so this just detects that and drops the guest flag.
+If bootstrap was cancelled mid-flow, `RESUME_PROFILE` stays unset and
+guest mode correctly stays active.)
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `cd /Users/morganescott/resume-builder && source .venv/bin/activate && python -m unittest tests.test_profile_gate -v`
+Expected: `OK`
+
+- [ ] **Step 7: Run the full suite**
+
+Run: `cd /Users/morganescott/resume-builder && source .venv/bin/activate && python -m unittest discover -s tests`
+Expected: `OK`. If an existing `test_cli.py`/`test_menu*.py` test invokes `cli.cli` or `run_interactive_menu()` and asserts on argument lists, call counts, or a fixed choices list without expecting the new gate call, it may need a mock added for `_confirm_active_profile` — check before assuming a failure here is unrelated.
+
+- [ ] **Step 8: Manual smoke test — all three paths**
+
+```bash
+cd /Users/morganescott/resume-builder && source .venv/bin/activate
+python scripts/cli.py --profile morgan tailor jds/dummy_jd.txt   # confirm it runs as morgan, no prompt
+python scripts/menu.py   # pick "morgan" at the gate -- confirm normal menu behavior, unchanged
+python scripts/menu.py   # pick "I'm new here" -> "Look around the main menu first" -- confirm
+                          # picking e.g. "Evaluate ALL Pending Roles" prints the guest-mode
+                          # message and does NOT run; confirm "New User? Start Here!" still works
+python scripts/menu.py   # pick "I'm new here" -> "Start new user setup now" -- confirm it goes
+                          # straight into the existing bootstrap name-prompt flow
+```
+
+- [ ] **Step 9: Commit**
+
+```bash
+cd /Users/morganescott/resume-builder
+git add scripts/cli.py scripts/menu.py tests/test_profile_gate.py
+git commit -m "Add an always-on profile gate + guest mode for shared-computer use
+
+cli.py gains a --profile flag (per-invocation override, no prompt).
+menu.py now always confirms who's using the tool at session start --
+even with only Morgan's profile existing -- rather than skipping below
+two profiles. A self-identified new person chooses between starting
+real setup now or browsing the menu first as a guest; guest mode
+blocks every choice except bootstrap/exit so nobody silently inherits
+Morgan's profile by default while looking around. Neither the gate nor
+guest mode writes to a shell rc file; both are session-scoped only.
+Closes the gap flagged 2026-07-17: two people on one computer can no
+longer silently inherit the wrong RESUME_PROFILE from whichever shell
+touched it last."
+```
+
+---
+
 ## Self-Review
 
-**Spec coverage:** every section of `docs/superpowers/specs/2026-07-16-engine-profile-split-design.md` maps to a task — Goals' `profile_paths.py`/migration (Tasks 1-2), path-redirect for all scripts (Tasks 3-6), `roles`/`protected_bullets`/`fixed_credentials`/`voice_calibration_example` schema (Task 7), `build_role_rules_block()` (Task 8), `situational_roles.py` YAML-ification (Task 9), `tailor_resume.md`/`style_rules.yaml`/5 smaller prompts genericized (Tasks 10-12), bootstrap new-profile entry point (Task 13), acceptance bar (Task 14). The one deliberately-deferred spec item — `TREERING_KEYWORDS`/`KB_ALLOWLIST` verification, flagged as "confirm during implementation" in the design spec — is addressed inline in Task 4's commentary (`KB_ALLOWLIST` confirmed filename-only, no change needed) and should be re-checked for `TREERING_KEYWORDS` specifically during Task 9 or Task 10 execution, since it's still used by `is_treering_bullet()` elsewhere in `orchestrator.py` outside this plan's direct scope — flagging this as a real follow-up rather than silently dropping it: **`TREERING_KEYWORDS` at `orchestrator.py:234` is NOT touched by this plan** and remains Morgan-specific; it's used by `is_treering_bullet()` for Tier-2 segment filtering logic unrelated to `tailor_resume.md`'s prompt content, and generalizing it is out of this plan's scope per the Global Constraints' focus on `profile_paths`/prompt genericization — track it as a known gap for a future pass, not resolved here.
+**Spec coverage:** every section of `docs/superpowers/specs/2026-07-16-engine-profile-split-design.md` maps to a task — Goals' `profile_paths.py`/migration (Tasks 1-2), path-redirect for all scripts (Tasks 3-6), `roles`/`protected_bullets`/`fixed_credentials`/`voice_calibration_example` schema (Task 7), `build_role_rules_block()` (Task 8), `situational_roles.py` YAML-ification (Task 9), `tailor_resume.md`/`style_rules.yaml`/5 smaller prompts genericized (Tasks 10-12), bootstrap new-profile entry point (Task 13), acceptance bar (Task 14), profile confirm/select gate (Task 15, added
+2026-07-17 after the spec's shared-computer update). The one deliberately-deferred spec item — `TREERING_KEYWORDS`/`KB_ALLOWLIST` verification, flagged as "confirm during implementation" in the design spec — is addressed inline in Task 4's commentary (`KB_ALLOWLIST` confirmed filename-only, no change needed) and should be re-checked for `TREERING_KEYWORDS` specifically during Task 9 or Task 10 execution, since it's still used by `is_treering_bullet()` elsewhere in `orchestrator.py` outside this plan's direct scope — flagging this as a real follow-up rather than silently dropping it: **`TREERING_KEYWORDS` at `orchestrator.py:234` is NOT touched by this plan** and remains Morgan-specific; it's used by `is_treering_bullet()` for Tier-2 segment filtering logic unrelated to `tailor_resume.md`'s prompt content, and generalizing it is out of this plan's scope per the Global Constraints' focus on `profile_paths`/prompt genericization — track it as a known gap for a future pass, not resolved here.
 
 **Placeholder scan:** no "TBD"/"TODO"/"implement later" found on re-read. One judgment call worth surfacing again here rather than leaving implicit: Task 13's Step 5 `_handle_bootstrap()` logic for detecting "does this profile need setup" is a reasonable heuristic (checks `RESUME_PROFILE` unset-or-morgan-without-override), not an exhaustive state machine — flagged inline in that task's step, not hidden.
 
