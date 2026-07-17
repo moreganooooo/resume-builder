@@ -34,6 +34,36 @@ def active_profile() -> str:
     return name
 
 
+# Modules that compute profile-scoped paths as module-level constants
+# (resolved once at import time, per this project's existing SCRIPT_DIR/
+# PROJECT_ROOT convention) rather than through this module's functions.
+# cli.py and menu.py both import these -- and everything that in turn
+# imports them (picker.py, scan.py, batch_evaluate.py, liveness.py all
+# reference jd_manager.<CONSTANT> via attribute access, never `from
+# jd_manager import X`) -- at their own top level, before any --profile
+# flag or interactive gate can run. Switching RESUME_PROFILE mid-process
+# without reloading these leaves them silently pointed at whichever
+# profile was active when the long-running menu/CLI process first
+# started, defeating the entire point of runtime profile-switching.
+_RELOAD_ON_PROFILE_SWITCH = ("jd_manager", "polish")
+
+
+def set_active_profile(name: str) -> None:
+    """Sets RESUME_PROFILE and reloads every already-imported module whose
+    profile-scoped path constants were resolved at their own import time
+    -- use this instead of assigning os.environ["RESUME_PROFILE"] directly
+    anywhere a profile switch needs to actually take effect for the rest
+    of a running process (the interactive menu gate, the CLI --profile
+    flag, bootstrap creating and switching to a new profile)."""
+    import importlib
+    import sys
+
+    os.environ["RESUME_PROFILE"] = name
+    for module_name in _RELOAD_ON_PROFILE_SWITCH:
+        if module_name in sys.modules:
+            importlib.reload(sys.modules[module_name])
+
+
 def profile_root(profile: str = None) -> str:
     return os.path.join(PROFILES_DIR, profile or active_profile())
 

@@ -59,6 +59,48 @@ _SCAN_SOURCE_CHOICES = [
 ]
 
 
+def _confirm_active_profile() -> None:
+    """Startup gate -- always runs, so nobody silently inherits whoever's
+    shell last set RESUME_PROFILE on a shared computer. A self-identified
+    new person chooses between jumping into real setup now or browsing
+    the menu first as a guest (see run_interactive_menu()'s guest-mode
+    guard for what "browsing" actually allows)."""
+    import profile_paths
+
+    names = sorted(
+        n for n in os.listdir(profile_paths.PROFILES_DIR)
+        if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
+    )
+    current = profile_paths.active_profile()
+    choice = questionary.select(
+        f"Who's using resume-builder? (currently: {current})",
+        choices=names + ["I'm new here"],
+        default=current if current in names else names[0],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if choice in names:
+        profile_paths.set_active_profile(choice)
+        return
+
+    # "I'm new here"
+    path = questionary.select(
+        "Welcome! Jump into new-user setup now, or look around the main menu first?",
+        choices=["Start new user setup now", "Look around the main menu first"],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if path == "Start new user setup now":
+        _handle_bootstrap()
+        return
+
+    # "Look around the main menu first" -- guest mode. Deliberately does
+    # NOT set RESUME_PROFILE (which would default-resolve to "morgan" and
+    # silently act as her); run_interactive_menu()'s guard blocks every
+    # choice except bootstrap/exit until real setup happens instead.
+    os.environ["RESUME_GUEST_MODE"] = "1"
+
+
 def _handle_bootstrap() -> bool:
     import profile_paths
 
@@ -84,7 +126,7 @@ def _handle_bootstrap() -> bool:
         print(f"\nCreated profiles/{name}/. Add this to your shell profile, then restart your "
               f"shell (or run `export RESUME_PROFILE={name}` for this session only):\n")
         print(f"  export RESUME_PROFILE={name}\n")
-        os.environ["RESUME_PROFILE"] = name
+        profile_paths.set_active_profile(name)
 
     # Recomputed fresh (not bootstrap_bullet_bank.SOURCE_DOCS_DIR) --
     # that module-level constant was resolved once at import time, before
@@ -307,6 +349,7 @@ def _session_summary(session_stats: dict) -> str:
 
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
+    _confirm_active_profile()
     cli_art.display_tip()
 
     session_stats = {}
@@ -326,4 +369,14 @@ def run_interactive_menu() -> None:
             cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
             break
 
+        if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
+            cli_art.console.print(
+                "[yellow]Take a look around! Choose \"New User? Start Here!\" when you're "
+                "ready to set up your own profile -- nothing else runs until then.[/yellow]"
+            )
+            continue
+
         _run_with_chain(choice, session_stats)
+
+        if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
+            os.environ.pop("RESUME_GUEST_MODE", None)
