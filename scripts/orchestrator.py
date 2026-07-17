@@ -985,6 +985,8 @@ class ResumeEngine:
         self.kb_dir          = profile_paths.kb_dir()
         self.templates_dir   = os.path.join(self.engine_dir, "templates")
         self.output_json_dir = os.path.join(profile_paths.output_dir(), "json")
+        self.output_html_dir = os.path.join(profile_paths.output_dir(), "html")
+        self.output_pdf_dir  = os.path.join(profile_paths.output_dir(), "pdf")
         self.jds_dir         = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
@@ -2103,8 +2105,8 @@ class ResumeEngine:
 
         stem     = _build_output_stem(jd_path)
         json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
-        html_out = os.path.join(PROJECT_ROOT, "output", "html", f"{stem}_CoverLetter.html")
-        pdf_out  = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{stem}_CoverLetter.pdf")
+        html_out = os.path.join(self.output_html_dir, f"{stem}_CoverLetter.html")
+        pdf_out  = os.path.join(self.output_pdf_dir,  f"{stem}_CoverLetter.pdf")
 
         os.makedirs(os.path.dirname(json_out), exist_ok=True)
         with open(json_out, "w", encoding="utf-8") as f:
@@ -2592,8 +2594,8 @@ class ResumeEngine:
         print(f"\n{'─'*60}")
         print("Step 7: Rendering HTML and generating PDF...")
         stem       = _build_output_stem(jd_path)
-        html_out   = os.path.join(PROJECT_ROOT, "output", "html", f"{stem}_Resume.html")
-        pdf_out    = os.path.join(PROJECT_ROOT, "output", "pdf",  f"{stem}_Resume.pdf")
+        html_out   = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
+        pdf_out    = os.path.join(self.output_pdf_dir,  f"{stem}_Resume.pdf")
         pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
 
         os.makedirs(os.path.dirname(html_out), exist_ok=True)
