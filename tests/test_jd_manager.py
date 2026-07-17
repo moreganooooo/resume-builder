@@ -615,5 +615,33 @@ class TestReadJdText(unittest.TestCase):
             jd_manager.read_jd_text(os.path.join(self.tmp_dir, "does_not_exist.json"))
 
 
+class TestProfileScopedPaths(unittest.TestCase):
+
+    def setUp(self):
+        self._orig = os.environ.get("RESUME_PROFILE")
+        os.environ["RESUME_PROFILE"] = "morgan"
+
+    def tearDown(self):
+        if self._orig is None:
+            os.environ.pop("RESUME_PROFILE", None)
+        else:
+            os.environ["RESUME_PROFILE"] = self._orig
+
+    def test_jds_dir_is_profile_scoped(self):
+        import importlib
+        importlib.reload(jd_manager)
+        self.assertTrue(jd_manager.JDS_DIR.endswith(os.path.join("jds", "morgan")))
+
+    def test_applications_md_is_profile_scoped(self):
+        import importlib
+        importlib.reload(jd_manager)
+        self.assertTrue(jd_manager.APPLICATIONS_MD.endswith(os.path.join("data", "morgan", "applications.md")))
+
+    def test_tracker_csv_is_profile_scoped(self):
+        import importlib
+        importlib.reload(jd_manager)
+        self.assertTrue(jd_manager.TRACKER_CSV.endswith(os.path.join("jds", "morgan", "jd_tracker_log.csv")))
+
+
 if __name__ == "__main__":
     unittest.main()

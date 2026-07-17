@@ -12,15 +12,20 @@ import hashlib
 import json
 import os
 import re
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-JDS_DIR = os.path.join(PROJECT_ROOT, "jds")
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+JDS_DIR = profile_paths.jds_dir()
 COMPLETED_DIR = os.path.join(JDS_DIR, "completed")
 EXPIRED_DIR = os.path.join(JDS_DIR, "expired")
-CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "output", "checkpoints")
-TRACKER_CSV = os.path.join(JDS_DIR, "jd_tracker_log.csv")
+CHECKPOINTS_DIR = profile_paths.checkpoints_dir()
+TRACKER_CSV = profile_paths.tracker_csv_path()
 
 
 def _meta_from_dict(job: dict) -> tuple:
@@ -242,7 +247,7 @@ class JDTracker:
         })
 
 
-APPLICATIONS_MD = os.path.join(PROJECT_ROOT, "data", "applications.md")
+APPLICATIONS_MD = profile_paths.applications_md_path()
 
 _APPLICATIONS_HEADER = (
     "# Applications Tracker\n\n"
