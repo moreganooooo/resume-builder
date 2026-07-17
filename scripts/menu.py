@@ -60,10 +60,40 @@ _SCAN_SOURCE_CHOICES = [
 
 
 def _handle_bootstrap() -> bool:
-    os.makedirs(bootstrap_bullet_bank.SOURCE_DOCS_DIR, exist_ok=True)
+    import profile_paths
+
+    try:
+        current = profile_paths.active_profile()
+        is_existing = os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, current)) and \
+            os.path.isdir(profile_paths.kb_dir(current))
+    except ValueError:
+        is_existing = False
+
+    if not is_existing:
+        # The active profile (whatever it resolved to) has no real
+        # knowledge_base/ yet -- offer to create one rather than silently
+        # writing into a half-set-up or nonexistent profile. (Task 15's
+        # guest-mode gate is a separate, additional trigger for this same
+        # prompt, wired in when that task lands.)
+        name = questionary.text(
+            "What's your name (used as your profile ID, e.g. 'dominick')?"
+        ).ask()
+        if not name:
+            return False
+        bootstrap_bullet_bank.create_new_profile(name)
+        print(f"\nCreated profiles/{name}/. Add this to your shell profile, then restart your "
+              f"shell (or run `export RESUME_PROFILE={name}` for this session only):\n")
+        print(f"  export RESUME_PROFILE={name}\n")
+        os.environ["RESUME_PROFILE"] = name
+
+    # Recomputed fresh (not bootstrap_bullet_bank.SOURCE_DOCS_DIR) --
+    # that module-level constant was resolved once at import time, before
+    # a brand-new profile created above could ever change RESUME_PROFILE.
+    source_docs_dir = os.path.join(profile_paths.kb_dir(), "bootstrap", "source_documents")
+    os.makedirs(source_docs_dir, exist_ok=True)
     files = [
-        f for f in os.listdir(bootstrap_bullet_bank.SOURCE_DOCS_DIR)
-        if os.path.isfile(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, f))
+        f for f in os.listdir(source_docs_dir)
+        if os.path.isfile(os.path.join(source_docs_dir, f))
     ]
 
     if not files:

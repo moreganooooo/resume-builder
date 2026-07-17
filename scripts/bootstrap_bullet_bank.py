@@ -46,6 +46,60 @@ REVIEW_CSV_PATH = os.path.join(BOOTSTRAP_DIR, "review-needed.csv")
 CERTIFICATIONS_PATH = os.path.join(BOOTSTRAP_DIR, "certifications.json")
 BULLET_BANK_CLEAN_PATH = os.path.join(KB_DIR, "bullet-bank-clean.csv")
 
+_FIXED_CONTENT_SCAFFOLD = '''"""fixed_content.py — this profile's contact info, company facts, and
+fixed credentials. Fill in real values as they become known; every dict
+here may start empty and grow over time."""
+
+CONTACT_INFO = {
+    "NAME": "",
+    "PHONE": "",
+    "EMAIL": "",
+    "LINKEDIN_DISPLAY": "",
+    "LOCATION": "",
+}
+
+COMPANY_META = {}
+COMPANY_TITLE_DESCRIPTOR = {}
+CLIENTS = {}
+COMPANY_RENAME_NOTE = {}
+COMPANY_FIXED_TITLE = {}
+CAREER_NOTE = ""
+CERTIFICATIONS = []
+KU_ACHIEVEMENT_OPTIONS = {}
+KCKCC_ACHIEVEMENT_OPTIONS = {}
+
+
+def build_education(ku_achievement_key: str = "", kckcc_achievement_key: str = "") -> list:
+    return []
+'''
+
+_SITUATIONAL_ROLES_SCAFFOLD = """situational_min_bullets: 2
+roles: []
+"""
+
+
+def create_new_profile(name: str) -> str:
+    """Scaffolds a fresh profiles/<name>/ directory: knowledge_base/ (plus
+    its bootstrap/source_documents/ subfolder), a blank fixed_content.py,
+    and an empty situational_roles.yaml. Raises FileExistsError if the
+    profile already exists -- never silently overwrites one."""
+    import profile_paths
+
+    profile_root = os.path.join(profile_paths.PROFILES_DIR, name)
+    if os.path.isdir(profile_root):
+        raise FileExistsError(f"profiles/{name}/ already exists -- refusing to overwrite it.")
+
+    os.makedirs(os.path.join(profile_root, "knowledge_base", "bootstrap", "source_documents"))
+
+    with open(os.path.join(profile_root, "fixed_content.py"), "w") as f:
+        f.write(_FIXED_CONTENT_SCAFFOLD)
+
+    with open(os.path.join(profile_root, "situational_roles.yaml"), "w") as f:
+        f.write(_SITUATIONAL_ROLES_SCAFFOLD)
+
+    return profile_root
+
+
 import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
 import bootstrap_timeline  # noqa: E402
