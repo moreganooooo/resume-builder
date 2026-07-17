@@ -17,7 +17,12 @@ import questionary
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-KB_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_DIR = profile_paths.kb_dir()
 
 PROFILE_YML_PATH = os.path.join(KB_DIR, "profile.yml")
 PORTALS_YML_PATH = os.path.join(KB_DIR, "portals.yml")
@@ -32,9 +37,6 @@ EVIDENCE_GRAPH_PATH = os.path.join(KB_DIR, "evidence_graph.json")
 EVIDENCE_GUIDE_PATH = os.path.join(KB_DIR, "evidence-guide.csv")
 SCREENSHOT_METRICS_PATH = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv")
 RECRUITER_PATTERNS_PATH = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
-
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
 
 import pandas as pd
 
