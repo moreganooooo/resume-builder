@@ -1320,7 +1320,14 @@ def process_bullet(
     rewrite_system_gemma: str,
     score_system: str,
     dry_run: bool,
+    start_model: str = None,
 ) -> dict:
+    """start_model overrides which model the first attempt targets --
+    defaults to REWRITE_MODEL (Gemma), matching every existing caller's
+    behavior. Pass REWRITE_FALLBACK_MODEL to skip Gemma entirely for
+    bullets already known to need it (e.g. audit_keepers.py's
+    --auto-rewrite queue, which only ever contains bullets that already
+    failed a first Gemma-led pass)."""
     original_bullet = str(row["Bullet Point"]).strip()
     tags            = str(row.get("Tags", ""))
     weaknesses      = str(row.get("weaknesses", ""))
@@ -1333,7 +1340,7 @@ def process_bullet(
     current_bullet = original_bullet
     current_scores = original_scores.copy()
     last_rewrite = last_reasoning = last_gaps = ""
-    active_rewrite_model   = REWRITE_MODEL
+    active_rewrite_model   = start_model or REWRITE_MODEL
     rewrite_parse_failures = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):

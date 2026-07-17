@@ -197,6 +197,35 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
         self.assertGreater(
             len(second_call_kwargs["contents"]), len(first_call_kwargs["contents"])
         )
+
+    @patch("rewrite_bullets.time.sleep", lambda *a, **kw: None)
+    @patch("rewrite_bullets.score_bullet")
+    @patch("rewrite_bullets.GeminiClient.generate")
+    def test_start_model_skips_gemma_entirely(self, mock_generate, mock_score):
+        # audit_keepers.py's --auto-rewrite passes start_model=REWRITE_FALLBACK_MODEL
+        # for bullets that already failed a first Gemma-led pass -- confirm
+        # the very first attempt targets that model directly, with no Gemma
+        # attempt (and therefore no slim-context system prompt) at all.
+        mock_generate.return_value = (
+            '{"rewritten_bullet": "Authored content for a cross-functional team.", "reasoning": "", "context_gaps": ""}',
+            {},
+        )
+        mock_score.return_value = {
+            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
+            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+        }
+
+        result = process_bullet(
+            self.row, self.kb,
+            rewrite_system="sys", rewrite_system_gemma="sys-gemma",
+            score_system="score-sys", dry_run=False,
+            start_model="gemini-3.1-flash-lite",
+        )
+
+        self.assertEqual(mock_generate.call_count, 1)
+        call_kwargs = mock_generate.call_args.kwargs
+        self.assertEqual(call_kwargs["model"], "gemini-3.1-flash-lite")
+        self.assertEqual(call_kwargs["system_instruction"], "sys")
         self.assertEqual(result["rewrite_status"], "KEEP")
 
 

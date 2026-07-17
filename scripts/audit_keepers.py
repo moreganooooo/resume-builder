@@ -103,6 +103,7 @@ from rewrite_bullets import (
     STRING_SCORE_COLS,
     KEEPER_COLS,
     SLEEP_BETWEEN_BULLETS,
+    REWRITE_FALLBACK_MODEL,
 )
 
 # ---------------------------------------------------------------------------
@@ -738,6 +739,12 @@ def stage4_auto_rewrite(
             rewrite_system_gemma=rewrite_system_gemma,
             score_system=score_system,
             dry_run=dry_run,
+            # These bullets already failed a first Gemma-led pass (that's
+            # exactly how they ended up queued here) -- start straight on
+            # flash-lite rather than spending another round of Gemma
+            # attempts/backoff on bullets already known to need the
+            # stronger model.
+            start_model=REWRITE_FALLBACK_MODEL,
         )
 
         if result["rewrite_status"] == "KEEP":
