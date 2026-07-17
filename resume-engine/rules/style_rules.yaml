@@ -1,7 +1,7 @@
 version: 2.1
 
-# Morgan Escott Resume Design System — Style Rules
-# Source: Morgan-Escott-Complete-Resume-Design-System.md
+# Resume Design System — Style Rules
+# Shared across all profiles; per-candidate specifics come from the ROLE RULES context block.
 
 philosophy:
   - Decide professional identity before writing; every element must support that identity
@@ -12,7 +12,7 @@ philosophy:
   - Strongest material first within each role; order by (1) JD-relevance (2) impressiveness (3) uniqueness
   - Mirror employer language for ATS; use exact JD phrasing across Summary Skills and bullets
   - Do not waste space on assumed soft skills; use space for scale technical depth and strategic ownership
-  - Repeat real differentiators deliberately; K-12 depth, Salesforce admin, Outreach implementation, lifecycle systems, CRM ops
+  - Repeat real differentiators deliberately; identify this candidate's 2-3 most distinctive real skills/experiences (from their verified profile data) and repeat them across sections rather than diluting focus with generic breadth
   - Summary is positioning not biography; role/identity, area of specialization, value created — written pronoun-free, not third-person biography
   - Skills reinforce identity; lead with the archetype-relevant category not a tool dumping ground
   - Think like the hiring manager; dissolve their core anxieties through content selection
@@ -282,15 +282,15 @@ layout_rules:
   page_size: Letter (8.5 x 11 in) for US/Canada; A4 for explicitly international roles
   margins: 0.5in all sides
   content_width: 7.5in
-  page_1: [Header, Professional Summary, Skills, Work Experience (Mercor if present, Treering, IST)]
-  page_2: [Work Experience continued (Element 8/Strategy LLC VML Callahan Creek), Training & Certifications, Education, Why section if present]
+  page_1: [Header, Professional Summary, Skills, Work Experience (page-1 roles per this candidate's ROLE RULES)]
+  page_2: [Work Experience continued (page-2 roles per this candidate's ROLE RULES), Training & Certifications, Education, Why section if present]
   # Why is the first thing trimmed, not the last resort: it only belongs on
   # the resume if it fits without pushing the page count past 2.
   trimming_priority:
     1: Remove Why section entirely
     2: Trim Summary to 5-line limit
     3: Tighten bullets (trim adjectives, front-load keywords, collapse redundant clauses)
-    4: Remove least-relevant bullets (protect Outreach implementation and CRM hygiene)
+    4: Remove least-relevant bullets from the lowest flex-priority role first (protect this candidate's Protected Bullets list)
 
 typography:
   name_font: DM Serif Display 400 32pt

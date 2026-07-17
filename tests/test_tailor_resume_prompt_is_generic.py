@@ -1,9 +1,16 @@
 import os
 import unittest
 
+import yaml
+
 PROMPT_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "resume-engine", "prompts", "tailor_resume.md",
+)
+
+STYLE_RULES_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "resume-engine", "rules", "style_rules.yaml",
 )
 
 BANNED_STRINGS = [
@@ -28,6 +35,24 @@ class TestTailorResumePromptIsGeneric(unittest.TestCase):
 
     def test_still_references_role_rules_block(self):
         self.assertIn("ROLE RULES", self.text)
+
+
+class TestStyleRulesYamlIsGeneric(unittest.TestCase):
+
+    def setUp(self):
+        with open(STYLE_RULES_PATH, "r") as f:
+            self.text = f.read()
+            f.seek(0)
+            self.data = yaml.safe_load(f)
+
+    def test_contains_no_hardcoded_company_names(self):
+        banned = ["Mercor", "Treering", "Element 8", "Strategy LLC", "VML", "Callahan Creek", "IST"]
+        found = [s for s in banned if s in self.text]
+        self.assertEqual(found, [])
+
+    def test_page_assignment_is_still_valid_yaml(self):
+        self.assertIn("page_1", self.data["layout_rules"])
+        self.assertIn("page_2", self.data["layout_rules"])
 
 
 if __name__ == "__main__":
