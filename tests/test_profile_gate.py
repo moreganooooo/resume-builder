@@ -73,6 +73,38 @@ class TestMenuProfileGate(unittest.TestCase):
             menu._confirm_active_profile()
         mock_bootstrap.assert_called_once()
 
+    def test_im_new_here_then_start_setup_marks_guest_mode_before_bootstrap_runs(self):
+        # RESUME_PROFILE is unset at this point, so without an explicit
+        # signal, _handle_bootstrap()'s own active_profile() call resolves
+        # to "morgan" -- whose profile always exists -- and would skip the
+        # new-profile prompt entirely, routing a real new user's documents
+        # into her knowledge_base/ instead of creating their own. This was
+        # a real, shipped bug: _confirm_active_profile() called
+        # _handle_bootstrap() with neither RESUME_PROFILE nor
+        # RESUME_GUEST_MODE set.
+        seen_guest_mode = []
+
+        def _record_and_return(*args, **kwargs):
+            seen_guest_mode.append(os.environ.get("RESUME_GUEST_MODE"))
+            return True
+
+        with patch("questionary.select") as mock_select, \
+             patch("menu._handle_bootstrap", side_effect=_record_and_return):
+            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+            menu._confirm_active_profile()
+        self.assertEqual(seen_guest_mode, ["1"])
+
+    def test_im_new_here_then_start_setup_clears_guest_mode_after_real_profile_created(self):
+        with patch("questionary.select") as mock_select, \
+             patch("menu._handle_bootstrap") as mock_bootstrap:
+            def _create_profile(*args, **kwargs):
+                os.environ["RESUME_PROFILE"] = "dominick"
+            mock_bootstrap.side_effect = _create_profile
+            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+            menu._confirm_active_profile()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "dominick")
+        self.assertIsNone(os.environ.get("RESUME_GUEST_MODE"))
+
     def test_im_new_here_then_look_around_sets_guest_mode(self):
         with patch("questionary.select") as mock_select, \
              patch("menu._handle_bootstrap") as mock_bootstrap:
