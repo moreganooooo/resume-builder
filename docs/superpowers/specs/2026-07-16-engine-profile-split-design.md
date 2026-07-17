@@ -149,10 +149,12 @@ fixed_credentials:
   education:
     - {institution: "University of Kansas", credential: "BS, Journalism + Strategic Communication", bullet_count: 2}
     - {institution: "Kansas City Kansas Community College", credential: "AA, Journalism", bullet_count: 2}
-    - {institution: "Johnson County Community College", credential: "<credential>", bullet_count: 2}
+    - {institution: "Johnson County Community College", credential: "Coursework, Graphic Design", bullet_count: 1}
 
 voice_calibration_example: "It felt like more than an opportunity -- it felt like alignment."
 ```
+
+### New situational_roles.yaml schema (per profile, separate file)
 
 `profiles/<name>/situational_roles.yaml` (replaces `situational_roles.py`'s
 hardcoded `SITUATIONAL_ROLES` dict, same shape as data instead of code):
