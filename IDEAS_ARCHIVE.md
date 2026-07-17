@@ -7,7 +7,7 @@ material for "how did we get here" / "what was already decided and why,"
 not a to-do list. Organized by feature, each section stamped with its
 done date; the daily build log at the top is chronological.
 
-## Daily build log (2026-07-04 through 2026-07-08)
+## Daily build log (2026-07-04 through 2026-07-16)
 
 A cross-cutting priority pass over the backlog happened 2026-07-04, with
 Morgan's explicit call that the CLI goes first; item 1 was broken into
@@ -120,6 +120,139 @@ added the same day:** a "View Application Tracker" menu option
 `data/applications.md` directly in the terminal via Rich's built-in
 Markdown renderer -- table and clickable links included, no custom
 parsing needed since the file is already valid GFM markdown.
+
+**2026-07-16 catch-up (documentation fell behind actual work for about a
+week, 2026-07-08 -> 2026-07-16; backfilling here rather than pretending it
+just happened):**
+
+- **Bootstrap flow for new users -- built 2026-07-12 and 2026-07-13**
+  (`docs/superpowers/specs/2026-07-12-bootstrap-bullet-bank-design.md` +
+  `2026-07-13-bootstrap-profile-personalization-design.md`), resolving the
+  core of the "harder problem" under Multi-user support in `IDEAS.md`: raw
+  uploaded documents (PDF/images/`.docx`/`.pptx`/spreadsheets) -> Gemini-
+  based classification/achievement extraction -> a real
+  `bullet-bank-clean.csv` -> the existing 6-stage pipeline, guided end-to-
+  end via a new "New User? Start Here!" entry point in the interactive menu
+  (`bootstrap_bullet_bank.py`, `bootstrap_extractors.py`,
+  `bootstrap_timeline.py`). A second pass (`bootstrap_profile.py`) then
+  auto-derives `verified_metrics/tools/projects.json` from those extracted
+  achievements, guesses/confirms `profile.yml`'s contact/target-role fields
+  inline, and drafts `cv.md` + `user-background-guide.md` for
+  accept/regenerate/skip review. **Important nuance -- this is the
+  onboarding-UX/extraction half only, not full multi-user isolation:**
+  confirmed there's still no `profiles/<name>/` directory split -- bootstrap
+  writes into the same single-user file layout Morgan's own data lives in.
+  Running it for a second real user today would still write over her live
+  files. **Verified 2026-07-16 against the 2026-07-04 brainstorm's specific
+  sequence, and the shipped flow's shape is materially different, not just
+  unverified:**
+  - **"Gaps surface after first resume, not before" -- not built.** The
+    decision was: upload triggers silent extraction straight through to a
+    rendered (expected-thin) resume with zero blocking questions, and
+    follow-up questions drive a second pass after that. What's actually
+    built instead (`bootstrap_profile.py`'s "Phase 0.5") asks guess-
+    confirm-or-edit questions (name, email, phone, location, portfolio
+    link, target roles) immediately after ingestion, before any resume
+    exists -- and bootstrap never generates an actual tailored resume at
+    all. Its final summary just points the user to run a real JD through
+    the normal pipeline afterward, as a separate manual step.
+  - **Lenient, onboarding-specific quality bar (vs. the production
+    believability bar) -- not built.** No distinct threshold logic exists
+    anywhere in the Phase 0.5 code or spec.
+  - **Capped at the top 2-3 highest-impact gaps -- not built.** There's no
+    gap-ranking/cap logic at all. Every extractable field gets its own
+    guess-confirm-or-edit prompt unconditionally, rather than a filtered
+    short list of the biggest gaps.
+  - **The "visible-growth reveal" garnish -- not built as conceived.** What
+    exists instead is an accept/regenerate/skip-and-edit-later preview for
+    the synthesized `cv.md` and `user-background-guide.md` drafts -- a
+    document-review step, not "watch a thin first resume visibly improve
+    after adding more material," which was the specific moment Morgan
+    wanted.
+  - **Net assessment:** the shipped wizard is a reasonable, working
+    onboarding flow and solves the hard "how does raw material become
+    first-draft evidence" problem correctly -- but it took a different
+    shape (guess-confirm Q&A up front + draft-preview-accept for two
+    documents) than the specific sequence decided on 2026-07-04 (silent-
+    extraction -> thin-resume -> top-3-gap-followups -> visible-growth
+    reveal). Worth a conscious call on whether the shipped version is good
+    enough as-is or whether the "watch it come alive" garnish specifically
+    is still wanted before Dom's actual onboarding session -- that piece
+    was the one Morgan was most specific about, and it's the one that
+    didn't make it in. See `IDEAS.md`'s Multi-user support entry.
+- **CLI visual redesign -- built 2026-07-14**
+  (`docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md`):
+  color/icon tokens fully consolidated onto `theme.py` (fixes the "defined
+  three different ways across three files" problem the spec opens with), a
+  diagonal-gradient splash with a progressive Rich `Live` reveal, live
+  stats + rotating "did you know?" tips on the splash, spinners around
+  long-running calls (`evaluate_fit()`, bootstrap,
+  `orchestrator.run_pipeline`) so a multi-minute Gemini call no longer
+  looks identical to a hang, a bordered fit-score table with a
+  recommendation color-key legend, a grouped main menu with labeled
+  separators + category icons, a compact breadcrumb replacing the
+  full-banner loop-back, and a session-end summary tally. Supersedes/
+  extends the narrower 2026-07-07 console-polish pass above.
+- **Bullet Bank Management menu -- built 2026-07-15**
+  (`docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md`): a
+  "Manage Bullet Bank" entry in the main interactive menu
+  (`scripts/bullet_bank_menu.py`, wired via `menu.py`'s dispatch loop),
+  distinct from "New User? Start Here!" (the full ingestion+profile+6-stage
+  bootstrap flow, which a returning user doesn't need). It surfaces a
+  mtime-based status table across all 6 pipeline stages
+  (`audit_bullet_bank.py` -> `cluster_bullet_bank.py` -> `rewrite_bullets.py`
+  -> `audit_keepers.py` -> `score_keeper_gems.py` -> `embed_bullet_bank.py`)
+  plus two adjacent maintenance scripts (`triage_needs_review.py`,
+  `retire_rewrite_queue.py`, surfaced as the submenu's own "maintenance"
+  section with its own status line), including in-progress checkpoints, so
+  someone mid-rebuild can see which stage they're on and whether a stage's
+  output is stale relative to its input, instead of eyeballing file
+  timestamps by hand. **Still open:** a top-level, cross-feature
+  "Maintenance" submenu (grouping this alongside a future doctor script and
+  anything else administrative) -- today maintenance only exists nested
+  inside "Manage Bullet Bank," scoped to the bullet bank specifically, not
+  as its own general category one level up in the main menu. See
+  `IDEAS.md`'s Bullet-bank reintegration entry.
+- **`resume polish` / Polish Chat -- built 2026-07-07**
+  (`docs/superpowers/specs/2026-07-07-polish-chat-design.md`, same day as
+  the Sparkle work above that references it): an interactive terminal chat
+  against an already-generated resume/cover-letter JSON -- each turn is a
+  free-form instruction answered by a single Gemini call returning the
+  complete updated document, shown as a diff requiring explicit
+  accept/reject before anything touches disk; accepting re-renders HTML and
+  regenerates the PDF immediately. This is what the Sparkle critique-
+  signals note above ("try `resume polish` for these") was already
+  assuming existed.
+- **Gemini-call reliability work -- built 2026-07-15/16.** `GeminiClient`
+  gained a `SustainedFailureError` (distinguishing real quota exhaustion
+  from a transient blip) and a `model_fallback` opt-out; `rewrite_bullets.py`/
+  `audit_keepers.py`/`score_keeper_gems.py` now checkpoint incrementally
+  and stop cleanly on sustained failure instead of burning full retry
+  ladders per remaining bullet; a new Gemma-specific slim-context tier
+  keeps `gemma-4-31b-it` usable under its new (2026-07-14) 16k-TPM cap
+  instead of 429ing on nearly every call. `cluster_bullet_bank.py`'s
+  embedding step now batches (`batchEmbedContents`) and checkpoints
+  incrementally, matching the pattern `embed_bullet_bank.py` already used
+  -- **this also resolves the `bullet-bank-clustered.csv` mismatch flagged
+  in the Evidence bank Phase 1 section below** (see that section's updated
+  note).
+
+**Score/Report wiring -- done 2026-07-16.**
+`jd_manager.append_application_row()` now takes an optional `evaluation`
+dict (the same shape `read_evaluation()` already returns) and fills
+`Score` as `"{composite_score:.2f}/5"` and `Report` as the recommendation
+label (e.g. "Strong pursue") when one's present, falling back to the old
+`"NA"`/`"—"` placeholders for a JD that was tailored without ever running
+through `resume evaluate` first. `orchestrator.py`'s batch-completion loop
+reads the pending JD's persisted `_evaluation`
+(`jd_manager.read_evaluation(path)`, called alongside the existing
+`extract_source_url(path)` call, before the file moves to
+`jds/completed/`) and passes it straight through. Covered by new tests in
+`tests/test_applications_md.py` (score/recommendation formatting, and the
+no-evaluation fallback) and a new end-to-end
+`tests/test_orchestrator_main_batch.py` case asserting a real persisted
+`_evaluation` shows up correctly in the written row. Full suite (615
+tests) passes. See `IDEAS.md`'s List Jobs / View Pipeline entry.
 
 ## CLI, track, evaluate, scan stages (items 1.1-1.4) -- done 2026-07-04
 
@@ -447,16 +580,19 @@ code, not assumed):**
   (232KB), `screenshot-review-log.csv`, and `treering-archive-readme.csv`
   (only the `.md` twin is wired; the `.csv` version of the same content
   isn't referenced anywhere).
-- **A real pipeline mismatch, found by accident:** `cluster_bullet_bank.py`
-  is currently configured to write `bullet-bank-clustered.csv`, but no
-  such file exists anywhere in `knowledge_base/` -- only
-  `bullet-bank-cluster-map.csv`/`-cluster-map-updated.csv` exist (which
-  `audit_keepers.py`/`rewrite_bullets.py` do read). Either those
-  cluster-map files came from an earlier version of the script before a
-  rename, or running `cluster_bullet_bank.py` today would silently
-  produce a file nothing downstream reads. Not investigated further at the
-  time; flagged for whoever picks up bullet-bank pipeline work next (see
-  the still-open Bullet-bank reintegration item in `IDEAS.md`).
+- **A real pipeline mismatch, found by accident -- resolved 2026-07-16.**
+  `cluster_bullet_bank.py` was configured to write
+  `bullet-bank-clustered.csv`, but no such file existed anywhere in
+  `knowledge_base/` -- only `bullet-bank-cluster-map.csv`/
+  `-cluster-map-updated.csv` existed (which `audit_keepers.py`/
+  `rewrite_bullets.py` actually read). Fixed alongside the Bullet Bank
+  Management menu build: `cluster_bullet_bank.py` was reworked (commit
+  `f46fd064`, "Rework bullet-bank clustering pipeline: audit-score joins,
+  next_action classification, path/column-detection fixes") and its
+  checkpoint/batching/rate-limit handling was brought in line with
+  `embed_bullet_bank.py`'s proven pattern
+  (`docs/superpowers/specs/2026-07-16-cluster-embedding-checkpoint-design.md`).
+  See `IDEAS.md`'s Bullet-bank reintegration entry.
 - **What's in career-ops that resume-builder had none of:**
   - `interview-prep/story-bank.md` -- turned out to be an **empty
     template** (26 lines, all placeholder comments, zero actual stories
