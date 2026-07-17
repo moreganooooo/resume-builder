@@ -1,9 +1,98 @@
 # resume-builder
 
-Tailors a resume to a specific job description using Gemini/Gemma, then
-renders it to an ATS-ready PDF. Content and formatting rules are enforced
-both through prompting and through deterministic Python validation, rather
-than trusting the model to follow formatting instructions on its own.
+### A job-search system that actually reads the room.
+
+Not a "type in your job title, get a resume" toy. This is a full pipeline —
+**scan** postings, **check** they're still real, **score** your actual fit,
+**tailor** a resume (and cover letter) in your own voice, **render** it to a
+punishingly ATS-clean PDF, and **track** where you sent it — built because I
+was tired of every AI resume tool doing exactly one of those steps badly and
+calling it a product.
+
+Everything it writes comes from a verified bank of things you've actually
+done. It will never invent a metric. It will never call you a
+"results-driven self-starter" (that phrase is *hard-banned*, along with
+about 30 of its cousins — see [`style_rules.yaml`](resume-engine/rules/style_rules.yaml)
+if you don't believe me). And it argues with itself before it lets a single
+sentence out the door: an LLM drafts, a different pass audits it for
+truthfulness, and deterministic Python checks the parts that shouldn't be
+left to a language model's judgment at all — page count, line wrapping,
+whether two bullets accidentally open with the same verb.
+
+Want to see what actually comes out the other end? [`resume_example.pdf`](resume_example.pdf)
+is a real sample, not a mockup.
+
+## Why this exists
+
+Job searching is a numbers game dressed up as a writing exercise. You don't
+need one perfect resume — you need *this specific role* to see the version
+of you that speaks to it, without you rewriting your whole history by hand
+fifty times, and without a chatbot quietly making things up to sound
+impressive. So I built the thing I actually wanted: a system that knows the
+difference between "tailored" and "fabricated," and treats that line as
+load-bearing.
+
+## What makes this different
+
+- **It cannot lie about you, structurally.** Every bullet the builder is
+  allowed to use lives in an audited bank (`bullet-bank-keepers-audited.csv`)
+  that's already been scored for truthfulness, banned language, and vague
+  verbs *before* a single job description ever sees it. The per-JD builder
+  can rephrase and select — it can't invent. Numbers are checked against
+  `verified_metrics.json`; a claim with no receipts doesn't make the cut.
+- **It's a pipeline, not a one-shot generator.** `scan` pulls in real
+  postings (JobRight, LinkedIn), `liveness` confirms they're still open,
+  `evaluate` scores your actual fit against a 10-dimension weighted rubric
+  *before* you spend a build on it, `tailor`/`coverletter` write the
+  documents, `render` turns them into PDFs, `track` logs the whole thing.
+  Most tools stop at step 4 and call it done.
+- **It reads the company, not just the job title.** When a posting carries
+  a company website, a research pass reads their About/Mission/Careers
+  pages and tone-matches your Summary and "Why" section to their actual
+  register — mission-driven org gets warmer, sharp B2B SaaS gets crisper —
+  never fabricated, and skipped entirely (not faked) when there's nothing
+  real to draw from.
+- **It protects the sentences that sound like you.** A holistic critique
+  pass after every build flags *distinctive moments* (the lines that read
+  as unmistakably you) versus *flat sections* (competent but interchangeable
+  with anyone else's resume) — and the automatic edit pass is forbidden from
+  touching the distinctive ones. Nothing here optimizes you into beige.
+- **It gets smarter about you over time.** Every accepted rewrite during a
+  real build gets queued back into the bullet bank's review pipeline
+  automatically. Your bank isn't a static file you filled out once — it
+  compounds.
+- **It knows when to break its own pattern.** A deterministic keyword gate
+  + LLM judgment call can surface one of your other real roles (the ones
+  that don't make the default cut) when — and only when — a posting is
+  specifically relevant to it. Rare, on purpose, and logged every time it
+  fires so "rare" stays a checkable fact, not a hope.
+- **It respects your rate limit and your time.** Batch evaluation paces
+  itself under your API tier's requests-per-minute cap instead of faceplanting
+  into a wall of 429s, and skips anything already scored by default so you
+  never pay twice for the same answer.
+- **Your data stays yours.** No cloud database, no vendor lock-in — CSVs and
+  JSON on your own disk, gitignored where it matters. Open a text editor and
+  you can read every row of your own application history.
+- **It fixed a bug most tools don't even know they have.** Chromium's
+  print-to-PDF path can silently scramble a PDF's underlying text layer —
+  looks perfect on screen, reads backwards to an ATS parser or a copy-paste.
+  Fixed at the font level (see [Fonts](#fonts) below) so it never happens
+  quietly.
+
+## The pipeline
+
+```
+   scan            liveness          evaluate           tailor / render          track
+┌─────────┐     ┌───────────┐     ┌───────────┐     ┌──────────────────┐     ┌──────────┐
+│ JobRight│ ──▶ │  is this  │ ──▶ │ score fit │ ──▶ │  write it in     │ ──▶ │  log the │
+│ LinkedIn│     │ posting   │     │ against a │     │  YOUR voice from │     │  build,  │
+│         │     │ still     │     │ 10-dim    │     │  a verified bank,│     │  link the│
+│         │     │ live?     │     │ rubric    │     │  render clean PDF│     │  posting │
+└─────────┘     └───────────┘     └───────────┘     └──────────────────┘     └──────────┘
+```
+
+Every stage runs standalone or chained through the interactive menu — see
+below. Nothing auto-triggers the next stage without you choosing it.
 
 ## Setup
 
@@ -41,423 +130,271 @@ than trusting the model to follow formatting instructions on its own.
    `RESUME_BUILDER_ICONS=unicode` to use plain Unicode symbols instead —
    works everywhere, no special font required.
 
-## CLI
+Source `scripts/resume-cli.sh` from your shell profile (`~/.zshrc` or
+`~/.bashrc` both work) to get a `resume` command usable from any directory,
+with the venv handled automatically:
+
+```bash
+source /path/to/resume-builder/scripts/resume-cli.sh
+```
+
+## Take it for a spin
+
+The fastest way in is the interactive menu — just run:
+
+```bash
+resume
+```
+
+That opens a block-letter title screen (diagonal blue-to-purple gradient,
+because why not) with a live stats line and a rotating tip, then an
+arrow-key menu grouped by pipeline stage: Discovery, Evaluation, Build,
+Utility. Every option maps to a CLI command underneath — the menu is just
+a friendlier way in, never a different code path.
+
+Prefer the command line directly? Drop a job description into `jds/` and:
+
+```bash
+resume evaluate jds/some_role.txt   # is this even worth building for?
+resume run jds/some_role.txt        # tailor + render a resume
+resume coverletter jds/some_role.txt # tailor + render a cover letter
+```
+
+## CLI reference
 
 `scripts/cli.py` is the actual command surface (Click-based); the `resume`
-shell shortcuts below are thin wrappers around it plus a couple of extras
-(`activate`, `cd`, `test`). Both are always in sync — the shortcuts just
-call `python scripts/cli.py <command>` under the hood.
+shell shortcuts are thin wrappers around it plus a couple of extras
+(`activate`, `cd`, `test`) — both always in sync, since the shortcuts just
+call `python scripts/cli.py <command>` underneath.
 
 | Command | What it does |
 |---|---|
-| `resume` (no arguments) | launch the interactive menu — see "Interactive menu" below |
+| `resume` (no arguments) | launch the interactive menu |
 | `resume run` | tailor + render every pending JD in `jds/` (batch mode), splitting any multi-job export into per-job files first |
 | `resume run jds/some_file.txt` | tailor + render one specific JD file |
-| `resume run --pick` | interactively select which pending JD(s) to tailor — see "Picking which JDs to tailor" below |
-| `resume coverletter jds/some_file.txt` | generate + render a cover letter for one JD — see "Generating cover letters" below |
-| `resume coverletter --pick` | interactively select which pending JD(s) to generate a cover letter for — see "Picking which JDs to tailor" below |
-| `resume polish` | interactively chat-edit an already-generated resume or cover letter — see "Polishing a resume or cover letter" below |
+| `resume run --pick` | evaluate everything pending, then check off which ones to actually build |
+| `resume coverletter jds/some_file.txt` | generate + render a cover letter for one JD |
+| `resume coverletter --pick` | same evaluate-then-checkbox flow, for cover letters |
+| `resume polish` | interactively chat-edit an already-generated resume or cover letter |
 | `resume polish output/json/some_file_Resume.json` | polish that specific file directly, skipping the picker |
-| `resume evaluate jds/some_file.txt` | score a JD's fit (go/no-go) *without* building a resume — see "Evaluating fit" below |
-| `resume evaluate` | score every pending JD at once — see "Evaluating fit" below |
+| `resume evaluate jds/some_file.txt` | score a JD's fit (go/no-go) *without* building a resume |
+| `resume evaluate` | score every pending JD at once |
 | `resume scan` | pull new postings from every configured source (JobRight, LinkedIn) into `jds/`, deduped against history |
 | `resume scan --source jobright` | pull from just one source (repeatable flag) |
-| `resume liveness` | check every pending JD's posting URL, moving confirmed-expired ones to `jds/expired/` — see "Checking posting liveness" below |
-| `resume activate` | cd into the project and activate `.venv/` in your current shell — stays active, for running anything else manually |
+| `resume liveness` | check every pending JD's posting URL, moving confirmed-expired ones to `jds/expired/` |
+| `resume activate` | cd into the project and activate `.venv/` in your current shell — stays active |
 | `resume cd` | cd into the project, no venv activation |
 | `resume test` | run the full test suite (compact: dots + summary, no app-log noise) |
 | `resume test -v` | same, but lists every test by name |
 | `resume test -vv` | same, but shows the app's own operational logging too |
 | `resume help` | print this list of commands (no menu launch) |
 
-Source `scripts/resume-cli.sh` from your shell profile (e.g. `~/.zshrc`) to
-get the `resume` command usable from any directory, with the venv handled
-automatically:
+Running `python scripts/cli.py <command>` directly works the same way
+(venv activated first) if you'd rather skip the shell shortcuts.
+`python scripts/orchestrator.py` (no args, or with a JD file) is the
+underlying batch/single-file pipeline `cli.py run`/`cli.py tailor` call —
+still works standalone if you want to bypass the CLI skin entirely.
+Completed JDs move to `jds/completed/`; expired ones move to
+`jds/expired/`; interrupted runs resume automatically from
+`output/checkpoints/<job_key>.json` instead of restarting from scratch.
 
-```bash
-source /path/to/resume-builder/scripts/resume-cli.sh
-```
+## The interactive menu, in more detail
 
-### Running without the shortcuts
+Options are named after the pipeline stage they support — Scan for New
+Postings, Check Posting Liveness, Evaluate ALL/a Specific JD, Customize
+Resume for ALL/a Specific JD, Write Cover Letter, Polish, View Application
+Tracker. **"Customize Resume for a Specific JD" only shows already-evaluated
+JDs**, sorted best-fit-first and labeled with a score
+(`4.8/5 | Strong pursue | Acme | Content Strategist`) — building a resume
+for a role you haven't screened first rarely makes sense, so the picker
+just doesn't offer that as an option.
 
-- `python scripts/cli.py <command>` — the same commands as above, directly
-  (needs the venv activated first).
-- `python scripts/orchestrator.py` (no args) / `python scripts/orchestrator.py
-  jds/some_file.txt` — the underlying batch/single-file pipeline `cli.py run`
-  and `cli.py tailor` call; still works standalone if you want to bypass the
-  CLI skin entirely.
-- Completed JDs move to `jds/completed/`; history logs to
-  `jds/jd_tracker_log.csv` (gitignored — may contain names/URLs) and to
-  `data/applications.md` (see "Tracking applications" below).
-- JDs a liveness check confirms are dead move to `jds/expired/` instead —
-  see "Checking posting liveness" below.
-- Interrupted runs resume automatically from
-  `output/checkpoints/<job_key>.json` instead of restarting.
+After anything that actually did something, a "What's next?" prompt offers
+the natural next pipeline step (Scan → Liveness → Evaluate → Customize →
+Cover Letter/Polish), always with "Back to Menu" as an out — nothing chains
+automatically without you choosing it. Exit prints a one-line summary of
+what happened that session (e.g. "3 resumes tailored · 2 cover letters
+written").
 
-## Interactive menu
-
-Just typing `resume` (or `python scripts/cli.py` directly) launches an
-interactive menu instead of running any single command, opening with a
-block-letter title screen (bordered panel, diagonal blue-to-purple
-gradient reveal — see "Colors" below) before the first arrow-key list.
-Options are grouped (Discovery / Evaluation / Build / Utility) with a
-category icon per item, and named after the pipeline stage they support:
-
-- Scan for New Postings
-- Check Posting Liveness
-- Evaluate ALL Pending JDs / Evaluate a Specific JD
-- Customize Resume for ALL Pending JDs (batch) / Customize Resume for a
-  Specific JD
-- Write cover letter for a Specific JD
-- Polish a resume or cover letter — see "Polishing a resume or cover
-  letter" below
-- View Application Tracker — renders `data/applications.md` (see
-  "Tracking applications" below) right in the terminal via Rich's
-  Markdown renderer, table and clickable `Apply` links included, no need
-  to open the file yourself
-
-On launch, the title banner sweeps in with a diagonal blue-to-purple
-gradient, followed by a live stats line (how many JDs are pending, how
-many have been tailored all-time) and a rotating "did you know?" tip.
-Returning to this menu after an action shows a compact one-line breadcrumb
-instead of repainting the full banner. Choosing Exit prints a one-line
-summary of what you actually did that session (e.g. "3 resumes tailored ·
-2 cover letters written").
-
-"Evaluate a Specific JD" and "Write cover letter for a Specific JD" use a
-lightweight picker over pending/completed JDs (labeled by company/title,
-no fit-scoring, no extra Gemini cost) — a different, cheaper mechanism
-than `resume run --pick`/`resume coverletter --pick`'s evaluate-then-
-checkbox flow (see "Picking which JDs to tailor" below), reserved for
-when you already know which one you want.
-
-**"Customize Resume for a Specific JD" is different: it only lists
-already-evaluated JDs**, sorted best-fit first and labeled with each
-one's score (`4.8/5 | Strong pursue | Acme | Content Strategist`) — since
-building a resume for a role you haven't screened first rarely makes
-sense. Evaluating (either menu option, or `resume evaluate`) persists its
-score into the JD's own JSON file the first time, so this list doesn't
-need a fresh Gemini call just to redisplay it. Nothing evaluated yet?
-The picker prints a hint pointing at "Evaluate ALL Pending JDs"/"Evaluate
-a Specific JD" instead of showing an empty list.
-
-After an action that actually did something, a "What's next?" prompt
-offers the natural next step in the pipeline (e.g. Scan → Check
-Liveness → Evaluate All JDs → Customize Resume → Write Cover Letter /
-Polish with Gemini), always with "Back to Menu" as an escape hatch —
-nothing chains automatically without you choosing it, and a no-op action
-(nothing found, declined confirmation) skips the prompt entirely rather
-than asking about a step that has nothing to act on. Select Exit (or
-cancel with Ctrl-C) to leave.
-
-**Colors & icons:** every color and icon in the interactive menu is
-sourced from one place, `scripts/theme.py` — explicit hex colors (blue
-`#4dabf7`, purple `#673ab7`, green `#4caf50`, etc.) rather than named ANSI
-colors like `cyan`, since named colors get remapped by whatever terminal
-theme is active (on a dark-teal theme, `cyan` used to render as a washed-
-out, nearly invisible gray). Icons default to Nerd Font glyphs (see
-Setup above); set `RESUME_BUILDER_ICONS=unicode` to use plain Unicode
-symbols instead if you haven't enabled one.
-
-This is purely a navigation layer over the same commands documented
-below — nothing here does anything a direct command couldn't already do,
-it just means never having to remember or type a specific invocation.
-Modeled on (and borrowing the color theme and scored-table styling from)
-the sibling job_automater project's own interactive menu.
+Every color and icon is sourced from one place (`scripts/theme.py`) with
+explicit hex values rather than named ANSI colors, since named colors get
+silently remapped by whatever terminal theme is active. Icons default to
+Nerd Font glyphs; set `RESUME_BUILDER_ICONS=unicode` if you don't have one
+enabled.
 
 ## Evaluating fit
 
 `resume evaluate <jd_file>` scores a JD against a 10-dimension weighted
-rubric (ported from career-ops: CV match, North Star alignment, remote
-quality, level fit, comp, growth, time-to-offer, tool relevance, company
-reputation, cultural signals) and prints a composite score out of 5, a
-recommendation (Strong pursue / Selective pursue / Low-priority pursue /
-Skip), and hard blockers if any (e.g. onsite-only). No resume is built.
-Useful for triaging a pile of scanned JDs before committing to a full
-tailor run. A successful evaluation does write one thing: the score and
-recommendation get saved into the JD's own JSON file (an `_evaluation`
-key), so "Customize Resume for a Specific JD" can filter/sort/label by it
-later without spending another Gemini call — see "Interactive menu"
-above. This metadata is automatically stripped back out before the JD's
-text ever reaches a Gemini prompt again, so it never leaks into keyword
-extraction or resume content.
+rubric (CV match, North Star alignment, remote quality, level fit, comp,
+growth, time-to-offer, tool relevance, company reputation, cultural
+signals) and prints a composite score out of 5, a recommendation (Strong
+pursue / Selective pursue / Low-priority pursue / Skip), and hard blockers
+if any (e.g. onsite-only) — no resume gets built. The score is saved into
+the JD's own file so later steps (like the resume picker above) can sort
+and filter by it without spending another API call.
 
-**`resume evaluate` (no file argument)** scores every pending JD in one go
-instead of one at a time — real cost: one Gemini call per pending JD.
-**Skips any JD that's already been evaluated by default** — a successful
-evaluation persists its score into the JD's own file (see below), so
-re-running this doesn't re-spend a Gemini call re-scoring something
-already scored. The confirmation prompt (`--yes` skips it) asks against
-the real count of JDs actually about to be evaluated (the unscored ones),
-not the full pending count, and a line above it reports how many
-already-evaluated JDs are being skipped. Pass `--refresh` to force
-re-evaluating everything anyway (overwriting existing scores). Calls are
-paced (a few seconds apart) to
-stay under this account's requests-per-minute tier instead of bursting
-all of them at once and hitting HTTP 429s — the same pacing also applies
-to `resume run --pick`/`resume coverletter --pick`, since both share this
-same evaluation loop (note: `--pick`'s flows always evaluate fresh, not
-skip-by-default, since showing you a checkbox list *is* the point of
-that flow). Prints a sorted summary table (score, recommendation,
-company, title, best-first); a JD that fails to evaluate shows `ERROR`
-and sorts to the bottom rather than crashing the whole batch.
+`resume evaluate` (no file) scores everything pending at once, skipping
+anything already scored by default so re-runs don't re-spend a call
+re-scoring the same JD — `--refresh` forces a full re-check. Calls are
+paced to stay under your account's rate limit rather than bursting all at
+once and hitting HTTP 429s.
 
 ## Scanning for new postings
 
-`resume scan` pulls job postings from JobRight (`--source jobright`) and/or
-LinkedIn (`--source linkedin`) and writes new ones straight into `jds/` as
-JD files, ready for `resume run`/`resume tailor`. No database — dedup is
-against `jd_tracker_log.csv` and `jds/` itself (`jd_manager.job_key_known()`),
-matched on any of: the posting's source job ID; the same source URL +
-company name (guards against a source re-surfacing the same posting under
-a new ID); or an exact normalized company name + job title match (catches
-the same real job cross-posted on a completely different platform, e.g.
-JobRight's aggregated listing and a separate LinkedIn scrape of the same
-opening — these share no ID or URL in common at all, so only
-company+title can catch them). The interactive menu's "Scan for New
-Postings" asks the same question (JobRight only / LinkedIn only / Both),
-defaulting to Both.
+`resume scan` pulls postings from JobRight and/or LinkedIn straight into
+`jds/`, ready to evaluate or tailor. Dedup runs against history on three
+signals — the posting's own source ID, a same-URL-plus-company match, or an
+exact normalized company+title match — the last one exists specifically to
+catch the same real job cross-posted on a completely different platform
+(JobRight's aggregated listing vs. a separate LinkedIn scrape), which share
+no ID or URL at all.
 
-**Careful with `resume run` after a scan** — batch mode processes every
-pending JD in `jds/`, so a scan that turns up dozens of postings means a
-real, uninterrupted batch of resume builds (real Gemini spend) if you run
-it right after. `resume evaluate` each one first, or thin the pile, before
-batch-running — or use `resume run --pick` instead (below).
+**Careful running `resume run` right after a scan** — batch mode processes
+every pending JD, so a scan that turns up two dozen postings means two
+dozen real builds if you fire it off immediately. Evaluate first, or use
+`resume run --pick` (below) to choose.
 
 ## Picking which JDs to tailor
 
-`resume run --pick` is the middle ground between "tailor everything" and
-"tailor one named file": it evaluates every pending JD (same confirmation
-gate and real per-JD Gemini cost as batch `resume evaluate`, and `--yes`
-skips the prompt the same way), then shows an interactive checkbox list —
-sorted best-fit-first, each line reading `score/5 | recommendation |
-company | title` — for you to arrow through and select from. Space toggles
-a selection, enter confirms. Only the JD(s) you actually check get tailored
-(one at a time, through the normal pipeline); selecting nothing exits
-cleanly with no builds run. `resume run` (no `--pick`) is unaffected —
-still processes every pending JD, same as always.
-
-`resume coverletter --pick` is the exact same mechanism applied to cover
-letters instead of resumes: same confirmation gate, same scored/sorted
-checkbox list, same `--yes` — but generates a cover letter for each
-selected JD instead of tailoring a resume. `resume coverletter <file>`
-(a named file, no `--pick`) is unaffected — still generates a cover letter
-for just that one JD, same as always. Passing both a file and `--pick`
-(or neither) is a usage error rather than an ambiguous default.
+`resume run --pick` sits between "tailor everything" and "tailor one named
+file": it evaluates every pending JD, then shows a scored, sorted,
+checkbox-style list to pick from — space toggles, enter confirms, only
+what's checked gets built. `resume coverletter --pick` is the same
+mechanism for cover letters. Neither one touches `resume run`/
+`resume coverletter <file>`'s normal behavior — those still do exactly
+what they've always done.
 
 ## Checking posting liveness
 
-`resume liveness` checks every pending JD's posting URL (`source_url`,
-already present on anything `resume scan` wrote) via a headless Playwright
-check ported from career-ops — deterministic HTTP-status/regex/DOM
-classification, no LLM calls, no database. Each JD classifies as `active`,
-`likely_active`, `expired`, or `uncertain`:
-
-- **`expired`** JDs move automatically to `jds/expired/` (same pattern as
-  `jds/completed/`), so `resume run`/`resume tailor` never wastes real
-  Gemini spend tailoring a resume for a dead posting.
-- **`uncertain`/`likely_active`** stay in the pending queue — only a
-  confident `expired` signal moves anything. Both get flagged in the
-  printed summary so you can eyeball them yourself.
-- JDs without a `source_url` (e.g. manually-dropped plain-text JDs) are
-  silently skipped, not flagged as anything.
-
-This is a separate, explicit command — never auto-wired into
-`scan`/`run`/`tailor`, since a real browser check per JD takes a few
-seconds each and this is meant to run on your own schedule, not silently
-add latency to a batch build.
+`resume liveness` runs a headless, deterministic check (no LLM calls) on
+every pending JD's posting URL. Confirmed-`expired` postings move
+automatically to `jds/expired/`, so you never waste a real API call
+tailoring a resume for a dead listing. `uncertain`/`likely_active` stay put
+and get flagged in the summary for you to eyeball. This is a separate,
+explicit command — it's never silently wired into a batch build, since a
+real browser check per posting takes a few seconds each.
 
 ## Generating cover letters
 
-`resume coverletter <jd_file>` generates and renders a first-person cover
-letter PDF for a single JD — a fully separate, opt-in command, never
-auto-triggered by `resume tailor`/`resume run` (plenty of real postings
-don't accept a cover letter at all). Output lands in the same
-`output/json/`, `output/html/`, `output/pdf/` folders as resumes, with a
-`_coverletter` filename suffix.
+`resume coverletter <jd_file>` writes and renders a first-person cover
+letter PDF for a single JD — fully opt-in, never auto-triggered by a
+resume build, since plenty of postings don't ask for one at all. A
+lightweight validator checks the result (banned phrases, paragraph count,
+accidental third-person slips) with one automatic retry before the PDF
+renders.
 
-A lightweight validator checks the result (forbidden phrases reused from
-the resume pipeline's own list, paragraph count, accidental third-person
-slips) with one automatic retry on violations before the PDF renders.
-
-**Signature image:** the template references
-`docs/MorganEscottSignature2025.png` for a handwritten-style signature
-under the sign-off. If that file doesn't exist yet, the PDF still renders
-fine — you'll just see a blank space where the image would go until you
-drop a real signature file at that path.
+**Signature image:** references `docs/MorganEscottSignature2025.png` for a
+handwritten-style signature under the sign-off. Missing that file just
+means a blank space where the signature goes — the PDF still renders fine.
 
 ## Polishing a resume or cover letter
 
 `resume polish [file]` opens an interactive terminal chat against an
-already-generated resume or cover letter's JSON — for the small personal
-touch-ups that don't warrant a full re-tailor. Type a plain-English
-request ("make the tagline punchier," "drop the second Treering bullet"),
-and each turn works like this:
+already-generated document. Type a plain-English request ("make the
+tagline punchier," "drop the second Treering bullet"), and each turn:
 
-1. Gemini returns the complete updated document (same schema/model the
-   builder already uses — no separate chat-history plumbing, since the
-   JSON file itself already encodes every previously-accepted edit).
-2. A field-level diff is shown — exactly what changed, nothing hidden.
-3. You accept (saves the JSON, re-renders HTML, regenerates the PDF),
-   reject (discard, rephrase and try again), or quit.
+1. Sends back the complete updated document (no separate chat-history
+   plumbing needed — the JSON file already encodes every prior edit).
+2. Shows a field-level diff — exactly what changed, nothing hidden.
+3. Lets you accept (saves, re-renders HTML + PDF), reject (rephrase and
+   try again), or quit.
 
-No file argument launches a picker over `output/json/*.json` (newest
-first); passing a path skips straight to that file. Type `done`, `exit`,
-or an empty line (or Ctrl-D/Ctrl-C) to leave the chat cleanly at any
+No file argument launches a picker over your most recent builds. Type
+`done`, `exit`, an empty line, or Ctrl-D/Ctrl-C to leave cleanly at any
 point.
 
 ## Company research
 
-Both `resume coverletter` and `resume tailor`/`run` automatically attempt
-a company-research step before writing anything, **when a JD carries a
-`company_website` field** (JobRight-scanned JDs have this; most
-LinkedIn-scanned ones don't). No CLI flag needed — it's fully automatic
-and gracefully skips (with a printed notice, never a crash) when there's
-no known website, the site's pages are unreachable, or there isn't enough
-usable content:
+Both `coverletter` and `tailor`/`run` automatically attempt a
+company-research pass whenever a JD carries a `company_website` field — no
+flag needed, and it gracefully skips (with a printed notice, never a
+crash) when there's no known site or nothing usable to read. A plain
+Python scraper (no browser, no search API) pulls the company's About/
+Mission/Careers pages; one model call extracts tone signals and a couple
+of factual, traceable statements. The cover letter uses this for its
+Company Connection paragraph; the resume uses it to tone-match the Summary
+and Why section. No research available means no tone-mirroring and no Why
+section — never invented content standing in for the real thing.
 
-- A plain Python scraper (`requests`/BeautifulSoup, no browser, no search
-  API) fetches the company's About/Mission/Careers pages.
-- One Gemini call extracts tone signals (register, formality, recurring
-  brand words) and 2-3 factual, traceable statements about the company.
-- The **cover letter** uses this for its "Company Connection" paragraph
-  and tone-matching, instead of generic flattery.
-- The **resume** uses it to tone-match the Summary and (when present) Why
-  section — completing instructions that were already written into the
-  tailoring prompt but had nothing feeding them before this existed. When
-  no research is available, tone-mirroring is skipped entirely and the Why
-  section is omitted rather than inventing research-sounding content.
+## Situational work-history entries
 
-## Situational/optional work history entries
-
-Rare and automatic: `resume tailor`/`run` runs a deterministic keyword
-scan against the JD text for 6 of Morgan's other real roles (Humane
-Society of Greater Kansas City, Unisource Document Products, Kansas
-Colloquies, KU Payroll Office, DeJoy Knauff & Blood, USitek). If a JD's
-language specifically matches one (e.g. "animal welfare" for the Humane
-Society role), the builder is *offered* the option — not forced — to
-include a small, 2-bullet supporting entry alongside the usual six roles.
-This should be rare by construction: clearing the keyword gate doesn't
-mean it gets used, and for most JDs nothing changes at all. No CLI flag —
-this is always on, and inert unless a JD's language genuinely triggers it.
+Rare and fully automatic: `tailor`/`run` runs a deterministic keyword scan
+against the JD for six of my other real roles that don't make the default
+cut (animal welfare, print production, journalism, payroll/clerical work,
+graphic design). If a JD's language specifically matches one, the builder
+is *offered* — never forced — a small, 2-bullet supporting entry alongside
+the usual lineup. Clearing the keyword gate doesn't guarantee it gets
+used; for most JDs, nothing changes at all. Nothing to configure — always
+on, inert until a JD's own language genuinely calls for it.
 
 ## Voice, distinctiveness & the holistic critique
 
-Every `resume tailor`/`run` build runs a holistic critique after the
-resume is drafted (scores, flags, and actionable recommendations against
-the JD). Two things happen with that critique's output beyond the score:
+Every build runs a holistic critique after the resume is drafted —
+scores, flags, actionable recommendations against the JD — plus two
+things purpose-built to protect your actual voice:
 
-- It identifies **distinctive moments** (2-3 sentences already in the
-  resume that read as memorable rather than generic) and **flat sections**
-  (parts that read competent but interchangeable with any other
-  candidate's), printed alongside the usual scores/flags. Distinctive
-  moments are then protected verbatim through the automatic
-  recommendation-apply pass that follows — an edit can't accidentally
-  flatten the one line that actually sounds like you.
-- A recommendation phrased as a reflective question about personal
-  motivation ("what made this project satisfying to you?") only gets
-  auto-applied if the answer is already grounded in your verified
-  background — never invented. Otherwise it's printed under "Needs your
-  input" as a good candidate for a `resume polish` session instead.
+- It identifies **distinctive moments** (lines that read as unmistakably
+  you) and **flat sections** (competent but generic). Distinctive moments
+  are protected verbatim through the automatic edit pass that follows — an
+  edit can't accidentally flatten the one line that sounds like you.
+- A recommendation phrased as a reflective personal question only
+  auto-applies if the answer is already grounded in your verified
+  background — never invented. Otherwise it surfaces under "Needs your
+  input" as a good candidate for a `resume polish` session.
 
-This calibration draws on a small curated voice reference
-(`resume-engine/knowledge_base/voice-anchors.md`, generated from real past
-application answers via `scripts/build_voice_anchors.py`) that both the
-per-bullet audit step and cover-letter generation see, plus Morgan's own
-established writing-style rubric folded directly into `style_rules.yaml`
-and `critique_resume.md`. Cover letters also now see `evidence-guide.csv`
-(thematic career-proof clusters), which previously only reached full
-resume builds.
+This draws on a small curated voice reference
+(`resume-engine/knowledge_base/voice-anchors.md`) built from real past
+application answers, plus a full writing-style rubric folded directly into
+`style_rules.yaml` — the same rules that ban "results-driven professional"
+and friends outright.
 
 ## Tracking applications
 
-Every completed build appends a row to two places: `jds/jd_tracker_log.csv`
+Every completed build appends a row to `jds/jd_tracker_log.csv`
 (machine-readable, drives dedup/resume logic) and `data/applications.md`
-(career-ops's markdown-table format — `# | Date | Company | Role | Score |
-Status | PDF | Link | Report | Notes` — for human review). Both are
-gitignored. **`Link` is a clickable `[Apply](source_url)`** — the actual
-posting, so you have somewhere to go apply once a resume's built.
-`Score`/`Report` are still placeholders until an evaluate/scan result is
-wired into a given row (a JD's own persisted `_evaluation`, see
-"Evaluating fit" above, isn't currently threaded into this specific file).
+(a human-readable markdown table — Date, Company, Role, Score, Status,
+PDF, Link, Report, Notes). Both gitignored. `Link` is a clickable
+`[Apply](source_url)` straight to the real posting, so there's always
+somewhere to go once a resume's built.
 
 ## Bullet Bank Management
 
-The menu's "Manage Bullet Bank" entry (separate from "New User? Start
-Here!", which is the full first-time ingestion+profile+pipeline flow) is
-for anyone already set up who just needs to run one stage of the
-rebuild pipeline at a time. It shows a status table (never run / stale /
-up to date, with a timestamp) computed from each stage's actual output
-file — no separate tracking file to fall out of sync.
+The menu's "Manage Bullet Bank" entry runs the six-stage curation pipeline
+that keeps the underlying bullet bank sharp — audit, cluster/dedupe,
+rewrite weak entries, re-audit, score for standout ("hidden gem") material,
+and re-embed for runtime matching. A status table (never run / stale / up
+to date) is computed straight from each stage's actual output file, so it
+never drifts out of sync with reality. Every stage checkpoints and resumes
+on its own.
 
-The 6 stages, in the only order that makes sense to run them:
-
-1. **Audit Bullet Bank** (`audit_bullet_bank.py`) — scores every bullet
-   (real Gemini calls) → `bullet-bank-audited.csv`
-2. **Cluster & Classify** (`cluster_bullet_bank.py`) — embeds + clusters
-   near-duplicates, joins audit scores, assigns `next_action` and elects
-   `is_representative` per cluster → `bullet-bank-cluster-map.csv`
-3. **Rewrite Weak Bullets** (`rewrite_bullets.py`) — rewrites every
-   `is_representative=True` row whose `next_action` is `REWRITE` or
-   `REVIEW` → `bullet-bank-keepers.csv`
-4. **Re-Audit Keepers** (`audit_keepers.py`) — re-scores keepers, diffs
-   against the cluster map, builds a triage queue → `bullet-bank-keepers-audited.csv`
-5. **Score Hidden Gems** (`score_keeper_gems.py`) — flags standout
-   bullets in place on the same file
-6. **Embed Bullet Bank** (`embed_bullet_bank.py`) — final embeddings used
-   by `orchestrator.py` at runtime to match bullets to a job description
-
-Each stage already checkpoints/resumes internally (same as the full
-bootstrap flow) — re-running a stage after an interruption picks up where
-it left off.
-
-Two more entries handle the ongoing (non-sequential) feedback loop:
-**Triage Needs-Review Queue** (`triage_needs_review.py`) routes rows
-`orchestrator.py` queued during a regular resume build into keepers,
-the rewrite queue, or retirement; **Retire Abandoned Rewrite-Queue
-Bullets** (`retire_rewrite_queue.py`) closes out non-representative rows
-still sitting in `rewrite-queue.csv`.
-
-## Bullet bank feedback loop
-
-The bullet bank isn't static. During every build, `orchestrator.py`'s
-bullet-audit step rewrites weak bullets and rescoring them; any rewrite that
-clears the bank's real "keeper" bar (`scripts/bullet_feedback.py`) is queued
-into `resume-engine/knowledge_base/needs-review.csv` automatically. Run
-`python scripts/triage_needs_review.py` periodically to route those queued
-rows into `bullet-bank-keepers.csv` (permanent), `rewrite-queue.csv`, or
-`retired-bullets.csv` — this is a separate, manual step, not automatic, so
-queued rows sit in `needs-review.csv` until you run it.
+The bank also isn't static day-to-day: every real build queues any
+accepted bullet rewrite that clears the bank's quality bar into a review
+queue automatically. Run `python scripts/triage_needs_review.py`
+periodically to route those into permanent keepers, a rewrite queue, or
+retirement — a deliberate manual checkpoint, not a silent auto-merge.
 
 ## Fonts
 
-`resume-engine/fonts/DMSans-{Regular,ExtraBold,Italic}-static.ttf` are fixed
-(non-variable) instances baked from Google's DM Sans variable font via
-`fonttools varLib.instancer`. Don't swap these back for the raw variable
-font — Chromium's print-to-PDF path (used by `scripts/generate-pdf.mjs`)
-fragmented it into dozens of near-duplicate embedded font subsets and
-coincided with a real bug where the PDF's underlying text layer came out
-scrambled (visually correct on screen, but copy-pasted/ATS-extracted text
-read backwards). Static instances avoid that code path entirely.
+`resume-engine/fonts/DMSans-{Regular,ExtraBold,Italic}-static.ttf` are
+fixed (non-variable) instances baked from Google's DM Sans variable font.
+Don't swap these back for the raw variable font — Chromium's
+print-to-PDF path fragmented it into dozens of near-duplicate embedded
+subsets and coincided with a real bug where the PDF's underlying text
+layer came out scrambled: visually correct on screen, backwards when
+copy-pasted or parsed by an ATS. Static instances sidestep that code path
+entirely.
 
 ## Roadmap
 
-The full `scan` → `liveness` → `evaluate` → `tailor`/`coverletter` →
-`render` → `track` pipeline is built, including company research, the
-(rare, automatic) situational work-history entries, the interactive
-menu's pipeline-ordered chain flow, `resume polish`, and (as of
-2026-07-07) the holistic critique's distinctiveness signals plus Phase 1
-of the evidence-bank extension (voice anchors, a trimmed detective-findings
-companion file, and cover letters gaining `evidence-guide.csv`). Also as
-of 2026-07-07: the interactive menu's console output is quieter (the
-trim-loop's PDF block and the keyword-extraction dump no longer repeat in
-full every step) and its colors are theme-safe (see "Colors" above), and
-"Customize Resume for a Specific JD" only surfaces already-evaluated,
-scored, sorted JDs instead of an unfiltered list of everything pending.
-Further feature ideas (multi-user support, a scheduler, the full
-multi-type evidence-bank generalization, a long-term merge with sibling
-projects) are tracked in `IDEAS.md`, organized by difficulty/scope.
-Nothing there is scheduled.
+The full pipeline — scan, liveness, evaluate, tailor/coverletter, render,
+track — is built and in daily use, along with company research,
+situational work-history entries, the interactive menu, `resume polish`,
+and the holistic critique's distinctiveness signals. What's still ahead —
+multi-user support, a background scheduler, the full evidence-bank
+generalization, a long-term merge with two sibling projects — is tracked
+in [`IDEAS.md`](IDEAS.md), organized by difficulty and scope, with full
+build history in [`IDEAS_ARCHIVE.md`](IDEAS_ARCHIVE.md). Nothing there is
+scheduled; it's a backlog, not a promise.
 
 ## Testing
 
@@ -465,10 +402,8 @@ Nothing there is scheduled.
 python -m unittest discover -s tests
 ```
 
-Stdlib `unittest`, not pytest (not installed) — discovery picks up every
-`tests/test_*.py` file automatically. `unittest`'s own pass/fail reporting
-goes to stderr, while the application code under test prints its own
-operational logging to stdout — `resume test` takes advantage of this to
-discard stdout by default, so the output stays a clean pass/fail summary
-instead of an interleaved wall of text (see the CLI table above for the
-verbose tiers).
+Stdlib `unittest`, not pytest — discovery picks up every `tests/test_*.py`
+file automatically. `resume test` discards the application's own stdout
+logging by default so what you see is a clean pass/fail summary, not an
+interleaved wall of text (`resume test -v`/`-vv` bring it back if you want
+it).
