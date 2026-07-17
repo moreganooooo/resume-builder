@@ -71,5 +71,43 @@ class TestFixedContentModule(unittest.TestCase):
             profile_paths.fixed_content_module("nonexistent_profile_xyz")
 
 
+class TestSetActiveProfileReloadsStaleModules(unittest.TestCase):
+    """jd_manager.py (and anything importing it via attribute access, not
+    `from jd_manager import X`) computes its path constants once at import
+    time -- a real bug found live-testing Task 14: cli.py and menu.py both
+    `import jd_manager` at their own top level, before any --profile flag
+    or interactive gate runs, so a mid-process profile switch silently
+    left jd_manager pointed at the profile that was active at process
+    start. set_active_profile() must reload it so switching actually
+    works, not just for profile_paths' own functions."""
+
+    def setUp(self):
+        self._orig = os.environ.get("RESUME_PROFILE")
+        self.second_profile = "test_reload_profile_xyz"
+        os.makedirs(os.path.join(profile_paths.PROFILES_DIR, self.second_profile), exist_ok=True)
+
+        import jd_manager
+        self.jd_manager = jd_manager
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(os.path.join(profile_paths.PROFILES_DIR, self.second_profile), ignore_errors=True)
+        if self._orig is None:
+            os.environ.pop("RESUME_PROFILE", None)
+        else:
+            os.environ["RESUME_PROFILE"] = self._orig
+        profile_paths.set_active_profile(self._orig or "morgan")
+
+    def test_jd_manager_jds_dir_updates_after_switch(self):
+        profile_paths.set_active_profile(self.second_profile)
+        self.assertTrue(self.jd_manager.JDS_DIR.endswith(os.path.join("jds", self.second_profile)))
+
+    def test_jd_manager_tracker_csv_updates_after_switch(self):
+        profile_paths.set_active_profile(self.second_profile)
+        self.assertTrue(
+            self.jd_manager.TRACKER_CSV.endswith(os.path.join("jds", self.second_profile, "jd_tracker_log.csv"))
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
