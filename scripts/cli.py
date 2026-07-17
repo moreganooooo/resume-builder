@@ -14,6 +14,7 @@ import questionary
 import cli_art
 import orchestrator
 import jd_manager
+import profile_paths
 import batch_evaluate
 import picker
 import menu
@@ -32,9 +33,12 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
 
 
 @click.group(invoke_without_command=True)
+@click.option("--profile", default=None, help="Override RESUME_PROFILE for this invocation only.")
 @click.pass_context
-def cli(ctx):
+def cli(ctx, profile):
     """resume-builder: tailor and render resumes per job description."""
+    if profile:
+        profile_paths.set_active_profile(profile)
     if ctx.invoked_subcommand is None:
         menu.run_interactive_menu()
 
