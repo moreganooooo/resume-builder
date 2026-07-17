@@ -2698,7 +2698,7 @@ class ResumeEngine:
             return {}
 
         final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
-        fired_situational_roles = final_companies & set(situational_roles.SITUATIONAL_ROLES.keys())
+        fired_situational_roles = final_companies & set(situational_roles.load_situational_roles()["roles"].keys())
         if fired_situational_roles:
             print(f"  🎯 Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
