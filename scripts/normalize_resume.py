@@ -8,7 +8,7 @@ formatting, never the builder's attempt at it.
 
 import re
 
-import fixed_content
+import profile_paths
 
 _SECTION_DEFAULTS = {
     "SECTION_SUMMARY": "Professional Summary",
@@ -37,6 +37,7 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
     fixed_content.CLIENTS) -- used by orchestrator's trim loop as a free,
     non-LLM trim step before the more expensive LLM-driven ones.
     """
+    fixed_content = profile_paths.fixed_content_module()
     result = dict(resume_data)
 
     result.update(fixed_content.CONTACT_INFO)

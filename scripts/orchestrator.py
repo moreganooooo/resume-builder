@@ -33,7 +33,6 @@ import normalize_resume
 import validate_resume
 import validate_coverletter
 import jd_manager
-import fixed_content
 import bullet_feedback
 import profile_paths
 
@@ -2571,6 +2570,7 @@ class ResumeEngine:
 
             if not dropped_optional_clients:
                 dropped_optional_clients = True
+                fixed_content = profile_paths.fixed_content_module()
                 has_optional_clients = any(
                     fixed_content.CLIENTS.get(job.get("company"), {}).get("essential") is False
                     and job.get("clients")

@@ -6,14 +6,14 @@ Groups near-duplicate bullets in the bullet bank, joins each one with its
 audit scores, decides a next_action per bullet, and elects one representative
 per cluster — the file rewrite_bullets.py reads to know what to rewrite.
 
-Inputs  (all in resume-engine/knowledge_base/):
+Inputs  (all in profiles/<profile>/knowledge_base/):
   bullet-bank-clean.csv           raw bullet bank (must exist)
   bullet-bank-audited.csv         per-bullet scores from audit_bullet_bank.py
                                   (must exist — run that script first if it
                                   doesn't; bullets not found in it are marked
                                   NEEDS_AUDIT rather than blocking the run)
 
-Outputs (all in resume-engine/knowledge_base/):
+Outputs (all in profiles/<profile>/knowledge_base/):
   bullet-bank-cluster-map.csv     every bullet with cluster_id, cluster_size,
                                   is_representative, next_action, and every
                                   joined audit column — this is what
