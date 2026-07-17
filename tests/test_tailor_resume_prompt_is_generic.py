@@ -55,5 +55,27 @@ class TestStyleRulesYamlIsGeneric(unittest.TestCase):
         self.assertIn("page_2", self.data["layout_rules"])
 
 
+PROMPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "resume-engine", "prompts",
+)
+SMALLER_PROMPT_FILES = [
+    "evaluate_fit.md", "critique_bullet.md", "critique_resume.md",
+    "polish_resume.md", "polish_coverletter.md", "tailor_coverletter.md",
+]
+
+
+class TestSmallerPromptFilesAreGeneric(unittest.TestCase):
+
+    def test_no_file_mentions_morgan_by_name(self):
+        offenders = []
+        for filename in SMALLER_PROMPT_FILES:
+            with open(os.path.join(PROMPTS_DIR, filename), "r") as f:
+                text = f.read()
+            if "Morgan" in text:
+                offenders.append(filename)
+        self.assertEqual(offenders, [])
+
+
 if __name__ == "__main__":
     unittest.main()
