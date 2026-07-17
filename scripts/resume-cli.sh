@@ -1,11 +1,18 @@
 # resume-builder shell shortcuts.
-# Source this from ~/.zshrc (one line: `source /path/to/resume-builder/scripts/resume-cli.sh`)
-# to get a `resume` command usable from anywhere in the terminal.
+# Source this from ~/.zshrc or ~/.bashrc (one line:
+# `source /path/to/resume-builder/scripts/resume-cli.sh`) to get a `resume`
+# command usable from anywhere in the terminal.
 #
 # Portable by design: resolves its own location at source time instead of a
 # hardcoded path, so the same line works on any machine's clone of this repo.
+# Works under both zsh and bash since the two shells expose the sourced
+# file's path differently.
 
-_RESUME_BUILDER_DIR="$(cd "$(dirname "${(%):-%x}")/.." && pwd)"
+if [ -n "$ZSH_VERSION" ]; then
+  _RESUME_BUILDER_DIR="$(cd "$(dirname "${(%):-%x}")/.." && pwd)"
+else
+  _RESUME_BUILDER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 
 resume() {
   local cmd="$1"
