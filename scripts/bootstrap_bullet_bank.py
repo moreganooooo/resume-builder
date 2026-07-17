@@ -30,7 +30,12 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-KB_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_DIR = profile_paths.kb_dir()
 
 BOOTSTRAP_DIR = os.path.join(KB_DIR, "bootstrap")
 SOURCE_DOCS_DIR = os.path.join(BOOTSTRAP_DIR, "source_documents")
@@ -40,9 +45,6 @@ DRAFT_CSV_PATH = os.path.join(BOOTSTRAP_DIR, "bullet-bank-draft.csv")
 REVIEW_CSV_PATH = os.path.join(BOOTSTRAP_DIR, "review-needed.csv")
 CERTIFICATIONS_PATH = os.path.join(BOOTSTRAP_DIR, "certifications.json")
 BULLET_BANK_CLEAN_PATH = os.path.join(KB_DIR, "bullet-bank-clean.csv")
-
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
 
 import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
