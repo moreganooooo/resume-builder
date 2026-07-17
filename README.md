@@ -114,14 +114,31 @@ below. Nothing auto-triggers the next stage without you choosing it.
    GEMINI_API_KEY=your-key-here
    ```
 5. Optional, only needed for `resume scan`:
-   - `JOBRIGHT_COOKIE_STRING` in `.env` — a JobRight session cookie string
-     (DevTools > Application > Cookies on jobright.ai). Needed for
-     `--source jobright`.
-   - `--source linkedin` needs no `.env` value at all — it reads your live
-     `li_at` session cookie straight out of Chrome's cookie store via
-     `browser_cookie3` on every run, so just be logged into LinkedIn in
-     Chrome when you run it. The cookie is never written to disk. This also
-     needs a real local Chrome install (Selenium drives it headlessly).
+   - **`--source jobright` needs `JOBRIGHT_COOKIE_STRING` in `.env`** — the
+     full raw cookie header string JobRight expects on every API request
+     (all `name=value` pairs, semicolon-separated), not just one cookie's
+     value. Grab it like this:
+     1. Log into [jobright.ai](https://jobright.ai) in Chrome.
+     2. Open DevTools (`F12` / `Cmd+Option+I`) → **Network** tab, then
+        reload the page so requests populate.
+     3. Right-click the first request at the top of the list → **Copy** →
+        **Copy as cURL**.
+     4. Paste that into a text editor and find the `-H 'cookie: ...'`
+        piece — everything inside the quotes after `cookie: ` is your
+        `JOBRIGHT_COOKIE_STRING`.
+     ```
+     JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ...
+     ```
+     Like most session cookies, this one can go stale — if
+     `resume scan --source jobright` starts failing with an auth error,
+     just repeat these steps for a fresh string.
+   - **`--source linkedin` needs no `.env` value at all, ever.** It reads
+     your live `li_at` session cookie straight out of Chrome's cookie
+     store via `browser_cookie3` on every run — no manual copy-paste, and
+     nothing to keep refreshing. Just stay logged into LinkedIn in Chrome;
+     the cookie is read fresh each time and never written to disk. This
+     also needs a real local Chrome install (Selenium drives it
+     headlessly).
 6. Optional, for the best icon experience: enable a [Nerd Font](https://www.nerdfonts.com/)
    in your terminal profile (iTerm2: Preferences → Profiles → Text → Font;
    Terminal.app: Preferences → Profiles → Text → Font). The menu's icons
