@@ -24,6 +24,7 @@ Usage:
 
 import csv
 import os
+import sys
 from datetime import date
 
 # bullet_feedback.py (which writes needs-review.csv) resolves this path from
@@ -31,7 +32,12 @@ from datetime import date
 # script finds the same file regardless of where it's invoked from.
 SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT   = os.path.dirname(SCRIPT_DIR)
-KB_BASE        = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
+
+KB_BASE        = profile_paths.kb_dir()
 NEEDS_REVIEW   = os.path.join(KB_BASE, "needs-review.csv")
 KEEPERS_CSV    = os.path.join(KB_BASE, "bullet-bank-keepers.csv")
 REWRITE_QUEUE  = os.path.join(KB_BASE, "rewrite-queue.csv")

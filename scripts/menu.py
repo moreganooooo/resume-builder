@@ -91,7 +91,16 @@ def _confirm_active_profile() -> None:
     ).ask()
 
     if path == "Start new user setup now":
+        # Signal to _handle_bootstrap() that this is genuinely a new
+        # person, not Morgan's own default -- without this, RESUME_PROFILE
+        # is still unset here, so active_profile() resolves to "morgan"
+        # (whose profile always exists), and the name-prompt would be
+        # skipped entirely, routing a real new user's documents straight
+        # into Morgan's own knowledge_base/.
+        os.environ["RESUME_GUEST_MODE"] = "1"
         _handle_bootstrap()
+        if os.environ.get("RESUME_PROFILE"):
+            os.environ.pop("RESUME_GUEST_MODE", None)
         return
 
     # "Look around the main menu first" -- guest mode. Deliberately does
@@ -111,12 +120,15 @@ def _handle_bootstrap() -> bool:
     except ValueError:
         is_existing = False
 
-    if not is_existing:
-        # The active profile (whatever it resolved to) has no real
-        # knowledge_base/ yet -- offer to create one rather than silently
-        # writing into a half-set-up or nonexistent profile. (Task 15's
-        # guest-mode gate is a separate, additional trigger for this same
-        # prompt, wired in when that task lands.)
+    if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
+        # Either the active profile (whatever it resolved to) has no real
+        # knowledge_base/ yet, or RESUME_GUEST_MODE marks this as a
+        # self-identified new person (Task 15's gate) -- without the
+        # guest-mode check, a brand-new user reaching this via "Start new
+        # user setup now" would resolve to Morgan's own already-existing
+        # profile (RESUME_PROFILE unset defaults to "morgan") and this
+        # prompt would be skipped entirely, routing their documents into
+        # her knowledge_base/ instead of a new one.
         name = questionary.text(
             "What's your name (used as your profile ID, e.g. 'dominick')?"
         ).ask()
