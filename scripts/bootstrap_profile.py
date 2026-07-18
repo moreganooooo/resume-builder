@@ -29,6 +29,7 @@ PROFILE_YML_PATH = os.path.join(KB_DIR, "profile.yml")
 PORTALS_YML_PATH = os.path.join(KB_DIR, "portals.yml")
 CV_MD_PATH = os.path.join(KB_DIR, "cv.md")
 BACKGROUND_GUIDE_PATH = os.path.join(KB_DIR, "user-background-guide.md")
+VOICE_ANCHORS_PATH = os.path.join(KB_DIR, "voice-anchors.md")
 VERIFIED_METRICS_PATH = os.path.join(KB_DIR, "verified_metrics.json")
 VERIFIED_TOOLS_PATH = os.path.join(KB_DIR, "verified_tools.json")
 VERIFIED_PROJECTS_PATH = os.path.join(KB_DIR, "verified_projects.json")
@@ -548,6 +549,13 @@ def _polish_bullet(
         "rewrite_status": result.get("rewrite_status", "MANUAL"),
     }
     checkpoint[key] = polished
+    if dry_run:
+        # A dry run makes zero real API calls and must make zero real
+        # filesystem changes either -- writing a checkpoint entry (even a
+        # placeholder "[DRY RUN] ..." one) would violate that, and could
+        # poison a *real* subsequent non-dry-run call into treating a
+        # never-actually-polished bullet as already done.
+        return polished
     _save_cv_draft_checkpoint(checkpoint)
     return polished
 
@@ -678,6 +686,70 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
 
     os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
     with open(BACKGROUND_GUIDE_PATH, "w", encoding="utf-8") as f:
+        f.write(draft if choice == "accept" else "")
+
+
+def _gather_voice_anchor_source_texts(checkpoint: dict) -> list:
+    """Same doc-type set _gather_background_source_texts() uses, plus
+    "other" -- a genuine writing sample (cover letter, essay, forum post,
+    etc.) has no dedicated doc_type in DocumentClassification and most
+    often lands in "other", which the background-guide gatherer
+    deliberately excludes since it's not reliably career-narrative content
+    there -- but it's exactly the kind of first-person writing voice
+    anchors need."""
+    texts = []
+    for filename, result in sorted(checkpoint.items()):
+        if result.get("status") != "done":
+            continue
+        if result.get("doc_type") not in ("resume", "linkedin_export", "recommendation_letter", "achievement_notes", "other"):
+            continue
+        path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
+        text, _upload_path = _resolve_text_or_upload(path)
+        if text:
+            texts.append(text)
+    return texts
+
+
+def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
+    """Optional -- unlike profile.yml/cv.md/background guide, voice-anchors.md
+    has no fallback derived from other data, and every consumer
+    (orchestrator.py, rewrite_bullets.py) already checks os.path.exists()
+    before reading it, so skipping this entirely (no writing-sample
+    documents provided, or explicitly skipped) is a fully supported
+    "no signal yet" state, not a gap that blocks anything else."""
+    source_texts = _gather_voice_anchor_source_texts(checkpoint)
+
+    if dry_run:
+        print("[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip.")
+        draft = bootstrap_extractors.draft_voice_anchors(source_texts, dry_run=dry_run)
+        os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
+        with open(VOICE_ANCHORS_PATH, "w", encoding="utf-8") as f:
+            f.write(draft)
+        return
+
+    draft = bootstrap_extractors.draft_voice_anchors(source_texts) if source_texts else ""
+    choice = "skip"
+    while True:
+        print("\n--- Draft voice anchors ---\n")
+        print(draft or "(nothing drafted -- no usable writing-sample text found; this is "
+                        "optional, skip freely)")
+        print("\n--- End draft ---\n")
+        choice = questionary.select(
+            "What would you like to do with this draft?",
+            choices=[
+                questionary.Choice(title="Accept it as-is", value="accept"),
+                questionary.Choice(title="Regenerate", value="regenerate"),
+                questionary.Choice(title="Skip -- optional, I'll add my own later", value="skip"),
+            ],
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if choice == "regenerate":
+            draft = bootstrap_extractors.draft_voice_anchors(source_texts)
+            continue
+        break
+
+    os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
+    with open(VOICE_ANCHORS_PATH, "w", encoding="utf-8") as f:
         f.write(draft if choice == "accept" else "")
 
 
@@ -839,12 +911,16 @@ def run_profile_setup(dry_run: bool = False) -> dict:
     write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
     write_portals_yml(identity)
     write_verified_ledger(dry_run=dry_run)
-    # background guide before cv.md, not after: rewrite_bullets.KnowledgeBase
-    # (which write_cv_md()'s bullet-polishing loop uses) loads
-    # user-background-guide.md at __init__ time -- if cv.md is drafted
-    # first, every bullet gets polished with no background-guide context
-    # available yet, since the file doesn't exist until this step runs.
+    # background guide + voice anchors before cv.md, not after:
+    # rewrite_bullets.KnowledgeBase (which write_cv_md()'s bullet-polishing
+    # loop uses) loads both user-background-guide.md and voice-anchors.md
+    # at __init__ time -- voice-anchors.md is actually injected into every
+    # rewrite prompt too (unlike the background guide, which is currently
+    # loaded but not yet wired into one) -- if cv.md is drafted first,
+    # every bullet gets polished with neither available yet, since neither
+    # file exists until these steps run.
     write_background_guide(checkpoint, dry_run=dry_run)
+    write_voice_anchors(checkpoint, dry_run=dry_run)
     write_cv_md(identity, dry_run=dry_run)
     return {
         "full_name": identity["full_name"],

@@ -460,6 +460,33 @@ keywords list (empty keywords is how the rest of the system recognizes a
 catch-all tag that matches everything, not a mistake to fix).
 """
 
+_VOICE_ANCHORS_PROMPT = """
+You are drafting a "voice anchors" file from this person's own writing --
+real answers to interview-style questions, cover letter excerpts, or
+any other first-person writing sample text they've provided. The goal is
+to capture genuine turns of phrase and themes worth echoing later, not to
+summarize their career (a separate background guide already does that).
+
+Output 3-6 entries in this exact markdown shape, one per real
+question/topic actually evident in the source text:
+
+### <a short question or topic, phrased the way an interviewer or cover
+letter prompt might ask it -- e.g. "Why would you be a good fit for X"
+or "Tell me about a time you had to prioritize under pressure">
+
+<one or two sentences paraphrasing their real answer/point, third person>
+
+> <OPTIONAL -- only if the source text contains an actual quotable
+line worth echoing verbatim; a real sentence or near-verbatim close
+paraphrase, in first person, in quotes. Omit this line entirely for an
+entry with no standout phrase to pull -- do not invent one.>
+
+Only draw from what's actually in the source text -- do not invent
+questions, answers, or quotes that aren't grounded in it. If the source
+material is too thin to produce even 3 genuine entries, output fewer
+rather than padding with invented ones.
+"""
+
 _LEDGER_PROMPT = """
 Given a list of resume achievement bullets, extract three things:
 - metrics: every quantified result mentioned, as a (label, value) pair
@@ -578,6 +605,29 @@ def draft_background_guide(source_texts: list[str], dry_run: bool = False) -> st
     combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
     raw, _ = GeminiClient.generate(
         model=EXTRACTION_MODEL, system_instruction=_BACKGROUND_GUIDE_PROMPT,
+        contents=combined, temperature=0.4,
+    )
+    return (raw or "").strip()
+
+
+def draft_voice_anchors(source_texts: list[str], dry_run: bool = False) -> str:
+    """Drafts voice-anchors.md -- real turns of phrase and themes worth
+    echoing later, pulled from whatever first-person writing-sample text
+    got ingested during bootstrap (cover letters, interview-prep answers,
+    etc.). Degrades to an empty string (not an invented example) when
+    there's nothing usable to draw from; every consumer of voice-anchors.md
+    (orchestrator.py, rewrite_bullets.py) already checks os.path.exists()
+    first, so an empty/missing file is a fully supported "no signal yet"
+    state, not an error."""
+    if dry_run:
+        print("[DRY RUN] would draft voice anchors.")
+        return ""
+
+    combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
+    if not combined:
+        return ""
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL, system_instruction=_VOICE_ANCHORS_PROMPT,
         contents=combined, temperature=0.4,
     )
     return (raw or "").strip()

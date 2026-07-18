@@ -32,6 +32,7 @@ class BootstrapProfileTestCase(unittest.TestCase):
         bootstrap_profile.PORTALS_YML_PATH = os.path.join(self.tmp_dir, "portals.yml")
         bootstrap_profile.CV_MD_PATH = os.path.join(self.tmp_dir, "cv.md")
         bootstrap_profile.BACKGROUND_GUIDE_PATH = os.path.join(self.tmp_dir, "user-background-guide.md")
+        bootstrap_profile.VOICE_ANCHORS_PATH = os.path.join(self.tmp_dir, "voice-anchors.md")
         bootstrap_profile.VERIFIED_METRICS_PATH = os.path.join(self.tmp_dir, "verified_metrics.json")
         bootstrap_profile.VERIFIED_TOOLS_PATH = os.path.join(self.tmp_dir, "verified_tools.json")
         bootstrap_profile.VERIFIED_PROJECTS_PATH = os.path.join(self.tmp_dir, "verified_projects.json")
@@ -446,6 +447,26 @@ class TestCvDraftResumability(BootstrapProfileTestCase):
         # silently replay the cached result from the draft just rejected.
         self.assertEqual(mock_process_bullet.call_count, 2)
 
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_dry_run_never_writes_a_checkpoint_file(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        # Regression test: a dry run must make zero real filesystem
+        # changes, same guarantee as zero real API calls -- caught during
+        # review before it ever wrote to a real profile's bootstrap/ dir,
+        # since write_cv_md()'s dry_run branch still calls
+        # _assemble_cv_draft() (to preview what *would* be drafted).
+        identity = self._setup_one_bullet()
+        mock_process_bullet.return_value = {"final_bullet": "[DRY RUN] polished", "rewrite_status": "MANUAL"}
+
+        bootstrap_profile.write_cv_md(identity, dry_run=True)
+
+        self.assertFalse(os.path.exists(bootstrap_profile.CV_DRAFT_CHECKPOINT_PATH))
+
 
 class TestCollectSecrets(unittest.TestCase):
     """
@@ -575,8 +596,61 @@ class TestWriteBackgroundGuide(BootstrapProfileTestCase):
             mock_draft.assert_called_once()
 
 
+class TestWriteVoiceAnchors(BootstrapProfileTestCase):
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_voice_anchors")
+    def test_accepts_draft_and_writes_file(self, mock_draft, mock_select):
+        self._touch_source("cover_letter.txt")
+        self._write_checkpoint({"cover_letter.txt": {"status": "done", "doc_type": "other"}})
+        mock_draft.return_value = "### Why this role\n\nSomething genuine.\n"
+        mock_select.return_value.ask.return_value = "accept"
+
+        bootstrap_profile.write_voice_anchors(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.VOICE_ANCHORS_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "### Why this role\n\nSomething genuine.\n")
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.bootstrap_extractors.draft_voice_anchors")
+    def test_skip_writes_empty_file(self, mock_draft, mock_select):
+        self._touch_source("cover_letter.txt")
+        self._write_checkpoint({"cover_letter.txt": {"status": "done", "doc_type": "other"}})
+        mock_draft.return_value = "Some draft text."
+        mock_select.return_value.ask.return_value = "skip"
+
+        bootstrap_profile.write_voice_anchors(bootstrap_profile._load_checkpoint())
+
+        with open(bootstrap_profile.VOICE_ANCHORS_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "")
+
+    def test_dry_run_writes_without_prompting(self):
+        with patch("bootstrap_profile.questionary.select") as mock_select, \
+             patch("bootstrap_profile.bootstrap_extractors.draft_voice_anchors", return_value="") as mock_draft:
+            bootstrap_profile.write_voice_anchors({}, dry_run=True)
+            mock_select.assert_not_called()
+            mock_draft.assert_called_once()
+
+    def test_gathers_other_doc_type_unlike_background_guide(self):
+        # Regression test: a genuine writing sample (cover letter, essay)
+        # has no dedicated doc_type and usually classifies as "other" --
+        # _gather_background_source_texts() deliberately excludes "other",
+        # but voice anchors need exactly this kind of first-person text.
+        self._touch_source("essay.txt")
+        with open(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, "essay.txt"), "w", encoding="utf-8") as f:
+            f.write("A real first-person writing sample.")
+        checkpoint = {"essay.txt": {"status": "done", "doc_type": "other"}}
+
+        texts = bootstrap_profile._gather_voice_anchor_source_texts(checkpoint)
+
+        self.assertEqual(texts, ["A real first-person writing sample."])
+
+
 class TestRunProfileSetup(BootstrapProfileTestCase):
 
+    @patch("bootstrap_profile.write_voice_anchors")
     @patch("bootstrap_profile.write_background_guide")
     @patch("bootstrap_profile.write_cv_md")
     @patch("bootstrap_profile.write_verified_ledger")
@@ -589,6 +663,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
     def test_calls_every_writer_in_order(
         self, mock_guess_recs, mock_collect_identity, mock_collect_linkedin, mock_generate_tags,
         mock_write_profile, mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
+        mock_write_voice,
     ):
         mock_collect_identity.return_value = {
             "full_name": "Jamie Rivera", "primary_roles": ["Marketing Manager"], "secondary_roles": [],
@@ -604,6 +679,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_ledger.assert_called_once()
         mock_write_cv.assert_called_once()
         mock_write_bg.assert_called_once()
+        mock_write_voice.assert_called_once()
         self.assertEqual(summary["full_name"], "Jamie Rivera")
         self.assertEqual(summary["primary_roles"], 1)
         self.assertEqual(summary["tags_generated"], 0)

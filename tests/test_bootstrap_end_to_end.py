@@ -27,6 +27,7 @@ class BootstrapEndToEndTestCase(unittest.TestCase):
         bootstrap_bullet_bank.CERTIFICATIONS_PATH = os.path.join(self.bootstrap_dir, "certifications.json")
         bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH = os.path.join(self.tmp_dir, "bullet-bank-clean.csv")
         os.makedirs(bootstrap_bullet_bank.SOURCE_DOCS_DIR, exist_ok=True)
+        bootstrap_profile.CV_DRAFT_CHECKPOINT_PATH = os.path.join(self.bootstrap_dir, "cv_draft_checkpoint.json")
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -140,10 +141,12 @@ class TestPhaseZeroPointFiveDryRunEndToEnd(BootstrapEndToEndTestCase):
         self.portals_yml_path = os.path.join(self.tmp_dir, "portals.yml")
         self.cv_md_path = os.path.join(self.tmp_dir, "cv.md")
         self.background_guide_path = os.path.join(self.tmp_dir, "user-background-guide.md")
+        self.voice_anchors_path = os.path.join(self.tmp_dir, "voice-anchors.md")
         bootstrap_profile.PROFILE_YML_PATH = self.profile_yml_path
         bootstrap_profile.PORTALS_YML_PATH = self.portals_yml_path
         bootstrap_profile.CV_MD_PATH = self.cv_md_path
         bootstrap_profile.BACKGROUND_GUIDE_PATH = self.background_guide_path
+        bootstrap_profile.VOICE_ANCHORS_PATH = self.voice_anchors_path
         bootstrap_profile.VERIFIED_METRICS_PATH = os.path.join(self.tmp_dir, "verified_metrics.json")
         bootstrap_profile.VERIFIED_TOOLS_PATH = os.path.join(self.tmp_dir, "verified_tools.json")
         bootstrap_profile.VERIFIED_PROJECTS_PATH = os.path.join(self.tmp_dir, "verified_projects.json")
@@ -163,6 +166,7 @@ class TestPhaseZeroPointFiveDryRunEndToEnd(BootstrapEndToEndTestCase):
 
         for path in (
             self.profile_yml_path, self.portals_yml_path, self.cv_md_path, self.background_guide_path,
+            self.voice_anchors_path,
             bootstrap_profile.VERIFIED_METRICS_PATH, bootstrap_profile.VERIFIED_TOOLS_PATH,
             bootstrap_profile.VERIFIED_PROJECTS_PATH, bootstrap_profile.VERIFIED_FACTS_PATH,
             bootstrap_profile.VERIFIED_CLAIMS_PATH, bootstrap_profile.EVIDENCE_GRAPH_PATH,
