@@ -110,8 +110,8 @@ class TestGenerateCandidate(unittest.TestCase):
             "SUMMARY_TEXT": "<strong>Summary.</strong>",
             "SECTION_EXPERIENCE": "Work Experience",
             "EXPERIENCE": [],
-            "KU_ACHIEVEMENT_KEY": "content_generalist",
-            "KCKCC_ACHIEVEMENT_KEY": "generalist",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "generalist",
             "SECTION_SKILLS": "Skills",
             "SKILLS": ["Python"],
             "SECTION_WHY": "",
@@ -140,8 +140,8 @@ class TestGenerateCandidate(unittest.TestCase):
         gemini_json = json.dumps({
             "TAGLINE": "TAG", "SECTION_SUMMARY": "Professional Summary",
             "SUMMARY_TEXT": "s", "SECTION_EXPERIENCE": "Work Experience",
-            "EXPERIENCE": [], "KU_ACHIEVEMENT_KEY": "content_generalist",
-            "KCKCC_ACHIEVEMENT_KEY": "generalist", "SECTION_SKILLS": "Skills",
+            "EXPERIENCE": [], "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "generalist", "SECTION_SKILLS": "Skills",
             "SKILLS": [], "SECTION_WHY": "", "WHY_TEXT": "",
         })
         mock_generate.return_value = (gemini_json, {})

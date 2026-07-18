@@ -190,133 +190,20 @@ NUMERIC_SCORE_COLS = ["accuracy_score", "believability_score", "clarity_score", 
 STRING_SCORE_COLS  = ["manager_test", "weaknesses"]
 
 DONE_STATUSES      = {"KEEP", "MANUAL"}
-TREERING_KEYWORDS  = ["treering", "tree ring", "yearbook"]
 MAX_CLAIMS_ROWS         = 12
 MAX_GEMMA_FILTER_ROWS   = 5   # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
 
-TAG_CONTEXT = {
-    "[content]":   "content marketing, editorial strategy, brand voice, or copywriting roles",
-    "[ops]":       "marketing operations, RevOps, CRM, automation, or analytics roles",
-    "[email]":     "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
-    "[demand]":    "demand generation, paid media, or growth marketing roles",
-    "[product]":   "product marketing or go-to-market strategy roles",
-    "[sales]":     "B2B sales, SDR/AE, or account management roles",
-    "[brand]":     "brand marketing, creative direction, or agency roles",
-    "[design]":    "graphic design, visual identity, or UX/UI roles",
-    "[general]":   "general marketing or cross-functional roles",
-}
-
-BACKGROUND_IDENTITY = """
-Morgan is a creative and strategic marketer with 10+ years of experience spanning journalism,
-design, agency work, sales, CRM, and lifecycle content. She is the rare combination: writes
-campaigns that perform AND operates the stack (Salesforce + Outreach.io). She brings structure
-to creative work and energy to technical systems. She is seeking fully remote IC roles — not
-management. She has consistently been the person companies come back to: Callahan Creek extended
-her from intern to freelance; Element 8's CEO recruited her to lead Strategy LLC branding;
-Treering headhunted her directly from IST.
-""".strip()
-
-BACKGROUND_TAGS = {
-    "[email]": """
-Email / Lifecycle context:
-- Owned Outreach.io as primary admin: evaluated vendors, led integration with Salesforce, drove
-  team-wide adoption for a 20+ person SDR org.
-- Built 62+ sequences across 4 major categories (PTA, Hot Zone, Private School, Title 1).
-- PTA Council: 74% open / 22% reply / 0 opt-outs. HZ Spring 1st Touch: 85% open / 39% reply.
-- Jan 2022 run: 63% avg open across 6 sequences, 8.7% reply, 3,337 prospects added.
-- Personalization at scale: variable logic, behavioral triggers, segmentation by district type.
-- A/B tested subject lines, CTAs, and send windows systematically.
-""".strip(),
-    "[ops]": """
-Ops / CRM context:
-- Salesforce Classic & Lightning: territory management, pipeline reporting, data hygiene at scale.
-- Uncovered $3M+ in stale pipeline via systematic CRM scrub; defined KPIs, dashboards, scope.
-- National Hot Zone analysis: identified high-propensity districts using Salesforce data;
-  trained team on strategy; the program scaled into a dedicated research function.
-- Managed 2,000+ accounts simultaneously while also managing a 4-6 person SDR team.
-- Led Outreach.io/Salesforce integration: data migration, deduplication, field mapping.
-""".strip(),
-    "[content]": """
-Content / Enablement context:
-- Founded and chaired the Content Committee: cross-department body owning brand voice,
-  sequence library (100+ assets), campaign QA, and content governance.
-- Built voice/tone guidelines adopted team-wide; peers held to Morgan's standard as benchmark.
-- Created SDR Process Map (escottmorgan.wixsite.com/processmap) — official new-hire training.
-- 100+ email campaigns across niche audiences, each with unique messaging and multi-touch logic.
-- Designed branded slide decks for all monthly team trainings (20+ employees); consistently
-  received outstanding feedback on quality and engagement.
-""".strip(),
-    "[enablement]": """
-Enablement / Training context:
-- Developed and delivered live + async training for 20+ employees on messaging, QA, platforms.
-- Created the SDR Process Map website used as official onboarding infrastructure.
-- Produced onboarding playbooks, interview guides, and campaign frameworks.
-- Coached a remote pod of 4-6 SDRs on sequencing strategy, CRM hygiene, and territory work.
-- Content Committee governed all sales content: 100+ assets, 129 sequences, QA checklists.
-""".strip(),
-    "[sales]": """
-Sales / SDR context:
-- First outbound hire to surpass $1M in sourced revenue at Treering; exceeded Year 1 target by 17%.
-- 2x Top Seller at Inside Sales Team (now Alleyoop); Top 10 company-wide in first 2 months.
-- Promoted within 6 months at IST to sole manager of a 12-person SDR team.
-- Treering recruited Morgan directly from IST based on exceptional performance.
-- Managed 2,000+ accounts; coached a pod of 4-6 SDRs on prospecting and outreach.
-""".strip(),
-    "[brand]": """
-Brand / Agency context:
-- VML (global ad agency): campaigns for Gatorade, SAP, HughesNet; pitch deck praised by CEO;
-  wrote 200+ page digital strategy report for Carlson Hotels.
-- Callahan Creek: worked in a real creative pod (copywriter, art director, designer); 2 campaigns
-  selected for client rollout; extended to long-term freelance.
-- Built Treering's voice/tone guidelines and Content Committee governance from scratch.
-""".strip(),
-    "[design]": """
-Design context:
-- Adobe Illustrator, Photoshop, InDesign: conference flyers, brand decks, COVID response flyer
-  (posted on Treering homepage), monthly training decks, Georgia PTA council presentation.
-- Element 8 / Strategy LLC: designed complete brand identity from scratch; still in use 15+ years later.
-- Lead Graphic Designer title at Strategy LLC; recruited specifically by the CEO for the role.
-- Canva, Figma (basic), CMS/WYSIWYG editors also in toolkit.
-""".strip(),
-    "[generalist]": """
-Generalist / cross-functional context:
-- Range: journalism foundation (KU BS), agency copywriting (VML, Callahan Creek), graphic design
-  (Element 8/Strategy LLC), B2B SaaS sales + CRM (Treering 8 years), AI data work (Mercor).
-- Comfortable moving between writing, ops, design, and strategy without losing quality in any lane.
-- Non-Treering experience spans EdTech, regulated financial copy (CACU), K-12/education audiences,
-  nonprofit (Humane Society of KC), print/publishing.
-""".strip(),
-}
-
-CV_SECTION_KEYWORDS = [
-    (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
-    (["inside sales", "alleyoop", "ist"],   "Inside Sales Team"),
-    (["usitek"],                             "USitek"),
-    (["element 8", "strategy llc"],         "Element 8"),
-    (["vml"],                               "VML"),
-    (["callahan"],                          "Callahan Creek"),
-    (["unisource", "udp"],                  "Unisource"),
-    (["humane society"],                    "Humane Society"),
-    (["mercor"],                            "Mercor"),
-]
-
-CLAIM_TAG_KEYWORDS = {
-    "[email]":       ["email", "open rate", "reply rate", "sequence", "outreach", "campaign",
-                      "pta", "hot zone", "mailchimp", "persistiq"],
-    "[ops]":         ["salesforce", "crm", "pipeline", "territory", "hygiene", "data",
-                      "hot zone", "import", "outreach", "integration"],
-    "[content]":     ["content", "committee", "asset", "library", "governance", "voice",
-                      "sequence", "playbook", "onboarding", "training"],
-    "[enablement]":  ["training", "onboarding", "playbook", "sdr", "enablement",
-                      "committee", "process map", "coaching"],
-    "[sales]":       ["revenue", "pipeline", "quota", "close rate", "sourced", "sdr",
-                      "outbound", "meeting", "deal"],
-    "[brand]":       ["brand", "voice", "tone", "agency", "campaign", "creative"],
-    "[design]":      ["design", "deck", "slide", "flyer", "illustrator", "canva"],
-    "[generalist]":  [],
-    "[mgmt]":        ["team", "coach", "manage", "sdr", "direct report", "training"],
-    "[writing]":     ["copy", "writing", "email", "sequence", "campaign", "authored"],
-}
+# TAG_CONTEXT/BACKGROUND_IDENTITY/BACKGROUND_TAGS/CV_SECTION_KEYWORDS/
+# CLAIM_TAG_KEYWORDS/TREERING_KEYWORDS used to be hardcoded here (this
+# file predates the engine/profile split and was never updated when
+# orchestrator.py's copies were genericized 2026-07-17) -- all per-profile
+# now: TAG_CONTEXT/CLAIM_TAG_KEYWORDS come from profile.yml's tags: (see
+# _tag_context_map()/_claim_tag_keywords_map() below and
+# profile_paths.tags()'s docstring); BACKGROUND_IDENTITY/BACKGROUND_TAGS/
+# CV_SECTION_KEYWORDS come from fixed_content.py (see
+# profile_paths.fixed_content_module()); the Treering-only deep-evidence
+# gate comes from profile.yml's deep_evidence_keywords: (see
+# is_deep_evidence_bullet() below).
 
 # ---------------------------------------------------------------------------
 # PYDANTIC SCHEMAS
@@ -653,19 +540,35 @@ def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
     return df_claims[available].to_csv(index=False)
 
 
-def is_treering_bullet(role_company: str) -> bool:
-    if not isinstance(role_company, str):
+def is_deep_evidence_bullet(role_company: str, keywords: list) -> bool:
+    """Whether role_company matches profile.yml's deep_evidence_keywords --
+    see orchestrator.py's identical function for the full rationale. Empty
+    keywords (a profile with no deep-evidence archive) means always False."""
+    if not isinstance(role_company, str) or not keywords:
         return False
     rc = role_company.lower()
-    return any(kw in rc for kw in TREERING_KEYWORDS)
+    return any(kw in rc for kw in keywords)
+
+
+def _tag_context_map() -> dict:
+    """Bracket-tag ("[ops]") -> persona_description, from profile.yml's
+    tags: -- see orchestrator.py's identical function."""
+    return {f"[{t['name']}]": t["persona_description"] for t in profile_paths.tags()}
+
+
+def _claim_tag_keywords_map() -> dict:
+    """Bracket-tag -> keywords, from profile.yml's tags: -- see
+    orchestrator.py's identical function."""
+    return {f"[{t['name']}]": (t.get("keywords") or []) for t in profile_paths.tags()}
 
 
 def extract_cv_section(cv_text: str, role_company: str) -> str:
     if not cv_text or not role_company:
         return cv_text
     rc_lower = role_company.lower()
+    fixed_content = profile_paths.fixed_content_module()
     matched_heading = None
-    for keywords, heading in CV_SECTION_KEYWORDS:
+    for keywords, heading in fixed_content.CV_SECTION_KEYWORDS:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
@@ -684,7 +587,7 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MA
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     keywords = []
     include_all = False
-    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+    for tag, kws in _claim_tag_keywords_map().items():
         if tag in tags_lower:
             if not kws:
                 include_all = True
@@ -709,7 +612,7 @@ def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     keywords = []
     include_all = False
-    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+    for tag, kws in _claim_tag_keywords_map().items():
         if tag in tags_lower:
             if not kws:
                 include_all = True
@@ -729,9 +632,10 @@ def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list
 
 
 def build_background_summary(tags: str) -> str:
+    fixed_content = profile_paths.fixed_content_module()
     tags_lower = tags.lower() if isinstance(tags, str) else ""
-    sections = [BACKGROUND_IDENTITY]
-    for tag, content in BACKGROUND_TAGS.items():
+    sections = [fixed_content.BACKGROUND_IDENTITY]
+    for tag, content in fixed_content.BACKGROUND_TAGS.items():
         if tag in tags_lower:
             sections.append(content)
     return "\n\n".join(sections)
@@ -759,6 +663,7 @@ class KnowledgeBase:
         self.verified_tools    = load_json_file(KB_VERIFIED_TOOLS,    "verified_tools.json")
         self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
         self.voice_anchors      = load_text_file(KB_VOICE_ANCHORS,    "voice-anchors.md")
+        self.deep_evidence_keywords = (yaml.safe_load(raw_profile) or {}).get("deep_evidence_keywords") or []
 
         print(f"   💥 profile.yml trimmed to {len(self.profile):,} chars")
 
@@ -783,7 +688,7 @@ class KnowledgeBase:
         if self.verified_facts:
             sections.append(
                 "=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
-                "These are the only facts about Morgan's career that are evidence-backed.\n"
+                "These are the only facts about this candidate's career that are evidence-backed.\n"
                 "Do NOT invent facts outside this list.\n"
                 + self.verified_facts
             )
@@ -817,7 +722,7 @@ class KnowledgeBase:
         if self.verified_facts:
             sections.append(
                 "=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
-                "These are the only facts about Morgan's career that are evidence-backed.\n"
+                "These are the only facts about this candidate's career that are evidence-backed.\n"
                 "Do NOT invent facts outside this list.\n"
                 + self.verified_facts
             )
@@ -846,7 +751,7 @@ class KnowledgeBase:
         check) let Treering-specific project detail leak into non-Treering
         bullets purely on keyword overlap (e.g. an "Inside Sales Team"
         bullet tagged [email] still matched Treering's "Outreach.io
-        Platform Rollout" project). Gating it behind is_treering_bullet,
+        Platform Rollout" project). Gating it behind is_deep_evidence_bullet,
         same as claims/metrics/screenshots below, avoids that cross-
         contamination -- it's excluded for the 2 non-Treering entries too,
         but that matches how narrowly this file actually applies."""
@@ -860,7 +765,7 @@ class KnowledgeBase:
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
 
-        if is_treering_bullet(role_company):
+        if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
             filtered_projects = filter_json_entries_by_tags(self.projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
             if filtered_projects:
                 sections.append(
@@ -873,7 +778,7 @@ class KnowledgeBase:
             claims_text = get_verified_claims_text(filtered_claims)
             if claims_text:
                 sections.append(
-                    "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                    f"=== VERIFIED CLAIMS & METRICS ({role_company} — resume-usable, tag-filtered) ===\n"
                     "Use these to inject real, verified metrics where appropriate. "
                     "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
                     + claims_text
@@ -888,7 +793,7 @@ class KnowledgeBase:
             if filtered_metrics:
                 sections.append(
                     "=== VERIFIED METRICS (authoritative — tag-filtered) ===\n"
-                    "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                    f"These are the ONLY numeric metrics that may be cited as hard facts in {role_company} bullets.\n"
                     + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
                 )
         return "\n\n".join(sections)
@@ -903,12 +808,12 @@ class KnowledgeBase:
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
-        if is_treering_bullet(role_company):
+        if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags)
             claims_text = get_verified_claims_text(filtered_claims)
             if claims_text:
                 sections.append(
-                    "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                    f"=== VERIFIED CLAIMS & METRICS ({role_company} — resume-usable, tag-filtered) ===\n"
                     "Use these to inject real, verified metrics where appropriate. "
                     "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
                     + claims_text
@@ -918,7 +823,7 @@ class KnowledgeBase:
             if self.verified_metrics:
                 sections.append(
                     "=== VERIFIED METRICS (authoritative — use these numbers, not guesses) ===\n"
-                    "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                    f"These are the ONLY numeric metrics that may be cited as hard facts in {role_company} bullets.\n"
                     + self.verified_metrics
                 )
         return "\n\n".join(sections)
@@ -936,8 +841,8 @@ class KnowledgeBase:
             self._segment_cache[key] = bundle
             gemma_bundle = self._build_gemma_segment_bundle(rc, tags)
             self._gemma_segment_cache[key] = gemma_bundle
-            treering_flag = " [Treering+claims]" if is_treering_bullet(rc) else ""
-            print(f"   📦 ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag} (Gemma: {len(gemma_bundle):,} chars)")
+            deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(rc, self.deep_evidence_keywords) else ""
+            print(f"   📦 ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
         print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
 
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
@@ -1039,10 +944,11 @@ def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
 # ---------------------------------------------------------------------------
 
 def persona_context(tags: str) -> str:
+    tag_context = _tag_context_map()
     if not isinstance(tags, str) or not tags.strip():
-        return "general marketing roles"
-    parts = [TAG_CONTEXT[tag] for tag in TAG_CONTEXT if tag in tags.lower()]
-    return ", ".join(parts) if parts else "general marketing roles"
+        return "this candidate's target roles"
+    parts = [tag_context[tag] for tag in tag_context if tag in tags.lower()]
+    return ", ".join(parts) if parts else "this candidate's target roles"
 
 
 # ---------------------------------------------------------------------------

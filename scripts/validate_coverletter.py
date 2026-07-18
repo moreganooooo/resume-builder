@@ -11,6 +11,8 @@ since a cover letter has none of those structures.
 
 import re
 
+import profile_paths
+
 
 def _check_forbidden_phrases(cover_letter_data: dict, style_rules: dict) -> list[str]:
     violations = []
@@ -35,16 +37,33 @@ def _check_paragraph_count(cover_letter_data: dict) -> list[str]:
     return []
 
 
-# Blunt heuristic, not a perfect one: a first-person letter addressed
-# generically to "Hiring Team" shouldn't ever need to reference a third
-# party by name/pronoun, so this is a reasonable v1 check -- but it would
-# false-positive on a legitimate sentence naming someone else (e.g. "I
-# worked with the hiring manager and her team"). Not a concern for this
-# pass since letters don't name third parties without company research.
-_THIRD_PERSON_PATTERN = re.compile(r"\b(Morgan Escott|Morgan|she|her|hers)\b", re.IGNORECASE)
+def _third_person_terms() -> list[str]:
+    """Terms that would indicate the letter slipped into third person about
+    the candidate themself: their full name, first name, and -- only if
+    the profile explicitly configures candidate.pronouns: -- their
+    pronouns. Pronouns are never guessed or defaulted (see CLAUDE.md-level
+    guidance against inferring pronouns from a name); a profile that
+    hasn't set them just gets a name-only check rather than a wrong
+    guess."""
+    data = profile_paths.profile_yaml()
+    candidate = data.get("candidate") or {}
+    full_name = candidate.get("full_name", "")
+    terms = [t for t in (full_name, full_name.split()[0] if full_name else "") if t]
+    terms += candidate.get("pronouns") or []
+    return terms
 
 
 def _check_third_person_slip(cover_letter_data: dict) -> list[str]:
+    # Blunt heuristic, not a perfect one: a first-person letter addressed
+    # generically to "Hiring Team" shouldn't ever need to reference a third
+    # party by name/pronoun, so this is a reasonable v1 check -- but it would
+    # false-positive on a legitimate sentence naming someone else (e.g. "I
+    # worked with the hiring manager and her team"). Not a concern for this
+    # pass since letters don't name third parties without company research.
+    terms = _third_person_terms()
+    if not terms:
+        return []
+    pattern = re.compile(r"\b(" + "|".join(re.escape(t) for t in terms) + r")\b", re.IGNORECASE)
     violations = []
     haystacks = (
         [("greeting", cover_letter_data.get("greeting", ""))]
@@ -52,7 +71,7 @@ def _check_third_person_slip(cover_letter_data: dict) -> list[str]:
         + [("sign_off", cover_letter_data.get("sign_off", ""))]
     )
     for field_name, text in haystacks:
-        if _THIRD_PERSON_PATTERN.search(text):
+        if pattern.search(text):
             violations.append(f"Third-person self-reference found in {field_name}: {text!r}")
     return violations
 

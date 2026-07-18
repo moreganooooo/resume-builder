@@ -3,19 +3,14 @@
 tag_bullet_bank.py
 
 Auto-assigns the [tag] category to bullet-bank rows that don't have one yet.
-Tags are the manual convention documented in bullet-bank.md ([email]
-[enablement] [content] [ops] [mgmt] [writing] [generalist]), extended here
-with [brand] and [design] — both already fully defined in rewrite_bullets.py
-(TAG_CONTEXT, BACKGROUND_TAGS, CLAIM_TAG_KEYWORDS) but missing from
-bullet-bank.md's list, which left ~27% of the bank (VML, Callahan Creek,
-Element 8/Strategy LLC, Bernstein Rein — creative/agency work) with no tag
-that actually fits, mistagged [email] off the generic word "campaign" or
-dumped into [generalist]. If you add tags here, update bullet-bank.md too.
-
-Keyword lists mirror rewrite_bullets.py's CLAIM_TAG_KEYWORDS (kept in sync by
-hand — if you change the tag vocabulary there, update TAG_KEYWORDS here too).
-That dict has one extra tag ([sales]) not used here — Treering/IST sales
-content is already well covered by [ops]/[mgmt]/[enablement].
+The tag taxonomy and its keyword lists come from profile.yml's tags: --
+generated per-profile during bootstrap from that candidate's own target
+roles and real achievement text (bootstrap_extractors.generate_tag_taxonomy()),
+not a hardcoded list. See profile_paths.tags()'s docstring: this used to be
+a module constant here duplicating (and, by 2026-07-17, having already
+drifted from) orchestrator.py's/rewrite_bullets.py's own separate copies of
+the same marketing-specific taxonomy -- every consumer now reads the same
+profile.yml source instead.
 
 Each bullet gets one tag, or two when there's independent (non-shared-keyword)
 evidence for both — e.g. a sales-enablement content bullet legitimately
@@ -39,49 +34,59 @@ Usage:
 import argparse
 import csv
 import os
+import sys
 
-# Mirrors rewrite_bullets.py's CLAIM_TAG_KEYWORDS, plus [brand]/[design]
-# (see module docstring).
-TAG_KEYWORDS = {
-    "[email]":      ["email", "open rate", "reply rate", "sequence", "outreach", "campaign",
-                      "pta", "hot zone", "mailchimp", "persistiq"],
-    "[ops]":        ["salesforce", "crm", "pipeline", "territory", "hygiene", "data",
-                      "hot zone", "import", "outreach", "integration"],
-    "[content]":    ["content", "committee", "asset", "library", "governance", "voice",
-                      "sequence", "playbook", "onboarding", "training"],
-    "[enablement]": ["training", "onboarding", "playbook", "sdr", "enablement",
-                      "committee", "process map", "coaching"],
-    "[mgmt]":       ["team", "coach", "manage", "sdr", "direct report", "training"],
-    "[writing]":    ["copy", "writing", "email", "sequence", "campaign", "authored"],
-    "[brand]":      ["brand", "voice", "tone", "agency", "campaign", "creative"],
-    "[design]":     ["design", "deck", "slide", "flyer", "illustrator", "canva"],
-}
-FALLBACK_TAG = "[generalist]"  # matches CLAIM_TAG_KEYWORDS's empty-keyword-list role
-
-# Several keyword lists share generic words ("campaign", "training",
-# "sequence") across 2-3 tags. A single occurrence of a SHARED word is weak
-# evidence; a single occurrence of a word unique to one tag (e.g.
-# "salesforce", only in [ops]) is strong evidence. Weight each keyword by
-# 1 / (number of tags it appears in) so unique words count full strength and
-# shared words get diluted instead of manufacturing false ties.
-_KEYWORD_TAG_COUNTS = {}
-for _kws in TAG_KEYWORDS.values():
-    for _kw in _kws:
-        _KEYWORD_TAG_COUNTS[_kw] = _KEYWORD_TAG_COUNTS.get(_kw, 0) + 1
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import profile_paths  # noqa: E402
 
 
-def score_bullet(text):
+def tag_keywords() -> dict:
+    """Bracket-tag ("[ops]") -> keywords, from profile.yml's tags:."""
+    return {f"[{t['name']}]": (t.get("keywords") or []) for t in profile_paths.tags()}
+
+
+def fallback_tag() -> str:
+    """The catch-all tag -- generate_tag_taxonomy() always produces exactly
+    one tag with an empty keywords list for this purpose. Falls back to the
+    literal "[generalist]" if somehow missing (e.g. a hand-edited
+    profile.yml with no such entry) rather than crashing."""
+    for t in profile_paths.tags():
+        if not t.get("keywords"):
+            return f"[{t['name']}]"
+    return "[generalist]"
+
+
+def _keyword_tag_counts(keywords_by_tag: dict) -> dict:
+    """Several keyword lists can share generic words ("campaign",
+    "training", "sequence") across 2-3 tags. A single occurrence of a
+    SHARED word is weak evidence; a single occurrence of a word unique to
+    one tag (e.g. "salesforce", only in [ops]) is strong evidence. Weight
+    each keyword by 1 / (number of tags it appears in) so unique words
+    count full strength and shared words get diluted instead of
+    manufacturing false ties."""
+    counts = {}
+    for kws in keywords_by_tag.values():
+        for kw in kws:
+            counts[kw] = counts.get(kw, 0) + 1
+    return counts
+
+
+def score_bullet(text: str, keywords_by_tag: dict = None) -> dict:
     """Returns {tag: weighted_score} for every tag with at least one hit."""
+    keywords_by_tag = keywords_by_tag if keywords_by_tag is not None else tag_keywords()
+    keyword_tag_counts = _keyword_tag_counts(keywords_by_tag)
     t = text.lower()
     scores = {}
-    for tag, keywords in TAG_KEYWORDS.items():
-        weight = sum(1 / _KEYWORD_TAG_COUNTS[kw] for kw in keywords if kw in t)
+    for tag, keywords in keywords_by_tag.items():
+        weight = sum(1 / keyword_tag_counts[kw] for kw in keywords if kw in t)
         if weight:
             scores[tag] = weight
     return scores
 
 
-def assign_tags(text):
+def assign_tags(text: str) -> tuple:
     """
     Returns (tag_string, needs_review: bool).
     A tag reaching a weighted score of 1.0 means at least one keyword unique
@@ -89,7 +94,7 @@ def assign_tags(text):
     doesn't need review. Below 1.0 means every hit was a word shared with
     other tags, which is genuinely weaker and worth a glance.
       - the highest-scoring tag wins outright; ties break by priority order
-        (the order tags are defined in TAG_KEYWORDS above)
+        (profile.yml's tags: list order)
       - a second tag rides along (up to 2 total) whenever it independently
         reaches 1.0 too (its own unique-keyword evidence, not just
         shared-word overlap) — a confident two-tag bullet is a normal,
@@ -97,11 +102,12 @@ def assign_tags(text):
       - flagged for review only when the winner's own score is < 1.0, i.e.
         the whole call rests on shared/generic words
     """
-    scores = score_bullet(text)
+    keywords_by_tag = tag_keywords()
+    scores = score_bullet(text, keywords_by_tag)
     if not scores:
-        return FALLBACK_TAG, False
+        return fallback_tag(), False
 
-    priority = list(TAG_KEYWORDS.keys())
+    priority = list(keywords_by_tag.keys())
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], priority.index(kv[0])))
     top_tag, top_score = ranked[0]
     winners = [top_tag]
@@ -127,6 +133,7 @@ def main():
     with open(args.input_csv, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
+    fallback = fallback_tag()
     tagged, skipped_existing, fell_back = 0, 0, 0
     review_rows = []
     for r in rows:
@@ -136,7 +143,7 @@ def main():
         tag_str, tied = assign_tags(r["Bullet Point"])
         r["Tags"] = tag_str
         tagged += 1
-        if tag_str == FALLBACK_TAG:
+        if tag_str == fallback:
             fell_back += 1
         if tied:
             review_rows.append({
@@ -158,7 +165,7 @@ def main():
 
     print(f"{args.input_csv}: {len(rows)} rows")
     print(f"  Already tagged (left alone): {skipped_existing}")
-    print(f"  Newly tagged: {tagged}  (of which {fell_back} fell back to {FALLBACK_TAG})")
+    print(f"  Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})")
     print(f"  Weak match, no unique keyword hit (flagged for review): {len(review_rows)}")
     print(f"  Wrote: {out_path}")
     if review_rows:
