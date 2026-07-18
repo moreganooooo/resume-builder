@@ -28,10 +28,10 @@ have been moved to the archive, so the sequence below starts at 4.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
-| 4 | Engine/profile rules audit + split | Medium-Hard | Unblocks all multi-user work. See Multi-user support below. |
+| 4 | Engine/profile rules audit + split | Medium-Hard | **Done 2026-07-17, including the `orchestrator.py` gap found in that day's final review (archived).** See `IDEAS_ARCHIVE.md`'s "Engine/profile split: orchestrator.py Morgan-specific constants closed" entry, and Multi-user support below. |
 | 5 | Evidence bank extension (Tier 2) | Hard | Phase 1 shipped 2026-07-07 (archived). Tier 2 -- raw "Treering Sequences" archive curation, `BestCopySamples`/`Master Cover Letters` skim -- still unscheduled. |
-| 7 | Per-user secrets (`.env` per profile) | Easy | Quick prerequisite right before Dom's onboarding. |
-| 8 | Dominick's onboarding | Hard | The onboarding wizard's own logic (extraction + profile personalization) shipped 2026-07-12/13 -- see the Multi-user support section below. Still blocked on #4 (no `profiles/<name>/` isolation yet -- a second user would overwrite Morgan's files today) and #7. |
+| 7 | Per-user secrets (`.env` per profile) | Easy | **Done 2026-07-17 (archived)** -- every script now loads `profiles/<name>/.env` instead of one shared root file; Morgan's real `.env` migrated. Bootstrap's own wizard walks a new profile through entering `GEMINI_API_KEY`/`JOBRIGHT_COOKIE_STRING` (or deferring to a file edit later) before Phase 0's first API call. See `IDEAS_ARCHIVE.md`. |
+| 8 | Dominick's onboarding | Hard | Onboarding wizard shipped 2026-07-12/13; `profiles/<name>/` isolation shipped 2026-07-17; #4's `orchestrator.py` gap and #7 (per-user secrets) both closed same week. **No remaining blockers** on the engineering side -- next step is Dom's actual first session. See Multi-user support below. |
 | 9 | Scheduler + notifications | Hard | Unblocked -- `scan` and `evaluate` stages both exist. Not started. See the Long-term merge section below. |
 | 10 | Mongo migration | Medium | The liveness-check half of this item is done (archived). Migration itself still undone -- tied to the long-term three-way merge. |
 | 11 | Multi-select "Specific JD" pickers (space-bar toggle) | Medium-Hard | Real open design question: how it coexists with `resume run --pick`'s existing evaluate-then-checkbox flow. See below. |
@@ -102,6 +102,40 @@ where one exists, framework-consistent print styling otherwise -- but
 real volume: two large files, dozens of print statements each, worth
 its own focused pass rather than folding into an unrelated change.
 
+### Clearer first-step instructions for the "New User? Start Here!" flow
+
+Raised 2026-07-17: the very first thing a brand-new user needs to know is
+"go put your documents in this exact folder, then come back." Today
+`menu.py`'s `_handle_bootstrap()` only prints this once someone's already
+selected the menu option and the folder's found to be empty (`"Looks like
+there's nothing in the source_documents folder yet..."`) -- there's no
+proactive, first-contact version of this that names the real path or
+gives document-type examples up front. Morgan's proposed copy (adjust
+final wording during implementation, but keep the shape and content):
+
+> Go to your source folder (`profiles/<name>/knowledge_base/bootstrap/source_documents/`)
+> and drop in any documentation related to your job search. Your current
+> resume and LinkedIn profile (exporting your profile as a PDF is
+> perfect) are a great place to start. You can also consider things like:
+> - Letters of recommendation
+> - Public LinkedIn recommendations
+> - Certifications
+> - Patents you own (look at you go!)
+> - Writing samples
+>
+> Once you're finished, restart this program and click New User again to
+> continue!
+
+Mechanical, no open design question -- source_docs_dir is already computed
+fresh per-profile in `_handle_bootstrap()` (`os.path.join(profile_paths.kb_dir(),
+"bootstrap", "source_documents")`), so the path is already known at the
+point this message needs to print; it just needs to print earlier/more
+proactively, with the real path interpolated in (and a real LinkedIn
+"export as PDF" help-article link, if one gets sourced -- not invented
+here). Worth deciding whether this fully replaces the existing
+empty-folder message or the empty-folder message becomes a shorter
+reminder that references this fuller one.
+
 ## Medium
 
 ### Liveness skip-by-recency (persist a check date, skip if checked recently)
@@ -130,6 +164,36 @@ pending count, learned the hard way on 2026-07-08). Also needs
 `jd_manager.read_jd_text()`'s same underscore-key-stripping treatment if
 liveness's checker ever reads JD content directly rather than just the
 `source_url` field it already extracts today.
+
+**Update 2026-07-17 (question raised, not yet built): should a JD found
+by a scan just now need a liveness check at all?** Real-world data point:
+a JobRight scan returned 104 JDs; the immediately-following liveness
+check called 71 `active`, 2 `likely_active`, 30 `uncertain`, 1 `skipped`
+(no `source_url`). Traced `check-liveness.mjs`
+(`scripts/liveness-core.mjs`): it fetches each JD's own `source_url` via
+headless browser and looks for an apply button (-> `active`), JD-shaped
+content with no clear button (-> `likely_active`), thin/ambiguous content
+(-> `uncertain`), or an explicit expired/404/redirect pattern (->
+`expired`, not seen in this run). Confirmed in `scan_jobright.py`:
+`source_url` is JobRight's `originalUrl` -- the posting on whatever
+external site/ATS JobRight aggregated it from, not jobright.ai itself.
+That explains the 30 `uncertain`: it's re-fetching a *different* page per
+company (Greenhouse, Lever, Workday, a custom careers page, ...), each
+with its own DOM shape and its own bot-detection/auth-wall quirks -- a
+real, still-open posting can easily fail to show a recognizable apply
+button on a site the heuristic hasn't seen before, with no way to
+distinguish that from an actually-thin listing today. **The proposed
+fix, building on the recency-skip work above:** seed `_liveness.checked_at`
+at *scan* time (not just at the next liveness run) so a JD found 5
+minutes ago is already inside its freshness window and doesn't need an
+immediate separate check at all -- the scan itself becomes a form of
+"confirmed to exist right now" signal. Doesn't fix the aggregator-DOM
+`uncertain` noise itself (a separate, harder problem -- maybe a looser
+bar specifically for aggregator-sourced URLs, or accepting `uncertain`
+means "leave in place, don't `active`-flag falsely" rather than trying to
+eliminate it), but removes the most common case that made this
+confusing: brand-new results getting immediately and redundantly
+re-verified.
 
 ### Multi-select pickers for "Specific JD" actions
 
@@ -178,6 +242,142 @@ found, completes the picture. No genuinely open design question here --
 it's broad (touches the Python env, Node env, filesystem, API keys, and
 tests) but every individual check is a simple, well-understood
 existence/version check.
+
+### Evaluate report: short "why this score" rationale per role
+
+Raised 2026-07-17: a role can land a lower composite score than another
+role that ends up with lower actual priority to Morgan, and today there's
+no quick way to see *why* without opening the full evaluation JSON.
+`evaluate_fit()`'s `FitEvaluationSchema` already computes per-dimension
+`dimension_scores` and an `archetype` classification -- richer reasoning
+than what actually survives to disk today. This is the same underlying
+gap the "List Jobs" / "View Pipeline" item (Hard, below) already flagged
+under "Eval notes may need richer persistence" (`save_evaluation()` only
+persists `composite_score`/`recommendation`/`hard_blockers`/`evaluated_at`,
+not the dimension-level reasoning) -- that item's browse/detail/act UI
+would be the natural place to show a *full* breakdown, but a **short
+one-line descriptor** (e.g. "Strong tools match, weak seniority fit") is
+a smaller, standalone win that doesn't need that whole feature built
+first: persist one new short string alongside the existing `_evaluation`
+fields, generated as part of the same `evaluate_fit()` call (a cheap
+"summarize your own scoring in one sentence" ask, not a second API call),
+and surface it directly in whatever prints/lists composite scores today.
+Worth building this first as its own small piece, then having the
+richer per-dimension persistence (if that item gets built) supersede it
+rather than duplicate it.
+
+### Prettier, more informative live progress for scan / liveness / evaluate
+
+Raised 2026-07-17 (Morgan's memory of this being worked on before is
+half-right): a real console-polish pass happened 2026-07-07
+(`docs/superpowers/specs/2026-07-07-console-polish-design.md`, archived)
+but it was scoped to the resume-*build* pipeline specifically (Step 1-7
+headers, the PDF trim loop, banner colors) -- `scan.py`, `liveness.py`,
+and `batch_evaluate.py` were never part of that pass. Current state,
+checked directly:
+- `batch_evaluate.py` already has a `[i+1/total]` counter per JD
+  (`"  [{i + 1}/{len(pending_paths)}] Evaluating {company}..."`) -- the
+  closest of the three to the audit-loop/bootstrap-polish standard, but
+  still no `───` separator between entries.
+- `scan.py` has no per-item progress at all -- one "Scanning {source}..."
+  line, then a single summary count at the end. Straightforward to add a
+  counter here, mirroring the pattern now established in
+  `bootstrap_profile.py`'s bullet-polish loop (separator + `[i/total]` +
+  a status icon per item).
+- `liveness.py` is architecturally different from the other two: it
+  shells out to `check-liveness.mjs` once for the *entire* batch via
+  `subprocess.run(..., capture_output=True)`, so there's no per-JD
+  progress signal available *during* the check today -- results only
+  print after the whole subprocess returns. Adding real incremental
+  progress here means the Node side streaming partial results (e.g.
+  JSON-lines to stdout as each URL resolves) rather than a single
+  captured blob, which is a real architecture change, not just a print
+  statement -- scope this one separately from the other two rather than
+  bundling all three into one pass.
+
+### Standardize company research across JD sources
+
+Raised 2026-07-17: `ResumeEngine.research_company()` only runs when
+`jd_data.get("company_website")` is present, and that field's
+availability is genuinely inconsistent across sources -- checked
+directly: `scan_jobright.py` sets it from JobRight's own `companyURL`
+field (itself not always populated by JobRight), while `scan_linkedin.py`
+hardcodes `"company_website": None` unconditionally -- LinkedIn-sourced
+JDs never get company research today, not because of missing data so
+much as the scraper never even tries to find it. Two separate
+sub-problems worth separating:
+1. **Easy part:** `scan_linkedin.py` could at least attempt to surface a
+   company website from whatever LinkedIn's job page already exposes
+   (a company page link is usually present even when a direct external
+   URL isn't), instead of hardcoding `None`.
+2. **The real open design question:** a fallback lookup for JDs with no
+   website from either source -- "AI searches for the company's website"
+   as Morgan put it. Worth investigating whether Gemini's API has a
+   built-in search-grounding tool (Google's "grounding with Google
+   Search" feature exists on recent Gemini models) before reaching for a
+   second, different model/provider just for this -- if grounding is
+   available and reasonably cheap, it would fit into `company_research.py`
+   as an additional lookup path rather than a whole separate integration.
+   Needs a real spike/investigation before committing to an approach, not
+   just an assumption either way.
+
+### Rotate across multiple API keys on rate-limit errors
+
+Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
+<-> gemma) on sustained failure (`gemini_client.py`'s `MODEL_FALLBACKS`),
+but has no concept of multiple *keys* for the same model -- one
+`GEMINI_API_KEY` in `.env`, full stop. The ask: support a list of keys
+(e.g. `GEMINI_API_KEYS=key1,key2,key3` alongside or instead of the
+singular var) and rotate to the next one specifically on a 429/rate-limit
+response, the same way `MODEL_FALLBACKS` already rotates models on
+sustained failure -- likely the same retry/backoff machinery
+(`RETRYABLE`/`HIGH_DEMAND_STATUS` in `gemini_client.py`) extended with a
+key index instead of (or alongside) a model swap. Real, but scoped --
+mostly touches `GeminiClient.generate()`'s retry loop; the main design
+question is whether key rotation and model-fallback rotation compose
+cleanly (try every key on the current model before swapping models, or
+interleave) rather than needing a genuinely new mechanism.
+
+### Turn the bootstrap flow into a persistent, resumable submenu
+
+Raised 2026-07-17: today "New User? Start Here!" is a single linear
+subprocess run (`bootstrap_bullet_bank.py`, per Phase 0 -> 0.5 -> 1-6) --
+if you back out partway (or it's a multi-session onboarding), there's no
+menu entry to see where you left off short of re-running the whole thing
+and relying on each phase's own internal checkpoint files. The ask:
+a dedicated menu entry (mirroring "Manage Bullet Bank"'s existing status-
+table-across-stages design, `scripts/bullet_bank_menu.py`) that shows
+this profile's own progress -- documents ingested, profile.yml/cv.md/
+background-guide drafted or not, which of the six real pipeline stages
+have run -- and lets you jump back in at whichever step, rather than
+always starting from `bootstrap_bullet_bank.main()`'s top. Most of the
+underlying state already exists (Phase 0's `checkpoint.json`, Phase 0.5's
+now-existing `cv_draft_checkpoint.json`, the six pipeline stages' own
+per-stage outputs) -- this is primarily a UI/menu-wiring exercise over
+already-persisted state, not new tracking logic, closely related to (and
+possibly sharing menu real estate with) the "Maintenance" submenu idea
+below.
+
+### Let new users add voice/tone examples during bootstrap
+
+Raised 2026-07-17: Morgan's own pipeline already has a real place for
+this -- `voice-anchors.md` ("real past answers, themes and quotes worth
+echoing," loaded into the audit loop's static prefix in both
+`orchestrator.py` and `rewrite_bullets.py`) -- but bootstrap never
+creates or populates one for a new profile; confirmed via direct grep,
+zero references to `voice-anchors`/`voice_anchors` anywhere in
+`bootstrap_bullet_bank.py`/`bootstrap_profile.py`/`bootstrap_extractors.py`.
+It degrades gracefully today (every consumer checks `os.path.exists()`
+first), so nothing breaks -- Dom's builds just never get this signal.
+"Writing samples" is already one of the suggested source-folder document
+types in the new-first-step-instructions item above, which gives this a
+natural on-ramp: a new `bootstrap_extractors` function (mirroring
+`draft_background_guide()`'s exact pattern) that drafts `voice-anchors.md`
+from whatever writing-sample/recommendation-letter text got ingested,
+previewed through the same accept/regenerate/skip UX already used for
+cv.md and the background guide. Could also add a direct Q&A fallback
+("paste 2-3 sentences that sound like you") for a profile with no
+writing-sample documents to draw from.
 
 ## Hard
 
@@ -281,7 +481,82 @@ moving is also much harder to walk back than most changes in this repo,
 which argues for a proposed structure + audit findings reviewed before
 executing, not folding straight into implementation.
 
+### "Updated knowledge" flow -- add more source documents after onboarding, without starting over
+
+Raised 2026-07-17: bootstrap's "New User? Start Here!" flow is designed
+around a one-time cold start (empty `bullet-bank-clean.csv`, fresh
+`profile.yml`), but real usage isn't one-time -- Morgan (or Dom, later)
+will keep finding more documents worth adding (a new cert, an old
+performance review, a fresh recommendation letter) long after the
+bullet bank is live and already has real, audited, in-use content
+(`bullet-bank-keepers.csv`, embeddings, cluster maps). The ask: a
+parallel flow -- "Update My Knowledge" alongside "New User? Start Here!"
+-- that ingests newly-dropped source documents the same way Phase 0
+already does, but merges the result into an *existing*, already-curated
+bank instead of building one from a blank slate.
+
+**Why this is Hard, not a small extension of Phase 0:** Phase 0's
+ingestion (`bootstrap_bullet_bank.py`'s `run_ingestion()`) assumes it's
+writing a fresh `bullet-bank-clean.csv` and a fresh `timeline.json`; an
+update flow needs to instead *append* to a timeline that already has
+real entries (attributing a new document's achievements against
+company/date ranges that already exist, not rebuilding them), and needs
+new bullets to enter the SAME six-stage pipeline
+(audit -> cluster -> rewrite -> audit_keepers -> score_keeper_gems ->
+embed) without re-processing everything already in
+`bullet-bank-keepers.csv` (the pipeline's own checkpointing mostly
+handles "don't redo work already done," but this needs verifying under
+an update scenario specifically, not just a first-run one). There's also
+a real question of whether newly-ingested bullets should go straight
+into the live bank or land in a review queue first (closer to how
+`bullet_feedback.py`'s harvest-back loop already works for rewrite-time
+discoveries) -- worth designing this as an extension of that existing
+mechanism rather than a third, separate ingestion path. Needs a real
+design pass, not just wiring -- flagged here rather than scoped further.
+
 ## Very Hard / Long-term
+
+### Multi-computer sync for a profile's data
+
+Raised 2026-07-17, genuinely open brainstorm (not scoped, no direction
+chosen yet): using this on more than one machine (e.g. a laptop and a
+desktop) means `profiles/<name>/` -- knowledge_base, bullet bank,
+checkpoints, and now each profile's own `.env` -- only lives on whichever
+one you last touched. job_automater's prior art here was MongoDB (a real
+remote datastore, but a genuinely different architecture from this
+repo's flat-file-per-profile design -- adopting it would mean either
+migrating every script that reads/writes these files directly, or
+running Mongo as a sync layer underneath the same file-based interface,
+which is its own design problem). Three lighter-weight options Morgan
+raised, none evaluated yet against this repo's actual constraints
+(git-ignored secrets in `.env`, binary-ish files like `.npy` embeddings
+mixed with text/CSV, checkpoint files that assume they're the only
+writer at a time):
+- **Syncthing** -- continuous, no-cloud-server file sync between
+  specific machines/paths. Closest to "just works" for a flat-file
+  layout like this one, but needs care around files that get read
+  *and* written mid-run (checkpoints, cluster maps) if two machines
+  could ever be active at once -- probably fine for "one person, two
+  machines, never simultaneously," worth confirming that's the actual
+  use case before assuming it.
+- **Cloud-folder symlinks** (Dropbox/Google Drive/OneDrive +
+  `ln -s`/`mklink /J`) -- simplest to set up, but inherits whatever
+  conflict-resolution behavior the cloud provider has for files that
+  change on two machines close together (typically a "conflicted copy"
+  duplicate file, not a merge) -- probably fine for the same
+  never-simultaneous use case, riskier if that assumption doesn't hold.
+- **Version control** (git) for the text-based state specifically --
+  already partially true (profile.yml-adjacent content could be
+  committed to a private repo/branch), but explicitly wrong for
+  `.env` (secrets, must stay gitignored) and awkward for large/binary
+  knowledge-base files (embeddings, audited CSVs) that don't diff
+  meaningfully.
+**Not evaluated yet, worth doing before committing to one:** what
+actually needs to sync (is `output/`/PDF history worth syncing, or just
+the knowledge base + bullet bank + profile.yml?), whether "two machines,
+never simultaneous" is a safe assumption to design around, and whether
+`.env`/secrets need to be explicitly excluded from whichever mechanism
+gets chosen (almost certainly yes, regardless of approach).
 
 ### Long-term: merge with career-ops and job_automater
 
@@ -449,10 +724,75 @@ generates an actual resume -- so the "watch it come alive" garnish Morgan
 was most specific about didn't make it in. Full comparison in
 `IDEAS_ARCHIVE.md`'s daily build log. Worth a conscious call on whether the
 shipped version is good enough as-is before Dom's actual onboarding
-session. **Still true regardless:** point 1 below (engine/profile split) is
-unbuilt -- bootstrap writes into Morgan's own single-user file layout, so
-Dom can't actually use this today without either overwriting her live
-files or #4/#7 landing first.
+session.
+
+**Update 2026-07-17: point 1 (engine/profile split) is now built, and
+three same-day follow-up passes closed every Morgan-specific gap found so
+far -- archived.** `profiles/<name>/`, `scripts/profile_paths.py`, every
+script's path constants, every remaining Morgan-specific constant in
+`orchestrator.py` (mining floors, persona framing, deep-evidence gating,
+filename prefix), a separately-hardcoded education achievement-bullet
+system, and a third-pass sweep that found and closed 7 more gaps outside
+`orchestrator.py`'s builder-schema path (`normalize_resume.py`'s career-note
+trigger, cv.md section-excerpt keywords, two hardcoded trim-step
+instructions, LLM-facing "Morgan's career" guardrail text,
+`validate_coverletter.py`'s third-person-name/pronoun check, and
+`scan_linkedin.py`'s saved searches) -- are all done. Full technical
+writeup in `IDEAS_ARCHIVE.md`'s "Engine/profile split: orchestrator.py
+Morgan-specific constants closed" entry.
+
+**Update 2026-07-17 (a fourth pass, same day): the tag taxonomy is now
+per-profile, and `rewrite_bullets.py` -- wrongly reported as dead code in
+the third pass above -- turned out to be live in Dom's actual onboarding
+wizard and got the same fixes as `orchestrator.py`.** A new `profile.yml`
+`tags:` field, generated during bootstrap from the candidate's own target
+roles + real achievement text (`bootstrap_extractors.generate_tag_taxonomy()`),
+replaces three separately-hardcoded, already-drifted copies of Morgan's
+marketing-specific `[email]`/`[ops]`/etc. taxonomy
+(`orchestrator.py`'s `TAG_CONTEXT`+`CLAIM_TAG_KEYWORDS`, `tag_bullet_bank.py`'s
+`TAG_KEYWORDS`) -- `tag_bullet_bank.py` is what actually auto-tags a new
+profile's bullets during bootstrap ingestion. `rewrite_bullets.py` is
+imported by `bootstrap_profile.py` for the CV-drafting step (`_polish_bullet()`),
+`audit_keepers.py`, and `bullet_feedback.py`, and carried the exact same
+hardcoded Morgan persona/Treering-evidence/"Morgan's career" content
+`orchestrator.py` had before this pass -- meaning every bullet polished
+during a new profile's onboarding was getting Morgan's identity injected
+into the prompt. Now fixed identically. A second, unrelated bug from the
+third pass was also caught here: `BACKGROUND_IDENTITY`/`BACKGROUND_TAGS`
+were moved to `fixed_content.py` without adding empty defaults to the
+bootstrap scaffold, so a fresh profile's first real build would have hit a
+hard crash, not a graceful degradation -- now fixed with a regression test
+that exercises the real consuming functions, not just checks for attribute
+names. Full writeup (including the grep-command mistake that caused the
+"dead code" misreport) in the same `IDEAS_ARCHIVE.md` entry, "Update... a
+fourth pass" section.
+
+Net effect: a second profile's actual resume build, bootstrap onboarding
+(including bullet polishing and auto-tagging), cover-letter validation,
+and LinkedIn scan all now read their own data from
+`profile.yml`/`fixed_content.py`, with zero remaining Morgan-specific
+fallback found across four full sweeps. Only remaining blocker before
+Dom's first real build is #7 (per-user `.env` secrets).
+
+**Other follow-ups noted in the same review, lower priority:**
+- `scripts/liveness.py:19`'s temp file (`LIVENESS_INPUT_PATH`) writes to
+  top-level `output/`, not `output/<profile>/` -- two profiles running
+  liveness checks at the same moment could collide on it. Minor,
+  transient file, not real data.
+- Morgan's own existing operational data (`jds/`, `output/checkpoints/`,
+  `data/applications.md`) sits at the old top-level paths from before
+  the split -- a one-time manual move into `jds/morgan/`, `output/morgan/`,
+  `data/morgan/` is needed the next time these are touched, or the
+  pipeline will look for pending JDs/checkpoints and quietly find none.
+- `CLAUDE.md` still documents `jds/`, `output/checkpoints/`, and
+  `jds/jd_tracker_log.csv` at top level -- stale, worth a quick pass
+  once the above settles.
+- `build_role_rules_block()` (`orchestrator.py`) uses direct dict-key
+  access on `roles:`/`fixed_credentials:` entries -- degrades
+  gracefully when a section is missing entirely, but a hand-edited
+  `profile.yml` with a *partially*-filled-in role/credential row would
+  raise `KeyError` instead of degrading. Only matters once someone's
+  hand-editing `profile.yml` directly rather than through bootstrap.
 
 **Scope note:** roughly tied with the merge as the biggest item here --
 and this has a real name and real deadline pressure attached rather than

@@ -17,8 +17,12 @@ class TestNormalizeResume(unittest.TestCase):
         self.raw = {
             "NAME": "Morgan Escott",
             "TAGLINE": "lifecycle marketing manager and crm strategist",
-            "KU_ACHIEVEMENT_KEY": "content_generalist",
-            "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            # Numbered per profile_paths.education_achievement_slots()'s
+            # order -- EDU_ACHIEVEMENT_KEY_1 is University of Kansas (the
+            # first profile.yml education entry with achievement_options),
+            # EDU_ACHIEVEMENT_KEY_2 is Kansas City Kansas Community College.
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
     def test_injects_company_meta_for_known_companies(self):

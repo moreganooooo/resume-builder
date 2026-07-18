@@ -6,11 +6,20 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import yaml
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
+
+
+def _write_profile_roles(tmp_dir: str, roles: list) -> None:
+    """mine_bullet_bank now reads its per-company minimums from
+    profile.yml's roles: (min_bullets), not a module constant -- write a
+    minimal profile.yml into the test's fake kb_dir to match."""
+    with open(os.path.join(tmp_dir, "profile.yml"), "w") as f:
+        yaml.safe_dump({"roles": roles}, f)
 
 
 class TestMineBulletBankCompanyFloor(unittest.TestCase):
@@ -68,8 +77,11 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
     @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     @patch("orchestrator.TOP_K_BULLETS", 5)
     def test_guarantees_minimum_bullets_for_a_low_scoring_company(self, mock_embed):
-        with patch.dict(orchestrator.COMPANY_MIN_BULLETS, {"Mercor": 1, "Treering Yearbooks": 1}, clear=True):
-            results = self.engine.mine_bullet_bank("some JD text", {})
+        _write_profile_roles(self.tmp_dir, [
+            {"name": "Mercor", "min_bullets": 1},
+            {"name": "Treering Yearbooks", "min_bullets": 1},
+        ])
+        results = self.engine.mine_bullet_bank("some JD text", {})
         companies = [company for (_, company, _) in results]
         self.assertIn("Mercor", companies, "Mercor's guaranteed minimum should have surfaced it despite low similarity")
 
@@ -78,8 +90,8 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
     def test_without_guarantee_low_scoring_company_would_be_excluded(self, mock_embed):
         # Only 5 of 6 rows can be selected -- with no guarantee, the lowest-
         # scoring row (Mercor, orthogonal to the JD vector) is the one left out.
-        with patch.dict(orchestrator.COMPANY_MIN_BULLETS, {}, clear=True):
-            results = self.engine.mine_bullet_bank("some JD text", {})
+        _write_profile_roles(self.tmp_dir, [])
+        results = self.engine.mine_bullet_bank("some JD text", {})
         companies = [company for (_, company, _) in results]
         self.assertEqual(len(results), 5)
         self.assertNotIn("Mercor", companies)
@@ -129,8 +141,8 @@ class TestMineBulletBankDeduplication(unittest.TestCase):
 
     @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0])
     def test_guaranteed_minimum_does_not_fill_with_near_duplicates(self, mock_embed):
-        with patch.dict(orchestrator.COMPANY_MIN_BULLETS, {"Treering Yearbooks": 2}, clear=True):
-            results = self.engine.mine_bullet_bank("some JD text", {})
+        _write_profile_roles(self.tmp_dir, [{"name": "Treering Yearbooks", "min_bullets": 2}])
+        results = self.engine.mine_bullet_bank("some JD text", {})
         bullets = [b for (b, _, _) in results]
         self.assertIn("Recovered $3M in pipeline via CRM audit", bullets)
         self.assertIn("Founded the Content Committee to govern brand voice", bullets)

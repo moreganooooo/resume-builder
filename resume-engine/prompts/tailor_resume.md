@@ -37,18 +37,13 @@ example below, which are illustrative only:
 # Education Achievement Bullet Selection
 
 The Education section's entries (see the ROLE RULES block's Education -- Fixed Order and Bullet
-Counts for this candidate's real schools) may each feature one pre-approved achievement bullet,
-selected (not written) via a key -- pick the option whose framing best matches the archetype you
-detected above, where such a key exists in this candidate's context.
-
-- **KU_ACHIEVEMENT_KEY** (this candidate's first education entry, if applicable) — choose one of:
-  - `content_generalist` — broad audience-growth framing
-  - `email_ops` — campaign/channel management framing
-  - `content` — editorial/content-production framing
-- **KCKCC_ACHIEVEMENT_KEY** (this candidate's second education entry, if applicable) — choose one of:
-  - `writing_content` — editorial/writing framing
-  - `enablement_mgmt` — team leadership/enablement framing
-  - `generalist` — balanced ownership framing
+Counts, and the Education Achievement Bullet Choices list right after it, for this candidate's
+real schools) may each feature one pre-approved achievement bullet, selected (not written) via a
+key -- pick the option whose framing best matches the archetype you detected above, for every
+`EDU_ACHIEVEMENT_KEY_<n>` field listed there. An entry with no achievement-bullet choices listed
+(a single fixed bullet, or no achievement concept at all) needs no key -- this candidate may have
+zero, one, or several such entries; the ROLE RULES block is the only source of truth for which
+ones apply and what their real option keys are, never any specific school name.
 
 # Tagline Rules
 

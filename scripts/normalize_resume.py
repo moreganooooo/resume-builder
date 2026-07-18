@@ -45,10 +45,16 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
     result.pop("PORTFOLIO_DISPLAY", None)
 
     result["CERTIFICATIONS"] = list(fixed_content.CERTIFICATIONS)
-    result["EDUCATION"] = fixed_content.build_education(
-        result.get("KU_ACHIEVEMENT_KEY", ""),
-        result.get("KCKCC_ACHIEVEMENT_KEY", ""),
-    )
+    # EDU_ACHIEVEMENT_KEY_<n> fields are numbered by profile_paths.
+    # education_achievement_slots()'s order (see orchestrator.py's
+    # build_education_achievement_schema_fields(), which built the schema
+    # the builder answered against) -- mapped back to institution names
+    # here so build_education() doesn't need to know about slot numbers.
+    achievement_keys = {
+        institution: result.get(f"EDU_ACHIEVEMENT_KEY_{i}", "")
+        for i, (institution, _options) in enumerate(profile_paths.education_achievement_slots(), 1)
+    }
+    result["EDUCATION"] = fixed_content.build_education(achievement_keys)
 
     if result.get("EXPERIENCE"):
         new_experience = []
@@ -75,7 +81,7 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
             if descriptor and job.get("title") and not job["title"].rstrip().endswith(f"({descriptor})"):
                 job["title"] = f"{job['title']} ({descriptor})"
 
-            if company == "Treering Yearbooks":
+            if fixed_content.CAREER_NOTE_COMPANY and company == fixed_content.CAREER_NOTE_COMPANY:
                 job["career_note"] = fixed_content.CAREER_NOTE
 
             clients = fixed_content.CLIENTS.get(company)

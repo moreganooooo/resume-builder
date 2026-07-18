@@ -17,6 +17,8 @@ this module exists to prevent.
 import importlib.util
 import os
 
+import yaml
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 PROFILES_DIR = os.path.join(PROJECT_ROOT, "profiles")
@@ -90,6 +92,67 @@ def fixed_content_module(profile: str = None):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def profile_yaml(profile: str = None) -> dict:
+    """Loads and returns profiles/<profile>/knowledge_base/profile.yml as a
+    dict -- shared by any caller that just needs one or two top-level
+    fields (e.g. candidate.full_name) without pulling in orchestrator.py's
+    ResumeEngine class."""
+    path = os.path.join(kb_dir(profile), "profile.yml")
+    with open(path, "r") as f:
+        return yaml.safe_load(f) or {}
+
+
+def full_name(profile: str = None) -> str:
+    """Reads candidate.full_name from profile.yml (e.g. "Morgan Escott")."""
+    return (profile_yaml(profile).get("candidate") or {}).get("full_name", "")
+
+
+def education_achievement_slots(profile: str = None) -> list:
+    """Returns [(institution, achievement_options_dict), ...] in
+    profile.yml's fixed_credentials.education order, for every entry that
+    offers a pre-approved achievement-bullet choice (achievement_options:
+    non-empty) -- entries with a single fixed bullet or no achievement
+    concept at all (e.g. JCCC) are skipped. Both orchestrator.py (building
+    the dynamic EDU_ACHIEVEMENT_KEY_<n> schema fields Gemini must answer)
+    and normalize_resume.py (mapping those answers back to institutions
+    for fixed_content.build_education()) call this exact function so the
+    slot numbering can never drift between the two."""
+    data = profile_yaml(profile)
+    education = ((data.get("fixed_credentials") or {}).get("education")) or []
+    return [
+        (ed["institution"], ed["achievement_options"])
+        for ed in education
+        if ed.get("achievement_options")
+    ]
+
+
+def tags(profile: str = None) -> list:
+    """Returns profile.yml's tags: list -- each a dict with name/
+    persona_description/keywords, generated once during bootstrap
+    (bootstrap_extractors.generate_tag_taxonomy()) from this profile's own
+    target roles and real achievement text. Replaces what used to be three
+    separately-hardcoded, already-drifted-apart copies of the same
+    marketing-specific taxonomy (orchestrator.py's TAG_CONTEXT +
+    CLAIM_TAG_KEYWORDS, tag_bullet_bank.py's TAG_KEYWORDS, and
+    rewrite_bullets.py's own copies of both) -- every consumer now reads
+    this one list, so they can't drift apart again. Empty for a profile
+    that hasn't generated one yet; callers should degrade gracefully
+    (e.g. treat every bullet as belonging to no specific tag) rather than
+    assume a non-empty list."""
+    return profile_yaml(profile).get("tags") or []
+
+
+def env_path(profile: str = None) -> str:
+    """Path to this profile's own .env (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING,
+    etc.) -- every script's load_dotenv() call points here instead of a
+    single project-root .env, so two profiles sharing one checkout can
+    each carry their own API key/cookie without colliding. Missing file is
+    not an error here (load_dotenv() itself already handles that
+    gracefully) -- callers surface their own clear error the first time
+    they actually need a var that isn't set."""
+    return os.path.join(profile_root(profile), ".env")
 
 
 def jds_dir(profile: str = None) -> str:

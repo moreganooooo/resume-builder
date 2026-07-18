@@ -84,6 +84,50 @@ class TestWidowTrimInstruction(unittest.TestCase):
         self.assertIn("change nothing", instruction)
         self.assertNotIn(short_bullet, instruction)
 
+    def test_checks_every_company_actually_present_not_a_hardcoded_pair(self):
+        # Regression test: this used to hardcode {"Treering Yearbooks",
+        # "Inside Sales Team"} -- a widow bullet from any other company
+        # (e.g. a profile with entirely different companies) must still
+        # get caught.
+        widow_bullet = "A" * 115 + " one two three"
+        resume = _resume_with("Some Other Company", [widow_bullet])
+        instruction = orchestrator._widow_trim_instruction(resume, STYLE_RULES)
+        self.assertIn(widow_bullet, instruction)
+
+
+class TestBulletRemovalTrimInstruction(unittest.TestCase):
+    """
+    Regression tests for the last-resort bullet-removal trim step, which
+    used to hardcode "Inside Sales Team, then Treering Yearbooks" and a
+    specific protected-bullet phrase -- both Morgan-specific and a silent
+    no-op for any profile whose companies/protected content differ.
+    """
+
+    def test_orders_by_flex_priority_and_names_each_roles_min_bullets(self):
+        profile_data = {
+            "roles": [
+                {"name": "Acme", "min_bullets": 2, "flex_priority": 2},
+                {"name": "Beta", "min_bullets": 3, "flex_priority": 1},
+            ],
+            "protected_bullets": [],
+        }
+        instruction = orchestrator._bullet_removal_trim_instruction(profile_data)
+        self.assertIn("Beta (can go down to 3 bullets total)", instruction)
+        self.assertIn("Acme (can go down to 2 bullets total)", instruction)
+        self.assertLess(instruction.index("Beta"), instruction.index("Acme"))
+
+    def test_includes_protected_bullets_when_present(self):
+        profile_data = {
+            "roles": [{"name": "Acme", "min_bullets": 2, "flex_priority": 1}],
+            "protected_bullets": ["A signature achievement"],
+        }
+        instruction = orchestrator._bullet_removal_trim_instruction(profile_data)
+        self.assertIn("A signature achievement", instruction)
+
+    def test_falls_back_to_generic_guidance_with_no_roles(self):
+        instruction = orchestrator._bullet_removal_trim_instruction({})
+        self.assertIn("most distinctive", instruction)
+
 
 if __name__ == "__main__":
     unittest.main()

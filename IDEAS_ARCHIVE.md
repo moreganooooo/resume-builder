@@ -651,6 +651,366 @@ Tier 2 (raw "Treering Sequences" archive curation, `BestCopySamples`/
 `Master Cover Letters` skim) remains unscheduled -- tracked as open in
 `IDEAS.md`'s Evidence bank extension entry.
 
+## Engine/profile split: orchestrator.py Morgan-specific constants closed -- done 2026-07-17
+
+The mechanical engine/profile split (`profiles/<name>/`, `scripts/profile_paths.py`,
+15 tasks, `docs/superpowers/plans/2026-07-16-engine-profile-split.md`) shipped
+2026-07-17 but that plan's own final review found `orchestrator.py` itself
+still had several Morgan-specific constants never threaded through
+`profile_paths` -- so a second profile's onboarding wizard would run
+cleanly, but an actual resume *build* under it would silently pull in
+Morgan's data anyway. Two passes, same day, closed all of it:
+
+**Pass 1 -- the four constants the review found:**
+- `COMPANY_MIN_BULLETS` deleted -- `mine_bullet_bank()` now builds its
+  per-company minimums straight from `profile.yml`'s `roles:` (`min_bullets`),
+  the same source `build_role_rules_block()` already read. One source of
+  truth, not two -- a real run had previously mined 0 Mercor and 0 Callahan
+  Creek bullets out of 30 precisely because this floor didn't generalize.
+- `BACKGROUND_IDENTITY`/`BACKGROUND_TAGS` (the persona bio blocks fed into
+  every bullet's rewrite context) moved to `profiles/morgan/fixed_content.py`,
+  loaded via the same `profile_paths.fixed_content_module()` helper
+  `CLIENTS` already used.
+- `TREERING_KEYWORDS`/`is_treering_bullet()` replaced by a new
+  `deep_evidence_keywords:` field in `profile.yml` and a generic
+  `is_deep_evidence_bullet(company, keywords)` -- an empty list (the
+  default for a fresh profile) just skips the deep-evidence file bundle
+  (verified-claims.csv, screenshot metrics, etc.) entirely rather than
+  needing Treering-shaped data. LLM-facing prompt text that used to
+  hardcode "Treering" now interpolates the real company name.
+- `MorganEscott_` output-filename prefix replaced by a new
+  `profile_paths.full_name()` helper reading `candidate.full_name` from
+  `profile.yml`, spaces stripped.
+
+`tests/test_mine_bullet_bank.py`'s three tests (which patched the now-gone
+`COMPANY_MIN_BULLETS` module dict) were updated to write a fake
+`profile.yml` into the test's temp `kb_dir` instead.
+
+**Pass 2 -- a fifth gap the review missed, caught by asking "were KU/KCKCC
+handled too?":** the Education Achievement Bullet Selection system had its
+own, separate hardcoding, spread across three files:
+- `orchestrator.py`'s `TemplateSchema` (the Pydantic class defining
+  Gemini's `responseSchema` for every builder/fix/trim call) had
+  `KU_ACHIEVEMENT_KEY`/`KCKCC_ACHIEVEMENT_KEY` as *required*
+  `Literal[...]`-typed fields with Morgan's exact enum values baked into
+  the class definition itself.
+- `resume-engine/prompts/tailor_resume.md` hardcoded the same two field
+  names and their options as authoritative instructions -- inconsistent
+  with the neighboring "Archetype Detection" section, which correctly
+  treats its own examples as "illustrative only" and defers to `profile.yml`.
+- `bootstrap_bullet_bank.py`'s new-profile scaffold literally wrote
+  `KU_ACHIEVEMENT_OPTIONS = {}`/`KCKCC_ACHIEVEMENT_OPTIONS = {}` into every
+  fresh profile's `fixed_content.py`, regardless of that profile's real
+  schools.
+
+This one was more invasive than pass 1's mechanical moves, because a plain
+generic field wouldn't actually work: `GeminiClient.sanitize_schema()`
+strips every field's `description` before the schema reaches Gemini (a
+regression test in `test_orchestrator_schema_cleanup.py` already existed
+to guard exactly this), so only a real JSON-schema `enum` constraint
+reliably makes the model pick a valid key -- and the valid keys differ per
+profile, unknowable at `TemplateSchema`'s class-definition time. The fix:
+- `TemplateSchema` no longer declares any achievement-key fields at all.
+- A new `ResumeEngine.build_education_achievement_schema_fields()` builds
+  one enum-typed `EDU_ACHIEVEMENT_KEY_<n>` property per `profile.yml`
+  education entry that offers a pre-approved achievement-bullet choice
+  (new `achievement_options:` sub-field under `fixed_credentials.education`),
+  numbered via a new shared `profile_paths.education_achievement_slots()`
+  so the numbering can never drift between schema-building and
+  response-parsing.
+- `GeminiClient.generate()` gained `extra_schema_properties`/
+  `extra_required` kwargs that merge into whatever `response_schema` was
+  passed, before `resolve_refs`/`sanitize_schema` run -- deliberately
+  *not* building a hand-assembled dict schema and passing it as
+  `response_schema=` directly, because that would have broken every
+  existing test's `response_schema is orchestrator.TemplateSchema` mock
+  routing (18+ call sites across `test_orchestrator_build_checkpoint.py`).
+  `response_schema=TemplateSchema` still gets passed at all 3 call sites
+  in `build_tailored_resume()`, identity intact.
+- `normalize_resume.py` maps `EDU_ACHIEVEMENT_KEY_<n>` answers back to
+  institution names via the same `education_achievement_slots()` call,
+  and `fixed_content.build_education()`'s signature changed from two
+  positional strings to one `achievement_keys: dict` keyed by institution
+  name (internal `KU_ACHIEVEMENT_OPTIONS`/`KCKCC_ACHIEVEMENT_OPTIONS` dict
+  names inside Morgan's own `fixed_content.py` stayed as-is -- that file is
+  already profile-internal Python, doesn't need generalizing itself).
+
+JCCC needed no change -- it never had an achievement-key field to begin
+with; its single fixed bullet was already handled generically.
+
+Tests updated: `test_orchestrator_schema_cleanup.py` (regression test
+rewritten against the new mechanism), `test_fixed_content.py`,
+`test_normalize_resume.py`, `test_polish.py`, `test_orchestrator_build_checkpoint.py`
+(key rename only, no schema-identity impact), plus two new tests in
+`test_gemini_client.py` covering the extra-properties merge itself. Full
+suite: 686 tests, all green.
+
+Net effect: a second profile's actual resume build -- not just its
+onboarding wizard -- now reads every one of its own mining floors, persona
+framing, filename prefix, deep-evidence gating, and education
+achievement-bullet options from its own `profile.yml`/`fixed_content.py`,
+with zero remaining Morgan-specific fallback anywhere in `orchestrator.py`.
+Only remaining blocker before Dom's first real build is `IDEAS.md`'s #7
+(per-user `.env` secrets) -- see `IDEAS.md`'s Multi-user support section
+for the "Other follow-ups, lower priority" list (still open: the
+`jds`/`output`/`data` top-level-to-per-profile path move, stale `CLAUDE.md`
+docs, and `build_role_rules_block()`'s ungraceful `KeyError` on a
+partially-filled hand-edited `profile.yml`).
+
+**Update 2026-07-17 (a third, broader pass, same day): a full codebase
+sweep for anything the first two passes missed (asked directly: "were
+KU/KCKCC/JCCC handled too?") found seven more real gaps, none caught by
+the engine/profile split's own review since they sit outside
+`orchestrator.py`'s builder-schema path -- all closed:**
+- `normalize_resume.py`'s `if company == "Treering Yearbooks":`
+  (triggering `CAREER_NOTE`) replaced by a new `CAREER_NOTE_COMPANY`
+  constant in `fixed_content.py` (empty string default in the bootstrap
+  scaffold -- no career note is a valid "nothing configured yet" state).
+- `orchestrator.py`'s `CV_SECTION_KEYWORDS` (company-name -> cv.md
+  `### heading` map, used by `extract_cv_section()`) moved into
+  `fixed_content.py`, loaded via the existing `fixed_content_module()`
+  pattern. Degraded gracefully before (fell back to the whole cv.md
+  rather than crashing) but lost the per-company excerpt precision for
+  any other profile.
+- `orchestrator.py`'s `_widow_trim_instruction` no longer hardcodes
+  `{"Treering Yearbooks", "Inside Sales Team"}` -- it now checks every
+  company actually present in the resume being trimmed. The hardcoded
+  version would have been a **complete no-op** for a profile whose
+  companies don't happen to match those two literal strings.
+- `orchestrator.py`'s 4th (last-resort) trim step, previously a fully
+  hardcoded lambda naming Morgan's two highest-bullet-count companies and
+  her exact protected-bullet phrasing, extracted into a new
+  `_bullet_removal_trim_instruction(profile_data)` that derives both from
+  `profile.yml`'s `roles:` (`flex_priority` ordering, `min_bullets`
+  floors) and `protected_bullets:` -- the same data `build_role_rules_block()`
+  already surfaces to the model elsewhere. **Real behavior nuance for
+  Morgan herself:** this now trims Treering Yearbooks before Inside Sales
+  Team (both share `flex_priority: 1`, tie broken by `roles:` list order)
+  where the old hardcoded text did the reverse -- which also resolves a
+  pre-existing self-contradiction, since the ROLE RULES block's own "Trim
+  priority" line already told the model Treering-then-IST. Both roles
+  stay bounded by their own `min_bullets` floor regardless of which goes
+  first.
+- Two LLM-facing guardrail strings in `build_audit_static_prefix()`/
+  `_gemma()` said "facts about Morgan's career" -- unlike `TemplateSchema`'s
+  `Field(description=...)` text (confirmed stripped by `sanitize_schema()`
+  before reaching Gemini), these are plain content strings that really do
+  reach the model on every call. Reworded to "this candidate's career."
+- `validate_coverletter.py`'s `_THIRD_PERSON_PATTERN` hardcoded
+  `"Morgan Escott|Morgan|she|her|hers"`. Replaced by a
+  `_third_person_terms()` helper reading `candidate.full_name` (always
+  available) plus an optional new `candidate.pronouns:` profile.yml field
+  -- deliberately never guessed or defaulted for a profile that hasn't set
+  it (a wrong pronoun guess is worse than no pronoun check at all), so
+  such a profile just gets a name-only check instead of a full no-op or a
+  bad guess.
+- `scan_linkedin.py`'s `_build_queries()` hardcoded Morgan's 3 tuned
+  LinkedIn boolean search strings. A new `linkedin_search_queries:` field
+  holds Morgan's exact real searches (hand-tuned boolean queries can't be
+  derived automatically); a profile without it falls back to one query
+  per `target_roles.primary` entry rather than searching nothing.
+
+**Also swept and found, but deliberately not touched:**
+- `scripts/rewrite_bullets.py` is a complete duplicate of the pre-split
+  Tier-2 logic (same `TREERING_KEYWORDS`/`BACKGROUND_IDENTITY`/etc.),
+  confirmed **not imported anywhere** -- dead code superseded by
+  `orchestrator.py`'s own copy, not a live gap. Candidate for deletion in
+  the "Repo reorganization / cleanup pass" item, not fixed here.
+- The `[email]`/`[ops]`/`[content]`/`[enablement]`/`[sales]`/`[brand]`/
+  `[design]` tag taxonomy (`TAG_CONTEXT`, `CLAIM_TAG_KEYWORDS`,
+  `tag_bullet_bank.py`'s `TAG_KEYWORDS` -- the last one **actively used**
+  during Dom's bootstrap onboarding via `bootstrap_bullet_bank.py`) is
+  marketing/sales-vocabulary, baked in throughout the rules engine too
+  (`verb_taxonomy.yaml`, `language_quality.yaml`). Not a "leftover" --
+  a real design question whose answer depends entirely on whether Dom's
+  actual field is marketing-adjacent, which isn't known. Left open.
+- `README.md` claims cover letters reference `docs/MorganEscottSignature2025.png`
+  for a handwritten signature -- no code anywhere actually reads that
+  file; either a removed feature or stale docs, unrelated to multi-user
+  since there's no live behavior to fix.
+
+Tests: `test_normalize_resume.py` unchanged (its Treering fixture matches
+`CAREER_NOTE_COMPANY`'s real value); `test_trim_widow_bullets.py` gained
+a regression test for the "any company, not a hardcoded pair" widow-check
+fix and a new `TestBulletRemovalTrimInstruction` class; other fixes had no
+existing test coverage to update. Full suite: 690 tests, all green.
+
+**Update 2026-07-17 (a fourth pass, same day): `rewrite_bullets.py` was
+NOT dead code -- a real correction after wrongly reporting it as such.**
+The "deliberately not touched" list above claimed `rewrite_bullets.py` was
+confirmed unimported and safe to delete via a grep that, in fact, silently
+failed (an unrelated shell-glob error aborted it before it ran) --
+un-verified "no output" got reported as "confirmed no matches." Real grep
+shows it's imported by `bootstrap_profile.py` (`RulesBundle`,
+`KnowledgeBase`, `build_system_prompts`, `process_bullet`, `RULES_DIR` --
+used in `_polish_bullet()` during `write_cv_md()`, i.e. **live in Dom's
+actual onboarding wizard**), `audit_keepers.py`, and `bullet_feedback.py`.
+Its `KnowledgeBase` class carried the exact same hardcoded
+`TAG_CONTEXT`/`BACKGROUND_IDENTITY`/`BACKGROUND_TAGS`/`CV_SECTION_KEYWORDS`/
+`TREERING_KEYWORDS`/`is_treering_bullet()`/"Morgan's career" text as
+`orchestrator.py`'s pre-fix copy -- meaning every bullet `bootstrap_profile.py`
+polished while drafting a new profile's `cv.md` was getting Morgan's
+persona identity and Treering-specific evidence injected into the prompt,
+regardless of whose onboarding it was.
+
+This surfaced while answering a direct question about whether the wizard
+could determine an appropriate **tag taxonomy** from a candidate's own
+target roles + ingested source documents, instead of Morgan's hardcoded
+marketing-specific `[email]`/`[ops]`/`[content]`/etc. categories (the "real
+design question" flagged as left-open above). The two turned out to be the
+same underlying problem: `TAG_CONTEXT`/`CLAIM_TAG_KEYWORDS` (`orchestrator.py`)
+and `TAG_KEYWORDS` (`tag_bullet_bank.py`) were three separately-hardcoded,
+already-drifted copies of the same taxonomy (confirmed by diffing them --
+`TAG_CONTEXT` had `[demand]`/`[product]`/`[general]` the other two didn't;
+`CLAIM_TAG_KEYWORDS`/`TAG_KEYWORDS` had `[enablement]`/`[mgmt]`/`[writing]`
+`TAG_CONTEXT` didn't -- `tag_bullet_bank.py`'s own docstring already
+admitted these were "kept in sync by hand"). Fixed together:
+
+- **New `profile.yml` field: `tags:`** -- one canonical list (`name`,
+  `persona_description`, `keywords` per tag), generated once during
+  bootstrap from that candidate's own target roles and real achievement
+  text, replacing all three hardcoded copies. A new
+  `profile_paths.tags()` is the one shared reader.
+- **`bootstrap_extractors.py`** gained `generate_tag_taxonomy()`, following
+  the exact pattern its sibling functions already use (`suggest_secondary_roles`,
+  `draft_background_guide`): a `TagTaxonomy`/`TagDefinition` Pydantic
+  schema, a prompt instructing the model to base the taxonomy entirely on
+  the given roles/achievements (not assume marketing), and an always-included
+  catch-all `"generalist"` tag with empty keywords (the established
+  "empty keywords = matches everything" convention, preserved from the
+  original hardcoded dicts).
+- **`bootstrap_profile.py`** calls it right after the identity Q&A (roles
+  known) using achievement text already gathered by Phase 0, and writes
+  the result into `profile.yml` via a new `tags:` block in
+  `_PROFILE_YML_TEMPLATE` -- ordered *before* `write_cv_md()` so
+  `rewrite_bullets.py`'s `KnowledgeBase` has real tag data by the time it
+  polishes the first bullet.
+- **`orchestrator.py`, `tag_bullet_bank.py`, and `rewrite_bullets.py`**
+  all now read `profile_paths.tags()` instead of their own hardcoded
+  copies -- `_tag_context_map()`/`_claim_tag_keywords_map()` (added to
+  both `orchestrator.py` and `rewrite_bullets.py`, identical) and
+  `tag_bullet_bank.tag_keywords()`/`fallback_tag()`.
+- **`rewrite_bullets.py` also got every other fix `orchestrator.py`
+  already had:** `BACKGROUND_IDENTITY`/`BACKGROUND_TAGS`/`CV_SECTION_KEYWORDS`
+  now come from `profile_paths.fixed_content_module()`;
+  `TREERING_KEYWORDS`/`is_treering_bullet()` replaced by
+  `is_deep_evidence_bullet()` reading `profile.yml`'s `deep_evidence_keywords:`
+  (a new `self.deep_evidence_keywords` loaded in `KnowledgeBase.__init__`);
+  the "Morgan's career" guardrail text genericized; `[Treering+claims]`
+  log flag genericized to `[+claims]`.
+- **Morgan's own `profile.yml`** got a real `tags:` list -- required, not
+  optional: `profile_paths.tags()` returning `[]` for her profile would
+  have silently degraded her own persona context to a generic fallback and
+  her claims/metrics filtering to an unfiltered `head(max_rows)` on every
+  build, a real regression caught before it shipped. The list consolidates
+  the union of all three drifted sources into one (9 tags: email, ops,
+  content, enablement, mgmt, writing, brand, design, generalist).
+
+**A second real bug, found and fixed in the same pass:** the original
+`BACKGROUND_IDENTITY`/`BACKGROUND_TAGS` fix (this entry's first update)
+moved those constants out of `orchestrator.py` into `fixed_content.py`,
+but never added empty defaults to `bootstrap_bullet_bank.py`'s new-profile
+scaffold -- so a freshly-bootstrapped profile's very first real build
+would have hit a hard `AttributeError` in `build_background_summary()` the
+moment any bullet got audited, not a graceful degradation. Fixed by adding
+`BACKGROUND_IDENTITY = ""` / `BACKGROUND_TAGS = {}` to the scaffold, with a
+new regression test (`test_scaffold_has_every_attribute_orchestrator_actually_accesses`
+in `test_bootstrap_new_profile.py`) that exercises the real consuming
+functions against a freshly-scaffolded profile, not just checking that
+attribute names exist as strings -- specifically so this class of bug (a
+scaffold gap invisible until someone's actual first build) gets caught
+here going forward.
+
+Tests: new `TestBulletRemovalTrimInstruction`-style coverage in
+`test_bootstrap_profile.py` (tag taxonomy written into `profile.yml`,
+`generate_tag_taxonomy()` called and mocked in the writer-order test),
+`test_bootstrap_new_profile.py` (the scaffold-completeness regression
+above), `test_rewrite_bullets.py` (updated comment only -- its existing
+13 tests kept passing unmodified since Morgan's real `profile.yml` now
+carries equivalent tag data), and a new `test_tag_bullet_bank.py` (this
+script had zero prior test coverage despite being live). Full suite: 696
+tests, all green.
+
+## Bootstrap wizard UX + per-profile secrets -- done 2026-07-17
+
+A fifth same-day pass, from real UX feedback after watching the wizard
+run: ordering, progress visibility, resumability, and per-profile
+secrets/search config. All in `bootstrap_profile.py`/`bootstrap_bullet_bank.py`
+unless noted.
+
+- **Draft ordering fixed:** `write_cv_md()` (bullet-polishing) used to run
+  *before* `write_background_guide()` in `run_profile_setup()` --
+  `rewrite_bullets.KnowledgeBase.__init__` loads `user-background-guide.md`
+  at construction time, so every bullet in the first draft was polished
+  with that file not yet existing. Swapped. (`self.bg_raw` -- that loaded
+  content -- is still not wired into any actual prompt; doing that
+  properly means tag-filtering it into the Tier-2 segment bundle like
+  `BACKGROUND_TAGS`, not dumping Morgan's real 15KB file into the
+  always-included Tier-1 prefix, which would silently inflate every
+  build's token cost. Left as a clearly-scoped follow-up, not bundled in
+  here.)
+- **Bullet-by-bullet visibility added:** `_assemble_cv_draft()`'s loop had
+  zero separation between bullets and no success indicator, unlike
+  `rewrite_bullets.py`'s real 6-stage pipeline and `orchestrator.py`'s
+  audit loop, both of which already print a `───` separator, a
+  `[i/total]` counter, and a status line per bullet. Bootstrap's loop now
+  matches: separator + `[i/total]` + company line + `✅ KEEP` / `🔧 MANUAL`
+  per bullet, plus an upfront total count.
+- **Resumability added:** an interrupted `write_cv_md()` run (network
+  blip, closed terminal, laptop sleep) used to lose every bullet already
+  polished -- up to 3 API calls each, zero incremental persistence. Now
+  checkpointed per bullet (keyed by company+text) to a new
+  `bootstrap/cv_draft_checkpoint.json`, mirroring Phase 0's own
+  `_load_checkpoint()`/`_save_checkpoint()` pattern -- a second call to
+  `write_cv_md()` reuses cached results instead of re-polishing. The
+  explicit "Regenerate" choice in the accept/regenerate/skip prompt clears
+  the checkpoint first, since that's a real request to start over, not an
+  interruption to resume from.
+- **Per-profile `.env`:** every script's `load_dotenv()` (`orchestrator.py`,
+  `gemini_client.py`, `audit_bullet_bank.py`, `cluster_bullet_bank.py`,
+  `embed_bullet_bank.py`, `detect_hidden_gems.py`, `ingest.py`) now points
+  at a new `profile_paths.env_path()` (`profiles/<name>/.env`) instead of
+  one shared project-root file. Morgan's real `.env` migrated to
+  `profiles/morgan/.env` (still correctly gitignored -- `*.env` matches at
+  any depth). A new `bootstrap_profile.collect_secrets()` walks a profile
+  through `GEMINI_API_KEY` and (optional) `JOBRIGHT_COOKIE_STRING`, each
+  with real instructions and a genuine "enter it now" vs. "I'll add it
+  later, here's the exact file and line" choice -- called from
+  `bootstrap_bullet_bank.py`'s `main()` *before* `run_ingestion()`, since
+  Phase 0 itself calls the Gemini API for document classification/
+  extraction, not just Phase 0.5. Skips the prompt entirely (no
+  re-asking) when a var is already set, since bootstrap is re-runnable on
+  an existing profile to ingest more documents later.
+- **LinkedIn search terms, made per-profile:** `linkedin_search_queries:`
+  existed in `profile_paths.py`'s reader (see the third-pass entry above)
+  but was never actually in the wizard-generated `profile.yml` template --
+  a new profile would silently and permanently fall back to
+  `target_roles.primary` with no visible way to set a real boolean query.
+  A new `collect_linkedin_search_queries()` explains that LinkedIn
+  scanning needs no cookie (live Chrome read, unlike JobRight) but does
+  need search terms, shows what the fallback would search for, and offers
+  to collect real boolean strings now or defer -- with the exact
+  `profile.yml` field name and path if deferred. Wired into the template
+  and `write_profile_yml()`.
+
+**A close call during verification, worth remembering:** smoke-testing
+`load_dotenv()` changes via `python -c "import audit_bullet_bank"`
+triggered that script's *entire* real audit run (no `if __name__ ==
+"__main__":` guard -- module-level code executes on import) against
+Morgan's live `bullet-bank-audited.csv`. It happened to be a safe no-op
+only because that file's checkpoint-resume logic found everything already
+scored from a prior real run (confirmed via `git diff --stat` showing
+zero byte change) -- not because the test method was actually safe.
+Scripts without a main-guard need `ast.parse()` for a syntax check, not a
+real `import`, when the only thing being verified is an unrelated
+top-of-file change.
+
+Tests: `test_bootstrap_profile.py` gained `TestCvDraftResumability` (3
+tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
+(3 tests); `test_bootstrap_bullet_bank_pipeline.py`'s four `main()` tests
+updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
+all green.
+
 ## Long-term merge: incident history
 
 These are past incidents from the career-ops/job_automater merge research

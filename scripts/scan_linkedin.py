@@ -22,6 +22,7 @@ import browser_cookie3
 import requests
 from bs4 import BeautifulSoup
 
+import profile_paths
 from linkedin_jobs_scraper import LinkedinScraper
 from linkedin_jobs_scraper.events import Events, EventData
 from linkedin_jobs_scraper.query import Query, QueryOptions, QueryFilters
@@ -88,9 +89,10 @@ def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
     return extras
 
 
-def _build_queries(job_limit: int) -> list:
-    """The 3 saved searches Morgan actually uses (ported as-is from
-    job_automater); edit here to change what LinkedIn is searched for."""
+def _build_queries(job_limit: int, search_terms: list) -> list:
+    """Builds one LinkedIn Query per search string in search_terms -- see
+    fetch_linkedin_jobs() for where those strings actually come from
+    (profile.yml, not hardcoded here)."""
     shared_filters = QueryFilters(
         relevance=RelevanceFilters.RELEVANT,
         time=TimeFilters.DAY,
@@ -121,16 +123,31 @@ def _build_queries(job_limit: int) -> list:
             ),
         )
 
-    return [
-        _query("Email OR Campaign"),
-        _query("Lifecycle"),
-        _query("Sales OR Revenue AND operations OR support OR enablement"),
-    ]
+    return [_query(text) for text in search_terms]
 
 
 def fetch_linkedin_jobs(limit: int = None) -> list:
-    """Runs the 3 saved LinkedIn searches and returns a list of job dicts
-    (same shape as job_automater's/JobRight's)."""
+    """Runs this profile's saved LinkedIn searches and returns a list of
+    job dicts (same shape as job_automater's/JobRight's).
+
+    Search terms come from profile.yml's linkedin_search_queries: (hand-
+    tuned boolean search strings -- Morgan's own profile.yml has her 3
+    real saved searches there) if present, else fall back to one query per
+    target_roles.primary entry, so a profile that hasn't hand-tuned
+    searches yet still gets something reasonable rather than nothing."""
+    profile_data = profile_paths.profile_yaml()
+    search_terms = (
+        profile_data.get("linkedin_search_queries")
+        or (profile_data.get("target_roles") or {}).get("primary")
+        or []
+    )
+    if not search_terms:
+        logging.error(
+            "No linkedin_search_queries or target_roles.primary configured "
+            "in profile.yml -- nothing to search for."
+        )
+        return []
+
     li_at_cookie = get_li_at_cookie()
     if not li_at_cookie:
         logging.error(
@@ -216,7 +233,7 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
     scraper.on(Events.END, on_end)
 
     try:
-        scraper.run(_build_queries(job_limit))
+        scraper.run(_build_queries(job_limit, search_terms))
     except Exception as e:
         logging.error(f"LinkedIn scraper run failed: {e}")
         on_end()
