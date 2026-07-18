@@ -158,12 +158,32 @@ class TestDisplayTip(unittest.TestCase):
         self.assertTrue(any(tip in output for tip in cli_art.TIPS))
 
 
+class TestShortWhy(unittest.TestCase):
+
+    def test_empty_or_missing_returns_a_dash(self):
+        self.assertEqual(cli_art._short_why(""), "-")
+        self.assertEqual(cli_art._short_why(None), "-")
+
+    def test_short_text_returned_as_is(self):
+        self.assertEqual(cli_art._short_why("Strong tools match."), "Strong tools match")
+
+    def test_takes_only_the_first_sentence(self):
+        why = "Strong tools match. Also remote-friendly. A third sentence that shouldn't show."
+        self.assertEqual(cli_art._short_why(why), "Strong tools match")
+
+    def test_truncates_a_long_first_sentence_with_ellipsis(self):
+        long_sentence = "This is a very long single sentence that goes on and on well past the short-descriptor limit"
+        result = cli_art._short_why(long_sentence, max_len=40)
+        self.assertTrue(result.endswith("..."))
+        self.assertLessEqual(len(result), 43)
+
+
 class TestRenderFitTable(unittest.TestCase):
 
     def test_shows_count_title_and_recommendation_legend(self):
         results = [
             {"error": False, "composite_score": 4.5, "recommendation": "Strong pursue",
-             "company_name": "Acme", "job_title": "Writer"},
+             "company_name": "Acme", "job_title": "Writer", "why": "Great fit on tools and seniority."},
             {"error": True, "composite_score": None, "recommendation": None,
              "company_name": "Bad Co", "job_title": "Unknown"},
         ]
@@ -178,6 +198,7 @@ class TestRenderFitTable(unittest.TestCase):
         self.assertIn("2 JD(s) evaluated", output)
         self.assertIn("Strong pursue", output)
         self.assertIn("ERROR", output)
+        self.assertIn("Great fit on tools and seniority", output)
 
 
 class TestDisplayBreadcrumb(unittest.TestCase):

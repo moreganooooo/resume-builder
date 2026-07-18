@@ -215,21 +215,40 @@ def display_banner(subtitle: str = "") -> None:
     console.rule(title, style="dim", align="left")
 
 
+def _short_why(why: str, max_len: int = 70) -> str:
+    """Truncates evaluate_fit()'s full 2-4 sentence `why` to a single
+    short descriptor for compact table display -- the full text is still
+    persisted in full (jd_manager.save_evaluation()) for anyone who wants
+    to read the whole rationale, this is just the at-a-glance version."""
+    why = (why or "").strip()
+    if not why:
+        return "-"
+    first_sentence = why.split(". ")[0].rstrip(".")
+    if len(first_sentence) <= max_len:
+        return first_sentence
+    return first_sentence[:max_len].rstrip() + "..."
+
+
 def render_fit_table(results: list) -> None:
     """Renders batch_evaluate.evaluate_all_pending()'s result list as a
     Rich Table, colored by recommendation tier (modeled on job_automater's
     display_job_table(), cli.py:73-142). results is expected pre-sorted
-    (evaluate_all_pending() already sorts best-first, errors-last)."""
+    (evaluate_all_pending() already sorts best-first, errors-last). The
+    "Why" column is a short excerpt, not the model's full reasoning --
+    lets a lower-scored-but-higher-priority role get spot-checked at a
+    glance instead of needing to open its JD JSON to see why it scored
+    the way it did."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
     table.add_column("Recommendation")
     table.add_column("Company")
     table.add_column("Title")
+    table.add_column("Why")
 
     for i, r in enumerate(results, 1):
         if r["error"]:
-            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"])
+            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-")
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
         table.add_row(
@@ -238,6 +257,7 @@ def render_fit_table(results: list) -> None:
             f"[{color}]{r['recommendation']}[/{color}]",
             r["company_name"],
             r["job_title"],
+            _short_why(r.get("why")),
         )
 
     legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())

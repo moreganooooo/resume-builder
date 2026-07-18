@@ -57,9 +57,12 @@ def run_scan(sources: list = None) -> int:
 
         print(f"\nScanning {source}...")
         jobs = fetch()
-        print(f"  Fetched {len(jobs)} jobs from {source}.")
+        total = len(jobs)
+        print(f"  Fetched {total} jobs from {source}.")
 
-        for job in jobs:
+        for i, job in enumerate(jobs, 1):
+            company = job.get("company_name", "unknown")
+            title = job.get("job_title", "unknown")
             job_id = job.get("source_job_id")
             job_key = str(job_id) if job_id else None
             if job_key and jd_manager.job_key_known(
@@ -67,11 +70,12 @@ def run_scan(sources: list = None) -> int:
                 source_url=job.get("source_url"), company_name=job.get("company_name"),
                 job_title=job.get("job_title"),
             ):
+                print(f"  [{i}/{total}] Skipping {company} -- {title} (already known)")
                 continue
 
             dest = _write_jd_file(job)
             written += 1
-            print(f"  + {job.get('company_name', 'unknown')} -- {job.get('job_title', 'unknown')} -> {dest}")
+            print(f"  [{i}/{total}] + {company} -- {title} -> {dest}")
 
     print(f"\nScan summary: {written} new JD file(s) written to jds/.")
     return written

@@ -77,6 +77,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
                 "job_title": job_title or "unknown",
                 "composite_score": None,
                 "recommendation": None,
+                "why": "",
                 "hard_blockers": [],
                 "error": True,
             })
@@ -91,6 +92,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
             "job_title": job_title or "unknown",
             "composite_score": evaluation.get("composite_score"),
             "recommendation": evaluation.get("recommendation"),
+            "why": evaluation.get("why") or "",
             "hard_blockers": evaluation.get("hard_blockers") or [],
             "error": False,
         })

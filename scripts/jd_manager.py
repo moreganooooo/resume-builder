@@ -98,6 +98,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
     data["_evaluation"] = {
         "composite_score": evaluation.get("composite_score"),
         "recommendation": evaluation.get("recommendation"),
+        "why": evaluation.get("why") or "",
         "hard_blockers": evaluation.get("hard_blockers") or [],
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
