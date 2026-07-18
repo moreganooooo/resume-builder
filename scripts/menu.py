@@ -110,6 +110,30 @@ def _confirm_active_profile() -> None:
     os.environ["RESUME_GUEST_MODE"] = "1"
 
 
+def _print_source_docs_instructions(source_docs_dir: str) -> None:
+    """The proactive "here's what to do first" message for an empty
+    source_documents/ folder -- shown whether this is a just-created
+    profile's very first visit or a returning profile that's cleared the
+    folder out again. Rich's [link=...] markup renders as a real clickable
+    hyperlink in terminals that support OSC 8 (most modern ones); it
+    degrades to plain unstyled text everywhere else -- either way the raw
+    path/URL stays visible in the message itself, never hidden behind an
+    opaque label."""
+    cli_art.console.print(
+        f"Go to your source folder ([link=file://{source_docs_dir}]{source_docs_dir}[/link]) "
+        "and drop in any documentation related to your job search. Your current resume and "
+        "LinkedIn profile (exporting your profile as a PDF is perfect -- "
+        "[link=https://www.linkedin.com/help/linkedin/answer/a541960]see LinkedIn's instructions "
+        "here[/link]) are a great place to start. You can also consider things like:\n\n"
+        "  - Letters of recommendation\n"
+        "  - Public LinkedIn recommendations\n"
+        "  - Certifications\n"
+        "  - Patents you own (look at you go!)\n"
+        "  - Writing samples\n\n"
+        "Once you're finished, restart this program and click New User again to continue!"
+    )
+
+
 def _handle_bootstrap() -> bool:
     import profile_paths
 
@@ -151,12 +175,7 @@ def _handle_bootstrap() -> bool:
     ]
 
     if not files:
-        cli_art.console.print(
-            "Looks like there's nothing in the source_documents folder yet. "
-            "Drop in your resume, LinkedIn export, certificates, "
-            "recommendation letters, or notes — then come back and select "
-            "this again when you're ready!"
-        )
+        _print_source_docs_instructions(source_docs_dir)
         return False
 
     proceed = questionary.confirm(
@@ -224,7 +243,11 @@ def _handle_evaluate_one() -> bool:
     jd_manager.save_evaluation(path, result)
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
-    cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")
+    cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}")
+    if result.get("why"):
+        cli_art.console.print(f"[bold]Why:[/bold] {result['why']}\n")
+    else:
+        cli_art.console.print("")
     return True
 
 

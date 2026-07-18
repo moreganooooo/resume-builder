@@ -568,6 +568,25 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
         self.assertIsNone(jd_manager.read_evaluation(path))
 
+    def test_save_then_read_round_trips_why(self):
+        # Regression test: `why` (evaluate_fit()'s plain-language rationale)
+        # used to be computed and immediately discarded -- never reaching
+        # disk, so there was no way to see why a role scored the way it did
+        # without re-running the evaluation.
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_evaluation(path, {
+            "composite_score": 4.2, "recommendation": "Strong pursue",
+            "why": "Strong tools match, but the role skews more senior than usual.",
+        })
+        result = jd_manager.read_evaluation(path)
+        self.assertEqual(result["why"], "Strong tools match, but the role skews more senior than usual.")
+
+    def test_missing_why_persists_as_empty_string_not_missing_key(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        result = jd_manager.read_evaluation(path)
+        self.assertEqual(result["why"], "")
+
     def test_read_evaluation_returns_none_for_plain_text_jd(self):
         path = self._write("dummy.txt", "Just plain text.")
         self.assertIsNone(jd_manager.read_evaluation(path))
