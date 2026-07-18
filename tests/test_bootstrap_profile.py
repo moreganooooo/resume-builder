@@ -41,6 +41,7 @@ class BootstrapProfileTestCase(unittest.TestCase):
         bootstrap_profile.EVIDENCE_GUIDE_PATH = os.path.join(self.tmp_dir, "evidence-guide.csv")
         bootstrap_profile.SCREENSHOT_METRICS_PATH = os.path.join(self.tmp_dir, "extracted-screenshot-metrics.csv")
         bootstrap_profile.RECRUITER_PATTERNS_PATH = os.path.join(self.tmp_dir, "recruiter_memory_patterns.json")
+        bootstrap_profile.CV_DRAFT_CHECKPOINT_PATH = os.path.join(self.bootstrap_dir, "cv_draft_checkpoint.json")
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -137,7 +138,7 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
             "secondary_roles": ["Customer Education Specialist"], "remote_preference": True,
         }
 
-        bootstrap_profile.write_profile_yml(identity, recommendations=[])
+        bootstrap_profile.write_profile_yml(identity, recommendations=[], taxonomy=bootstrap_extractors.TagTaxonomy())
 
         with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -145,6 +146,29 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
         self.assertEqual(data["target_roles"]["primary"], ["Marketing Manager"])
         self.assertEqual(data["target_roles"]["secondary"], ["Customer Education Specialist"])
         self.assertEqual(data["location"]["remote_required"], True)
+
+    def test_writes_generated_tags(self):
+        import yaml
+        identity = {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
+            "remote_preference": False,
+        }
+        taxonomy = bootstrap_extractors.TagTaxonomy(tags=[
+            bootstrap_extractors.TagDefinition(
+                name="ops", persona_description="operations or process roles", keywords=["salesforce", "crm"],
+            ),
+            bootstrap_extractors.TagDefinition(name="generalist", persona_description="general roles", keywords=[]),
+        ])
+
+        bootstrap_profile.write_profile_yml(identity, recommendations=[], taxonomy=taxonomy)
+
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["tags"][0]["name"], "ops")
+        self.assertEqual(data["tags"][0]["keywords"], ["salesforce", "crm"])
+        self.assertEqual(data["tags"][1]["name"], "generalist")
+        self.assertEqual(data["tags"][1]["keywords"], [])
 
     def test_auto_fills_key_recommendations_when_present(self):
         import yaml
@@ -155,7 +179,7 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
         }
         recs = [bootstrap_extractors.RecommendationQuote(name="Alex Chen", title="VP Marketing", quote="Excellent writer.")]
 
-        bootstrap_profile.write_profile_yml(identity, recommendations=recs)
+        bootstrap_profile.write_profile_yml(identity, recommendations=recs, taxonomy=bootstrap_extractors.TagTaxonomy())
 
         with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -169,7 +193,7 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
             "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [],
             "remote_preference": False,
         }
-        bootstrap_profile.write_profile_yml(identity, recommendations=[])
+        bootstrap_profile.write_profile_yml(identity, recommendations=[], taxonomy=bootstrap_extractors.TagTaxonomy())
         with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         self.assertEqual(data["narrative"]["headline"], "")
@@ -349,6 +373,170 @@ class TestWriteCvMd(BootstrapProfileTestCase):
         self.assertTrue(os.path.exists(bootstrap_profile.CV_MD_PATH))
 
 
+class TestCvDraftResumability(BootstrapProfileTestCase):
+    """
+    Regression tests for write_cv_md()'s resumability: previously, an
+    interruption mid-loop (network blip, closed terminal, laptop sleep)
+    lost every bullet already polished -- up to 3 API calls each -- with
+    no way to pick back up except starting completely over. Bullets are
+    now checkpointed as they complete (mirroring bootstrap_bullet_bank.py's
+    own Phase 0 checkpoint pattern), so a second call reuses prior work
+    instead of re-polishing everything.
+    """
+
+    def _setup_one_bullet(self):
+        self._write_timeline([{"company": "Acme Corp", "title": "Manager", "start_date": "2019", "end_date": "2022", "needs_review": False, "conflict_note": None}])
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- First bullet", "source_file": "resume.txt", "source_type": "resume"})
+        return {"full_name": "Jamie", "email": "", "phone": "", "location": "", "linkedin_url": "", "portfolio_url": "", "extra_link": "", "primary_roles": [], "secondary_roles": [], "remote_preference": False}
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_a_polished_bullet_is_checkpointed_to_disk(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        identity = self._setup_one_bullet()
+        mock_process_bullet.return_value = {"final_bullet": "polished", "rewrite_status": "KEEP"}
+        mock_select.return_value.ask.return_value = "skip"
+
+        bootstrap_profile.write_cv_md(identity)
+
+        self.assertTrue(os.path.exists(bootstrap_profile.CV_DRAFT_CHECKPOINT_PATH))
+        with open(bootstrap_profile.CV_DRAFT_CHECKPOINT_PATH, encoding="utf-8") as f:
+            checkpoint = json.load(f)
+        self.assertEqual(checkpoint["Acme Corp::- First bullet"]["final_bullet"], "polished")
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_a_second_run_reuses_the_checkpoint_instead_of_recalling_the_api(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        identity = self._setup_one_bullet()
+        mock_process_bullet.return_value = {"final_bullet": "polished", "rewrite_status": "KEEP"}
+        mock_select.return_value.ask.return_value = "skip"
+
+        bootstrap_profile.write_cv_md(identity)   # first "run" -- polishes and checkpoints
+        bootstrap_profile.write_cv_md(identity)   # simulated resume after an interruption
+
+        mock_process_bullet.assert_called_once()  # not called again on the second run
+
+    @patch("bootstrap_profile.questionary.select")
+    @patch("bootstrap_profile.process_bullet")
+    @patch("bootstrap_profile.build_system_prompts", return_value=("rewrite sys", "rewrite sys gemma", "score sys"))
+    @patch("bootstrap_profile.KnowledgeBase")
+    @patch("bootstrap_profile.RulesBundle")
+    def test_regenerate_clears_the_checkpoint_and_recalls_the_api(
+        self, mock_rules_cls, mock_kb_cls, mock_build_prompts, mock_process_bullet, mock_select,
+    ):
+        identity = self._setup_one_bullet()
+        mock_process_bullet.return_value = {"final_bullet": "polished", "rewrite_status": "KEEP"}
+        mock_select.return_value.ask.side_effect = ["regenerate", "skip"]
+
+        bootstrap_profile.write_cv_md(identity)
+
+        # regenerate is an explicit "start over" request -- it should not
+        # silently replay the cached result from the draft just rejected.
+        self.assertEqual(mock_process_bullet.call_count, 2)
+
+
+class TestCollectSecrets(unittest.TestCase):
+    """
+    Regression tests for collect_secrets(): each profile now gets its own
+    .env (profile_paths.env_path()) instead of one shared project-root
+    file, and the wizard should never re-prompt for a var that's already
+    set (this can run again on an existing profile, not just a brand-new
+    one).
+    """
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.env_path = os.path.join(self.tmp_dir, ".env")
+        self._env_patch = patch("bootstrap_profile.profile_paths.env_path", return_value=self.env_path)
+        self._env_patch.start()
+        self._orig_gemini = os.environ.pop("GEMINI_API_KEY", None)
+        self._orig_google = os.environ.pop("GOOGLE_API_KEY", None)
+        self._orig_jobright = os.environ.pop("JOBRIGHT_COOKIE_STRING", None)
+
+    def tearDown(self):
+        self._env_patch.stop()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        for var, val in (("GEMINI_API_KEY", self._orig_gemini), ("GOOGLE_API_KEY", self._orig_google), ("JOBRIGHT_COOKIE_STRING", self._orig_jobright)):
+            if val is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = val
+
+    def test_dry_run_prompts_nothing(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            result = bootstrap_profile.collect_secrets(dry_run=True)
+            mock_confirm.assert_not_called()
+        self.assertEqual(result, {"gemini_key_set": False, "jobright_cookie_set": False})
+
+    def test_entering_a_key_now_writes_it_to_this_profiles_own_env_file(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
+             patch("bootstrap_profile.questionary.password") as mock_password:
+            mock_confirm.return_value.ask.side_effect = [True, False]  # yes to Gemini, no to JobRight
+            mock_password.return_value.ask.return_value = "test-gemini-key-123"
+
+            result = bootstrap_profile.collect_secrets(dry_run=False)
+
+        self.assertTrue(result["gemini_key_set"])
+        self.assertFalse(result["jobright_cookie_set"])
+        with open(self.env_path) as f:
+            content = f.read()
+        self.assertIn("GEMINI_API_KEY", content)
+        self.assertIn("test-gemini-key-123", content)
+
+    def test_skips_the_prompt_entirely_when_already_configured_in_the_shell(self):
+        os.environ["GEMINI_API_KEY"] = "already-set-in-shell"
+        os.environ["JOBRIGHT_COOKIE_STRING"] = "already-set-cookie"
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
+             patch("bootstrap_profile.questionary.password") as mock_password:
+            result = bootstrap_profile.collect_secrets(dry_run=False)
+            mock_confirm.assert_not_called()
+            mock_password.assert_not_called()
+        self.assertEqual(result, {"gemini_key_set": True, "jobright_cookie_set": True})
+        self.assertFalse(os.path.exists(self.env_path))  # nothing needed writing
+
+
+class TestCollectLinkedinSearchQueries(unittest.TestCase):
+    """
+    Regression tests: linkedin_search_queries: didn't exist in the
+    wizard-generated profile.yml template at all before this pass -- a new
+    profile would silently fall back to target_roles.primary forever, with
+    no way to set a real boolean query without hand-editing profile.yml
+    afterward and knowing that field existed.
+    """
+
+    def test_dry_run_returns_empty_without_prompting(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            result = bootstrap_profile.collect_linkedin_search_queries(["Marketing Manager"], dry_run=True)
+            mock_confirm.assert_not_called()
+        self.assertEqual(result, [])
+
+    def test_declining_custom_terms_returns_empty_list(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = False
+            result = bootstrap_profile.collect_linkedin_search_queries(["Marketing Manager"])
+        self.assertEqual(result, [])
+
+    def test_entering_custom_terms_collects_them_until_a_blank_line(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
+             patch("bootstrap_profile.questionary.text") as mock_text:
+            mock_confirm.return_value.ask.return_value = True
+            mock_text.return_value.ask.side_effect = ["Email OR Campaign", "Lifecycle", ""]
+            result = bootstrap_profile.collect_linkedin_search_queries(["Marketing Manager"])
+        self.assertEqual(result, ["Email OR Campaign", "Lifecycle"])
+
+
 class TestWriteBackgroundGuide(BootstrapProfileTestCase):
 
     @patch("bootstrap_profile.questionary.select")
@@ -394,18 +582,23 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
     @patch("bootstrap_profile.write_verified_ledger")
     @patch("bootstrap_profile.write_portals_yml")
     @patch("bootstrap_profile.write_profile_yml")
+    @patch("bootstrap_profile.bootstrap_extractors.generate_tag_taxonomy")
+    @patch("bootstrap_profile.collect_linkedin_search_queries", return_value=[])
     @patch("bootstrap_profile.collect_identity")
     @patch("bootstrap_profile._guess_recommendations", return_value=[])
     def test_calls_every_writer_in_order(
-        self, mock_guess_recs, mock_collect_identity, mock_write_profile,
-        mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
+        self, mock_guess_recs, mock_collect_identity, mock_collect_linkedin, mock_generate_tags,
+        mock_write_profile, mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
     ):
         mock_collect_identity.return_value = {
             "full_name": "Jamie Rivera", "primary_roles": ["Marketing Manager"], "secondary_roles": [],
         }
+        mock_generate_tags.return_value = bootstrap_extractors.TagTaxonomy()
 
         summary = bootstrap_profile.run_profile_setup()
 
+        mock_collect_linkedin.assert_called_once()
+        mock_generate_tags.assert_called_once()
         mock_write_profile.assert_called_once()
         mock_write_portals.assert_called_once()
         mock_write_ledger.assert_called_once()
@@ -413,6 +606,8 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_bg.assert_called_once()
         self.assertEqual(summary["full_name"], "Jamie Rivera")
         self.assertEqual(summary["primary_roles"], 1)
+        self.assertEqual(summary["tags_generated"], 0)
+        self.assertEqual(summary["linkedin_search_queries"], 0)
 
 
 if __name__ == "__main__":

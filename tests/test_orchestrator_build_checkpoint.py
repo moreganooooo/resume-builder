@@ -266,12 +266,12 @@ class TestBuildCheckpointResume(unittest.TestCase):
         bad_resume = {
             "SUMMARY_TEXT": "<strong>A results-driven lifecycle marketer.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         good_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         template_call_count = {"n": 0}
 
@@ -466,12 +466,12 @@ class TestBuildCheckpointResume(unittest.TestCase):
                     return (json.dumps({
                         "SUMMARY_TEXT": "<strong>A results-driven marketer.</strong>",
                         "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-                        "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+                        "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
                     }), {})
                 return (json.dumps({
                     "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
                     "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-                    "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+                    "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
                 }), {})
             if schema is orchestrator.ResumeCritiqueSchema:
                 return (json.dumps({
@@ -519,7 +519,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         always_bad = {
             "SUMMARY_TEXT": "<strong>A results-driven marketer.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         def generate_side_effect(*args, **kwargs):
@@ -566,7 +566,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         good_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         template_call_count = {"n": 0}
 
@@ -627,7 +627,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         good_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         def generate_side_effect(*args, **kwargs):
@@ -682,7 +682,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         always_long_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         def generate_side_effect(*args, **kwargs):
@@ -734,7 +734,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         seeded_resume_data = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
             "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
-            "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         jd_manager.save_checkpoint(self.job_key, {
             "jd_keywords": {"hard_skills": ["python"]},
@@ -789,7 +789,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         })
         base_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
-            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "WHY_TEXT": "", "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         rec_call_count = {"n": 0}
@@ -855,7 +855,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         })
         base_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
-            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "WHY_TEXT": "", "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         def generate_side_effect(*args, **kwargs):
@@ -909,7 +909,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         })
         base_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
-            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "WHY_TEXT": "", "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
         def generate_side_effect(*args, **kwargs):
@@ -962,7 +962,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         })
         base_resume = {
             "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>", "SKILLS": [], "EXPERIENCE": [],
-            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "WHY_TEXT": "", "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         captured_contents = {}
 
@@ -1011,7 +1011,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
     ):
         base_resume = {
             "SUMMARY_TEXT": "<strong>Already applied.</strong>", "SKILLS": [], "EXPERIENCE": [],
-            "WHY_TEXT": "", "KU_ACHIEVEMENT_KEY": "content_generalist", "KCKCC_ACHIEVEMENT_KEY": "writing_content",
+            "WHY_TEXT": "", "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
         jd_manager.save_checkpoint(self.job_key, {
             "jd_keywords": {"hard_skills": ["python"]},

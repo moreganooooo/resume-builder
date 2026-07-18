@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from dotenv import load_dotenv
 from google import genai
@@ -12,8 +13,11 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 TXT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output", "txt")
 JSON_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output", "json")
 
-# Ensure .env is loaded from the project root
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+sys.path.insert(0, SCRIPT_DIR)
+import profile_paths
+
+# Ensure .env is loaded from the active profile's own directory
+load_dotenv(profile_paths.env_path())
 
 # Initialize client
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "YOUR_API_KEY"))

@@ -1,16 +1,17 @@
 import os
 import json
+import sys
 import time
 import pandas as pd
 from dotenv import load_dotenv
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+sys.path.insert(0, SCRIPT_DIR)
+import profile_paths
+load_dotenv(profile_paths.env_path())
 
 # Import shared objects from orchestrator
-import sys
-sys.path.insert(0, SCRIPT_DIR)
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
 
 SLEEP = 8  # seconds between calls — generous since this is a one-time offline task

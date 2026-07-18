@@ -109,12 +109,21 @@ below. Nothing auto-triggers the next stage without you choosing it.
    npm install
    npx playwright install chromium
    ```
-4. Create a `.env` file in the project root with your API key:
+4. Create a `.env` file in **your own profile's directory**
+   (`profiles/<name>/.env` — `profiles/morgan/.env` for the default
+   profile) with your API key. Each profile carries its own `.env`, not
+   one shared file, so two people sharing this checkout never share
+   credentials:
    ```
    GEMINI_API_KEY=your-key-here
    ```
+   The bootstrap wizard (`resume` menu's "New User? Start Here!") walks a
+   new profile through this interactively and offers to write it for
+   you — this manual step is only needed if you're setting up outside
+   that flow.
 5. Optional, only needed for `resume scan`:
-   - **`--source jobright` needs `JOBRIGHT_COOKIE_STRING` in `.env`** — the
+   - **`--source jobright` needs `JOBRIGHT_COOKIE_STRING` in your
+     profile's `.env`** — the
      full raw cookie header string JobRight expects on every API request
      (all `name=value` pairs, semicolon-separated), not just one cookie's
      value. Grab it like this:

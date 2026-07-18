@@ -9,6 +9,60 @@ candidate:
   linkedin: "linkedin.com/in/morganescott"
   portfolio_url: "https://escottmorgan.myportfolio.com"
   process_map_url: "https://escottmorgan.wixsite.com/processmap"
+  # Optional -- used only by validate_coverletter.py's third-person-slip
+  # check, to catch the model accidentally referring to the candidate by
+  # pronoun instead of "I". Omit entirely for a profile that would rather
+  # not have (or hasn't configured) this specific check.
+  pronouns: ["she", "her", "hers"]
+
+# Hand-tuned boolean search strings for scan_linkedin.py's saved
+# searches -- deliberately not derived from target_roles: above, since a
+# good LinkedIn boolean query needs real tuning, not a naive per-role-name
+# search. A profile without this falls back to one query per
+# target_roles.primary entry (see scan_linkedin.py's fetch_linkedin_jobs()).
+linkedin_search_queries:
+  - "Email OR Campaign"
+  - "Lifecycle"
+  - "Sales OR Revenue AND operations OR support OR enablement"
+
+# Bullet-tag taxonomy: which category each bullet-bank row is tagged with
+# ([email], [ops], etc. -- see bullet-bank.md), used for auto-tagging
+# (tag_bullet_bank.py), persona context injected into rewrite prompts
+# (persona_description), and filtering claims/metrics/projects to what's
+# actually relevant to a given bullet (keywords). Consolidated 2026-07-17
+# from three previously-hardcoded, already-drifted-apart copies
+# (orchestrator.py's TAG_CONTEXT + CLAIM_TAG_KEYWORDS, tag_bullet_bank.py's
+# TAG_KEYWORDS) into this one source. An empty keywords: list is the
+# catch-all convention -- it means "matches everything," not "matches
+# nothing."
+tags:
+  - name: "email"
+    persona_description: "email marketing, lifecycle marketing, or CRM/ESP campaign roles"
+    keywords: ["email", "open rate", "reply rate", "sequence", "outreach", "campaign", "pta", "hot zone", "mailchimp", "persistiq"]
+  - name: "ops"
+    persona_description: "marketing operations, RevOps, CRM, automation, or analytics roles"
+    keywords: ["salesforce", "crm", "pipeline", "territory", "hygiene", "data", "hot zone", "import", "outreach", "integration"]
+  - name: "content"
+    persona_description: "content marketing, editorial strategy, brand voice, or copywriting roles"
+    keywords: ["content", "committee", "asset", "library", "governance", "voice", "sequence", "playbook", "onboarding", "training"]
+  - name: "enablement"
+    persona_description: "sales enablement, training/onboarding design, or content-governance roles"
+    keywords: ["training", "onboarding", "playbook", "sdr", "enablement", "committee", "process map", "coaching"]
+  - name: "mgmt"
+    persona_description: "team leadership, coaching, or people-management roles"
+    keywords: ["team", "coach", "manage", "sdr", "direct report", "training"]
+  - name: "writing"
+    persona_description: "copywriting, editorial, or long-form content-writing roles"
+    keywords: ["copy", "writing", "email", "sequence", "campaign", "authored"]
+  - name: "brand"
+    persona_description: "brand marketing, creative direction, or agency roles"
+    keywords: ["brand", "voice", "tone", "agency", "campaign", "creative"]
+  - name: "design"
+    persona_description: "graphic design, visual identity, or UX/UI roles"
+    keywords: ["design", "deck", "slide", "flyer", "illustrator", "canva"]
+  - name: "generalist"
+    persona_description: "general marketing or cross-functional roles"
+    keywords: []
 
 target_roles:
   primary:
@@ -343,6 +397,16 @@ roles:
     page: 2
     flex_priority: 2
 
+# Companies with an extra audited-evidence archive beyond the base bullet
+# bank (verified-claims.csv, extracted-screenshot-metrics.csv,
+# verified_metrics.json, verified_projects.json) -- matched as
+# case-insensitive substrings against each bullet's Role / Company value.
+# A profile with no such archive yet can leave this empty or omit it.
+deep_evidence_keywords:
+  - "treering"
+  - "tree ring"
+  - "yearbook"
+
 protected_bullets:
   - "Outreach.io full platform ownership (vendor eval, Salesforce integration, migration, adoption training, ongoing stewardship)"
   - "CRM scrub: scale (thousands of accounts), systematic audit, verified $3M pipeline recovery"
@@ -364,9 +428,21 @@ fixed_credentials:
     - institution: "University of Kansas"
       credential: "BS, Journalism + Strategic Communication"
       bullet_count: 2
+      # Pre-approved achievement-bullet options -- the builder picks the
+      # key whose framing best fits the detected archetype (see
+      # fixed_content.py's KU_ACHIEVEMENT_OPTIONS for the actual bullet
+      # text each key selects).
+      achievement_options:
+        content_generalist: "broad audience-growth framing"
+        email_ops: "campaign/channel management framing"
+        content: "editorial/content-production framing"
     - institution: "Kansas City Kansas Community College"
       credential: "AA, Journalism"
       bullet_count: 2
+      achievement_options:
+        writing_content: "editorial/writing framing"
+        enablement_mgmt: "team leadership/enablement framing"
+        generalist: "balanced ownership framing"
     - institution: "Johnson County Community College"
       credential: "Coursework, Graphic Design"
       bullet_count: 1

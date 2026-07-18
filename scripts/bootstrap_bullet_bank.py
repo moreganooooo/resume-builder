@@ -64,12 +64,14 @@ CLIENTS = {}
 COMPANY_RENAME_NOTE = {}
 COMPANY_FIXED_TITLE = {}
 CAREER_NOTE = ""
+CAREER_NOTE_COMPANY = ""
 CERTIFICATIONS = []
-KU_ACHIEVEMENT_OPTIONS = {}
-KCKCC_ACHIEVEMENT_OPTIONS = {}
+CV_SECTION_KEYWORDS = []
+BACKGROUND_IDENTITY = ""
+BACKGROUND_TAGS = {}
 
 
-def build_education(ku_achievement_key: str = "", kckcc_achievement_key: str = "") -> list:
+def build_education(achievement_keys: dict = None) -> list:
     return []
 '''
 
@@ -386,6 +388,11 @@ def main():
     parser.add_argument("--yes", action="store_true", help="Skip confirmation gates and run the full pipeline unattended.")
     parser.add_argument("--dry-run", action="store_true", help="Print prompts instead of calling the API, and skip the real six-stage pipeline entirely.")
     args = parser.parse_args()
+
+    # Before Phase 0 -- run_ingestion() itself calls the Gemini API (document
+    # classification/extraction), so the key needs to be in place before
+    # the very first real call, not just before Phase 0.5's steps.
+    bootstrap_profile.collect_secrets(dry_run=args.dry_run)
 
     summary = run_ingestion(dry_run=args.dry_run)
     print_ingestion_summary(summary)

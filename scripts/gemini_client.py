@@ -15,16 +15,18 @@ import time
 import requests
 from dotenv import load_dotenv
 
-# Resolved from this file's own location, matching every other script in
-# this pipeline (cluster_bullet_bank.py, audit_keepers.py,
-# score_keeper_gems.py, embed_bullet_bank.py all do the same). override=True
-# is the important part -- without it, a GEMINI_API_KEY already exported in
-# the shell (e.g. from an earlier manual export while juggling API keys)
-# silently wins over whatever's actually in .env, since dotenv's default
-# behavior is to never overwrite an existing environment variable.
+import profile_paths
+
+# Resolved via profile_paths.env_path() -- each profile carries its own
+# .env (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING), not one shared project-
+# root file. override=True is the important part -- without it, a
+# GEMINI_API_KEY already exported in the shell (e.g. from an earlier
+# manual export while juggling API keys) silently wins over whatever's
+# actually in .env, since dotenv's default behavior is to never overwrite
+# an existing environment variable.
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+load_dotenv(profile_paths.env_path(), override=True)
 
 API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -198,6 +200,8 @@ class GeminiClient:
         system_instruction: str,
         contents: str,
         response_schema=None,
+        extra_schema_properties: dict = None,
+        extra_required: list = None,
         temperature: float = 0.0,
         max_retries: int = 6,
         max_output_tokens: int = None,
@@ -252,6 +256,21 @@ class GeminiClient:
                         raw_schema = json.loads(response_schema)
                     except json.JSONDecodeError:
                         print("ERROR: response_schema string is not valid JSON.")
+                if raw_schema and (extra_schema_properties or extra_required):
+                    # Callers that need profile-specific enum fields not knowable
+                    # at Pydantic class-definition time (e.g. orchestrator.py's
+                    # per-profile education achievement-key options) merge them
+                    # in here rather than passing a hand-built dict as
+                    # response_schema -- this keeps response_schema=SomeModel
+                    # identity-comparable in tests/mocks that route on it, and
+                    # keeps the merge applied before resolve_refs/sanitize_schema
+                    # so it goes through the exact same pipeline as every other
+                    # property. Copies rather than mutates raw_schema in place,
+                    # since a Pydantic-sourced dict could in principle be reused
+                    # across calls.
+                    raw_schema = dict(raw_schema)
+                    raw_schema["properties"] = {**raw_schema.get("properties", {}), **(extra_schema_properties or {})}
+                    raw_schema["required"] = list(raw_schema.get("required", [])) + list(extra_required or [])
                 if raw_schema:
                     generation_config["responseSchema"] = GeminiClient.sanitize_schema(
                         GeminiClient.resolve_refs(raw_schema)

@@ -38,7 +38,7 @@ import profile_paths  # noqa: E402
 
 KB_DIR       = profile_paths.kb_dir()
 
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+load_dotenv(profile_paths.env_path(), override=True)
 
 KEEPERS_CSV  = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 GEMS_CSV     = os.path.join(KB_DIR, "hidden-gems.csv")

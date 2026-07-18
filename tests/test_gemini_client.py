@@ -242,5 +242,56 @@ class TestGemmaPacing(unittest.TestCase):
         mock_sleep.assert_not_called()
 
 
+class TestExtraSchemaProperties(unittest.TestCase):
+    """
+    orchestrator.py's per-profile education achievement-key fields (see
+    ResumeEngine.build_education_achievement_schema_fields()) can't be
+    static fields on the Pydantic response_schema class, since their valid
+    enum values differ per profile. extra_schema_properties/extra_required
+    let a caller merge real, per-call fields into whatever response_schema
+    it passed -- these tests confirm the merge actually reaches the request
+    body sent to Gemini, survives the same resolve_refs/sanitize_schema
+    pipeline every other property goes through, and stays a no-op when
+    unused (the vast majority of calls, which never pass either kwarg).
+    """
+
+    @patch("gemini_client.requests.post")
+    def test_extra_properties_and_required_merge_into_a_dict_response_schema(self, mock_post):
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="content",
+            response_schema={
+                "type": "object",
+                "properties": {"TAGLINE": {"type": "string"}},
+                "required": ["TAGLINE"],
+            },
+            extra_schema_properties={"EDU_ACHIEVEMENT_KEY_1": {"type": "string", "enum": ["a", "b"]}},
+            extra_required=["EDU_ACHIEVEMENT_KEY_1"],
+        )
+
+        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"]["responseSchema"]
+        self.assertEqual(sent_schema["properties"]["TAGLINE"], {"type": "string"})
+        self.assertEqual(sent_schema["properties"]["EDU_ACHIEVEMENT_KEY_1"], {"type": "string", "enum": ["a", "b"]})
+        self.assertEqual(set(sent_schema["required"]), {"TAGLINE", "EDU_ACHIEVEMENT_KEY_1"})
+
+    @patch("gemini_client.requests.post")
+    def test_no_extra_kwargs_leaves_the_schema_unchanged(self, mock_post):
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="content",
+            response_schema={"type": "object", "properties": {"TAGLINE": {"type": "string"}}, "required": ["TAGLINE"]},
+        )
+
+        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"]["responseSchema"]
+        self.assertEqual(list(sent_schema["properties"].keys()), ["TAGLINE"])
+        self.assertEqual(sent_schema["required"], ["TAGLINE"])
+
+
 if __name__ == "__main__":
     unittest.main()

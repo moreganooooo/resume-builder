@@ -23,9 +23,14 @@ from typing import List, Literal, Tuple
 # on load_dotenv() can't fix that after the fact, since it's a plain module
 # constant, not re-read per call. This caused every single API call in a run
 # to fail with 401 Unauthorized while silently ignoring a correct .env key.
+# profile_paths itself is imported first (ahead of the render_html/etc.
+# block below) purely so env_path() is available here -- it doesn't touch
+# gemini_client, so it doesn't reintroduce the hazard this ordering guards
+# against.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+import profile_paths
+load_dotenv(profile_paths.env_path(), override=True)
 
 from render_html import render_html
 from render_coverletter import render_coverletter
@@ -34,7 +39,6 @@ import validate_resume
 import validate_coverletter
 import jd_manager
 import bullet_feedback
-import profile_paths
 
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -167,24 +171,6 @@ GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 # that just share a topic, so nudge it back up if that starts happening.
 DEDUP_SIMILARITY_THRESHOLD = 0.85
 
-# Per-company minimum bullets to guarantee during mining, matching
-# tailor_resume.md's per-role bullet-count targets (low end for the two
-# ranged roles). Pure global top-K ranking has no per-company floor -- a JD
-# whose embedding favors one company can starve every other company of
-# material entirely (a real run mined 0 Mercor and 0 Callahan Creek bullets
-# out of 30). These minimums are pulled from each company's own bullet pool
-# before the remaining TOP_K_BULLETS - sum(minimums) slots are filled by the
-# global ranking.
-COMPANY_MIN_BULLETS = {
-    "Mercor": 2,
-    "Treering Yearbooks": 6,
-    "Inside Sales Team": 5,
-    "Element 8 / Strategy LLC": 4,
-    "VML": 4,
-    "Callahan Creek": 4,
-}
-
-
 # --- STRENGTH TIER SORT ORDER ---
 # Hidden Gems always rank above Strong, Strong above Solid, Solid above Needs Work.
 # Bullets without a strength_category column fall to rank 99 (sort last).
@@ -231,137 +217,12 @@ KB_ALLOWLIST = sorted([
 # --- TIER 2 FILTERING CONSTANTS ---
 # Ported verbatim from rewrite_bullets.py. These are what actually make
 # the segment bundle small and relevant instead of a raw file dump.
-TREERING_KEYWORDS = ["treering", "tree ring", "yearbook"]
+# The keyword list gating which companies get the "deep evidence" file
+# bundle (verified-claims.csv, extracted-screenshot-metrics.csv, etc.) is
+# per-profile -- see profile.yml's deep_evidence_keywords: -- since it's
+# not every profile that has one company with this much audited archive.
 MAX_CLAIMS_ROWS   = 12
 MAX_GEMMA_FILTER_ROWS = 5   # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
-
-# TAG_CONTEXT maps bracketed bullet tags (e.g. "[ops]") to the persona
-# roles they target, used by persona_context() below. Bracketed form
-# matters -- it's how rewrite_bullets.py avoids accidental substring
-# matches (e.g. "ops" inside some unrelated word).
-TAG_CONTEXT = {
-    "[content]":    "content marketing, editorial strategy, brand voice, or copywriting roles",
-    "[ops]":        "marketing operations, RevOps, CRM, automation, or analytics roles",
-    "[email]":      "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
-    "[demand]":     "demand generation, paid media, or growth marketing roles",
-    "[product]":    "product marketing or go-to-market strategy roles",
-    "[sales]":      "B2B sales, SDR/AE, or account management roles",
-    "[brand]":      "brand marketing, creative direction, or agency roles",
-    "[design]":     "graphic design, visual identity, or UX/UI roles",
-    "[general]":    "general marketing or cross-functional roles",
-}
-
-BACKGROUND_IDENTITY = """
-Morgan is a creative and strategic marketer with 10+ years of experience spanning journalism,
-design, agency work, sales, CRM, and lifecycle content. She is the rare combination: writes
-campaigns that perform AND operates the stack (Salesforce + Outreach.io). She brings structure
-to creative work and energy to technical systems. She is seeking fully remote IC roles — not
-management. She has consistently been the person companies come back to: Callahan Creek extended
-her from intern to freelance; Element 8's CEO recruited her to lead Strategy LLC branding;
-Treering headhunted her directly from IST.
-""".strip()
-
-BACKGROUND_TAGS = {
-    "[email]": """
-Email / Lifecycle context:
-- Owned Outreach.io as primary admin: evaluated vendors, led integration with Salesforce, drove
-  team-wide adoption for a 20+ person SDR org.
-- Built 62+ sequences across 4 major categories (PTA, Hot Zone, Private School, Title 1).
-- PTA Council: 74% open / 22% reply / 0 opt-outs. HZ Spring 1st Touch: 85% open / 39% reply.
-- Jan 2022 run: 63% avg open across 6 sequences, 8.7% reply, 3,337 prospects added.
-- Personalization at scale: variable logic, behavioral triggers, segmentation by district type.
-- A/B tested subject lines, CTAs, and send windows systematically.
-""".strip(),
-    "[ops]": """
-Ops / CRM context:
-- Salesforce Classic & Lightning: territory management, pipeline reporting, data hygiene at scale.
-- Uncovered $3M+ in stale pipeline via systematic CRM scrub; defined KPIs, dashboards, scope.
-- National Hot Zone analysis: identified high-propensity districts using Salesforce data;
-  trained team on strategy; the program scaled into a dedicated research function.
-- Managed 2,000+ accounts simultaneously while also managing a 4-6 person SDR team.
-- Led Outreach.io/Salesforce integration: data migration, deduplication, field mapping.
-""".strip(),
-    "[content]": """
-Content / Enablement context:
-- Founded and chaired the Content Committee: cross-department body owning brand voice,
-  sequence library (100+ assets), campaign QA, and content governance.
-- Built voice/tone guidelines adopted team-wide; peers held to Morgan's standard as benchmark.
-- Created SDR Process Map (escottmorgan.wixsite.com/processmap) — official new-hire training.
-- 100+ email campaigns across niche audiences, each with unique messaging and multi-touch logic.
-- Designed branded slide decks for all monthly team trainings (20+ employees); consistently
-  received outstanding feedback on quality and engagement.
-""".strip(),
-    "[enablement]": """
-Enablement / Training context:
-- Developed and delivered live + async training for 20+ employees on messaging, QA, platforms.
-- Created the SDR Process Map website used as official onboarding infrastructure.
-- Produced onboarding playbooks, interview guides, and campaign frameworks.
-- Coached a remote pod of 4-6 SDRs on sequencing strategy, CRM hygiene, and territory work.
-- Content Committee governed all sales content: 100+ assets, 129 sequences, QA checklists.
-""".strip(),
-    "[sales]": """
-Sales / SDR context:
-- First outbound hire to surpass $1M in sourced revenue at Treering; exceeded Year 1 target by 17%.
-- 2x Top Seller at Inside Sales Team (now Alleyoop); Top 10 company-wide in first 2 months.
-- Promoted within 6 months at IST to sole manager of a 12-person SDR team.
-- Treering recruited Morgan directly from IST based on exceptional performance.
-- Managed 2,000+ accounts; coached a pod of 4-6 SDRs on prospecting and outreach.
-""".strip(),
-    "[brand]": """
-Brand / Agency context:
-- VML (global ad agency): campaigns for Gatorade, SAP, HughesNet; pitch deck praised by CEO;
-  wrote 200+ page digital strategy report for Carlson Hotels.
-- Callahan Creek: worked in a real creative pod (copywriter, art director, designer); 2 campaigns
-  selected for client rollout; extended to long-term freelance.
-- Built Treering's voice/tone guidelines and Content Committee governance from scratch.
-""".strip(),
-    "[design]": """
-Design context:
-- Adobe Illustrator, Photoshop, InDesign: conference flyers, brand decks, COVID response flyer
-  (posted on Treering homepage), monthly training decks, Georgia PTA council presentation.
-- Element 8 / Strategy LLC: designed complete brand identity from scratch; still in use 15+ years later.
-- Lead Graphic Designer title at Strategy LLC; recruited specifically by the CEO for the role.
-- Canva, Figma (basic), CMS/WYSIWYG editors also in toolkit.
-""".strip(),
-    "[generalist]": """
-Generalist / cross-functional context:
-- Range: journalism foundation (KU BS), agency copywriting (VML, Callahan Creek), graphic design
-  (Element 8/Strategy LLC), B2B SaaS sales + CRM (Treering 8 years), AI data work (Mercor).
-- Comfortable moving between writing, ops, design, and strategy without losing quality in any lane.
-- Non-Treering experience spans EdTech, regulated financial copy (CACU), K-12/education audiences,
-  nonprofit (Humane Society of KC), print/publishing.
-""".strip(),
-}
-
-CV_SECTION_KEYWORDS = [
-    (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
-    (["inside sales", "alleyoop", "ist"],   "Inside Sales Team"),
-    (["usitek"],                             "USitek"),
-    (["element 8", "strategy llc"],         "Element 8"),
-    (["vml"],                               "VML"),
-    (["callahan"],                          "Callahan Creek"),
-    (["unisource", "udp"],                  "Unisource"),
-    (["humane society"],                    "Humane Society"),
-    (["mercor"],                            "Mercor"),
-]
-
-CLAIM_TAG_KEYWORDS = {
-    "[email]":       ["email", "open rate", "reply rate", "sequence", "outreach", "campaign",
-                      "pta", "hot zone", "mailchimp", "persistiq"],
-    "[ops]":         ["salesforce", "crm", "pipeline", "territory", "hygiene", "data",
-                      "hot zone", "import", "outreach", "integration"],
-    "[content]":     ["content", "committee", "asset", "library", "governance", "voice",
-                      "sequence", "playbook", "onboarding", "training"],
-    "[enablement]":  ["training", "onboarding", "playbook", "sdr", "enablement",
-                      "committee", "process map", "coaching"],
-    "[sales]":       ["revenue", "pipeline", "quota", "close rate", "sourced", "sdr",
-                      "outbound", "meeting", "deal"],
-    "[brand]":       ["brand", "voice", "tone", "agency", "campaign", "creative"],
-    "[design]":      ["design", "deck", "slide", "flyer", "illustrator", "canva"],
-    "[generalist]":  [],
-    "[mgmt]":        ["team", "coach", "manage", "sdr", "direct report", "training"],
-    "[writing]":     ["copy", "writing", "email", "sequence", "campaign", "authored"],
-}
 
 # profile.yml sections to KEEP in the audit prefix (trimmed for token efficiency).
 AUDIT_PROFILE_KEEP = [
@@ -396,19 +257,24 @@ from gemini_client import GeminiClient  # replaces the inline class
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)
 # ---------------------------------------------------------------------------
 
-def is_treering_bullet(role_company: str) -> bool:
-    if not isinstance(role_company, str):
+def is_deep_evidence_bullet(role_company: str, keywords: list) -> bool:
+    """Whether role_company matches profile.yml's deep_evidence_keywords --
+    the companies with an extra audited-evidence archive (verified claims,
+    screenshot metrics, etc.) beyond the base bullet bank. Empty keywords
+    (a profile with no such archive yet) means this is always False."""
+    if not isinstance(role_company, str) or not keywords:
         return False
     rc = role_company.lower()
-    return any(kw in rc for kw in TREERING_KEYWORDS)
+    return any(kw in rc for kw in keywords)
 
 
 def extract_cv_section(cv_text: str, role_company: str) -> str:
     if not cv_text or not role_company:
         return cv_text
     rc_lower = role_company.lower()
+    fixed_content = profile_paths.fixed_content_module()
     matched_heading = None
-    for keywords, heading in CV_SECTION_KEYWORDS:
+    for keywords, heading in fixed_content.CV_SECTION_KEYWORDS:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
@@ -421,13 +287,31 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
     return cv_text
 
 
+def _tag_context_map() -> dict:
+    """Bracket-tag ("[ops]") -> persona_description, built from profile.yml's
+    tags: (profile_paths.tags(), generated per-profile during bootstrap)
+    instead of a hardcoded module constant -- see that function's
+    docstring for why. Bracketed form matters -- it's how tag matching
+    avoids accidental substring matches (e.g. "ops" inside some unrelated
+    word)."""
+    return {f"[{t['name']}]": t["persona_description"] for t in profile_paths.tags()}
+
+
+def _claim_tag_keywords_map() -> dict:
+    """Bracket-tag -> keywords, built from profile.yml's tags: the same
+    way as _tag_context_map(). An empty keywords list for a tag means
+    "matches everything" (the catch-all/generalist convention), not
+    "matches nothing" -- see filter_claims_by_tags()'s include_all logic."""
+    return {f"[{t['name']}]": (t.get("keywords") or []) for t in profile_paths.tags()}
+
+
 def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS) -> pd.DataFrame:
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     keywords = []
     include_all = False
-    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+    for tag, kws in _claim_tag_keywords_map().items():
         if tag in tags_lower:
             if not kws:
                 include_all = True
@@ -456,7 +340,7 @@ def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list
     tags_lower = tags.lower() if isinstance(tags, str) else ""
     keywords = []
     include_all = False
-    for tag, kws in CLAIM_TAG_KEYWORDS.items():
+    for tag, kws in _claim_tag_keywords_map().items():
         if tag in tags_lower:
             if not kws:
                 include_all = True
@@ -476,9 +360,10 @@ def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list
 
 
 def build_background_summary(tags: str) -> str:
+    fixed_content = profile_paths.fixed_content_module()
     tags_lower = tags.lower() if isinstance(tags, str) else ""
-    sections = [BACKGROUND_IDENTITY]
-    for tag, content in BACKGROUND_TAGS.items():
+    sections = [fixed_content.BACKGROUND_IDENTITY]
+    for tag, content in fixed_content.BACKGROUND_TAGS.items():
         if tag in tags_lower:
             sections.append(content)
     return "\n\n".join(sections)
@@ -493,10 +378,11 @@ def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
 
 
 def persona_context(tags: str) -> str:
+    tag_context = _tag_context_map()
     if not isinstance(tags, str) or not tags.strip():
-        return "general marketing roles"
-    parts = [TAG_CONTEXT[tag] for tag in TAG_CONTEXT if tag in tags.lower()]
-    return ", ".join(parts) if parts else "general marketing roles"
+        return "this candidate's target roles"
+    parts = [tag_context[tag] for tag in tag_context if tag in tags.lower()]
+    return ", ".join(parts) if parts else "this candidate's target roles"
 
 
 # ---------------------------------------------------------------------------
@@ -625,19 +511,20 @@ def _short_widow_bullets(resume_data: dict, companies: set, style_rules: dict) -
 
 def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
     """
-    Builds the trim-step instruction for tightening Treering/Inside Sales
-    Team bullets that wrap to a short widow second line -- the specific
-    bullets are named explicitly so the model tightens only those, not a
-    guess at which ones might wrap.
+    Builds the trim-step instruction for tightening bullets that wrap to a
+    short widow second line -- the specific bullets are named explicitly
+    so the model tightens only those, not a guess at which ones might
+    wrap. Checks every company actually present in this resume (not a
+    hardcoded subset) -- a widow line is a rendering artifact of the
+    bullet text and page width, not something specific to any one role.
     """
-    widow_bullets = _short_widow_bullets(
-        resume_data, {"Treering Yearbooks", "Inside Sales Team"}, style_rules,
-    )
+    companies = {job.get("company") for job in resume_data.get("EXPERIENCE", []) if job.get("company")}
+    widow_bullets = _short_widow_bullets(resume_data, companies, style_rules)
     if not widow_bullets:
         return (
-            "No Treering/Inside Sales Team bullets currently wrap to a short "
-            "widow second line -- leave every bullet exactly as-is and change "
-            "nothing for this step."
+            "No bullets currently wrap to a short widow second line -- "
+            "leave every bullet exactly as-is and change nothing for this "
+            "step."
         )
     return (
         "Tighten ONLY these specific bullets, which wrap to a short widow "
@@ -646,6 +533,37 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
         "line or wraps to a fuller second line. Leave every other bullet "
         "exactly as-is.\n" + "\n".join(f"- {b}" for b in widow_bullets)
     )
+
+
+def _bullet_removal_trim_instruction(profile_data: dict) -> str:
+    """
+    Builds the last-resort trim step's instruction: remove bullets from
+    the lowest-flex_priority roles first, working each toward its
+    min_bullets floor, protecting profile.yml's protected_bullets:. Uses
+    the exact same flex_priority ordering build_role_rules_block()'s
+    "Trim priority" line already promises the model, so this step's actual
+    behavior matches what it was already told to expect -- not a
+    hardcoded company list, which would be a silent no-op for any profile
+    whose companies don't happen to match it.
+    """
+    roles = profile_data.get("roles") or []
+    protected = profile_data.get("protected_bullets") or []
+    if not roles:
+        return (
+            "Remove the least-relevant bullets from any role, working toward "
+            "each role's minimum bullet count, while protecting the most "
+            "distinctive/differentiated bullets from removal."
+        )
+    flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
+    order_text = ", then ".join(
+        f"{r['name']} (can go down to {r['min_bullets']} bullets total)" for r in flex_order
+    )
+    text = f"Remove the least-relevant bullets, starting with {order_text}"
+    if protected:
+        text += ", while protecting these specific bullets from removal: " + "; ".join(protected)
+    else:
+        text += "."
+    return text
 
 
 def _parse_pdf_result(stdout: str) -> tuple:
@@ -768,14 +686,16 @@ def _parse_jd_data(jd_text: str) -> dict:
 
 
 def _build_output_stem(jd_path: str) -> str:
-    """Returns 'MorganEscott[_Title][_Company]' for resume/cover-letter
-    output filenames. Role title and company segments are each included
-    only when known -- omitted entirely (not a placeholder like
-    "Unknown") when missing, since a filename with a placeholder in it
-    would always need fixing before sending, whereas e.g.
-    "MorganEscott_CampaignManager_Resume" is still sendable as-is."""
+    """Returns '<CandidateName>[_Title][_Company]' for resume/cover-letter
+    output filenames, with the candidate name prefix derived from the
+    active profile's profile.yml (candidate.full_name, spaces stripped --
+    e.g. "Morgan Escott" -> "MorganEscott"). Role title and company
+    segments are each included only when known -- omitted entirely (not a
+    placeholder like "Unknown") when missing, since a filename with a
+    placeholder in it would always need fixing before sending, whereas
+    e.g. "MorganEscott_CampaignManager_Resume" is still sendable as-is."""
     job_title, company_name = jd_manager.extract_job_meta(jd_path)
-    parts = ["MorganEscott"]
+    parts = [profile_paths.full_name().replace(" ", "")]
     if job_title:
         parts.append(jd_manager.sanitize_for_filename(job_title))
     if company_name:
@@ -885,22 +805,23 @@ class TemplateSchema(BaseModel):
     SECTION_EXPERIENCE:     str       = Field(default="Work Experience")
     EXPERIENCE:             List[ExperienceEntry] = Field(
         description=(
-            "One entry per company. Bullet counts per role must match "
-            "tailor.md targets exactly: Mercor 2-3, Treering 6-7, "
-            "Inside Sales Team 5, Element 8/Strategy LLC 4, VML 4, "
-            "Callahan Creek 4."
+            "One entry per company. Bullet counts per role must match the "
+            "ROLE RULES block's Per-Role Bullet Count Targets table exactly."
         )
     )
-    KU_ACHIEVEMENT_KEY:     Literal["content_generalist", "email_ops", "content"] = Field(description=(
-        "Which pre-approved KU achievement bullet best fits this JD's archetype. "
-        "content_generalist = broad audience-growth framing; email_ops = campaign/channel "
-        "management framing; content = editorial/content-production framing."
-    ))
-    KCKCC_ACHIEVEMENT_KEY:  Literal["writing_content", "enablement_mgmt", "generalist"] = Field(description=(
-        "Which pre-approved KCKCC achievement bullet best fits this JD's archetype. "
-        "writing_content = editorial/writing framing; enablement_mgmt = team leadership/"
-        "enablement framing; generalist = balanced ownership framing."
-    ))
+    # No KU/KCKCC-named achievement-key fields here -- those were Morgan-
+    # specific and hardcoded (both the field names and their Literal enum
+    # values) directly into this class, which every profile's builder call
+    # shares. The generic replacement -- EDU_ACHIEVEMENT_KEY_<n>, one per
+    # profile.yml education entry that offers a pre-approved achievement-
+    # bullet choice -- is built per-profile at call time by
+    # ResumeEngine.build_education_achievement_schema_fields() and merged
+    # into this schema via GeminiClient.generate()'s extra_schema_properties/
+    # extra_required, not declared as static fields here. See that method's
+    # docstring for why a plain str field wouldn't work (sanitize_schema()
+    # strips `description`, so only a real `enum` constraint survives to
+    # Gemini -- and the valid enum values differ per profile, unknowable at
+    # this class's definition time).
     SECTION_SKILLS:         str       = Field(default="Skills")
     SKILLS:                 List[str] = Field(description="Technical skills mapped to JD.")
     SECTION_WHY:            str       = Field(
@@ -991,6 +912,9 @@ class ResumeEngine:
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
+        self.deep_evidence_keywords = (
+            self.load_yaml(self.kb_dir, "profile.yml").get("deep_evidence_keywords") or []
+        )
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
@@ -1073,6 +997,18 @@ class ResumeEngine:
             for i, ed in enumerate(education, 1):
                 lines.append(f"{i}. {ed['institution']} -- {ed['credential']}: exactly {ed['bullet_count']} bullet(s)")
 
+            edu_slots = profile_paths.education_achievement_slots()
+            if edu_slots:
+                lines.append(
+                    "\nEducation Achievement Bullet Choices -- for each entry below, set the "
+                    "matching EDU_ACHIEVEMENT_KEY_<n> field (numbered in this same order) to "
+                    "whichever key's framing best fits the archetype you detected:"
+                )
+                for i, (institution, options) in enumerate(edu_slots, 1):
+                    lines.append(f"EDU_ACHIEVEMENT_KEY_{i} ({institution}):")
+                    for key, framing in options.items():
+                        lines.append(f"  - `{key}`: {framing}")
+
         if roles:
             page_1_roles = [r["name"] for r in roles if r.get("page") == 1]
             page_2_roles = [r["name"] for r in roles if r.get("page") == 2]
@@ -1086,6 +1022,44 @@ class ResumeEngine:
             lines.append(f"\nVoice Calibration Example (this candidate's authentic voice): \"{voice_example}\"")
 
         return "\n".join(lines)
+
+    def build_education_achievement_schema_fields(self) -> Tuple[dict, list]:
+        """Per-profile Gemini responseSchema additions for education
+        achievement-bullet selection: one enum-typed EDU_ACHIEVEMENT_KEY_<n>
+        property per profile.yml education entry that offers a pre-approved
+        choice (profile_paths.education_achievement_slots()), numbered in
+        that same order so normalize_resume.py can map each answer back to
+        its institution unambiguously. Returns ({}, []) for a profile with
+        no such entries (e.g. a freshly-bootstrapped one) -- the builder
+        call just gets no extra fields.
+
+        These can't be static Literal-typed fields on TemplateSchema (the
+        way e.g. ExperienceEntry's fields are) because the valid keys differ
+        per profile and aren't known at that class's definition time. They
+        also can't be a plain str field with the options only described in
+        prose: GeminiClient.sanitize_schema() strips every field's
+        `description` before the schema ever reaches Gemini's
+        responseSchema (see test_orchestrator_schema_cleanup.py's
+        regression test for this), so only an actual JSON-schema `enum`
+        constraint reliably constrains the model to a valid key -- hence
+        building real enum-typed properties here, per call, and merging
+        them into TemplateSchema's schema via GeminiClient.generate()'s
+        extra_schema_properties/extra_required rather than baking them into
+        the class."""
+        properties: dict = {}
+        required: list = []
+        for i, (institution, options) in enumerate(profile_paths.education_achievement_slots(), 1):
+            field_name = f"EDU_ACHIEVEMENT_KEY_{i}"
+            properties[field_name] = {
+                "type": "string",
+                "enum": list(options.keys()),
+                "description": (
+                    f"Pre-approved achievement-bullet choice for {institution} -- "
+                    + "; ".join(f"{key} = {framing}" for key, framing in options.items())
+                ),
+            }
+            required.append(field_name)
+        return properties, required
 
     def build_audit_static_prefix(self, include_evidence_guide: bool = False) -> str:
         """
@@ -1132,7 +1106,7 @@ class ResumeEngine:
         for fname, header, note in [
             ("verified_facts.json",
              "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
-             "These are the only facts about Morgan's career that are evidence-backed.\nDo NOT invent facts outside this list."),
+             "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list."),
             ("verified_tools.json",
              "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
              "Never claim proficiency with any tool not present in this list."),
@@ -1187,7 +1161,7 @@ class ResumeEngine:
         for fname, header, note in [
             ("verified_facts.json",
              "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
-             "These are the only facts about Morgan's career that are evidence-backed.\nDo NOT invent facts outside this list."),
+             "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list."),
             ("verified_tools.json",
              "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
              "Never claim proficiency with any tool not present in this list."),
@@ -1271,7 +1245,8 @@ class ResumeEngine:
         Builds a per-bullet context bundle for the rewrite call (Tier 2).
         Now actually mirrors rewrite_bullets.py's _build_segment_bundle():
         a curated cv.md excerpt + tag-specific background blurb, plus
-        (only for Treering bullets) tag-filtered verified claims, capped
+        (only for deep-evidence-archive companies, per profile.yml's
+        deep_evidence_keywords:) tag-filtered verified claims, capped
         at MAX_CLAIMS_ROWS rows -- not the full unfiltered CSV/JSON dump
         this used to send on every bullet regardless of company or tag.
         """
@@ -1296,7 +1271,7 @@ class ResumeEngine:
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
 
-        if is_treering_bullet(company):
+        if is_deep_evidence_bullet(company, self.deep_evidence_keywords):
             claims_path = os.path.join(self.kb_dir, "verified-claims.csv")
             if os.path.exists(claims_path):
                 try:
@@ -1309,7 +1284,7 @@ class ResumeEngine:
                     claims_text = get_verified_claims_text(filtered_claims)
                     if claims_text:
                         sections.append(
-                            "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                            f"=== VERIFIED CLAIMS & METRICS ({company} — resume-usable, tag-filtered) ===\n"
                             "Use these to inject real, verified metrics where appropriate. "
                             "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
                             + claims_text
@@ -1335,7 +1310,7 @@ class ResumeEngine:
                     if verified_metrics:
                         sections.append(
                             "=== VERIFIED METRICS (authoritative — use these numbers, not guesses) ===\n"
-                            "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                            f"These are the ONLY numeric metrics that may be cited as hard facts in {company} bullets.\n"
                             + verified_metrics
                         )
                 except Exception as e:
@@ -1347,8 +1322,8 @@ class ResumeEngine:
         """Slim segment bundle for Gemma only -- mirrors rewrite_bullets.py's
         KnowledgeBase._build_gemma_segment_bundle() (2026-07-16). cv excerpt
         and background summary are unchanged (already small); claims and,
-        for Treering bullets, screenshot metrics + verified metrics are
-        tag-filtered to MAX_GEMMA_FILTER_ROWS instead of included at the
+        for deep-evidence-archive companies, screenshot metrics + verified
+        metrics are tag-filtered to MAX_GEMMA_FILTER_ROWS instead of included at the
         looser MAX_CLAIMS_ROWS cap or (screenshots/metrics) unfiltered.
         verified_projects.json, dropped entirely from the Gemma static
         prefix, is added back here tag-filtered rather than as the full
@@ -1374,7 +1349,7 @@ class ResumeEngine:
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
 
-        if is_treering_bullet(company):
+        if is_deep_evidence_bullet(company, self.deep_evidence_keywords):
             projects_path = os.path.join(self.kb_dir, "verified_projects.json")
             if os.path.exists(projects_path):
                 try:
@@ -1402,7 +1377,7 @@ class ResumeEngine:
                     claims_text = get_verified_claims_text(filtered_claims)
                     if claims_text:
                         sections.append(
-                            "=== VERIFIED CLAIMS & METRICS (Treering — resume-usable, tag-filtered) ===\n"
+                            f"=== VERIFIED CLAIMS & METRICS ({company} — resume-usable, tag-filtered) ===\n"
                             "Use these to inject real, verified metrics where appropriate. "
                             "Do NOT use metrics marked Medium or Low confidence as hard facts.\n"
                             + claims_text
@@ -1430,7 +1405,7 @@ class ResumeEngine:
                     if filtered_metrics:
                         sections.append(
                             "=== VERIFIED METRICS (authoritative — tag-filtered) ===\n"
-                            "These are the ONLY numeric metrics that may be cited as hard facts in Treering bullets.\n"
+                            f"These are the ONLY numeric metrics that may be cited as hard facts in {company} bullets.\n"
                             + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
                         )
                 except Exception as e:
@@ -1477,8 +1452,8 @@ class ResumeEngine:
             self._segment_cache[(company, tags)] = bundle
             gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
             self._gemma_segment_cache[(company, tags)] = gemma_bundle
-            treering_flag = " [Treering+claims]" if is_treering_bullet(company) else ""
-            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{treering_flag} (Gemma: {len(gemma_bundle):,} chars)")
+            deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(company, self.deep_evidence_keywords) else ""
+            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
         print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
 
     @staticmethod
@@ -1859,8 +1834,8 @@ class ResumeEngine:
 
         1. Embed JD, compute cosine similarity against the whole pre-embedded bank.
         2. Rank the whole bank by gem-boosted similarity, then strength_category tier.
-        3. Guarantee each company in COMPANY_MIN_BULLETS its minimum from within
-           its own bullets (ranked the same way) -- a pure global top-K let one
+        3. Guarantee each company in profile.yml's roles: (min_bullets) its
+           minimum from within its own bullets (ranked the same way) -- a pure global top-K let one
            company's high-scoring bullets crowd out every other company entirely
            (a real run mined 0 Mercor and 0 Callahan Creek bullets out of 30).
         4. Fill the remaining TOP_K_BULLETS - guaranteed slots from the overall
@@ -1938,7 +1913,11 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            combined_minimums = {**COMPANY_MIN_BULLETS, **(extra_company_minimums or {})}
+            profile_roles = self.load_yaml(self.kb_dir, "profile.yml").get("roles") or []
+            company_min_bullets = {
+                r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r
+            }
+            combined_minimums = {**company_min_bullets, **(extra_company_minimums or {})}
             for company, min_count in combined_minimums.items():
                 company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
                 taken = 0
@@ -2247,6 +2226,12 @@ class ResumeEngine:
         # of whether this run resumed resume_data from a checkpoint.
         build_prompt = self.load_prompt("tailor_resume.md")
 
+        # Computed once and reused at every response_schema=TemplateSchema
+        # call below (build, fix, trim) -- see
+        # build_education_achievement_schema_fields()'s docstring for why
+        # these can't just be static fields on TemplateSchema itself.
+        edu_schema_properties, edu_schema_required = self.build_education_achievement_schema_fields()
+
         # Loaded unconditionally (not just in the fresh-build branch below)
         # for the same reason build_prompt is: Step 7's trim loop re-validates
         # every trim attempt regardless of whether this run resumed resume_data
@@ -2319,6 +2304,8 @@ class ResumeEngine:
                 system_instruction=builder_system,
                 contents=combined_contents,
                 response_schema=TemplateSchema,
+                extra_schema_properties=edu_schema_properties,
+                extra_required=edu_schema_required,
                 temperature=0.0,
             )
             _log_cache_stats(usage, 0, 0)
@@ -2383,6 +2370,8 @@ class ResumeEngine:
                     system_instruction=build_prompt,
                     contents=fix_contents,
                     response_schema=TemplateSchema,
+                    extra_schema_properties=edu_schema_properties,
+                    extra_required=edu_schema_required,
                     temperature=0.0,
                 )
                 _log_cache_stats(fix_usage, 0, 0)
@@ -2611,11 +2600,7 @@ class ResumeEngine:
             ),
             lambda rd: "Trim the Summary to its 5-line limit.",
             lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
-            lambda rd: (
-                "Remove the least-relevant bullets, starting with Inside Sales Team (can go "
-                "down to 4 bullets total), then Treering Yearbooks (can go down to 6 bullets "
-                "total), while protecting the Outreach.io implementation and CRM-hygiene bullets."
-            ),
+            lambda rd: _bullet_removal_trim_instruction(self.load_yaml(self.kb_dir, "profile.yml")),
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
@@ -2665,6 +2650,8 @@ class ResumeEngine:
                 system_instruction=build_prompt,
                 contents=trim_contents,
                 response_schema=TemplateSchema,
+                extra_schema_properties=edu_schema_properties,
+                extra_required=edu_schema_required,
                 temperature=0.0,
             )
             _log_cache_stats(trim_usage, 0, 0)

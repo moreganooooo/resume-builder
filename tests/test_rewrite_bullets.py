@@ -69,7 +69,7 @@ class TestFilterJsonEntriesByTags(unittest.TestCase):
         self.assertLessEqual(len(filtered), 3)
 
     def test_too_few_matches_falls_back_to_head(self):
-        # "[generalist]" has no keywords in CLAIM_TAG_KEYWORDS -> include_all -> head(max_rows)
+        # "[generalist]" has no keywords in profile.yml's tags: -> include_all -> head(max_rows)
         filtered = filter_json_entries_by_tags(_metric_entries(), "[generalist]", max_rows=2)
         self.assertEqual(len(filtered), 2)
 

@@ -18,25 +18,35 @@ class TestSchemaCleanup(unittest.TestCase):
         field = orchestrator.ResumeCritiqueSchema.model_fields["skills_relevance_score"]
         self.assertNotIn("Competencies", field.description)
 
-    def test_achievement_key_fields_survive_sanitize_schema_as_enums(self):
+    def test_education_achievement_schema_fields_survive_sanitize_schema_as_enums(self):
         """
-        Regression test: KU_ACHIEVEMENT_KEY and KCKCC_ACHIEVEMENT_KEY must be
-        typed so the model actually learns the valid option strings. Plain
-        `str` fields only carry that information in `description`, which
-        GeminiClient.sanitize_schema() strips before the schema ever reaches
-        Gemini's responseSchema -- silently defeating archetype selection.
-        Literal[...] fields serialize to an `enum` key, which sanitize_schema
-        does NOT strip, so the constraint survives to the model.
+        Regression test (successor to the old KU_ACHIEVEMENT_KEY/
+        KCKCC_ACHIEVEMENT_KEY version, removed 2026-07-17 when those became
+        per-profile EDU_ACHIEVEMENT_KEY_<n> fields instead of hardcoded
+        Literal fields on TemplateSchema -- see
+        ResumeEngine.build_education_achievement_schema_fields()). These
+        fields must be typed so the model actually learns the valid option
+        strings. Plain `str` fields only carry that information in
+        `description`, which GeminiClient.sanitize_schema() strips before
+        the schema ever reaches Gemini's responseSchema -- silently
+        defeating archetype selection. An actual `enum` key survives
+        sanitize_schema, so the constraint reaches the model.
         """
+        engine = orchestrator.ResumeEngine()
+        properties, required = engine.build_education_achievement_schema_fields()
+        self.assertEqual(required, ["EDU_ACHIEVEMENT_KEY_1", "EDU_ACHIEVEMENT_KEY_2"])
+
         raw_schema = orchestrator.TemplateSchema.model_json_schema()
+        raw_schema["properties"] = {**raw_schema["properties"], **properties}
+        raw_schema["required"] = list(raw_schema["required"]) + required
         sanitized = GeminiClient.sanitize_schema(raw_schema)
         props = sanitized["properties"]
 
-        ku_field = props["KU_ACHIEVEMENT_KEY"]
+        ku_field = props["EDU_ACHIEVEMENT_KEY_1"]
         self.assertIn("enum", ku_field)
         self.assertEqual(set(ku_field["enum"]), {"content_generalist", "email_ops", "content"})
 
-        kckcc_field = props["KCKCC_ACHIEVEMENT_KEY"]
+        kckcc_field = props["EDU_ACHIEVEMENT_KEY_2"]
         self.assertIn("enum", kckcc_field)
         self.assertEqual(set(kckcc_field["enum"]), {"writing_content", "enablement_mgmt", "generalist"})
 

@@ -14,6 +14,7 @@ import os
 import sys
 
 import questionary
+from dotenv import set_key
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -37,6 +38,7 @@ EVIDENCE_GRAPH_PATH = os.path.join(KB_DIR, "evidence_graph.json")
 EVIDENCE_GUIDE_PATH = os.path.join(KB_DIR, "evidence-guide.csv")
 SCREENSHOT_METRICS_PATH = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv")
 RECRUITER_PATTERNS_PATH = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
+CV_DRAFT_CHECKPOINT_PATH = os.path.join(KB_DIR, "bootstrap", "cv_draft_checkpoint.json")
 
 import pandas as pd
 
@@ -195,6 +197,26 @@ def _yaml_string_list(items: list, indent: str = "    ") -> str:
     return "\n".join(f'{indent}- "{item}"' for item in items)
 
 
+def _yaml_tags(taxonomy) -> str:
+    if not taxonomy.tags:
+        return (
+            "  # Generated from your target roles + real achievement text during\n"
+            "  # bootstrap. Each bullet in your bullet bank gets auto-tagged with\n"
+            "  # one of these (tag_bullet_bank.py), and the audit/rewrite steps use\n"
+            "  # persona_description + keywords to pull in the right context per\n"
+            "  # bullet. Add/edit any time -- an empty keywords: list means \"matches\n"
+            "  # everything\" (the catch-all tag), not \"matches nothing.\"\n"
+            "  []"
+        )
+    lines = []
+    for tag in taxonomy.tags:
+        lines.append(f'  - name: "{tag.name}"')
+        lines.append(f'    persona_description: "{tag.persona_description}"')
+        keywords_json = ", ".join(json.dumps(k) for k in tag.keywords)
+        lines.append(f"    keywords: [{keywords_json}]")
+    return "\n".join(lines)
+
+
 def _yaml_key_recommendations(quotes: list) -> str:
     if not quotes:
         return (
@@ -227,6 +249,16 @@ target_roles:
 {primary_roles_yaml}
   secondary:
 {secondary_roles_yaml}
+
+# Hand-tuned boolean search strings for scan_linkedin.py's saved searches.
+# Leave empty (the default) to fall back to one query per target_roles.primary
+# entry instead -- fine to start with, but a real boolean query (e.g.
+# "Email OR Campaign") usually finds better matches than a bare job title.
+linkedin_search_queries:
+{linkedin_search_queries_yaml}
+
+tags:
+{tags_yaml}
 
 archetypes:
   # For each role you're targeting, a short note on what specifically
@@ -301,13 +333,15 @@ cv:
 """
 
 
-def write_profile_yml(identity: dict, recommendations: list) -> None:
+def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_search_queries: list = None) -> None:
     content = _PROFILE_YML_TEMPLATE.format(
         full_name=identity["full_name"], email=identity["email"], phone=identity["phone"],
         location=identity["location"], linkedin_url=identity["linkedin_url"],
         portfolio_url=identity["portfolio_url"], extra_link=identity["extra_link"],
         primary_roles_yaml=_yaml_string_list(identity["primary_roles"]),
         secondary_roles_yaml=_yaml_string_list(identity["secondary_roles"]),
+        linkedin_search_queries_yaml=_yaml_string_list(linkedin_search_queries or [], indent="  "),
+        tags_yaml=_yaml_tags(taxonomy),
         key_recommendations_yaml=_yaml_key_recommendations(recommendations),
         location_flexibility="Remote only" if identity.get("remote_preference") else "",
         remote_required=str(bool(identity.get("remote_preference"))).lower(),
@@ -470,26 +504,86 @@ def _build_cv_draft_rows() -> list:
     return result
 
 
-def _polish_bullet(bullet: str, role_company: str, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool = False) -> str:
+def _load_cv_draft_checkpoint() -> dict:
+    if not os.path.exists(CV_DRAFT_CHECKPOINT_PATH):
+        return {}
+    with open(CV_DRAFT_CHECKPOINT_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_cv_draft_checkpoint(state: dict) -> None:
+    os.makedirs(os.path.dirname(CV_DRAFT_CHECKPOINT_PATH), exist_ok=True)
+    with open(CV_DRAFT_CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def _clear_cv_draft_checkpoint() -> None:
+    if os.path.exists(CV_DRAFT_CHECKPOINT_PATH):
+        os.remove(CV_DRAFT_CHECKPOINT_PATH)
+
+
+def _cv_draft_checkpoint_key(role_company: str, bullet: str) -> str:
+    return f"{role_company}::{bullet}"
+
+
+def _polish_bullet(
+    bullet: str, role_company: str, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str,
+    dry_run: bool = False, checkpoint: dict = None,
+) -> dict:
+    """Returns {"final_bullet": ..., "rewrite_status": "KEEP"|"MANUAL"}.
+    Reuses a prior run's result from checkpoint (keyed by company+bullet
+    text) instead of re-calling the API when one's already there -- makes
+    write_cv_md() resumable: an interrupted run just picks up where it
+    left off on the next call, rather than losing every polish already
+    paid for."""
+    checkpoint = checkpoint if checkpoint is not None else {}
+    key = _cv_draft_checkpoint_key(role_company, bullet)
+    if key in checkpoint:
+        return checkpoint[key]
+
     row = pd.Series({"Bullet Point": bullet, "Tags": "", "Role / Company": role_company, "weaknesses": ""})
     result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
-    return result.get("final_bullet", bullet)
+    polished = {
+        "final_bullet": result.get("final_bullet", bullet),
+        "rewrite_status": result.get("rewrite_status", "MANUAL"),
+    }
+    checkpoint[key] = polished
+    _save_cv_draft_checkpoint(checkpoint)
+    return polished
 
 
 def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
+    total = sum(len(role["bullets"]) for role in rows)
+    print(f"\n\U0001F4DD Polishing {total} bullet(s) for your cv.md draft...")
+
+    checkpoint = _load_cv_draft_checkpoint()
+    already_done = sum(1 for role in rows for bullet in role["bullets"]
+                        if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint)
+    if already_done:
+        print(f"   ⏭️  Resuming: {already_done}/{total} already polished in a prior run.")
+
     lines = [f"# {identity['full_name']}", ""]
     contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
     if contact_parts:
         lines.append(" | ".join(contact_parts))
         lines.append("")
 
+    i = 0
     for role in rows:
         header = f"## {role['title']} — {role['company']}" if role["title"] else f"## {role['company']}"
         date_range = f" ({role['start_date']} - {role['end_date']})" if role["start_date"] else ""
         lines.append(header + date_range)
         for bullet in role["bullets"]:
-            polished = _polish_bullet(bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
-            lines.append(f"- {polished}")
+            i += 1
+            print(f"\n{'─'*60}")
+            print(f"[{i}/{total}] {bullet[:60]}...")
+            print(f"   Company: {role['company']}")
+            polished = _polish_bullet(
+                bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run, checkpoint,
+            )
+            status_icon = "✅" if polished["rewrite_status"] == "KEEP" else "\U0001F527"
+            print(f"   {status_icon} {polished['rewrite_status']}")
+            lines.append(f"- {polished['final_bullet']}")
         lines.append("")
 
     return "\n".join(lines)
@@ -525,6 +619,9 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
             style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if choice == "regenerate":
+            # A real regenerate request -- start every bullet over rather
+            # than replaying cached results from the draft just rejected.
+            _clear_cv_draft_checkpoint()
             content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
             continue
         break
@@ -584,18 +681,176 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
         f.write(draft if choice == "accept" else "")
 
 
+def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions: str, env_file: str) -> bool:
+    """Walks the user through one .env var: shows instructions, offers to
+    enter it right now (written straight to this profile's own .env via
+    python-dotenv's set_key(), which creates the file if it doesn't exist
+    yet and updates the line in place if it does) or defer it, printing
+    exactly which file to edit and what line to add later. Returns True
+    if a value was actually collected and written."""
+    print(f"\n{instructions}")
+    set_now = questionary.confirm(
+        f"Enter your {prompt_label} now?", default=True, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not set_now:
+        print(f"  No problem -- add it later by editing {env_file} (create it if it doesn't exist) "
+              f"and adding a line:")
+        print(f"    {var_name}=your-value-here")
+        return False
+
+    value = questionary.password(f"Paste your {prompt_label}:", style=cli_art.QUESTIONARY_STYLE).ask()
+    if not value or not value.strip():
+        print(f"  No value entered -- add it later the same way (see instructions above).")
+        return False
+
+    os.makedirs(os.path.dirname(env_file), exist_ok=True)
+    set_key(env_file, var_name, value.strip())
+    print(f"  ✅ Saved {var_name} to {env_file}.")
+    return True
+
+
+def collect_secrets(dry_run: bool = False) -> dict:
+    """Walks a new profile through its own .env setup -- GEMINI_API_KEY
+    (needed for every real build) and JOBRIGHT_COOKIE_STRING (optional,
+    only needed for `resume scan --source jobright`). Each profile gets
+    its own profiles/<name>/.env (profile_paths.env_path()), so two
+    people sharing this checkout never share credentials. Returns
+    {"gemini_key_set": bool, "jobright_cookie_set": bool}."""
+    if dry_run:
+        print("[DRY RUN] would walk through .env setup (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING).")
+        return {"gemini_key_set": False, "jobright_cookie_set": False}
+
+    env_file = profile_paths.env_path()
+
+    # This can run again on a profile that's already configured (bootstrap
+    # is re-runnable to ingest more documents later, not strictly one-time)
+    # -- skip re-prompting for a var that's already set, whether that's in
+    # this profile's own .env (already loaded into os.environ by the
+    # gemini_client import chain by the time this runs) or the shell.
+    already_configured = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+    if already_configured:
+        gemini_set = True
+    else:
+        print("\n" + "=" * 60)
+        print("API key & cookie setup")
+        print("=" * 60)
+        gemini_set = _collect_secret_now_or_later(
+            "GEMINI_API_KEY",
+            "Gemini API key",
+            "Every resume build calls Google's Gemini API, so you'll need your own "
+            "API key (a free tier is available -- get one from Google AI Studio if "
+            "you don't already have one).",
+            env_file,
+        )
+
+    jobright_set = bool(os.environ.get("JOBRIGHT_COOKIE_STRING"))
+    if not jobright_set:
+        wants_jobright = questionary.confirm(
+            "\nOptional: set up JobRight scanning now? (only needed for "
+            "`resume scan --source jobright` -- skip this if you'll only use "
+            "LinkedIn scanning, or aren't scanning for jobs yet)",
+            default=False, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if wants_jobright:
+            jobright_set = _collect_secret_now_or_later(
+                "JOBRIGHT_COOKIE_STRING",
+                "JobRight cookie string",
+                "Grab it like this:\n"
+                "  1. Log into jobright.ai in Chrome.\n"
+                "  2. Open DevTools (F12 / Cmd+Option+I) -> Network tab, then reload the page.\n"
+                "  3. Right-click the first request at the top of the list -> Copy -> Copy as cURL.\n"
+                "  4. Paste that into a text editor and find the -H 'cookie: ...' piece --\n"
+                "     everything inside the quotes after 'cookie: ' is your JOBRIGHT_COOKIE_STRING.\n"
+                "  This cookie goes stale over time -- repeat these steps whenever JobRight\n"
+                "  scanning starts failing with an auth error.",
+                env_file,
+            )
+        else:
+            print(f"  Skipped -- add it later by editing {env_file} (create it if it doesn't exist) "
+                  f"and adding a line:")
+            print("    JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ...")
+
+    if not already_configured or not jobright_set:
+        print("\nNote: LinkedIn scanning needs no .env value at all -- it reads your live,")
+        print("already-logged-in Chrome session automatically, every time.")
+
+    return {"gemini_key_set": gemini_set, "jobright_cookie_set": jobright_set}
+
+
+def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) -> list:
+    """Confirms/collects this profile's own LinkedIn boolean search
+    strings (profile.yml's linkedin_search_queries:). A good boolean query
+    needs real per-person tuning, so this asks rather than deriving one
+    automatically -- an empty answer here is a fully supported choice,
+    since scan_linkedin.py already falls back to one query per
+    target_roles.primary entry when linkedin_search_queries: is empty."""
+    if dry_run:
+        print("[DRY RUN] would confirm LinkedIn search terms.")
+        return []
+
+    print("\n" + "=" * 60)
+    print("LinkedIn search terms")
+    print("=" * 60)
+    print(
+        "LinkedIn scanning needs no cookie or login setup -- it reads your live, "
+        "already-logged-in Chrome session automatically. It does need to know what "
+        "to search for, though."
+    )
+    if primary_roles:
+        print(f"Without anything set here, it'll search for each of your primary target "
+              f"roles one at a time: {', '.join(primary_roles)}.")
+
+    wants_custom = questionary.confirm(
+        "Set up your own custom search terms now instead? (optional, and not permanent -- "
+        "you can always add/edit these later)",
+        default=False, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not wants_custom:
+        print(
+            "  Using your target roles as-is for now. To fine-tune later, edit "
+            f"{PROFILE_YML_PATH}'s linkedin_search_queries: field "
+            "(boolean strings like \"Email OR Campaign\")."
+        )
+        return []
+
+    print("Enter one search term per line (e.g. \"Email OR Campaign\"). Leave blank when done.")
+    queries = []
+    while True:
+        q = questionary.text(
+            f"Search term {len(queries) + 1} (blank to finish):", style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if not q or not q.strip():
+            break
+        queries.append(q.strip())
+    if not queries:
+        print("  No terms entered -- falling back to target roles.")
+    return queries
+
+
 def run_profile_setup(dry_run: bool = False) -> dict:
     checkpoint = _load_checkpoint()
     identity = collect_identity(dry_run=dry_run)
+    linkedin_search_queries = collect_linkedin_search_queries(identity["primary_roles"], dry_run=dry_run)
     recommendations = _guess_recommendations(checkpoint, dry_run=dry_run)
-    write_profile_yml(identity, recommendations)
+    achievements_text = _achievements_summary_text()
+    taxonomy = bootstrap_extractors.generate_tag_taxonomy(
+        identity["primary_roles"], identity["secondary_roles"], achievements_text, dry_run=dry_run,
+    )
+    write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
     write_portals_yml(identity)
     write_verified_ledger(dry_run=dry_run)
-    write_cv_md(identity, dry_run=dry_run)
+    # background guide before cv.md, not after: rewrite_bullets.KnowledgeBase
+    # (which write_cv_md()'s bullet-polishing loop uses) loads
+    # user-background-guide.md at __init__ time -- if cv.md is drafted
+    # first, every bullet gets polished with no background-guide context
+    # available yet, since the file doesn't exist until this step runs.
     write_background_guide(checkpoint, dry_run=dry_run)
+    write_cv_md(identity, dry_run=dry_run)
     return {
         "full_name": identity["full_name"],
         "primary_roles": len(identity["primary_roles"]),
         "secondary_roles": len(identity["secondary_roles"]),
         "recommendations_found": len(recommendations),
+        "tags_generated": len(taxonomy.tags),
+        "linkedin_search_queries": len(linkedin_search_queries),
     }

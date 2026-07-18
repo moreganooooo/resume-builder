@@ -52,7 +52,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
+load_dotenv(profile_paths.env_path(), override=True)
 
 API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"

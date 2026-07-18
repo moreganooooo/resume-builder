@@ -379,6 +379,16 @@ class RoleSuggestions(BaseModel):
     secondary_roles: list[str] = Field(default_factory=list)
 
 
+class TagDefinition(BaseModel):
+    name: str
+    persona_description: str
+    keywords: list[str] = Field(default_factory=list)
+
+
+class TagTaxonomy(BaseModel):
+    tags: list[TagDefinition] = Field(default_factory=list)
+
+
 class LedgerEntry(BaseModel):
     label: str
     value: str
@@ -423,6 +433,31 @@ source text -- do not invent employers, dates, or accomplishments not
 present in the source. If the source material is too thin to say anything
 specific, write a short, honest, general paragraph instead of padding it
 with invented detail.
+"""
+
+_TAG_TAXONOMY_PROMPT = """
+Given a candidate's target job titles and a sample of their real
+achievement bullets, define a tag taxonomy for categorizing their resume
+bullets by skill/theme area -- 4-8 short, single-word, lowercase tags
+(e.g. "email", "ops", "leadership", "design") that meaningfully partition
+the kinds of work actually evident in their target roles and achievements.
+Base the taxonomy entirely on the target roles and achievement text given
+-- do not assume a specific industry (e.g. marketing) unless the input
+evidence actually supports it; a different candidate's evidence should
+produce a different taxonomy.
+
+For each tag, provide:
+- name: the tag word itself, no brackets (e.g. "email", not "[email]")
+- persona_description: one sentence naming the job archetypes/role types
+  this tag's content is most relevant to (e.g. "email marketing, lifecycle
+  marketing, or CRM/ESP campaign roles")
+- keywords: 5-12 lowercase keywords/phrases that would plausibly appear in
+  a bullet belonging to this tag -- prefer specific terms over generic ones
+
+Always include exactly one catch-all tag named "generalist" with
+persona_description "general or cross-functional roles" and an EMPTY
+keywords list (empty keywords is how the rest of the system recognizes a
+catch-all tag that matches everything, not a mistake to fix).
 """
 
 _LEDGER_PROMPT = """
@@ -501,6 +536,36 @@ def suggest_secondary_roles(
     )
     data = GeminiClient.parse_json(raw)
     return data.get("secondary_roles", [])
+
+
+def generate_tag_taxonomy(
+    primary_roles: list[str], secondary_roles: list[str], achievements_text: str, dry_run: bool = False,
+) -> TagTaxonomy:
+    """Derives a per-profile bullet-tag taxonomy (name/persona_description/
+    keywords per tag) from this candidate's own target roles and real
+    achievement text -- replaces what used to be Morgan's hardcoded
+    marketing-specific tags (see profile_paths.tags()'s docstring), so
+    auto-tagging and claim/context filtering work for any field, not just
+    marketing/sales. Falls back to a single "generalist" tag with no
+    keywords if the model returns nothing usable, so callers always get at
+    least one tag to work with."""
+    if dry_run:
+        print("[DRY RUN] would generate a tag taxonomy.")
+        return TagTaxonomy()
+
+    roles_text = ", ".join(primary_roles + secondary_roles)
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL, system_instruction=_TAG_TAXONOMY_PROMPT,
+        contents=f"Target roles: {roles_text}\n\nSample achievements:\n{achievements_text[:6000]}",
+        response_schema=TagTaxonomy, temperature=0.2,
+    )
+    data = GeminiClient.parse_json(raw)
+    taxonomy = TagTaxonomy(**data) if data else TagTaxonomy()
+    if not taxonomy.tags:
+        taxonomy = TagTaxonomy(tags=[
+            TagDefinition(name="generalist", persona_description="general or cross-functional roles", keywords=[]),
+        ])
+    return taxonomy
 
 
 def draft_background_guide(source_texts: list[str], dry_run: bool = False) -> str:

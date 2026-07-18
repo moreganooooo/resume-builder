@@ -1,0 +1,37 @@
+- In new user flow, adjust instrutions:
+
+Very first step should read something like, "Go to your source folder (hyperlink and provide the file path to the source folder) and drop in any documentation related to your job search. Your current resume and LinkedIn profile (exporting your profile as a PDF is perfect, see here for instructions: hyperlinktolinkedinhelparticlehere.com/thankyou) is a great place to start. You can also consider things like:
+
+- Letters of recommendation
+- Public LinkedIn recommendations
+- Certifications
+- Patents you own (look at you go!)
+- Writing samples
+
+Once you're finished, restart this program and click New User again to continue!"
+
+- Liveness: do we need this immediately after a job scan is run? If the scan literally just found it, should we consider it "live" for a period of time until the program recommends a liveness check to stay current? Also! At one point I ran a job scan for JobRight and I got 104 jds in my results. When it ran the liveness check, only 71 were active, 2 were likely active, 30 were uncertain, and 1 was skipped. What is the liveness check based on, and shouldn't all of them have been live? Unless it's trying to find the source posting (since JobRight is an aggregator)? Would love to clarify this process and adjust a little if needed!
+
+- Global profiles that can sync on a different computer if opened. job_automater has mongodb, we could look at that or something else like:
+
+Syncthing: This is a widely recommended open-source tool that provides continuous file synchronization without relying on a central cloud server. It works by identifying specific paths for save files and syncing those folders between your devices (Linux, Windows, or Mac) the moment a change is detected.
+
+Cloud Symlinks: You can move your terminal program's data folder into a cloud service like Dropbox, Google Drive, or OneDrive. By using symbolic links (e.g., ln -s on Linux/Mac or mklink /J on Windows), you can point the program to the cloud-synced folder so that saves are mirrored automatically.
+
+Version Control: For text-based states like configuration files or command history, some users keep their .bashrc or .bash_history in a synced folder to maintain a consistent environment across all machines.
+
+I'm not sure what's possible or appropriate, but I would love to brainstorm this!
+
+- Evaluate report: can we add a very short descriptor that notes why the role scored the way it did? It's possible for roles with lower scores get a higher priority, and this would help clarify and provide transparency/spot-checking ability for the grading system!
+
+- Job scan, liveness scan, evaluation: let's make these processes a bit prettier and more informative with live progress to match the rest of the program! I think we may have worked on this a bit, maybe it was just spec or idea planning?
+
+- Company research: this only happens if a website is provided in the JD, but I'd like to make it more standard somehow. Let's look at what JDs contain for JobRight and LinkedIn, figure out if either of them provide this consistently. For roles that don't have a website provided, I'd love to include a backup process where AI could possibly search for the company's website? Maybe use a different model from the Gemini API? Either way, company research should be standard as much as it's possible!!
+
+- I'd love to add a feature where it's possible to drop additional docs into the source folder as time goes on and add to the knowledge base without needing to start over from scratch or manually input a bunch of details. Maybe there's something similar to the "new user" flow that's more like a "updated knowledge" flow?
+
+- Eventually: add the ability to enable several API keys at a time that rotate if one starts giving a rate limit error.
+
+- Turn bootstrap flow into submenu you can return to and see your progress, very similar to the bullet bank management submenu.
+
+- Way for new users to add "voice/tone" examples to their source docs, if this doesn't exist already!
