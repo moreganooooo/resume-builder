@@ -36,6 +36,12 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("bullet_bank", values)
         self.assertIn("bullet_bank", menu._HANDLERS)
 
+    def test_help_entry_is_registered(self):
+        values = [c.value for c in menu._CHOICES]
+        self.assertIn("help", values)
+        self.assertIn("help", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["help"], menu._handle_help)
+
     def test_choices_are_grouped_with_labeled_separators(self):
         separator_lines = [c.line for c in menu._CHOICES if isinstance(c, questionary.Separator)]
         self.assertTrue(any("Discovery" in line for line in separator_lines))
@@ -253,6 +259,14 @@ class TestHandleBulletBank(unittest.TestCase):
     def test_always_returns_false(self, mock_run):
         self.assertFalse(menu._handle_bullet_bank())
         mock_run.assert_called_once()
+
+
+class TestHandleHelp(unittest.TestCase):
+
+    @patch("menu.cli_art.display_help")
+    def test_always_returns_false(self, mock_display):
+        self.assertFalse(menu._handle_help())
+        mock_display.assert_called_once()
 
 
 class TestChainContent(unittest.TestCase):

@@ -45,6 +45,7 @@ _CHOICES = [
     questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter to Match a Resume", value="coverletter_one"),
     questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini\n", value="polish"),
     questionary.Separator("── Utility ──"),
+    questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  View Application Tracker", value="view_applications"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
     questionary.Separator("── Bullet Bank ──"),
@@ -292,6 +293,11 @@ def _handle_bullet_bank() -> bool:
     return False
 
 
+def _handle_help() -> bool:
+    cli_art.display_help()
+    return False
+
+
 def _handle_view_applications() -> bool:
     if not os.path.exists(jd_manager.APPLICATIONS_MD):
         cli_art.console.print("No applications tracked yet -- nothing to view.")
@@ -312,6 +318,7 @@ _HANDLERS = {
     "tailor_one": _handle_tailor_one,
     "coverletter_one": _handle_coverletter_one,
     "polish": _handle_polish,
+    "help": _handle_help,
     "view_applications": _handle_view_applications,
     "bullet_bank": _handle_bullet_bank,
 }

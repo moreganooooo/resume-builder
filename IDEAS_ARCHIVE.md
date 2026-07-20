@@ -1011,6 +1011,39 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Interactive-menu Help entry + emoji modernization -- done 2026-07-20
+
+Two Easy-tier items closed in one pass.
+
+- **Help command in the interactive menu, closed.** `cli_art.HELP_ENTRIES`
+  (a plain list of (command, description) tuples) plus `cli_art.display_help()`
+  is now the single source of truth for the shortcuts cheat sheet --
+  `scripts/cli.py` gained a `help` command that calls it, `menu.py`'s
+  `_CHOICES` gained a "Help" entry (`theme.ICONS['hint']`) under the
+  Utility section that calls the same function, and `scripts/resume-cli.sh`'s
+  `help)` case now just shells out to `python scripts/cli.py help` instead
+  of its own hardcoded `echo` lines -- closing the "content lives in two
+  (arguably three) places" wrinkle the item originally flagged.
+- **Modernize emojis in rewrite_bullets.py / orchestrator.py, closed.**
+  Every ad-hoc emoji in both files' print statements (~95 occurrences
+  across the two files) now resolves through `theme.ICONS` instead of a
+  hardcoded glyph, following a 3-bucket mapping: success/done/loaded/
+  accepted states -> `theme.ICONS['success']`; could-not-load/cache-miss/
+  parse-error/fallback-triggered states -> `theme.ICONS['warning']`;
+  everything else (progress announcements, config stats, informational
+  one-liners with no existing theme concept) -> `theme.ICONS['hint']`, the
+  same general-purpose FYI icon `cli_art.py`'s tip panel already uses --
+  deliberately not stretching `discovery`/`evaluate`/`build`/`utility`/
+  `bullet_bank` to cover unrelated meanings, since those are tied to
+  specific menu-domain concepts elsewhere. Plain (non-f) print strings
+  got an `f` prefix added where needed so the interpolation actually
+  evaluates. **Noted, not fixed (out of scope):** `bootstrap_profile.py`
+  has its own, unconverted `✅`/`🔧` pair for an equivalent KEEP/MANUAL
+  status marker, built 2026-07-17 -- after the menu's icon system already
+  existed. Not part of this item's stated scope (only rewrite_bullets.py/
+  orchestrator.py), but worth a follow-up pass someday for full
+  consistency. Full suite (720 tests) green after both changes.
+
 ## Onboarding copy, evaluate rationale, voice-anchor drafting -- done 2026-07-17
 
 A sixth same-day pass, closing three items straight off `IDEAS.md`'s Easy

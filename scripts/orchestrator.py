@@ -39,6 +39,7 @@ import validate_resume
 import validate_coverletter
 import jd_manager
 import bullet_feedback
+import theme
 
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -451,9 +452,9 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     )
 
     if cached_tokens and cached_tokens > 0:
-        print(f"   💫 tokens — {token_part} | ✨ cached: {cached_tokens:,}")
+        print(f"   {theme.ICONS['hint']} tokens — {token_part} | {theme.ICONS['hint']} cached: {cached_tokens:,}")
     else:
-        print(f"   💫 tokens — {token_part}")
+        print(f"   {theme.ICONS['hint']} tokens — {token_part}")
 
 
 def _sanitize_none_for_prompt(value):
@@ -1072,7 +1073,7 @@ class ResumeEngine:
         loop, which reuses this same function across many calls per resume
         build and must not have that cost multiply across them.
         """
-        print("\n📚 Loading knowledge base context (Tier 1)...")
+        print(f"\n{theme.ICONS['hint']} Loading knowledge base context (Tier 1)...")
         sections = []
 
         profile_path = os.path.join(self.kb_dir, "profile.yml")
@@ -1080,7 +1081,7 @@ class ResumeEngine:
             try:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
-                print(f"   ✅ Loaded profile.yml ({len(raw):,} chars)")
+                print(f"   {theme.ICONS['success']} Loaded profile.yml ({len(raw):,} chars)")
                 lines = raw.splitlines()
                 result = []
                 capturing = False
@@ -1094,7 +1095,7 @@ class ResumeEngine:
                         result.append(line)
                 trimmed = "\n".join(result).strip()
                 if trimmed:
-                    print(f"   📝 profile.yml trimmed to {len(trimmed):,} chars")
+                    print(f"   {theme.ICONS['hint']} profile.yml trimmed to {len(trimmed):,} chars")
                     sections.append(
                         "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                         "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
@@ -1119,7 +1120,7 @@ class ResumeEngine:
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
-                    print(f"   ✅ Loaded {fname} ({len(data):,} chars)")
+                    print(f"   {theme.ICONS['success']} Loaded {fname} ({len(data):,} chars)")
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
                     print(f"  WARNING: build_audit_static_prefix: could not load {fname}: {e}")
@@ -1129,7 +1130,7 @@ class ResumeEngine:
             try:
                 with open(voice_anchors_path, "r", encoding="utf-8") as f:
                     data = f.read()
-                print(f"   ✅ Loaded voice-anchors.md ({len(data):,} chars)")
+                print(f"   {theme.ICONS['success']} Loaded voice-anchors.md ({len(data):,} chars)")
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
                 print(f"  WARNING: build_audit_static_prefix: could not load voice-anchors.md: {e}")
@@ -1140,7 +1141,7 @@ class ResumeEngine:
                 try:
                     with open(evidence_guide_path, "r", encoding="utf-8") as f:
                         data = f.read()
-                    print(f"   ✅ Loaded evidence-guide.csv ({len(data):,} chars)")
+                    print(f"   {theme.ICONS['success']} Loaded evidence-guide.csv ({len(data):,} chars)")
                     sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
                 except Exception as e:
                     print(f"  WARNING: build_audit_static_prefix: could not load evidence-guide.csv: {e}")
@@ -1422,7 +1423,7 @@ class ResumeEngine:
         """
         key = (company, tags)
         if key not in self._segment_cache:
-            print(f"   ⚠️ Cache miss for {key} — building segment on demand.")
+            print(f"   {theme.ICONS['warning']} Cache miss for {key} — building segment on demand.")
             self._segment_cache[key] = self._build_audit_segment_bundle(company, tags)
         return self._segment_cache[key]
 
@@ -1432,7 +1433,7 @@ class ResumeEngine:
         context_block_for_bullet_gemma()."""
         key = (company, tags)
         if key not in self._gemma_segment_cache:
-            print(f"   ⚠️ Gemma cache miss for {key} — building segment on demand.")
+            print(f"   {theme.ICONS['warning']} Gemma cache miss for {key} — building segment on demand.")
             self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, tags)
         return self._gemma_segment_cache[key]
 
@@ -1446,15 +1447,15 @@ class ResumeEngine:
         self._segment_cache = {}
         self._gemma_segment_cache = {}
         pairs = sorted({(company, tags) for _, company, tags in bullet_tuples})
-        print(f"\n🔥 Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        print(f"\n{theme.ICONS['hint']} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
             gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
             self._gemma_segment_cache[(company, tags)] = gemma_bundle
             deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(company, self.deep_evidence_keywords) else ""
-            print(f"   📦 ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
-        print(f"   ✅ {len(self._segment_cache)} segment bundles ready.\n")
+            print(f"   {theme.ICONS['hint']} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
+        print(f"   {theme.ICONS['success']} {len(self._segment_cache)} segment bundles ready.\n")
 
     @staticmethod
     def critique_composite(scores: dict) -> float:
@@ -1478,8 +1479,8 @@ class ResumeEngine:
         Critiques on slim static_prefix (Tier 1+2 cache architecture).
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
-        print("\n📋 Loading rules bundle...")
-        print(f"📌 Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
+        print(f"\n{theme.ICONS['hint']} Loading rules bundle...")
+        print(f"{theme.ICONS['hint']} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
             print("  No bullets to audit -- empty or invalid input. Skipping audit loop.")
@@ -1492,14 +1493,14 @@ class ResumeEngine:
             return refined_bullets
 
         critique_system = self.build_bullet_critique_system()
-        print("   ✅ Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
+        print(f"   {theme.ICONS['success']} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
         # to build (2 small JSON files + voice-anchors.md), so it's built
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
         static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        print(f"📌 Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
+        print(f"{theme.ICONS['hint']} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
 
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
@@ -1620,11 +1621,11 @@ class ResumeEngine:
         rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
         rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
 
-        print(f"📐 Rewrite rules block:   {len(rewrite_rules_block):,} chars")
-        print(f"📐 Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
-        print(f"✏️  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
-        print(f"✏️  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
-        print(f"💯 Score system prompt:   {len(critique_system):,} chars")
+        print(f"{theme.ICONS['hint']} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
+        print(f"{theme.ICONS['hint']} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
+        print(f"{theme.ICONS['hint']}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+        print(f"{theme.ICONS['hint']}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
+        print(f"{theme.ICONS['hint']} Score system prompt:   {len(critique_system):,} chars")
 
         self.warm_segment_cache(bullet_tuples)
 
@@ -1679,19 +1680,19 @@ class ResumeEngine:
                 gem_flag   = critique_data.get("hidden_gem_flag", False)
                 gem_reason = critique_data.get("hidden_gem_reason", "")
                 if gem_flag:
-                    print(f"   💎 GEM: Hidden Gem! score={gem_score} — {gem_reason}")
+                    print(f"   {theme.ICONS['success']} GEM: Hidden Gem! score={gem_score} — {gem_reason}")
                 elif gem_score >= 75:
-                    print(f"   ⭐ STRONG: gem_score={gem_score} — {gem_reason}")
+                    print(f"   {theme.ICONS['success']} STRONG: gem_score={gem_score} — {gem_reason}")
 
                 if (critique_data.get("manager_test") == "FAIL" or
                         critique_data.get("believability_score", 100) < 80):
-                    print(f"   ✏️  Rewriting with {REWRITE_MODEL}...")
+                    print(f"   {theme.ICONS['hint']}  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
                     segment_bundle       = self.audit_segment_bundle_for(company, tags)
                     segment_bundle_gemma = self.audit_segment_bundle_for_gemma(company, tags)
                     if segment_bundle:
-                        print(f"   📦 segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
+                        print(f"   {theme.ICONS['hint']} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
@@ -1771,29 +1772,29 @@ class ResumeEngine:
 
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
-                                print(f"   ✅ ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                                print(f"   {theme.ICONS['success']} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
                                 # Use the rescore data for the rewritten bullet
                                 critique_to_record = rescore_data
                                 try:
                                     if bullet_feedback.queue_accepted_rewrite(
                                         bullet, rewritten_bullet, company, tags, critique_to_record
                                     ):
-                                        print("   📥 Queued for bank review (needs-review.csv)")
+                                        print(f"   {theme.ICONS['hint']} Queued for bank review (needs-review.csv)")
                                 except Exception as feedback_err:
-                                    print(f"   ⚠️  Could not queue bullet for bank review: {feedback_err}")
+                                    print(f"   {theme.ICONS['warning']}  Could not queue bullet for bank review: {feedback_err}")
                             else:
                                 rewritten_bullet = bullet
-                                print(f"   🔄 KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                                print(f"   {theme.ICONS['hint']} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
                                 # Use the original critique data
                                 critique_to_record = critique_data
                             break
 
                         except Exception as rw_err:
                             rewrite_parse_failures += 1
-                            print(f"   ⚠️  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
+                            print(f"   {theme.ICONS['warning']}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
                             if (rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
                                     and active_rewrite_model != REWRITE_FALLBACK_MODEL):
-                                print(f"   🔄 FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
+                                print(f"   {theme.ICONS['warning']} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
@@ -1802,11 +1803,11 @@ class ResumeEngine:
                     _record(bullet, critique_data)
 
             except Exception as e:
-                print(f"   ⚠️  Critique error on bullet {i+1}: {e}")
+                print(f"   {theme.ICONS['warning']}  Critique error on bullet {i+1}: {e}")
                 _record(bullet, None)
 
         print(f"\n{'='*60}")
-        print(f"✅ Audit complete: {len(refined_bullets)} bullets refined")
+        print(f"{theme.ICONS['success']} Audit complete: {len(refined_bullets)} bullets refined")
 
         # Sort bullets deterministically by manager_test and believability_score.
         # Only apply sorting to bullets processed in this run (not resumed bullets).
@@ -2013,7 +2014,7 @@ class ResumeEngine:
             print("  ℹ️  Company research skipped: model response couldn't be parsed.")
             return None
 
-        print(f"  ✅ Company research complete for {company_website}.")
+        print(f"  {theme.ICONS['success']} Company research complete for {company_website}.")
         return research_data
 
     def build_tailored_coverletter(self, jd_path: str) -> dict:
@@ -2100,12 +2101,12 @@ class ResumeEngine:
             capture_output=True, text=True
         )
         if pdf_result.returncode != 0:
-            print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+            print(f"  {theme.ICONS['warning']}  PDF generation failed:\n{pdf_result.stderr}")
             return {}
         print(pdf_result.stdout)
 
         letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
-        print(f"  🎉 Cover letter complete! PDF → {pdf_out}")
+        print(f"  {theme.ICONS['success']} Cover letter complete! PDF → {pdf_out}")
         return letter_data
 
     def build_tailored_resume(
@@ -2613,7 +2614,7 @@ class ResumeEngine:
                 capture_output=True, text=True
             )
             if pdf_result.returncode != 0:
-                print(f"  ⚠️  PDF generation failed:\n{pdf_result.stderr}")
+                print(f"  {theme.ICONS['warning']}  PDF generation failed:\n{pdf_result.stderr}")
                 return {}
 
             page_count, size_str = _parse_pdf_result(pdf_result.stdout)
@@ -2671,7 +2672,7 @@ class ResumeEngine:
             trimmed_resume_data = normalize_resume.normalize(trimmed)
             trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation)
             if trim_violations:
-                print(f"  ⚠️  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                print(f"  {theme.ICONS['warning']}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:")
                 for v in trim_violations:
                     print(f"    - {v}")
@@ -2689,9 +2690,9 @@ class ResumeEngine:
         final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
         fired_situational_roles = final_companies & set(situational_roles.load_situational_roles()["roles"].keys())
         if fired_situational_roles:
-            print(f"  🎯 Situational role fired: {', '.join(sorted(fired_situational_roles))}")
+            print(f"  {theme.ICONS['hint']} Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
-        print(f"  🎉 Pipeline complete! PDF → {pdf_out}")
+        print(f"  {theme.ICONS['success']} Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
         resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
         resume_data["_page_count"] = page_count
