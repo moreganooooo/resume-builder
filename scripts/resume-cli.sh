@@ -70,24 +70,11 @@ resume() {
       esac
       ;;
     help)
-      echo "resume-builder shortcuts:"
-      echo "  resume                 launch the interactive menu"
-      echo "  resume activate        cd into the project and activate the venv (stays active in this shell)"
-      echo "  resume cd              just cd into the project"
-      echo "  resume run             tailor+render every pending JD in jds/ (batch mode)"
-      echo "  resume run jds/x.txt   tailor+render one specific JD file"
-      echo "  resume run --pick      interactively select which pending JD(s) to tailor"
-      echo "  resume coverletter jds/x.txt   generate + render a cover letter for one JD"
-      echo "  resume coverletter --pick   interactively select which pending JD(s) to generate a cover letter for"
-      echo "  resume evaluate jds/x.txt   score a JD's fit (go/no-go) without building a resume"
-      echo "  resume evaluate         score every pending JD at once"
-      echo "  resume scan             pull new postings from all configured sources into jds/"
-      echo "  resume scan --source jobright   pull from just one source (jobright, linkedin)"
-      echo "  resume liveness         check every pending JD's posting URL, move expired ones out"
-      echo "  resume polish           interactively polish an already-generated resume/cover letter"
-      echo "  resume test            run the full test suite (compact: dots + summary)"
-      echo "  resume test -v         same, but lists every test by name"
-      echo "  resume test -vv        same, but shows the app's own logging too"
+      # Delegates to `python scripts/cli.py help` (cli_art.display_help(),
+      # sourced from cli_art.HELP_ENTRIES) instead of a second hardcoded
+      # copy of this text, so there's exactly one place to update it --
+      # this is also what the interactive menu's own Help entry renders.
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py help )
       ;;
     *)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py "${all_args[@]}" )
