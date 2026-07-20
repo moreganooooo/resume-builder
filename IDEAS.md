@@ -48,22 +48,6 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Easy
 
-### Rotate the leaked LinkedIn `li_at` cookie
-
-Found during the 2026-07-04 merge research, still unresolved: a local
-script in the job_automater working copy
-(`scrapers/recommended_scraper.py`, not part of the actual upstream
-project) has a LinkedIn `li_at` session cookie hardcoded in plaintext.
-It's a live credential still sitting on disk. Rotate it, and don't carry
-that file forward into any future merge work. Full context in
-`IDEAS_ARCHIVE.md`'s "Long-term merge: incident history" section.
-
-### The Johnson County Community College education line wraps
-
-It currently wraps to a 2nd line at the real printed page width (KU/KCKCC
-don't anymore, after shortening their degree names) -- low priority, not
-something Morgan has flagged as a problem.
-
 ### Help command in the interactive menu
 
 `resume help` already exists -- but only as a shell shortcut
@@ -101,40 +85,6 @@ open design question -- swap each emoji for its `theme.ICONS` equivalent
 where one exists, framework-consistent print styling otherwise -- but
 real volume: two large files, dozens of print statements each, worth
 its own focused pass rather than folding into an unrelated change.
-
-### Clearer first-step instructions for the "New User? Start Here!" flow
-
-Raised 2026-07-17: the very first thing a brand-new user needs to know is
-"go put your documents in this exact folder, then come back." Today
-`menu.py`'s `_handle_bootstrap()` only prints this once someone's already
-selected the menu option and the folder's found to be empty (`"Looks like
-there's nothing in the source_documents folder yet..."`) -- there's no
-proactive, first-contact version of this that names the real path or
-gives document-type examples up front. Morgan's proposed copy (adjust
-final wording during implementation, but keep the shape and content):
-
-> Go to your source folder (`profiles/<name>/knowledge_base/bootstrap/source_documents/`)
-> and drop in any documentation related to your job search. Your current
-> resume and LinkedIn profile (exporting your profile as a PDF is
-> perfect) are a great place to start. You can also consider things like:
-> - Letters of recommendation
-> - Public LinkedIn recommendations
-> - Certifications
-> - Patents you own (look at you go!)
-> - Writing samples
->
-> Once you're finished, restart this program and click New User again to
-> continue!
-
-Mechanical, no open design question -- source_docs_dir is already computed
-fresh per-profile in `_handle_bootstrap()` (`os.path.join(profile_paths.kb_dir(),
-"bootstrap", "source_documents")`), so the path is already known at the
-point this message needs to print; it just needs to print earlier/more
-proactively, with the real path interpolated in (and a real LinkedIn
-"export as PDF" help-article link, if one gets sourced -- not invented
-here). Worth deciding whether this fully replaces the existing
-empty-folder message or the empty-folder message becomes a shorter
-reminder that references this fuller one.
 
 ## Medium
 
@@ -243,47 +193,21 @@ it's broad (touches the Python env, Node env, filesystem, API keys, and
 tests) but every individual check is a simple, well-understood
 existence/version check.
 
-### Evaluate report: short "why this score" rationale per role
-
-Raised 2026-07-17: a role can land a lower composite score than another
-role that ends up with lower actual priority to Morgan, and today there's
-no quick way to see *why* without opening the full evaluation JSON.
-`evaluate_fit()`'s `FitEvaluationSchema` already computes per-dimension
-`dimension_scores` and an `archetype` classification -- richer reasoning
-than what actually survives to disk today. This is the same underlying
-gap the "List Jobs" / "View Pipeline" item (Hard, below) already flagged
-under "Eval notes may need richer persistence" (`save_evaluation()` only
-persists `composite_score`/`recommendation`/`hard_blockers`/`evaluated_at`,
-not the dimension-level reasoning) -- that item's browse/detail/act UI
-would be the natural place to show a *full* breakdown, but a **short
-one-line descriptor** (e.g. "Strong tools match, weak seniority fit") is
-a smaller, standalone win that doesn't need that whole feature built
-first: persist one new short string alongside the existing `_evaluation`
-fields, generated as part of the same `evaluate_fit()` call (a cheap
-"summarize your own scoring in one sentence" ask, not a second API call),
-and surface it directly in whatever prints/lists composite scores today.
-Worth building this first as its own small piece, then having the
-richer per-dimension persistence (if that item gets built) supersede it
-rather than duplicate it.
-
-### Prettier, more informative live progress for scan / liveness / evaluate
+### Prettier, more informative live progress for liveness / evaluate
 
 Raised 2026-07-17 (Morgan's memory of this being worked on before is
 half-right): a real console-polish pass happened 2026-07-07
 (`docs/superpowers/specs/2026-07-07-console-polish-design.md`, archived)
 but it was scoped to the resume-*build* pipeline specifically (Step 1-7
 headers, the PDF trim loop, banner colors) -- `scan.py`, `liveness.py`,
-and `batch_evaluate.py` were never part of that pass. Current state,
-checked directly:
+and `batch_evaluate.py` were never part of that pass. **`scan.py`'s piece
+is now done** (`[i/total]` + explicit skip-reason per job, shipped
+2026-07-17 alongside the evaluate-rationale/voice-anchor work -- see
+`IDEAS_ARCHIVE.md`). Still open:
 - `batch_evaluate.py` already has a `[i+1/total]` counter per JD
   (`"  [{i + 1}/{len(pending_paths)}] Evaluating {company}..."`) -- the
-  closest of the three to the audit-loop/bootstrap-polish standard, but
-  still no `───` separator between entries.
-- `scan.py` has no per-item progress at all -- one "Scanning {source}..."
-  line, then a single summary count at the end. Straightforward to add a
-  counter here, mirroring the pattern now established in
-  `bootstrap_profile.py`'s bullet-polish loop (separator + `[i/total]` +
-  a status icon per item).
+  closest to the audit-loop/bootstrap-polish standard, but still no
+  `───` separator between entries.
 - `liveness.py` is architecturally different from the other two: it
   shells out to `check-liveness.mjs` once for the *entire* batch via
   `subprocess.run(..., capture_output=True)`, so there's no per-JD
@@ -358,27 +282,6 @@ already-persisted state, not new tracking logic, closely related to (and
 possibly sharing menu real estate with) the "Maintenance" submenu idea
 below.
 
-### Let new users add voice/tone examples during bootstrap
-
-Raised 2026-07-17: Morgan's own pipeline already has a real place for
-this -- `voice-anchors.md` ("real past answers, themes and quotes worth
-echoing," loaded into the audit loop's static prefix in both
-`orchestrator.py` and `rewrite_bullets.py`) -- but bootstrap never
-creates or populates one for a new profile; confirmed via direct grep,
-zero references to `voice-anchors`/`voice_anchors` anywhere in
-`bootstrap_bullet_bank.py`/`bootstrap_profile.py`/`bootstrap_extractors.py`.
-It degrades gracefully today (every consumer checks `os.path.exists()`
-first), so nothing breaks -- Dom's builds just never get this signal.
-"Writing samples" is already one of the suggested source-folder document
-types in the new-first-step-instructions item above, which gives this a
-natural on-ramp: a new `bootstrap_extractors` function (mirroring
-`draft_background_guide()`'s exact pattern) that drafts `voice-anchors.md`
-from whatever writing-sample/recommendation-letter text got ingested,
-previewed through the same accept/regenerate/skip UX already used for
-cv.md and the background guide. Could also add a direct Q&A fallback
-("paste 2-3 sentences that sound like you") for a profile with no
-writing-sample documents to draw from.
-
 ## Hard
 
 ### "List Jobs" / "View Pipeline" browsing command
@@ -413,13 +316,15 @@ pick-and-immediately-act flow, not a browse-then-decide one.
   confirming rather than assuming -- e.g. should an archived JD ever be
   un-archived, and does `get_pending_jds()` need to explicitly exclude it
   (the way it already excludes `completed/`)?
-- **Eval "notes" may need richer persistence than exists today.**
-  `save_evaluation()` currently only persists `composite_score`,
-  `recommendation`, `hard_blockers`, and `evaluated_at` -- not the
-  model's per-dimension reasoning from `evaluate_fit()`'s full
-  `FitEvaluationSchema` result (`dimension_scores`, `archetype`, etc.).
-  "Read eval rating notes" implies persisting more of that structure,
-  which is a real (if modest) schema change to `_evaluation`, not free.
+- **Eval "notes" may need richer persistence than exists today --
+  partially closed 2026-07-17.** `save_evaluation()` now also persists a
+  one-line `why` rationale alongside `composite_score`/`recommendation`/
+  `hard_blockers`/`evaluated_at` (see `IDEAS_ARCHIVE.md`), which covers
+  the short-descriptor case. Still missing: the model's full per-dimension
+  reasoning from `evaluate_fit()`'s `FitEvaluationSchema` result
+  (`dimension_scores`, `archetype`, etc.) for a genuine drill-in "View
+  More Details" breakdown -- that's still a real (if modest) schema
+  change to `_evaluation`, not free.
 - **Last liveness check date** depends on the liveness skip-by-recency
   item above existing first -- there's nothing to show here until that's
   built.

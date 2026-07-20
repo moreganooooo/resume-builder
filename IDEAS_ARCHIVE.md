@@ -1011,6 +1011,58 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Onboarding copy, evaluate rationale, voice-anchor drafting -- done 2026-07-17
+
+A sixth same-day pass, closing three items straight off `IDEAS.md`'s Easy
+and Medium tiers plus part of a fourth. Full suite (716 tests) green.
+
+- **Proactive first-step onboarding copy (Easy tier item, closed).**
+  `menu.py`'s `_handle_bootstrap()` used to only mention the
+  `source_documents/` folder reactively, once someone had already picked
+  "New User? Start Here!" and the folder turned up empty. Now prints
+  Morgan's proposed copy (hyperlinked real path, document-type examples --
+  resume, LinkedIn PDF export, recommendation letters, certifications,
+  writing samples) proactively, before that fallback case is even
+  reached.
+- **Evaluate report "why" rationale (Medium tier item, closed).**
+  `evaluate_fit()` was already computing a `why` field and discarding it.
+  `jd_manager.save_evaluation()` now persists it into `_evaluation`
+  alongside `composite_score`/`recommendation`/`hard_blockers`/
+  `evaluated_at`; `batch_evaluate.py` surfaces a short excerpt in the
+  batch fit table and the full text on a single evaluation. Partially
+  closes the "List Jobs" Hard-tier item's "eval notes may need richer
+  persistence" open question too -- the one-line case is covered, full
+  per-dimension `dimension_scores`/`archetype` persistence for a real
+  drill-in view is still open.
+- **Voice-anchor drafting during bootstrap (Medium tier item, closed).**
+  New `bootstrap_extractors.draft_voice_anchors()` (mirrors
+  `draft_background_guide()`'s pattern) drafts `voice-anchors.md` from
+  writing-sample source docs, sequenced in `bootstrap_profile.py` before
+  `cv.md` since voice anchors are actually injected into the
+  bullet-polishing prompt. Previewed through the same accept/regenerate/
+  skip UX as cv.md and the background guide.
+- **`scan.py` progress display (one piece of the still-open "Prettier,
+  live progress" Medium item).** Now shows `[i/total]` and an explicit
+  skip-reason per job, matching the pattern established elsewhere this
+  session. `liveness.py` and `batch_evaluate.py`'s separator-polish are
+  still open -- see `IDEAS.md`.
+- **Dry-run bug fix caught in review:** `_polish_bullet()` was writing a
+  real checkpoint file even under `dry_run=True`; fixed alongside the
+  above.
+
+## JCCC education line wrap -- closed (fixed 2026-07-05, confirmed 2026-07-20)
+
+Flagged as a low-priority Easy-tier item: the Johnson County Community
+College education entry wrapped to a 2nd line at real printed page width,
+unlike KU/KCKCC after their degree names got shortened. Turns out it was
+already fixed at the time it was flagged -- `scripts/fixed_content.py`
+(now `profiles/morgan/fixed_content.py`) had the degree label shortened
+from `"Relevant Coursework, Graphic Design"` to `"Coursework, Graphic
+Design"` in commit `d66ae3ec` (2026-07-05), one commit after the field
+was first added. Confirmed 2026-07-20 the shortened label is still live
+today, matching Morgan's recollection of the fix -- removed from
+`IDEAS.md`.
+
 ## Long-term merge: incident history
 
 These are past incidents from the career-ops/job_automater merge research
@@ -1050,19 +1102,25 @@ which is how they were silently lost in the first place -- they're tracked
 now, so this specific failure mode shouldn't recur). job_automater is no
 longer a blocker for merge planning.
 
-**Security flag found during this research (2026-07-04) -- still open, see
-`IDEAS.md`'s Easy tier.** `scrapers/recommended_scraper.py` (present in the
-working copy) had a **LinkedIn `li_at` session cookie hardcoded in
-plaintext**. Checked the fresh ZIP re-download: this file **isn't part of
-the actual open-source project at all** -- the real repo's `scrapers/` only
-has `__init__.py`, `jobright_scraper.py`, and `linkedin_scraper.py` (which
-correctly sources its cookie from `config`, not hardcoded). So this is a
-local, ad-hoc script Morgan or something added to her working copy and
-never upstream. The 2026-07-04 repair above only restored *missing* files
-and deliberately left every existing file untouched, so this one is
-exactly as it was found -- **the cookie is a live credential still sitting
-on disk and still needs rotating; don't carry the file forward into any
-merge.**
+**Security flag found during this research (2026-07-04) -- closed, removed
+from `IDEAS.md`'s Easy tier 2026-07-20.** `scrapers/recommended_scraper.py`
+(present in the working copy at the time) had a **LinkedIn `li_at` session
+cookie hardcoded in plaintext**. Checked the fresh ZIP re-download at the
+time: this file **wasn't part of the actual open-source project at all**
+-- the real repo's `scrapers/` only ever had `__init__.py`,
+`jobright_scraper.py`, and `linkedin_scraper.py` (which correctly sources
+its cookie from `config`, not hardcoded). So this was a local, ad-hoc
+script added to the working copy and never upstream. **Closed 2026-07-20:**
+the file itself is confirmed deleted from job_automater (`git log` there
+shows `a8c55e3 Remove stray scrapers/recommended_scraper.py`), and Morgan
+confirmed the underlying exposure is moot regardless -- the `li_at` cookie
+rotates so frequently on its own that any value captured back on
+2026-07-04 has long since expired. The better fix that superseded the
+whole manual-copy-paste-a-static-cookie pattern is already built and live:
+`scan_linkedin.py`'s `get_li_at_cookie()` (see row 1.4 above) reads the
+*current* cookie straight out of an already-logged-in Chrome via
+`browser_cookie3` on every scan call -- nothing is ever written to disk,
+so there's no static value left to leak in the first place.
 
 **Interview setup -- confirmed doesn't exist in job_automater (2026-07-04),**
 not even a partial version. The likely source of the mix-up:
