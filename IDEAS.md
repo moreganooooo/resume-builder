@@ -48,19 +48,6 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Easy
 
-### Help command in the interactive menu
-
-`resume help` already exists -- but only as a shell shortcut
-(`scripts/resume-cli.sh`'s `help)` case, a hardcoded list of `echo` lines
-describing every command). It isn't reachable from inside the interactive
-menu itself, and Click's own auto-generated `--help` flag on
-`scripts/cli.py` is a separate, third copy of similar information. Adding
-a "Help" entry to `menu.py`'s `_CHOICES` that prints an equivalent summary
-closes that gap. Mechanical, no open design question -- the only minor
-wrinkle is that the content would then live in two (arguably three)
-places unless something shares a single source of truth between the
-shell script's static text and whatever the menu option prints.
-
 ### Rename the `resume` CLI alias
 
 "Resume" is ambiguous in a way that's mildly confusing in context --
@@ -73,18 +60,6 @@ name. Mechanically small -- the only open question is picking the actual
 name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
 `rbuild`, `jobkit`. Pull this into a real change the moment a name is
 chosen.
-
-### Modernize emojis in rewrite_bullets.py / orchestrator.py
-
-The interactive menu's icons went through a real design pass
-(`theme.py`'s `ICONS` dict, Nerd Font default + plain-Unicode fallback
-via `RESUME_BUILDER_ICONS=unicode`), but `rewrite_bullets.py` and
-`orchestrator.py`'s print statements still use the older, ad-hoc emoji
-set (📥📋✅⚠️📌🔥📦🖊️💫💯✏️🔧 etc.) picked before that system existed. No
-open design question -- swap each emoji for its `theme.ICONS` equivalent
-where one exists, framework-consistent print styling otherwise -- but
-real volume: two large files, dozens of print statements each, worth
-its own focused pass rather than folding into an unrelated change.
 
 ## Medium
 

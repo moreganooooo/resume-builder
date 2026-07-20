@@ -244,5 +244,14 @@ class TestRenderBulletBankStatus(unittest.TestCase):
         self.assertIn("3 row(s) waiting", output)
 
 
+class TestDisplayHelp(unittest.TestCase):
+
+    def test_renders_every_command_and_description(self):
+        output = _rendered(cli_art.display_help)
+        for command, description in cli_art.HELP_ENTRIES:
+            self.assertIn(command, output)
+        self.assertIn("launch the interactive menu", output)
+
+
 if __name__ == "__main__":
     unittest.main()

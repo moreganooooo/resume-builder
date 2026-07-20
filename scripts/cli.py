@@ -191,5 +191,12 @@ def polish(file):
     polish_module.run(file)
 
 
+@cli.command(name="help")
+def help_cmd():
+    """Prints the shortcuts cheat sheet (same content the interactive
+    menu's Help entry shows -- see cli_art.HELP_ENTRIES)."""
+    cli_art.display_help()
+
+
 if __name__ == "__main__":
     cli()

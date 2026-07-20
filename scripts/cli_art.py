@@ -292,6 +292,40 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list) -> None:
     console.print(Panel(table, title="Bullet Bank Pipeline Status", border_style=theme.BRAND, box=box.ROUNDED))
 
 
+# Single source of truth for the shortcuts cheat sheet -- both `resume
+# help` (scripts/resume-cli.sh, which shells out to `python scripts/cli.py
+# help`) and the interactive menu's Help entry render this same list, so
+# there's exactly one place to update instead of two copies drifting apart.
+HELP_ENTRIES = [
+    ("resume", "launch the interactive menu"),
+    ("resume activate", "cd into the project and activate the venv (stays active in this shell)"),
+    ("resume cd", "just cd into the project"),
+    ("resume run", "tailor+render every pending JD in jds/ (batch mode)"),
+    ("resume run jds/x.txt", "tailor+render one specific JD file"),
+    ("resume run --pick", "interactively select which pending JD(s) to tailor"),
+    ("resume coverletter jds/x.txt", "generate + render a cover letter for one JD"),
+    ("resume coverletter --pick", "interactively select which pending JD(s) to generate a cover letter for"),
+    ("resume evaluate jds/x.txt", "score a JD's fit (go/no-go) without building a resume"),
+    ("resume evaluate", "score every pending JD at once"),
+    ("resume scan", "pull new postings from all configured sources into jds/"),
+    ("resume scan --source jobright", "pull from just one source (jobright, linkedin)"),
+    ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
+    ("resume polish", "interactively polish an already-generated resume/cover letter"),
+    ("resume test", "run the full test suite (compact: dots + summary)"),
+    ("resume test -v", "same, but lists every test by name"),
+    ("resume test -vv", "same, but shows the app's own logging too"),
+]
+
+
+def display_help() -> None:
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("Command")
+    table.add_column("What it does")
+    for command, description in HELP_ENTRIES:
+        table.add_row(command, description)
+    console.print(Panel(table, title="resume-builder shortcuts", border_style=theme.BRAND, box=box.ROUNDED))
+
+
 def display_applications_tracker(content: str) -> None:
     """Renders data/applications.md's raw markdown content directly in the
     terminal via Rich's built-in Markdown renderer -- the table and each
