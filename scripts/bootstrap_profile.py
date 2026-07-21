@@ -46,6 +46,7 @@ import pandas as pd
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import cli_art  # noqa: E402
+import theme  # noqa: E402
 from rewrite_bullets import RulesBundle, KnowledgeBase, build_system_prompts, process_bullet, RULES_DIR  # noqa: E402
 
 
@@ -562,7 +563,7 @@ def _polish_bullet(
 
 def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
     total = sum(len(role["bullets"]) for role in rows)
-    print(f"\n\U0001F4DD Polishing {total} bullet(s) for your cv.md draft...")
+    print(f"\n{theme.ICONS['hint']} Polishing {total} bullet(s) for your cv.md draft...")
 
     checkpoint = _load_cv_draft_checkpoint()
     already_done = sum(1 for role in rows for bullet in role["bullets"]
@@ -589,7 +590,7 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
             polished = _polish_bullet(
                 bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run, checkpoint,
             )
-            status_icon = "✅" if polished["rewrite_status"] == "KEEP" else "\U0001F527"
+            status_icon = theme.ICONS["success"] if polished["rewrite_status"] == "KEEP" else theme.ICONS["warning"]
             print(f"   {status_icon} {polished['rewrite_status']}")
             lines.append(f"- {polished['final_bullet']}")
         lines.append("")
@@ -777,7 +778,7 @@ def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions:
 
     os.makedirs(os.path.dirname(env_file), exist_ok=True)
     set_key(env_file, var_name, value.strip())
-    print(f"  ✅ Saved {var_name} to {env_file}.")
+    print(f"  {theme.ICONS['success']} Saved {var_name} to {env_file}.")
     return True
 
 
