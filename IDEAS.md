@@ -29,7 +29,7 @@ have been moved to the archive, so the sequence below starts at 4.
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
 | 4 | Engine/profile rules audit + split | Medium-Hard | **Done 2026-07-17, including the `orchestrator.py` gap found in that day's final review (archived).** See `IDEAS_ARCHIVE.md`'s "Engine/profile split: orchestrator.py Morgan-specific constants closed" entry, and Multi-user support below. |
-| 5 | Evidence bank extension (Tier 2) | Hard | Phase 1 shipped 2026-07-07 (archived). Tier 2 -- raw "Treering Sequences" archive curation, `BestCopySamples`/`Master Cover Letters` skim -- still unscheduled. |
+| 5 | Evidence bank extension | -- | Phase 1 shipped 2026-07-07 (archived). Everything past Phase 1 decoupled from the merge/career-ops entirely 2026-07-21 -- see "Strengthen evidence-guide.csv for cover letters" (Medium) and "Evidence bank: interview stories, negotiation talking points, full multi-type generalization" (Very Hard / Long-term) below. |
 | 7 | Per-user secrets (`.env` per profile) | Easy | **Done 2026-07-17 (archived)** -- every script now loads `profiles/<name>/.env` instead of one shared root file; Morgan's real `.env` migrated. Bootstrap's own wizard walks a new profile through entering `GEMINI_API_KEY`/`JOBRIGHT_COOKIE_STRING` (or deferring to a file edit later) before Phase 0's first API call. See `IDEAS_ARCHIVE.md`. |
 | 8 | Dominick's onboarding | Hard | Onboarding wizard shipped 2026-07-12/13; `profiles/<name>/` isolation shipped 2026-07-17; #4's `orchestrator.py` gap and #7 (per-user secrets) both closed same week. **No remaining blockers** on the engineering side -- next step is Dom's actual first session. See Multi-user support below. |
 | 9 | Scheduler + notifications | Hard | Unblocked -- `scan` and `evaluate` stages both exist. Not started. See the Long-term merge section below. |
@@ -257,6 +257,24 @@ already-persisted state, not new tracking logic, closely related to (and
 possibly sharing menu real estate with) the "Maintenance" submenu idea
 below.
 
+### Strengthen evidence-guide.csv for cover letters
+
+Split off from the evidence-bank/merge discussion 2026-07-21, decoupled
+from career-ops entirely -- Morgan has additional source material in other
+places she can supply whenever this gets picked up, no dependency on the
+merge or on career-ops's files specifically. `evidence-guide.csv` (78
+rows: Evidence Cluster / Finding / Source File(s) / Best Detail-Quote /
+Best Metric / What This Proves / Where to Use It / Confidence / Source
+URL) is comparatively thin next to the resume bullet bank's 1,400+ rows,
+and it's the one piece of a broader evidence-bank expansion with real,
+immediate payoff -- it already has a live consumer (cover-letter
+generation already reads this file), so filling it out directly
+strengthens cover letters without needing any new pipeline stage or
+schema. No open design question -- same extraction pattern already proven
+on the existing 78 rows (read source material, fill in the existing
+columns, verify attribution before adding a row). Non-essential, no
+deadline -- whenever Morgan wants to supply more material.
+
 ## Hard
 
 ### "List Jobs" / "View Pipeline" browsing command
@@ -438,6 +456,29 @@ never simultaneous" is a safe assumption to design around, and whether
 `.env`/secrets need to be explicitly excluded from whichever mechanism
 gets chosen (almost certainly yes, regardless of approach).
 
+### Evidence bank: interview stories, negotiation talking points, full multi-type generalization
+
+Split off from the evidence-bank/merge discussion 2026-07-21, **deliberately
+decoupled from career-ops and from the merge** -- not blocked by, or
+blocking, anything in the three-repo merge punchlist. Morgan has this kind
+of source material (interview stories, negotiation talking points, company
+proof points) in places outside career-ops too, and can supply it whenever
+she wants to dig in -- no urgency, no deadline, no dependency on the merge
+happening first. Two real things bundled here, worth separating whenever
+this gets picked up: (1) sourcing/curating the raw material itself (dedup,
+verify real attribution before anything goes in a bank whose whole premise
+is "never fabricate, everything traceable"), and (2) the actual engineering
+-- today nothing in the pipeline can consume an evidence type beyond resume
+bullets; even `evaluate_fit()`'s cover-letter path only reads
+`evidence-guide.csv` directly, there's no general "different renderers pull
+from the same audited pool, filtered by evidence type" mechanism yet (the
+architecture the Long-term merge section below originally sketched this
+under). Interview-story evidence specifically has no consumer at all --
+the `interview-prep` pipeline stage doesn't exist and is separately
+deferred (Morgan's call, see the merge section below) -- so curating that
+material before that stage exists would sit unused. Non-essential,
+someday, no target date.
+
 ### Long-term: merge with career-ops and job_automater
 
 **Punchlist:** `docs/superpowers/plans/2026-07-16-three-repo-merge-punchlist.md`
@@ -539,16 +580,20 @@ resume-generation features of both `/Users/morganescott/career-ops` and
   already works: `bullet_feedback.py`, `triage_needs_review.py`, the
   verified-bullet CSV schema, the truthfulness/critique prompts. New
   evidence *types* get added alongside resume bullets -- STAR+R interview
-  stories (from career-ops's story bank), cover-letter proof points,
-  negotiation talking points, company-fact notes -- each keeping the same
-  verification metadata (believability score, source, keep/retire status)
-  that already governs resume bullets today. Different renderers
-  (resume-bullet, interview-story, cover-letter-paragraph) pull from the
-  same audited pool, filtered by which evidence rows are tagged applicable
-  to that output type. This is also the piece that directly informs
-  Dominick's onboarding -- see Multi-user support below. (Phase 1 of this
-  is done -- see the Evidence bank extension row in the build-order table
-  above and `IDEAS_ARCHIVE.md` for the full research/build writeup.)
+  stories, cover-letter proof points, negotiation talking points,
+  company-fact notes -- each keeping the same verification metadata
+  (believability score, source, keep/retire status) that already governs
+  resume bullets today. Different renderers (resume-bullet, interview-story,
+  cover-letter-paragraph) pull from the same audited pool, filtered by
+  which evidence rows are tagged applicable to that output type. This is
+  also the piece that directly informs Dominick's onboarding -- see
+  Multi-user support below. (Phase 1 of this is done -- see
+  `IDEAS_ARCHIVE.md` for the full research/build writeup. **Decoupled from
+  career-ops specifically, 2026-07-21** -- source material for new evidence
+  types doesn't need to come from career-ops's files; Morgan has this
+  material in other places too and can supply it whenever this gets picked
+  up. See the Medium and Very-Hard/Long-term tiers below for the two pieces
+  this split into.)
 - **Pipeline + CLI.** Each stage (`scan`, `evaluate`, `tailor`, `render`,
   `track`, `interview-prep`) is a Python module with a defined in/out
   contract, runnable standalone or chained. The CLI itself gets
