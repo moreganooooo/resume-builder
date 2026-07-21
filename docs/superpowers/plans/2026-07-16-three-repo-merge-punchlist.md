@@ -131,22 +131,30 @@ everywhere else in this repo) when it's actually time to build it.
       that treatment). Keep resume-builder's copies as authoritative for
       all 5 files; career-ops's originals aren't pulled forward into
       anything.
-- [ ] Curate career-ops's `writing-samples/` (291 files, mostly untapped)
-      for evidence-bank Tier 2 — `MorganWritingStyleGuide.txt` already
-      ported (Phase 1, 2026-07-07); `BestCopySamples`/`Master Cover
-      Letters`/the raw "Treering Sequences" archive still need their own
-      curation pass (heavy duplication, some non-Morgan authorship to
-      filter out first).
+- [x] **Writing-samples curation — decoupled from the merge entirely,
+      2026-07-21.** Previously scoped as "curate career-ops's
+      `writing-samples/` (291 files)." Morgan's call: this was never
+      actually career-ops-dependent -- she has this source material in
+      other places too and can pull it back up whenever she wants to dig
+      into interview stories/negotiation talking points/etc., independent
+      of whether or when the merge itself happens. Nothing here blocks or
+      is blocked by anything else in this punchlist. See IDEAS.md's Medium
+      tier for the one piece she did greenlight (strengthening
+      `evidence-guide.csv` for cover letters) and the Very-Hard/Long-term
+      tier for everything else (now tracked as its own standalone,
+      non-essential item, not a merge subtask).
 
-### 4. Evidence bank (item #5) — the priority piece
+### 4. Evidence bank (item #5)
 
-- [ ] Phase 1 done 2026-07-07 (voice-anchors.md, trimmed
+- [x] Phase 1 done 2026-07-07 (voice-anchors.md, trimmed
       detective-findings, evidence-guide.csv for cover letters, style-guide
       distillation).
-- [ ] Tier 2 (item 3's writing-samples curation) — unscheduled.
-- [ ] Full multi-type generalization beyond resume bullets (interview
-      stories, cover-letter proof points, negotiation talking points) —
-      not started.
+- [x] **Tier 2 and full multi-type generalization — decoupled from the
+      merge, 2026-07-21 (see item 3 above).** No longer tracked here at
+      all; not a merge prerequisite or dependency. Whatever happens next
+      with `evidence-guide.csv` or new evidence types (interview stories,
+      negotiation talking points) happens on its own timeline in
+      IDEAS.md, independent of career-ops/job_automater entirely.
 
 ### 5. Pipeline porting
 
