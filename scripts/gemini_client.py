@@ -207,6 +207,7 @@ class GeminiClient:
         max_output_tokens: int = None,
         service_tier: str = "standard",
         model_fallback: bool = True,
+        tools: list = None,
     ) -> tuple[str | None, dict]:
         url = f"{BASE_URL}/{model}:generateContent"
 
@@ -214,6 +215,14 @@ class GeminiClient:
         tier = (service_tier or "standard").strip().lower()
         if tier not in valid_tiers:
             raise ValueError(f"Invalid service_tier {service_tier!r}.")
+
+        # Google Search grounding (tools=[{"google_search": {}}]) and
+        # structured JSON output (response_schema) have long been mutually
+        # exclusive on Gemini's API -- a grounded call must return free-form
+        # text with citations, not a schema-constrained object. Caught here
+        # rather than surfacing as a confusing 400 from the API itself.
+        if tools and response_schema is not None:
+            raise ValueError("generate(): tools (e.g. search grounding) and response_schema cannot be combined in one call.")
 
         failure_streak = 0
 
@@ -287,6 +296,8 @@ class GeminiClient:
                 "generationConfig": generation_config,
                 "serviceTier": tier,
             }
+            if tools:
+                body["tools"] = tools
 
             try:
                 resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)

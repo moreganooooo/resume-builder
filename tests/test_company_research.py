@@ -83,3 +83,45 @@ class TestFetchCompanyPages(unittest.TestCase):
         mock_get.return_value = _response(status_code=200, text=huge_text)
         result = company_research.fetch_company_pages("acme.com")
         self.assertLessEqual(len(result), company_research.MAX_TOTAL_CHARS)
+
+
+class TestFindCompanyWebsite(unittest.TestCase):
+
+    def test_returns_none_when_company_name_missing(self):
+        self.assertIsNone(company_research.find_company_website(""))
+        self.assertIsNone(company_research.find_company_website(None))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_extracts_url_from_grounded_response(self, mock_generate):
+        mock_generate.return_value = ("https://www.acme.com", {})
+        result = company_research.find_company_website("Acme Corp")
+        self.assertEqual(result, "https://www.acme.com")
+
+    @patch("company_research.GeminiClient.generate")
+    def test_passes_google_search_tool_not_response_schema(self, mock_generate):
+        mock_generate.return_value = ("https://www.acme.com", {})
+        company_research.find_company_website("Acme Corp")
+        _, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs.get("tools"), [{"google_search": {}}])
+        self.assertNotIn("response_schema", kwargs)
+
+    @patch("company_research.GeminiClient.generate")
+    def test_strips_surrounding_prose_around_the_url(self, mock_generate):
+        mock_generate.return_value = ("Sure! The URL is https://www.acme.com/ -- hope that helps.", {})
+        result = company_research.find_company_website("Acme Corp")
+        self.assertEqual(result, "https://www.acme.com/")
+
+    @patch("company_research.GeminiClient.generate")
+    def test_rejects_job_board_and_reference_site_domains(self, mock_generate):
+        mock_generate.return_value = ("https://www.linkedin.com/company/acme", {})
+        self.assertIsNone(company_research.find_company_website("Acme Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_when_no_url_in_response(self, mock_generate):
+        mock_generate.return_value = ("I couldn't find that company.", {})
+        self.assertIsNone(company_research.find_company_website("Nonexistent Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_on_api_exception_instead_of_raising(self, mock_generate):
+        mock_generate.side_effect = RuntimeError("network error")
+        self.assertIsNone(company_research.find_company_website("Acme Corp"))

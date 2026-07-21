@@ -1985,15 +1985,20 @@ class ResumeEngine:
     def research_company(self, jd_data: dict) -> dict | None:
         """
         Fetches a company's About/Mission/Careers pages (if a
-        company_website is known in jd_data) and extracts tone signals +
-        traceable facts via one Gemini call. Returns None (with a printed,
-        non-alarming notice) if no website is known, pages are
-        unreachable/too thin, or the model response can't be parsed --
-        callers must treat None as "proceed exactly as if this feature
-        didn't exist." See
+        company_website is known in jd_data, or found via a Google Search
+        grounding fallback lookup keyed on company_name) and extracts tone
+        signals + traceable facts via one Gemini call. Returns None (with a
+        printed, non-alarming notice) if no website is known or findable,
+        pages are unreachable/too thin, or the model response can't be
+        parsed -- callers must treat None as "proceed exactly as if this
+        feature didn't exist." See
         docs/superpowers/specs/2026-07-04-company-research-design.md.
         """
         company_website = jd_data.get("company_website")
+        if not company_website:
+            company_website = company_research.find_company_website(jd_data.get("company_name"))
+            if company_website:
+                print(f"  ℹ️  No company website on file -- found one via search: {company_website}")
         if not company_website:
             print("  ℹ️  Company research skipped: no company website known for this JD.")
             return None

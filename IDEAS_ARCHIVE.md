@@ -1011,6 +1011,55 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Company-research fallback lookup: search-grounding spike + build -- done 2026-07-21
+
+Closes the real design question left open in "Standardize company
+research across JD sources" after its mechanical half (`scan_linkedin.py`
+passing through `company_link`) shipped earlier the same day.
+
+**The spike, run before writing any code:** tried a live test call to
+`gemini-3.1-flash-lite` with `tools: [{"google_search": {}}]` via this
+project's existing REST client to confirm grounding actually works on
+this account/model combo. Got a real `429 RESOURCE_EXHAUSTED` both times
+(not transient -- retried once) -- the account's Gemini quota was fully
+exhausted at the time, so live verification couldn't complete. Rather
+than block on that, designed around the one grounding constraint that's
+been stable and well-documented regardless of live-test results: Google
+Search grounding and structured JSON output (`response_schema`) can't be
+combined in a single Gemini call. The build below never attempts to
+combine them, so it doesn't depend on the blocked spike's answer -- worth
+a real live smoke-test once quota resets, but not a blocker to shipping.
+
+**Built:**
+- `gemini_client.py`'s `GeminiClient.generate()` gained an optional
+  `tools` parameter (reaches the request body as `body["tools"]` when
+  set) plus an explicit `ValueError` if both `tools` and `response_schema`
+  are passed together -- catches the incompatibility above at the call
+  site instead of surfacing as a confusing API-level 400 far from the
+  mistake.
+- `company_research.py` gained `find_company_website(company_name)`: a
+  separate, plain-text grounded call (no `response_schema`) that asks for
+  just the official homepage URL, extracts it via regex from the
+  response, and rejects matches on job-board/reference-site domains
+  (`_REJECTED_DOMAINS`: linkedin.com, indeed.com, glassdoor.com,
+  wikipedia.org, etc.) that grounding could plausibly surface instead of
+  the real company site. Returns `None` (never raises) on any failure
+  mode, matching `research_company()`'s existing "None means proceed as
+  if this feature didn't exist" contract.
+- `ResumeEngine.research_company()` now calls this fallback when
+  `jd_data` has no `company_website` at all, before giving up -- if
+  found, the existing scrape-then-extract flow (`fetch_company_pages()` +
+  the structured `CompanyResearchSchema` call) proceeds completely
+  unchanged. This is the piece that actually helps LinkedIn-sourced JDs
+  specifically, since `scan_linkedin.py`'s `company_link` fallback
+  (shipped the same day) is a LinkedIn URL that mostly fails
+  `MIN_USEFUL_CHARS` -- this grounded lookup is the real fallback for
+  those cases, not the LinkedIn-URL passthrough.
+
+Full suite (742 tests, 13 new) green -- all new tests mock
+`GeminiClient.generate`/`requests.post`, none depend on live API access,
+so they're unaffected by the quota exhaustion that blocked the spike.
+
 ## Four highest-impact-per-effort backlog items -- done 2026-07-21
 
 Picked via an explicit impact-vs-effort pass over the whole backlog

@@ -135,36 +135,6 @@ audit-loop/bootstrap-polish standard). Still open:
   statement -- scope this one separately from the other two rather than
   bundling all three into one pass.
 
-### Standardize company research across JD sources
-
-Raised 2026-07-17: `ResumeEngine.research_company()` only runs when
-`jd_data.get("company_website")` is present, and that field's
-availability is genuinely inconsistent across sources -- checked
-directly: `scan_jobright.py` sets it from JobRight's own `companyURL`
-field (itself not always populated by JobRight), while `scan_linkedin.py`
-hardcoded `"company_website": None` unconditionally -- LinkedIn-sourced
-JDs never got company research at all, not because of missing data so
-much as the scraper never even trying to find it. **The mechanical half
-is done, 2026-07-21:** `scan_linkedin.py` now passes through
-`company_link` (LinkedIn's own `/company/<slug>` page, the only
-company-related URL the `linkedin_jobs_scraper` library exposes) instead
-of hardcoding `None`. Worth noting honestly: this is a LinkedIn URL, not
-an external company domain, and LinkedIn blocks unauthenticated scraping
-on most of its pages -- `company_research.py`'s existing
-`MIN_USEFUL_CHARS` graceful-degradation means this is low-risk (same
-practical outcome as before on a failed attempt) but also probably
-low-yield (rarely succeeds) rather than a full fix. **Still open, the
-real design question:** a genuine fallback lookup for JDs with no usable
-website from either source -- "AI searches for the company's website" as
-Morgan put it. Worth investigating whether Gemini's API has a built-in
-search-grounding tool (Google's "grounding with Google Search" feature
-exists on recent Gemini models) before reaching for a second, different
-model/provider just for this -- if grounding is available and reasonably
-cheap, it would fit into `company_research.py` as an additional lookup
-path rather than a whole separate integration. Needs a real
-spike/investigation before committing to an approach, not just an
-assumption either way.
-
 ### Follow-up cadence tracker
 
 Found during a 2026-07-21 sibling-repo audit: career-ops's `modes/followup.md`
