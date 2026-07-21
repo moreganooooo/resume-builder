@@ -4,10 +4,17 @@
 
 Direction brainstormed and agreed 2026-07-04 (see `IDEAS.md`'s "Long-term:
 merge with career-ops and job_automater" section for the full narrative,
-rationale, and incident history). **No implementation has started.** This
-file turns that narrative into an ordered, actionable list — it doesn't
-re-argue anything already decided; go to IDEAS.md for the "why" behind any
-item here.
+rationale, and incident history). This file turns that narrative into an
+ordered, actionable list — it doesn't re-argue anything already decided;
+go to IDEAS.md for the "why" behind any item here.
+
+**Updated 2026-07-20: section 2 (prerequisite engineering) is done** —
+both items closed 2026-07-17, one day after this file was written. Every
+other section below (3 through 7) is still exactly as unstarted as when
+this was first drafted. Confirmed directly against the repo, not just the
+narrative below: `scripts/profile_paths.py` exists and is live, no board
+scraper for any of career-ops's ~26 providers exists in `scripts/`, and no
+`.plist`/launchd artifact exists anywhere in the repo.
 
 Nothing below has a target date. Pull an item into its own design spec +
 implementation plan (the `docs/superpowers/specs/`+`plans/` pattern used
@@ -96,15 +103,17 @@ everywhere else in this repo) when it's actually time to build it.
       afterward as a separate, ongoing content task** (see item 5 below),
       not a blocker to porting itself.
 
-### 2. Prerequisite engineering (blocks multi-user AND the merge's shared-engine goal)
+### 2. Prerequisite engineering (blocks multi-user AND the merge's shared-engine goal) — DONE 2026-07-20
 
-- [ ] **Engine/profile split** (tracked as item #4 in IDEAS.md's main
-      table) — generalize `fixed_content.py`/prompts/rules away from
-      Morgan-only assumptions, with the boundary *structurally* enforced
-      (not just documented — career-ops's own documented-but-unenforced
-      version already failed once in practice, see IDEAS.md).
-- [ ] **Per-user secrets** (`.env` per profile, tracked as item #7) —
-      small, but blocks Dom's onboarding specifically.
+- [x] **Engine/profile split** (item #4) — done 2026-07-17, across four
+      same-day passes (`profile_paths.py`, per-profile `fixed_content.py`,
+      every hardcoded Morgan constant in `orchestrator.py`/
+      `rewrite_bullets.py`, the per-profile tag taxonomy). Full writeup:
+      `IDEAS_ARCHIVE.md`'s "Engine/profile split" and "Multi-user support"
+      entries.
+- [x] **Per-user secrets** (item #7) — done 2026-07-17, same week. Every
+      script now loads `profiles/<name>/.env`; Morgan's real `.env`
+      migrated. See `IDEAS_ARCHIVE.md`.
 
 ### 3. Data reconciliation
 
