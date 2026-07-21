@@ -37,16 +37,14 @@ _CHOICES = [
     questionary.Choice(title=f"{theme.ICONS['discovery']}  Scan for New Postings", value="scan"),
     questionary.Choice(title=f"{theme.ICONS['discovery']}  Check Posting Liveness\n", value="liveness"),
     questionary.Separator("── Evaluation ──"),
-    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending Roles", value="evaluate_all"),
-    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate a Specific Role\n", value="evaluate_one"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending Roles\n", value="evaluate_all"),
     questionary.Separator("── Build ──"),
     questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending Roles (batch)", value="tailor_all"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for a Specific Role", value="tailor_one"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter to Match a Resume", value="coverletter_one"),
     questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini\n", value="polish"),
+    questionary.Separator("── Browse ──"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Browse & Manage Jobs\n", value="browse_jobs"),
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
-    questionary.Choice(title=f"{theme.ICONS['utility']}  View Application Tracker", value="view_applications"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
     questionary.Separator("── Bullet Bank ──"),
     questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank", value="bullet_bank"),
@@ -231,30 +229,6 @@ def _handle_evaluate_all() -> bool:
     return bool(results)
 
 
-def _handle_evaluate_one() -> bool:
-    path = picker.pick_one_pending_jd(jd_manager.get_pending_jds())
-    if not path:
-        return False
-    engine = orchestrator.ResumeEngine()
-    with cli_art.console.status("Weighing the fit...", spinner="dots"):
-        result = engine.evaluate_fit(path)
-    if not result:
-        cli_art.display_error("Evaluation failed -- no parseable result.")
-        return False
-    jd_manager.save_evaluation(path, result)
-    cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
-    cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
-    cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}")
-    if result.get("why"):
-        cli_art.console.print(f"[bold]Why:[/bold] {result['why']}")
-    legitimacy = result.get("posting_legitimacy")
-    if legitimacy and legitimacy != "High Confidence":
-        color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
-        cli_art.console.print(f"[bold {color}]Posting legitimacy: {legitimacy}[/bold {color}] -- {result.get('posting_legitimacy_notes', '')}")
-    cli_art.console.print("")
-    return True
-
-
 def _handle_tailor_all() -> bool:
     pending = jd_manager.get_pending_jds()
     if not pending:
@@ -267,23 +241,111 @@ def _handle_tailor_all() -> bool:
     return completed > 0
 
 
-def _handle_tailor_one() -> bool:
-    path = picker.pick_one_evaluated_jd(jd_manager.get_pending_jds())
-    if not path:
-        return False
-    completed, _failed = orchestrator.run_pipeline(jd_path=path)
-    return completed > 0
+def _print_evaluation_detail(row: dict) -> None:
+    evaluation = row["evaluation"]
+    cli_art.console.print(f"\n[bold]{row['company'] or '?'} -- {row['title'] or '?'}[/bold] ({row['status']})")
+    cli_art.console.print(f"[bold]Archetype:[/bold] {evaluation.get('archetype') or 'unknown'}")
+    cli_art.console.print(f"[bold]Composite score:[/bold] {evaluation.get('composite_score')}/5")
+    cli_art.console.print(f"[bold]Recommendation:[/bold] {evaluation.get('recommendation') or 'unknown'}")
+    dimension_scores = evaluation.get("dimension_scores") or {}
+    if dimension_scores:
+        dims = ", ".join(f"{cli_art._FIT_DIMENSION_LABELS.get(k, k)}: {v}" for k, v in dimension_scores.items())
+        cli_art.console.print(f"[bold]Dimensions:[/bold] {dims}")
+    if evaluation.get("hard_blockers"):
+        cli_art.console.print(f"[bold]Hard blockers:[/bold] {', '.join(evaluation['hard_blockers'])}")
+    if evaluation.get("why"):
+        cli_art.console.print(f"[bold]Why:[/bold] {evaluation['why']}")
+    legitimacy = evaluation.get("posting_legitimacy")
+    if legitimacy and legitimacy != "High Confidence":
+        color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
+        cli_art.console.print(f"[bold {color}]Posting legitimacy: {legitimacy}[/bold {color}] -- {evaluation.get('posting_legitimacy_notes', '')}")
+    liveness = row.get("liveness")
+    if liveness:
+        cli_art.console.print(f"[bold]Last liveness check:[/bold] {liveness.get('result')} ({(liveness.get('checked_at') or '')[:10]}) -- {liveness.get('reason', '')}")
+    cli_art.console.print("")
 
 
-def _handle_coverletter_one() -> bool:
-    # Sources from completed JDs (a resume already built), not pending --
-    # a cover letter gets written after its resume the overwhelming
-    # majority of the time.
-    path = picker.pick_one_pending_jd(jd_manager.get_completed_jds())
-    if not path:
+def _browse_single_action(row: dict) -> bool:
+    while True:
+        action_choices = [questionary.Choice(title="View More Details", value="details")]
+        if row["status"] == "Pending":
+            action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Tailor Resume", value="tailor"))
+        if row["status"] == "Completed":
+            action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter", value="coverletter"))
+        action_choices.append(questionary.Choice(title=f"{theme.ICONS['utility']}  Archive", value="archive"))
+        action_choices.append(questionary.Choice(title="Back", value="back"))
+
+        action = questionary.select(
+            f"{row['company'] or '?'} -- {row['title'] or '?'}: choose an action",
+            choices=action_choices, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if not action or action == "back":
+            return False
+        if action == "details":
+            _print_evaluation_detail(row)
+            continue
+        if action == "tailor":
+            completed, _failed = orchestrator.run_pipeline(jd_path=row["path"])
+            return completed > 0
+        if action == "coverletter":
+            engine = orchestrator.ResumeEngine()
+            return bool(engine.build_tailored_coverletter(row["path"]))
+        if action == "archive":
+            jd_manager.archive_jd(row["path"])
+            cli_art.console.print(f"Archived {row['company'] or row['path']}.")
+            return True
+
+
+def _browse_bulk_action(rows: list) -> bool:
+    any_pending = any(r["status"] == "Pending" for r in rows)
+    all_completed = all(r["status"] == "Completed" for r in rows)
+
+    action_choices = [questionary.Choice(title=f"{theme.ICONS['evaluate']}  Compare Selected", value="compare")]
+    if any_pending:
+        action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Tailor Resumes for Selected", value="tailor"))
+    if all_completed:
+        action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letters for Selected", value="coverletter"))
+    action_choices.append(questionary.Choice(title=f"{theme.ICONS['utility']}  Archive Selected", value="archive"))
+    action_choices.append(questionary.Choice(title="Back", value="back"))
+
+    action = questionary.select(
+        f"{len(rows)} JD(s) selected: choose an action", choices=action_choices, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if not action or action == "back":
         return False
-    engine = orchestrator.ResumeEngine()
-    return bool(engine.build_tailored_coverletter(path))
+    if action == "compare":
+        cli_art.render_comparison_table(rows)
+        return True
+    if action == "tailor":
+        # Completed JDs already have a resume -- silently skipped rather
+        # than re-tailored, matching the old single-JD picker's constraint.
+        completed_count = 0
+        for r in rows:
+            if r["status"] != "Pending":
+                continue
+            completed, _failed = orchestrator.run_pipeline(jd_path=r["path"])
+            completed_count += completed
+        return completed_count > 0
+    if action == "coverletter":
+        engine = orchestrator.ResumeEngine()
+        successes = sum(1 for r in rows if engine.build_tailored_coverletter(r["path"]))
+        return successes > 0
+    if action == "archive":
+        for r in rows:
+            jd_manager.archive_jd(r["path"])
+        cli_art.console.print(f"Archived {len(rows)} JD(s).")
+        return True
+
+
+def _handle_browse_jobs() -> bool:
+    selected = picker.browse_and_select_jds()
+    if not selected:
+        return False
+    if len(selected) == 1:
+        return _browse_single_action(selected[0])
+    return _browse_bulk_action(selected)
 
 
 def _handle_polish() -> bool:
@@ -301,28 +363,15 @@ def _handle_help() -> bool:
     return False
 
 
-def _handle_view_applications() -> bool:
-    if not os.path.exists(jd_manager.APPLICATIONS_MD):
-        cli_art.console.print("No applications tracked yet -- nothing to view.")
-        return False
-    with open(jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
-        content = f.read()
-    cli_art.display_applications_tracker(content)
-    return True
-
-
 _HANDLERS = {
     "bootstrap": _handle_bootstrap,
     "scan": _handle_scan,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
-    "evaluate_one": _handle_evaluate_one,
     "tailor_all": _handle_tailor_all,
-    "tailor_one": _handle_tailor_one,
-    "coverletter_one": _handle_coverletter_one,
+    "browse_jobs": _handle_browse_jobs,
     "polish": _handle_polish,
     "help": _handle_help,
-    "view_applications": _handle_view_applications,
     "bullet_bank": _handle_bullet_bank,
 }
 
@@ -330,22 +379,19 @@ _HANDLERS = {
 _CHAIN = {
     "scan": [("Check Liveness", "liveness")],
     "liveness": [("Evaluate All JDs", "evaluate_all")],
-    "evaluate_all": [("Customize Resume", "tailor_all")],
-    "evaluate_one": [("Customize Resume", "tailor_all")],
-    "tailor_all": [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
-    "tailor_one": [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
-    "coverletter_one": [("Polish with Gemini", "polish")],
+    "evaluate_all": [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
+    "tailor_all": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
 }
 
 # Same icon per destination value as _CHOICES above, so the "what's next"
 # chain prompt stays visually consistent with the main menu instead of
 # falling back to plain text.
 _CHAIN_ICONS = {
-    "liveness":        theme.ICONS["discovery"],
-    "evaluate_all":    theme.ICONS["evaluate"],
-    "tailor_all":      theme.ICONS["build"],
-    "coverletter_one": theme.ICONS["build"],
-    "polish":          theme.ICONS["build"],
+    "liveness":     theme.ICONS["discovery"],
+    "evaluate_all": theme.ICONS["evaluate"],
+    "tailor_all":   theme.ICONS["build"],
+    "browse_jobs":  theme.ICONS["utility"],
+    "polish":       theme.ICONS["build"],
 }
 
 # Labels for the session-end summary -- only actions worth reporting on
@@ -353,8 +399,6 @@ _CHAIN_ICONS = {
 # "liveness") just isn't tallied.
 _SESSION_LABELS = {
     "tailor_all": "resumes tailored",
-    "tailor_one": "resumes tailored",
-    "coverletter_one": "cover letters written",
 }
 
 

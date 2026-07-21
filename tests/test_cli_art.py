@@ -201,6 +201,46 @@ class TestRenderFitTable(unittest.TestCase):
         self.assertIn("Great fit on tools and seniority", output)
 
 
+class TestRenderPipelineTable(unittest.TestCase):
+
+    def test_shows_count_status_and_liveness_columns(self):
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
+             "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"}},
+            {"path": "jds/b.json", "status": "Completed", "company": "Beta", "title": "PM",
+             "evaluation": {"composite_score": 3.0, "recommendation": "Selective pursue"},
+             "liveness": None},
+        ]
+        output = _rendered(cli_art.render_pipeline_table, rows)
+        self.assertIn("2 evaluated JD(s)", output)
+        self.assertIn("Pending", output)
+        self.assertIn("Completed", output)
+        self.assertIn("active", output)
+        self.assertIn("2026-07-21", output)
+
+
+class TestRenderComparisonTable(unittest.TestCase):
+
+    def test_shows_one_column_per_jd_and_dimension_rows(self):
+        rows = [
+            {"company": "Acme", "title": "Writer", "evaluation": {
+                "composite_score": 4.5, "recommendation": "Strong pursue", "archetype": "Content Lead",
+                "dimension_scores": {"cv_profile_match": 5, "remote_quality": 4},
+            }},
+            {"company": "Beta", "title": "PM", "evaluation": {
+                "composite_score": 3.0, "recommendation": "Selective pursue", "archetype": "Ops Generalist",
+                "dimension_scores": {"cv_profile_match": 3, "remote_quality": 2},
+            }},
+        ]
+        output = _rendered(cli_art.render_comparison_table, rows)
+        self.assertIn("Comparing 2 JD(s)", output)
+        self.assertIn("Acme", output)
+        self.assertIn("Beta", output)
+        self.assertIn("Content Lead", output)
+        self.assertIn("CV Match", output)
+
+
 class TestDisplayBreadcrumb(unittest.TestCase):
 
     def test_prints_a_one_line_rule_not_a_full_panel(self):

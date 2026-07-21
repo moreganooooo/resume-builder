@@ -272,6 +272,84 @@ def render_fit_table(results: list) -> None:
     ))
 
 
+def _liveness_cell(liveness: dict | None) -> str:
+    if not liveness or not liveness.get("checked_at"):
+        return "-"
+    date = liveness["checked_at"][:10]
+    result = liveness.get("result", "")
+    color = {"active": theme.SUCCESS, "likely_active": theme.SUCCESS, "expired": theme.ERROR}.get(result, theme.WARNING)
+    return f"[{color}]{result or '?'}[/{color}] ({date})"
+
+
+def render_pipeline_table(rows: list) -> None:
+    """Renders picker.list_all_evaluated_jds()'s row list -- every
+    evaluated JD, pending or completed, in one browsable table (the "List
+    Jobs" / "View Pipeline" backlog item). rows is expected pre-sorted
+    (list_all_evaluated_jds() already sorts best-first)."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Score", justify="right")
+    table.add_column("Recommendation")
+    table.add_column("Company")
+    table.add_column("Title")
+    table.add_column("Status")
+    table.add_column("Last Liveness")
+
+    for i, r in enumerate(rows, 1):
+        evaluation = r["evaluation"]
+        color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), "white")
+        table.add_row(
+            str(i),
+            f"[{color}]{evaluation.get('composite_score', 0):.2f}/5[/{color}]",
+            f"[{color}]{evaluation.get('recommendation')}[/{color}]",
+            r["company"] or "?",
+            r["title"] or "?",
+            r["status"],
+            _liveness_cell(r.get("liveness")),
+        )
+
+    console.print(Panel(
+        table, title=f"{len(rows)} evaluated JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
+    ))
+
+
+_FIT_DIMENSION_LABELS = {
+    "cv_profile_match": "CV Match", "north_star_alignment": "North Star", "remote_quality": "Remote",
+    "level_fit": "Level Fit", "compensation": "Comp", "growth": "Growth", "time_to_offer": "Speed",
+    "tech_tool_relevance": "Tools", "company_reputation": "Reputation", "cultural_signals": "Culture",
+}
+
+
+def render_comparison_table(rows: list) -> None:
+    """Side-by-side comparison of 2+ already-evaluated JDs (the "Multi-job
+    comparison mode" backlog item) -- one column per JD, one row per
+    dimension, so a strength/weakness pattern is visible at a glance
+    rather than needing to hold several single-JD views in your head."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("")
+    for r in rows:
+        table.add_column(f"{r['company'] or '?'}\n{r['title'] or '?'}")
+
+    def _row(label: str, values: list) -> None:
+        table.add_row(label, *[str(v) for v in values])
+
+    _row("Score", [f"{r['evaluation'].get('composite_score', 0):.2f}/5" for r in rows])
+    _row("Recommendation", [
+        f"[{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
+        f"{r['evaluation'].get('recommendation')}[/{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
+        for r in rows
+    ])
+    _row("Archetype", [r["evaluation"].get("archetype") or "-" for r in rows])
+    table.add_section()
+
+    for dim, label in _FIT_DIMENSION_LABELS.items():
+        _row(label, [r["evaluation"].get("dimension_scores", {}).get(dim, "-") for r in rows])
+
+    console.print(Panel(
+        table, title=f"Comparing {len(rows)} JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
+    ))
+
+
 _STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
 
 

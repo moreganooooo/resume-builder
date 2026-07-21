@@ -34,12 +34,12 @@ have been moved to the archive, so the sequence below starts at 4.
 | 8 | Dominick's onboarding | Hard | Onboarding wizard shipped 2026-07-12/13; `profiles/<name>/` isolation shipped 2026-07-17; #4's `orchestrator.py` gap and #7 (per-user secrets) both closed same week. **No remaining blockers** on the engineering side -- next step is Dom's actual first session. See Multi-user support below. |
 | 9 | Scheduler + notifications | Hard | Unblocked -- `scan` and `evaluate` stages both exist. Not started. See the Long-term merge section below. |
 | 10 | Mongo migration | Medium | The liveness-check half of this item is done (archived). Migration itself still undone -- tied to the long-term three-way merge. |
-| 11 | Multi-select "Specific JD" pickers (space-bar toggle) | Medium-Hard | Real open design question: how it coexists with `resume run --pick`'s existing evaluate-then-checkbox flow. See below. |
-| 12 | Help command in the interactive menu | Easy | `resume help` already exists as a shell shortcut; just needs a menu entry. See below. |
+| 11 | Multi-select "Specific JD" pickers (space-bar toggle) | -- | **Done 2026-07-21 (archived)**, folded into the "Browse & Manage Jobs" build alongside #15 and multi-job comparison -- see `IDEAS_ARCHIVE.md`. |
+| 12 | Help command in the interactive menu | -- | **Done 2026-07-20 (archived).** See `IDEAS_ARCHIVE.md`. |
 | 13 | "Doctor" script (dependency/asset checks + test run) | Medium | See below. |
 | 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | Bullet-bank menu done 2026-07-15, including a real maintenance section inside it. Still open: a top-level, cross-feature "Maintenance" submenu (would also house #13's doctor script). See below. |
-| 15 | "List Jobs" / "View Pipeline" browsing command | Hard | A real first step already exists ("View Application Tracker," 2026-07-08) and `Score`/`Report` are now wired to the real `evaluate` stage (2026-07-16). Still covers a narrower slice -- no drill-in or Skip/Archive action. See below. |
-| 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | Medium | Close parallel to the evaluate skip-by-default feature (archived) -- same pattern, plus a time-window twist. See below. |
+| 15 | "List Jobs" / "View Pipeline" browsing command | -- | **Done 2026-07-21 (archived)** as "Browse & Manage Jobs" -- browse, drill-in, Archive, and bulk actions across every evaluated JD, pending or completed. Retired the old "View Application Tracker" entry entirely. See `IDEAS_ARCHIVE.md`. |
+| 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | -- | **Done 2026-07-21 (archived).** See `IDEAS_ARCHIVE.md`. |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
 (porting career-ops's `modes/interview-prep.md`) -- Morgan's call, not
@@ -62,31 +62,6 @@ name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
 chosen.
 
 ## Medium
-
-### Multi-select pickers for "Specific JD" actions
-
-Today, `picker.pick_one_pending_jd()` and `picker.pick_one_evaluated_jd()`
-(used by "Evaluate a Specific JD," "Write cover letter for a Specific
-JD," and "Customize Resume for a Specific JD") are single-select
-(`questionary.select()`) -- pick exactly one JD, act on it, done. The
-ask: let these toggle multiple selections via the space bar (like
-`questionary.checkbox()`, which `pick_and_process()` -- the
-evaluate-then-checkbox flow behind `resume run --pick`/`resume
-coverletter --pick` -- already uses) and act on every checked JD in one go.
-
-**The open design question:** this would functionally overlap with what
-`--pick` already does, just without `--pick`'s fresh full-batch
-evaluation step first. Worth deciding explicitly: does the "Specific JD"
-picker become multi-select and subsume single-select (space to check one
-or many, enter confirms), or does it stay single-select with a separate,
-new multi-select entry point alongside it? The former is probably the
-more natural fit for how these are actually used, but changes an existing
-interaction pattern people already have muscle memory for. Whichever
-direction, the mechanics themselves are well-understood
-(`questionary.checkbox()` is already proven in this codebase) -- the
-three menu handlers (`_handle_evaluate_one`, `_handle_coverletter_one`,
-`_handle_tailor_one`) would need to loop over a list of paths instead of
-handling exactly one, and their "one" naming would need revisiting.
 
 ### "Doctor" script -- dependency/asset checks + test run
 
@@ -164,18 +139,6 @@ company research) rather than logic that needs porting. Main work is
 adapting the prompt plus a lightweight interactive flow (see `resume
 polish` for the closest existing pattern), not porting computation.
 
-### Multi-job comparison mode
-
-Found during the same audit: career-ops's `modes/offers.md` ranks
-multiple job offers side-by-side, distinct from the single-JD fit
-evaluation already ported. Not tracked anywhere yet. **Difficulty:
-Medium.** Checked career-ops directly -- 316-line prompt file, also no
-distinct backing script found. Comparison logic can likely lean on
-`_evaluation` data already persisted per JD (`composite_score`,
-`recommendation`, `why`, see `jd_manager.save_evaluation()`) rather than
-needing new analysis -- mostly a synthesis/presentation problem across
-JDs already evaluated, not new computation.
-
 ### Rotate across multiple API keys on rate-limit errors
 
 Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
@@ -248,58 +211,6 @@ surfaced in this audit, doing real historical mining across
 evaluations/outcomes. Genuine analytical logic to port or rebuild (not
 prompt adaptation) -- closest in spirit to a small analytics engine, not
 a quick feature add.
-
-### "List Jobs" / "View Pipeline" browsing command
-
-**A real first step already exists.** "View Application Tracker" (built
-2026-07-08) renders `data/applications.md` as a Rich-Markdown table in the
-terminal, satisfying the "browse a list" half in miniature, and its
-`Score`/`Report` columns are now wired to the real `evaluate` stage
-(done 2026-07-16, see `IDEAS_ARCHIVE.md`). It's still a narrower feature,
-not an early version of this one: it only lists JDs that reached a
-completed/tailored build (this idea wants *every evaluated job*, pending
-or completed), and there's no drill-in or Skip/Archive action at all --
-just a flat printed table. Everything below (archive state, richer
-eval-notes persistence, the browse/detail/act UI pattern) is still fully
-open.
-
-A menu option listing every evaluated job at once (score, recommendation,
-last liveness check date, Completed/Pending status), with a "View More Details" drill-in
-(full JD text + the evaluation's reasoning) and a manual Skip/Archive
-action per role. Genuinely more than a picker -- it's a new interaction
-shape (browse a list -> drill into one item -> take an action on it) that
-nothing in `menu.py` does today; every existing picker is a single
-pick-and-immediately-act flow, not a browse-then-decide one.
-
-**Several real open questions, not just engineering:**
-- **Archive as a new state.** Skipping/archiving a role needs somewhere
-  to live that isn't "pending" (would keep resurfacing) or "completed"
-  (no resume was built) or "expired" (liveness didn't decide this, a
-  person did). A new `jds/archived/` folder mirroring the existing
-  `completed/`/`expired/` pattern is the obvious shape, but worth
-  confirming rather than assuming -- e.g. should an archived JD ever be
-  un-archived, and does `get_pending_jds()` need to explicitly exclude it
-  (the way it already excludes `completed/`)?
-- **Eval "notes" may need richer persistence than exists today --
-  partially closed 2026-07-17.** `save_evaluation()` now also persists a
-  one-line `why` rationale alongside `composite_score`/`recommendation`/
-  `hard_blockers`/`evaluated_at` (see `IDEAS_ARCHIVE.md`), which covers
-  the short-descriptor case. Still missing: the model's full per-dimension
-  reasoning from `evaluate_fit()`'s `FitEvaluationSchema` result
-  (`dimension_scores`, `archetype`, etc.) for a genuine drill-in "View
-  More Details" breakdown -- that's still a real (if modest) schema
-  change to `_evaluation`, not free.
-- **Last liveness check date -- unblocked 2026-07-21.** `_liveness.checked_at`
-  now exists per JD (`jd_manager.save_liveness()`/`read_liveness()`), so
-  the data this column needs is already there; just needs surfacing.
-- **The browse/detail/act UI pattern itself** needs its own design pass:
-  paginated vs. scrollable for 300+ pending JDs, how "View More Details"
-  composes with questionary's existing single-screen-per-prompt model
-  (probably a sub-menu loop: list -> select one -> action menu -> back to
-  list), and whether this subsumes or complements the existing evaluated
-  picker (the multi-select pickers idea above is closely related --
-  worth designing these together rather than separately, since both are
-  about browsing/acting on the same underlying pending-JD pile).
 
 ### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu) -- menu done 2026-07-15
 
