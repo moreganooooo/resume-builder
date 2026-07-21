@@ -592,6 +592,75 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         self.assertIsNone(jd_manager.read_evaluation(path))
 
 
+class TestSaveAndReadLiveness(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_liveness_persist")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_save_then_read_round_trips_result_reason_and_checked_at(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "source_url": "https://x"}))
+        jd_manager.save_liveness(path, "active", "apply button found")
+        result = jd_manager.read_liveness(path)
+        self.assertEqual(result["result"], "active")
+        self.assertEqual(result["reason"], "apply button found")
+        self.assertIn("checked_at", result)
+
+    def test_save_preserves_the_rest_of_the_jd_content(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_liveness(path, "expired", "404")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["job_title"], "Role")
+        self.assertEqual(data["company_name"], "Acme")
+
+    def test_read_liveness_returns_none_when_never_checked(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        self.assertIsNone(jd_manager.read_liveness(path))
+
+    def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
+        jd_manager.save_liveness(path, "active", "n/a")
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+
+class TestReadJdTextStripsAnyUnderscoreKey(unittest.TestCase):
+    """Regression coverage for read_jd_text() generalizing from a
+    hardcoded _evaluation-only strip to any underscore-prefixed key --
+    added alongside _liveness so a persisted liveness result can never
+    leak into a Gemini prompt as job-description content."""
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_read_jd_text_liveness")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def test_strips_liveness_block_from_prompt_text(self):
+        path = os.path.join(self.tmp_dir, "a.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"job_title": "Role", "_liveness": {"result": "active", "reason": "x", "checked_at": "2026-07-21T00:00:00"}}, f)
+        text = jd_manager.read_jd_text(path)
+        self.assertNotIn("_liveness", text)
+        self.assertIn("Role", text)
+
+
 class TestReadJdText(unittest.TestCase):
 
     def setUp(self):

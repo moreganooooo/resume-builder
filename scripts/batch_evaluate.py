@@ -65,6 +65,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
         if i > 0:
             time.sleep(SECONDS_BETWEEN_CALLS)
         job_title, company_name = jd_manager.extract_job_meta(path)
+        print(f"\n{'─'*60}")
         print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...")
         with cli_art.console.status(f"Weighing the fit for {company_name or os.path.basename(path)}...", spinner="dots"):
             evaluation = engine.evaluate_fit(path)
@@ -79,6 +80,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
                 "recommendation": None,
                 "why": "",
                 "hard_blockers": [],
+                "posting_legitimacy": "",
                 "error": True,
             })
             continue
@@ -94,6 +96,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
             "recommendation": evaluation.get("recommendation"),
             "why": evaluation.get("why") or "",
             "hard_blockers": evaluation.get("hard_blockers") or [],
+            "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
             "error": False,
         })
 
