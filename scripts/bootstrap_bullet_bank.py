@@ -388,6 +388,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--yes", action="store_true", help="Skip confirmation gates and run the full pipeline unattended.")
     parser.add_argument("--dry-run", action="store_true", help="Print prompts instead of calling the API, and skip the real six-stage pipeline entirely.")
+    parser.add_argument(
+        "--scope", choices=["bullets", "profile", "both"], default="both",
+        help="\"Update My Knowledge\" only: which downstream steps to run after "
+             "ingesting new source_documents/ content. Phase 0 (ingestion) always "
+             "runs regardless of scope, since it's what processes the new files.",
+    )
     args = parser.parse_args()
 
     # Before Phase 0 -- run_ingestion() itself calls the Gemini API (document
@@ -398,13 +404,15 @@ def main():
     summary = run_ingestion(dry_run=args.dry_run)
     print_ingestion_summary(summary)
 
-    bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
+    if args.scope in ("profile", "both"):
+        bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
 
     if args.dry_run:
         print("\n--dry-run set: skipping the six-stage pipeline.")
         return
 
-    run_full_pipeline(skip_confirm=args.yes)
+    if args.scope in ("bullets", "both"):
+        run_full_pipeline(skip_confirm=args.yes)
 
 
 if __name__ == "__main__":

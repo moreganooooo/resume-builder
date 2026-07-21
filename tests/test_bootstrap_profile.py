@@ -201,6 +201,49 @@ class TestWriteProfileYml(BootstrapProfileTestCase):
         self.assertEqual(data["deal_breakers"], [""])
         self.assertEqual(data["management_evidence"], [])
 
+    def _minimal_identity(self):
+        return {
+            "full_name": "Jamie Rivera", "email": "jamie@example.com", "phone": "555-0100",
+            "location": "Austin, TX", "linkedin_url": "", "portfolio_url": "", "extra_link": "",
+            "primary_roles": ["Marketing Manager"], "secondary_roles": [], "remote_preference": True,
+        }
+
+    def test_no_confirm_prompt_when_no_existing_file(self):
+        # Regression guard for the "Update My Knowledge" overwrite gate --
+        # confirms a first-time cold start (no profile.yml yet) never
+        # prompts, since there's nothing to lose.
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            bootstrap_profile.write_profile_yml(self._minimal_identity(), recommendations=[], taxonomy=bootstrap_extractors.TagTaxonomy())
+        mock_confirm.assert_not_called()
+        self.assertTrue(os.path.exists(bootstrap_profile.PROFILE_YML_PATH))
+
+    def test_declining_overwrite_leaves_existing_file_untouched_and_returns_false(self):
+        with open(bootstrap_profile.PROFILE_YML_PATH, "w", encoding="utf-8") as f:
+            f.write("candidate:\n  full_name: Original Name\n")
+
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = False
+            result = bootstrap_profile.write_profile_yml(self._minimal_identity(), recommendations=[], taxonomy=bootstrap_extractors.TagTaxonomy())
+
+        self.assertFalse(result)
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Original Name", content)
+
+    def test_accepting_overwrite_replaces_the_file_and_returns_true(self):
+        with open(bootstrap_profile.PROFILE_YML_PATH, "w", encoding="utf-8") as f:
+            f.write("candidate:\n  full_name: Original Name\n")
+
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = True
+            result = bootstrap_profile.write_profile_yml(self._minimal_identity(), recommendations=[], taxonomy=bootstrap_extractors.TagTaxonomy())
+
+        self.assertTrue(result)
+        with open(bootstrap_profile.PROFILE_YML_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Jamie Rivera", content)
+        self.assertNotIn("Original Name", content)
+
 
 class TestWritePortalsYml(BootstrapProfileTestCase):
 

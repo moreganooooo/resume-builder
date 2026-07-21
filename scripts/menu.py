@@ -33,6 +33,7 @@ import theme
 
 _CHOICES = [
     questionary.Choice(title=[("class:new_user", "--> New User? Start Here!\n")], value="bootstrap"),
+    questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Update My Knowledge\n", value="update_knowledge"),
     questionary.Separator("── Discovery ──"),
     questionary.Choice(title=f"{theme.ICONS['discovery']}  Scan for New Postings", value="scan"),
     questionary.Choice(title=f"{theme.ICONS['discovery']}  Check Posting Liveness\n", value="liveness"),
@@ -188,6 +189,63 @@ def _handle_bootstrap() -> bool:
     cli_art.display_bootstrap_intro(len(files))
     script_path = os.path.join(bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py")
     result = subprocess.run([sys.executable, script_path])
+    return result.returncode == 0
+
+
+def _handle_update_knowledge() -> bool:
+    """"Update My Knowledge" -- lets a returning profile (one that's
+    already been through Phase 0 at least once) drop new source documents
+    into the same source_documents/ folder and re-run just the parts they
+    choose: the bullet bank (Phase 0 ingestion + the six-stage pipeline)
+    and/or profile & background documents (Phase 0.5 -- cv.md/profile.yml/
+    background guide). Phase 0 ingestion itself always runs when there are
+    new files, since that's what actually processes them; --scope only
+    gates what runs after it. See IDEAS_ARCHIVE.md for the full design
+    writeup, including why this is safe to re-run today (most pipeline
+    stages checkpoint by bullet-text content, not position)."""
+    import profile_paths
+
+    if not os.path.exists(bootstrap_bullet_bank.CHECKPOINT_PATH):
+        cli_art.console.print(
+            "This profile hasn't been set up yet -- use \"New User? Start Here!\" first."
+        )
+        return False
+
+    source_docs_dir = os.path.join(profile_paths.kb_dir(), "bootstrap", "source_documents")
+    os.makedirs(source_docs_dir, exist_ok=True)
+    files = [
+        f for f in os.listdir(source_docs_dir)
+        if os.path.isfile(os.path.join(source_docs_dir, f))
+    ]
+    if not files:
+        _print_source_docs_instructions(source_docs_dir)
+        return False
+
+    scope_choices = questionary.checkbox(
+        f"Found {len(files)} document(s). What would you like to update with them?",
+        choices=[
+            questionary.Choice(title="Bullet Bank", value="bullets", checked=True),
+            questionary.Choice(
+                title="Profile & Background Documents (cv.md, profile.yml, background guide)",
+                value="profile", checked=True,
+            ),
+        ],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not scope_choices:
+        cli_art.console.print("Nothing selected -- nothing to update.")
+        return False
+    scope = "both" if len(scope_choices) == 2 else scope_choices[0]
+
+    proceed = questionary.confirm(
+        f"Ready to process {len(files)} document(s)?", default=True, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not proceed:
+        return False
+
+    cli_art.display_bootstrap_intro(len(files))
+    script_path = os.path.join(bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py")
+    result = subprocess.run([sys.executable, script_path, "--scope", scope])
     return result.returncode == 0
 
 
@@ -365,6 +423,7 @@ def _handle_help() -> bool:
 
 _HANDLERS = {
     "bootstrap": _handle_bootstrap,
+    "update_knowledge": _handle_update_knowledge,
     "scan": _handle_scan,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
