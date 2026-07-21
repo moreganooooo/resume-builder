@@ -117,14 +117,20 @@ everywhere else in this repo) when it's actually time to build it.
 
 ### 3. Data reconciliation
 
-- [ ] Diff career-ops's `data/*.csv` against resume-builder's
-      `knowledge_base/*.csv` for the files sharing names
-      (`bullet-bank-clean.csv`, `evidence-guide.csv`,
-      `detective-findings.csv`, `verified-claims.csv`,
-      `summaries-and-skills-clean.csv`) — these diverged after an original
-      one-time copy since resume-builder built real pipeline logic
-      (clustering, auditing, hidden-gem scoring) on top of its copies.
-      Decide which is authoritative, or how to merge.
+- [x] **CSV authority — decided 2026-07-20: resume-builder's copies win,
+      no merge needed.** Checked row counts on all 5 shared-name files
+      directly: `evidence-guide.csv` (78/78), `detective-findings.csv`
+      (174/174), and `verified-claims.csv` (132/132) are identical between
+      the two repos -- nothing to reconcile. `bullet-bank-clean.csv`
+      (1,432 rows here vs. 1,493 in career-ops) and
+      `summaries-and-skills-clean.csv` (1,163 vs. 1,310) genuinely
+      diverged after the original one-time copy, but Morgan's call:
+      resume-builder's versions are the better-curated ones at this point
+      (real pipeline logic -- clustering, auditing, hidden-gem scoring --
+      ran on top of these copies since the split, career-ops's never got
+      that treatment). Keep resume-builder's copies as authoritative for
+      all 5 files; career-ops's originals aren't pulled forward into
+      anything.
 - [ ] Curate career-ops's `writing-samples/` (291 files, mostly untapped)
       for evidence-bank Tier 2 — `MorganWritingStyleGuide.txt` already
       ported (Phase 1, 2026-07-07); `BestCopySamples`/`Master Cover
