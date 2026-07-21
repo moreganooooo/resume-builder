@@ -293,5 +293,46 @@ class TestExtraSchemaProperties(unittest.TestCase):
         self.assertEqual(sent_schema["required"], ["TAGLINE"])
 
 
+class TestToolsParameter(unittest.TestCase):
+    """company_research.find_company_website() is the first real caller of
+    tools= (Google Search grounding) -- these confirm it reaches the
+    request body, and that combining it with response_schema is rejected
+    up front rather than surfacing as a confusing API-level 400, since the
+    two are mutually exclusive on Gemini's API."""
+
+    @patch("gemini_client.requests.post")
+    def test_tools_reaches_the_request_body(self, mock_post):
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="content",
+            tools=[{"google_search": {}}],
+        )
+
+        sent_body = mock_post.call_args.kwargs["json"]
+        self.assertEqual(sent_body["tools"], [{"google_search": {}}])
+
+    @patch("gemini_client.requests.post")
+    def test_no_tools_key_when_tools_not_passed(self, mock_post):
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="content")
+
+        sent_body = mock_post.call_args.kwargs["json"]
+        self.assertNotIn("tools", sent_body)
+
+    def test_tools_with_response_schema_raises_before_any_request(self):
+        with self.assertRaises(ValueError):
+            GeminiClient.generate(
+                model="gemini-3.1-flash-lite",
+                system_instruction="sys",
+                contents="content",
+                tools=[{"google_search": {}}],
+                response_schema={"type": "object", "properties": {}},
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
