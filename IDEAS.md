@@ -261,39 +261,6 @@ moving is also much harder to walk back than most changes in this repo,
 which argues for a proposed structure + audit findings reviewed before
 executing, not folding straight into implementation.
 
-### "Updated knowledge" flow -- add more source documents after onboarding, without starting over
-
-Raised 2026-07-17: bootstrap's "New User? Start Here!" flow is designed
-around a one-time cold start (empty `bullet-bank-clean.csv`, fresh
-`profile.yml`), but real usage isn't one-time -- Morgan (or Dom, later)
-will keep finding more documents worth adding (a new cert, an old
-performance review, a fresh recommendation letter) long after the
-bullet bank is live and already has real, audited, in-use content
-(`bullet-bank-keepers.csv`, embeddings, cluster maps). The ask: a
-parallel flow -- "Update My Knowledge" alongside "New User? Start Here!"
--- that ingests newly-dropped source documents the same way Phase 0
-already does, but merges the result into an *existing*, already-curated
-bank instead of building one from a blank slate.
-
-**Why this is Hard, not a small extension of Phase 0:** Phase 0's
-ingestion (`bootstrap_bullet_bank.py`'s `run_ingestion()`) assumes it's
-writing a fresh `bullet-bank-clean.csv` and a fresh `timeline.json`; an
-update flow needs to instead *append* to a timeline that already has
-real entries (attributing a new document's achievements against
-company/date ranges that already exist, not rebuilding them), and needs
-new bullets to enter the SAME six-stage pipeline
-(audit -> cluster -> rewrite -> audit_keepers -> score_keeper_gems ->
-embed) without re-processing everything already in
-`bullet-bank-keepers.csv` (the pipeline's own checkpointing mostly
-handles "don't redo work already done," but this needs verifying under
-an update scenario specifically, not just a first-run one). There's also
-a real question of whether newly-ingested bullets should go straight
-into the live bank or land in a review queue first (closer to how
-`bullet_feedback.py`'s harvest-back loop already works for rewrite-time
-discoveries) -- worth designing this as an extension of that existing
-mechanism rather than a third, separate ingestion path. Needs a real
-design pass, not just wiring -- flagged here rather than scoped further.
-
 ## Very Hard / Long-term
 
 ### Multi-computer sync for a profile's data

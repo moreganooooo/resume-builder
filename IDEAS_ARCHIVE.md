@@ -1011,6 +1011,66 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## "Update My Knowledge" flow -- done 2026-07-21
+
+Filed as Hard, on the assumption that the six-stage pipeline's
+checkpointing needed new "append, don't rebuild" logic to be safe on a
+second run. **Checked all six stages directly before writing any code --
+turned out mostly already true, for free:**
+- `audit_bullet_bank.py`, `rewrite_bullets.py`, `audit_keepers.py`,
+  `score_keeper_gems.py` all checkpoint by **bullet-text content**, not
+  row position -- re-running them on a regenerated `bullet-bank-clean.csv`
+  (old bullets + new ones) already skips everything previously processed
+  and only touches genuinely new bullets.
+- `cluster_bullet_bank.py`/`embed_bullet_bank.py` checkpoint by **row
+  index** instead -- riskier under a grown file. Decided not to bet on
+  index-resume math staying valid across a rebuild; an update run just
+  forces a full re-cluster/re-embed instead. Bounded cost at today's bank
+  size (~1,400 rows), not a real scalability problem.
+- `run_ingestion()`'s own draft outputs (`timeline.json`,
+  `bullet-bank-clean.csv`) already **regenerate from the complete
+  accumulated checkpoint** every run (old files skip re-extraction, but
+  their stored results still feed the rebuild) -- so there was no real
+  "append vs. rebuild" problem to solve there either; a full rebuild from
+  complete accumulated data already produces the correct end state.
+- `bootstrap_profile.collect_secrets()` already explicitly documented
+  itself as safe to re-run on an already-configured profile -- confirmed,
+  no changes needed.
+
+**One real gap found and closed:** `write_profile_yml()` was the only
+Phase-0.5 writer with no accept/regenerate/skip protection (unlike
+`write_cv_md()`/`write_background_guide()`/`write_voice_anchors()`, all
+of which already have a real preview loop) -- it would have silently
+clobbered any hand-edited `profile.yml` on a second run. Now gated: if
+`profile.yml` already exists, confirms before overwriting (declining
+leaves the existing file untouched); no prompt at all on a first-time
+cold start, since there's nothing to lose yet.
+
+**Scope decision, asked directly rather than assumed:** should "Update My
+Knowledge" also re-run Phase 0.5 (cv.md/profile.yml/background guide), or
+stay scoped to just the bullet bank? Morgan's answer -- a genuine
+third option, not either of the two offered: let the user choose per run,
+via a checkbox ("Bullet Bank" / "Profile & Background Documents"),
+defaulting both checked. Implemented as `bootstrap_bullet_bank.py`'s new
+`--scope {bullets,profile,both}` CLI flag -- Phase 0 ingestion always
+runs first regardless of scope (it's what actually processes new files),
+`--scope` only gates what runs after it.
+
+**Built:**
+- `bootstrap_bullet_bank.py main()`: `--scope` flag, default `"both"`
+  (preserves the original cold-start behavior exactly for every existing
+  caller).
+- `menu.py`: new "Update My Knowledge" entry (right under "New User?
+  Start Here!"). Gated on `bootstrap_bullet_bank.CHECKPOINT_PATH` already
+  existing (i.e. Phase 0 has run at least once for this profile) --
+  otherwise points the user at "New User? Start Here!" instead. Checks
+  `source_documents/` for new files (same proactive-instructions message
+  bootstrap's own empty-folder case already uses), then the scope
+  checkbox, then shells out to `bootstrap_bullet_bank.py --scope <value>`
+  exactly like cold-start bootstrap already does.
+
+Full suite: 767 tests (15 new), all green.
+
 ## "Browse & Manage Jobs": multi-select pickers + List Jobs + comparison mode unified -- done 2026-07-21
 
 Three separately-tracked Hard/Medium-Hard items (#11 multi-select "Specific

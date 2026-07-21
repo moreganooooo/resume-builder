@@ -153,5 +153,55 @@ class TestMainCallsProfileSetup(unittest.TestCase):
         mock_run_full_pipeline.assert_not_called()
 
 
+class TestMainScope(unittest.TestCase):
+    """--scope is "Update My Knowledge"'s way of running only part of the
+    flow after a shared Phase 0 ingestion -- default "both" preserves the
+    original cold-start behavior exactly (both prior test classes above
+    already cover that implicitly by omitting --scope)."""
+
+    @patch("bootstrap_bullet_bank.bootstrap_profile.collect_secrets")
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
+    @patch("bootstrap_bullet_bank.run_full_pipeline")
+    @patch("bootstrap_bullet_bank.run_ingestion")
+    @patch("sys.argv", ["bootstrap_bullet_bank.py", "--scope", "bullets"])
+    def test_scope_bullets_skips_profile_setup_but_still_ingests(
+        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+    ):
+        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        bootstrap_bullet_bank.main()
+        mock_run_ingestion.assert_called_once()
+        mock_profile_setup.assert_not_called()
+        mock_run_full_pipeline.assert_called_once()
+
+    @patch("bootstrap_bullet_bank.bootstrap_profile.collect_secrets")
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
+    @patch("bootstrap_bullet_bank.run_full_pipeline")
+    @patch("bootstrap_bullet_bank.run_ingestion")
+    @patch("sys.argv", ["bootstrap_bullet_bank.py", "--scope", "profile"])
+    def test_scope_profile_skips_pipeline_but_still_ingests(
+        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+    ):
+        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        bootstrap_bullet_bank.main()
+        mock_run_ingestion.assert_called_once()
+        mock_profile_setup.assert_called_once()
+        mock_run_full_pipeline.assert_not_called()
+
+    @patch("bootstrap_bullet_bank.bootstrap_profile.collect_secrets")
+    @patch("bootstrap_bullet_bank.bootstrap_profile.run_profile_setup")
+    @patch("bootstrap_bullet_bank.run_full_pipeline")
+    @patch("bootstrap_bullet_bank.run_ingestion")
+    @patch("sys.argv", ["bootstrap_bullet_bank.py"])
+    def test_default_scope_runs_both(
+        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+    ):
+        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        bootstrap_bullet_bank.main()
+        mock_profile_setup.assert_called_once()
+        mock_run_full_pipeline.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

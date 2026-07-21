@@ -335,7 +335,26 @@ cv:
 """
 
 
-def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_search_queries: list = None) -> None:
+def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_search_queries: list = None) -> bool:
+    """Writes profile.yml. Unlike write_cv_md()/write_background_guide()/
+    write_voice_anchors(), this has no accept/regenerate/skip preview loop
+    -- it's a deterministic template fill, not an LLM draft. That's fine
+    on a first-time cold start (nothing to lose), but re-running this on
+    an existing, possibly hand-edited profile.yml (the "Update My
+    Knowledge" flow) needs a real confirm gate first, or a manual tweak
+    made since onboarding gets silently clobbered. Returns False (does
+    NOT write) if an existing file's overwrite is declined; True
+    otherwise."""
+    if os.path.exists(PROFILE_YML_PATH):
+        overwrite = questionary.confirm(
+            f"{PROFILE_YML_PATH} already exists -- overwrite it with a freshly regenerated version? "
+            "(Any manual edits you've made since onboarding will be lost.)",
+            default=False,
+        ).ask()
+        if not overwrite:
+            print("Keeping the existing profile.yml unchanged.")
+            return False
+
     content = _PROFILE_YML_TEMPLATE.format(
         full_name=identity["full_name"], email=identity["email"], phone=identity["phone"],
         location=identity["location"], linkedin_url=identity["linkedin_url"],
@@ -351,6 +370,7 @@ def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_
     os.makedirs(os.path.dirname(PROFILE_YML_PATH), exist_ok=True)
     with open(PROFILE_YML_PATH, "w", encoding="utf-8") as f:
         f.write(content)
+    return True
 
 
 _PORTALS_YML_TEMPLATE = """# Portal Scanner Configuration
