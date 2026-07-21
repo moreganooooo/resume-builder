@@ -1011,6 +1011,70 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## "Browse & Manage Jobs": multi-select pickers + List Jobs + comparison mode unified -- done 2026-07-21
+
+Three separately-tracked Hard/Medium-Hard items (#11 multi-select "Specific
+JD" pickers, #15 "List Jobs"/"View Pipeline" browsing, and the sibling-repo
+audit's "Multi-job comparison mode") turned out to be one feature, not
+three -- all were really "browse/act on multiple already-evaluated JDs at
+once." Two design decisions locked in before building (asked directly,
+not assumed): the new view **replaces** the three old single-JD-by-name
+pickers ("Evaluate/Tailor/Write Cover Letter for a Specific Role") rather
+than sitting alongside them, and **absorbs** the old "View Application
+Tracker" markdown-table entry entirely rather than keeping both.
+
+**Data layer (`jd_manager.py`):**
+- `save_evaluation()` now also persists `archetype`/`dimension_scores`
+  (previously computed and discarded, same gap `why` used to have) --
+  needed for the browse view's per-JD detail drill-in.
+- New `ARCHIVED_DIR` (`jds/archived/`) and `archive_jd()` -- a JD's fourth
+  terminal state, distinct from `completed/` (no resume necessarily
+  built) and `expired/` (liveness decided it, not a person). One-way for
+  now, no un-archive UI. Needs no exclusion logic in
+  `get_pending_jds()`/`get_completed_jds()` -- both already only scan
+  their own specific directory.
+
+**Selection layer (`picker.py`):** `list_all_evaluated_jds()` combines
+`get_pending_jds()`/`get_completed_jds()`, filters to JDs carrying a
+persisted `_evaluation`, tags each with its status, sorts best-score-first
+(same pattern the now-removed `pick_one_evaluated_jd()` used).
+`browse_and_select_jds()` renders the overview table then a
+`questionary.checkbox()` multi-select over the same rows, returning full
+row dicts (not just paths) so downstream code never has to re-fetch.
+**Removed as genuinely dead code** (zero remaining callers after the
+menu restructure): `pick_one_pending_jd()`, `pick_one_evaluated_jd()`.
+
+**Rendering (`cli_art.py`):** `render_pipeline_table()` (# / Score /
+Recommendation / Company / Title / Status / Last Liveness -- the actual
+"List Jobs" ask). `render_comparison_table()` (the "Multi-job comparison"
+ask) -- one column per selected JD, one row per fit dimension plus
+score/recommendation/archetype, so a strength/weakness pattern is visible
+across jobs at a glance rather than holding several single-JD views in
+your head.
+
+**Menu (`menu.py`):** one new entry, "Browse & Manage Jobs," replaces
+four old ones (`evaluate_one`, `tailor_one`, `coverletter_one`,
+`view_applications`). Selecting exactly one JD opens a per-item action
+menu (View More Details / Tailor -- Pending only / Write Cover Letter --
+Completed only / Archive / Back); selecting 2+ opens a bulk menu (Compare
+Selected / Tailor Resumes for Selected -- Completed rows silently
+skipped, matching the old single-picker's same constraint / Write Cover
+Letters for Selected -- shown only when every selected row is Completed /
+Archive Selected / Back). `_CHAIN` updated: `evaluate_all` and
+`tailor_all` now offer "Browse & Manage Jobs" as a next step in place of
+the retired `coverletter_one` destination.
+
+**One disclosed behavior change, not a bug:** there's no dedicated
+"evaluate one specific not-yet-evaluated JD by name" flow anymore -- the
+browse view's whole premise is *already-evaluated* JDs. "Evaluate ALL
+Pending Roles" still covers this (it already skips already-scored JDs by
+default, so re-running it after adding one new JD is cheap), just not via
+a pick-by-name single-eval entry point.
+
+Full suite: 752 tests, net +10 from real churn (retired pickers'/handlers'
+tests removed, new data/selection/render/menu-layer tests added) -- all
+green.
+
 ## Company-research fallback lookup: search-grounding spike + build -- done 2026-07-21
 
 Closes the real design question left open in "Standardize company
