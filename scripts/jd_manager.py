@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,6 +25,7 @@ import profile_paths  # noqa: E402
 JDS_DIR = profile_paths.jds_dir()
 COMPLETED_DIR = os.path.join(JDS_DIR, "completed")
 EXPIRED_DIR = os.path.join(JDS_DIR, "expired")
+ARCHIVED_DIR = os.path.join(JDS_DIR, "archived")
 CHECKPOINTS_DIR = profile_paths.checkpoints_dir()
 TRACKER_CSV = profile_paths.tracker_csv_path()
 
@@ -102,6 +104,8 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "hard_blockers": evaluation.get("hard_blockers") or [],
         "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
         "posting_legitimacy_notes": evaluation.get("posting_legitimacy_notes") or "",
+        "archetype": evaluation.get("archetype") or "",
+        "dimension_scores": evaluation.get("dimension_scores") or {},
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
     with open(jd_path, "w", encoding="utf-8") as f:
@@ -497,3 +501,18 @@ def get_completed_jds() -> list:
         and name != tracker_filename
         and not name.startswith(".")
     )
+
+
+def archive_jd(jd_path: str) -> str:
+    """Moves a JD file (from JDS_DIR root or COMPLETED_DIR -- wherever it
+    currently lives) into ARCHIVED_DIR, a new terminal state distinct from
+    completed/ (no resume was necessarily built) and expired/ (a person
+    decided this, not liveness). One-way for now -- no un-archive UI;
+    move the file back out of jds/archived/ by hand if that's ever
+    needed. Returns the new path. Archived JDs are naturally excluded
+    from get_pending_jds()/get_completed_jds() (both only scan their own
+    specific directory), so no separate exclusion logic is needed."""
+    os.makedirs(ARCHIVED_DIR, exist_ok=True)
+    dest = os.path.join(ARCHIVED_DIR, os.path.basename(jd_path))
+    shutil.move(jd_path, dest)
+    return dest

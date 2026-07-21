@@ -591,6 +591,71 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         path = self._write("dummy.txt", "Just plain text.")
         self.assertIsNone(jd_manager.read_evaluation(path))
 
+    def test_save_then_read_round_trips_archetype_and_dimension_scores(self):
+        # Regression test: dimension_scores/archetype used to be computed
+        # and immediately discarded, same as `why` used to be -- needed
+        # for the "List Jobs" browse view's per-JD drill-in detail.
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_evaluation(path, {
+            "composite_score": 4.2, "recommendation": "Strong pursue",
+            "archetype": "Lifecycle Marketing Manager",
+            "dimension_scores": {"cv_profile_match": 5, "remote_quality": 4},
+        })
+        result = jd_manager.read_evaluation(path)
+        self.assertEqual(result["archetype"], "Lifecycle Marketing Manager")
+        self.assertEqual(result["dimension_scores"], {"cv_profile_match": 5, "remote_quality": 4})
+
+    def test_missing_archetype_and_dimension_scores_persist_as_empty(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        result = jd_manager.read_evaluation(path)
+        self.assertEqual(result["archetype"], "")
+        self.assertEqual(result["dimension_scores"], {})
+
+
+class TestArchiveJd(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_archive_jd")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._real_jds_dir = jd_manager.JDS_DIR
+        self._real_archived_dir = jd_manager.ARCHIVED_DIR
+        jd_manager.JDS_DIR = self.tmp_dir
+        jd_manager.ARCHIVED_DIR = os.path.join(self.tmp_dir, "archived")
+
+    def tearDown(self):
+        jd_manager.JDS_DIR = self._real_jds_dir
+        jd_manager.ARCHIVED_DIR = self._real_archived_dir
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        if os.path.exists(self.tmp_dir):
+            os.rmdir(self.tmp_dir)
+
+    def test_moves_file_into_archived_dir(self):
+        src = os.path.join(self.tmp_dir, "a.json")
+        with open(src, "w", encoding="utf-8") as f:
+            json.dump({"job_title": "Role"}, f)
+
+        dest = jd_manager.archive_jd(src)
+
+        self.assertFalse(os.path.exists(src))
+        self.assertTrue(os.path.exists(dest))
+        self.assertEqual(os.path.dirname(dest), jd_manager.ARCHIVED_DIR)
+
+    def test_preserves_file_content(self):
+        src = os.path.join(self.tmp_dir, "a.json")
+        with open(src, "w", encoding="utf-8") as f:
+            json.dump({"job_title": "Role", "company_name": "Acme"}, f)
+
+        dest = jd_manager.archive_jd(src)
+
+        with open(dest, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["company_name"], "Acme")
+
 
 class TestSaveAndReadLiveness(unittest.TestCase):
 

@@ -97,118 +97,95 @@ class TestPickAndProcess(unittest.TestCase):
         mock_confirm.assert_not_called()
 
 
-class TestPickOnePendingJd(unittest.TestCase):
+class TestListAllEvaluatedJds(unittest.TestCase):
 
-    def test_empty_list_returns_none_without_prompting(self):
-        with patch("picker.questionary.select") as mock_select:
-            result = picker.pick_one_pending_jd([])
-        self.assertIsNone(result)
-        mock_select.assert_not_called()
-
-    @patch("picker.jd_manager.extract_job_meta")
-    @patch("picker.questionary.select")
-    def test_label_uses_company_and_title_when_present(self, mock_select, mock_meta):
-        mock_meta.return_value = ("Campaign Manager", "4MINDS")
-        mock_select.return_value.ask.return_value = "jds/a.json"
-
-        result = picker.pick_one_pending_jd(["jds/a.json"])
-
-        self.assertEqual(result, "jds/a.json")
-        choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(choices[0].title, "4MINDS - Campaign Manager")
-        self.assertEqual(choices[0].value, "jds/a.json")
-
-    @patch("picker.jd_manager.extract_job_meta", return_value=("", ""))
-    @patch("picker.questionary.select")
-    def test_label_falls_back_to_filename_when_meta_is_empty(self, mock_select, mock_meta):
-        mock_select.return_value.ask.return_value = "jds/some_file.json"
-
-        picker.pick_one_pending_jd(["jds/some_file.json"])
-
-        choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(choices[0].title, "some_file.json")
-
-    @patch("picker.jd_manager.extract_job_meta", return_value=("Title", "Company"))
-    @patch("picker.questionary.select")
-    def test_returns_the_users_selection(self, mock_select, mock_meta):
-        mock_select.return_value.ask.return_value = "jds/b.json"
-        result = picker.pick_one_pending_jd(["jds/a.json", "jds/b.json"])
-        self.assertEqual(result, "jds/b.json")
-
-
-class TestPickOneEvaluatedJd(unittest.TestCase):
-
-    def test_empty_list_returns_none_without_prompting(self):
-        with patch("picker.questionary.select") as mock_select:
-            result = picker.pick_one_evaluated_jd([])
-        self.assertIsNone(result)
-        mock_select.assert_not_called()
-
-    @patch("picker.jd_manager.read_evaluation", return_value=None)
-    def test_no_evaluated_jds_prints_hint_and_returns_none(self, mock_read):
-        with patch("picker.questionary.select") as mock_select, \
-             patch("picker.cli_art.console.print") as mock_print:
-            result = picker.pick_one_evaluated_jd(["jds/a.json"])
-        self.assertIsNone(result)
-        mock_select.assert_not_called()
-        printed = mock_print.call_args[0][0]
-        self.assertIn("Hint", printed)
-
-    @patch("picker.jd_manager.extract_job_meta")
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
-    @patch("picker.questionary.select")
-    def test_excludes_jds_with_no_evaluation(self, mock_select, mock_read, mock_meta):
+    @patch("picker.jd_manager.get_completed_jds", return_value=["jds/completed/c.json"])
+    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/p.json"])
+    def test_combines_pending_and_completed_with_status_tags(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
+        mock_read.side_effect = lambda path: {
+            "jds/p.json": {"composite_score": 3.0, "recommendation": "Selective pursue"},
+            "jds/completed/c.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+        }[path]
+
+        rows = picker.list_all_evaluated_jds()
+
+        statuses = {r["path"]: r["status"] for r in rows}
+        self.assertEqual(statuses["jds/p.json"], "Pending")
+        self.assertEqual(statuses["jds/completed/c.json"], "Completed")
+
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("picker.jd_manager.read_liveness", return_value=None)
+    @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.jd_manager.get_completed_jds", return_value=[])
+    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"])
+    def test_excludes_jds_with_no_evaluation(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
         mock_read.side_effect = lambda path: {
             "jds/a.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
             "jds/b.json": None,
         }[path]
-        mock_meta.return_value = ("Role", "Acme")
-        mock_select.return_value.ask.return_value = "jds/a.json"
 
-        picker.pick_one_evaluated_jd(["jds/a.json", "jds/b.json"])
+        rows = picker.list_all_evaluated_jds()
 
-        choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(len(choices), 1)
-        self.assertEqual(choices[0].value, "jds/a.json")
+        self.assertEqual([r["path"] for r in rows], ["jds/a.json"])
 
-    @patch("picker.jd_manager.extract_job_meta")
+    @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
-    @patch("picker.questionary.select")
-    def test_sorts_best_score_first_regardless_of_input_order(self, mock_select, mock_read, mock_meta):
+    @patch("picker.jd_manager.get_completed_jds", return_value=[])
+    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/low.json", "jds/high.json"])
+    def test_sorts_best_score_first(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
         mock_read.side_effect = lambda path: {
             "jds/low.json": {"composite_score": 2.5, "recommendation": "Low-priority pursue"},
             "jds/high.json": {"composite_score": 4.8, "recommendation": "Strong pursue"},
         }[path]
-        mock_meta.return_value = ("Role", "Company")
-        mock_select.return_value.ask.return_value = "jds/high.json"
 
-        picker.pick_one_evaluated_jd(["jds/low.json", "jds/high.json"])
+        rows = picker.list_all_evaluated_jds()
 
-        choices = mock_select.call_args.kwargs["choices"]
-        self.assertEqual(choices[0].value, "jds/high.json")
-        self.assertEqual(choices[1].value, "jds/low.json")
+        self.assertEqual([r["path"] for r in rows], ["jds/high.json", "jds/low.json"])
 
-    @patch("picker.jd_manager.extract_job_meta", return_value=("Content Strategist", "Acme"))
-    @patch("picker.jd_manager.read_evaluation", return_value={
-        "composite_score": 4.8, "recommendation": "Strong pursue",
-    })
-    @patch("picker.questionary.select")
-    def test_label_includes_score_and_recommendation(self, mock_select, mock_read, mock_meta):
-        mock_select.return_value.ask.return_value = "jds/a.json"
-        picker.pick_one_evaluated_jd(["jds/a.json"])
-        choices = mock_select.call_args.kwargs["choices"]
-        combined_text = "".join(part[1] for part in choices[0].title)
-        self.assertEqual(combined_text, "4.80/5 | Strong pursue | Acme | Content Strategist")
 
-    @patch("picker.jd_manager.extract_job_meta", return_value=("Content Strategist", "Acme"))
-    @patch("picker.jd_manager.read_evaluation", return_value={
-        "composite_score": 4.8, "recommendation": "Strong pursue",
-    })
-    @patch("picker.questionary.select")
-    def test_label_colors_the_score_segment_by_recommendation_tier(self, mock_select, mock_read, mock_meta):
-        mock_select.return_value.ask.return_value = "jds/a.json"
-        picker.pick_one_evaluated_jd(["jds/a.json"])
-        choices = mock_select.call_args.kwargs["choices"]
-        score_style, score_text = choices[0].title[0]
-        self.assertEqual(score_style, "fg:#4caf50 bold")
-        self.assertEqual(score_text, "4.80/5 | Strong pursue")
+class TestBrowseAndSelectJds(unittest.TestCase):
+
+    @patch("picker.list_all_evaluated_jds", return_value=[])
+    def test_empty_list_prints_hint_and_returns_empty(self, mock_list):
+        with patch("picker.questionary.checkbox") as mock_checkbox, \
+             patch("picker.cli_art.console.print") as mock_print:
+            result = picker.browse_and_select_jds()
+        self.assertEqual(result, [])
+        mock_checkbox.assert_not_called()
+        printed = mock_print.call_args[0][0]
+        self.assertIn("Hint", printed)
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_nothing_checked_returns_empty(self, mock_list, mock_render):
+        mock_list.return_value = [
+            {"path": "jds/a.json", "status": "Pending", "title": "Role", "company": "Acme",
+             "evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"}},
+        ]
+        mock_question = MagicMock()
+        mock_question.ask.return_value = None
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            result = picker.browse_and_select_jds()
+        self.assertEqual(result, [])
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_returns_the_selected_rows_not_just_paths(self, mock_list, mock_render):
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "title": "Role A", "company": "Acme",
+             "evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"}},
+            {"path": "jds/b.json", "status": "Completed", "title": "Role B", "company": "Beta",
+             "evaluation": {"composite_score": 3.0, "recommendation": "Selective pursue"}},
+        ]
+        mock_list.return_value = rows
+        mock_question = MagicMock()
+        mock_question.ask.return_value = ["jds/b.json"]
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            result = picker.browse_and_select_jds()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["path"], "jds/b.json")
+        self.assertEqual(result[0]["status"], "Completed")

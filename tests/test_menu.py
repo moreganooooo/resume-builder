@@ -20,16 +20,27 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertNotIn("tailor_pick", menu._HANDLERS)
         self.assertNotIn("coverletter_pick", menu._HANDLERS)
 
+    def test_specific_jd_pickers_and_view_applications_are_gone(self):
+        # Retired 2026-07-21 in favor of "Browse & Manage Jobs" -- see
+        # IDEAS_ARCHIVE.md's browse/multi-select/compare writeup.
+        values = [c.value for c in menu._CHOICES]
+        for retired in ("evaluate_one", "tailor_one", "coverletter_one", "view_applications"):
+            self.assertNotIn(retired, values)
+            self.assertNotIn(retired, menu._HANDLERS)
+
     def test_choices_have_the_renamed_labels(self):
         labels = {c.value: c.title for c in menu._CHOICES}
         self.assertIn("Scan for New Postings", labels["scan"])
         self.assertIn("Check Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate ALL Pending Roles", labels["evaluate_all"])
-        self.assertIn("Evaluate a Specific Role", labels["evaluate_one"])
         self.assertIn("Customize Resume for ALL Pending Roles (batch)", labels["tailor_all"])
-        self.assertIn("Customize Resume for a Specific Role", labels["tailor_one"])
-        self.assertIn("Write Cover Letter to Match a Resume", labels["coverletter_one"])
         self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
+
+    def test_browse_jobs_entry_is_registered(self):
+        values = [c.value for c in menu._CHOICES]
+        self.assertIn("browse_jobs", values)
+        self.assertIn("browse_jobs", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["browse_jobs"], menu._handle_browse_jobs)
 
     def test_bullet_bank_entry_is_registered(self):
         values = [c.value for c in menu._CHOICES]
@@ -47,6 +58,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertTrue(any("Discovery" in line for line in separator_lines))
         self.assertTrue(any("Evaluation" in line for line in separator_lines))
         self.assertTrue(any("Build" in line for line in separator_lines))
+        self.assertTrue(any("Browse" in line for line in separator_lines))
 
 
 class TestHandleScan(unittest.TestCase):
@@ -150,36 +162,6 @@ class TestHandleEvaluateAll(unittest.TestCase):
         mock_proceed.assert_not_called()
 
 
-class TestHandleEvaluateOne(unittest.TestCase):
-
-    @patch("menu.picker.pick_one_pending_jd", return_value=None)
-    def test_returns_false_when_no_path(self, mock_pick):
-        self.assertFalse(menu._handle_evaluate_one())
-
-    @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
-    def test_returns_false_when_result_falsy(self, mock_pick, mock_engine_cls):
-        mock_engine_cls.return_value.evaluate_fit.return_value = {}
-        self.assertFalse(menu._handle_evaluate_one())
-
-    @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
-    def test_returns_true_when_result_truthy(self, mock_pick, mock_engine_cls):
-        mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue",
-        }
-        self.assertTrue(menu._handle_evaluate_one())
-
-    @patch("menu.jd_manager.save_evaluation")
-    @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
-    def test_persists_evaluation_on_success(self, mock_pick, mock_engine_cls, mock_save):
-        result = {"archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue"}
-        mock_engine_cls.return_value.evaluate_fit.return_value = result
-        menu._handle_evaluate_one()
-        mock_save.assert_called_once_with("jds/a.json", result)
-
-
 class TestHandleTailorAll(unittest.TestCase):
 
     @patch("menu.jd_manager.get_pending_jds", return_value=[])
@@ -206,44 +188,145 @@ class TestHandleTailorAll(unittest.TestCase):
         self.assertFalse(menu._handle_tailor_all())
 
 
-class TestHandleTailorOne(unittest.TestCase):
+def _row(path="jds/a.json", status="Pending", company="Acme", title="Writer", **eval_kwargs):
+    evaluation = {"composite_score": 4.0, "recommendation": "Strong pursue", **eval_kwargs}
+    return {"path": path, "status": status, "company": company, "title": title,
+            "evaluation": evaluation, "liveness": None}
 
-    @patch("menu.picker.pick_one_evaluated_jd", return_value=None)
-    def test_returns_false_when_no_path_picked(self, mock_pick):
-        self.assertFalse(menu._handle_tailor_one())
+
+class TestHandleBrowseJobs(unittest.TestCase):
+
+    @patch("menu.picker.browse_and_select_jds", return_value=[])
+    def test_returns_false_when_nothing_selected(self, mock_browse):
+        self.assertFalse(menu._handle_browse_jobs())
+
+    @patch("menu._browse_single_action", return_value=True)
+    @patch("menu.picker.browse_and_select_jds")
+    def test_single_selection_routes_to_single_action(self, mock_browse, mock_single):
+        row = _row()
+        mock_browse.return_value = [row]
+        self.assertTrue(menu._handle_browse_jobs())
+        mock_single.assert_called_once_with(row)
+
+    @patch("menu._browse_bulk_action", return_value=True)
+    @patch("menu.picker.browse_and_select_jds")
+    def test_multi_selection_routes_to_bulk_action(self, mock_browse, mock_bulk):
+        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
+        mock_browse.return_value = rows
+        self.assertTrue(menu._handle_browse_jobs())
+        mock_bulk.assert_called_once_with(rows)
+
+
+class TestBrowseSingleAction(unittest.TestCase):
+
+    @patch("menu.questionary.select")
+    def test_back_returns_false(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        self.assertFalse(menu._browse_single_action(_row()))
+
+    @patch("menu.questionary.select")
+    def test_cancelled_prompt_returns_false(self, mock_select):
+        mock_select.return_value.ask.return_value = None
+        self.assertFalse(menu._browse_single_action(_row()))
+
+    @patch("menu._print_evaluation_detail")
+    @patch("menu.questionary.select")
+    def test_view_details_loops_back_to_the_action_menu(self, mock_select, mock_print_detail):
+        mock_select.return_value.ask.side_effect = ["details", "back"]
+        self.assertFalse(menu._browse_single_action(_row()))
+        mock_print_detail.assert_called_once()
+        self.assertEqual(mock_select.call_count, 2)
 
     @patch("menu.orchestrator.run_pipeline", return_value=(1, 0))
-    @patch("menu.picker.pick_one_evaluated_jd", return_value="jds/a.json")
-    def test_returns_true_when_completed(self, mock_pick, mock_run):
-        self.assertTrue(menu._handle_tailor_one())
+    @patch("menu.questionary.select")
+    def test_tailor_action_on_pending_jd(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "tailor"
+        row = _row(status="Pending", path="jds/a.json")
+        self.assertTrue(menu._browse_single_action(row))
         mock_run.assert_called_once_with(jd_path="jds/a.json")
 
+    @patch("menu.questionary.select")
+    def test_pending_jd_offers_tailor_not_coverletter(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        menu._browse_single_action(_row(status="Pending"))
+        choices = mock_select.call_args.kwargs["choices"]
+        values = [c.value for c in choices]
+        self.assertIn("tailor", values)
+        self.assertNotIn("coverletter", values)
 
-class TestHandleCoverletterOne(unittest.TestCase):
-
-    @patch("menu.picker.pick_one_pending_jd", return_value=None)
-    def test_returns_false_when_no_path_picked(self, mock_pick):
-        self.assertFalse(menu._handle_coverletter_one())
+    @patch("menu.questionary.select")
+    def test_completed_jd_offers_coverletter_not_tailor(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        menu._browse_single_action(_row(status="Completed"))
+        choices = mock_select.call_args.kwargs["choices"]
+        values = [c.value for c in choices]
+        self.assertIn("coverletter", values)
+        self.assertNotIn("tailor", values)
 
     @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
-    def test_returns_true_when_letter_built(self, mock_pick, mock_engine_cls):
+    @patch("menu.questionary.select")
+    def test_coverletter_action_on_completed_jd(self, mock_select, mock_engine_cls):
+        mock_select.return_value.ask.return_value = "coverletter"
         mock_engine_cls.return_value.build_tailored_coverletter.return_value = {"company_name": "Acme"}
-        self.assertTrue(menu._handle_coverletter_one())
+        row = _row(status="Completed", path="jds/a.json")
+        self.assertTrue(menu._browse_single_action(row))
+        mock_engine_cls.return_value.build_tailored_coverletter.assert_called_once_with("jds/a.json")
 
-    @patch("menu.orchestrator.ResumeEngine")
-    @patch("menu.picker.pick_one_pending_jd", return_value="jds/a.json")
-    def test_returns_false_when_build_fails(self, mock_pick, mock_engine_cls):
-        mock_engine_cls.return_value.build_tailored_coverletter.return_value = {}
-        self.assertFalse(menu._handle_coverletter_one())
+    @patch("menu.jd_manager.archive_jd")
+    @patch("menu.questionary.select")
+    def test_archive_action_moves_the_file_and_returns_true(self, mock_select, mock_archive):
+        mock_select.return_value.ask.return_value = "archive"
+        row = _row(path="jds/a.json")
+        self.assertTrue(menu._browse_single_action(row))
+        mock_archive.assert_called_once_with("jds/a.json")
 
-    @patch("menu.picker.pick_one_pending_jd", return_value=None)
-    @patch("menu.jd_manager.get_completed_jds", return_value=["jds/completed/a.json"])
-    @patch("menu.jd_manager.get_pending_jds", return_value=["jds/still_pending.json"])
-    def test_picks_from_completed_jds_not_pending(self, mock_pending, mock_completed, mock_pick):
-        menu._handle_coverletter_one()
-        mock_pick.assert_called_once_with(["jds/completed/a.json"])
-        mock_pending.assert_not_called()
+
+class TestBrowseBulkAction(unittest.TestCase):
+
+    @patch("menu.questionary.select")
+    def test_back_returns_false(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        self.assertFalse(menu._browse_bulk_action([_row(), _row()]))
+
+    @patch("menu.cli_art.render_comparison_table")
+    @patch("menu.questionary.select")
+    def test_compare_action_renders_the_comparison_table(self, mock_select, mock_render):
+        mock_select.return_value.ask.return_value = "compare"
+        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
+        self.assertTrue(menu._browse_bulk_action(rows))
+        mock_render.assert_called_once_with(rows)
+
+    @patch("menu.orchestrator.run_pipeline", return_value=(1, 0))
+    @patch("menu.questionary.select")
+    def test_tailor_action_skips_completed_rows(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "tailor"
+        rows = [_row(path="jds/a.json", status="Pending"), _row(path="jds/b.json", status="Completed")]
+        self.assertTrue(menu._browse_bulk_action(rows))
+        mock_run.assert_called_once_with(jd_path="jds/a.json")
+
+    @patch("menu.questionary.select")
+    def test_tailor_option_absent_when_all_selected_are_completed(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        rows = [_row(status="Completed"), _row(status="Completed")]
+        menu._browse_bulk_action(rows)
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertNotIn("tailor", [c.value for c in choices])
+
+    @patch("menu.questionary.select")
+    def test_coverletter_option_present_only_when_all_selected_are_completed(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        rows = [_row(status="Pending"), _row(status="Completed")]
+        menu._browse_bulk_action(rows)
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertNotIn("coverletter", [c.value for c in choices])
+
+    @patch("menu.jd_manager.archive_jd")
+    @patch("menu.questionary.select")
+    def test_archive_action_archives_every_selected_row(self, mock_select, mock_archive):
+        mock_select.return_value.ask.return_value = "archive"
+        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
+        self.assertTrue(menu._browse_bulk_action(rows))
+        self.assertEqual(mock_archive.call_count, 2)
 
 
 class TestHandlePolish(unittest.TestCase):
@@ -274,20 +357,20 @@ class TestChainContent(unittest.TestCase):
     def test_chain_matches_the_designed_pipeline_order(self):
         self.assertEqual(menu._CHAIN["scan"], [("Check Liveness", "liveness")])
         self.assertEqual(menu._CHAIN["liveness"], [("Evaluate All JDs", "evaluate_all")])
-        self.assertEqual(menu._CHAIN["evaluate_all"], [("Customize Resume", "tailor_all")])
-        self.assertEqual(menu._CHAIN["evaluate_one"], [("Customize Resume", "tailor_all")])
+        self.assertEqual(
+            menu._CHAIN["evaluate_all"],
+            [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
+        )
         self.assertEqual(
             menu._CHAIN["tailor_all"],
-            [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
+            [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
         )
-        self.assertEqual(
-            menu._CHAIN["tailor_one"],
-            [("Write Cover Letter", "coverletter_one"), ("Polish with Gemini", "polish")],
-        )
-        self.assertEqual(menu._CHAIN["coverletter_one"], [("Polish with Gemini", "polish")])
 
     def test_polish_has_no_chain_entry(self):
         self.assertNotIn("polish", menu._CHAIN)
+
+    def test_browse_jobs_has_no_chain_entry(self):
+        self.assertNotIn("browse_jobs", menu._CHAIN)
 
 
 class TestRunWithChain(unittest.TestCase):
@@ -383,36 +466,6 @@ class TestSessionSummary(unittest.TestCase):
         self.assertIn("3 resumes tailored", summary)
         self.assertIn("2 cover letters written", summary)
         self.assertIn("Nice work.", summary)
-
-
-class TestHandleViewApplications(unittest.TestCase):
-
-    def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_view_applications")
-        os.makedirs(self.tmp_dir, exist_ok=True)
-        self.path = os.path.join(self.tmp_dir, "applications.md")
-        self._real_applications_md = menu.jd_manager.APPLICATIONS_MD
-        menu.jd_manager.APPLICATIONS_MD = self.path
-
-    def tearDown(self):
-        menu.jd_manager.APPLICATIONS_MD = self._real_applications_md
-        for name in os.listdir(self.tmp_dir):
-            os.remove(os.path.join(self.tmp_dir, name))
-        os.rmdir(self.tmp_dir)
-
-    def test_returns_false_when_no_tracker_file_exists(self):
-        with patch("menu.cli_art.display_applications_tracker") as mock_display:
-            result = menu._handle_view_applications()
-        self.assertFalse(result)
-        mock_display.assert_not_called()
-
-    def test_displays_content_and_returns_true_when_file_exists(self):
-        with open(self.path, "w", encoding="utf-8") as f:
-            f.write("# Applications Tracker\n\n| # | Company |\n|---|---------|\n| 1 | Acme |\n")
-        with patch("menu.cli_art.display_applications_tracker") as mock_display:
-            result = menu._handle_view_applications()
-        self.assertTrue(result)
-        mock_display.assert_called_once_with("# Applications Tracker\n\n| # | Company |\n|---|---------|\n| 1 | Acme |\n")
 
 
 if __name__ == "__main__":
