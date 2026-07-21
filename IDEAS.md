@@ -220,6 +220,48 @@ sub-problems worth separating:
    Needs a real spike/investigation before committing to an approach, not
    just an assumption either way.
 
+### Posting-legitimacy check missing from ported evaluate logic
+
+Found during a 2026-07-21 sibling-repo audit: career-ops's original
+6-block fit-evaluation included a scam/ghost-posting legitimacy check as
+one block; confirmed via direct grep that resume-builder's ported
+`evaluate_fit()` has no equivalent anywhere in `orchestrator.py` or
+`resume-engine/prompts/` -- it was dropped somewhere during the 2026-07-04
+port, not a deliberate cut. No open design question -- add an equivalent
+check/flag to the existing evaluation schema and prompt.
+
+### Follow-up cadence tracker
+
+Found during the same audit: career-ops's `modes/followup.md` tracks
+per-application follow-up timing (overdue/waiting/cold) and drafts
+tailored follow-up emails/LinkedIn notes. Not ported, not tracked
+anywhere yet. Real dovetail with the already-planned scheduler (item #9)
+-- both are about "surface things Morgan should act on without her having
+to remember to check."
+
+### Contact/outreach finder
+
+Found during the same audit: career-ops's `modes/contact.md` identifies
+the best person to contact for a role and drafts a short, human-sounding
+outreach message. Genuinely new capability, not represented anywhere in
+resume-builder today.
+
+### Multi-job comparison mode
+
+Found during the same audit: career-ops's `modes/offers.md` ranks
+multiple job offers side-by-side, distinct from the single-JD fit
+evaluation already ported. Not tracked anywhere yet.
+
+### Application pattern analysis
+
+Found during the same audit: career-ops's `modes/patterns.md` +
+`analyze-patterns.mjs` mine historical evaluations/applications/outcomes
+for what's actually converting (by archetype, etc.), not just a rejection
+log. Independently reinforced -- job_automater's own README lists an
+"Analytics Dashboard" under its own Future Enhancements wishlist, so this
+is a capability both sibling projects separately wanted. Not tracked
+anywhere in resume-builder yet.
+
 ### Rotate across multiple API keys on rate-limit errors
 
 Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
