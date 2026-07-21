@@ -646,11 +646,13 @@ class FitDimensionScores(BaseModel):
     cultural_signals:     int = Field(description="1-5: promising vs. concerning signals in the JD's own language")
 
 class FitEvaluationSchema(BaseModel):
-    archetype:        str                = Field(description="Best-matching role archetype, or closest hybrid of two")
-    hard_blockers:    List[str]          = Field(description="Explicit disqualifying constraints found; empty list if none")
-    dimension_scores: FitDimensionScores
-    recommendation:   Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
-    why:              str                = Field(description="2-4 plain-language sentences justifying the recommendation")
+    archetype:                str                = Field(description="Best-matching role archetype, or closest hybrid of two")
+    hard_blockers:            List[str]          = Field(description="Explicit disqualifying constraints found; empty list if none")
+    dimension_scores:         FitDimensionScores
+    recommendation:           Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
+    why:                      str                = Field(description="2-4 plain-language sentences justifying the recommendation")
+    posting_legitimacy:       Literal["High Confidence", "Proceed with Caution", "Suspicious"] = Field(description="Does this posting look real, active, and worth pursuing?")
+    posting_legitimacy_notes: str                = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
 
 
 def fit_composite_score(dimension_scores: dict) -> float:
