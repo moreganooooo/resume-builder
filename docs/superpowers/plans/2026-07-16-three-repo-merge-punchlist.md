@@ -178,9 +178,19 @@ everywhere else in this repo) when it's actually time to build it.
         follow-up task, not part of "porting," and can happen incrementally
         after the fact (start with what's already curated, expand as
         Morgan identifies more companies worth tracking on each ATS).
+      - **Found during a 2026-07-21 sibling-repo audit:** career-ops's
+        `scan.mjs --verify` runs a Playwright liveness pass over only
+        new/deduped postings right after the zero-token API scan, before
+        anything hits the pipeline. Worth designing this porting pass
+        together with the already-tracked liveness work (item #16 /
+        "Liveness skip-by-recency") rather than treating scan-porting and
+        liveness as fully separate efforts.
 - [ ] **`evaluate`:** career-ops's fit-scoring — already ported (done
-      2026-07-04, IDEAS.md item 1.3). Nothing further needed for the merge
-      itself.
+      2026-07-04, IDEAS.md item 1.3), but **one gap found 2026-07-21**:
+      career-ops's original 6-block evaluation included a scam/ghost-
+      posting legitimacy check that didn't make it into the port — see
+      IDEAS.md's "Posting-legitimacy check missing from ported evaluate
+      logic." Small, scoped fix; not a merge blocker either way.
 - [ ] **`track`:** adopt career-ops's markdown/YAML tracker fully —
       partially done (`applications.md` exists; Score/Report wired to the
       real evaluate stage 2026-07-16). Career-ops's dedup/merge logic
