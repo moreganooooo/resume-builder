@@ -17,6 +17,12 @@ import jd_manager
 import scan_jobright
 import scan_linkedin
 
+# A JD just found by a scan is, by definition, confirmed to exist right
+# now -- seeding _liveness here means it starts inside liveness.py's
+# recency window instead of needing a redundant separate check seconds
+# later.
+_SCAN_LIVENESS_REASON = "confirmed to exist by scan"
+
 SOURCE_FETCHERS = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
@@ -35,6 +41,14 @@ def _write_jd_file(job: dict) -> str:
     while os.path.exists(dest):
         dest = os.path.join(jd_manager.JDS_DIR, filename.replace(".json", f"_{counter}.json"))
         counter += 1
+
+    # Matches jd_manager.save_liveness()'s exact _liveness shape so
+    # liveness.py's recency check reads it back identically either way.
+    job["_liveness"] = {
+        "result": "active",
+        "reason": _SCAN_LIVENESS_REASON,
+        "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
 
     with open(dest, "w", encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)

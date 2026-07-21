@@ -8,6 +8,7 @@ ported from career-ops's already-proven liveness-core.mjs/liveness-browser.mjs.
 See docs/superpowers/specs/2026-07-05-liveness-checker-design.md.
 """
 
+import datetime
 import json
 import os
 import shutil
@@ -17,6 +18,34 @@ import jd_manager
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIVENESS_INPUT_PATH = os.path.join(jd_manager.PROJECT_ROOT, "output", "liveness_input_tmp.json")
+
+# How recently a JD needs to have been checked (or scanned -- see
+# scan.py's seeding of _liveness at write time) to skip re-checking it by
+# default. Unlike evaluate's skip (permanent -- a JD either has been
+# evaluated or hasn't), this is time-windowed since a posting can genuinely
+# go stale between runs.
+RECENCY_HOURS = 24
+
+
+def _is_recently_checked(jd_path: str) -> bool:
+    liveness = jd_manager.read_liveness(jd_path)
+    if not liveness or not liveness.get("checked_at"):
+        return False
+    try:
+        checked_at = datetime.datetime.fromisoformat(liveness["checked_at"])
+    except ValueError:
+        return False
+    return (datetime.datetime.now() - checked_at) < datetime.timedelta(hours=RECENCY_HOURS)
+
+
+def split_recently_checked(pending_paths: list) -> tuple:
+    """Splits pending_paths into (recently_checked, to_check), based on
+    whether each JD's persisted _liveness.checked_at is within
+    RECENCY_HOURS. Mirrors batch_evaluate.split_evaluated()'s shape so a
+    caller can show an accurate confirmation count before proceeding."""
+    recently_checked = [p for p in pending_paths if _is_recently_checked(p)]
+    to_check = [p for p in pending_paths if not _is_recently_checked(p)]
+    return recently_checked, to_check
 
 
 def _gather_candidates(pending_paths: list) -> list:
@@ -41,19 +70,30 @@ def _gather_candidates(pending_paths: list) -> list:
     return candidates
 
 
-def run_liveness_check() -> dict:
+def run_liveness_check(refresh: bool = False) -> dict:
     """
     Checks every pending JD's source_url, moves confirmed-expired ones to
-    jds/expired/. Returns a summary dict with keys: active, likely_active,
-    expired, uncertain, skipped, moved (plus error=True on a failure path).
+    jds/expired/. Skips any JD checked (or scanned -- see scan.py) within
+    RECENCY_HOURS unless refresh=True. Returns a summary dict with keys:
+    active, likely_active, expired, uncertain, skipped, recently_checked,
+    moved (plus error=True on a failure path).
     """
     pending_paths = jd_manager.get_pending_jds()
-    candidates = _gather_candidates(pending_paths)
-    skipped = len(pending_paths) - len(candidates)
+
+    if refresh:
+        recently_checked, to_check = [], pending_paths
+    else:
+        recently_checked, to_check = split_recently_checked(pending_paths)
+
+    candidates = _gather_candidates(to_check)
+    skipped = len(to_check) - len(candidates)
+
+    if recently_checked:
+        print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
 
     if not candidates:
-        print(f"Nothing to check -- {len(pending_paths)} pending JD(s), none with a source_url.")
-        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "moved": 0}
+        print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
+        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0}
 
     os.makedirs(os.path.dirname(LIVENESS_INPUT_PATH), exist_ok=True)
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
@@ -72,13 +112,13 @@ def run_liveness_check() -> dict:
         )
         if proc.returncode != 0:
             print(f"  ⚠️  Liveness check failed:\n{proc.stderr}")
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "moved": 0, "error": True}
+            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0, "error": True}
 
         try:
             results = json.loads(proc.stdout)
         except json.JSONDecodeError:
             print(f"  ⚠️  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "moved": 0, "error": True}
+            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0, "error": True}
     finally:
         if os.path.exists(LIVENESS_INPUT_PATH):
             os.remove(LIVENESS_INPUT_PATH)
@@ -95,8 +135,11 @@ def run_liveness_check() -> dict:
         if outcome not in ("active", "likely_active"):
             print(f"       {r.get('reason', '')}")
 
+        source_file = r.get("source_file")
+        if source_file and os.path.exists(source_file):
+            jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
+
         if outcome == "expired":
-            source_file = r.get("source_file")
             if source_file and os.path.exists(source_file):
                 dest = os.path.join(jd_manager.EXPIRED_DIR, os.path.basename(source_file))
                 shutil.move(source_file, dest)
@@ -107,7 +150,8 @@ def run_liveness_check() -> dict:
         f"{counts.get('likely_active', 0)} likely active, "
         f"{counts.get('expired', 0)} expired (moved to jds/expired/), "
         f"{counts.get('uncertain', 0)} uncertain (left in place), "
-        f"{skipped} skipped (no source_url)."
+        f"{skipped} skipped (no source_url), "
+        f"{len(recently_checked)} skipped (checked within {RECENCY_HOURS}h)."
     )
 
     return {
@@ -115,6 +159,7 @@ def run_liveness_check() -> dict:
         "likely_active": counts.get("likely_active", 0),
         "expired": counts.get("expired", 0),
         "uncertain": counts.get("uncertain", 0),
+        "recently_checked": len(recently_checked),
         "skipped": skipped,
         "moved": moved,
     }

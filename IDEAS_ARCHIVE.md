@@ -1011,6 +1011,70 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Four highest-impact-per-effort backlog items -- done 2026-07-21
+
+Picked via an explicit impact-vs-effort pass over the whole backlog
+(highest daily-workflow impact for the least build complexity), then
+built in that order. Full suite (729 tests, 9 new) green.
+
+- **LinkedIn JDs never got company research, closed.** `scan_linkedin.py`
+  hardcoded `"company_website": None` unconditionally, so every
+  LinkedIn-sourced resume/cover letter silently skipped
+  `ResumeEngine.research_company()` entirely, while JobRight-sourced ones
+  got it. Now passes through `company_link` (LinkedIn's own
+  `/company/<slug>` page -- the only company-related URL the
+  `linkedin_jobs_scraper` library exposes) instead. Honest caveat kept in
+  a code comment: this is a LinkedIn URL, not an external domain, and
+  LinkedIn blocks unauthenticated scraping on most of its pages --
+  `company_research.py`'s existing `MIN_USEFUL_CHARS` graceful
+  degradation makes this low-risk but also probably low-yield, not a full
+  fix. The real fallback-lookup design question (AI-searches-for-website)
+  stays open in `IDEAS.md`.
+- **Posting-legitimacy check, closed.** career-ops's original 6-block
+  evaluation had a scam/ghost-posting legitimacy assessment that didn't
+  survive the 2026-07-04 port -- confirmed missing via direct grep before
+  building anything. Added `posting_legitimacy`
+  ("High Confidence"/"Proceed with Caution"/"Suspicious") and
+  `posting_legitimacy_notes` to `FitEvaluationSchema` and
+  `evaluate_fit.md`'s prompt (condensed from career-ops's original Block
+  G criteria: posting freshness, description quality, practical
+  credibility), persisted via `save_evaluation()`, and surfaced two
+  places: the single-JD evaluate view (`_handle_evaluate_one`, shown only
+  when not "High Confidence" so the common case stays uncluttered) and an
+  inline flag on the batch fit table's Recommendation column. Also fixed
+  one leftover gendered pronoun ("her real experience" -> "the
+  candidate's real experience") found while editing the same prompt file
+  -- a genuine miss from the four full multi-user sweeps back on 2026-07-17.
+- **Liveness skip-by-recency, closed.** `run_liveness_check()` used to
+  re-check every pending JD's URL every run, even one confirmed `active`
+  five minutes ago. New `jd_manager.save_liveness()`/`read_liveness()`
+  (mirrors `save_evaluation()`/`read_evaluation()` exactly) persists a
+  `_liveness` block (`result`, `reason`, `checked_at`); `RECENCY_HOURS = 24`
+  and `liveness.split_recently_checked()` skip anything checked inside
+  that window by default, with a `--refresh` CLI flag (`resume liveness
+  --refresh`) to force a full re-check. **Also seeded at scan time:**
+  `scan.py`'s `_write_jd_file()` now stamps a fresh `_liveness` block
+  (`result: "active"`, reason `"confirmed to exist by scan"`) onto every
+  newly-written JD, so a posting found 5 minutes ago is already inside
+  its freshness window instead of triggering an immediate, redundant
+  separate check -- directly resolves the 2026-07-17 real-world data point
+  (104 JobRight results, 30 confusing `uncertain`s from same-minute
+  re-verification of brand-new results). Doesn't fix the aggregator-DOM
+  `uncertain` noise itself (still a separate, harder problem, noted as
+  such in the original write-up). **Side fix along the way:**
+  `jd_manager.read_jd_text()` generalized from hardcoded
+  `_evaluation`-only stripping to stripping any underscore-prefixed
+  metadata key, so `_liveness` (and anything persisted later) can never
+  leak into a Gemini prompt as job-description content -- exactly the gap
+  the original backlog item flagged as a risk if liveness ever read JD
+  content directly.
+- **`batch_evaluate.py`'s missing `───` separator, closed.** The smallest
+  of the four -- one line, matching the same divider convention already
+  used in `orchestrator.py`/`bootstrap_profile.py`'s progress loops. Left
+  `liveness.py`'s half of this same backlog item open (a real streaming-
+  architecture change, not a print statement -- `check-liveness.mjs`
+  still returns one captured blob per batch, not incremental results).
+
 ## Interactive-menu Help entry + emoji modernization -- done 2026-07-20
 
 Two Easy-tier items closed in one pass.

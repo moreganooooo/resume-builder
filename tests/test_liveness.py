@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import sys
@@ -153,3 +154,83 @@ class TestLiveness(unittest.TestCase):
         liveness.run_liveness_check()
 
         self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
+
+
+class TestRecencySkip(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_liveness_recency")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.expired_dir = os.path.join(self.tmp_dir, "expired")
+        self._real_expired_dir = jd_manager.EXPIRED_DIR
+        jd_manager.EXPIRED_DIR = self.expired_dir
+
+    def tearDown(self):
+        jd_manager.EXPIRED_DIR = self._real_expired_dir
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        if os.path.exists(self.tmp_dir):
+            os.rmdir(self.tmp_dir)
+
+    def _write(self, name, data):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return path
+
+    def test_split_recently_checked_separates_fresh_from_stale(self):
+        fresh_checked_at = (datetime.datetime.now() - datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+        stale_checked_at = (datetime.datetime.now() - datetime.timedelta(hours=48)).isoformat(timespec="seconds")
+        fresh = self._write("fresh.json", {"source_url": "https://x/1", "_liveness": {"result": "active", "checked_at": fresh_checked_at}})
+        stale = self._write("stale.json", {"source_url": "https://x/2", "_liveness": {"result": "active", "checked_at": stale_checked_at}})
+        never = self._write("never.json", {"source_url": "https://x/3"})
+
+        recently_checked, to_check = liveness.split_recently_checked([fresh, stale, never])
+
+        self.assertEqual(recently_checked, [fresh])
+        self.assertEqual(set(to_check), {stale, never})
+
+    @patch("liveness.jd_manager.get_pending_jds")
+    @patch("liveness.subprocess.run")
+    def test_recently_checked_jd_is_skipped_by_default(self, mock_run, mock_get_pending):
+        fresh_checked_at = (datetime.datetime.now() - datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+        fresh = self._write("fresh.json", {"source_url": "https://x/1", "_liveness": {"result": "active", "checked_at": fresh_checked_at}})
+        mock_get_pending.return_value = [fresh]
+
+        summary = liveness.run_liveness_check()
+
+        mock_run.assert_not_called()
+        self.assertEqual(summary["recently_checked"], 1)
+
+    @patch("liveness.jd_manager.get_pending_jds")
+    @patch("liveness.subprocess.run")
+    def test_refresh_flag_re_checks_recently_checked_jds(self, mock_run, mock_get_pending):
+        fresh_checked_at = (datetime.datetime.now() - datetime.timedelta(hours=1)).isoformat(timespec="seconds")
+        fresh = self._write("fresh.json", {"source_url": "https://x/1", "_liveness": {"result": "active", "checked_at": fresh_checked_at}})
+        mock_get_pending.return_value = [fresh]
+        mock_run.return_value = _proc(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": fresh, "url": "https://x/1", "result": "active", "reason": "ok"},
+        ]))
+
+        summary = liveness.run_liveness_check(refresh=True)
+
+        mock_run.assert_called_once()
+        self.assertEqual(summary["active"], 1)
+
+    @patch("liveness.jd_manager.get_pending_jds")
+    @patch("liveness.subprocess.run")
+    def test_checked_result_is_persisted_onto_the_jd(self, mock_run, mock_get_pending):
+        path = self._write("a.json", {"source_url": "https://x/1"})
+        mock_get_pending.return_value = [path]
+        mock_run.return_value = _proc(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": path, "url": "https://x/1", "result": "active", "reason": "apply button found"},
+        ]))
+
+        liveness.run_liveness_check()
+
+        persisted = jd_manager.read_liveness(path)
+        self.assertEqual(persisted["result"], "active")
+        self.assertEqual(persisted["reason"], "apply button found")

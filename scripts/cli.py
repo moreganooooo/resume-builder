@@ -178,10 +178,12 @@ def scan_cmd(sources):
 
 
 @cli.command(name="liveness")
-def liveness_cmd():
+@click.option("--refresh", is_flag=True, default=False,
+              help="Re-check every pending JD's liveness, even ones checked within the recency window")
+def liveness_cmd(refresh):
     """Check every pending JD's source_url, moving expired ones to jds/expired/."""
     cli_art.display_banner("Checking posting liveness")
-    liveness_module.run_liveness_check()
+    liveness_module.run_liveness_check(refresh=refresh)
 
 
 @cli.command()

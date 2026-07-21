@@ -251,10 +251,15 @@ def render_fit_table(results: list) -> None:
             table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-")
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
+        legitimacy = r.get("posting_legitimacy")
+        recommendation_text = f"[{color}]{r['recommendation']}[/{color}]"
+        if legitimacy and legitimacy != "High Confidence":
+            flag_color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
+            recommendation_text += f" [{flag_color}]({theme.ICONS['warning']} {legitimacy})[/{flag_color}]"
         table.add_row(
             str(i),
             f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
-            f"[{color}]{r['recommendation']}[/{color}]",
+            recommendation_text,
             r["company_name"],
             r["job_title"],
             _short_why(r.get("why")),

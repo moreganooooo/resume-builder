@@ -100,6 +100,8 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "recommendation": evaluation.get("recommendation"),
         "why": evaluation.get("why") or "",
         "hard_blockers": evaluation.get("hard_blockers") or [],
+        "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
+        "posting_legitimacy_notes": evaluation.get("posting_legitimacy_notes") or "",
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
     with open(jd_path, "w", encoding="utf-8") as f:
@@ -119,22 +121,59 @@ def read_evaluation(jd_path: str) -> dict | None:
     return data.get("_evaluation")
 
 
+def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
+    """Persists a liveness result into the JD's own JSON file under a
+    _liveness key (result, reason, checked_at), matching _evaluation's
+    existing pattern -- lets liveness.py skip re-checking any JD whose
+    _liveness.checked_at is still within the recency window. No-ops
+    silently for non-JSON-dict JDs, same as save_evaluation()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_liveness"] = {
+        "result": result,
+        "reason": reason,
+        "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(jd_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_liveness(jd_path: str) -> dict | None:
+    """Reads back a persisted _liveness (see save_liveness()), or None if
+    the JD isn't a JSON dict or has never had a liveness check recorded."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_liveness")
+
+
 def read_jd_text(jd_path: str) -> str:
-    """Reads a JD file's content for prompt use, stripping the persisted
-    _evaluation key (see save_evaluation()) if present so a prior
-    evaluation's score/recommendation never leaks into a Gemini prompt as
-    if it were job-description content. Passes plain-text (or otherwise
-    non-JSON-dict) JDs through unchanged. Raises FileNotFoundError exactly
-    like a raw open() would, so existing call-site error handling needs no
-    changes."""
+    """Reads a JD file's content for prompt use, stripping any persisted
+    underscore-prefixed metadata key (_evaluation, _liveness, ...; see
+    save_evaluation()/save_liveness()) if present so a prior evaluation's
+    score/recommendation or a liveness result never leaks into a Gemini
+    prompt as if it were job-description content. Passes plain-text (or
+    otherwise non-JSON-dict) JDs through unchanged. Raises
+    FileNotFoundError exactly like a raw open() would, so existing
+    call-site error handling needs no changes."""
     with open(jd_path, "r", encoding="utf-8") as f:
         raw_text = f.read()
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError:
         return raw_text
-    if isinstance(data, dict) and "_evaluation" in data:
-        data = {k: v for k, v in data.items() if k != "_evaluation"}
+    if isinstance(data, dict) and any(k.startswith("_") for k in data):
+        data = {k: v for k, v in data.items() if not k.startswith("_")}
         return json.dumps(data, indent=2)
     return raw_text
 

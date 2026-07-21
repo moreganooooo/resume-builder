@@ -48,19 +48,6 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Easy
 
-### Posting-legitimacy check missing from ported evaluate logic
-
-Found during a 2026-07-21 sibling-repo audit: career-ops's original
-6-block fit-evaluation included a scam/ghost-posting legitimacy check as
-one block; confirmed via direct grep that resume-builder's ported
-`evaluate_fit()` has no equivalent anywhere in `orchestrator.py` or
-`resume-engine/prompts/` -- it was dropped somewhere during the 2026-07-04
-port, not a deliberate cut. No open design question -- add an equivalent
-check/flag to the existing evaluation schema and prompt. **Difficulty:
-Easy.** It's one block bolted onto an already-existing, already-working
-schema and prompt (`evaluate_fit()`) -- adding fields/criteria to
-something already built and proven, not new infrastructure.
-
 ### Rename the `resume` CLI alias
 
 "Resume" is ambiguous in a way that's mildly confusing in context --
@@ -75,63 +62,6 @@ name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
 chosen.
 
 ## Medium
-
-### Liveness skip-by-recency (persist a check date, skip if checked recently)
-
-A close parallel to the evaluate skip-by-default feature built
-2026-07-08 (`batch_evaluate.split_evaluated()`/`save_evaluation()`) --
-same shape, applied to `liveness.py` instead. Today,
-`run_liveness_check()` persists nothing for `active`/`likely_active`/
-`uncertain` results (only `expired` triggers a real action, moving the
-file to `jds/expired/`) -- every result is printed once and forgotten, so
-re-running liveness re-checks every pending JD's URL every time, even one
-confirmed `active` five minutes ago. The ask: persist a `_liveness` block
-(result, reason, `checked_at`) into each JD's own JSON, matching
-`_evaluation`'s existing pattern, and skip re-checking any JD whose
-`_liveness.checked_at` is within some recency window (Morgan suggested 24
-hours) by default.
-
-**The one real twist vs. evaluate's skip logic:** evaluate's skip is
-permanent (a JD either has been evaluated or hasn't -- no expiry), while
-this needs an actual time comparison (`checked_at` newer than N hours ago
--> skip; older -> re-check). Otherwise the same shape applies: a
-`--refresh`-style escape hatch to force-recheck everything, and the
-confirmation-prompt-accuracy lesson from the evaluate fix (show the real
-count of JDs *about to be checked* after the skip filter, not the raw
-pending count, learned the hard way on 2026-07-08). Also needs
-`jd_manager.read_jd_text()`'s same underscore-key-stripping treatment if
-liveness's checker ever reads JD content directly rather than just the
-`source_url` field it already extracts today.
-
-**Update 2026-07-17 (question raised, not yet built): should a JD found
-by a scan just now need a liveness check at all?** Real-world data point:
-a JobRight scan returned 104 JDs; the immediately-following liveness
-check called 71 `active`, 2 `likely_active`, 30 `uncertain`, 1 `skipped`
-(no `source_url`). Traced `check-liveness.mjs`
-(`scripts/liveness-core.mjs`): it fetches each JD's own `source_url` via
-headless browser and looks for an apply button (-> `active`), JD-shaped
-content with no clear button (-> `likely_active`), thin/ambiguous content
-(-> `uncertain`), or an explicit expired/404/redirect pattern (->
-`expired`, not seen in this run). Confirmed in `scan_jobright.py`:
-`source_url` is JobRight's `originalUrl` -- the posting on whatever
-external site/ATS JobRight aggregated it from, not jobright.ai itself.
-That explains the 30 `uncertain`: it's re-fetching a *different* page per
-company (Greenhouse, Lever, Workday, a custom careers page, ...), each
-with its own DOM shape and its own bot-detection/auth-wall quirks -- a
-real, still-open posting can easily fail to show a recognizable apply
-button on a site the heuristic hasn't seen before, with no way to
-distinguish that from an actually-thin listing today. **The proposed
-fix, building on the recency-skip work above:** seed `_liveness.checked_at`
-at *scan* time (not just at the next liveness run) so a JD found 5
-minutes ago is already inside its freshness window and doesn't need an
-immediate separate check at all -- the scan itself becomes a form of
-"confirmed to exist right now" signal. Doesn't fix the aggregator-DOM
-`uncertain` noise itself (a separate, harder problem -- maybe a looser
-bar specifically for aggregator-sourced URLs, or accepting `uncertain`
-means "leave in place, don't `active`-flag falsely" rather than trying to
-eliminate it), but removes the most common case that made this
-confusing: brand-new results getting immediately and redundantly
-re-verified.
 
 ### Multi-select pickers for "Specific JD" actions
 
@@ -191,11 +121,9 @@ headers, the PDF trim loop, banner colors) -- `scan.py`, `liveness.py`,
 and `batch_evaluate.py` were never part of that pass. **`scan.py`'s piece
 is now done** (`[i/total]` + explicit skip-reason per job, shipped
 2026-07-17 alongside the evaluate-rationale/voice-anchor work -- see
-`IDEAS_ARCHIVE.md`). Still open:
-- `batch_evaluate.py` already has a `[i+1/total]` counter per JD
-  (`"  [{i + 1}/{len(pending_paths)}] Evaluating {company}..."`) -- the
-  closest to the audit-loop/bootstrap-polish standard, but still no
-  `───` separator between entries.
+`IDEAS_ARCHIVE.md`). **`batch_evaluate.py`'s piece is now done too**
+(`───` separator added between entries, 2026-07-21, matching the
+audit-loop/bootstrap-polish standard). Still open:
 - `liveness.py` is architecturally different from the other two: it
   shells out to `check-liveness.mjs` once for the *entire* batch via
   `subprocess.run(..., capture_output=True)`, so there's no per-JD
@@ -214,24 +142,28 @@ Raised 2026-07-17: `ResumeEngine.research_company()` only runs when
 availability is genuinely inconsistent across sources -- checked
 directly: `scan_jobright.py` sets it from JobRight's own `companyURL`
 field (itself not always populated by JobRight), while `scan_linkedin.py`
-hardcodes `"company_website": None` unconditionally -- LinkedIn-sourced
-JDs never get company research today, not because of missing data so
-much as the scraper never even tries to find it. Two separate
-sub-problems worth separating:
-1. **Easy part:** `scan_linkedin.py` could at least attempt to surface a
-   company website from whatever LinkedIn's job page already exposes
-   (a company page link is usually present even when a direct external
-   URL isn't), instead of hardcoding `None`.
-2. **The real open design question:** a fallback lookup for JDs with no
-   website from either source -- "AI searches for the company's website"
-   as Morgan put it. Worth investigating whether Gemini's API has a
-   built-in search-grounding tool (Google's "grounding with Google
-   Search" feature exists on recent Gemini models) before reaching for a
-   second, different model/provider just for this -- if grounding is
-   available and reasonably cheap, it would fit into `company_research.py`
-   as an additional lookup path rather than a whole separate integration.
-   Needs a real spike/investigation before committing to an approach, not
-   just an assumption either way.
+hardcoded `"company_website": None` unconditionally -- LinkedIn-sourced
+JDs never got company research at all, not because of missing data so
+much as the scraper never even trying to find it. **The mechanical half
+is done, 2026-07-21:** `scan_linkedin.py` now passes through
+`company_link` (LinkedIn's own `/company/<slug>` page, the only
+company-related URL the `linkedin_jobs_scraper` library exposes) instead
+of hardcoding `None`. Worth noting honestly: this is a LinkedIn URL, not
+an external company domain, and LinkedIn blocks unauthenticated scraping
+on most of its pages -- `company_research.py`'s existing
+`MIN_USEFUL_CHARS` graceful-degradation means this is low-risk (same
+practical outcome as before on a failed attempt) but also probably
+low-yield (rarely succeeds) rather than a full fix. **Still open, the
+real design question:** a genuine fallback lookup for JDs with no usable
+website from either source -- "AI searches for the company's website" as
+Morgan put it. Worth investigating whether Gemini's API has a built-in
+search-grounding tool (Google's "grounding with Google Search" feature
+exists on recent Gemini models) before reaching for a second, different
+model/provider just for this -- if grounding is available and reasonably
+cheap, it would fit into `company_research.py` as an additional lookup
+path rather than a whole separate integration. Needs a real
+spike/investigation before committing to an approach, not just an
+assumption either way.
 
 ### Follow-up cadence tracker
 
@@ -362,8 +294,7 @@ eval-notes persistence, the browse/detail/act UI pattern) is still fully
 open.
 
 A menu option listing every evaluated job at once (score, recommendation,
-last liveness check date if the liveness skip-by-recency item above
-exists, Completed/Pending status), with a "View More Details" drill-in
+last liveness check date, Completed/Pending status), with a "View More Details" drill-in
 (full JD text + the evaluation's reasoning) and a manual Skip/Archive
 action per role. Genuinely more than a picker -- it's a new interaction
 shape (browse a list -> drill into one item -> take an action on it) that
@@ -388,9 +319,9 @@ pick-and-immediately-act flow, not a browse-then-decide one.
   (`dimension_scores`, `archetype`, etc.) for a genuine drill-in "View
   More Details" breakdown -- that's still a real (if modest) schema
   change to `_evaluation`, not free.
-- **Last liveness check date** depends on the liveness skip-by-recency
-  item above existing first -- there's nothing to show here until that's
-  built.
+- **Last liveness check date -- unblocked 2026-07-21.** `_liveness.checked_at`
+  now exists per JD (`jd_manager.save_liveness()`/`read_liveness()`), so
+  the data this column needs is already there; just needs surfacing.
 - **The browse/detail/act UI pattern itself** needs its own design pass:
   paginated vs. scrollable for 300+ pending JDs, how "View More Details"
   composes with questionary's existing single-screen-per-prompt model

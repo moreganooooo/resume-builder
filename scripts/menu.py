@@ -246,9 +246,12 @@ def _handle_evaluate_one() -> bool:
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}")
     if result.get("why"):
-        cli_art.console.print(f"[bold]Why:[/bold] {result['why']}\n")
-    else:
-        cli_art.console.print("")
+        cli_art.console.print(f"[bold]Why:[/bold] {result['why']}")
+    legitimacy = result.get("posting_legitimacy")
+    if legitimacy and legitimacy != "High Confidence":
+        color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
+        cli_art.console.print(f"[bold {color}]Posting legitimacy: {legitimacy}[/bold {color}] -- {result.get('posting_legitimacy_notes', '')}")
+    cli_art.console.print("")
     return True
 
 
