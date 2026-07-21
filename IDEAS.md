@@ -48,6 +48,19 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Easy
 
+### Posting-legitimacy check missing from ported evaluate logic
+
+Found during a 2026-07-21 sibling-repo audit: career-ops's original
+6-block fit-evaluation included a scam/ghost-posting legitimacy check as
+one block; confirmed via direct grep that resume-builder's ported
+`evaluate_fit()` has no equivalent anywhere in `orchestrator.py` or
+`resume-engine/prompts/` -- it was dropped somewhere during the 2026-07-04
+port, not a deliberate cut. No open design question -- add an equivalent
+check/flag to the existing evaluation schema and prompt. **Difficulty:
+Easy.** It's one block bolted onto an already-existing, already-working
+schema and prompt (`evaluate_fit()`) -- adding fields/criteria to
+something already built and proven, not new infrastructure.
+
 ### Rename the `resume` CLI alias
 
 "Resume" is ambiguous in a way that's mildly confusing in context --
@@ -220,47 +233,46 @@ sub-problems worth separating:
    Needs a real spike/investigation before committing to an approach, not
    just an assumption either way.
 
-### Posting-legitimacy check missing from ported evaluate logic
-
-Found during a 2026-07-21 sibling-repo audit: career-ops's original
-6-block fit-evaluation included a scam/ghost-posting legitimacy check as
-one block; confirmed via direct grep that resume-builder's ported
-`evaluate_fit()` has no equivalent anywhere in `orchestrator.py` or
-`resume-engine/prompts/` -- it was dropped somewhere during the 2026-07-04
-port, not a deliberate cut. No open design question -- add an equivalent
-check/flag to the existing evaluation schema and prompt.
-
 ### Follow-up cadence tracker
 
-Found during the same audit: career-ops's `modes/followup.md` tracks
-per-application follow-up timing (overdue/waiting/cold) and drafts
+Found during a 2026-07-21 sibling-repo audit: career-ops's `modes/followup.md`
+tracks per-application follow-up timing (overdue/waiting/cold) and drafts
 tailored follow-up emails/LinkedIn notes. Not ported, not tracked
 anywhere yet. Real dovetail with the already-planned scheduler (item #9)
 -- both are about "surface things Morgan should act on without her having
-to remember to check."
+to remember to check." **Difficulty: Medium-Hard.** Checked career-ops
+directly -- this has real backing computation, not just a prompt: a
+341-line `followup-cadence.mjs` (cadence classification logic) plus a
+436-line `modes/followup.md` (the drafting flow). Porting means real logic
+(not just prompt adaptation), a new tracker file (`follow-ups.md`
+equivalent), and an interactive drafting flow -- closest prior art is
+`resume polish`'s existing chat-based pattern. Shape is well-understood
+(close cousin of the applications tracker already built), just more
+substantial than the other three modes found in this same audit.
 
 ### Contact/outreach finder
 
 Found during the same audit: career-ops's `modes/contact.md` identifies
 the best person to contact for a role and drafts a short, human-sounding
 outreach message. Genuinely new capability, not represented anywhere in
-resume-builder today.
+resume-builder today. **Difficulty: Medium.** Checked career-ops directly
+-- 394-line prompt file, no distinct backing script found, meaning this is
+mostly LLM reasoning over data resume-builder already has (JD text,
+company research) rather than logic that needs porting. Main work is
+adapting the prompt plus a lightweight interactive flow (see `resume
+polish` for the closest existing pattern), not porting computation.
 
 ### Multi-job comparison mode
 
 Found during the same audit: career-ops's `modes/offers.md` ranks
 multiple job offers side-by-side, distinct from the single-JD fit
-evaluation already ported. Not tracked anywhere yet.
-
-### Application pattern analysis
-
-Found during the same audit: career-ops's `modes/patterns.md` +
-`analyze-patterns.mjs` mine historical evaluations/applications/outcomes
-for what's actually converting (by archetype, etc.), not just a rejection
-log. Independently reinforced -- job_automater's own README lists an
-"Analytics Dashboard" under its own Future Enhancements wishlist, so this
-is a capability both sibling projects separately wanted. Not tracked
-anywhere in resume-builder yet.
+evaluation already ported. Not tracked anywhere yet. **Difficulty:
+Medium.** Checked career-ops directly -- 316-line prompt file, also no
+distinct backing script found. Comparison logic can likely lean on
+`_evaluation` data already persisted per JD (`composite_score`,
+`recommendation`, `why`, see `jd_manager.save_evaluation()`) rather than
+needing new analysis -- mostly a synthesis/presentation problem across
+JDs already evaluated, not new computation.
 
 ### Rotate across multiple API keys on rate-limit errors
 
@@ -318,6 +330,22 @@ columns, verify attribution before adding a row). Non-essential, no
 deadline -- whenever Morgan wants to supply more material.
 
 ## Hard
+
+### Application pattern analysis
+
+Found during the 2026-07-21 sibling-repo audit: career-ops's
+`modes/patterns.md` + `analyze-patterns.mjs` mine historical
+evaluations/applications/outcomes for what's actually converting (by
+archetype, etc.), not just a rejection log. Independently reinforced --
+job_automater's own README lists an "Analytics Dashboard" under its own
+Future Enhancements wishlist, so this is a capability both sibling
+projects separately wanted. Not tracked anywhere in resume-builder yet.
+**Difficulty: Hard.** Checked career-ops directly -- `analyze-patterns.mjs`
+is 692 lines, the largest backing script found across all four modes
+surfaced in this audit, doing real historical mining across
+evaluations/outcomes. Genuine analytical logic to port or rebuild (not
+prompt adaptation) -- closest in spirit to a small analytics engine, not
+a quick feature add.
 
 ### "List Jobs" / "View Pipeline" browsing command
 
