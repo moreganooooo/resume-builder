@@ -1037,12 +1037,20 @@ Two Easy-tier items closed in one pass.
   `bullet_bank` to cover unrelated meanings, since those are tied to
   specific menu-domain concepts elsewhere. Plain (non-f) print strings
   got an `f` prefix added where needed so the interpolation actually
-  evaluates. **Noted, not fixed (out of scope):** `bootstrap_profile.py`
-  has its own, unconverted `✅`/`🔧` pair for an equivalent KEEP/MANUAL
-  status marker, built 2026-07-17 -- after the menu's icon system already
-  existed. Not part of this item's stated scope (only rewrite_bullets.py/
-  orchestrator.py), but worth a follow-up pass someday for full
-  consistency. Full suite (720 tests) green after both changes.
+  evaluates. Full suite (720 tests) green after both changes.
+- **Follow-up, same day: bootstrap_profile.py and bootstrap_bullet_bank.py
+  swept too, closing the gap flagged above.** `bootstrap_profile.py`'s own
+  unconverted `✅`/`🔧` KEEP/MANUAL status pair (built 2026-07-17, after
+  the menu's icon system already existed) now uses `theme.ICONS['success']`/
+  `theme.ICONS['warning']`, plus one `📝`-prefixed progress line ->
+  `theme.ICONS['hint']`. While in there, `bootstrap_bullet_bank.py`
+  turned out to have the same drift -- its `_STAGE_HINTS` dict (6 entries)
+  used a raw `\U0001F4A1` (💡) literal that happened to already be the
+  *exact same glyph* as `theme.ICONS['hint']`'s Unicode fallback, just not
+  wired through `theme` (so it wouldn't respect
+  `RESUME_BUILDER_ICONS=unicode`/Nerd-Font switching); one closing
+  `\U0001F389` ("All done!") -> `theme.ICONS['success']`. `bootstrap_extractors.py`
+  checked and already clean, no emoji at all. Full suite (720 tests) green.
 
 ## Onboarding copy, evaluate rationale, voice-anchor drafting -- done 2026-07-17
 
