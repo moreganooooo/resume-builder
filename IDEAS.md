@@ -36,8 +36,8 @@ have been moved to the archive, so the sequence below starts at 4.
 | 10 | Mongo migration | Medium | The liveness-check half of this item is done (archived). Migration itself still undone -- tied to the long-term three-way merge. |
 | 11 | Multi-select "Specific JD" pickers (space-bar toggle) | -- | **Done 2026-07-21 (archived)**, folded into the "Browse & Manage Jobs" build alongside #15 and multi-job comparison -- see `IDEAS_ARCHIVE.md`. |
 | 12 | Help command in the interactive menu | -- | **Done 2026-07-20 (archived).** See `IDEAS_ARCHIVE.md`. |
-| 13 | "Doctor" script (dependency/asset checks + test run) | Medium | See below. |
-| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | Hard | Bullet-bank menu done 2026-07-15, including a real maintenance section inside it. Still open: a top-level, cross-feature "Maintenance" submenu (would also house #13's doctor script). See below. |
+| 13 | "Doctor" script (dependency/asset checks + test run) | -- | **Done 2026-07-22 (archived)**, built together with #14's Maintenance submenu -- see `IDEAS_ARCHIVE.md`. |
+| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | -- | **Done.** Bullet-bank menu done 2026-07-15 (archived). The top-level "Maintenance" submenu shipped 2026-07-22 as the general home for admin tasks (doctor checks today) -- deliberately kept separate from "Manage Bullet Bank"'s own already-working maintenance section rather than merging them. See `IDEAS_ARCHIVE.md`. |
 | 15 | "List Jobs" / "View Pipeline" browsing command | -- | **Done 2026-07-21 (archived)** as "Browse & Manage Jobs" -- browse, drill-in, Archive, and bulk actions across every evaluated JD, pending or completed. Retired the old "View Application Tracker" entry entirely. See `IDEAS_ARCHIVE.md`. |
 | 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | -- | **Done 2026-07-21 (archived).** See `IDEAS_ARCHIVE.md`. |
 
@@ -62,29 +62,6 @@ name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
 chosen.
 
 ## Medium
-
-### "Doctor" script -- dependency/asset checks + test run
-
-job_automater has real prior art for this exact pattern (full detail in
-`IDEAS_ARCHIVE.md`'s incident history): `system_checker.py` (Python
-version, MongoDB, pdflatex, pip) plus `config_validator.py` (API keys,
-contact fields, etc.) together form its "doctor" equivalent, run via its
-`setup`/`validate-config` commands. resume-builder's own version would
-check things specific to this pipeline instead: Python 3.10+, `.venv/`
-exists with `requirements.txt` installed, Node + Playwright's Chromium
-browser installed, `GEMINI_API_KEY` (and `JOBRIGHT_COOKIE_STRING` if scan
-is used) present in `.env`, the static DM Sans font files exist at
-`resume-engine/fonts/`, `docs/MorganEscottSignature2025.png` exists (the
-README already documents this one degrading gracefully if missing, but a
-doctor script could flag it proactively instead), and the `KB_ALLOWLIST`
-files `orchestrator.py` references are all actually present on disk.
-Ending with a real test-suite run
-(`python -m unittest discover -s tests`) and a plain-English summary of
-what passed/failed/is missing, with a one-line suggested fix per problem
-found, completes the picture. No genuinely open design question here --
-it's broad (touches the Python env, Node env, filesystem, API keys, and
-tests) but every individual check is a simple, well-understood
-existence/version check.
 
 ### Prettier, more informative live progress for liveness / evaluate
 
@@ -196,37 +173,6 @@ surfaced in this audit, doing real historical mining across
 evaluations/outcomes. Genuine analytical logic to port or rebuild (not
 prompt adaptation) -- closest in spirit to a small analytics engine, not
 a quick feature add.
-
-### Bullet-bank reintegration menu option (+ eventual "Maintenance" submenu) -- menu done 2026-07-15
-
-Built (`docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md`,
-archived): a "Manage Bullet Bank" entry in the main interactive menu
-(`scripts/bullet_bank_menu.py`), surfacing a status table across all 6
-pipeline stages plus the `triage_needs_review.py`/`retire_rewrite_queue.py`
-maintenance scripts. The open pipeline-order question this section used to
-flag (whether `triage_needs_review.py` -> `score_keeper_gems.py` ->
-`embed_bullet_bank.py` was the real, correct chain) got resolved as a side
-effect of the same build, alongside the `cluster_bullet_bank.py` ->
-`bullet-bank-clustered.csv` naming mismatch -- see `IDEAS_ARCHIVE.md`'s
-daily build log and Evidence bank Phase 1 section for full detail.
-
-**Still open, not part of that build:** the broader "Maintenance" submenu
-idea below (grouping this alongside a future doctor script and anything
-else administrative) -- today maintenance only exists nested inside
-"Manage Bullet Bank," scoped to the bullet bank specifically, not as its
-own general category one level up in the main menu.
-
-**The "Maintenance" submenu idea:** rather than bolting bullet-bank
-triage directly onto the main menu list, Morgan's suggestion is a
-dedicated "Maintenance" entry leading to its own submenu of
-background/administrative tasks (this bullet-bank reintegration flow,
-and eventually the doctor script above, maybe others later) -- each
-showing something like "Last run: 2026-07-07, 3 days ago." That needs a
-small persisted "when did this last run" marker per task (a gitignored
-JSON/text file per task, following this project's existing tracker-file
-conventions, is probably the simplest option) -- not itself hard, but
-worth designing once there's more than one maintenance task to actually
-house in it.
 
 ### Repo reorganization / cleanup pass
 

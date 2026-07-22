@@ -414,6 +414,8 @@ HELP_ENTRIES = [
     ("resume test", "run the full test suite (compact: dots + summary)"),
     ("resume test -v", "same, but lists every test by name"),
     ("resume test -vv", "same, but shows the app's own logging too"),
+    ("resume doctor", "check dependencies/assets/config, then run the test suite"),
+    ("resume doctor --skip-tests", "same, but skip the (slower) test-suite run"),
 ]
 
 
@@ -432,3 +434,36 @@ def display_applications_tracker(content: str) -> None:
     row's clickable "[Apply](source_url)" link render as-is, no custom
     parsing needed since the file is already valid GFM markdown."""
     console.print(Markdown(content))
+
+
+def render_doctor_report(checks: list, test_result: tuple | None = None) -> None:
+    """checks: doctor.run_checks()'s result list. test_result: doctor.run_
+    test_suite()'s (passed, summary) tuple, or None if the test-suite step
+    was skipped/declined. Ends with a plain-English "N passed, M problems
+    found" line and a one-line suggested fix per failing check, so nothing
+    requires opening a JSON blob to act on."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("Check")
+    table.add_column("Status")
+    table.add_column("Detail")
+
+    failed = []
+    for c in checks:
+        icon = f"[{theme.SUCCESS}]{theme.ICONS['success']}[/{theme.SUCCESS}]" if c["passed"] else f"[{theme.ERROR}]{theme.ICONS['error']}[/{theme.ERROR}]"
+        table.add_row(c["name"], icon, c["detail"])
+        if not c["passed"]:
+            failed.append(c)
+
+    console.print(Panel(table, title="Doctor Checks", border_style=theme.BRAND, box=box.ROUNDED))
+
+    if test_result is not None:
+        test_passed, test_summary = test_result
+        icon = SUCCESS if test_passed else ERROR
+        console.print(f"\n{icon} Test suite: {test_summary}")
+
+    if failed:
+        console.print(f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]")
+        for c in failed:
+            console.print(f"  {theme.ICONS['warning']} {c['name']}: {c['fix']}")
+    else:
+        console.print(f"\n{SUCCESS} All checks passed.")

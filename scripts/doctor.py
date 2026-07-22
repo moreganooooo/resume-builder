@@ -1,0 +1,211 @@
+"""
+doctor.py — dependency/asset/config checks plus a real test-suite run,
+with a plain-English summary and a one-line suggested fix per problem
+found. Prior art: job_automater's system_checker.py + config_validator.py
+(see IDEAS_ARCHIVE.md); this version is scoped to resume-builder's own
+real dependencies instead.
+
+Pure logic module -- no printing here. cli_art.render_doctor_report()
+handles display; menu.py/cli.py call run_checks()/run_test_suite() and
+pass the results to it.
+"""
+
+import importlib
+import os
+import shutil
+import subprocess
+import sys
+
+import profile_paths
+
+PROJECT_ROOT = profile_paths.PROJECT_ROOT
+MIN_PYTHON = (3, 10)
+
+# pip package name -> the name actually used in `import ...`, wherever
+# they differ, so this can check every line in requirements.txt for real
+# rather than spot-checking a handful.
+REQUIRED_PACKAGES = {
+    "pandas": "pandas", "numpy": "numpy", "pyyaml": "yaml", "pydantic": "pydantic",
+    "requests": "requests", "python-dotenv": "dotenv", "google-genai": "google.genai",
+    "click": "click", "rich": "rich", "linkedin-jobs-scraper": "linkedin_jobs_scraper",
+    "selenium": "selenium", "webdriver-manager": "webdriver_manager",
+    "beautifulsoup4": "bs4", "browser_cookie3": "browser_cookie3", "questionary": "questionary",
+    "python-docx": "docx", "python-pptx": "pptx", "odfpy": "odf", "openpyxl": "openpyxl",
+}
+
+FONT_FILES = [
+    "DMSans-ExtraBold-static.ttf", "DMSans-Italic-static.ttf", "DMSans-Regular-static.ttf",
+    "dm-serif-display-latin-ext.woff2", "dm-serif-display-latin.woff2",
+]
+
+SIGNATURE_PATH = os.path.join(PROJECT_ROOT, "docs", "MorganEscottSignature2025.png")
+PLAYWRIGHT_CACHE_DIR = os.path.join(os.path.expanduser("~"), "Library", "Caches", "ms-playwright")
+
+
+def _check(name: str, passed: bool, detail: str, fix: str = "") -> dict:
+    return {"name": name, "passed": passed, "detail": detail, "fix": fix if not passed else ""}
+
+
+def check_python_version() -> dict:
+    ok = sys.version_info[:2] >= MIN_PYTHON
+    return _check(
+        "Python version", ok,
+        f"{sys.version.split()[0]} (need >= {'.'.join(map(str, MIN_PYTHON))})",
+        "Install Python 3.10+ and rebuild .venv/ (see CLAUDE.md Setup).",
+    )
+
+
+def check_venv() -> dict:
+    venv_path = os.path.join(PROJECT_ROOT, ".venv")
+    exists = os.path.isdir(venv_path)
+    active = sys.prefix != sys.base_prefix
+    ok = exists and active
+    detail = f".venv/ {'found' if exists else 'missing'}, {'active' if active else 'not active'} in this process"
+    return _check(
+        ".venv/ exists and is active", ok, detail,
+        "source .venv/bin/activate (rebuild first if missing: "
+        "/usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate && "
+        "pip install -r requirements.txt).",
+    )
+
+
+def check_python_packages() -> dict:
+    missing = []
+    for pip_name, import_name in REQUIRED_PACKAGES.items():
+        try:
+            importlib.import_module(import_name)
+        except ImportError:
+            missing.append(pip_name)
+    ok = not missing
+    return _check(
+        "Python packages (requirements.txt)", ok,
+        "all installed" if ok else f"missing: {', '.join(missing)}",
+        f"pip install {' '.join(missing)}" if missing else "",
+    )
+
+
+def check_node() -> dict:
+    path = shutil.which("node")
+    return _check(
+        "Node.js", path is not None, path or "not found on PATH",
+        "Install Node.js (https://nodejs.org) -- needed for PDF rendering via Playwright.",
+    )
+
+
+def check_playwright_npm_package() -> dict:
+    ok = os.path.isdir(os.path.join(PROJECT_ROOT, "node_modules", "playwright"))
+    return _check(
+        "Playwright npm package", ok,
+        "installed" if ok else "node_modules/playwright not found",
+        "npm install (package.json already lists playwright as a dependency).",
+    )
+
+
+def check_playwright_chromium() -> dict:
+    ok = False
+    if os.path.isdir(PLAYWRIGHT_CACHE_DIR):
+        ok = any(name.startswith("chromium-") for name in os.listdir(PLAYWRIGHT_CACHE_DIR))
+    return _check(
+        "Playwright Chromium browser", ok,
+        "found" if ok else f"no chromium-* install found under {PLAYWRIGHT_CACHE_DIR}",
+        "npx playwright install chromium",
+    )
+
+
+def _env_values() -> dict:
+    from dotenv import dotenv_values
+    path = profile_paths.env_path()
+    return dotenv_values(path) if os.path.exists(path) else {}
+
+
+def check_gemini_api_key() -> dict:
+    values = _env_values()
+    in_file = bool(values.get("GEMINI_API_KEY"))
+    has_key = in_file or bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+    detail = f"set in {profile_paths.env_path()}" if in_file else ("set in shell environment" if has_key else "not found")
+    return _check(
+        "GEMINI_API_KEY", has_key, detail,
+        f"Add GEMINI_API_KEY=... to {profile_paths.env_path()} (or re-run the bootstrap wizard's secrets step).",
+    )
+
+
+def check_jobright_cookie() -> dict:
+    # Optional -- only needed for `resume scan --source jobright`, never a
+    # hard failure, so this always reports passed=True.
+    values = _env_values()
+    has_cookie = bool(values.get("JOBRIGHT_COOKIE_STRING") or os.environ.get("JOBRIGHT_COOKIE_STRING"))
+    return _check(
+        "JOBRIGHT_COOKIE_STRING (optional -- only for scan --source jobright)", True,
+        "set" if has_cookie else "not set -- fine unless you use JobRight scanning",
+    )
+
+
+def check_fonts() -> dict:
+    fonts_dir = os.path.join(PROJECT_ROOT, "resume-engine", "fonts")
+    missing = [f for f in FONT_FILES if not os.path.exists(os.path.join(fonts_dir, f))]
+    ok = not missing
+    return _check(
+        "DM Sans static font files", ok,
+        "all present" if ok else f"missing: {', '.join(missing)}",
+        f"Restore the missing font file(s) into {fonts_dir}/ (see git history).",
+    )
+
+
+def check_signature_image() -> dict:
+    # Informational only -- README documents this degrading gracefully
+    # (blank space where the signature goes), so this always reports
+    # passed=True. The template's src path is hardcoded to this one file
+    # regardless of active profile (a known gap, see IDEAS.md), not
+    # something this check can fix.
+    ok = os.path.exists(SIGNATURE_PATH)
+    return _check(
+        "Signature image (optional, degrades gracefully)", True,
+        "found" if ok else "missing -- cover letters render with a blank signature space, which is fine",
+    )
+
+
+def check_kb_allowlist() -> dict:
+    import orchestrator
+    kb_dir = profile_paths.kb_dir()
+    missing = [f for f in orchestrator.KB_ALLOWLIST if not os.path.exists(os.path.join(kb_dir, f))]
+    ok = not missing
+    return _check(
+        f"Knowledge-base allowlist files ({profile_paths.active_profile()})", ok,
+        "all present" if ok else f"missing: {', '.join(missing)}",
+        f"Missing files silently shrink the builder's context -- restore them into {kb_dir}/, "
+        "or re-run bootstrap/Update My Knowledge if this is a fresh or partial profile.",
+    )
+
+
+CHECKS = [
+    check_python_version,
+    check_venv,
+    check_python_packages,
+    check_node,
+    check_playwright_npm_package,
+    check_playwright_chromium,
+    check_gemini_api_key,
+    check_jobright_cookie,
+    check_fonts,
+    check_signature_image,
+    check_kb_allowlist,
+]
+
+
+def run_checks() -> list:
+    return [check() for check in CHECKS]
+
+
+def run_test_suite() -> tuple:
+    """Runs the real test suite for real. Returns (passed: bool, summary:
+    str) -- summary is unittest's own final report line(s) (e.g. "Ran 808
+    tests in 19.7s" + "OK"/"FAILED (failures=2)"), not the full verbose
+    output."""
+    result = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True,
+    )
+    passed = result.returncode == 0
+    lines = [line for line in result.stderr.strip().splitlines() if line.strip()]
+    summary = "\n".join(lines[-3:]) if lines else ("OK" if passed else "FAILED")
+    return passed, summary

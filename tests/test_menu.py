@@ -47,6 +47,12 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("bullet_bank", values)
         self.assertIn("bullet_bank", menu._HANDLERS)
 
+    def test_maintenance_entry_is_registered(self):
+        values = [c.value for c in menu._CHOICES]
+        self.assertIn("maintenance", values)
+        self.assertIn("maintenance", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["maintenance"], menu._handle_maintenance)
+
     def test_help_entry_is_registered(self):
         values = [c.value for c in menu._CHOICES]
         self.assertIn("help", values)
@@ -513,6 +519,72 @@ class TestHandleBulletBank(unittest.TestCase):
     def test_always_returns_false(self, mock_run):
         self.assertFalse(menu._handle_bullet_bank())
         mock_run.assert_called_once()
+
+
+class TestHandleRunDoctor(unittest.TestCase):
+
+    @patch("menu.maintenance.record_run")
+    @patch("menu.cli_art.render_doctor_report")
+    @patch("menu.doctor.run_test_suite", return_value=(True, "OK"))
+    @patch("menu.doctor.run_checks", return_value=[{"name": "x", "passed": True, "detail": "", "fix": ""}])
+    @patch("menu.questionary.confirm")
+    def test_runs_test_suite_when_confirmed(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
+        mock_confirm.return_value.ask.return_value = True
+        menu._handle_run_doctor()
+        mock_tests.assert_called_once()
+        mock_render.assert_called_once_with(mock_checks.return_value, (True, "OK"))
+        mock_record.assert_called_once_with("doctor")
+
+    @patch("menu.maintenance.record_run")
+    @patch("menu.cli_art.render_doctor_report")
+    @patch("menu.doctor.run_test_suite")
+    @patch("menu.doctor.run_checks", return_value=[])
+    @patch("menu.questionary.confirm")
+    def test_skips_test_suite_when_declined(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
+        mock_confirm.return_value.ask.return_value = False
+        menu._handle_run_doctor()
+        mock_tests.assert_not_called()
+        mock_render.assert_called_once_with([], None)
+
+
+class TestHandleMaintenance(unittest.TestCase):
+
+    @patch("menu.maintenance.get_last_run", return_value=None)
+    @patch("menu.questionary.select")
+    def test_back_returns_false(self, mock_select, mock_last_run):
+        mock_select.return_value.ask.return_value = "back"
+        self.assertFalse(menu._handle_maintenance())
+
+    @patch("menu.maintenance.get_last_run", return_value=None)
+    @patch("menu.questionary.select")
+    def test_cancelled_prompt_returns_false(self, mock_select, mock_last_run):
+        mock_select.return_value.ask.return_value = None
+        self.assertFalse(menu._handle_maintenance())
+
+    @patch("menu.maintenance.get_last_run", return_value=None)
+    @patch("menu.questionary.select")
+    def test_never_run_label_when_no_prior_run(self, mock_select, mock_last_run):
+        mock_select.return_value.ask.return_value = "back"
+        menu._handle_maintenance()
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertIn("never run", choices[0].title)
+
+    @patch("menu.maintenance.get_last_run", return_value="2026-07-22T10:00:00")
+    @patch("menu.questionary.select")
+    def test_last_run_date_shown_when_recorded(self, mock_select, mock_last_run):
+        mock_select.return_value.ask.return_value = "back"
+        menu._handle_maintenance()
+        choices = mock_select.call_args.kwargs["choices"]
+        self.assertIn("2026-07-22", choices[0].title)
+
+    @patch("menu._handle_run_doctor")
+    @patch("menu.maintenance.get_last_run", return_value=None)
+    @patch("menu.questionary.select")
+    def test_doctor_choice_loops_back_to_the_submenu(self, mock_select, mock_last_run, mock_run_doctor):
+        mock_select.return_value.ask.side_effect = ["doctor", "back"]
+        self.assertFalse(menu._handle_maintenance())
+        mock_run_doctor.assert_called_once()
+        self.assertEqual(mock_select.call_count, 2)
 
 
 class TestHandleHelp(unittest.TestCase):
