@@ -1,0 +1,188 @@
+import os
+import sys
+import unittest
+from unittest.mock import patch, MagicMock
+
+SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+sys.path.insert(0, SCRIPTS_DIR)
+
+import doctor  # noqa: E402
+
+
+class TestCheckPythonVersion(unittest.TestCase):
+
+    def test_passes_on_this_interpreter(self):
+        # This suite itself only runs on Python 3.10+ (per CLAUDE.md), so
+        # the real sys.version_info here is always a real, current pass.
+        result = doctor.check_python_version()
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["fix"], "")
+
+    @patch("doctor.sys")
+    def test_fails_below_minimum(self, mock_sys):
+        mock_sys.version_info = (3, 9, 0)
+        mock_sys.version = "3.9.0"
+        result = doctor.check_python_version()
+        self.assertFalse(result["passed"])
+        self.assertNotEqual(result["fix"], "")
+
+
+class TestCheckVenv(unittest.TestCase):
+
+    @patch("doctor.os.path.isdir", return_value=True)
+    @patch("doctor.sys")
+    def test_passes_when_present_and_active(self, mock_sys, mock_isdir):
+        mock_sys.prefix = "/some/venv"
+        mock_sys.base_prefix = "/usr/local"
+        result = doctor.check_venv()
+        self.assertTrue(result["passed"])
+
+    @patch("doctor.os.path.isdir", return_value=False)
+    @patch("doctor.sys")
+    def test_fails_when_missing(self, mock_sys, mock_isdir):
+        mock_sys.prefix = "/x"
+        mock_sys.base_prefix = "/x"
+        result = doctor.check_venv()
+        self.assertFalse(result["passed"])
+
+
+class TestCheckPythonPackages(unittest.TestCase):
+
+    def test_passes_when_everything_importable(self):
+        # Real check against this project's actual .venv, which requirements.txt
+        # itself guarantees is fully installed per CLAUDE.md Setup.
+        result = doctor.check_python_packages()
+        self.assertTrue(result["passed"], result["detail"])
+
+    @patch("doctor.importlib.import_module")
+    def test_flags_missing_packages_with_a_pip_install_fix(self, mock_import):
+        def side_effect(name):
+            if name == "yaml":
+                raise ImportError("no module named yaml")
+        mock_import.side_effect = side_effect
+        result = doctor.check_python_packages()
+        self.assertFalse(result["passed"])
+        self.assertIn("pyyaml", result["detail"])
+        self.assertIn("pip install", result["fix"])
+        self.assertIn("pyyaml", result["fix"])
+
+
+class TestCheckNode(unittest.TestCase):
+
+    @patch("doctor.shutil.which", return_value="/usr/local/bin/node")
+    def test_passes_when_found(self, mock_which):
+        self.assertTrue(doctor.check_node()["passed"])
+
+    @patch("doctor.shutil.which", return_value=None)
+    def test_fails_when_not_on_path(self, mock_which):
+        result = doctor.check_node()
+        self.assertFalse(result["passed"])
+        self.assertIn("nodejs.org", result["fix"])
+
+
+class TestCheckPlaywrightNpmPackage(unittest.TestCase):
+
+    @patch("doctor.os.path.isdir", return_value=True)
+    def test_passes_when_present(self, mock_isdir):
+        self.assertTrue(doctor.check_playwright_npm_package()["passed"])
+
+    @patch("doctor.os.path.isdir", return_value=False)
+    def test_fails_with_npm_install_fix(self, mock_isdir):
+        result = doctor.check_playwright_npm_package()
+        self.assertFalse(result["passed"])
+        self.assertIn("npm install", result["fix"])
+
+
+class TestCheckPlaywrightChromium(unittest.TestCase):
+
+    @patch("doctor.os.listdir", return_value=["chromium-1223", "firefox-1532"])
+    @patch("doctor.os.path.isdir", return_value=True)
+    def test_passes_when_a_chromium_install_exists(self, mock_isdir, mock_listdir):
+        self.assertTrue(doctor.check_playwright_chromium()["passed"])
+
+    @patch("doctor.os.path.isdir", return_value=False)
+    def test_fails_when_cache_dir_missing(self, mock_isdir):
+        result = doctor.check_playwright_chromium()
+        self.assertFalse(result["passed"])
+        self.assertIn("playwright install chromium", result["fix"])
+
+
+class TestCheckGeminiApiKey(unittest.TestCase):
+
+    @patch("doctor._env_values", return_value={"GEMINI_API_KEY": "abc123"})
+    def test_passes_when_set_in_env_file(self, mock_values):
+        result = doctor.check_gemini_api_key()
+        self.assertTrue(result["passed"])
+        self.assertIn(".env", result["detail"])
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("doctor._env_values", return_value={})
+    def test_fails_when_nowhere_to_be_found(self, mock_values):
+        result = doctor.check_gemini_api_key()
+        self.assertFalse(result["passed"])
+        self.assertNotEqual(result["fix"], "")
+
+
+class TestCheckJobrightCookie(unittest.TestCase):
+
+    @patch("doctor._env_values", return_value={})
+    def test_always_passes_since_optional(self, mock_values):
+        # Never a hard failure -- only needed for scan --source jobright.
+        result = doctor.check_jobright_cookie()
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["fix"], "")
+
+
+class TestCheckFonts(unittest.TestCase):
+
+    def test_passes_on_the_real_repo_fonts_dir(self):
+        # These files are tracked in git -- a real, present-by-default check.
+        result = doctor.check_fonts()
+        self.assertTrue(result["passed"], result["detail"])
+
+    @patch("doctor.os.path.exists", return_value=False)
+    def test_fails_and_lists_missing_files(self, mock_exists):
+        result = doctor.check_fonts()
+        self.assertFalse(result["passed"])
+        self.assertIn("DMSans-Regular-static.ttf", result["detail"])
+
+
+class TestCheckSignatureImage(unittest.TestCase):
+
+    def test_always_passes_missing_or_not(self):
+        # Informational only, per README's documented graceful degradation.
+        self.assertTrue(doctor.check_signature_image()["passed"])
+        self.assertEqual(doctor.check_signature_image()["fix"], "")
+
+
+class TestRunChecks(unittest.TestCase):
+
+    def test_returns_one_result_per_registered_check(self):
+        results = doctor.run_checks()
+        self.assertEqual(len(results), len(doctor.CHECKS))
+        for r in results:
+            self.assertIn("name", r)
+            self.assertIn("passed", r)
+            self.assertIn("detail", r)
+            self.assertIn("fix", r)
+
+
+class TestRunTestSuite(unittest.TestCase):
+
+    @patch("doctor.subprocess.run")
+    def test_passed_true_on_zero_returncode(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stderr="Ran 5 tests in 0.01s\n\nOK\n")
+        passed, summary = doctor.run_test_suite()
+        self.assertTrue(passed)
+        self.assertIn("OK", summary)
+
+    @patch("doctor.subprocess.run")
+    def test_passed_false_on_nonzero_returncode(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stderr="Ran 5 tests in 0.01s\n\nFAILED (failures=1)\n")
+        passed, summary = doctor.run_test_suite()
+        self.assertFalse(passed)
+        self.assertIn("FAILED", summary)
+
+
+if __name__ == "__main__":
+    unittest.main()

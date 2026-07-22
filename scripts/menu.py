@@ -23,6 +23,8 @@ import questionary
 import bootstrap_bullet_bank
 import bullet_bank_menu
 import cli_art
+import doctor
+import maintenance
 import orchestrator
 import jd_manager
 import batch_evaluate
@@ -49,7 +51,9 @@ _CHOICES = [
     questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
     questionary.Separator("── Bullet Bank ──"),
-    questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank", value="bullet_bank"),
+    questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank\n", value="bullet_bank"),
+    questionary.Separator("── Maintenance ──"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Maintenance", value="maintenance"),
 ]
 
 
@@ -491,6 +495,42 @@ def _handle_bullet_bank() -> bool:
     return False
 
 
+def _handle_run_doctor() -> None:
+    checks = doctor.run_checks()
+    run_tests = questionary.confirm(
+        "Also run the full test suite? (slower, ~20s)", default=True, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    test_result = doctor.run_test_suite() if run_tests else None
+    cli_art.render_doctor_report(checks, test_result)
+    maintenance.record_run("doctor")
+
+
+def _handle_maintenance() -> bool:
+    """The general home for background/administrative tasks -- doctor
+    checks today, room for more later (per Morgan's original ask) without
+    needing a new top-level menu entry each time. Deliberately does NOT
+    duplicate "Manage Bullet Bank"'s own already-built Ongoing Maintenance
+    section (triage_needs_review.py/retire_rewrite_queue.py, done
+    2026-07-15) -- that stays exactly where it is; this houses genuinely
+    cross-cutting tasks that aren't bullet-bank-specific."""
+    while True:
+        last_run = maintenance.get_last_run("doctor")
+        last_run_label = f"(last run: {last_run[:10]})" if last_run else "(never run)"
+        choice = questionary.select(
+            "Maintenance",
+            choices=[
+                questionary.Choice(title=f"Run Doctor Checks {last_run_label}", value="doctor"),
+                questionary.Choice(title="Back", value="back"),
+            ],
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if not choice or choice == "back":
+            return False
+        if choice == "doctor":
+            _handle_run_doctor()
+            continue
+
+
 def _handle_help() -> bool:
     cli_art.display_help()
     return False
@@ -507,6 +547,7 @@ _HANDLERS = {
     "polish": _handle_polish,
     "help": _handle_help,
     "bullet_bank": _handle_bullet_bank,
+    "maintenance": _handle_maintenance,
 }
 
 

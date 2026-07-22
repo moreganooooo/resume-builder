@@ -1011,6 +1011,66 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Doctor script + Maintenance submenu -- done 2026-07-22
+
+Built together as scoped (the docs already flagged the Maintenance
+submenu as the doctor script's intended home -- building doctor as a
+standalone entry first, then relocating it, would've been throwaway
+work).
+
+**A real finding along the way, not a hypothetical:** while scoping the
+Node/Playwright check, direct inspection of this actual checkout found
+`node_modules/` doesn't exist at all right now -- `package.json` correctly
+lists `playwright` as a dependency, but it's never been installed here, so
+`generate-pdf.mjs`'s `import { chromium } from 'playwright'` would fail if
+a real build ran. `resume doctor` catches exactly this and reports the fix
+(`npm install`). Confirms the whole premise of the feature on its first
+real run, not just in tests.
+
+**Also found and flagged, not fixed (separate decision):** the cover-letter
+template (`resume-engine/templates/coverletter-template.html`) hardcodes
+`src="./docs/MorganEscottSignature2025.png"` -- confirmed via direct grep,
+not parameterized by profile at all, a leftover gap the four multi-user
+sweeps (2026-07-17) never caught since it's a template asset, not a Python
+constant. Doctor's signature check reports this as informational-only
+(matches the README's already-documented graceful degradation), and
+explicitly does not try to fix the underlying gap -- making the signature
+profile-configurable is a real, separate feature decision, not a doctor-
+script concern.
+
+**Built:**
+- `scripts/doctor.py` -- 11 checks (Python version, `.venv/` active,
+  every `requirements.txt` package actually importable via a real
+  pip-name -> import-name map, Node on PATH, the `playwright` npm package,
+  a Playwright Chromium install under `~/Library/Caches/ms-playwright/`,
+  `GEMINI_API_KEY`, `JOBRIGHT_COOKIE_STRING` as optional/informational,
+  DM Sans font files, the signature image as informational, and the
+  active profile's `KB_ALLOWLIST` files) plus `run_test_suite()` (the
+  real suite, real subprocess). Pure logic, no printing -- matches
+  `liveness.py`/`scan.py`'s existing split between logic and
+  `cli_art.py`-owned rendering.
+- `cli_art.render_doctor_report()` -- a table plus a plain-English "N
+  problem(s) found" summary with a one-line suggested fix per failure, per
+  the original spec.
+- `scripts/maintenance.py` -- `record_run()`/`get_last_run()`, one small
+  gitignored JSON file per profile (`profile_paths.maintenance_log_path()`
+  -- already covered by the existing `*_log.json` gitignore pattern, no
+  gitignore change needed), keyed by task name so it generalizes to future
+  maintenance tasks without a schema change.
+- New top-level "Maintenance" menu entry -> a submenu currently housing
+  "Run Doctor Checks" (shows "last run: <date>" / "never run"), and a
+  `resume doctor` / `resume doctor --skip-tests` CLI command (added to
+  `HELP_ENTRIES`). **Scope decision, not in the original ask:** deliberately
+  did NOT relocate "Manage Bullet Bank"'s own already-working Ongoing
+  Maintenance section (`triage_needs_review.py`/`retire_rewrite_queue.py`,
+  built 2026-07-15) into this new submenu -- that stays exactly where it
+  is, since it's real, working, bullet-bank-specific UI; duplicating or
+  tearing it out for a second entry point would have been churn without a
+  real payoff. The new Maintenance submenu is the general home for
+  cross-cutting admin tasks that aren't specific to any one domain.
+
+Full suite: 848 tests (40 new), all green.
+
 ## Follow-up cadence tracking + contact/outreach finder -- done 2026-07-22
 
 Both found in the 2026-07-21 sibling-repo audit; both turned out to have
