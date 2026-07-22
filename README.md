@@ -174,9 +174,9 @@ resume
 
 That opens a block-letter title screen (diagonal blue-to-purple gradient,
 because why not) with a live stats line and a rotating tip, then an
-arrow-key menu grouped by pipeline stage: Discovery, Evaluation, Build,
-Utility. Every option maps to a CLI command underneath — the menu is just
-a friendlier way in, never a different code path.
+arrow-key menu grouped by pipeline stage (see below for the full
+breakdown). Every option maps to a CLI command underneath — the menu is
+just a friendlier way in, never a different code path.
 
 Prefer the command line directly? Drop a job description into `jds/` and:
 
@@ -214,6 +214,8 @@ call `python scripts/cli.py <command>` underneath.
 | `resume test -v` | same, but lists every test by name |
 | `resume test -vv` | same, but shows the app's own operational logging too |
 | `resume help` | print this list of commands (no menu launch) |
+| `resume doctor` | check dependencies/assets/config, then run the test suite — plain-English summary, one-line fix per problem |
+| `resume doctor --skip-tests` | same, but skip the (slower) test-suite run |
 
 Running `python scripts/cli.py <command>` directly works the same way
 (venv activated first) if you'd rather skip the shell shortcuts.
@@ -226,21 +228,24 @@ Completed JDs move to `jds/completed/`; expired ones move to
 
 ## The interactive menu, in more detail
 
-Options are named after the pipeline stage they support — Scan for New
-Postings, Check Posting Liveness, Evaluate ALL/a Specific JD, Customize
-Resume for ALL/a Specific JD, Write Cover Letter, Polish, View Application
-Tracker. **"Customize Resume for a Specific JD" only shows already-evaluated
-JDs**, sorted best-fit-first and labeled with a score
-(`4.8/5 | Strong pursue | Acme | Content Strategist`) — building a resume
-for a role you haven't screened first rarely makes sense, so the picker
-just doesn't offer that as an option.
+Grouped by pipeline stage — Discovery (Scan, Liveness), Evaluation
+(Evaluate ALL), Build (Customize ALL, Polish), Browse (Browse & Manage
+Jobs), Bullet Bank, Maintenance — plus "New User? Start Here!" and
+"Update My Knowledge" up top for onboarding a profile or feeding it more
+source material later.
+
+**Browse & Manage Jobs** is where single-JD work happens now — it
+replaced the old separate "Evaluate/Customize/Cover-Letter for a Specific
+JD" pickers and the markdown-table "View Application Tracker" with one
+browsable, scored, sorted list (space bar to multi-select) that you can
+drill into or act on in bulk. See below for what it can actually do.
 
 After anything that actually did something, a "What's next?" prompt offers
 the natural next pipeline step (Scan → Liveness → Evaluate → Customize →
-Cover Letter/Polish), always with "Back to Menu" as an out — nothing chains
-automatically without you choosing it. Exit prints a one-line summary of
-what happened that session (e.g. "3 resumes tailored · 2 cover letters
-written").
+Browse & Manage Jobs), always with "Back to Menu" as an out — nothing
+chains automatically without you choosing it. Exit prints a one-line
+summary of what happened that session (e.g. "3 resumes tailored · 2 cover
+letters written").
 
 Every color and icon is sourced from one place (`scripts/theme.py`) with
 explicit hex values rather than named ANSI colors, since named colors get
@@ -254,10 +259,12 @@ enabled.
 rubric (CV match, North Star alignment, remote quality, level fit, comp,
 growth, time-to-offer, tool relevance, company reputation, cultural
 signals) and prints a composite score out of 5, a recommendation (Strong
-pursue / Selective pursue / Low-priority pursue / Skip), and hard blockers
-if any (e.g. onsite-only) — no resume gets built. The score is saved into
-the JD's own file so later steps (like the resume picker above) can sort
-and filter by it without spending another API call.
+pursue / Selective pursue / Low-priority pursue / Skip), hard blockers if
+any (e.g. onsite-only), and a posting-legitimacy flag (High Confidence /
+Proceed with Caution / Suspicious) when a listing shows real scam-or-
+ghost-posting warning signs — no resume gets built. The score is saved
+into the JD's own file so later steps (like Browse & Manage Jobs above)
+can sort and filter by it without spending another API call.
 
 `resume evaluate` (no file) scores everything pending at once, skipping
 anything already scored by default so re-runs don't re-spend a call
@@ -289,6 +296,19 @@ what's checked gets built. `resume coverletter --pick` is the same
 mechanism for cover letters. Neither one touches `resume run`/
 `resume coverletter <file>`'s normal behavior — those still do exactly
 what they've always done.
+
+## Browsing and managing jobs
+
+The menu's "Browse & Manage Jobs" is the one place to see every evaluated
+JD — pending or completed — as a single scored, sorted, multi-select
+list. Pick one to drill into full details or act on it directly (tailor,
+write a cover letter, archive); pick several to compare them side-by-side
+dimension-by-dimension, or act on the whole batch at once. It also
+carries the real-world follow-up loop: mark an application Applied/
+Responded/Interview/etc., log follow-ups sent, and see at a glance which
+ones are overdue for a nudge — and where JobRight has already surfaced a
+real contact at the company, draft a short, specific outreach message to
+them, grounded only in real, already-verified people (never invented).
 
 ## Checking posting liveness
 
@@ -333,15 +353,17 @@ point.
 ## Company research
 
 Both `coverletter` and `tailor`/`run` automatically attempt a
-company-research pass whenever a JD carries a `company_website` field — no
-flag needed, and it gracefully skips (with a printed notice, never a
-crash) when there's no known site or nothing usable to read. A plain
-Python scraper (no browser, no search API) pulls the company's About/
-Mission/Careers pages; one model call extracts tone signals and a couple
-of factual, traceable statements. The cover letter uses this for its
-Company Connection paragraph; the resume uses it to tone-match the Summary
-and Why section. No research available means no tone-mirroring and no Why
-section — never invented content standing in for the real thing.
+company-research pass — no flag needed, and it gracefully skips (with a
+printed notice, never a crash) when there's nothing usable to read. A
+plain Python scraper pulls the company's About/Mission/Careers pages;
+one model call extracts tone signals and a couple of factual, traceable
+statements. If a JD has no known company website at all, a Google
+Search-grounded lookup tries to find the real one first — never a guess,
+since a grounded search either finds the actual site or comes back
+empty. The cover letter uses this for its Company Connection paragraph;
+the resume uses it to tone-match the Summary and Why section. No
+research available means no tone-mirroring and no Why section — never
+invented content standing in for the real thing.
 
 ## Situational work-history entries
 
@@ -400,6 +422,23 @@ queue automatically. Run `python scripts/triage_needs_review.py`
 periodically to route those into permanent keepers, a rewrite queue, or
 retirement — a deliberate manual checkpoint, not a silent auto-merge.
 
+## Updating your knowledge later
+
+Onboarding isn't one-time. The menu's "Update My Knowledge" lets an
+existing profile drop new source documents (a new cert, an old
+performance review, a fresh recommendation letter) into the same
+`source_documents/` folder bootstrap used, then choose what to refresh —
+just the bullet bank, just your profile/CV/background docs, or both —
+without starting over or losing anything already curated.
+
+## Keeping things healthy
+
+`resume doctor` (or the menu's "Maintenance" entry) checks your Python/
+Node environment, Playwright's browser install, API keys, fonts, and
+knowledge-base files, then runs the real test suite — ending in a
+plain-English summary with a one-line fix per problem found, not a wall
+of stack traces.
+
 ## Fonts
 
 `resume-engine/fonts/DMSans-{Regular,ExtraBold,Italic}-static.ttf` are
@@ -414,14 +453,17 @@ entirely.
 ## Roadmap
 
 The full pipeline — scan, liveness, evaluate, tailor/coverletter, render,
-track — is built and in daily use, along with company research,
-situational work-history entries, the interactive menu, `resume polish`,
-and the holistic critique's distinctiveness signals. What's still ahead —
-multi-user support, a background scheduler, the full evidence-bank
-generalization, a long-term merge with two sibling projects — is tracked
-in [`IDEAS.md`](IDEAS.md), organized by difficulty and scope, with full
-build history in [`IDEAS_ARCHIVE.md`](IDEAS_ARCHIVE.md). Nothing there is
-scheduled; it's a backlog, not a promise.
+track — is built and in daily use, along with company research (plus a
+search-grounded fallback), situational work-history entries, Browse &
+Manage Jobs, follow-up tracking, the contact/outreach finder, `resume
+polish`, the holistic critique's distinctiveness signals, and multi-user
+support (a second profile can already fully use this end to end). What's
+still ahead — a background scheduler, the full evidence-bank
+generalization beyond resume bullets, a long-term merge with two sibling
+projects — is tracked in [`IDEAS.md`](IDEAS.md), organized by difficulty
+and scope, with full build history in
+[`IDEAS_ARCHIVE.md`](IDEAS_ARCHIVE.md). Nothing there is scheduled; it's
+a backlog, not a promise.
 
 ## Testing
 
