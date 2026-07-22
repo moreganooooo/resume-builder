@@ -464,7 +464,13 @@ each one):
 
 **One-time setup, once on each machine:**
 1. `brew install syncthing` (or your platform's equivalent), then start
-   it and open its web UI (usually `http://localhost:8384`).
+   it and open its web UI (usually `http://localhost:8384`). On macOS,
+   `brew install` registers it as a LaunchAgent automatically
+   (`~/Library/LaunchAgents/homebrew.mxcl.syncthing.plist`, `RunAtLoad`
+   + `KeepAlive` both on) — it starts itself on login and macOS
+   relaunches it if it ever dies, no separate "start on startup" step
+   needed. Confirm with `brew services list`; logs land in
+   `/usr/local/var/log/syncthing.log`.
 2. Under **Actions → Show ID**, get this machine's device ID; on the
    other machine, **Add Remote Device** with that ID (and vice versa) —
    this is the one step that has to happen with both machines in front
@@ -474,7 +480,8 @@ each one):
    both sides so Syncthing knows they're the same folder — and share
    each one with the other device.
 4. That's it going forward — edits on either machine propagate
-   automatically, no manual copying.
+   automatically, no manual copying, and it survives a reboot with zero
+   manual steps.
 
 **Why `.env` is safe to include here** even though it's gitignored:
 gitignore exists to keep secrets out of a *public* (or at least shared)
