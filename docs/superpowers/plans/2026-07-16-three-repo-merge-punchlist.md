@@ -16,6 +16,12 @@ narrative below: `scripts/profile_paths.py` exists and is live, no board
 scraper for any of career-ops's ~26 providers exists in `scripts/`, and no
 `.plist`/launchd artifact exists anywhere in the repo.
 
+**Updated 2026-07-22: every item in section 1 reaffirmed (IDEAS.md's own
+copy of these decisions had gone stale and was fixed to match); dashboard
+status changed from deferred to promoted (see section 5b, new).** Nothing
+else below has moved -- section 5b is the only actual scope change today,
+everything else is documentation catching up to decisions already made.
+
 Nothing below has a target date. Pull an item into its own design spec +
 implementation plan (the `docs/superpowers/specs/`+`plans/` pattern used
 everywhere else in this repo) when it's actually time to build it.
@@ -32,7 +38,8 @@ everywhere else in this repo) when it's actually time to build it.
   (`automator_main.py`/`ats_fillers/`) and all three LaTeX/reportlab
   rendering backends (`document_generator/`). Playwright/HTML stays the one
   renderer; a human always has the final call before any submit, full stop.
-- **Deferred, not decided against:** a career-ops-style dashboard/TUI.
+- **career-ops-style dashboard/TUI — promoted into near-term scope,
+  2026-07-22** (previously deferred). See section 5b.
 
 ## Punchlist, roughly in dependency order
 
@@ -61,6 +68,10 @@ everywhere else in this repo) when it's actually time to build it.
       anything to port here, not even as a fallback.
 
 ### 1. Decisions needed before their dependent work can start
+
+All three items below were reaffirmed 2026-07-22 (IDEAS.md's own copy of
+these decisions had drifted stale and was corrected to match this file --
+nothing here changed, only IDEAS.md did).
 
 - [x] **Persistence layer — decided 2026-07-16: stay with CSV/markdown,
       adopt nothing new yet.** Today there's a single writer
@@ -199,6 +210,37 @@ everywhere else in this repo) when it's actually time to build it.
 - [ ] **`interview-prep`:** deliberately deferred (Morgan's call, not
       essential right now).
 
+### 5b. Dashboard integration — promoted 2026-07-22 (previously deferred)
+
+career-ops's Go dashboard (`career-ops/dashboard/`, Bubble Tea TUI) went
+from hypothetical port to actually-proven-out today:
+
+- **Themed to match resume-builder** (`internal/theme/resumebuilder.go`,
+  new -- ports `scripts/theme.py`'s exact hex palette; verified byte-exact
+  in real rendered ANSI output) and made the default (`-theme` flag,
+  `resume-builder` value).
+- **Two real pre-existing bugs found and fixed**, independent of theming:
+  a tracker-column-count mismatch (the Go parser was still written against
+  career-ops's original 9-column format and was silently misreading
+  resume-builder's 10-column one -- Link/Report/Notes were getting
+  misattributed, dropping real location/pay/last-contact data derived from
+  Notes) and a crash (`strings.Repeat` with an unclamped negative count) on
+  narrow terminal widths.
+- **Verified end-to-end** against a realistic synthetic `applications.md`
+  fixture via a real pty (build clean, `go vet` clean, existing Go test
+  suite green, plus a manual pty-driven run confirming no panic and
+  correct rendering/coloring).
+
+**What's still not done, i.e. what "near-term scope" actually means going
+forward:** it runs today as a *separate* binary against
+`career-ops/dashboard`, pointed at resume-builder's `data/<profile>/` via
+`-path` -- it is not yet part of resume-builder's own menu/CLI. Porting it
+in means either (a) vendoring/rewriting the Go source as a resume-builder-
+owned artifact the menu can shell out to, or (b) keeping it a separate Go
+module but adding a `resume dashboard` command that locates and invokes
+the built binary. Neither approach has been chosen yet -- that's the next
+real decision here, not yet made.
+
 ### 6. Scheduler + notifications (item #9)
 
 - [ ] Unblocked since 2026-07-04 (scan + evaluate both exist); item 1's
@@ -219,7 +261,6 @@ everywhere else in this repo) when it's actually time to build it.
 
 - ATS auto-apply/auto-submit — cut, human-in-the-loop only, full stop.
 - LaTeX/reportlab rendering — cut, Playwright/HTML is the one renderer.
-- career-ops-style dashboard/TUI — deferred, not decided against.
 
 ## References
 
