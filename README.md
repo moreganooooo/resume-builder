@@ -441,6 +441,14 @@ knowledge-base files, then runs the real test suite — ending in a
 plain-English summary with a one-line fix per problem found, not a wall
 of stack traces.
 
+The menu also checks for GitHub updates on startup — if your local
+`main` is behind `origin/main`, it prompts before pulling; it never
+pulls silently, and skips the check entirely (rather than risk
+overwriting anything) if you have uncommitted changes. Same check is
+available anytime from the Maintenance submenu ("Check for GitHub
+Updates") if you'd rather trigger it manually than wait for the next
+startup prompt.
+
 ## Multi-computer sync
 
 A profile's data — knowledge base, bullet bank (CSV and embeddings),
