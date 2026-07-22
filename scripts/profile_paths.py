@@ -173,3 +173,11 @@ def applications_md_path(profile: str = None) -> str:
 
 def tracker_csv_path(profile: str = None) -> str:
     return os.path.join(jds_dir(profile), "jd_tracker_log.csv")
+
+
+def maintenance_log_path(profile: str = None) -> str:
+    """Where the Maintenance submenu persists "when did this task last
+    run" per background/administrative task (doctor script, etc.) --
+    already covered by .gitignore's existing `*_log.json` pattern, no
+    gitignore change needed."""
+    return os.path.join(profile_root(profile), "maintenance_log.json")

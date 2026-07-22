@@ -21,6 +21,8 @@ import menu
 import scan as scan_module
 import liveness as liveness_module
 import polish as polish_module
+import doctor
+import maintenance
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -198,6 +200,17 @@ def help_cmd():
     """Prints the shortcuts cheat sheet (same content the interactive
     menu's Help entry shows -- see cli_art.HELP_ENTRIES)."""
     cli_art.display_help()
+
+
+@cli.command(name="doctor")
+@click.option("--skip-tests", is_flag=True, default=False, help="Skip the test-suite run (just the fast checks).")
+def doctor_cmd(skip_tests):
+    """Checks dependencies, assets, and config, then runs the test suite -- a plain-English summary with a suggested fix per problem found."""
+    cli_art.display_banner("Running doctor checks")
+    checks = doctor.run_checks()
+    test_result = None if skip_tests else doctor.run_test_suite()
+    cli_art.render_doctor_report(checks, test_result)
+    maintenance.record_run("doctor")
 
 
 if __name__ == "__main__":

@@ -254,6 +254,38 @@ class TestRenderComparisonTable(unittest.TestCase):
         self.assertIn("CV Match", output)
 
 
+class TestRenderDoctorReport(unittest.TestCase):
+
+    def test_all_passed_shows_success_summary_no_fixes(self):
+        checks = [
+            {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""},
+            {"name": "Node.js", "passed": True, "detail": "/usr/local/bin/node", "fix": ""},
+        ]
+        output = _rendered(cli_art.render_doctor_report, checks)
+        self.assertIn("All checks passed", output)
+        self.assertNotIn("problem(s) found", output)
+
+    def test_failures_show_count_and_one_line_fix_each(self):
+        checks = [
+            {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""},
+            {"name": "Node.js", "passed": False, "detail": "not found on PATH", "fix": "Install Node.js"},
+        ]
+        output = _rendered(cli_art.render_doctor_report, checks)
+        self.assertIn("1 problem(s) found", output)
+        self.assertIn("Install Node.js", output)
+
+    def test_test_result_summary_included_when_provided(self):
+        checks = [{"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}]
+        output = _rendered(cli_art.render_doctor_report, checks, test_result=(True, "Ran 5 tests in 0.01s\nOK"))
+        self.assertIn("Test suite", output)
+        self.assertIn("Ran 5 tests", output)
+
+    def test_no_test_result_line_when_none(self):
+        checks = [{"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}]
+        output = _rendered(cli_art.render_doctor_report, checks, None)
+        self.assertNotIn("Test suite", output)
+
+
 class TestDisplayBreadcrumb(unittest.TestCase):
 
     def test_prints_a_one_line_rule_not_a_full_panel(self):
