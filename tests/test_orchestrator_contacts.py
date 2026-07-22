@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -90,6 +90,58 @@ class TestDraftOutreachMessage(unittest.TestCase):
         self.assertIn("Jen Dudik", contents)
         self.assertIn("Director of Talent Development", contents)
         self.assertIn("JobRight match", contents)
+
+
+class TestDraftFollowupMessage(unittest.TestCase):
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.contact = {"name": "Jen Dudik", "title": "Director of Talent Development",
+                         "connection_type": "JobRight match"}
+
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data="## CV\nReal achievements here.")
+    @patch("orchestrator.jd_manager.read_jd_text", return_value="=== JD text ===")
+    def test_returns_stripped_message_text(self, mock_read_text, mock_file, mock_exists, mock_generate):
+        mock_generate.return_value = ("  Hi Jen, ...  \n", {})
+        result = self.engine.draft_followup_message("jds/a.json", follow_up_count=0, contact=self.contact)
+        self.assertEqual(result, "Hi Jen, ...")
+
+    @patch("orchestrator.jd_manager.read_jd_text", side_effect=FileNotFoundError)
+    def test_returns_none_when_jd_not_found(self, mock_read_text):
+        result = self.engine.draft_followup_message("jds/missing.json", follow_up_count=0)
+        self.assertIsNone(result)
+
+    @patch("orchestrator.GeminiClient.generate", return_value=("", {}))
+    @patch("orchestrator.os.path.exists", return_value=False)
+    @patch("orchestrator.jd_manager.read_jd_text", return_value="=== JD text ===")
+    def test_returns_none_on_empty_model_response(self, mock_read_text, mock_exists, mock_generate):
+        result = self.engine.draft_followup_message("jds/a.json", follow_up_count=0)
+        self.assertIsNone(result)
+
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.os.path.exists", return_value=False)
+    @patch("orchestrator.jd_manager.read_jd_text", return_value="=== JD text ===")
+    def test_works_without_a_contact(self, mock_read_text, mock_exists, mock_generate):
+        mock_generate.return_value = ("Hi there, ...", {})
+        result = self.engine.draft_followup_message("jds/a.json", follow_up_count=0, contact=None)
+        self.assertEqual(result, "Hi there, ...")
+        contents = mock_generate.call_args.kwargs["contents"]
+        self.assertIn("No specific contact known", contents)
+
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data="Real cv content")
+    @patch("orchestrator.jd_manager.read_jd_text", return_value="=== JD text ===")
+    def test_follow_up_number_and_cv_reach_the_prompt_contents(self, mock_read_text, mock_file, mock_exists, mock_generate):
+        mock_generate.return_value = ("Hi Jen", {})
+        self.engine.draft_followup_message("jds/a.json", follow_up_count=1, contact=self.contact)
+        contents = mock_generate.call_args.kwargs["contents"]
+        self.assertIn("FOLLOW-UP NUMBER", contents)
+        self.assertIn("2", contents)
+        self.assertIn("Real cv content", contents)
+        self.assertIn("Jen Dudik", contents)
 
 
 if __name__ == "__main__":

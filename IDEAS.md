@@ -87,20 +87,6 @@ audit-loop/bootstrap-polish standard). Still open:
   statement -- scope this one separately from the other two rather than
   bundling all three into one pass.
 
-### Follow-up cadence tracker -- drafting half still open
-
-Found during a 2026-07-21 sibling-repo audit: career-ops's `modes/followup.md`
-tracks per-application follow-up timing (overdue/waiting/cold) and drafts
-tailored follow-up emails/LinkedIn notes. **The cadence-tracking half
-shipped 2026-07-22** (status tracking, urgency classification, surfaced
-in "Browse & Manage Jobs" -- see `IDEAS_ARCHIVE.md`). **Still open: the
-drafting half** -- career-ops's `modes/followup.md` also generates a
-tailored follow-up email/LinkedIn note per application, which didn't get
-built. Now that `orchestrator.py`'s `draft_outreach_message()` exists as
-prior art (same shape: one Gemini call, given a JD + real context, drafts
-a short message), a `draft_followup_message()` sibling should be a small,
-well-understood addition -- not a fresh design problem.
-
 ### Rotate across multiple API keys on rate-limit errors
 
 Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
