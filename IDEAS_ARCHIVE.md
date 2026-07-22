@@ -1673,3 +1673,57 @@ search queries, plus a supplementary authenticated `requests`/BeautifulSoup
 pass to detect "Top Applicant" badges. Same Mongo + JSON-backup output
 pattern as Jobright. (Superseded by the ported `scripts/scan_linkedin.py`,
 see 1.4 above.)
+
+## Multi-computer sync (Syncthing), config + docs -- done 2026-07-22
+
+Settled the "Very Hard / Long-term" open brainstorm from 2026-07-17 (three
+unevaluated options: Syncthing, cloud-folder symlinks, or git for the
+text-based state). Syncthing won on the first real test against this
+repo's actual shape: it's direct device-to-device, doesn't care whether a
+directory holds text or binary (`.npy` embeddings), and needs zero new
+remote infrastructure -- closest fit for a flat-file-per-profile design
+that already treats `profile_paths.py` as the single source of truth for
+every path.
+
+- **New: `profile_paths.sync_roots(profile)`** -- names the four
+  directories a profile's data lives in for sync purposes:
+  `profiles/<name>/`, `jds/<name>/`, `output/<name>/`, `data/<name>/`.
+  Deliberately excludes nothing, not even `.env` or `signature.*` --
+  the reason those are gitignored (keeping secrets out of a shared git
+  history) doesn't apply to a direct, TLS-encrypted device-to-device
+  sync that never touches GitHub. This is also what resolves Morgan's
+  "pull `.env` from whatever computer I'm on" wish -- syncing it was
+  never actually blocked, it just needed separating from the
+  git-secrecy question that made it feel risky.
+- **New: `profile_paths.write_sync_ignore_files(profile)`** -- ensures
+  all four directories exist and seeds each with a `.stignore`
+  (Syncthing's per-folder ignore file) excluding only machine-local
+  cruft (`__pycache__`, `.DS_Store`) -- idempotent, never clobbers a
+  hand-edited one. Wired into `bootstrap_bullet_bank.create_new_profile()`
+  so every future profile is sync-ready with zero extra steps; run once
+  by hand for the existing `morgan` profile.
+- **New `data_dir(profile)` helper** -- `applications_md_path()` now
+  builds on it instead of hand-rolling the same join, so `data/<name>/`
+  has the same one-function-per-directory shape as the other three
+  roots `sync_roots()` names.
+- `.gitignore`: added a `.stignore` entry (matches at every level) so
+  the auto-regenerated file doesn't get accidentally tracked in
+  `profiles/`/`jds/`/`data/` (it's already excluded in `output/` by the
+  existing blanket rule there) -- consistent behavior across all four
+  roots, and no upkeep burden since it's fully reproducible from code.
+- **Deliberately not done, and correctly so per this session's own
+  scoping decision:** installing Syncthing itself and pairing two real
+  devices is a manual, physical-device step (the device-ID exchange has
+  to happen with, or be trusted between, both machines) that can't be
+  scripted from one checkout -- config and documentation only. README's
+  new "Multi-computer sync" section has the actual pairing/folder-share
+  walkthrough for whenever a second machine is in the picture.
+- Output syncing (previously an open question -- "is `output/`/PDF
+  history worth syncing?") settled: yes, include it. Small files,
+  fully regenerable from `jds/` if a sync is ever missed, and it means
+  a freshly-picked-up machine already has the latest tailored resume
+  without a re-run.
+
+6 new tests (`profile_paths.sync_roots`/`write_sync_ignore_files`,
+`create_new_profile`'s `.stignore` seeding). Full suite: 876 tests, all
+green.

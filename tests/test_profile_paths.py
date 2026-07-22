@@ -64,6 +64,58 @@ class TestPathHelpers(unittest.TestCase):
         expected = os.path.join(profile_paths.PROFILES_DIR, "morgan", "situational_roles.yaml")
         self.assertEqual(profile_paths.situational_roles_path("morgan"), expected)
 
+    def test_data_dir_resolves_under_top_level_data(self):
+        expected = os.path.join(profile_paths.PROJECT_ROOT, "data", "morgan")
+        self.assertEqual(profile_paths.data_dir("morgan"), expected)
+
+    def test_applications_md_path_nests_under_data_dir(self):
+        expected = os.path.join(profile_paths.data_dir("morgan"), "applications.md")
+        self.assertEqual(profile_paths.applications_md_path("morgan"), expected)
+
+
+class TestSyncRoots(unittest.TestCase):
+
+    def setUp(self):
+        self.profile = "test_sync_roots_xyz"
+        self.dirs = [
+            profile_paths.profile_root(self.profile),
+            profile_paths.jds_dir(self.profile),
+            profile_paths.output_dir(self.profile),
+            profile_paths.data_dir(self.profile),
+        ]
+
+    def tearDown(self):
+        import shutil
+        for d in self.dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_sync_roots_names_the_four_operational_directories(self):
+        roots = dict(profile_paths.sync_roots(self.profile))
+        self.assertEqual(roots["profile"], profile_paths.profile_root(self.profile))
+        self.assertEqual(roots["jds"], profile_paths.jds_dir(self.profile))
+        self.assertEqual(roots["output"], profile_paths.output_dir(self.profile))
+        self.assertEqual(roots["data"], profile_paths.data_dir(self.profile))
+
+    def test_write_sync_ignore_files_creates_every_directory_and_stignore(self):
+        profile_paths.write_sync_ignore_files(self.profile)
+        for d in self.dirs:
+            self.assertTrue(os.path.isdir(d))
+            stignore = os.path.join(d, ".stignore")
+            self.assertTrue(os.path.isfile(stignore))
+            with open(stignore) as f:
+                self.assertIn("__pycache__", f.read())
+
+    def test_write_sync_ignore_files_does_not_clobber_a_hand_edited_stignore(self):
+        os.makedirs(profile_paths.profile_root(self.profile), exist_ok=True)
+        custom_path = os.path.join(profile_paths.profile_root(self.profile), ".stignore")
+        with open(custom_path, "w") as f:
+            f.write("my-custom-rule\n")
+
+        profile_paths.write_sync_ignore_files(self.profile)
+
+        with open(custom_path) as f:
+            self.assertEqual(f.read(), "my-custom-rule\n")
+
 
 class TestSignaturePath(unittest.TestCase):
 

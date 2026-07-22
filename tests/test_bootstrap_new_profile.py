@@ -20,6 +20,12 @@ class TestCreateNewProfile(unittest.TestCase):
     def tearDown(self):
         if os.path.isdir(self.profile_path):
             shutil.rmtree(self.profile_path)
+        for path in (
+            profile_paths.jds_dir(self.test_profile),
+            profile_paths.output_dir(self.test_profile),
+            profile_paths.data_dir(self.test_profile),
+        ):
+            shutil.rmtree(path, ignore_errors=True)
 
     def test_creates_profile_directory_structure(self):
         result = bootstrap_bullet_bank.create_new_profile(self.test_profile)
@@ -39,6 +45,12 @@ class TestCreateNewProfile(unittest.TestCase):
         bootstrap_bullet_bank.create_new_profile(self.test_profile)
         path = os.path.join(self.profile_path, "situational_roles.yaml")
         self.assertTrue(os.path.exists(path))
+
+    def test_seeds_stignore_files_in_every_sync_root(self):
+        bootstrap_bullet_bank.create_new_profile(self.test_profile)
+        for _label, path in profile_paths.sync_roots(self.test_profile):
+            self.assertTrue(os.path.isdir(path))
+            self.assertTrue(os.path.isfile(os.path.join(path, ".stignore")))
 
     def test_raises_if_profile_already_exists(self):
         bootstrap_bullet_bank.create_new_profile(self.test_profile)

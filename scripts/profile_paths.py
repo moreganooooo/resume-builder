@@ -185,12 +185,59 @@ def checkpoints_dir(profile: str = None) -> str:
     return os.path.join(output_dir(profile), "checkpoints")
 
 
+def data_dir(profile: str = None) -> str:
+    return os.path.join(PROJECT_ROOT, "data", profile or active_profile())
+
+
 def applications_md_path(profile: str = None) -> str:
-    return os.path.join(PROJECT_ROOT, "data", profile or active_profile(), "applications.md")
+    return os.path.join(data_dir(profile), "applications.md")
 
 
 def tracker_csv_path(profile: str = None) -> str:
     return os.path.join(jds_dir(profile), "jd_tracker_log.csv")
+
+
+def sync_roots(profile: str = None) -> list:
+    """Returns [(label, path), ...] for the profile-scoped directories a
+    multi-computer sync tool (Syncthing) should be pointed at -- see
+    CLAUDE.md's "Multi-computer sync" section for the full design. Kept
+    as one place so write_sync_ignore_files() and any future sync
+    tooling can't drift apart on what "this profile's synced data" means.
+    Deliberately excludes nothing (not even .env or signature.*) --
+    Syncthing is direct device-to-device and encrypted in transit, so the
+    git-secrecy reason those are gitignored doesn't apply to it."""
+    name = profile or active_profile()
+    return [
+        ("profile", profile_root(name)),
+        ("jds", jds_dir(name)),
+        ("output", output_dir(name)),
+        ("data", data_dir(name)),
+    ]
+
+
+_SYNC_STIGNORE_CONTENT = (
+    "// Syncthing per-folder ignore file -- machine-local cruft that should\n"
+    "// never sync between devices. Secrets/PII are deliberately NOT\n"
+    "// excluded here; see CLAUDE.md's \"Multi-computer sync\" section for why.\n"
+    "__pycache__\n"
+    "*.pyc\n"
+    ".DS_Store\n"
+)
+
+
+def write_sync_ignore_files(profile: str = None) -> None:
+    """Ensures every directory sync_roots() names exists and carries a
+    .stignore, so a profile is ready for Syncthing to point at without
+    the user hand-authoring config per profile. Called once from
+    bootstrap_bullet_bank.create_new_profile() for every new profile.
+    Idempotent and non-destructive -- never overwrites an already-present
+    .stignore, so hand-customization survives re-runs."""
+    for _label, path in sync_roots(profile):
+        os.makedirs(path, exist_ok=True)
+        stignore_path = os.path.join(path, ".stignore")
+        if not os.path.exists(stignore_path):
+            with open(stignore_path, "w", encoding="utf-8") as f:
+                f.write(_SYNC_STIGNORE_CONTENT)
 
 
 def maintenance_log_path(profile: str = None) -> str:

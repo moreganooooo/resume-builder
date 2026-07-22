@@ -30,6 +30,27 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   (Python packages, Node/Playwright, API keys, fonts, KB files) is
   actually set up correctly, plus a real test-suite run — reach for it
   before manually debugging a "why isn't this working" environment issue.
+- **Multi-computer sync (Syncthing):** a profile's data can sync across
+  machines via Syncthing, four independent folders per profile —
+  `scripts/profile_paths.sync_roots(profile)` is the single source of
+  truth for exactly which four (`profiles/<name>/`, `jds/<name>/`,
+  `output/<name>/`, `data/<name>/`) — never `.git/` or the repo root
+  itself (concurrent file-sync of a live git working tree/object store
+  is a known corruption risk; code stays on normal git push/pull, only
+  data syncs). `write_sync_ignore_files(profile)` seeds a `.stignore`
+  (machine-local cruft only — `__pycache__`, `.DS_Store`; deliberately
+  *not* excluding `.env` or `signature.*`) in each and is called
+  automatically for every new profile from
+  `bootstrap_bullet_bank.create_new_profile()`. Any new profile-scoped
+  directory should be added to `sync_roots()`, not hand-wired elsewhere,
+  so it's covered automatically. `.env` and `signature.*` are gitignored
+  (keeps them out of GitHub) but deliberately *not* excluded from sync —
+  Syncthing is direct device-to-device and TLS-encrypted, never touches
+  GitHub, so the reason those are gitignored doesn't apply to it; syncing
+  `.env` is how a second machine gets a working `GEMINI_API_KEY` without
+  it being typed in by hand. See README's "Multi-computer sync" section
+  for the actual Syncthing pairing/folder-sharing walkthrough (a manual,
+  per-device step that can't be scripted from here).
 
 ## Shortcuts
 - `resume run` / `resume run jds/<profile>/some_file.txt` — batch or
