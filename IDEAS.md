@@ -110,34 +110,19 @@ audit-loop/bootstrap-polish standard). Still open:
   statement -- scope this one separately from the other two rather than
   bundling all three into one pass.
 
-### Follow-up cadence tracker
+### Follow-up cadence tracker -- drafting half still open
 
 Found during a 2026-07-21 sibling-repo audit: career-ops's `modes/followup.md`
 tracks per-application follow-up timing (overdue/waiting/cold) and drafts
-tailored follow-up emails/LinkedIn notes. Not ported, not tracked
-anywhere yet. Real dovetail with the already-planned scheduler (item #9)
--- both are about "surface things Morgan should act on without her having
-to remember to check." **Difficulty: Medium-Hard.** Checked career-ops
-directly -- this has real backing computation, not just a prompt: a
-341-line `followup-cadence.mjs` (cadence classification logic) plus a
-436-line `modes/followup.md` (the drafting flow). Porting means real logic
-(not just prompt adaptation), a new tracker file (`follow-ups.md`
-equivalent), and an interactive drafting flow -- closest prior art is
-`resume polish`'s existing chat-based pattern. Shape is well-understood
-(close cousin of the applications tracker already built), just more
-substantial than the other three modes found in this same audit.
-
-### Contact/outreach finder
-
-Found during the same audit: career-ops's `modes/contact.md` identifies
-the best person to contact for a role and drafts a short, human-sounding
-outreach message. Genuinely new capability, not represented anywhere in
-resume-builder today. **Difficulty: Medium.** Checked career-ops directly
--- 394-line prompt file, no distinct backing script found, meaning this is
-mostly LLM reasoning over data resume-builder already has (JD text,
-company research) rather than logic that needs porting. Main work is
-adapting the prompt plus a lightweight interactive flow (see `resume
-polish` for the closest existing pattern), not porting computation.
+tailored follow-up emails/LinkedIn notes. **The cadence-tracking half
+shipped 2026-07-22** (status tracking, urgency classification, surfaced
+in "Browse & Manage Jobs" -- see `IDEAS_ARCHIVE.md`). **Still open: the
+drafting half** -- career-ops's `modes/followup.md` also generates a
+tailored follow-up email/LinkedIn note per application, which didn't get
+built. Now that `orchestrator.py`'s `draft_outreach_message()` exists as
+prior art (same shape: one Gemini call, given a JD + real context, drafts
+a short message), a `draft_followup_message()` sibling should be a small,
+well-understood addition -- not a fresh design problem.
 
 ### Rotate across multiple API keys on rate-limit errors
 

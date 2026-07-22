@@ -92,10 +92,13 @@ def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_co
 def list_all_evaluated_jds() -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
     each as {"path", "status" ("Pending"/"Completed"), "evaluation",
-    "liveness", "title", "company"}, sorted best composite_score first.
-    Archived JDs are never included -- jd_manager.get_pending_jds()/
-    get_completed_jds() only scan their own directory, and jds/archived/
-    is a third, separate one neither touches."""
+    "liveness", "application", "title", "company"}, sorted best
+    composite_score first. "application" is the real-world application
+    progress (see jd_manager.save_application_status()) -- None until
+    someone's marked it. Archived JDs are never included --
+    jd_manager.get_pending_jds()/get_completed_jds() only scan their own
+    directory, and jds/archived/ is a third, separate one neither
+    touches."""
     rows = []
     for path in jd_manager.get_pending_jds():
         evaluation = jd_manager.read_evaluation(path)
@@ -104,7 +107,9 @@ def list_all_evaluated_jds() -> list:
         title, company = jd_manager.extract_job_meta(path)
         rows.append({
             "path": path, "status": "Pending", "evaluation": evaluation,
-            "liveness": jd_manager.read_liveness(path), "title": title, "company": company,
+            "liveness": jd_manager.read_liveness(path),
+            "application": jd_manager.read_application_status(path),
+            "title": title, "company": company,
         })
     for path in jd_manager.get_completed_jds():
         evaluation = jd_manager.read_evaluation(path)
@@ -113,7 +118,9 @@ def list_all_evaluated_jds() -> list:
         title, company = jd_manager.extract_job_meta(path)
         rows.append({
             "path": path, "status": "Completed", "evaluation": evaluation,
-            "liveness": jd_manager.read_liveness(path), "title": title, "company": company,
+            "liveness": jd_manager.read_liveness(path),
+            "application": jd_manager.read_application_status(path),
+            "title": title, "company": company,
         })
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
