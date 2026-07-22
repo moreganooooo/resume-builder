@@ -161,6 +161,66 @@ def read_liveness(jd_path: str) -> dict | None:
     return data.get("_liveness")
 
 
+APPLICATION_STATUSES = ["Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"]
+
+
+def save_application_status(jd_path: str, status: str, log_followup: bool = False) -> None:
+    """Persists real-world application progress into the JD's own JSON
+    under an _application key -- the prerequisite the follow-up cadence
+    tracker needs (career-ops's classification depends on status
+    transitions this repo's tracker never recorded before). status must
+    be one of APPLICATION_STATUSES. applied_at is set once, the first
+    time status becomes "Applied", and never overwritten by a later
+    status change, so cadence math always has a stable anchor date.
+    log_followup=True additionally increments follow_up_count and stamps
+    last_followup_at -- pass it alongside a status update, or on its own
+    call to log a follow-up without changing status. No-ops silently for
+    non-JSON-dict JDs, matching save_evaluation()/save_liveness()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    existing = data.get("_application") or {}
+
+    applied_at = existing.get("applied_at")
+    if status == "Applied" and not applied_at:
+        applied_at = now
+
+    follow_up_count = existing.get("follow_up_count", 0)
+    last_followup_at = existing.get("last_followup_at")
+    if log_followup:
+        follow_up_count += 1
+        last_followup_at = now
+
+    data["_application"] = {
+        "status": status,
+        "applied_at": applied_at,
+        "status_changed_at": now,
+        "follow_up_count": follow_up_count,
+        "last_followup_at": last_followup_at,
+    }
+    with open(jd_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_application_status(jd_path: str) -> dict | None:
+    """Reads back a persisted _application (see save_application_status()),
+    or None if the JD isn't a JSON dict or has never had a status set."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_application")
+
+
 def read_jd_text(jd_path: str) -> str:
     """Reads a JD file's content for prompt use, stripping any persisted
     underscore-prefixed metadata key (_evaluation, _liveness, ...; see

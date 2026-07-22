@@ -702,6 +702,81 @@ class TestSaveAndReadLiveness(unittest.TestCase):
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
 
 
+class TestSaveAndReadApplicationStatus(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_application_status")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_save_then_read_round_trips_status(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_application_status(path, "Applied")
+        result = jd_manager.read_application_status(path)
+        self.assertEqual(result["status"], "Applied")
+        self.assertIn("applied_at", result)
+        self.assertIn("status_changed_at", result)
+        self.assertEqual(result["follow_up_count"], 0)
+
+    def test_applied_at_is_set_once_and_not_overwritten_by_later_status_changes(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_application_status(path, "Applied")
+        first = jd_manager.read_application_status(path)["applied_at"]
+
+        jd_manager.save_application_status(path, "Responded")
+        second = jd_manager.read_application_status(path)
+
+        self.assertEqual(second["applied_at"], first)
+        self.assertEqual(second["status"], "Responded")
+
+    def test_log_followup_increments_count_and_stamps_last_followup_at(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_application_status(path, "Applied")
+        jd_manager.save_application_status(path, "Applied", log_followup=True)
+        result = jd_manager.read_application_status(path)
+        self.assertEqual(result["follow_up_count"], 1)
+        self.assertIsNotNone(result["last_followup_at"])
+
+        jd_manager.save_application_status(path, "Applied", log_followup=True)
+        result = jd_manager.read_application_status(path)
+        self.assertEqual(result["follow_up_count"], 2)
+
+    def test_status_change_without_followup_does_not_increment_count(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_application_status(path, "Applied", log_followup=True)
+        jd_manager.save_application_status(path, "Responded")
+        result = jd_manager.read_application_status(path)
+        self.assertEqual(result["follow_up_count"], 1)
+
+    def test_save_preserves_the_rest_of_the_jd_content(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_application_status(path, "Applied")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["company_name"], "Acme")
+
+    def test_read_returns_none_when_never_set(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        self.assertIsNone(jd_manager.read_application_status(path))
+
+    def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
+        jd_manager.save_application_status(path, "Applied")
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+
 class TestReadJdTextStripsAnyUnderscoreKey(unittest.TestCase):
     """Regression coverage for read_jd_text() generalizing from a
     hardcoded _evaluation-only strip to any underscore-prefixed key --
