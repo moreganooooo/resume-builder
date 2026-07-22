@@ -441,6 +441,67 @@ knowledge-base files, then runs the real test suite — ending in a
 plain-English summary with a one-line fix per problem found, not a wall
 of stack traces.
 
+## Multi-computer sync
+
+A profile's data — knowledge base, bullet bank (CSV and embeddings),
+`.env`/config/identity files, JDs with their evaluations and application
+tracking, and generated output (PDFs, cover letters, HTML) — can sync
+across machines with [Syncthing](https://syncthing.net/), direct
+device-to-device and encrypted in transit. It never touches GitHub, so
+it's a separate, simpler thing than git: code still goes through the
+usual push/pull, only a profile's *data* syncs this way.
+
+Each profile has four independent Syncthing folders (already scaffolded
+for you — `resume doctor` or a fresh bootstrap seeds a `.stignore` in
+each one):
+
+| Folder ID (suggested)  | Path                | Contents |
+|-------------------------|----------------------|----------|
+| `resume-<name>-profile` | `profiles/<name>/`  | knowledge base, bullet bank + embeddings, `.env`, config/identity files, signature image |
+| `resume-<name>-jds`     | `jds/<name>/`       | every JD, with its evaluation/liveness/application-status metadata attached |
+| `resume-<name>-output`  | `output/<name>/`    | rendered PDFs, cover letters, HTML |
+| `resume-<name>-data`    | `data/<name>/`      | `applications.md` |
+
+**One-time setup, once on each machine:**
+1. `brew install syncthing` (or your platform's equivalent), then start
+   it and open its web UI (usually `http://localhost:8384`).
+2. Under **Actions → Show ID**, get this machine's device ID; on the
+   other machine, **Add Remote Device** with that ID (and vice versa) —
+   this is the one step that has to happen with both machines in front
+   of you, or with the ID shared over a channel you trust.
+3. Once paired, **Add Folder** for each of the four paths above (full
+   path to the directory, not a relative one), matching Folder IDs on
+   both sides so Syncthing knows they're the same folder — and share
+   each one with the other device.
+4. That's it going forward — edits on either machine propagate
+   automatically, no manual copying.
+
+**Why `.env` is safe to include here** even though it's gitignored:
+gitignore exists to keep secrets out of a *public* (or at least shared)
+git history. Syncthing isn't git — it's a direct, encrypted connection
+between your own two machines — so that concern doesn't apply. Syncing
+`.env` means a new machine has a working `GEMINI_API_KEY` (and
+`JOBRIGHT_COOKIE_STRING`, if you use it) the moment its folder finishes
+its first sync, with nothing to retype.
+
+A few things worth knowing:
+- **Conflicts are rare in practice** (you're usually working from one
+  machine at a time), but if the same file changes on two machines
+  before they sync, Syncthing keeps both as
+  `filename.sync-conflict-<date>-<time>.ext` rather than silently
+  picking one — check for those after reconnecting two machines that
+  were both active offline.
+- **Checkpoints** (`output/<name>/checkpoints/`) resume an interrupted
+  `resume run` — don't start the *same* batch on two machines at once
+  while it's mid-run, for the same reason you wouldn't do that on one
+  machine with `.venv/` in two terminals.
+- **Not synced, and shouldn't be:** `.venv/`, `node_modules/`,
+  `__pycache__/`, `.git/` — these are either machine-specific or
+  already handled by their own tooling (pip/npm/git). Syncing `.git/`
+  itself is a real corruption risk (two machines both writing to the
+  same object store/refs without git's own coordination) — code changes
+  stay on git push/pull, only the four data folders above use Syncthing.
+
 ## Fonts
 
 `resume-engine/fonts/DMSans-{Regular,ExtraBold,Italic}-static.ttf` are
@@ -458,8 +519,9 @@ The full pipeline — scan, liveness, evaluate, tailor/coverletter, render,
 track — is built and in daily use, along with company research (plus a
 search-grounded fallback), situational work-history entries, Browse &
 Manage Jobs, follow-up tracking, the contact/outreach finder, `resume
-polish`, the holistic critique's distinctiveness signals, and multi-user
-support (a second profile can already fully use this end to end). What's
+polish`, the holistic critique's distinctiveness signals, multi-user
+support (a second profile can already fully use this end to end), and
+multi-computer sync via Syncthing. What's
 still ahead — a background scheduler, the full evidence-bank
 generalization beyond resume bullets, a long-term merge with two sibling
 projects — is tracked in [`IDEAS.md`](IDEAS.md), organized by difficulty
