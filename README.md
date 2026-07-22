@@ -309,9 +309,10 @@ lightweight validator checks the result (banned phrases, paragraph count,
 accidental third-person slips) with one automatic retry before the PDF
 renders.
 
-**Signature image:** references `docs/MorganEscottSignature2025.png` for a
-handwritten-style signature under the sign-off. Missing that file just
-means a blank space where the signature goes — the PDF still renders fine.
+**Signature image:** drop a handwritten-style signature into
+`profiles/<name>/signature.png` (`.jpg`/`.jpeg` also work) and it renders
+under the sign-off — fully optional and per-profile. No file there just
+means no signature image renders — the PDF still renders fine either way.
 
 ## Polishing a resume or cover letter
 

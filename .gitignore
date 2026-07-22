@@ -11,6 +11,15 @@ config.local.*
 **/.meta
 
 
+# === PERSONAL IDENTIFYING ASSETS ===
+# A handwritten-style signature image is personal, identifying content --
+# same conservative posture as the PII note below for scanned JD data.
+# profiles/<name>/signature.{png,jpg,jpeg} -- see profile_paths.signature_path().
+profiles/*/signature.png
+profiles/*/signature.jpg
+profiles/*/signature.jpeg
+
+
 # === AUDIT & OUTPUT FILES (may contain keys or PII) ===
 # IMPORTANT: Be specific here. Wildcards like *audit*.csv will catch
 # bullet-bank-keepers-audited.csv if it ever needs to be re-added.

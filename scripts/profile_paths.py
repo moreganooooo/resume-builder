@@ -155,6 +155,24 @@ def env_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), ".env")
 
 
+SIGNATURE_EXTENSIONS = (".png", ".jpg", ".jpeg")
+
+
+def signature_path(profile: str = None) -> str | None:
+    """Path to this profile's own optional handwritten-style signature
+    image (profiles/<name>/signature.{png,jpg,jpeg}), or None if the
+    profile hasn't dropped one in -- render_coverletter() treats None as
+    "render with no signature image," never an error. Checks each
+    extension in SIGNATURE_EXTENSIONS in order, returns the first that
+    exists."""
+    root = profile_root(profile)
+    for ext in SIGNATURE_EXTENSIONS:
+        candidate = os.path.join(root, f"signature{ext}")
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def jds_dir(profile: str = None) -> str:
     return os.path.join(PROJECT_ROOT, "jds", profile or active_profile())
 

@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -62,6 +63,40 @@ class TestPathHelpers(unittest.TestCase):
     def test_situational_roles_path_resolves_under_profile_root(self):
         expected = os.path.join(profile_paths.PROFILES_DIR, "morgan", "situational_roles.yaml")
         self.assertEqual(profile_paths.situational_roles_path("morgan"), expected)
+
+
+class TestSignaturePath(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_signature_profile")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._patcher = patch("profile_paths.profile_root", return_value=self.tmp_dir)
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def test_returns_none_when_no_signature_file(self):
+        self.assertIsNone(profile_paths.signature_path())
+
+    def test_finds_png(self):
+        path = os.path.join(self.tmp_dir, "signature.png")
+        open(path, "w").close()
+        self.assertEqual(profile_paths.signature_path(), path)
+
+    def test_finds_jpg_when_no_png(self):
+        path = os.path.join(self.tmp_dir, "signature.jpg")
+        open(path, "w").close()
+        self.assertEqual(profile_paths.signature_path(), path)
+
+    def test_png_takes_priority_over_jpg(self):
+        png_path = os.path.join(self.tmp_dir, "signature.png")
+        open(os.path.join(self.tmp_dir, "signature.jpg"), "w").close()
+        open(png_path, "w").close()
+        self.assertEqual(profile_paths.signature_path(), png_path)
 
 
 class TestFixedContentModule(unittest.TestCase):

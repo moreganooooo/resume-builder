@@ -1,10 +1,12 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import render_coverletter as render_coverletter_module  # noqa: E402
 from render_coverletter import render_coverletter  # noqa: E402
 
 
@@ -58,3 +60,32 @@ class TestRenderCoverLetter(unittest.TestCase):
             html = f.read()
         self.assertIn("Morgan Escott", html)
         self.assertIn("escott.morgan@gmail.com", html)
+
+    @patch("render_coverletter.profile_paths.signature_path", return_value="/x/profiles/morgan/signature.png")
+    def test_signature_image_rendered_as_absolute_file_url_when_present(self, mock_sig):
+        render_coverletter(_minimal_letter_data(), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn('src="file:///x/profiles/morgan/signature.png"', html)
+        self.assertIn('class="signature-img"', html)
+
+    @patch("render_coverletter.profile_paths.signature_path", return_value=None)
+    def test_no_img_tag_at_all_when_no_signature(self, mock_sig):
+        render_coverletter(_minimal_letter_data(), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        # The .signature-img CSS *rule* stays in <style> either way (inert
+        # if unused) -- what must be absent is an actual <img> element.
+        self.assertNotIn("<img", html)
+
+
+class TestBuildSignatureBlockHtml(unittest.TestCase):
+
+    @patch("render_coverletter.profile_paths.signature_path", return_value=None)
+    def test_returns_empty_string_when_no_signature(self, mock_sig):
+        self.assertEqual(render_coverletter_module.build_signature_block_html(), "")
+
+    @patch("render_coverletter.profile_paths.signature_path", return_value="/some/path/signature.jpg")
+    def test_returns_img_tag_with_absolute_file_url(self, mock_sig):
+        result = render_coverletter_module.build_signature_block_html()
+        self.assertEqual(result, '<img class="signature-img" src="file:///some/path/signature.jpg" alt="">')

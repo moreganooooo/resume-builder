@@ -1011,6 +1011,65 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Signature image made per-profile and actually fixed -- done 2026-07-22
+
+Closes the gap flagged in the Doctor-script archive entry above, and
+corrects two earlier, incomplete findings about this same feature -- both
+worth recording since they show how a `.py`-only grep can miss a real
+bug living in a `.html` template.
+
+**The earlier findings, corrected:**
+- A pass during the multi-user work (see this archive's "third pass" note
+  above) concluded "no code anywhere actually reads that file; either a
+  removed feature or stale docs" -- true only because that grep never
+  checked `.html` files. `resume-engine/templates/coverletter-template.html`
+  had `<img src="./docs/MorganEscottSignature2025.png">` hardcoded the
+  whole time.
+- Yesterday's Doctor-script entry flagged this as "hardcoded, not
+  profile-specific" -- accurate, but incomplete. The real, deeper bug,
+  found today by actually tracing how `generate-pdf.mjs` loads the
+  rendered HTML: it writes the HTML to a temp directory
+  (`os.tmpdir()/resume-pdf-*/resume.html`) before navigating Chromium to
+  it -- a real fix for a font-loading bug, per that file's own comment.
+  A relative `./docs/...` path in the HTML resolves against *that temp
+  directory*, not the real project. **This feature has never actually
+  worked, for any profile, since the day that temp-file fix shipped** --
+  independent of whether the PNG file ever existed on disk.
+
+**Built:**
+- `profile_paths.signature_path(profile=None) -> str | None` -- checks
+  `profiles/<name>/signature.{png,jpg,jpeg}` in that order, returns the
+  first that exists or `None`.
+- `resume-engine/templates/coverletter-template.html`'s hardcoded `<img>`
+  replaced with a `{{SIGNATURE_BLOCK}}` token, same pattern as the
+  existing `{{RECIPIENT_BLOCK}}`/`{{BODY_PARAGRAPHS}}` tokens.
+  `render_coverletter.build_signature_block_html()` renders either a real
+  `<img>` tag or an empty string -- true graceful degradation (no
+  element at all), not a broken reference.
+- **Fixes the actual bug, not just the hardcoding:** the `<img>` tag now
+  uses an *absolute* `file://` path
+  (`file:///Users/.../profiles/morgan/signature.png`) built directly in
+  Python, sidestepping the temp-dir problem entirely -- no relative path
+  involved, so nothing for the temp-file move to break. Mirrors
+  `generate-pdf.mjs`'s own already-proven fix for the exact same class of
+  bug with font files (absolute `file://` paths to `resume-engine/fonts/`,
+  a different directory than the temp HTML file, confirmed working) --
+  same fix, applied on the Python side this time instead of needing a
+  second rewrite pass in the Node script.
+- `doctor.py`'s signature check now reports the active profile's real
+  `signature_path()` result instead of a hardcoded, Morgan-only path.
+- `.gitignore`: `profiles/*/signature.{png,jpg,jpeg}` -- a handwritten
+  signature is personal, identifying content, same conservative posture
+  this repo already takes on scanned-JD PII. Verified the pattern
+  actually matches before relying on it.
+- README's signature section rewritten to describe the new per-profile
+  location instead of the old hardcoded one.
+
+Full suite: 856 tests (12 new), all green. Smoke-tested end to end with a
+real placeholder PNG before writing this up -- confirmed
+`signature_path()` finds it and `build_signature_block_html()` emits the
+correct absolute `file://` `<img>` tag.
+
 ## Doctor script + Maintenance submenu -- done 2026-07-22
 
 Built together as scoped (the docs already flagged the Maintenance
