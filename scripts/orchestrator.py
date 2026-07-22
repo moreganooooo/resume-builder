@@ -2096,6 +2096,62 @@ class ResumeEngine:
         )
         return text.strip() if text else None
 
+    def draft_followup_message(self, jd_path: str, follow_up_count: int, contact: dict = None) -> str | None:
+        """
+        Drafts a short, specific follow-up message for an application
+        genuinely due for one -- callers gate on
+        followup.compute_urgency() being "overdue" (never "waiting" or
+        "cold") before calling this; it doesn't re-derive urgency itself.
+        follow_up_count is _application's existing count (0 before the
+        first follow-up, 1 before the second) -- career-ops's original
+        mode never drafts a third, so neither does this; that's a caller-
+        side gate, not something enforced here.
+
+        Grounded in cv.md only, not the full knowledge base -- a 2-4
+        sentence follow-up doesn't need ~250k tokens of context, and
+        cv.md is already the distilled, curated summary of real,
+        traceable achievements the prompt is told to draw its one proof
+        point from. contact is optional (unlike draft_outreach_message(),
+        which requires one) -- career-ops's own spec drafts a generic-
+        address email when no contact is known, it just doesn't skip
+        the follow-up entirely. Returns None if the JD can't be read or
+        the model call fails to return anything.
+        """
+        try:
+            jd_text = jd_manager.read_jd_text(jd_path)
+        except FileNotFoundError:
+            return None
+
+        cv_path = os.path.join(self.kb_dir, "cv.md")
+        cv_text = ""
+        if os.path.exists(cv_path):
+            with open(cv_path, "r", encoding="utf-8") as f:
+                cv_text = f.read()
+
+        if contact:
+            contact_block = (
+                f"Name: {contact.get('name', '')}\n"
+                f"Title: {contact.get('title', '')}\n"
+                f"Connection type: {contact.get('connection_type', '')}"
+            )
+        else:
+            contact_block = "No specific contact known -- address generically (e.g. the hiring team)."
+
+        prompt = self.load_prompt("draft_followup.md")
+        contents = (
+            f"=== FOLLOW-UP NUMBER ===\n{follow_up_count + 1}\n\n"
+            f"=== CONTACT ===\n{contact_block}\n\n"
+            f"=== CANDIDATE BACKGROUND (cv.md) ===\n{cv_text}\n\n"
+            f"=== JOB DESCRIPTION ===\n{jd_text}"
+        )
+        text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=prompt,
+            contents=contents,
+            temperature=0.3,
+        )
+        return text.strip() if text else None
+
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
         Standalone cover letter generation -- independent of
