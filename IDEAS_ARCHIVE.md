@@ -1204,6 +1204,41 @@ half only:**
 
 Full suite: 808 tests (41 new), all green.
 
+## Follow-up message drafting -- done 2026-07-22
+
+Closed the one piece deliberately left open above: career-ops's
+`modes/followup.md` drafting half. `draft_outreach_message()` was
+prior art for the shape (one Gemini call, real JD + real context, short
+message) but not a drop-in -- a follow-up has different constraints an
+outreach message doesn't:
+
+- New `resume-engine/prompts/draft_followup.md`, mirroring career-ops's
+  drafting rules (1st vs. 2nd follow-up structure/length, banned
+  "just checking in"-style phrasing, exactly one real proof point from
+  `cv.md` tied to something the JD actually asks for, contact-type-aware
+  addressing, LinkedIn-note-length vs. email framing).
+- `ResumeEngine.draft_followup_message(jd_path, follow_up_count,
+  contact=None)`: grounds on `cv.md` alone rather than the full ~250k-token
+  knowledge base -- a 2-4 sentence message doesn't need that much context,
+  and `cv.md` is already the curated, traceable source the prompt draws
+  its one proof point from. Doesn't re-derive urgency itself; callers gate
+  on `followup.compute_urgency() == "overdue"` before calling it.
+- Unlike `draft_outreach_message()`, `contact` is optional here --
+  career-ops's own spec drafts a generically-addressed email
+  ("the hiring team") when no contact is known rather than skipping the
+  follow-up entirely, since a follow-up (unlike a cold outreach) doesn't
+  need someone specific to address.
+- New "Draft Follow-Up Message" action in "Browse & Manage Jobs", shown
+  only when `followup.compute_urgency(row["application"]) == "overdue"`
+  (never for "waiting" -- too soon -- or "cold" -- already two unanswered
+  follow-ups, a different problem). Reuses `find_jd_contacts()` for the
+  same real-contact-or-generic prompt as outreach. After the draft
+  prints, asks "Did you send this?" and logs it via the existing
+  `_handle_log_followup()` on confirmation -- closing the loop career-ops's
+  own spec calls for (record a follow-up only after it's actually sent).
+
+Full suite: 870 tests (14 new), all green.
+
 ## "Update My Knowledge" flow -- done 2026-07-21
 
 Filed as Hard, on the assumption that the six-stage pipeline's

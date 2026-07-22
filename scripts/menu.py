@@ -24,6 +24,7 @@ import bootstrap_bullet_bank
 import bullet_bank_menu
 import cli_art
 import doctor
+import followup
 import maintenance
 import orchestrator
 import jd_manager
@@ -389,6 +390,58 @@ def _handle_draft_outreach(row: dict) -> None:
     cli_art.console.print(f"\n{message}\n")
 
 
+def _handle_draft_followup(row: dict) -> None:
+    """Only offered (see _browse_single_action) when
+    followup.compute_urgency() is "overdue" -- career-ops's own spec never
+    drafts for "waiting" (too soon) or "cold" (already had two with no
+    response; a different action, not another message). Reuses
+    find_jd_contacts() -- same real-contact-or-none logic as outreach,
+    except a missing contact doesn't block drafting here, it just means a
+    generically-addressed message (career-ops's own behavior: an unknown
+    contact still gets a follow-up, just not a named one)."""
+    application = row.get("application") or {}
+    follow_up_count = application.get("follow_up_count", 0)
+
+    try:
+        with open(row["path"], "r", encoding="utf-8") as f:
+            jd_data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        jd_data = {}
+    contacts = orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+
+    contact = None
+    if len(contacts) == 1:
+        contact = contacts[0]
+    elif len(contacts) > 1:
+        choice_labels = [
+            questionary.Choice(title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})", value=i)
+            for i, c in enumerate(contacts)
+        ]
+        choice_labels.append(questionary.Choice(title="No specific contact -- address generically", value=-1))
+        picked = questionary.select(
+            "Who should this follow-up be addressed to?", choices=choice_labels, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if picked is None:
+            return
+        if picked != -1:
+            contact = contacts[picked]
+
+    engine = orchestrator.ResumeEngine()
+    with cli_art.console.status("Drafting a follow-up message...", spinner="dots"):
+        message = engine.draft_followup_message(row["path"], follow_up_count, contact)
+    if not message:
+        cli_art.display_error("Couldn't draft a follow-up -- no parseable result.")
+        return
+
+    cli_art.console.print(f"\n{message}\n")
+
+    sent = questionary.confirm(
+        "Did you send this?", default=False, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if sent:
+        _handle_log_followup(row)
+
+
 def _browse_single_action(row: dict) -> bool:
     while True:
         action_choices = [questionary.Choice(title="View More Details", value="details")]
@@ -399,6 +452,8 @@ def _browse_single_action(row: dict) -> bool:
             action_choices.append(questionary.Choice(title="Update Application Status", value="update_status"))
             if row.get("application"):
                 action_choices.append(questionary.Choice(title="Log a Follow-up Sent", value="log_followup"))
+                if followup.compute_urgency(row["application"]) == "overdue":
+                    action_choices.append(questionary.Choice(title="Draft Follow-Up Message", value="draft_followup"))
         action_choices.append(questionary.Choice(title="Draft Outreach Message", value="outreach"))
         action_choices.append(questionary.Choice(title=f"{theme.ICONS['utility']}  Archive", value="archive"))
         action_choices.append(questionary.Choice(title="Back", value="back"))
@@ -424,6 +479,9 @@ def _browse_single_action(row: dict) -> bool:
             continue
         if action == "log_followup":
             _handle_log_followup(row)
+            continue
+        if action == "draft_followup":
+            _handle_draft_followup(row)
             continue
         if action == "outreach":
             _handle_draft_outreach(row)
