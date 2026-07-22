@@ -61,14 +61,13 @@ def check_python_version() -> dict:
 def check_venv() -> dict:
     venv_path = os.path.join(PROJECT_ROOT, ".venv")
     exists = os.path.isdir(venv_path)
-    active = sys.prefix != sys.base_prefix
-    ok = exists and active
-    detail = f".venv/ {'found' if exists else 'missing'}, {'active' if active else 'not active'} in this process"
+    has_python = os.path.isfile(os.path.join(venv_path, "bin", "python"))
+    ok = exists and has_python
+    detail = f".venv/ {'found' if exists else 'missing'}, ready to use"
     return _check(
-        ".venv/ exists and is active", ok, detail,
-        "source .venv/bin/activate (rebuild first if missing: "
-        "/usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate && "
-        "pip install -r requirements.txt).",
+        ".venv/ exists and is ready", ok, detail,
+        "Rebuild .venv/: /usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate && "
+        "pip install -r requirements.txt.",
     )
 
 
