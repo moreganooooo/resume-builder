@@ -306,9 +306,11 @@ write a cover letter, archive); pick several to compare them side-by-side
 dimension-by-dimension, or act on the whole batch at once. It also
 carries the real-world follow-up loop: mark an application Applied/
 Responded/Interview/etc., log follow-ups sent, and see at a glance which
-ones are overdue for a nudge — and where JobRight has already surfaced a
-real contact at the company, draft a short, specific outreach message to
-them, grounded only in real, already-verified people (never invented).
+ones are overdue for a nudge. When one is overdue, draft the follow-up
+message itself right there, grounded in your real background; and where
+JobRight has already surfaced a real contact at the company, draft a
+short, specific outreach message to them too — both grounded only in
+real, already-verified people and achievements (never invented).
 
 ## Checking posting liveness
 
