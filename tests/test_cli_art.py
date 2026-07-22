@@ -219,6 +219,19 @@ class TestRenderPipelineTable(unittest.TestCase):
         self.assertIn("active", output)
         self.assertIn("2026-07-21", output)
 
+    def test_shows_followup_status_and_urgency(self):
+        import datetime
+        overdue_at = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(timespec="seconds")
+        rows = [
+            {"path": "jds/a.json", "status": "Completed", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
+             "liveness": None,
+             "application": {"status": "Applied", "status_changed_at": overdue_at, "follow_up_count": 0}},
+        ]
+        output = _rendered(cli_art.render_pipeline_table, rows)
+        self.assertIn("Applied", output)
+        self.assertIn("overdue", output)
+
 
 class TestRenderComparisonTable(unittest.TestCase):
 

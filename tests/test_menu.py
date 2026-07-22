@@ -280,6 +280,177 @@ class TestBrowseSingleAction(unittest.TestCase):
         self.assertTrue(menu._browse_single_action(row))
         mock_archive.assert_called_once_with("jds/a.json")
 
+    @patch("menu.questionary.select")
+    def test_update_status_only_offered_for_completed(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        menu._browse_single_action(_row(status="Pending"))
+        values = [c.value for c in mock_select.call_args.kwargs["choices"]]
+        self.assertNotIn("update_status", values)
+
+        menu._browse_single_action(_row(status="Completed"))
+        values = [c.value for c in mock_select.call_args.kwargs["choices"]]
+        self.assertIn("update_status", values)
+
+    @patch("menu.questionary.select")
+    def test_log_followup_only_offered_once_an_application_exists(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        row = _row(status="Completed")
+        row["application"] = None
+        menu._browse_single_action(row)
+        values = [c.value for c in mock_select.call_args.kwargs["choices"]]
+        self.assertNotIn("log_followup", values)
+
+        row["application"] = {"status": "Applied"}
+        menu._browse_single_action(row)
+        values = [c.value for c in mock_select.call_args.kwargs["choices"]]
+        self.assertIn("log_followup", values)
+
+    @patch("menu.questionary.select")
+    def test_outreach_offered_regardless_of_status(self, mock_select):
+        mock_select.return_value.ask.return_value = "back"
+        for status in ("Pending", "Completed"):
+            menu._browse_single_action(_row(status=status))
+            values = [c.value for c in mock_select.call_args.kwargs["choices"]]
+            self.assertIn("outreach", values)
+
+    @patch("menu._handle_update_application_status")
+    @patch("menu.questionary.select")
+    def test_update_status_action_loops_back(self, mock_select, mock_handler):
+        mock_select.return_value.ask.side_effect = ["update_status", "back"]
+        self.assertFalse(menu._browse_single_action(_row(status="Completed")))
+        mock_handler.assert_called_once()
+
+    @patch("menu._handle_log_followup")
+    @patch("menu.questionary.select")
+    def test_log_followup_action_loops_back(self, mock_select, mock_handler):
+        row = _row(status="Completed")
+        row["application"] = {"status": "Applied"}
+        mock_select.return_value.ask.side_effect = ["log_followup", "back"]
+        self.assertFalse(menu._browse_single_action(row))
+        mock_handler.assert_called_once()
+
+    @patch("menu._handle_draft_outreach")
+    @patch("menu.questionary.select")
+    def test_outreach_action_loops_back(self, mock_select, mock_handler):
+        mock_select.return_value.ask.side_effect = ["outreach", "back"]
+        self.assertFalse(menu._browse_single_action(_row()))
+        mock_handler.assert_called_once()
+
+
+class TestHandleUpdateApplicationStatus(unittest.TestCase):
+
+    @patch("menu.jd_manager.read_application_status")
+    @patch("menu.jd_manager.save_application_status")
+    @patch("menu.questionary.select")
+    def test_saves_the_selected_status(self, mock_select, mock_save, mock_read):
+        mock_select.return_value.ask.return_value = "Applied"
+        mock_read.return_value = {"status": "Applied"}
+        row = _row(path="jds/a.json", status="Completed")
+
+        menu._handle_update_application_status(row)
+
+        mock_save.assert_called_once_with("jds/a.json", "Applied")
+        self.assertEqual(row["application"], {"status": "Applied"})
+
+    @patch("menu.jd_manager.save_application_status")
+    @patch("menu.questionary.select")
+    def test_cancelled_prompt_saves_nothing(self, mock_select, mock_save):
+        mock_select.return_value.ask.return_value = None
+        menu._handle_update_application_status(_row())
+        mock_save.assert_not_called()
+
+
+class TestHandleLogFollowup(unittest.TestCase):
+
+    @patch("menu.jd_manager.read_application_status")
+    @patch("menu.jd_manager.save_application_status")
+    def test_logs_a_followup_against_the_current_status(self, mock_save, mock_read):
+        mock_read.return_value = {"status": "Applied", "follow_up_count": 1}
+        row = _row(path="jds/a.json")
+        row["application"] = {"status": "Applied"}
+
+        menu._handle_log_followup(row)
+
+        mock_save.assert_called_once_with("jds/a.json", "Applied", log_followup=True)
+
+    @patch("menu.jd_manager.read_application_status", return_value={"status": "Applied"})
+    @patch("menu.jd_manager.save_application_status")
+    def test_defaults_to_applied_when_no_prior_status(self, mock_save, mock_read):
+        row = _row(path="jds/a.json")
+        row["application"] = None
+        menu._handle_log_followup(row)
+        mock_save.assert_called_once_with("jds/a.json", "Applied", log_followup=True)
+
+
+class TestHandleDraftOutreach(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_draft_outreach")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write_jd(self, name, data):
+        import json as json_module
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json_module.dump(data, f)
+        return path
+
+    @patch("menu.orchestrator.find_jd_contacts", return_value=[])
+    @patch("menu.cli_art.console.print")
+    def test_prints_message_and_returns_when_no_contacts(self, mock_print, mock_find):
+        path = self._write_jd("a.json", {"company_name": "Acme"})
+        menu._handle_draft_outreach(_row(path=path))
+        printed = mock_print.call_args[0][0]
+        self.assertIn("No real contacts found", printed)
+
+    @patch("menu.orchestrator.ResumeEngine")
+    @patch("menu.orchestrator.find_jd_contacts")
+    def test_single_contact_drafts_without_a_selection_prompt(self, mock_find, mock_engine_cls):
+        path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
+        contact = {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""}
+        mock_find.return_value = [contact]
+        mock_engine_cls.return_value.draft_outreach_message.return_value = "Hi Jen, ..."
+
+        with patch("menu.questionary.select") as mock_select:
+            menu._handle_draft_outreach(_row(path=path))
+            mock_select.assert_not_called()
+
+        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(path, contact)
+
+    @patch("menu.orchestrator.ResumeEngine")
+    @patch("menu.orchestrator.find_jd_contacts")
+    def test_multiple_contacts_prompts_for_a_choice(self, mock_find, mock_engine_cls):
+        path = self._write_jd("a.json", {"social_connections": []})
+        contacts = [
+            {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""},
+            {"name": "Alex Chen", "title": "PM", "connection_type": "Personal company connection", "linkedin_url": ""},
+        ]
+        mock_find.return_value = contacts
+        mock_engine_cls.return_value.draft_outreach_message.return_value = "Hi Alex, ..."
+
+        with patch("menu.questionary.select") as mock_select:
+            mock_select.return_value.ask.return_value = 1
+            menu._handle_draft_outreach(_row(path=path))
+
+        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(path, contacts[1])
+
+    @patch("menu.orchestrator.ResumeEngine")
+    @patch("menu.orchestrator.find_jd_contacts")
+    @patch("menu.cli_art.display_error")
+    def test_shows_error_when_draft_fails(self, mock_error, mock_find, mock_engine_cls):
+        path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
+        mock_find.return_value = [{"name": "Jen Dudik", "title": "", "connection_type": "JobRight match", "linkedin_url": ""}]
+        mock_engine_cls.return_value.draft_outreach_message.return_value = None
+
+        menu._handle_draft_outreach(_row(path=path))
+
+        mock_error.assert_called_once()
+
 
 class TestBrowseBulkAction(unittest.TestCase):
 

@@ -13,6 +13,7 @@ confirmation, zero results) returns False and goes straight back to the
 main menu instead.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -323,6 +324,67 @@ def _print_evaluation_detail(row: dict) -> None:
     cli_art.console.print("")
 
 
+def _handle_update_application_status(row: dict) -> None:
+    choices = [questionary.Choice(title=s, value=s) for s in jd_manager.APPLICATION_STATUSES]
+    status = questionary.select(
+        "Mark this application as:", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not status:
+        return
+    jd_manager.save_application_status(row["path"], status)
+    row["application"] = jd_manager.read_application_status(row["path"])
+    cli_art.console.print(f"Marked {row['company'] or row['path']} as {status}.")
+
+
+def _handle_log_followup(row: dict) -> None:
+    application = row.get("application")
+    status = (application or {}).get("status") or "Applied"
+    jd_manager.save_application_status(row["path"], status, log_followup=True)
+    row["application"] = jd_manager.read_application_status(row["path"])
+    cli_art.console.print(f"Logged a follow-up for {row['company'] or row['path']}.")
+
+
+def _handle_draft_outreach(row: dict) -> None:
+    try:
+        with open(row["path"], "r", encoding="utf-8") as f:
+            jd_data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        jd_data = {}
+    contacts = orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+    if not contacts:
+        cli_art.console.print(
+            "No real contacts found for this JD -- this only works for JobRight-sourced "
+            "postings (or a personal company/school connection), and only when one was found."
+        )
+        return
+
+    if len(contacts) == 1:
+        contact = contacts[0]
+    else:
+        choice_labels = [
+            questionary.Choice(title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})", value=i)
+            for i, c in enumerate(contacts)
+        ]
+        picked = questionary.select("Who would you like to reach out to?", choices=choice_labels, style=cli_art.QUESTIONARY_STYLE).ask()
+        if picked is None:
+            return
+        contact = contacts[picked]
+
+    engine = orchestrator.ResumeEngine()
+    with cli_art.console.status(f"Drafting a message to {contact['name']}...", spinner="dots"):
+        message = engine.draft_outreach_message(row["path"], contact)
+    if not message:
+        cli_art.display_error("Couldn't draft a message -- no parseable result.")
+        return
+
+    cli_art.console.print(
+        f"\n[bold]To:[/bold] {contact['name']} ({contact['title'] or '?'}, {contact['connection_type']})"
+    )
+    if contact.get("linkedin_url"):
+        cli_art.console.print(f"[bold]Profile:[/bold] {contact['linkedin_url']}")
+    cli_art.console.print(f"\n{message}\n")
+
+
 def _browse_single_action(row: dict) -> bool:
     while True:
         action_choices = [questionary.Choice(title="View More Details", value="details")]
@@ -330,6 +392,10 @@ def _browse_single_action(row: dict) -> bool:
             action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Tailor Resume", value="tailor"))
         if row["status"] == "Completed":
             action_choices.append(questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter", value="coverletter"))
+            action_choices.append(questionary.Choice(title="Update Application Status", value="update_status"))
+            if row.get("application"):
+                action_choices.append(questionary.Choice(title="Log a Follow-up Sent", value="log_followup"))
+        action_choices.append(questionary.Choice(title="Draft Outreach Message", value="outreach"))
         action_choices.append(questionary.Choice(title=f"{theme.ICONS['utility']}  Archive", value="archive"))
         action_choices.append(questionary.Choice(title="Back", value="back"))
 
@@ -349,6 +415,15 @@ def _browse_single_action(row: dict) -> bool:
         if action == "coverletter":
             engine = orchestrator.ResumeEngine()
             return bool(engine.build_tailored_coverletter(row["path"]))
+        if action == "update_status":
+            _handle_update_application_status(row)
+            continue
+        if action == "log_followup":
+            _handle_log_followup(row)
+            continue
+        if action == "outreach":
+            _handle_draft_outreach(row)
+            continue
         if action == "archive":
             jd_manager.archive_jd(row["path"])
             cli_art.console.print(f"Archived {row['company'] or row['path']}.")

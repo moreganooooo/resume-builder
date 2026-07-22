@@ -14,6 +14,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
 
+import followup
 import jd_manager
 import theme
 
@@ -281,6 +282,20 @@ def _liveness_cell(liveness: dict | None) -> str:
     return f"[{color}]{result or '?'}[/{color}] ({date})"
 
 
+_FOLLOWUP_COLORS = {"overdue": theme.ERROR, "cold": theme.MUTED, "waiting": theme.SUCCESS}
+
+
+def _followup_cell(application: dict | None) -> str:
+    if not application:
+        return "-"
+    status = application.get("status", "?")
+    urgency = followup.compute_urgency(application)
+    if not urgency:
+        return status
+    color = _FOLLOWUP_COLORS.get(urgency, "white")
+    return f"{status} [{color}]({urgency})[/{color}]"
+
+
 def render_pipeline_table(rows: list) -> None:
     """Renders picker.list_all_evaluated_jds()'s row list -- every
     evaluated JD, pending or completed, in one browsable table (the "List
@@ -294,6 +309,7 @@ def render_pipeline_table(rows: list) -> None:
     table.add_column("Title")
     table.add_column("Status")
     table.add_column("Last Liveness")
+    table.add_column("Follow-up")
 
     for i, r in enumerate(rows, 1):
         evaluation = r["evaluation"]
@@ -306,6 +322,7 @@ def render_pipeline_table(rows: list) -> None:
             r["title"] or "?",
             r["status"],
             _liveness_cell(r.get("liveness")),
+            _followup_cell(r.get("application")),
         )
 
     console.print(Panel(

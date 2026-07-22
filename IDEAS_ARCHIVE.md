@@ -1011,6 +1011,80 @@ tests), `TestCollectSecrets` (3 tests), `TestCollectLinkedinSearchQueries`
 updated to mock the new `collect_secrets()` call. Full suite: 705 tests,
 all green.
 
+## Follow-up cadence tracking + contact/outreach finder -- done 2026-07-22
+
+Both found in the 2026-07-21 sibling-repo audit; both turned out to have
+real complications only visible once the actual data was checked
+directly, not from career-ops's file sizes alone.
+
+**Follow-up cadence tracking (career-ops's `modes/followup.md`), tracking
+half only:**
+- **Real prerequisite found before building anything:** career-ops's
+  cadence classification depends on an application's status progressing
+  (Applied -> Responded -> Interview). Checked `jd_manager.append_application_row()`
+  directly -- resume-builder's `applications.md` writes exactly one
+  hardcoded status, `"Tailored"`, and nothing ever updates it. There was
+  nothing to classify until that gap closed.
+- Closed it using the existing per-JD-JSON metadata pattern
+  (`_evaluation`/`_liveness`) rather than trying to rewrite markdown table
+  rows in place: `jd_manager.save_application_status()`/
+  `read_application_status()` persist an `_application` block
+  (`status`, `applied_at` -- set once, never overwritten by a later
+  status change -- `status_changed_at`, `follow_up_count`,
+  `last_followup_at`) directly on the JD's own JSON.
+- `followup.py` (new module): `compute_urgency()`, a straight port of
+  `followup-cadence.mjs`'s date-math thresholds (7 days to first
+  follow-up, 7 more between subsequent ones, cold after 2, 3 days for a
+  "responded" reply, 1 day for a post-interview thank-you) -- pure
+  function, no LLM call, no network.
+- Surfaced in "Browse & Manage Jobs": a new "Follow-up" column on the
+  pipeline table (status + colored urgency), plus two new single-JD
+  actions for Completed-status rows -- "Update Application Status"
+  (select from `jd_manager.APPLICATION_STATUSES`) and "Log a Follow-up
+  Sent" (shown only once a status exists).
+- **Deliberately not built:** the actual follow-up message drafting
+  (career-ops's other half of this mode). Flagged in `IDEAS.md` as a
+  small remaining piece now that `draft_outreach_message()` (below)
+  exists as prior art for the same shape.
+
+**Contact/outreach finder (career-ops's `modes/contact.md`):**
+- **Real fabrication risk found before building anything:** the mode's
+  actual job is surfacing real, named people at a company -- an
+  ungrounded LLM call here risks hallucinated names/titles, a serious
+  problem for a system whose whole identity is "never fabricate."
+- **Then a much better answer than either grounding or role-archetypes-only
+  was found by checking real scanned data:** `scan_jobright.py` already
+  captures `social_connections`/`personal_social_connections` from
+  JobRight's own API response into every JobRight-sourced JD file --
+  confirmed on a real file on disk (an actual named person, title, and
+  LinkedIn URL, already surfaced by JobRight itself, sitting unused).
+  Zero fabrication risk this way: nothing is generated or guessed, only
+  quoted from an already-real, already-scraped source.
+- **LinkedIn-sourced JDs confirmed NOT to have this, and confirmed why,**
+  via a live empirical test (not assumed): `scan_linkedin.py` hardcodes
+  both fields to `None`. Tested LinkedIn's "People you can reach out to"
+  panel directly against a real posting Morgan confirmed shows the panel
+  on her screen -- an authenticated fetch of the exact same URL (same
+  mechanism `_fetch_personalized_extras()` already uses successfully for
+  "Top Applicant" detection) contained none of the panel's markers. The
+  panel is rendered client-side after page load, not in the HTML a plain
+  fetch can see, even authenticated. Real browser automation would be
+  needed to capture it -- a materially bigger lift than anything else
+  built this session, and deliberately not pursued. LinkedIn-sourced JDs
+  get `[]` from `find_jd_contacts()`, not an error.
+- Built: `orchestrator.find_jd_contacts(jd_data)` (module-level, pure
+  data-shaping, no Gemini call) flattens both connection sources into
+  `{name, title, company, linkedin_url, connection_type}` dicts, skipping
+  any entry with no name. `ResumeEngine.draft_outreach_message(jd_path,
+  contact)` (one Gemini call, `resume-engine/prompts/draft_outreach.md`)
+  drafts a short, specific message to an already-real contact -- the
+  prompt explicitly forbids fabricating any shared connection or prior
+  interaction beyond what's given. New "Draft Outreach Message" action in
+  "Browse & Manage Jobs" (available regardless of Pending/Completed
+  status), prompting for which contact when more than one is found.
+
+Full suite: 808 tests (41 new), all green.
+
 ## "Update My Knowledge" flow -- done 2026-07-21
 
 Filed as Hard, on the assumption that the six-stage pipeline's

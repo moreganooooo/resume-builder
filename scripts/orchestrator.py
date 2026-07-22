@@ -688,6 +688,50 @@ def _parse_jd_data(jd_text: str) -> dict:
         return {}
 
 
+def find_jd_contacts(jd_data: dict) -> list:
+    """Flattens a JD's already-scraped social_connections (JobRight's own
+    people-search, captured into the JD dict by scan_jobright.py --
+    real, named people JobRight itself found, e.g. {"fullName": "Jen
+    Dudik", "jobTitle": "Director of Talent Development", "linkedinUrl":
+    "https://www.linkedin.com/in/..."}) and personal_social_connections
+    (company/school ties to the candidate specifically) into one list of
+    {"name", "title", "company", "linkedin_url", "connection_type"}
+    dicts. Never generates or guesses a person -- every entry here quotes
+    JobRight's own scrape verbatim, matching this system's never-
+    fabricate stance. LinkedIn-sourced JDs never have this data today --
+    confirmed 2026-07-22 that LinkedIn's "People you can reach out to"
+    panel is rendered client-side after page load, not in the HTML a
+    plain authenticated fetch (scan_linkedin.py's existing mechanism)
+    can see -- so this returns [] for those, not an error."""
+    contacts = []
+
+    for entry in (jd_data.get("social_connections") or []):
+        name = entry.get("fullName") or entry.get("firstName") or ""
+        if not name:
+            continue
+        contacts.append({
+            "name": name, "title": entry.get("jobTitle") or "",
+            "company": entry.get("companyName") or "",
+            "linkedin_url": entry.get("linkedinUrl") or "",
+            "connection_type": "JobRight match",
+        })
+
+    personal = jd_data.get("personal_social_connections") or {}
+    for tie_type in ("company", "school"):
+        for entry in (personal.get(tie_type) or []):
+            name = entry.get("fullName") or entry.get("firstName") or ""
+            if not name:
+                continue
+            contacts.append({
+                "name": name, "title": entry.get("jobTitle") or "",
+                "company": entry.get("companyName") or "",
+                "linkedin_url": entry.get("linkedinUrl") or "",
+                "connection_type": f"Personal {tie_type} connection",
+            })
+
+    return contacts
+
+
 def _build_output_stem(jd_path: str) -> str:
     """Returns '<CandidateName>[_Title][_Company]' for resume/cover-letter
     output filenames, with the candidate name prefix derived from the
@@ -2023,6 +2067,34 @@ class ResumeEngine:
 
         print(f"  {theme.ICONS['success']} Company research complete for {company_website}.")
         return research_data
+
+    def draft_outreach_message(self, jd_path: str, contact: dict) -> str | None:
+        """
+        Drafts a short, specific outreach message to a real contact
+        already surfaced by find_jd_contacts() -- never invents a person;
+        contact must already be one JobRight's own scrape (or a personal
+        connection) confirmed exists. Returns None if the JD can't be
+        read or the model call fails to return anything.
+        """
+        try:
+            jd_text = jd_manager.read_jd_text(jd_path)
+        except FileNotFoundError:
+            return None
+
+        contact_block = (
+            f"Name: {contact.get('name', '')}\n"
+            f"Title: {contact.get('title', '')}\n"
+            f"Company: {contact.get('company', '')}\n"
+            f"Connection type: {contact.get('connection_type', '')}"
+        )
+        prompt = self.load_prompt("draft_outreach.md")
+        text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=prompt,
+            contents=f"=== CONTACT ===\n{contact_block}\n\n=== JOB DESCRIPTION ===\n{jd_text}",
+            temperature=0.3,
+        )
+        return text.strip() if text else None
 
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
