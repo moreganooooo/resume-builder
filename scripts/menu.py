@@ -25,6 +25,7 @@ import bullet_bank_menu
 import cli_art
 import doctor
 import followup
+import git_update
 import maintenance
 import orchestrator
 import jd_manager
@@ -578,6 +579,7 @@ def _handle_maintenance() -> bool:
             "Maintenance",
             choices=[
                 questionary.Choice(title=f"Run Doctor Checks {last_run_label}", value="doctor"),
+                questionary.Choice(title="Check for GitHub Updates", value="check_updates"),
                 questionary.Choice(title="Back", value="back"),
             ],
             style=cli_art.QUESTIONARY_STYLE,
@@ -587,11 +589,74 @@ def _handle_maintenance() -> bool:
         if choice == "doctor":
             _handle_run_doctor()
             continue
+        if choice == "check_updates":
+            _handle_check_updates()
+            continue
 
 
 def _handle_help() -> bool:
     cli_art.display_help()
     return False
+
+
+def _prompt_for_update() -> None:
+    """Check for git updates and prompt the user if updates are available.
+    This is called at startup before displaying the main menu."""
+    if git_update.has_uncommitted_changes():
+        cli_art.console.print(
+            "[yellow]⚠ You have uncommitted changes -- skipping update check.[/yellow]"
+        )
+        return
+
+    has_updates, message = git_update.check_for_updates()
+    if not has_updates:
+        return
+
+    cli_art.console.print(f"\n[cyan]Updates available: {message}[/cyan]")
+    update = questionary.confirm(
+        "Pull the latest changes from GitHub?",
+        default=False,
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+
+    if update:
+        success, result = git_update.pull_updates()
+        if success:
+            cli_art.console.print(f"[green]✓ Updated successfully[/green]")
+        else:
+            cli_art.console.print(f"[red]✗ Update failed: {result}[/red]")
+
+
+def _handle_check_updates() -> bool:
+    """Maintenance menu option to check for and apply updates."""
+    if git_update.has_uncommitted_changes():
+        cli_art.console.print(
+            "[yellow]You have uncommitted changes -- please commit or stash them first.[/yellow]"
+        )
+        return False
+
+    cli_art.console.print("\nChecking for updates...")
+    has_updates, message = git_update.check_for_updates()
+
+    if has_updates:
+        cli_art.console.print(f"[cyan]✓ Updates available: {message}[/cyan]")
+        update = questionary.confirm(
+            "Pull the latest changes?",
+            default=True,
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+
+        if update:
+            success, result = git_update.pull_updates()
+            if success:
+                cli_art.console.print(f"[green]✓ Updated successfully[/green]\n")
+                return True
+            else:
+                cli_art.console.print(f"[red]✗ Update failed: {result}[/red]\n")
+                return False
+    else:
+        cli_art.console.print(f"[green]✓ {message}[/green]\n")
+        return False
 
 
 _HANDLERS = {
@@ -604,6 +669,7 @@ _HANDLERS = {
     "browse_jobs": _handle_browse_jobs,
     "polish": _handle_polish,
     "help": _handle_help,
+    "check_updates": _handle_check_updates,
     "bullet_bank": _handle_bullet_bank,
     "maintenance": _handle_maintenance,
 }
@@ -672,6 +738,7 @@ def _session_summary(session_stats: dict) -> str:
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
     _confirm_active_profile()
+    _prompt_for_update()
     cli_art.display_tip()
 
     session_stats = {}
