@@ -38,7 +38,6 @@ FONT_FILES = [
     "dm-serif-display-latin-ext.woff2", "dm-serif-display-latin.woff2",
 ]
 
-SIGNATURE_PATH = os.path.join(PROJECT_ROOT, "docs", "MorganEscottSignature2025.png")
 PLAYWRIGHT_CACHE_DIR = os.path.join(os.path.expanduser("~"), "Library", "Caches", "ms-playwright")
 
 
@@ -152,15 +151,14 @@ def check_fonts() -> dict:
 
 
 def check_signature_image() -> dict:
-    # Informational only -- README documents this degrading gracefully
-    # (blank space where the signature goes), so this always reports
-    # passed=True. The template's src path is hardcoded to this one file
-    # regardless of active profile (a known gap, see IDEAS.md), not
-    # something this check can fix.
-    ok = os.path.exists(SIGNATURE_PATH)
+    # Informational only -- profiles/<name>/signature.{png,jpg,jpeg} is
+    # fully optional; render_coverletter.py already degrades gracefully
+    # (no <img> tag at all) when it's missing, so this always reports
+    # passed=True.
+    path = profile_paths.signature_path()
     return _check(
-        "Signature image (optional, degrades gracefully)", True,
-        "found" if ok else "missing -- cover letters render with a blank signature space, which is fine",
+        f"Signature image ({profile_paths.active_profile()}, optional)", True,
+        f"found: {path}" if path else "not set -- cover letters render with no signature image, which is fine",
     )
 
 

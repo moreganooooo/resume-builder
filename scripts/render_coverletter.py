@@ -32,6 +32,26 @@ def build_body_paragraphs_html(paragraphs: list) -> str:
     return "\n".join(f"<p>{escape(p)}</p>" for p in paragraphs)
 
 
+def build_signature_block_html() -> str:
+    """Empty string (no <img> at all) when this profile has no
+    profiles/<name>/signature.{png,jpg,jpeg} -- true graceful
+    degradation, not a broken image reference. Uses an absolute file://
+    path rather than a relative one: generate-pdf.mjs writes the rendered
+    HTML to a temp directory before navigating Chromium to it (a real
+    file:// bug fix for font loading, see that file's own comment), so a
+    relative "./signature.png" would resolve against the temp dir and
+    never find the real file -- exactly the bug that made the old
+    hardcoded "./docs/MorganEscottSignature2025.png" reference silently
+    broken from the day the temp-file fix shipped, regardless of whether
+    that file ever existed. Absolute file:// paths already work for fonts
+    (see generate-pdf.mjs's own fontsDir rewrite) -- same fix, applied
+    here instead of needing a second rewrite pass in the Node script."""
+    path = profile_paths.signature_path()
+    if not path:
+        return ""
+    return f'<img class="signature-img" src="file://{path}" alt="">'
+
+
 def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     """
     Fill coverletter-template.html with cover_letter_data and write to
@@ -65,6 +85,7 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
 
     html = html.replace("{{RECIPIENT_BLOCK}}", build_recipient_block_html(company_name))
     html = html.replace("{{BODY_PARAGRAPHS}}", build_body_paragraphs_html(cover_letter_data.get("body_paragraphs", [])))
+    html = html.replace("{{SIGNATURE_BLOCK}}", build_signature_block_html())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
