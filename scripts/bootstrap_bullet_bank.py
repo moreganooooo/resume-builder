@@ -83,8 +83,10 @@ roles: []
 def create_new_profile(name: str) -> str:
     """Scaffolds a fresh profiles/<name>/ directory: knowledge_base/ (plus
     its bootstrap/source_documents/ subfolder), a blank fixed_content.py,
-    and an empty situational_roles.yaml. Raises FileExistsError if the
-    profile already exists -- never silently overwrites one."""
+    an empty situational_roles.yaml, and .stignore files in every one of
+    this profile's sync roots (profile_paths.write_sync_ignore_files())
+    so it's ready for Syncthing out of the box. Raises FileExistsError if
+    the profile already exists -- never silently overwrites one."""
     import profile_paths
 
     profile_root = os.path.join(profile_paths.PROFILES_DIR, name)
@@ -98,6 +100,8 @@ def create_new_profile(name: str) -> str:
 
     with open(os.path.join(profile_root, "situational_roles.yaml"), "w") as f:
         f.write(_SITUATIONAL_ROLES_SCAFFOLD)
+
+    profile_paths.write_sync_ignore_files(name)
 
     return profile_root
 

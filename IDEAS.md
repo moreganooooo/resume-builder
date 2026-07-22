@@ -180,48 +180,6 @@ executing, not folding straight into implementation.
 
 ## Very Hard / Long-term
 
-### Multi-computer sync for a profile's data
-
-Raised 2026-07-17, genuinely open brainstorm (not scoped, no direction
-chosen yet): using this on more than one machine (e.g. a laptop and a
-desktop) means `profiles/<name>/` -- knowledge_base, bullet bank,
-checkpoints, and now each profile's own `.env` -- only lives on whichever
-one you last touched. job_automater's prior art here was MongoDB (a real
-remote datastore, but a genuinely different architecture from this
-repo's flat-file-per-profile design -- adopting it would mean either
-migrating every script that reads/writes these files directly, or
-running Mongo as a sync layer underneath the same file-based interface,
-which is its own design problem). Three lighter-weight options Morgan
-raised, none evaluated yet against this repo's actual constraints
-(git-ignored secrets in `.env`, binary-ish files like `.npy` embeddings
-mixed with text/CSV, checkpoint files that assume they're the only
-writer at a time):
-- **Syncthing** -- continuous, no-cloud-server file sync between
-  specific machines/paths. Closest to "just works" for a flat-file
-  layout like this one, but needs care around files that get read
-  *and* written mid-run (checkpoints, cluster maps) if two machines
-  could ever be active at once -- probably fine for "one person, two
-  machines, never simultaneously," worth confirming that's the actual
-  use case before assuming it.
-- **Cloud-folder symlinks** (Dropbox/Google Drive/OneDrive +
-  `ln -s`/`mklink /J`) -- simplest to set up, but inherits whatever
-  conflict-resolution behavior the cloud provider has for files that
-  change on two machines close together (typically a "conflicted copy"
-  duplicate file, not a merge) -- probably fine for the same
-  never-simultaneous use case, riskier if that assumption doesn't hold.
-- **Version control** (git) for the text-based state specifically --
-  already partially true (profile.yml-adjacent content could be
-  committed to a private repo/branch), but explicitly wrong for
-  `.env` (secrets, must stay gitignored) and awkward for large/binary
-  knowledge-base files (embeddings, audited CSVs) that don't diff
-  meaningfully.
-**Not evaluated yet, worth doing before committing to one:** what
-actually needs to sync (is `output/`/PDF history worth syncing, or just
-the knowledge base + bullet bank + profile.yml?), whether "two machines,
-never simultaneous" is a safe assumption to design around, and whether
-`.env`/secrets need to be explicitly excluded from whichever mechanism
-gets chosen (almost certainly yes, regardless of approach).
-
 ### Evidence bank: interview stories, negotiation talking points, full multi-type generalization
 
 Split off from the evidence-bank/merge discussion 2026-07-21, **deliberately

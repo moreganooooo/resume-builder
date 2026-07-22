@@ -78,6 +78,15 @@ yarn-debug.log*
 yarn-error.log*
 
 
+# === MULTI-COMPUTER SYNC (Syncthing) ===
+# Auto-regenerated identically by profile_paths.write_sync_ignore_files()
+# on every profile -- see CLAUDE.md's "Multi-computer sync" section.
+# Not worth tracking: it's boilerplate, not personalization data, and
+# output/'s copy is already excluded by the blanket output/ rule below --
+# this just keeps profiles/jds/data consistent with that.
+.stignore
+
+
 # === OS ===
 .DS_Store
 **/.DS_Store
