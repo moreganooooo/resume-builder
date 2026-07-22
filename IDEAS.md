@@ -210,6 +210,14 @@ turns the narrative below into an ordered, actionable list (with
 dependencies/blockers noted) -- this section stays the "why," that file is
 the "what's next."
 
+**Every open decision here is now settled, as of 2026-07-22.** Persistence,
+ATS-provider scope, and launchd job layout were each already decided in
+the punchlist on 2026-07-16 -- this file's own copy had just gone stale
+and is now corrected to match. Dashboard status is the one genuinely new
+call made today. What follows is no longer "here's an unresolved design
+problem" -- it's "here's the agreed direction, still not built." Full
+decision text and rationale lives in the punchlist, not duplicated here.
+
 **Scope note:** the biggest item on this list. Spans three separate
 codebases (this project plus two mature sibling projects). A brainstorming
 pass happened 2026-07-04 and landed on an agreed direction below, but
@@ -232,8 +240,10 @@ resume-generation features of both `/Users/morganescott/career-ops` and
   Recruitee, plus a generic local-parser fallback, ~26 providers total) --
   a different, complementary source type from job_automater's scrapers
   below (LinkedIn + JobRight), not a redundant one; the merged system
-  likely wants both rather than picking one. Worth naming which 1-2
-  providers Morgan actually uses before picking what to port first.
+  wants both. **Decided 2026-07-16, reaffirmed 2026-07-22: port all ~26**,
+  not a curated subset -- see the punchlist's item 1 for why (uniform
+  porting cost; usage skew is a curation artifact, not a scraper-quality
+  one).
 - **From job_automater**: the CLI shape (`cli.py`, Click-based
   `job-agent`-style command group: `fetch-jobs`, `list-jobs`,
   `generate-docs`, `apply`, `status`, `setup`, `validate-config`/`config`,
@@ -241,16 +251,24 @@ resume-generation features of both `/Users/morganescott/career-ops` and
   script item above). Its document-generation backends (LaTeX/reportlab)
   and ATS auto-apply engine were both explicitly decided against carrying
   forward -- see `IDEAS_ARCHIVE.md` for why.
-- **Persistence-layer mismatch, worth deciding up front -- not yet
-  decided.** job_automater stores everything in MongoDB (run via a local
+- **Persistence-layer mismatch -- decided 2026-07-16, reaffirmed
+  2026-07-22.** job_automater stores everything in MongoDB (run via a local
   Docker container, `local-mongo` / image `mongo:latest`, port 27017),
   career-ops treats flat markdown/YAML files as the source of truth
   (`data/applications.md`, `data/pipeline.md`), and resume-builder uses
   CSV files + JSON checkpoints. Three different persistence philosophies
   across the three projects -- the merge needs one, not an integration
-  layer across all three.
+  layer across all three. **Decision: stay with markdown/YAML (career-ops's
+  format carries over as data), adopt nothing new yet.** Today there's a
+  single writer (resume-builder itself), so the concurrency problem
+  Mongo/SQLite would solve doesn't exist yet, and Mongo means a
+  permanently-running Docker daemon for a single-user personal tool.
+  **Trigger to revisit:** the day the scheduler actually fires multiple
+  launchd jobs that could write to the tracker concurrently -- at that
+  point, adopt SQLite specifically (WAL mode, no daemon, stdlib-only), not
+  Mongo. Full rationale in the punchlist's item 1.
 
-  **Pros/cons discussed 2026-07-06, not yet decided:**
+  **Pros/cons discussed 2026-07-06, informed the decision above:**
   - *CSV + JSON (resume-builder today):* zero infrastructure, human-
     inspectable, already proven at real scale (209+ JDs). Cons: no real
     query/indexing (dedup is hand-rolled Python, not a query), weak
@@ -285,11 +303,10 @@ resume-generation features of both `/Users/morganescott/career-ops` and
     doesn't fully exist yet -- the benefit mainly kicks in once the
     scheduler (below) is actually running unattended, not at today's
     scale.
-  - **Leaning:** keep the human-facing tracker as markdown/YAML (or CSV)
-    for inspectability; revisit SQLite specifically for the scheduler's
+  - **Decided:** keep the human-facing tracker as markdown/YAML for
+    inspectability; revisit SQLite specifically for the scheduler's
     concurrent-write needs when that build actually starts, rather than
-    adopting it preemptively. Still not decided -- reference material for
-    when this choice actually gets made.
+    adopting it preemptively.
 
 **Agreed direction (brainstormed 2026-07-04, not yet a build plan):**
 
@@ -344,12 +361,26 @@ resume-generation features of both `/Users/morganescott/career-ops` and
   Nothing here ever applies or submits anything -- the entire scheduler's
   output is "things placed in front of Morgan to approve." Confirmed
   2026-07-06: the email digest sends via `smtplib` + a Gmail app password
-  in `.env`, consistent with this repo's existing patterns. Still fully
-  unresolved: the exact launchd job layout (one job per saved search vs.
-  one dispatcher job iterating all of them).
-- **Explicitly deferred, not decided against:** a career-ops-style
-  dashboard/TUI (Morgan's call: "later nice-to-have," not blocking the
-  core pipeline). **Decided against, not deferred:** ATS auto-apply/
+  in `.env`, consistent with this repo's existing patterns. **Launchd job
+  layout -- decided 2026-07-16, reaffirmed 2026-07-22: one dispatcher job,
+  not one per saved search.** A dispatcher is what makes the already-agreed
+  "one notification, one email digest per run" design simple -- N separate
+  per-search jobs would mean N separate notifications, fighting that. If a
+  search ever needs its own cadence, that's a per-search timestamp checked
+  inside the dispatcher, not a separate OS-level job.
+- **career-ops-style dashboard/TUI -- promoted into near-term merge scope,
+  2026-07-22** (previously "later nice-to-have, not blocking"). What
+  changed: it's no longer a hypothetical port -- the actual Go dashboard
+  (`career-ops/dashboard/`) got themed to match this project's palette/
+  icons and had two real pre-existing bugs fixed (a tracker-column-count
+  mismatch that was silently dropping resume-builder's Notes/Link data, and
+  a crash on narrow terminal widths), then verified end-to-end against
+  real resume-builder-shaped data. It runs standalone against
+  `data/<profile>/` today without needing any of this merge's other
+  pieces. Porting it *into* resume-builder proper (rather than running it
+  from the separate career-ops checkout) is now one of the merge's
+  concrete near-term pieces, not a someday item -- not yet scheduled, but
+  no longer deferred. **Decided against, not deferred:** ATS auto-apply/
   auto-submit and LaTeX rendering.
 
 No implementation has started; this is scope-awareness plus an agreed
