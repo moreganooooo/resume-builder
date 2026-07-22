@@ -38,7 +38,11 @@ FONT_FILES = [
     "dm-serif-display-latin-ext.woff2", "dm-serif-display-latin.woff2",
 ]
 
-PLAYWRIGHT_CACHE_DIR = os.path.join(os.path.expanduser("~"), "Library", "Caches", "ms-playwright")
+PLAYWRIGHT_CACHE_DIR = (
+    os.path.join(os.path.expanduser("~"), "Library", "Caches", "ms-playwright")
+    if sys.platform == "darwin"
+    else os.path.join(os.path.expanduser("~"), ".cache", "ms-playwright")
+)
 
 
 def _check(name: str, passed: bool, detail: str, fix: str = "") -> dict:
