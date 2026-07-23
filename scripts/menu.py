@@ -21,6 +21,7 @@ import sys
 import questionary
 
 import bootstrap_bullet_bank
+import bootstrap_menu
 import build_sample
 import bullet_bank_menu
 import cli_art
@@ -174,32 +175,7 @@ def _handle_bootstrap() -> bool:
         cli_art.console.print(f"  export RESUME_PROFILE={name}\n")
         profile_paths.set_active_profile(name)
 
-    # Recomputed fresh (not bootstrap_bullet_bank.SOURCE_DOCS_DIR) --
-    # that module-level constant was resolved once at import time, before
-    # a brand-new profile created above could ever change RESUME_PROFILE.
-    source_docs_dir = os.path.join(profile_paths.kb_dir(), "bootstrap", "source_documents")
-    os.makedirs(source_docs_dir, exist_ok=True)
-    files = [
-        f for f in os.listdir(source_docs_dir)
-        if os.path.isfile(os.path.join(source_docs_dir, f))
-    ]
-
-    if not files:
-        _print_source_docs_instructions(source_docs_dir)
-        return False
-
-    proceed = questionary.confirm(
-        f"Looks like you've got {len(files)} document(s) to process. Ready to get started?",
-        default=True,
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
-    if not proceed:
-        return False
-
-    cli_art.display_bootstrap_intro(len(files))
-    script_path = os.path.join(bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py")
-    result = subprocess.run([sys.executable, script_path])
-    return result.returncode == 0
+    return bootstrap_menu.run_bootstrap_menu()
 
 
 def _handle_update_knowledge() -> bool:
