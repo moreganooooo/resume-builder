@@ -74,6 +74,8 @@ from datetime import datetime
 
 import pandas as pd
 
+import theme
+
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
 # ---------------------------------------------------------------------------
@@ -345,7 +347,6 @@ def stage1_audit_keepers(
     snapshot (_STARTUP_CLUSTER_ID_MAP) so that IDs stamped by
     backfill_cluster_ids.py are never lost when this function is called
     from a fresh keepers.csv that lacks the column.
-import theme
     """
     print("\n" + "─" * 60)
     print("STAGE 1 — Audit Keepers")
