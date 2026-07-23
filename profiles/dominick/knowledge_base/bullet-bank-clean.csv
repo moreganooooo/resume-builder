@@ -1,0 +1,37 @@
+Role / Company,Tags,Bullet Point
+mlQroTech,[ops],"- Developed and scaled machine learning models to optimize pipeline monitoring, reducing anomaly detection time and increasing overall model accuracy by over 15%."
+mlQroTech,[ops],"- Automated end-to-end data pipelines using AWS Glue and SageMaker, reducing data processing times by roughly 30% and cutting manual workload by 50%."
+mlQroTech,[ops][mgmt],"- Created an in-house Python visualization suite to track and monitor real-time sensor data, facilitating a data-driven decision-making process across engineering and sales teams."
+mlQroTech,[ops],"- Led initiatives to enhance sensor data quality by advocating for upgraded hardware, improving overall data acquisition rates by over 200%."
+mlQroTech,[ops][design],"- Designed computational models to support sensor and IoT systems for pipeline monitoring, contributing to the development of patented technologies."
+mlQroTech,[generalist],"- Conducted proof-of-concept studies and led experimental trials, providing quantitative evidence to validate system effectiveness and leading to successful product launches."
+mlQroTech,[ops],"- Advocated for hardware and data acquisition improvements that enhanced sensor capability, directly improving data integrity, preventing a recall of a full batch of devices"
+mlQroTech,[generalist],"- Collaborated with sales and engineering to create technical reference documents, facilitating understanding of complex systems for non-technical stakeholders."
+Penn State University,[ops],"- Led problem-solving sessions and laboratory experiments for 120+ students per semester, fostering a deeper understanding of chemistry, data analysis, and effective communication."
+Penn State University,[generalist],- Developed instructional materials and increased average student exam scores by 3% through one-on-one tutoring and technical workshops.
+Seeking New Opportunities in Data Science,[generalist],"- Built LyrIQs, an NLP project analyzing rap lyrics (lexical diversity, readability, rhyme density, syntactic complexity) with publicationstyle visuals and reproducible notebooks"
+Seeking New Opportunities in Data Science,[ops],"- Developed a Nürburgring laptime model: cleaned & enriched vehicle specs (e.g., power/weight, wheelbase), engineered features, trained regressions, and assessed feature importance"
+Seeking New Opportunities in Data Science,[ops][writing],"- Initiated the development of a personal website and data science portfolio, integrating technical writing and project showcases, which established an online presence and supported early brand-building efforts"
+mlQroTech,[ops][design],"- Designed, deployed, and scaled ML models for oil pipeline anomaly detection, improving accuracy by 15%."
+mlQroTech,[ops],"- Automated AWS-based ETL pipelines, reducing processing time by 30% and manual labor by 50%."
+mlQroTech,[ops][mgmt],"- Built Python-based dashboards to visualize real-time sensor data, aiding decision-making across teams."
+Seeking New Opportunities in Data Science,[ops],"- Led sensor hardware upgrades, significantly enhancing data acquisition capabilities and improving data quality for analysis"
+mlQroTech,[generalist],"- Assisted clients in professional wardrobe planning, enhancing active listening and customer empathy skills"
+mlQroTech,[generalist],- Maintained top customer satisfaction scores and sales performance in a high-pressure retail environment.
+mlQroTech,[ops],"- Balanced the role with early data science upskilling by exploring projects and ideating part-time contracts, enhancing skills in spaCy and ETL processes"
+mlQroTech,[generalist],"- Developed computational models for IoT sensors, contributing to patent-winning technologies."
+mlQroTech,[ops],"- Led proof-of-concept trials and data validation using regression analysis, driving product enhancements and ensuring data accuracy"
+mlQroTech,[ops][mgmt],"- Collaborated with hardware teams to improve data reliability, preventing costly product recalls."
+mlQroTech,[writing],"- Authored technical documentation for stakeholders, using clear language to bridge knowledge gaps and facilitate better understanding of product features"
+Penn State University,[ops],- Led lab instruction and tutoring for 120+ students per semester in data analysis and chemistry.
+Penn State University,[generalist],- Raised average student exam scores by 3% through custom learning tools.
+mlQroTech,[ops],- Built ML model on time-series sensor data; reduced false positives by 20%.
+mlQroTech,[ops],"- Developed automated QA checks, improving usable data volume by 15%."
+mlQroTech,[generalist],"- Created dashboards for real-time analytics, halving reporting workload."
+mlQroTech,[generalist],"- US Patent 11,719,390 B2: Apparatus, system, and method for determining a location"
+mlQroTech,[generalist],"- US Patent 11,808,692 B2: Apparatus, system, and method for sensing corrosion of a member"
+Misc. / Unassigned,[generalist],"- Magellan Scholarship Research Grant: USC Aiken, funded in the amount of $5,000"
+Penn State University,[generalist],"- Graduate Student Teaching Award: Penn State University, funded in the amount of $4,000"
+Penn State University,[generalist],- Chemistry Student of the Year
+Seeking New Opportunities in Data Science,[generalist],"- Invented an apparatus, system, and method for sensing corrosion of a member, featuring a non-invasive sensor array with magnetoresistive sensors to detect corrosion processes and background magnetic properties."
+Seeking New Opportunities in Data Science,[ops],"- Invented an apparatus, system, and method for determining a location of a structural deficiency or predetermined condition, such as a leak or spill in a pipeline system."

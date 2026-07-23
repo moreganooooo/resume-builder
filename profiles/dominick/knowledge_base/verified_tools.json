@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "source": "bootstrap ingestion",
+    "total_entries": 5
+  },
+  "tools": [
+    {
+      "id": "tool_001",
+      "name": "AWS Glue"
+    },
+    {
+      "id": "tool_002",
+      "name": "SageMaker"
+    },
+    {
+      "id": "tool_003",
+      "name": "Python"
+    },
+    {
+      "id": "tool_004",
+      "name": "spaCy"
+    },
+    {
+      "id": "tool_005",
+      "name": "ETL"
+    }
+  ]
+}

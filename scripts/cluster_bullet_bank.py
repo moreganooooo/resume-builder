@@ -69,6 +69,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+import theme
 
 KB_DIR       = profile_paths.kb_dir()
 
@@ -329,9 +330,9 @@ def decide_action(row) -> str:
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("  CLUSTER BULLET BANK")
-    print("=" * 60)
+    print("─" * 60)
 
     if not os.path.exists(RAW_CSV):
         print(f"  ERROR: {RAW_CSV} not found.")
