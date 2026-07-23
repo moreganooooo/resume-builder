@@ -829,6 +829,13 @@ class KnowledgeBase:
                 )
         return "\n\n".join(sections)
 
+    @staticmethod
+    def _normalize_tags(tags_str: str) -> str:
+        """Normalize tag string by sorting individual tags alphabetically.
+        '[email][content]' and '[content][email]' both normalize to '[content][email]'."""
+        tag_list = re.findall(r'\[([^\]]+)\]', tags_str)
+        return ''.join(f'[{tag}]' for tag in sorted(tag_list))
+
     def warm_segment_cache(self, df: pd.DataFrame) -> None:
         self._segment_cache = {}
         self._gemma_segment_cache = {}
@@ -836,7 +843,7 @@ class KnowledgeBase:
         print(f"\n{theme.ICONS['hint']} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         for _, row in pairs.iterrows():
             rc   = str(row["Role / Company"])
-            tags = str(row["Tags"])
+            tags = self._normalize_tags(str(row["Tags"]))
             key  = (rc, tags)
             bundle = self._build_segment_bundle(rc, tags)
             self._segment_cache[key] = bundle
@@ -847,18 +854,20 @@ class KnowledgeBase:
         print(f"   {theme.ICONS['success']} {len(self._segment_cache)} segment bundles ready.\n")
 
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
-        key = (role_company, tags)
+        normalized_tags = self._normalize_tags(tags)
+        key = (role_company, normalized_tags)
         if key not in self._segment_cache:
             print(f"   {theme.ICONS['warning']} Cache miss for {key} — building segment on demand.")
-            self._segment_cache[key] = self._build_segment_bundle(role_company, tags)
+            self._segment_cache[key] = self._build_segment_bundle(role_company, normalized_tags)
         segment = self._segment_cache[key]
         return f"{self.static_prefix}\n\n{segment}" if segment else self.static_prefix
 
     def context_block_for_bullet_gemma(self, role_company: str, tags: str) -> str:
-        key = (role_company, tags)
+        normalized_tags = self._normalize_tags(tags)
+        key = (role_company, normalized_tags)
         if key not in self._gemma_segment_cache:
             print(f"   {theme.ICONS['warning']} Gemma cache miss for {key} — building segment on demand.")
-            self._gemma_segment_cache[key] = self._build_gemma_segment_bundle(role_company, tags)
+            self._gemma_segment_cache[key] = self._build_gemma_segment_bundle(role_company, normalized_tags)
         segment = self._gemma_segment_cache[key]
         return f"{self.gemma_static_prefix}\n\n{segment}" if segment else self.gemma_static_prefix
 
