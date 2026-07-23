@@ -1866,3 +1866,37 @@ suite: 912 tests, all green.
 
 **Not in scope (deferred, no changes):** A broader "make all scripts uniform in styling" audit didn't happen -- some scripts use icons, some don't; some use separators, some don't. That would be a larger consistency pass across the whole codebase. Today's focus was high-impact density reduction for the most user-visible output paths.
 
+## Console styling consistency audit: icon/separator/color/progress unification -- done 2026-07-22
+
+The "not in scope" consistency pass flagged at the end of the console-polish entry above -- done as a full 6-phase refactor across ~30 scripts, closing every drift the follow-up survey found between `theme.py`'s single source of truth and what individual scripts actually printed.
+
+**Phase 2:** Expanded `theme.py`'s `ICONS` dict from 9 keys to 14:
+- Added `skip` (nf-fa-ban / 🚫), `save` (nf-fa-save / 💾), `resume` (nf-fa-play / ▶), `complete` (nf-fa-check_circle / ✅), `gem` (nf-fa-diamond / 💎)
+- All follow the existing Nerd Font + Unicode fallback pair pattern, toggled via `RESUME_BUILDER_ICONS=unicode`.
+
+**Phase 3:** Standardized separators and warning/error prefixes:
+- Unified separator character from `=` to `─` across 6 files: `audit_keepers.py`, `bootstrap_profile.py`, `cluster_bullet_bank.py`, `detect_blank_scores.py`, `detect_hidden_gems.py`, `rewrite_bullets.py`.
+- Replaced 30+ raw `"WARNING:"`/`"ERROR:"` text prefixes with `theme.ICONS` lookups in 6 files: `orchestrator.py`, `gemini_client.py`, `scan.py`, `cluster_bullet_bank.py`, `audit_bullet_bank.py`, `detect_hidden_gems.py`.
+
+**Phase 4:** Replaced raw emoji with theme-driven equivalents:
+- `liveness.py`: inline `icon_map` dict replaced entirely with `theme.ICONS` lookups.
+- `bootstrap_profile.py`: `⏭️` → `theme.ICONS['resume']`.
+- Bulk sweep across `audit_bullet_bank.py`, `embed_bullet_bank.py`, `audit_keepers.py`, `score_keeper_gems.py`, `detect_blank_scores.py`: `✅`→`success`, `❌`→`error`, `⚠️`→`warning`, `💾`→`save`, `♻️`→`resume`, `🎉`→`complete`, `💎`→`gem`.
+- One-off decorative emoji with no real status meaning (🔑 API-key labels, 📦 batch-size labels, ⏱ time estimates, 🧹 cleanup notices) dropped in favor of plain text rather than forced into the icon system.
+
+**Phase 5:** Standardized progress indicators to bracket style `[i/total]`: `audit_bullet_bank.py`'s prose `"Auditing bullet i/total..."` converted.
+
+**Phase 6 check:** `bootstrap_profile.py`'s `"\n--- Draft ... ---\n"` text headers were checked against its already-correct `─`*60 separator and found to serve a genuinely distinct purpose (draft-preview boundaries vs. progress separators) -- kept both rather than converging.
+
+**Result:** all ~30 touched scripts now respect the `RESUME_BUILDER_ICONS=unicode` toggle uniformly; 14 centralized icon keys used across every pipeline script; consistent `─` separators and `theme.ICONS` color/icon pairs throughout. Test suite (912 tests) unchanged -- confirms no logic broke from what was a purely cosmetic-output pass. Commits: 07543d3d, 209b4d86.
+
+## Turn the bootstrap flow into a persistent, resumable submenu -- done 2026-07-22
+
+"New User? Start Here!" no longer runs the whole onboarding flow as one opaque subprocess. `scripts/bootstrap_menu.py` (new) shows a status table across all 8 steps -- Phase 0 (document ingestion), Phase 0.5 (profile setup), and the 6 bullet-bank pipeline stages -- and lets you run any one individually, jumping back in wherever you left off.
+
+Reuses `bullet_bank_menu.STAGES`/`_stage_status()`/`_handle_choice()` directly for stages 1-6 rather than duplicating them, since `bootstrap_bullet_bank.PIPELINE_STAGES` and `bullet_bank_menu.STAGES` are the exact same six scripts. Phase 0's status reads document count vs. `checkpoint.json`'s done count; Phase 0.5's checks `profile.yml`/`cv.md` existence (`cv.md` is the last artifact `run_profile_setup()` writes, so its absence signals an interrupted run even if `profile.yml` made it to disk). `cli_art.render_bullet_bank_status()` picked up an optional `title` param so both menus share the same table renderer.
+
+Fixed a related real bug found along the way: `bootstrap_bullet_bank.py`, `bootstrap_profile.py`, and `bullet_bank_menu.py` all compute profile-scoped path constants at module level but weren't in `profile_paths._RELOAD_ON_PROFILE_SWITCH` -- meaning right after creating a brand-new profile mid-session, they'd have silently kept pointing at the old profile's paths. All three are now in that reload list.
+
+`scripts/menu.py`'s `_handle_bootstrap()` shrank to just the profile-creation/guest-mode gate, then delegates to `bootstrap_menu.run_bootstrap_menu()`. Test coverage: new `tests/test_bootstrap_menu.py`; `tests/test_menu_bootstrap.py`'s now-obsolete subprocess-flow tests replaced with delegation tests.
+
