@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import theme
 
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
@@ -134,25 +135,25 @@ def print_report(report: dict) -> None:
     print(f"\n📄 {path_label}")
 
     if "error" in report:
-        print(f"   ❌ Error: {report['error']}")
+        print(f"   {theme.ICONS['error']} Error: {report['error']}")
         return
 
     print(f"   Total rows:           {report['total_rows']}")
     print(f"   Fully unscored rows:  {report['fully_unscored_rows']}")
 
     if report.get("note"):
-        print(f"   ⚠️  {report['note']}")
+        print(f"   {theme.ICONS['warning']}  {report['note']}")
 
     if report["missing_by_col"]:
         print("   Blank counts per score column:")
         for col, count in report["missing_by_col"].items():
-            status = "✅" if count == 0 else "⚠️ "
+            status = "{theme.ICONS['success']}" if count == 0 else "{theme.ICONS['warning']} "
             print(f"     {status} {col}: {count} blank")
     else:
-        print("   ⚠️  No score columns present in this file.")
+        print("   {theme.ICONS['warning']}  No score columns present in this file.")
 
     if report["fully_unscored_rows"] == 0:
-        print("   ✅ All rows scored — nothing to do.")
+        print("   {theme.ICONS['success']} All rows scored — nothing to do.")
     else:
         print(f"   🎯 Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.")
 
@@ -197,7 +198,7 @@ def main():
     print(f"Total unscored rows across all files: {total_unscored}")
 
     if total_unscored == 0:
-        print("✅ All bullet bank files are fully scored. Nothing to do.")
+        print("{theme.ICONS['success']} All bullet bank files are fully scored. Nothing to do.")
     else:
         print("🎯 Run: python scripts/score_keeper_gems.py  to fill blank scores.")
 

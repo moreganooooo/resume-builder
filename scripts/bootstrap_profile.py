@@ -591,7 +591,7 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
     already_done = sum(1 for role in rows for bullet in role["bullets"]
                         if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint)
     if already_done:
-        print(f"   ⏭️  Resuming: {already_done}/{total} already polished in a prior run.")
+        print(f"   {theme.ICONS['resume']} Resuming: {already_done}/{total} already polished in a prior run.")
 
     lines = [f"# {identity['full_name']}", ""]
     contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]

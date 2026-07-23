@@ -15,6 +15,7 @@ import shutil
 import subprocess
 
 import jd_manager
+import theme
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIVENESS_INPUT_PATH = os.path.join(jd_manager.PROJECT_ROOT, "output", "liveness_input_tmp.json")
@@ -143,13 +144,18 @@ def run_liveness_check(refresh: bool = False) -> dict:
 
     # Process and display by status group
     status_order = ["active", "likely_active", "expired", "uncertain"]
-    icon_map = {"active": "✅", "likely_active": "🟡", "expired": "❌", "uncertain": "⚠️"}
+    icon_map = {
+        "active": theme.ICONS["success"],
+        "likely_active": theme.ICONS["warning"],
+        "expired": theme.ICONS["error"],
+        "uncertain": theme.ICONS["warning"],
+    }
 
     for status in status_order:
         status_results = results_by_status.get(status, [])
         if status_results:
             status_label = status.replace("_", " ").title()
-            print(f"{icon_map.get(status, '❓')} {status_label}:")
+            print(f"{icon_map.get(status, '?')} {status_label}:")
             for r in status_results:
                 print(f"  • {r.get('source_file')}")
                 if status not in ("active", "likely_active"):
@@ -176,12 +182,12 @@ def run_liveness_check(refresh: bool = False) -> dict:
     print(f"{'─'*60}")
     print("Liveness Summary:")
     print(f"{'─'*60}")
-    print(f"  ✅ Active:                 {counts.get('active', 0)}")
-    print(f"  🟡 Likely active:          {counts.get('likely_active', 0)}")
-    print(f"  ❌ Expired (moved):         {counts.get('expired', 0)}")
-    print(f"  ⚠️  Uncertain (left):       {counts.get('uncertain', 0)}")
-    print(f"  ⏭️  Skipped (no URL):       {skipped}")
-    print(f"  ⏭️  Recently checked:       {len(recently_checked)}")
+    print(f"  {theme.ICONS['success']} Active:                 {counts.get('active', 0)}")
+    print(f"  {theme.ICONS['warning']} Likely active:          {counts.get('likely_active', 0)}")
+    print(f"  {theme.ICONS['error']} Expired (moved):         {counts.get('expired', 0)}")
+    print(f"  {theme.ICONS['warning']} Uncertain (left):       {counts.get('uncertain', 0)}")
+    print(f"  {theme.ICONS['skip']} Skipped (no URL):       {skipped}")
+    print(f"  {theme.ICONS['skip']} Recently checked:       {len(recently_checked)}")
     print()
 
     return {

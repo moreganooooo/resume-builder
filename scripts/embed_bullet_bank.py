@@ -51,6 +51,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+import theme
 
 load_dotenv(profile_paths.env_path(), override=True)
 
@@ -105,7 +106,7 @@ def load_checkpoint():
         data = np.load(CHECKPOINT_PATH, allow_pickle=False)
         vectors = list(data["vectors"])
         start_index = int(data["next_index"])
-        print(f"   ♻️  Resuming from checkpoint: {start_index} bullets already embedded.")
+        print(f"   {theme.ICONS['resume']}  Resuming from checkpoint: {start_index} bullets already embedded.")
         return vectors, start_index
     return [], 0
 
@@ -123,7 +124,7 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
-    print(f"   🔑 Using key: {API_KEY[:8]}... (length {len(API_KEY)})")
+    print(f"   Using key: {API_KEY[:8]}... (length {len(API_KEY)})")
 
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
@@ -148,8 +149,8 @@ def main():
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
     est_secs  = n_batches * EMBED_SLEEP
     print(f"🔢 Embedding with {EMBED_MODEL} @ {EMBED_DIM}d")
-    print(f"📦 Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining")
-    print(f"⏱  Estimated time: ~{est_secs // 60}m {est_secs % 60}s\n")
+    print(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining")
+    print(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s\n")
 
     batch_num = 0
     for batch_start in range(start_index, total, BATCH_SIZE):
@@ -173,7 +174,7 @@ def main():
     # All done — write final outputs
     matrix = np.array(vectors, dtype=np.float32)  # shape: (N, EMBED_DIM)
     np.save(NPY_PATH, matrix)
-    print(f"\n✅ Saved {matrix.shape} vector matrix → {NPY_PATH}")
+    print(f"\n{theme.ICONS['success']} Saved {matrix.shape} vector matrix → {NPY_PATH}")
 
     meta = {
         "model": EMBED_MODEL,
@@ -188,9 +189,9 @@ def main():
 
     if os.path.exists(CHECKPOINT_PATH):
         os.remove(CHECKPOINT_PATH)
-        print(f"🧹 Checkpoint file removed.")
+        print(f"Checkpoint file removed.")
 
-    print("\n🎉 Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
+    print("\n{theme.ICONS['complete']} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
 
 
 if __name__ == "__main__":
