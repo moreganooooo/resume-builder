@@ -42,39 +42,39 @@ RECOMMENDATION_STYLES = {
 # Font Awesome glyphs (Private Use Area code points Nerd Fonts patch in
 # verbatim under the nf-fa-* names) -- this is the default experience.
 _NERD_ICONS = {
-    "success": "",     # nf-fa-check
-    "error": "",       # nf-fa-times
-    "warning": "",     # nf-fa-exclamation_triangle
-    "hint": "",        # nf-fa-lightbulb_o
-    "discovery": "",   # nf-fa-search
-    "evaluate": "",    # nf-fa-bar_chart
-    "build": "",       # nf-fa-wrench
-    "utility": "",     # nf-fa-cog
-    "bullet_bank": "", # nf-fa-database
-    "skip": "",        # nf-fa-ban
-    "save": "",        # nf-fa-save
-    "resume": "",      # nf-fa-play
-    "complete": "",    # nf-fa-check_circle
-    "gem": "",         # nf-fa-diamond
+    "success": "",  # nf-fa-check
+    "error": "",  # nf-fa-times
+    "warning": "",  # nf-fa-exclamation_triangle
+    "hint": "",  # nf-fa-lightbulb_o
+    "discovery": "",  # nf-fa-search
+    "evaluate": "",  # nf-fa-bar_chart
+    "build": "",  # nf-fa-wrench
+    "utility": "",  # nf-fa-cog
+    "bullet_bank": "",  # nf-fa-database
+    "skip": "",  # nf-fa-ban
+    "save": "",  # nf-fa-save
+    "resume": "",  # nf-fa-play
+    "complete": "",  # nf-fa-check_circle
+    "gem": "",  # nf-fa-diamond
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
 # README's "Fonts"/Setup notes for how to opt in via RESUME_BUILDER_ICONS.
 _UNICODE_ICONS = {
-    "success": "✓",       # ✓
-    "error": "✗",         # ✗
-    "warning": "⚠",       # ⚠
-    "hint": "💡",      # 💡
+    "success": "✓",  # ✓
+    "error": "✗",  # ✗
+    "warning": "⚠",  # ⚠
+    "hint": "💡",  # 💡
     "discovery": "🔍",  # 🔍
-    "evaluate": "📊",   # 📊
-    "build": "🛠",      # 🛠
-    "utility": "⚙",        # ⚙
+    "evaluate": "📊",  # 📊
+    "build": "🛠",  # 🛠
+    "utility": "⚙",  # ⚙
     "bullet_bank": "🗃",  # 🗃
-    "skip": "🚫",        # 🚫
-    "save": "💾",        # 💾
-    "resume": "▶",               # ▶
-    "complete": "✅",            # ✅
-    "gem": "💎",         # 💎
+    "skip": "🚫",  # 🚫
+    "save": "💾",  # 💾
+    "resume": "▶",  # ▶
+    "complete": "✅",  # ✅
+    "gem": "💎",  # 💎
 }
 
 # Nerd Font is the default -- set RESUME_BUILDER_ICONS=unicode (exact,
