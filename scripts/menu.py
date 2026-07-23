@@ -168,9 +168,9 @@ def _handle_bootstrap() -> bool:
         if not name:
             return False
         bootstrap_bullet_bank.create_new_profile(name)
-        print(f"\nCreated profiles/{name}/. Add this to your shell profile, then restart your "
+        cli_art.console.print(f"\nCreated profiles/{name}/. Add this to your shell profile, then restart your "
               f"shell (or run `export RESUME_PROFILE={name}` for this session only):\n")
-        print(f"  export RESUME_PROFILE={name}\n")
+        cli_art.console.print(f"  export RESUME_PROFILE={name}\n")
         profile_paths.set_active_profile(name)
 
     # Recomputed fresh (not bootstrap_bullet_bank.SOURCE_DOCS_DIR) --
@@ -621,7 +621,7 @@ def _prompt_for_update() -> None:
     This is called at startup before displaying the main menu."""
     if git_update.has_uncommitted_changes():
         cli_art.console.print(
-            "[yellow]⚠ You have uncommitted changes -- skipping update check.[/yellow]"
+            f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
         )
         return
 
@@ -629,7 +629,7 @@ def _prompt_for_update() -> None:
     if not has_updates:
         return
 
-    cli_art.console.print(f"\n[cyan]Updates available: {message}[/cyan]")
+    cli_art.console.print(f"\n{cli_art.HINT} Updates available: {message}")
     update = questionary.confirm(
         "Pull the latest changes from GitHub?",
         default=False,
@@ -639,16 +639,16 @@ def _prompt_for_update() -> None:
     if update:
         success, result = git_update.pull_updates()
         if success:
-            cli_art.console.print(f"[green]✓ Updated successfully[/green]")
+            cli_art.console.print(f"{cli_art.SUCCESS} Updated successfully")
         else:
-            cli_art.console.print(f"[red]✗ Update failed: {result}[/red]")
+            cli_art.console.print(f"{cli_art.ERROR} Update failed: {result}")
 
 
 def _handle_check_updates() -> bool:
     """Maintenance menu option to check for and apply updates."""
     if git_update.has_uncommitted_changes():
         cli_art.console.print(
-            "[yellow]You have uncommitted changes -- please commit or stash them first.[/yellow]"
+            f"{cli_art.WARNING} You have uncommitted changes -- please commit or stash them first."
         )
         return False
 
@@ -656,7 +656,7 @@ def _handle_check_updates() -> bool:
     has_updates, message = git_update.check_for_updates()
 
     if has_updates:
-        cli_art.console.print(f"[cyan]✓ Updates available: {message}[/cyan]")
+        cli_art.console.print(f"{cli_art.SUCCESS} Updates available: {message}")
         update = questionary.confirm(
             "Pull the latest changes?",
             default=True,
@@ -666,13 +666,13 @@ def _handle_check_updates() -> bool:
         if update:
             success, result = git_update.pull_updates()
             if success:
-                cli_art.console.print(f"[green]✓ Updated successfully[/green]\n")
+                cli_art.console.print(f"{cli_art.SUCCESS} Updated successfully\n")
                 return True
             else:
-                cli_art.console.print(f"[red]✗ Update failed: {result}[/red]\n")
+                cli_art.console.print(f"{cli_art.ERROR} Update failed: {result}\n")
                 return False
     else:
-        cli_art.console.print(f"[green]✓ {message}[/green]\n")
+        cli_art.console.print(f"{cli_art.SUCCESS} {message}\n")
         return False
 
 
