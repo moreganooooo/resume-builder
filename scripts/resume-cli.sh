@@ -14,7 +14,35 @@ else
   _RESUME_BUILDER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
+# When multiple people share one login (no per-user RESUME_PROFILE default
+# to inherit), ask once per terminal session which profile this session is
+# for, then export it so every `resume` call after that just works. Only
+# fires when RESUME_PROFILE is unset and more than one profiles/<name>/
+# directory exists -- a single-profile checkout never prompts, and
+# profile_paths.py's own "morgan" default still applies if this is skipped.
+_resume_ensure_profile() {
+  [ -n "$RESUME_PROFILE" ] && return
+  local profiles_dir="$_RESUME_BUILDER_DIR/profiles"
+  [ -d "$profiles_dir" ] || return
+  local names
+  names="$(cd "$profiles_dir" && ls -d */ 2>/dev/null | sed 's#/$##')"
+  local count
+  count="$(printf '%s\n' "$names" | grep -c .)"
+  [ "$count" -gt 1 ] || return
+
+  echo "Multiple resume-builder profiles found:"
+  printf '  %s\n' $names
+  local default
+  default="$(printf '%s\n' "$names" | head -1)"
+  printf "Which profile for this terminal session? [%s]: " "$default"
+  read -r choice
+  choice="${choice:-$default}"
+  export RESUME_PROFILE="$choice"
+  echo "Using profile: $RESUME_PROFILE (set for this terminal session only)"
+}
+
 resume() {
+  _resume_ensure_profile
   local cmd="$1"
   local all_args=("$@")
   if [ $# -gt 0 ]; then shift; fi
