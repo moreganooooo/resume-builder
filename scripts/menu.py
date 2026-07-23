@@ -311,9 +311,11 @@ def _handle_tailor_all() -> bool:
 def _print_evaluation_detail(row: dict) -> None:
     evaluation = row["evaluation"]
     cli_art.console.print(f"\n[bold]{row['company'] or '?'} -- {row['title'] or '?'}[/bold] ({row['status']})")
+    cli_art.console.print()
     cli_art.console.print(f"[bold]Archetype:[/bold] {evaluation.get('archetype') or 'unknown'}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {evaluation.get('composite_score')}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {evaluation.get('recommendation') or 'unknown'}")
+    cli_art.console.print()
     dimension_scores = evaluation.get("dimension_scores") or {}
     if dimension_scores:
         dims = ", ".join(f"{cli_art._FIT_DIMENSION_LABELS.get(k, k)}: {v}" for k, v in dimension_scores.items())
@@ -322,6 +324,8 @@ def _print_evaluation_detail(row: dict) -> None:
         cli_art.console.print(f"[bold]Hard blockers:[/bold] {', '.join(evaluation['hard_blockers'])}")
     if evaluation.get("why"):
         cli_art.console.print(f"[bold]Why:[/bold] {evaluation['why']}")
+    if dimension_scores or evaluation.get("hard_blockers") or evaluation.get("why"):
+        cli_art.console.print()
     legitimacy = evaluation.get("posting_legitimacy")
     if legitimacy and legitimacy != "High Confidence":
         color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR

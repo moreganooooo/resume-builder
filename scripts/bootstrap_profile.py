@@ -150,12 +150,14 @@ def collect_identity(dry_run: bool = False) -> dict:
 
     if dry_run:
         print("[DRY RUN] would confirm identity fields:")
+        print()
         print(f"  Full name: {guessed.full_name or ''}")
         print(f"  Email: {guessed.email or ''}")
         print(f"  Phone: {guessed.phone or ''}")
         print(f"  Location: {guessed.location or ''}")
         print(f"  LinkedIn URL: {guessed.linkedin_url or ''}")
         print(f"  Primary target roles: {', '.join(primary_guess)}")
+        print()
         return {
             "full_name": guessed.full_name or "", "email": guessed.email or "",
             "phone": guessed.phone or "", "location": guessed.location or "",
@@ -612,6 +614,7 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
             )
             status_icon = theme.ICONS["success"] if polished["rewrite_status"] == "KEEP" else theme.ICONS["warning"]
             print(f"   {status_icon} {polished['rewrite_status']}")
+            print()
             lines.append(f"- {polished['final_bullet']}")
         lines.append("")
 
@@ -884,14 +887,17 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     print("\n" + "=" * 60)
     print("LinkedIn search terms")
     print("=" * 60)
+    print()
     print(
         "LinkedIn scanning needs no cookie or login setup -- it reads your live, "
         "already-logged-in Chrome session automatically. It does need to know what "
         "to search for, though."
     )
+    print()
     if primary_roles:
         print(f"Without anything set here, it'll search for each of your primary target "
               f"roles one at a time: {', '.join(primary_roles)}.")
+        print()
 
     wants_custom = questionary.confirm(
         "Set up your own custom search terms now instead? (optional, and not permanent -- "
