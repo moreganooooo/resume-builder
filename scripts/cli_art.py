@@ -370,10 +370,12 @@ def render_comparison_table(rows: list) -> None:
 _STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
 
 
-def render_bullet_bank_status(stage_rows: list, maintenance_rows: list) -> None:
+def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status") -> None:
     """stage_rows: (number, label, status, detail) tuples, in pipeline
     order. maintenance_rows: (label, detail) tuples for the non-sequential
-    triage/retire scripts."""
+    triage/retire scripts. title is overridable so bootstrap_menu.py can
+    reuse this exact table shape for onboarding-phase status instead of
+    carrying its own near-identical render function."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="dim")
     table.add_column("Stage")
@@ -389,7 +391,7 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list) -> None:
     for label, detail in maintenance_rows:
         table.add_row("-", label, detail)
 
-    console.print(Panel(table, title="Bullet Bank Pipeline Status", border_style=theme.BRAND, box=box.ROUNDED))
+    console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED))
 
 
 # Single source of truth for the shortcuts cheat sheet -- both `resume
