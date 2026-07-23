@@ -92,6 +92,7 @@ yarn-error.log*
 # output/'s copy is already excluded by the blanket output/ rule below --
 # this just keeps profiles/jds/data consistent with that.
 .stignore
+**/.stfolder/
 
 
 # === OS ===
