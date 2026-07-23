@@ -21,6 +21,7 @@ import sys
 import questionary
 
 import bootstrap_bullet_bank
+import build_sample
 import bullet_bank_menu
 import cli_art
 import dashboard as dashboard_module
@@ -581,6 +582,24 @@ def _handle_run_doctor() -> None:
     maintenance.record_run("doctor")
 
 
+def _handle_build_sample() -> None:
+    """QA smoke test: builds a resume + cover letter against the permanent
+    fixtures/sample_jd.txt fixture, using the exact same engine calls a
+    real JD gets -- but bypassing orchestrator.run_pipeline() entirely, so
+    nothing gets moved into jds/<profile>/completed/ or logged as a real
+    completed application. Safe to run any time, by anyone, before ever
+    touching a real JD -- exactly the point of having it."""
+    result = build_sample.build_sample()
+    if result["resume"] and result["coverletter"]:
+        cli_art.display_success(
+            f"Sample resume + cover letter built:\n"
+            f"  {result['resume']['_output_paths']['pdf']}\n"
+            f"  {result['coverletter']['_output_paths']['pdf']}"
+        )
+    else:
+        cli_art.display_error("Sample build failed -- see output above for details.")
+
+
 def _handle_maintenance() -> bool:
     """The general home for background/administrative tasks -- doctor
     checks today, room for more later (per Morgan's original ask) without
@@ -596,6 +615,7 @@ def _handle_maintenance() -> bool:
             "Maintenance",
             choices=[
                 questionary.Choice(title=f"Run Doctor Checks {last_run_label}", value="doctor"),
+                questionary.Choice(title="Generate Sample Resume + Cover Letter (QA)", value="build_sample"),
                 questionary.Choice(title="Check for GitHub Updates", value="check_updates"),
                 questionary.Choice(title="Back", value="back"),
             ],
@@ -605,6 +625,9 @@ def _handle_maintenance() -> bool:
             return False
         if choice == "doctor":
             _handle_run_doctor()
+            continue
+        if choice == "build_sample":
+            _handle_build_sample()
             continue
         if choice == "check_updates":
             _handle_check_updates()

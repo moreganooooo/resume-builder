@@ -24,6 +24,7 @@ import polish as polish_module
 import doctor
 import maintenance
 import dashboard as dashboard_module
+import build_sample
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -194,6 +195,24 @@ def liveness_cmd(refresh):
 def polish(file):
     """Interactively polish an already-generated resume or cover letter."""
     polish_module.run(file)
+
+
+@cli.command(name="sample")
+def sample_cmd():
+    """Builds a resume + cover letter against the permanent fixtures/sample_jd.txt
+    fixture -- a QA smoke test for bullet writing, summary formatting, and PDF
+    visual details, safe to re-run any time without touching real JD tracking."""
+    cli_art.display_banner("Sample build: fixtures/sample_jd.txt")
+    result = build_sample.build_sample()
+    if result["resume"] and result["coverletter"]:
+        cli_art.display_success(
+            f"Sample resume + cover letter built:\n"
+            f"  {result['resume']['_output_paths']['pdf']}\n"
+            f"  {result['coverletter']['_output_paths']['pdf']}"
+        )
+    else:
+        cli_art.display_error("Sample build failed -- see output above for details.")
+        raise SystemExit(1)
 
 
 @cli.command(name="help")

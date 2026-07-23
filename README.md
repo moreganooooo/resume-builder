@@ -220,6 +220,7 @@ call `python scripts/cli.py <command>` underneath.
 | `resume help` | print this list of commands (no menu launch) |
 | `resume doctor` | check dependencies/assets/config, then run the test suite — plain-English summary, one-line fix per problem |
 | `resume doctor --skip-tests` | same, but skip the (slower) test-suite run |
+| `resume sample` | QA smoke test: build a resume + cover letter against the permanent `fixtures/sample_jd.txt` fixture, safe to re-run any time (see "Sanity-checking output" below) |
 
 Running `python scripts/cli.py <command>` directly works the same way
 (venv activated first) if you'd rather skip the shell shortcuts.
@@ -468,6 +469,33 @@ overwriting anything) if you have uncommitted changes. Same check is
 available anytime from the Maintenance submenu ("Check for GitHub
 Updates") if you'd rather trigger it manually than wait for the next
 startup prompt.
+
+## Sanity-checking output with a sample JD
+
+`resume sample` (or the menu's "Maintenance" → "Generate Sample Resume +
+Cover Letter (QA)") runs the exact same tailor+render pipeline a real JD
+gets, but against a permanent fixture — `fixtures/sample_jd.txt` — instead
+of a real posting. It's the fastest way for you, or a second person on
+the same checkout, to confirm bullet writing reads right, summaries land
+in the right format, and the PDF's visual details are in order, before
+ever touching a real JD.
+
+Unlike a real run, it never moves anything into `jds/<profile>/completed/`
+or logs a row into your tracker — `fixtures/sample_jd.txt` lives outside
+`jds/<profile>/` specifically so a batch `resume run` never picks it up,
+and the command calls the engine directly rather than going through
+`orchestrator.run_pipeline()`'s completion tracking. Safe to re-run as
+often as you like; each run is a full fresh build (any old checkpoint for
+it is cleared first) and overwrites the same output files:
+
+```
+output/<profile>/pdf/<CandidateName>_ContentStrategist_AbnormalAI_Resume.pdf
+output/<profile>/pdf/<CandidateName>_ContentStrategist_AbnormalAI_CoverLetter.pdf
+```
+
+Since it runs against whichever profile is active, each person sees their
+own bullet bank and voice reflected in the output — handy for confirming
+a freshly-bootstrapped profile is actually wired up correctly.
 
 ## Multi-computer sync
 
