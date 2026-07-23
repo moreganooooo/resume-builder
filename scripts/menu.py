@@ -51,13 +51,13 @@ _CHOICES = [
     questionary.Separator("── Browse ──"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Browse & Manage Jobs", value="browse_jobs"),
     questionary.Choice(title=f"{theme.ICONS['evaluate']}  Career Dashboard\n", value="career_dashboard"),
-    questionary.Separator("── Utility ──"),
-    questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
-    questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
     questionary.Separator("── Bullet Bank ──"),
     questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank\n", value="bullet_bank"),
     questionary.Separator("── Maintenance ──"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Maintenance", value="maintenance"),
+    questionary.Separator("── Utility ──"),
+    questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
 ]
 
 
