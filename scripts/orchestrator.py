@@ -1467,21 +1467,30 @@ class ResumeEngine:
         so repeated (company, tags) pairs reuse the same bundle string instead of
         rebuilding it (and re-reading cv.md / claims csvs) on every bullet.
         """
-        key = (company, tags)
+        normalized_tags = self._normalize_tags(tags)
+        key = (company, normalized_tags)
         if key not in self._segment_cache:
             print(f"   {theme.ICONS['warning']} Cache miss for {key} — building segment on demand.")
-            self._segment_cache[key] = self._build_audit_segment_bundle(company, tags)
+            self._segment_cache[key] = self._build_audit_segment_bundle(company, normalized_tags)
         return self._segment_cache[key]
 
     def audit_segment_bundle_for_gemma(self, company: str, tags: str) -> str:
         """Memoized accessor for _build_audit_segment_bundle_gemma (Tier 2,
         Gemma-slim) -- mirrors rewrite_bullets.py's
         context_block_for_bullet_gemma()."""
-        key = (company, tags)
+        normalized_tags = self._normalize_tags(tags)
+        key = (company, normalized_tags)
         if key not in self._gemma_segment_cache:
             print(f"   {theme.ICONS['warning']} Gemma cache miss for {key} — building segment on demand.")
-            self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, tags)
+            self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, normalized_tags)
         return self._gemma_segment_cache[key]
+
+    @staticmethod
+    def _normalize_tags(tags_str: str) -> str:
+        """Normalize tag string by sorting individual tags alphabetically.
+        '[email][content]' and '[content][email]' both normalize to '[content][email]'."""
+        tag_list = re.findall(r'\[([^\]]+)\]', tags_str)
+        return ''.join(f'[{tag}]' for tag in sorted(tag_list))
 
     def warm_segment_cache(self, bullet_tuples: List[Tuple[str, str, str]]) -> None:
         """
@@ -1492,7 +1501,7 @@ class ResumeEngine:
         """
         self._segment_cache = {}
         self._gemma_segment_cache = {}
-        pairs = sorted({(company, tags) for _, company, tags in bullet_tuples})
+        pairs = sorted({(company, self._normalize_tags(tags)) for _, company, tags in bullet_tuples})
         print(f"\n{theme.ICONS['hint']} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         print()
         for company, tags in pairs:
