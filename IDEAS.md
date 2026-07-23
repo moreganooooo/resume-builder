@@ -65,27 +65,21 @@ chosen.
 
 ### Prettier, more informative live progress for liveness / evaluate
 
-Raised 2026-07-17 (Morgan's memory of this being worked on before is
-half-right): a real console-polish pass happened 2026-07-07
-(`docs/superpowers/specs/2026-07-07-console-polish-design.md`, archived)
-but it was scoped to the resume-*build* pipeline specifically (Step 1-7
-headers, the PDF trim loop, banner colors) -- `scan.py`, `liveness.py`,
-and `batch_evaluate.py` were never part of that pass. **`scan.py`'s piece
-is now done** (`[i/total]` + explicit skip-reason per job, shipped
-2026-07-17 alongside the evaluate-rationale/voice-anchor work -- see
-`IDEAS_ARCHIVE.md`). **`batch_evaluate.py`'s piece is now done too**
-(`───` separator added between entries, 2026-07-21, matching the
-audit-loop/bootstrap-polish standard). Still open:
-- `liveness.py` is architecturally different from the other two: it
-  shells out to `check-liveness.mjs` once for the *entire* batch via
-  `subprocess.run(..., capture_output=True)`, so there's no per-JD
-  progress signal available *during* the check today -- results only
-  print after the whole subprocess returns. Adding real incremental
-  progress here means the Node side streaming partial results (e.g.
-  JSON-lines to stdout as each URL resolves) rather than a single
-  captured blob, which is a real architecture change, not just a print
-  statement -- scope this one separately from the other two rather than
-  bundling all three into one pass.
+**DONE (2026-07-22).** Completed the full three-script console-polish pass:
+
+- **`scan.py`** — shipped 2026-07-17 with `[i/total]` + explicit skip-reason per job
+- **`batch_evaluate.py`** — shipped 2026-07-21 with `───` separators between entries
+- **`liveness.py`** — shipped 2026-07-22 with streaming progress (`[i/total]` + icons + real-time updates + results grouped by status)
+
+**Architecture note on liveness.py:** The streaming was already wired in `check-liveness.mjs` (logging to stderr while JSON goes to stdout), but Python's `capture_output=True` was swallowing it. Fixed by using separate `stdout=PIPE, stderr=PIPE` — minimal change, no major refactor needed. Now displays per-URL progress in real-time as each liveness check completes, matching scan/evaluate's [i/total] pattern.
+
+All three scripts now have:
+- Live `[i/total]` progress indicators
+- Visual separators and grouping
+- Icons and meaningful feedback per item
+- Consistent formatting with whitespace improvements
+
+See `IDEAS_ARCHIVE.md` for the full writeup and historical context.
 
 ### Rotate across multiple API keys on rate-limit errors
 

@@ -1812,3 +1812,57 @@ immediately rather than just recorded:
 `resume doctor`) on top of the vendored Go module's own pre-existing test
 suite (unchanged, still green as its own `go test ./...`). Full Python
 suite: 912 tests, all green.
+
+## Console polish pass: prettier reporting + whitespace improvements -- done 2026-07-22
+
+**Overall scope:** Two related quality-of-life passes completed same day. First, finished the three-script "prettier, more informative live progress" item from IDEAS.md (liveness.py was the only piece still open; scan.py and batch_evaluate.py were done in prior weeks). Second, a comprehensive whitespace-addition sweep across 10 high-impact user-facing output areas, transforming dense wall-of-text reports into readable, scannable sections with visual hierarchy.
+
+### Prettier reporting: liveness.py streaming progress (2026-07-22)
+
+**Context:** The item was scoped to three scripts: scan.py (done 2026-07-17), batch_evaluate.py (done 2026-07-21), and liveness.py (remaining blocker). liveness.py was architecturally different: it shelled out to `check-liveness.mjs` once for the entire batch via `subprocess.run(..., capture_output=True)`, so all results printed at once after the Node subprocess finished -- no per-JD progress signal *during* the check. The item's notes flagged this as requiring "a real architecture change" (streaming from Node side).
+
+**Solution:** Discovered the streaming was already built into `check-liveness.mjs` (logging to stderr while JSON results go to stdout), but Python's `capture_output=True` was swallowing it. Fixed with minimal change: use separate `stdout=PIPE, stderr=PIPE` instead of `capture_output=True` to let stderr print in real-time. No major refactor needed.
+
+**Changes:**
+1. `scripts/liveness.py`:
+   - Changed subprocess call from `capture_output=True` to separate stdout/stderr handling
+   - Progress from Node side now displays incrementally as each URL check completes
+   - Reorganized results display: group by status (active/likely_active/expired/uncertain) instead of dumping all results
+   - Each group shows file paths + reason (for non-active statuses)
+   - New summary table with icons and aligned counts instead of one-line paragraph
+   - Added visual separators (─) matching audit-loop/bootstrap-polish standard
+
+2. `scripts/check-liveness.mjs`:
+   - Enhanced progress output: added `[i/total]` counter per URL (was just result + path before)
+   - Shows status icon + result + reason in real-time
+   - Progress logs to stderr, keeping stdout clean for JSON parsing
+
+**Result:** Users now see real-time per-URL feedback as liveness checks run, matching the scan/evaluate pattern. Instead of a pause followed by all results at once, they get immediate feedback on each posting's status.
+
+### Comprehensive whitespace sweep: 10 high-impact output areas (2026-07-22)
+
+**Scope:** A systematic audit identified the top 10 user-facing output areas where dense text output made it hard to scan results, group related data, or understand progress. Each location was selected for either high impact (affects 50+ output lines many users see) or medium impact (affects 10-20 output lines, new/returning users). Additions were purely strategic blank lines between logical sections using `print()` or `console.print()` with no parameters.
+
+**Files touched:**
+1. `scripts/orchestrator.py` (3 locations):
+   - Resume build pipeline (4-step workflow): add spacing between step summaries
+   - Resume critique results: group scores, flags, recommendations, distinctive moments with visual breaks
+   - System prompt diagnostics: separate rules blocks from prompts from score prompts
+   - Rules bundle loading: separate config sections
+   - Bullet audit loop: blank line after each bullet's progress indicator
+   - Segment cache warming: blank line after header before item list
+
+2. `scripts/bootstrap_profile.py` (3 locations):
+   - Bullet processing loop: blank line after each bullet's status line
+   - Identity confirmation (dry-run): blank lines before/after profile fields
+   - LinkedIn section header: blank lines around instructions
+
+3. `scripts/menu.py` (1 location):
+   - Evaluation detail display: blank lines between metadata, dimensions, legitimacy sections
+
+**Principle:** Added blank lines at section boundaries to reduce visual density and improve scannability. No content added or removed, purely structural improvement. All additions follow existing patterns (separators in some places were already `\n`, now complemented with blank lines).
+
+**Result:** User-facing output now has clear visual hierarchy instead of wall-of-text effect. Sections are visually grouped, making it easier to scan results, compare counts, understand progress, and spot important information.
+
+**Not in scope (deferred, no changes):** A broader "make all scripts uniform in styling" audit didn't happen -- some scripts use icons, some don't; some use separators, some don't. That would be a larger consistency pass across the whole codebase. Today's focus was high-impact density reduction for the most user-visible output paths.
+
