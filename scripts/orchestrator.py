@@ -984,13 +984,13 @@ class ResumeEngine:
             for filename in KB_ALLOWLIST:
                 filepath = os.path.join(self.kb_dir, filename)
                 if not os.path.exists(filepath):
-                    print(f"  WARNING: KB allowlist entry not found, skipping: {filename}")
+                    print(f"  {theme.ICONS["warning"]} KB allowlist entry not found, skipping: {filename}")
                     continue
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
                         master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
                 except Exception as e:
-                    print(f"  WARNING: Could not load KB file {filename}: {e}")
+                    print(f"  {theme.ICONS["warning"]} Could not load KB file {filename}: {e}")
         return master_context
 
     def build_role_rules_block(self, profile_data: dict) -> str:
@@ -1148,7 +1148,7 @@ class ResumeEngine:
                         + trimmed
                     )
             except Exception as e:
-                print(f"  WARNING: build_audit_static_prefix: could not load profile.yml: {e}")
+                print(f"  {theme.ICONS["warning"]} build_audit_static_prefix: could not load profile.yml: {e}")
 
         for fname, header, note in [
             ("verified_facts.json",
@@ -1169,7 +1169,7 @@ class ResumeEngine:
                     print(f"   {theme.ICONS['success']} Loaded {fname} ({len(data):,} chars)")
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    print(f"  WARNING: build_audit_static_prefix: could not load {fname}: {e}")
+                    print(f"  {theme.ICONS["warning"]} build_audit_static_prefix: could not load {fname}: {e}")
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
@@ -1179,7 +1179,7 @@ class ResumeEngine:
                 print(f"   {theme.ICONS['success']} Loaded voice-anchors.md ({len(data):,} chars)")
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
-                print(f"  WARNING: build_audit_static_prefix: could not load voice-anchors.md: {e}")
+                print(f"  {theme.ICONS["warning"]} build_audit_static_prefix: could not load voice-anchors.md: {e}")
 
         if include_evidence_guide:
             evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
@@ -1190,7 +1190,7 @@ class ResumeEngine:
                     print(f"   {theme.ICONS['success']} Loaded evidence-guide.csv ({len(data):,} chars)")
                     sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
                 except Exception as e:
-                    print(f"  WARNING: build_audit_static_prefix: could not load evidence-guide.csv: {e}")
+                    print(f"  {theme.ICONS["warning"]} build_audit_static_prefix: could not load evidence-guide.csv: {e}")
 
         return "\n\n".join(sections)
 
@@ -1220,7 +1220,7 @@ class ResumeEngine:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    print(f"  WARNING: build_audit_static_prefix_gemma: could not load {fname}: {e}")
+                    print(f"  {theme.ICONS["warning"]} build_audit_static_prefix_gemma: could not load {fname}: {e}")
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
@@ -1229,7 +1229,7 @@ class ResumeEngine:
                     data = f.read()
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
-                print(f"  WARNING: build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}")
+                print(f"  {theme.ICONS["warning"]} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}")
 
         return "\n\n".join(sections)
 
@@ -1248,7 +1248,7 @@ class ResumeEngine:
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
         except Exception as e:
-            print(f"  WARNING: recruiter_context_block: could not load recruiter_memory_patterns.json: {e}")
+            print(f"  {theme.ICONS["warning"]} recruiter_context_block: could not load recruiter_memory_patterns.json: {e}")
             return ""
         if not data:
             return ""
@@ -1306,7 +1306,7 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                print(f"  WARNING: _build_audit_segment_bundle: could not load cv.md: {e}")
+                print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle: could not load cv.md: {e}")
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
@@ -1337,7 +1337,7 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle: could not load verified-claims.csv: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle: could not load verified-claims.csv: {e}")
 
             screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
             if os.path.exists(screenshot_path):
@@ -1347,7 +1347,7 @@ class ResumeEngine:
                     if screenshot_text:
                         sections.append(f"=== SCREENSHOT-SOURCED METRICS ===\n{screenshot_text}")
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle: could not load screenshot metrics: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle: could not load screenshot metrics: {e}")
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
@@ -1361,7 +1361,7 @@ class ResumeEngine:
                             + verified_metrics
                         )
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle: could not load verified_metrics.json: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle: could not load verified_metrics.json: {e}")
 
         return "\n\n".join(sections)
 
@@ -1384,7 +1384,7 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load cv.md: {e}")
+                print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle_gemma: could not load cv.md: {e}")
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
@@ -1410,7 +1410,7 @@ class ResumeEngine:
                             + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
                         )
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}")
 
             claims_path = os.path.join(self.kb_dir, "verified-claims.csv")
             if os.path.exists(claims_path):
@@ -1430,7 +1430,7 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}")
 
             screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
             if os.path.exists(screenshot_path):
@@ -1441,7 +1441,7 @@ class ResumeEngine:
                     if screenshot_text:
                         sections.append(f"=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n{screenshot_text}")
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}")
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
@@ -1456,7 +1456,7 @@ class ResumeEngine:
                             + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
                         )
                 except Exception as e:
-                    print(f"  WARNING: _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}")
+                    print(f"  {theme.ICONS["warning"]} _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}")
 
         return "\n\n".join(sections)
 
@@ -1914,7 +1914,7 @@ class ResumeEngine:
             df   = pd.read_csv(bank_csv)
             embs = np.load(emb_npy)
         except Exception as e:
-            print(f"  WARNING: Could not load bullet bank: {e}")
+            print(f"  {theme.ICONS["warning"]} Could not load bullet bank: {e}")
             return []
 
         if "Bullet Point" not in df.columns:
@@ -1922,7 +1922,7 @@ class ResumeEngine:
             return []
 
         if len(df) != len(embs):
-            print(f"  WARNING: Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.")
+            print(f"  {theme.ICONS["warning"]} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.")
             return []
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
@@ -2013,7 +2013,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  ERROR: JD file not found: {jd_path}")
+            print(f"  {theme.ICONS["error"]} JD file not found: {jd_path}")
             return {}
 
         eval_prompt = self.load_prompt("evaluate_fit.md")
@@ -2174,7 +2174,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  ERROR: JD file not found: {jd_path}")
+            print(f"  {theme.ICONS["error"]} JD file not found: {jd_path}")
             return {}
 
         jd_data = _parse_jd_data(jd_text)
@@ -2220,7 +2220,7 @@ class ResumeEngine:
                 letter_data = fixed_data
                 violations = validate_coverletter.validate(letter_data, style_rules)
             if violations:
-                print(f"  WARNING: {len(violations)} issue(s) remain after retry, proceeding anyway:")
+                print(f"  {theme.ICONS["warning"]} {len(violations)} issue(s) remain after retry, proceeding anyway:")
                 for v in violations:
                     print(f"    - {v}")
 
@@ -2272,7 +2272,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  ERROR: JD file not found: {jd_path}")
+            print(f"  {theme.ICONS["error"]} JD file not found: {jd_path}")
             return {}
 
         situational_candidates = situational_roles.detect_situational_candidates(jd_text)
@@ -2528,13 +2528,13 @@ class ResumeEngine:
                     # continuing just moves on to the next outer attempt with the
                     # same (unchanged) violations, rather than giving up after one
                     # network hiccup with attempts still remaining.
-                    print(f"  WARNING: Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
+                    print(f"  {theme.ICONS["warning"]} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
                     continue
                 resume_data = normalize_resume.normalize(fixed)
                 violations = validate_resume.validate(resume_data, style_rules_for_validation)
 
             if violations:
-                print(f"  ERROR: Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
+                print(f"  {theme.ICONS["error"]} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
                 for v in violations:
                     print(f"    - {v}")
                 return {}
@@ -2727,7 +2727,7 @@ class ResumeEngine:
                 json.dump(resume_data, f, indent=2, ensure_ascii=False)
             print(f"\n  Resume saved to: {output_path}")
         except Exception as e:
-            print(f"  WARNING: Could not save resume JSON: {e}")
+            print(f"  {theme.ICONS["warning"]} Could not save resume JSON: {e}")
 
         # --- Step 7: Render HTML + Generate PDF ---
         print(f"\n{'─'*60}")
@@ -2813,7 +2813,7 @@ class ResumeEngine:
                 # point is reached before trim_attempt is incremented, so it
                 # must be bumped here too or `continue` would spin on the same
                 # index forever.
-                print(f"  WARNING: Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
+                print(f"  {theme.ICONS["warning"]} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
                       f"keeping prior resume_data and retrying if attempts remain.")
                 trim_attempt += 1
                 continue
@@ -2833,7 +2833,7 @@ class ResumeEngine:
             trim_attempt += 1
 
         if page_count is not None and page_count > 2:
-            print(f"  ERROR: PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
+            print(f"  {theme.ICONS["error"]} PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
             return {}
 
         final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
@@ -2887,7 +2887,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         try:
             job_key = jd_manager.compute_job_key(path)
         except OSError as e:
-            print(f"  ERROR: Could not read JD file {path}: {e}")
+            print(f"  {theme.ICONS["error"]} Could not read JD file {path}: {e}")
             tracker.mark_failed(
                 job_key=f"unreadable:{os.path.basename(path)}",
                 source_file=os.path.basename(path),
@@ -2909,7 +2909,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             )
         except Exception as e:
             result = None
-            print(f"  ERROR: Unhandled exception building resume for {path}: {e}")
+            print(f"  {theme.ICONS["error"]} Unhandled exception building resume for {path}: {e}")
 
         if result:
             output_paths = result.get("_output_paths", {})

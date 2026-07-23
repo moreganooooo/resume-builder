@@ -42,15 +42,20 @@ RECOMMENDATION_STYLES = {
 # Font Awesome glyphs (Private Use Area code points Nerd Fonts patch in
 # verbatim under the nf-fa-* names) -- this is the default experience.
 _NERD_ICONS = {
-    "success": "",     # nf-fa-check
-    "error": "",       # nf-fa-times
-    "warning": "",     # nf-fa-exclamation_triangle
-    "hint": "",        # nf-fa-lightbulb_o
-    "discovery": "",   # nf-fa-search
-    "evaluate": "",    # nf-fa-bar_chart
-    "build": "",       # nf-fa-wrench
-    "utility": "",     # nf-fa-cog
-    "bullet_bank": "", # nf-fa-database
+    "success": "",     # nf-fa-check
+    "error": "",       # nf-fa-times
+    "warning": "",     # nf-fa-exclamation_triangle
+    "hint": "",        # nf-fa-lightbulb_o
+    "discovery": "",   # nf-fa-search
+    "evaluate": "",    # nf-fa-bar_chart
+    "build": "",       # nf-fa-wrench
+    "utility": "",     # nf-fa-cog
+    "bullet_bank": "", # nf-fa-database
+    "skip": "",        # nf-fa-ban
+    "save": "",        # nf-fa-save
+    "resume": "",      # nf-fa-play
+    "complete": "",    # nf-fa-check_circle
+    "gem": "",         # nf-fa-diamond
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -59,12 +64,17 @@ _UNICODE_ICONS = {
     "success": "✓",       # ✓
     "error": "✗",         # ✗
     "warning": "⚠",       # ⚠
-    "hint": "\U0001F4A1",      # 💡
-    "discovery": "\U0001F50D",  # 🔍
-    "evaluate": "\U0001F4CA",   # 📊
-    "build": "\U0001F6E0",      # 🛠
+    "hint": "💡",      # 💡
+    "discovery": "🔍",  # 🔍
+    "evaluate": "📊",   # 📊
+    "build": "🛠",      # 🛠
     "utility": "⚙",        # ⚙
-    "bullet_bank": "\U0001F5C3",  # 🗃
+    "bullet_bank": "🗃",  # 🗃
+    "skip": "🚫",        # 🚫
+    "save": "💾",        # 💾
+    "resume": "▶",               # ▶
+    "complete": "✅",            # ✅
+    "gem": "💎",         # 💎
 }
 
 # Nerd Font is the default -- set RESUME_BUILDER_ICONS=unicode (exact,

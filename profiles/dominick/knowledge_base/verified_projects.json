@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "source": "bootstrap ingestion",
+    "total_entries": 8
+  },
+  "projects": [
+    {
+      "id": "proj_001",
+      "name": "LyrIQs"
+    },
+    {
+      "id": "proj_002",
+      "name": "N\u00fcrburgring laptime model"
+    },
+    {
+      "id": "proj_003",
+      "name": "personal website and data science portfolio"
+    },
+    {
+      "id": "proj_004",
+      "name": "US Patent 11,719,390 B2"
+    },
+    {
+      "id": "proj_005",
+      "name": "US Patent 11,808,692 B2"
+    },
+    {
+      "id": "proj_006",
+      "name": "Magellan Scholarship Research Grant"
+    },
+    {
+      "id": "proj_007",
+      "name": "Graduate Student Teaching Award"
+    },
+    {
+      "id": "proj_008",
+      "name": "Chemistry Student of the Year"
+    }
+  ]
+}

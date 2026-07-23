@@ -827,9 +827,9 @@ def collect_secrets(dry_run: bool = False) -> dict:
     if already_configured:
         gemini_set = True
     else:
-        print("\n" + "=" * 60)
+        print("\n" + "─" * 60)
         print("API key & cookie setup")
-        print("=" * 60)
+        print("─" * 60)
         gemini_set = _collect_secret_now_or_later(
             "GEMINI_API_KEY",
             "Gemini API key",
@@ -884,9 +884,9 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
         print("[DRY RUN] would confirm LinkedIn search terms.")
         return []
 
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("LinkedIn search terms")
-    print("=" * 60)
+    print("─" * 60)
     print()
     print(
         "LinkedIn scanning needs no cookie or login setup -- it reads your live, "

@@ -346,9 +346,9 @@ def stage1_audit_keepers(
     backfill_cluster_ids.py are never lost when this function is called
     from a fresh keepers.csv that lacks the column.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("STAGE 1 — Audit Keepers")
-    print("=" * 60)
+    print("─" * 60)
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
@@ -470,9 +470,9 @@ def stage2_diff_cluster_map(
     not match any row in the cluster map verbatim. They are counted silently
     and shown only as a summary line at the end.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("STAGE 2 — Diff Against Cluster Map")
-    print("=" * 60)
+    print("─" * 60)
 
     # Prefer updated map; fall back to original
     if os.path.exists(CLUSTER_MAP_UPDATED):
@@ -569,9 +569,9 @@ def stage3_build_rewrite_queue(
 
     Sorted by composite score ascending (worst first).
     """
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("STAGE 3 — Triage Queue")
-    print("=" * 60)
+    print("─" * 60)
 
     queue_rows = []
 
@@ -710,9 +710,9 @@ def stage4_auto_rewrite(
     Records source_cluster_id on each saved keeper row so that Stage 3 can
     exclude that cluster on the next run by ID rather than by bullet text.
     """
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("STAGE 4 — Auto-Rewrite")
-    print("=" * 60)
+    print("─" * 60)
 
     if df_queue.empty:
         print("   ✅ Queue is empty — nothing to auto-rewrite.")
@@ -912,12 +912,12 @@ def main():
                 f"Run with --auto-rewrite to process them."
             )
 
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("  ✅  audit_keepers.py complete")
     print(f"     Audited keepers  → {os.path.basename(KEEPERS_AUDITED)}")
     print(f"     Discrepancies    → {os.path.basename(DISCREPANCIES_OUT)}")
     print(f"     Rewrite queue    → {os.path.basename(REWRITE_QUEUE_OUT)}")
-    print("=" * 60 + "\n")
+    print("─" * 60 + "\n")
 
 
 if __name__ == "__main__":

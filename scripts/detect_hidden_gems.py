@@ -35,6 +35,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+import theme
 
 KB_DIR       = profile_paths.kb_dir()
 
@@ -56,9 +57,9 @@ BELIEVABILITY_MIN   = 90   # believability_score >= this (combined with accuracy
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\n" + "=" * 60)
+    print("\n" + "─" * 60)
     print("  DETECT HIDDEN GEMS")
-    print("=" * 60)
+    print("─" * 60)
 
     if not os.path.exists(KEEPERS_CSV):
         print(f"  ERROR: {KEEPERS_CSV} not found.")

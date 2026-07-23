@@ -1,0 +1,73 @@
+{
+  "_meta": {
+    "source": "bootstrap ingestion",
+    "total_entries": 13
+  },
+  "metrics": [
+    {
+      "id": "metric_001",
+      "label": "model accuracy increase",
+      "value": "over 15%"
+    },
+    {
+      "id": "metric_002",
+      "label": "data processing time reduction",
+      "value": "roughly 30%"
+    },
+    {
+      "id": "metric_003",
+      "label": "manual workload reduction",
+      "value": "50%"
+    },
+    {
+      "id": "metric_004",
+      "label": "data acquisition rate improvement",
+      "value": "over 200%"
+    },
+    {
+      "id": "metric_005",
+      "label": "students per semester",
+      "value": "120+"
+    },
+    {
+      "id": "metric_006",
+      "label": "average student exam score increase",
+      "value": "3%"
+    },
+    {
+      "id": "metric_007",
+      "label": "model accuracy improvement",
+      "value": "15%"
+    },
+    {
+      "id": "metric_008",
+      "label": "processing time reduction",
+      "value": "30%"
+    },
+    {
+      "id": "metric_009",
+      "label": "manual labor reduction",
+      "value": "50%"
+    },
+    {
+      "id": "metric_010",
+      "label": "false positive reduction",
+      "value": "20%"
+    },
+    {
+      "id": "metric_011",
+      "label": "usable data volume improvement",
+      "value": "15%"
+    },
+    {
+      "id": "metric_012",
+      "label": "Magellan Scholarship Research Grant funding",
+      "value": "$5,000"
+    },
+    {
+      "id": "metric_013",
+      "label": "Graduate Student Teaching Award funding",
+      "value": "$4,000"
+    }
+  ]
+}
