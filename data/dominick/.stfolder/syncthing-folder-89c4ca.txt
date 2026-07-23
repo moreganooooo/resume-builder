@@ -1,5 +1,0 @@
-# This directory is a Syncthing folder marker.
-# Do not delete.
-
-folderID: viqeo-j5te2
-created: 2026-07-22T18:47:42-04:00
