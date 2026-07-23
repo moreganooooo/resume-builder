@@ -13,6 +13,7 @@ load_dotenv(profile_paths.env_path())
 
 # Import shared objects from orchestrator
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
+import theme
 
 SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
 

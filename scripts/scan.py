@@ -16,6 +16,7 @@ import os
 import jd_manager
 import scan_jobright
 import scan_linkedin
+import theme
 
 # A JD just found by a scan is, by definition, confirmed to exist right
 # now -- seeding _liveness here means it starts inside liveness.py's
