@@ -1494,6 +1494,7 @@ class ResumeEngine:
         self._gemma_segment_cache = {}
         pairs = sorted({(company, tags) for _, company, tags in bullet_tuples})
         print(f"\n{theme.ICONS['hint']} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        print()
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
@@ -1527,6 +1528,7 @@ class ResumeEngine:
         """
         print(f"\n{theme.ICONS['hint']} Loading rules bundle...")
         print(f"{theme.ICONS['hint']} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
+        print()
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
             print("  No bullets to audit -- empty or invalid input. Skipping audit loop.")
@@ -1540,6 +1542,7 @@ class ResumeEngine:
 
         critique_system = self.build_bullet_critique_system()
         print(f"   {theme.ICONS['success']} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
+        print()
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
         # to build (2 small JSON files + voice-anchors.md), so it's built
@@ -1669,8 +1672,10 @@ class ResumeEngine:
 
         print(f"{theme.ICONS['hint']} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
         print(f"{theme.ICONS['hint']} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
+        print()
         print(f"{theme.ICONS['hint']}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
         print(f"{theme.ICONS['hint']}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
+        print()
         print(f"{theme.ICONS['hint']} Score system prompt:   {len(critique_system):,} chars")
 
         self.warm_segment_cache(bullet_tuples)
@@ -1700,6 +1705,7 @@ class ResumeEngine:
             print(f"\n{'─'*60}")
             print(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...")
             print(f"   Tags: {tags}  |  Company: {company}")
+            print()
 
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
@@ -2301,6 +2307,7 @@ class ResumeEngine:
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
+        print()
 
         # --- Step 2: Mine bullet bank ---
         print(f"\n{'─'*60}")
@@ -2316,6 +2323,7 @@ class ResumeEngine:
             checkpoint["bullet_tuples"] = bullet_tuples
             jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(bullet_tuples)} bullet tuples retrieved.")
+        print()
 
         # --- Step 3: Audit and refine bullets ---
         print(f"\n{'─'*60}")
@@ -2336,6 +2344,7 @@ class ResumeEngine:
         checkpoint["refined_bullets"] = refined_tuples
         jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  {len(refined_bullets)} bullets after audit.")
+        print()
 
         # audit_and_refine_bullets emits exactly one output bullet per input
         # tuple, in order, so re-pairing by index recovers each bullet's
@@ -2567,26 +2576,31 @@ class ResumeEngine:
                 print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
                 print(f"    top_third         : {critique_data.get('top_third_score',         '?')}")
                 print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
+                print()
                 flags = critique_data.get("flags", [])
                 if flags:
                     print("  Flags:")
                     for flag in flags:
                         print(f"    - {flag}")
+                    print()
                 recs = critique_data.get("recommendations", [])
                 if recs:
                     print("  Recommendations:")
                     for rec in recs:
                         print(f"    - {rec}")
+                    print()
                 moments = critique_data.get("distinctive_moments", [])
                 if moments:
                     print("  Distinctive moments (protected):")
                     for m in moments:
                         print(f"    - {m}")
+                    print()
                 flat = critique_data.get("flat_sections", [])
                 if flat:
                     print("  Flat sections:")
                     for f in flat:
                         print(f"    - {f}")
+                    print()
                 resume_data["_critique"] = critique_data
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
