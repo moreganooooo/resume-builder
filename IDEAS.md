@@ -23,23 +23,14 @@ incidents, and detail on everything already shipped, see
 A cross-cutting priority pass over the backlog, ordered by dependency (not
 a replacement for the difficulty tiers below -- this is *which order*, the
 tiers are still *how hard*). Numbering carries over from the original
-2026-07-04 roadmap; items 1-3, 6, and the liveness half of 10 are done and
-have been moved to the archive, so the sequence below starts at 4.
+2026-07-04 roadmap; every item except 8, 9, and 10 is now done and archived
+(see `IDEAS_ARCHIVE.md`), so those three are the only ones left below.
 
 | # | Item | Difficulty | Notes |
 |---|------|-----------|-------|
-| 4 | Engine/profile rules audit + split | Medium-Hard | **Done 2026-07-17, including the `orchestrator.py` gap found in that day's final review (archived).** See `IDEAS_ARCHIVE.md`'s "Engine/profile split: orchestrator.py Morgan-specific constants closed" entry, and Multi-user support below. |
-| 5 | Evidence bank extension | -- | Phase 1 shipped 2026-07-07 (archived). Everything past Phase 1 decoupled from the merge/career-ops entirely 2026-07-21 -- see "Strengthen evidence-guide.csv for cover letters" (Medium) and "Evidence bank: interview stories, negotiation talking points, full multi-type generalization" (Very Hard / Long-term) below. |
-| 7 | Per-user secrets (`.env` per profile) | Easy | **Done 2026-07-17 (archived)** -- every script now loads `profiles/<name>/.env` instead of one shared root file; Morgan's real `.env` migrated. Bootstrap's own wizard walks a new profile through entering `GEMINI_API_KEY`/`JOBRIGHT_COOKIE_STRING` (or deferring to a file edit later) before Phase 0's first API call. See `IDEAS_ARCHIVE.md`. |
-| 8 | Dominick's onboarding | Hard | Onboarding wizard shipped 2026-07-12/13; `profiles/<name>/` isolation shipped 2026-07-17; #4's `orchestrator.py` gap and #7 (per-user secrets) both closed same week. **No remaining blockers** on the engineering side -- next step is Dom's actual first session. See Multi-user support below. |
+| 8 | Dominick's onboarding | Hard | Engineering side has no remaining blockers (engine/profile split, per-user secrets, and the onboarding wizard are all done -- see Multi-user support below). Next step is Dom's actual first session. |
 | 9 | Scheduler + notifications | Hard | Unblocked -- `scan` and `evaluate` stages both exist. Not started. See the Long-term merge section below. |
-| 10 | Mongo migration | Medium | The liveness-check half of this item is done (archived). Migration itself still undone -- tied to the long-term three-way merge. |
-| 11 | Multi-select "Specific JD" pickers (space-bar toggle) | -- | **Done 2026-07-21 (archived)**, folded into the "Browse & Manage Jobs" build alongside #15 and multi-job comparison -- see `IDEAS_ARCHIVE.md`. |
-| 12 | Help command in the interactive menu | -- | **Done 2026-07-20 (archived).** See `IDEAS_ARCHIVE.md`. |
-| 13 | "Doctor" script (dependency/asset checks + test run) | -- | **Done 2026-07-22 (archived)**, built together with #14's Maintenance submenu -- see `IDEAS_ARCHIVE.md`. |
-| 14 | Bullet-bank reintegration menu option + eventual "Maintenance" submenu | -- | **Done.** Bullet-bank menu done 2026-07-15 (archived). The top-level "Maintenance" submenu shipped 2026-07-22 as the general home for admin tasks (doctor checks today) -- deliberately kept separate from "Manage Bullet Bank"'s own already-working maintenance section rather than merging them. See `IDEAS_ARCHIVE.md`. |
-| 15 | "List Jobs" / "View Pipeline" browsing command | -- | **Done 2026-07-21 (archived)** as "Browse & Manage Jobs" -- browse, drill-in, Archive, and bulk actions across every evaluated JD, pending or completed. Retired the old "View Application Tracker" entry entirely. See `IDEAS_ARCHIVE.md`. |
-| 16 | Skip recently-checked JDs in liveness (like evaluate's skip-by-default) | -- | **Done 2026-07-21 (archived).** See `IDEAS_ARCHIVE.md`. |
+| 10 | Mongo migration | Medium | Migration itself still undone -- tied to the long-term three-way merge (see that section's persistence-layer discussion below). |
 
 **Deliberately left off this pass:** an `interview-prep` pipeline stage
 (porting career-ops's `modes/interview-prep.md`) -- Morgan's call, not
@@ -63,52 +54,6 @@ chosen.
 
 ## Medium
 
-### Prettier, more informative live progress for liveness / evaluate
-
-**DONE (2026-07-22).** Completed the full three-script console-polish pass:
-
-- **`scan.py`** — shipped 2026-07-17 with `[i/total]` + explicit skip-reason per job
-- **`batch_evaluate.py`** — shipped 2026-07-21 with `───` separators between entries
-- **`liveness.py`** — shipped 2026-07-22 with streaming progress (`[i/total]` + icons + real-time updates + results grouped by status)
-
-**Architecture note on liveness.py:** The streaming was already wired in `check-liveness.mjs` (logging to stderr while JSON goes to stdout), but Python's `capture_output=True` was swallowing it. Fixed by using separate `stdout=PIPE, stderr=PIPE` — minimal change, no major refactor needed. Now displays per-URL progress in real-time as each liveness check completes, matching scan/evaluate's [i/total] pattern.
-
-All three scripts now have:
-- Live `[i/total]` progress indicators
-- Visual separators and grouping
-- Icons and meaningful feedback per item
-- Consistent formatting with whitespace improvements
-
-See `IDEAS_ARCHIVE.md` for the full writeup and historical context.
-
-### Console styling consistency audit (icon/separator/color/progress unification)
-
-**DONE (2026-07-22).** Completed comprehensive 6-phase refactor to standardize console output across ~30 scripts:
-
-**Phase 2:** Expanded `theme.py` icon vocabulary from 9 to 14 keys:
-- Added: `skip` (nf-fa-ban / 🚫), `save` (nf-fa-save / 💾), `resume` (nf-fa-play / ▶),
-  `complete` (nf-fa-check_circle / ✅), `gem` (nf-fa-diamond / 💎)
-- All follow existing Nerd Font + Unicode fallback pattern; toggle via `RESUME_BUILDER_ICONS=unicode`
-
-**Phase 3:** Standardized separators and prefix conventions:
-- Unified separator char from `=` to `─` across 6 files (audit_keepers.py, bootstrap_profile.py, cluster_bullet_bank.py, detect_blank_scores.py, detect_hidden_gems.py, rewrite_bullets.py)
-- Replaced 30+ raw "WARNING:" and "ERROR:" text prefixes with `theme.ICONS` lookups in 6 files (orchestrator.py, gemini_client.py, scan.py, cluster_bullet_bank.py, audit_bullet_bank.py, detect_hidden_gems.py)
-
-**Phase 4:** Replaced all raw emoji with theme-driven equivalents:
-- liveness.py: Inline `icon_map` dict → `theme.ICONS` lookups
-- bootstrap_profile.py: ⏭️ → `theme.ICONS['resume']`
-- Bulk sweep: audit_bullet_bank.py, embed_bullet_bank.py, audit_keepers.py, score_keeper_gems.py, detect_blank_scores.py (✅→success, ❌→error, ⚠️→warning, 💾→save, ♻️→resume, 🎉→complete, 💎→gem)
-- Removed one-off decorative emoji (🔑 API labels, 📦 batch size, ⏱ time estimates, 🧹 cleanup) per design principle
-
-**Phase 5:** Standardized progress indicators:
-- audit_bullet_bank.py: Prose "Auditing bullet i/total..." → bracket style `[i/total]`
-
-**Phase 6 check:** bootstrap_profile.py's `"\n--- Draft ...\n"` text headers serve distinct semantic purpose (marking draft boundaries) vs. progress separators, so intentionally remain separate.
-
-**Result:** All ~30 scripts now respect `RESUME_BUILDER_ICONS=unicode` toggle uniformly; 14 centralized icon keys across pipelines; consistent `─` separators and `theme.ICONS` color/icon pairs throughout; test suite (912 tests) unchanged with pre-existing failures unrelated to cosmetic output changes.
-
-See commit history (07543d3d, 209b4d86) for phase-by-phase breakdown.
-
 ### Rotate across multiple API keys on rate-limit errors
 
 Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
@@ -125,37 +70,6 @@ mostly touches `GeminiClient.generate()`'s retry loop; the main design
 question is whether key rotation and model-fallback rotation compose
 cleanly (try every key on the current model before swapping models, or
 interleave) rather than needing a genuinely new mechanism.
-
-### Turn the bootstrap flow into a persistent, resumable submenu
-
-**DONE (2026-07-22).** "New User? Start Here!" no longer runs the whole
-onboarding flow as one opaque subprocess. `scripts/bootstrap_menu.py` (new)
-shows a status table across all 8 steps -- Phase 0 (document ingestion),
-Phase 0.5 (profile setup), and the 6 bullet-bank pipeline stages -- and
-lets you run any one individually, jumping back in wherever you left off.
-
-Reuses `bullet_bank_menu.STAGES`/`_stage_status()`/`_handle_choice()`
-directly for stages 1-6 rather than duplicating them, since
-`bootstrap_bullet_bank.PIPELINE_STAGES` and `bullet_bank_menu.STAGES` are
-the exact same six scripts. Phase 0's status reads document count vs.
-`checkpoint.json`'s done count; Phase 0.5's checks `profile.yml`/`cv.md`
-existence (`cv.md` is the last artifact `run_profile_setup()` writes, so
-its absence signals an interrupted run even if `profile.yml` made it to
-disk). `cli_art.render_bullet_bank_status()` picked up an optional `title`
-param so both menus share the same table renderer.
-
-Fixed a related real bug found along the way: `bootstrap_bullet_bank.py`,
-`bootstrap_profile.py`, and `bullet_bank_menu.py` all compute
-profile-scoped path constants at module level but weren't in
-`profile_paths._RELOAD_ON_PROFILE_SWITCH` -- meaning right after creating
-a brand-new profile mid-session, they'd have silently kept pointing at the
-old profile's paths. All three are now in that reload list.
-
-`scripts/menu.py`'s `_handle_bootstrap()` shrank to just the
-profile-creation/guest-mode gate, then delegates to
-`bootstrap_menu.run_bootstrap_menu()`. Test coverage: new
-`tests/test_bootstrap_menu.py`; `tests/test_menu_bootstrap.py`'s
-now-obsolete subprocess-flow tests replaced with delegation tests.
 
 ### Strengthen evidence-guide.csv for cover letters
 
@@ -192,6 +106,102 @@ surfaced in this audit, doing real historical mining across
 evaluations/outcomes. Genuine analytical logic to port or rebuild (not
 prompt adaptation) -- closest in spirit to a small analytics engine, not
 a quick feature add.
+
+### Dashboard: future views & analytics (brainstormed 2026-07-23)
+
+The Go dashboard (`dashboard/`, `resume dashboard`) currently ships three
+screens: **Pipeline** (kanban-style tracker + report/status actions per
+job), **Progress** (funnel stages, score-bucket distribution, weekly
+activity, response/interview/offer rates, avg/top score) and **Viewer**
+(file/report detail view) -- all built on career-ops's `_application`/
+`_evaluation` tracker data. Brainstormed with Morgan what an *ideal*
+dashboard adds on top of that, grouped by what data it needs:
+
+**Ready now (uses data already persisted, no new plumbing):**
+- Bullet-bank health/staleness -- which bullets get selected constantly
+  vs. never, last-used date per bullet, gem density over time (from the
+  audit/cluster/rewrite/gems pipeline's own output files).
+- Daily briefing panel -- JDs expiring soon, checkpoints stuck mid-run
+  (`output/<profile>/checkpoints/`), liveness re-checks overdue. The
+  "what needs attention today" view, distinct from Progress's cumulative
+  stats.
+- Profile identity / two-profile comparison -- the dashboard currently has
+  no concept of "whose numbers am I looking at" even though Dom's profile
+  data now lives alongside Morgan's in the same checkout; a profile
+  indicator plus Morgan-vs-Dominick side-by-side stats are the same
+  underlying gap.
+- Timeline scrubber -- replay `jd_tracker_log.csv` chronologically
+  instead of only ever seeing the current-state snapshot.
+- **Evaluation dimension-score breakdown** -- `evaluate_fit()` already
+  produces a full `dimension_scores` dict (the 10-dimension weighted
+  matrix) plus `archetype` and `posting_legitimacy`, but the dashboard
+  only ever sees the final composite score. An archetype/dimension screen
+  ("which role archetypes am I strongest/weakest against") and a
+  per-dimension bar cluster (color-graded bars, one per dimension -- 90%
+  of a radar chart's value without fighting terminal rendering for real
+  radar geometry) both hang off this same unused structure.
+- **Bullet quality data surfaced outside "Manage Bullet Bank"** --
+  `bullet-bank-keepers-audited.csv` already has `accuracy_score`/
+  `believability_score`/`clarity_score`/`ats_value`/`manager_test` per
+  bullet, tagged by category (`[ops]`, `[content]`, etc.). Currently only
+  visible inside the bullet-bank menu, disconnected from the dashboard
+  entirely.
+- **Pipeline-internals surfacing** -- liveness results, cover-letter
+  validator violation counts, PDF trim-attempt counts, situational-role
+  firing frequency, and the company-research cache are all persisted
+  somewhere in the pipeline already; none of it reaches the dashboard.
+- **Posting-quality trend** -- `posting_legitimacy` over time or by source
+  (e.g. "JobRight postings flagged Suspicious 12% of the time this
+  month"). Adjacent to source/board performance below but tracks
+  legitimacy flags, not conversion.
+- **Pacing view** -- applications this week vs. a target rate,
+  days-since-last-application; a momentum framing distinct from the
+  daily-briefing "needs attention" framing above.
+- **Calendar heatmap** -- GitHub-contribution-style daily block grid for
+  application activity, replacing/supplementing Progress's 8-week bar
+  view with something that reads richer at a glance.
+- **Sparklines** -- score trend and weekly volume trend over the full
+  history, not just the current 8 weeks.
+- **Multi-panel "mission control" screen** -- lipgloss can lay out several
+  small boxes side by side (funnel + score distribution + heatmap + top
+  archetypes + recent activity feed, all visible at once) instead of each
+  metric living on its own full-screen view behind a keybinding. This is
+  the "multi-panel layout" theme from the first brainstorming pass on
+  this, now given concrete shape.
+
+**Needs new data plumbing:**
+- Skill-gap radar -- skills requested across JDs vs. skills the bullet
+  bank covers, using the existing embeddings (`bullet_vectors_ge2_d768.npy`)
+  to compare against JD text rather than exact keyword match.
+- Source/board performance -- which job sources actually convert to
+  interviews, not just volume; needs `source_job_id`/source tagged
+  through to `_application` outcomes.
+- Gemini API cost/spend tracking per JD and cumulative -- would need
+  token/cost logging added at the API-call layer, which doesn't exist
+  yet.
+- **Bullet-bank <-> outcome correlation** -- cross-reference which bullet
+  tags show up most in resumes that led to interviews/offers vs. ones
+  that got rejected. The one idea here that's genuine insight rather than
+  a prettier chart on data already sitting around -- needs which bullets
+  went into which submitted resume tracked and linked back to that
+  resume's outcome, which nothing currently records.
+
+**Needs more outcome data to be meaningful (revisit once volume is
+higher):**
+- Response-time analytics (median days to first response, sliced by
+  source/company size) -- overlaps with both "Application pattern
+  analysis" above (career-ops's `analyze-patterns.mjs`) and the
+  bullet-bank/outcome correlation idea just above; all three are
+  historical-outcome-mining in different shapes, worth designing once
+  rather than three times if more than one gets picked up.
+
+**Difficulty: Hard** -- open design question is which of these actually
+earns a permanent screen vs. staying a one-off `resume` subcommand/report,
+plus real terminal-rendering decisions for any new chart types (radar,
+heatmap, scrubber) beyond what lipgloss/Bubble Tea patterns already exist
+in `dashboard/internal/ui/screens/progress.go`. Not started -- next step
+is Morgan picking one item to prototype first, not building all of it in
+one pass.
 
 ### Repo reorganization / cleanup pass
 
@@ -419,72 +429,31 @@ date.
 
 ### Multi-user support -- let other people (starting with Dominick) use this
 
-**Update 2026-07-16: the "harder problem" below (raw material -> first-draft
-bullets) is genuinely solved -- but shipped a materially different shape
-than the 2026-07-04 brainstorm decided on.** `bootstrap_extractors.py`/
-`bootstrap_timeline.py`/`bootstrap_profile.py`, built 2026-07-12/13, extract
-achievements from arbitrary uploaded documents into
-`bullet-bank-clean.csv` and draft `cv.md`/`user-background-guide.md`,
-reachable self-serve via a "New User? Start Here!" menu entry
-(`bootstrap_bullet_bank.py`). What's different from the brainstormed
-sequence below: it asks guess-confirm-or-edit questions immediately after
-ingestion rather than surfacing gaps only after a first thin resume, has no
-lenient onboarding-specific quality bar or top-2-3-gap cap, and never
-generates an actual resume -- so the "watch it come alive" garnish Morgan
-was most specific about didn't make it in. Full comparison in
-`IDEAS_ARCHIVE.md`'s daily build log. Worth a conscious call on whether the
-shipped version is good enough as-is before Dom's actual onboarding
+**Status: engineering is done; one UX/design question is still open.** The
+mechanical engine/profile split and the onboarding wizard both shipped
+2026-07-12 through 2026-07-17 -- full technical history (four sweeps
+closing every Morgan-specific hardcode, the per-profile tag taxonomy, per-
+profile secrets) lives in `IDEAS_ARCHIVE.md`'s "Engine/profile split:
+orchestrator.py Morgan-specific constants closed" and "Bootstrap wizard UX
++ per-profile secrets" entries. Net effect: a second profile's resume
+build, bootstrap onboarding, cover-letter validation, and LinkedIn scan
+all read their own data, with zero remaining Morgan-specific fallback.
+
+**Still open: is the shipped onboarding UX good enough as-is?** The
+2026-07-12/13 wizard (`bootstrap_bullet_bank.py`/`bootstrap_extractors.py`/
+`bootstrap_profile.py`) solves the actual hard problem -- raw uploaded
+documents into first-draft bullets -- but shipped a materially different
+shape than the 2026-07-04 brainstorm below: it asks guess-confirm-or-edit
+questions immediately after ingestion rather than surfacing gaps only
+after a first thin resume, has no lenient onboarding-specific quality bar
+or top-2-3-gap cap, and never generates an actual resume -- so the "watch
+it come alive" garnish Morgan was most specific about didn't make it in.
+Full comparison in `IDEAS_ARCHIVE.md`'s daily build log (2026-07-16
+catch-up). Worth a conscious call on whether this is good enough as-is, or
+whether that garnish is still wanted, before Dom's actual onboarding
 session.
 
-**Update 2026-07-17: point 1 (engine/profile split) is now built, and
-three same-day follow-up passes closed every Morgan-specific gap found so
-far -- archived.** `profiles/<name>/`, `scripts/profile_paths.py`, every
-script's path constants, every remaining Morgan-specific constant in
-`orchestrator.py` (mining floors, persona framing, deep-evidence gating,
-filename prefix), a separately-hardcoded education achievement-bullet
-system, and a third-pass sweep that found and closed 7 more gaps outside
-`orchestrator.py`'s builder-schema path (`normalize_resume.py`'s career-note
-trigger, cv.md section-excerpt keywords, two hardcoded trim-step
-instructions, LLM-facing "Morgan's career" guardrail text,
-`validate_coverletter.py`'s third-person-name/pronoun check, and
-`scan_linkedin.py`'s saved searches) -- are all done. Full technical
-writeup in `IDEAS_ARCHIVE.md`'s "Engine/profile split: orchestrator.py
-Morgan-specific constants closed" entry.
-
-**Update 2026-07-17 (a fourth pass, same day): the tag taxonomy is now
-per-profile, and `rewrite_bullets.py` -- wrongly reported as dead code in
-the third pass above -- turned out to be live in Dom's actual onboarding
-wizard and got the same fixes as `orchestrator.py`.** A new `profile.yml`
-`tags:` field, generated during bootstrap from the candidate's own target
-roles + real achievement text (`bootstrap_extractors.generate_tag_taxonomy()`),
-replaces three separately-hardcoded, already-drifted copies of Morgan's
-marketing-specific `[email]`/`[ops]`/etc. taxonomy
-(`orchestrator.py`'s `TAG_CONTEXT`+`CLAIM_TAG_KEYWORDS`, `tag_bullet_bank.py`'s
-`TAG_KEYWORDS`) -- `tag_bullet_bank.py` is what actually auto-tags a new
-profile's bullets during bootstrap ingestion. `rewrite_bullets.py` is
-imported by `bootstrap_profile.py` for the CV-drafting step (`_polish_bullet()`),
-`audit_keepers.py`, and `bullet_feedback.py`, and carried the exact same
-hardcoded Morgan persona/Treering-evidence/"Morgan's career" content
-`orchestrator.py` had before this pass -- meaning every bullet polished
-during a new profile's onboarding was getting Morgan's identity injected
-into the prompt. Now fixed identically. A second, unrelated bug from the
-third pass was also caught here: `BACKGROUND_IDENTITY`/`BACKGROUND_TAGS`
-were moved to `fixed_content.py` without adding empty defaults to the
-bootstrap scaffold, so a fresh profile's first real build would have hit a
-hard crash, not a graceful degradation -- now fixed with a regression test
-that exercises the real consuming functions, not just checks for attribute
-names. Full writeup (including the grep-command mistake that caused the
-"dead code" misreport) in the same `IDEAS_ARCHIVE.md` entry, "Update... a
-fourth pass" section.
-
-Net effect: a second profile's actual resume build, bootstrap onboarding
-(including bullet polishing and auto-tagging), cover-letter validation,
-and LinkedIn scan all now read their own data from
-`profile.yml`/`fixed_content.py`, with zero remaining Morgan-specific
-fallback found across four full sweeps. Only remaining blocker before
-Dom's first real build is #7 (per-user `.env` secrets).
-
-**Other follow-ups noted in the same review, lower priority:**
+**Other follow-ups noted in the 2026-07-17 review, lower priority:**
 - `scripts/liveness.py:19`'s temp file (`LIVENESS_INPUT_PATH`) writes to
   top-level `output/`, not `output/<profile>/` -- two profiles running
   liveness checks at the same moment could collide on it. Minor,
@@ -512,37 +481,32 @@ the scope, but it does mean this shouldn't sit indefinitely once the
 merge's evidence-bank work is underway -- Dom's onboarding is the first
 real test of it.
 
-Splits into a mechanical (if broad) half -- separating engine from
-per-user profile data -- and a genuinely unsolved half: designing an
+This item split into a mechanical (if broad) half -- separating engine
+from per-user profile data -- and a genuinely unsolved half: designing an
 onboarding flow that gets a brand-new user to a usable, trustworthy bullet
-bank fast. That second half is a process/UX design problem, not an
-engineering one.
+bank fast. The first half is done (below); the second is the still-open
+UX question above.
 
-Right now the whole pipeline is Morgan-specific, not just in data but in
-structure: `scripts/fixed_content.py` is literally her contact info/company
-facts/certifications/education as Python constants, and
-`resume-engine/prompts/tailor_resume.md` + `resume-engine/rules/*.yaml` are
-written assuming her specific companies, roles, and voice.
+**1. Generalizing the engine -- done 2026-07-17.** `profiles/<name>/`
+directories now hold each user's own fixed-content equivalent, bullet
+bank, and knowledge base, with `scripts/profile_paths.py` as the single
+source of truth every script routes through. Full technical writeup in
+`IDEAS_ARCHIVE.md`.
 
-**1. Generalizing the engine.** Splitting "engine" (generic pipeline logic)
-from "profile" (a per-user directory holding their own fixed-content
-equivalent, bullet bank, and knowledge base) so a second person's data
-doesn't live inside Morgan's files. Mechanical but broad -- touches most of
-`scripts/` and `resume-engine/`.
+**The standard this split was held to, worth keeping even though the work
+itself is done:** career-ops has almost this same engine/profile split on
+paper (`DATA_CONTRACT.md`'s System Layer vs. User Layer) and it still
+failed in practice in June 2026 -- an auto-update silently overwrote
+Morgan's personalization because the tool's own docs invited hand-editing
+"system" files directly, so real customization ended up there anyway (full
+account in `IDEAS_ARCHIVE.md`, and in memory `project_career_ops_update_risk`).
+The lesson: the engine/profile boundary needs to be structurally enforced
+(profile data physically can't live in engine-owned files/paths), not just
+documented as a convention -- which is why the actual split was built that
+way.
 
-**A real-world cautionary tale for this exact split, not a hypothetical:**
-career-ops has almost this same engine/profile split on paper
-(`DATA_CONTRACT.md`'s System Layer vs. User Layer) and it still failed in
-practice in June 2026 -- an auto-update silently overwrote Morgan's
-personalization because the tool's own docs invited hand-editing "system"
-files directly, so real customization ended up there anyway (full account
-in `IDEAS_ARCHIVE.md`, and in memory `project_career_ops_update_risk`).
-The lesson for this split: the engine/profile boundary needs to be
-structurally enforced (e.g. profile data physically can't live in
-engine-owned files/paths) rather than just documented as a convention, or
-the same failure mode will eventually repeat here too.
-
-**2. The harder problem: how does a new user build their own bullet bank
+**2. The harder problem (solved, shape discussed in the still-open
+question above): how does a new user build their own bullet bank
 in the first place**, when they don't have 100+ audited variations sitting
 around already? Options raised: a guided interview/Q&A process, a profile
 file/form to fill out, a LinkedIn data export, or sharing project
@@ -556,13 +520,15 @@ write-ups directly.
   exactly the "polish a new user's rough draft into a verified bullet" step
   -- and it's the same machinery already battle-tested on Morgan's own
   material.
-- **Not built yet, a real gap:** nothing today turns raw source material --
-  a LinkedIn export, an old resume, project write-ups, or an interview
-  transcript -- into first-*draft* bullets in the first place.
-  `extract_evidence.md` (despite the name) deconstructs an *existing*
-  bullet to check its credibility; it doesn't generate new ones from raw
-  material. That initial extraction step is the thing to actually design/
-  build.
+- **Built 2026-07-12/13 (`bootstrap_extractors.py`), in a different shape
+  than described below:** turning raw source material -- a LinkedIn
+  export, an old resume, project write-ups -- into first-*draft* bullets
+  was a real gap at the time this was written. It's now solved; see the
+  "still open" note above for exactly how the shipped shape diverges from
+  the brainstormed sequence that follows. (`extract_evidence.md`, despite
+  the name, still only deconstructs an *existing* bullet to check its
+  credibility -- a separate, still-accurate thing from the extraction step
+  described here.)
 - **The genuinely hard part isn't mechanical.** This whole system's identity
   is "never fabricate, everything traceable to real verified history."
   Morgan's bullet bank got that grounding from years of lived history plus
@@ -674,5 +640,7 @@ picked the upload-first wizard, plus a specific garnish:
   designing it generally rather than resume-bullet-specific if that's not
   much extra work, so it isn't rebuilt twice.
 
-No design work has started on the implementation of any of this; the
-onboarding flow above is a brainstormed direction, not a plan.
+The onboarding flow above is the original 2026-07-04 brainstormed
+direction -- not what shipped. See the "still open" note near the top of
+this section for how far the real wizard diverges from it, and whether
+closing that gap is still worth doing.
