@@ -81,6 +81,34 @@ All three scripts now have:
 
 See `IDEAS_ARCHIVE.md` for the full writeup and historical context.
 
+### Console styling consistency audit (icon/separator/color/progress unification)
+
+**DONE (2026-07-22).** Completed comprehensive 6-phase refactor to standardize console output across ~30 scripts:
+
+**Phase 2:** Expanded `theme.py` icon vocabulary from 9 to 14 keys:
+- Added: `skip` (nf-fa-ban / 🚫), `save` (nf-fa-save / 💾), `resume` (nf-fa-play / ▶),
+  `complete` (nf-fa-check_circle / ✅), `gem` (nf-fa-diamond / 💎)
+- All follow existing Nerd Font + Unicode fallback pattern; toggle via `RESUME_BUILDER_ICONS=unicode`
+
+**Phase 3:** Standardized separators and prefix conventions:
+- Unified separator char from `=` to `─` across 6 files (audit_keepers.py, bootstrap_profile.py, cluster_bullet_bank.py, detect_blank_scores.py, detect_hidden_gems.py, rewrite_bullets.py)
+- Replaced 30+ raw "WARNING:" and "ERROR:" text prefixes with `theme.ICONS` lookups in 6 files (orchestrator.py, gemini_client.py, scan.py, cluster_bullet_bank.py, audit_bullet_bank.py, detect_hidden_gems.py)
+
+**Phase 4:** Replaced all raw emoji with theme-driven equivalents:
+- liveness.py: Inline `icon_map` dict → `theme.ICONS` lookups
+- bootstrap_profile.py: ⏭️ → `theme.ICONS['resume']`
+- Bulk sweep: audit_bullet_bank.py, embed_bullet_bank.py, audit_keepers.py, score_keeper_gems.py, detect_blank_scores.py (✅→success, ❌→error, ⚠️→warning, 💾→save, ♻️→resume, 🎉→complete, 💎→gem)
+- Removed one-off decorative emoji (🔑 API labels, 📦 batch size, ⏱ time estimates, 🧹 cleanup) per design principle
+
+**Phase 5:** Standardized progress indicators:
+- audit_bullet_bank.py: Prose "Auditing bullet i/total..." → bracket style `[i/total]`
+
+**Phase 6 check:** bootstrap_profile.py's `"\n--- Draft ...\n"` text headers serve distinct semantic purpose (marking draft boundaries) vs. progress separators, so intentionally remain separate.
+
+**Result:** All ~30 scripts now respect `RESUME_BUILDER_ICONS=unicode` toggle uniformly; 14 centralized icon keys across pipelines; consistent `─` separators and `theme.ICONS` color/icon pairs throughout; test suite (912 tests) unchanged with pre-existing failures unrelated to cosmetic output changes.
+
+See commit history (07543d3d, 209b4d86) for phase-by-phase breakdown.
+
 ### Rotate across multiple API keys on rate-limit errors
 
 Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
