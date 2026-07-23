@@ -90,7 +90,7 @@ def run_scan(sources: list = None) -> int:
 
             dest = _write_jd_file(job)
             written += 1
-            print(f"  [{i}/{total}] + {company} -- {title} -> {dest}")
+            print(f"  [{i}/{total}] + {company} -- {title}")
 
     print(f"\nScan summary: {written} new JD file(s) written to jds/.")
     return written
