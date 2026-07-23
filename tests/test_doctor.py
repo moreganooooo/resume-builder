@@ -107,6 +107,23 @@ class TestCheckPlaywrightChromium(unittest.TestCase):
         self.assertIn("playwright install chromium", result["fix"])
 
 
+class TestCheckGo(unittest.TestCase):
+
+    @patch("doctor.shutil.which", return_value="/usr/local/bin/go")
+    def test_always_passes_when_found(self, mock_which):
+        result = doctor.check_go()
+        self.assertTrue(result["passed"])
+        self.assertIn("found", result["detail"])
+
+    @patch("doctor.shutil.which", return_value=None)
+    def test_still_passes_when_not_on_path(self, mock_which):
+        # Optional dependency -- missing Go is never a hard failure, just
+        # a note that `resume dashboard` specifically won't work.
+        result = doctor.check_go()
+        self.assertTrue(result["passed"])
+        self.assertIn("resume dashboard", result["detail"])
+
+
 class TestCheckGeminiApiKey(unittest.TestCase):
 
     @patch("doctor._env_values", return_value={"GEMINI_API_KEY": "abc123"})

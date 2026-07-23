@@ -23,6 +23,7 @@ import liveness as liveness_module
 import polish as polish_module
 import doctor
 import maintenance
+import dashboard as dashboard_module
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -211,6 +212,16 @@ def doctor_cmd(skip_tests):
     test_result = None if skip_tests else doctor.run_test_suite()
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
+
+
+@cli.command(name="dashboard")
+def dashboard_cmd():
+    """Launches the career pipeline/progress dashboard (a full-screen Go
+    TUI) against this profile's real tracker data."""
+    success, message = dashboard_module.run()
+    if not success:
+        cli_art.display_error(message)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
