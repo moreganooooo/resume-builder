@@ -89,7 +89,7 @@ def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_co
     return (completed, failed)
 
 
-def list_all_evaluated_jds() -> list:
+def list_all_evaluated_jds(statuses: list | None = None) -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
     each as {"path", "status" ("Pending"/"Completed"), "evaluation",
     "liveness", "application", "title", "company"}, sorted best
@@ -98,46 +98,56 @@ def list_all_evaluated_jds() -> list:
     someone's marked it. Archived JDs are never included --
     jd_manager.get_pending_jds()/get_completed_jds() only scan their own
     directory, and jds/archived/ is a third, separate one neither
-    touches."""
+    touches. statuses restricts which of "Pending"/"Completed" get
+    scanned at all (default: both) -- for callers whose action only
+    makes sense against one status (e.g. tailoring only applies to
+    Pending, a cover letter only to Completed)."""
+    statuses = statuses or ["Pending", "Completed"]
     rows = []
-    for path in jd_manager.get_pending_jds():
-        evaluation = jd_manager.read_evaluation(path)
-        if not evaluation:
-            continue
-        title, company = jd_manager.extract_job_meta(path)
-        rows.append({
-            "path": path, "status": "Pending", "evaluation": evaluation,
-            "liveness": jd_manager.read_liveness(path),
-            "application": jd_manager.read_application_status(path),
-            "title": title, "company": company,
-        })
-    for path in jd_manager.get_completed_jds():
-        evaluation = jd_manager.read_evaluation(path)
-        if not evaluation:
-            continue
-        title, company = jd_manager.extract_job_meta(path)
-        rows.append({
-            "path": path, "status": "Completed", "evaluation": evaluation,
-            "liveness": jd_manager.read_liveness(path),
-            "application": jd_manager.read_application_status(path),
-            "title": title, "company": company,
-        })
+    if "Pending" in statuses:
+        for path in jd_manager.get_pending_jds():
+            evaluation = jd_manager.read_evaluation(path)
+            if not evaluation:
+                continue
+            title, company = jd_manager.extract_job_meta(path)
+            rows.append({
+                "path": path, "status": "Pending", "evaluation": evaluation,
+                "liveness": jd_manager.read_liveness(path),
+                "application": jd_manager.read_application_status(path),
+                "title": title, "company": company,
+            })
+    if "Completed" in statuses:
+        for path in jd_manager.get_completed_jds():
+            evaluation = jd_manager.read_evaluation(path)
+            if not evaluation:
+                continue
+            title, company = jd_manager.extract_job_meta(path)
+            rows.append({
+                "path": path, "status": "Completed", "evaluation": evaluation,
+                "liveness": jd_manager.read_liveness(path),
+                "application": jd_manager.read_application_status(path),
+                "title": title, "company": company,
+            })
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
 
 
-def browse_and_select_jds() -> list:
+def browse_and_select_jds(statuses: list | None = None) -> list:
     """The shared browse-and-act entry point: renders every evaluated JD
-    (pending or completed) as a table, then a questionary.checkbox() over
-    the same rows so one or many can be selected at once. Returns a list
-    of the selected rows (list_all_evaluated_jds()'s dict shape) -- empty
-    if there's nothing to show or nothing gets checked."""
-    rows = list_all_evaluated_jds()
+    (pending or completed, or just one status if statuses is passed) as
+    a table, then a questionary.checkbox() over the same rows so one or
+    many can be selected at once. Returns a list of the selected rows
+    (list_all_evaluated_jds()'s dict shape) -- empty if there's nothing
+    to show or nothing gets checked."""
+    rows = list_all_evaluated_jds(statuses=statuses)
     if not rows:
-        cli_art.console.print(
-            "Nothing to browse -- no evaluated JDs yet.\n"
-            "Hint: run \"Evaluate ALL Pending Roles\" first, then they'll appear here."
-        )
+        if statuses == ["Pending"]:
+            hint = "Nothing to browse -- no evaluated Pending JDs.\nHint: run \"Evaluate ALL Pending Roles\" first, then they'll appear here."
+        elif statuses == ["Completed"]:
+            hint = "Nothing to browse -- no Completed JDs yet.\nHint: tailor a resume for a role first, then it'll appear here."
+        else:
+            hint = "Nothing to browse -- no evaluated JDs yet.\nHint: run \"Evaluate ALL Pending Roles\" first, then they'll appear here."
+        cli_art.console.print(hint)
         return []
 
     cli_art.render_pipeline_table(rows)

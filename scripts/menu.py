@@ -48,15 +48,17 @@ _CHOICES = [
     questionary.Separator("── Evaluation ──"),
     questionary.Choice(title=f"{theme.ICONS['evaluate']}  Evaluate ALL Pending Roles\n", value="evaluate_all"),
     questionary.Separator("── Build ──"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending Roles (batch)", value="tailor_all"),
-    questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini\n", value="polish"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for a Specific Role", value="tailor_pick"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Write Cover Letter for a Specific Role", value="coverletter_pick"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini", value="polish"),
+    questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending Roles (Batch Run)\n", value="tailor_all"),
     questionary.Separator("── Browse ──"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Browse & Manage Jobs", value="browse_jobs"),
     questionary.Choice(title=f"{theme.ICONS['evaluate']}  Career Dashboard\n", value="career_dashboard"),
     questionary.Separator("── Bullet Bank ──"),
     questionary.Choice(title=f"{theme.ICONS['bullet_bank']}  Manage Bullet Bank\n", value="bullet_bank"),
     questionary.Separator("── Maintenance ──"),
-    questionary.Choice(title=f"{theme.ICONS['utility']}  Maintenance", value="maintenance"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Maintenance\n", value="maintenance"),
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
@@ -527,6 +529,32 @@ def _handle_browse_jobs() -> bool:
     return _browse_bulk_action(selected)
 
 
+def _handle_tailor_pick() -> bool:
+    """Main-menu shortcut straight into the multi-select picker, scoped
+    to Pending JDs, for tailoring one or a few specific roles without
+    detouring through Browse & Manage Jobs' own action submenu."""
+    selected = picker.browse_and_select_jds(statuses=["Pending"])
+    if not selected:
+        return False
+    completed_count = 0
+    for row in selected:
+        completed, _failed = orchestrator.run_pipeline(jd_path=row["path"])
+        completed_count += completed
+    return completed_count > 0
+
+
+def _handle_coverletter_pick() -> bool:
+    """Main-menu shortcut straight into the multi-select picker, scoped
+    to Completed JDs (a resume already exists to match), for writing a
+    cover letter for one or a few specific roles."""
+    selected = picker.browse_and_select_jds(statuses=["Completed"])
+    if not selected:
+        return False
+    engine = orchestrator.ResumeEngine()
+    successes = sum(1 for row in selected if engine.build_tailored_coverletter(row["path"]))
+    return successes > 0
+
+
 def _handle_career_dashboard() -> bool:
     """Hands the terminal over entirely to the vendored Go dashboard
     (dashboard/) -- unlike every other handler here, this isn't
@@ -682,6 +710,8 @@ _HANDLERS = {
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
     "tailor_all": _handle_tailor_all,
+    "tailor_pick": _handle_tailor_pick,
+    "coverletter_pick": _handle_coverletter_pick,
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
@@ -697,17 +727,21 @@ _CHAIN = {
     "liveness": [("Evaluate All JDs", "evaluate_all")],
     "evaluate_all": [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
     "tailor_all": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
+    "tailor_pick": [("Write Cover Letter", "coverletter_pick"), ("Polish with Gemini", "polish")],
+    "coverletter_pick": [("Polish with Gemini", "polish")],
 }
 
 # Same icon per destination value as _CHOICES above, so the "what's next"
 # chain prompt stays visually consistent with the main menu instead of
 # falling back to plain text.
 _CHAIN_ICONS = {
-    "liveness":     theme.ICONS["discovery"],
-    "evaluate_all": theme.ICONS["evaluate"],
-    "tailor_all":   theme.ICONS["build"],
-    "browse_jobs":  theme.ICONS["utility"],
-    "polish":       theme.ICONS["build"],
+    "liveness":         theme.ICONS["discovery"],
+    "evaluate_all":     theme.ICONS["evaluate"],
+    "tailor_all":       theme.ICONS["build"],
+    "tailor_pick":      theme.ICONS["build"],
+    "coverletter_pick": theme.ICONS["build"],
+    "browse_jobs":      theme.ICONS["utility"],
+    "polish":           theme.ICONS["build"],
 }
 
 # Labels for the session-end summary -- only actions worth reporting on
@@ -715,6 +749,8 @@ _CHAIN_ICONS = {
 # "liveness") just isn't tallied.
 _SESSION_LABELS = {
     "tailor_all": "resumes tailored",
+    "tailor_pick": "resumes tailored",
+    "coverletter_pick": "cover letters written",
 }
 
 
