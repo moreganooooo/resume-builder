@@ -13,12 +13,19 @@ import menu  # noqa: E402
 
 class TestChoicesAndHandlers(unittest.TestCase):
 
-    def test_pick_from_list_entries_are_gone(self):
+    def test_tailor_pick_and_coverletter_pick_are_registered(self):
+        # Reinstated 2026-07-23 as main-menu shortcuts straight into the
+        # Browse & Manage Jobs picker (scoped by status) -- discoverability
+        # for a first-time user matters more than avoiding a second entry
+        # point into the same picker. See menu.py's _handle_tailor_pick/
+        # _handle_coverletter_pick docstrings.
         values = [c.value for c in menu._CHOICES]
-        self.assertNotIn("tailor_pick", values)
-        self.assertNotIn("coverletter_pick", values)
-        self.assertNotIn("tailor_pick", menu._HANDLERS)
-        self.assertNotIn("coverletter_pick", menu._HANDLERS)
+        self.assertIn("tailor_pick", values)
+        self.assertIn("coverletter_pick", values)
+        self.assertIn("tailor_pick", menu._HANDLERS)
+        self.assertIn("coverletter_pick", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["tailor_pick"], menu._handle_tailor_pick)
+        self.assertIs(menu._HANDLERS["coverletter_pick"], menu._handle_coverletter_pick)
 
     def test_specific_jd_pickers_and_view_applications_are_gone(self):
         # Retired 2026-07-21 in favor of "Browse & Manage Jobs" -- see
@@ -33,7 +40,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("Scan for New Postings", labels["scan"])
         self.assertIn("Check Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate ALL Pending Roles", labels["evaluate_all"])
-        self.assertIn("Customize Resume for ALL Pending Roles (batch)", labels["tailor_all"])
+        self.assertIn("Customize Resume for ALL Pending Roles (Batch Run)", labels["tailor_all"])
         self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
 
     def test_browse_jobs_entry_is_registered(self):
@@ -227,6 +234,46 @@ class TestHandleBrowseJobs(unittest.TestCase):
         mock_browse.return_value = rows
         self.assertTrue(menu._handle_browse_jobs())
         mock_bulk.assert_called_once_with(rows)
+
+
+class TestHandleTailorPick(unittest.TestCase):
+
+    @patch("menu.picker.browse_and_select_jds", return_value=[])
+    def test_returns_false_when_nothing_selected(self, mock_browse):
+        self.assertFalse(menu._handle_tailor_pick())
+
+    @patch("menu.orchestrator.run_pipeline")
+    @patch("menu.picker.browse_and_select_jds")
+    def test_scopes_picker_to_pending_and_tailors_each_selection(self, mock_browse, mock_run):
+        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
+        mock_browse.return_value = rows
+        mock_run.side_effect = [(1, 0), (0, 1)]
+        self.assertTrue(menu._handle_tailor_pick())
+        mock_browse.assert_called_once_with(statuses=["Pending"])
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("menu.orchestrator.run_pipeline", return_value=(0, 1))
+    @patch("menu.picker.browse_and_select_jds")
+    def test_returns_false_when_nothing_completed(self, mock_browse, mock_run):
+        mock_browse.return_value = [_row()]
+        self.assertFalse(menu._handle_tailor_pick())
+
+
+class TestHandleCoverletterPick(unittest.TestCase):
+
+    @patch("menu.picker.browse_and_select_jds", return_value=[])
+    def test_returns_false_when_nothing_selected(self, mock_browse):
+        self.assertFalse(menu._handle_coverletter_pick())
+
+    @patch("menu.orchestrator.ResumeEngine")
+    @patch("menu.picker.browse_and_select_jds")
+    def test_scopes_picker_to_completed_and_writes_each_cover_letter(self, mock_browse, mock_engine_cls):
+        rows = [_row(path="jds/a.json", status="Completed"), _row(path="jds/b.json", status="Completed")]
+        mock_browse.return_value = rows
+        mock_engine_cls.return_value.build_tailored_coverletter.side_effect = [True, False]
+        self.assertTrue(menu._handle_coverletter_pick())
+        mock_browse.assert_called_once_with(statuses=["Completed"])
+        self.assertEqual(mock_engine_cls.return_value.build_tailored_coverletter.call_count, 2)
 
 
 class TestBrowseSingleAction(unittest.TestCase):
