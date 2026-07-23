@@ -30,6 +30,11 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   (Python packages, Node/Playwright, API keys, fonts, KB files) is
   actually set up correctly, plus a real test-suite run — reach for it
   before manually debugging a "why isn't this working" environment issue.
+- `dashboard/` is a vendored Go module (Bubble Tea TUI, `resume
+  dashboard`) — the one part of this repo not in Python. `scripts/
+  dashboard.py` shells out to it via `go run .` (never `go build`, so no
+  compiled binary should ever land in the repo). Needs the Go toolchain
+  installed; everything else in this repo does not.
 - **Multi-computer sync (Syncthing):** a profile's data can sync across
   machines via Syncthing, four independent folders per profile —
   `scripts/profile_paths.sync_roots(profile)` is the single source of
@@ -109,3 +114,10 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   asset reference needs to build an absolute `file://` path in Python
   (see `render_coverletter.build_signature_block_html()`) rather than a
   relative HTML path.
+- **`dashboard/` was vendored from the `career-ops` sibling repo's
+  `dashboard/` on 2026-07-22** (themed to this project's palette/icons,
+  plus two real bugs fixed there — a tracker-column-count mismatch and a
+  narrow-terminal crash). This repo's copy is authoritative going
+  forward; `career-ops/dashboard/` is not where future dashboard changes
+  should land, and may drift stale over time. See `IDEAS_ARCHIVE.md` for
+  the full writeup.

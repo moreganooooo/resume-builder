@@ -23,6 +23,7 @@ import questionary
 import bootstrap_bullet_bank
 import bullet_bank_menu
 import cli_art
+import dashboard as dashboard_module
 import doctor
 import followup
 import git_update
@@ -48,7 +49,8 @@ _CHOICES = [
     questionary.Choice(title=f"{theme.ICONS['build']}  Customize Resume for ALL Pending Roles (batch)", value="tailor_all"),
     questionary.Choice(title=f"{theme.ICONS['build']}  Polish a Resume or Cover Letter with Gemini\n", value="polish"),
     questionary.Separator("── Browse ──"),
-    questionary.Choice(title=f"{theme.ICONS['utility']}  Browse & Manage Jobs\n", value="browse_jobs"),
+    questionary.Choice(title=f"{theme.ICONS['utility']}  Browse & Manage Jobs", value="browse_jobs"),
+    questionary.Choice(title=f"{theme.ICONS['evaluate']}  Career Dashboard\n", value="career_dashboard"),
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=f"{theme.ICONS['hint']}  Help", value="help"),
     questionary.Choice(title=f"{theme.ICONS['utility']}  Exit\n", value="exit"),
@@ -544,6 +546,17 @@ def _handle_browse_jobs() -> bool:
     return _browse_bulk_action(selected)
 
 
+def _handle_career_dashboard() -> bool:
+    """Hands the terminal over entirely to the vendored Go dashboard
+    (dashboard/) -- unlike every other handler here, this isn't
+    questionary-driven; the dashboard is its own full-screen TUI that
+    takes over stdio until the user quits it (`q`)."""
+    success, message = dashboard_module.run()
+    if not success:
+        cli_art.display_error(message)
+    return False
+
+
 def _handle_polish() -> bool:
     polish_module.run(None)
     return False
@@ -667,6 +680,7 @@ _HANDLERS = {
     "evaluate_all": _handle_evaluate_all,
     "tailor_all": _handle_tailor_all,
     "browse_jobs": _handle_browse_jobs,
+    "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
     "help": _handle_help,
     "check_updates": _handle_check_updates,

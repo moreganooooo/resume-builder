@@ -368,20 +368,17 @@ resume-generation features of both `/Users/morganescott/career-ops` and
   per-search jobs would mean N separate notifications, fighting that. If a
   search ever needs its own cadence, that's a per-search timestamp checked
   inside the dispatcher, not a separate OS-level job.
-- **career-ops-style dashboard/TUI -- promoted into near-term merge scope,
-  2026-07-22** (previously "later nice-to-have, not blocking"). What
-  changed: it's no longer a hypothetical port -- the actual Go dashboard
-  (`career-ops/dashboard/`) got themed to match this project's palette/
-  icons and had two real pre-existing bugs fixed (a tracker-column-count
-  mismatch that was silently dropping resume-builder's Notes/Link data, and
-  a crash on narrow terminal widths), then verified end-to-end against
-  real resume-builder-shaped data. It runs standalone against
-  `data/<profile>/` today without needing any of this merge's other
-  pieces. Porting it *into* resume-builder proper (rather than running it
-  from the separate career-ops checkout) is now one of the merge's
-  concrete near-term pieces, not a someday item -- not yet scheduled, but
-  no longer deferred. **Decided against, not deferred:** ATS auto-apply/
-  auto-submit and LaTeX rendering.
+- **career-ops-style dashboard/TUI -- vendored and shipped, 2026-07-22**
+  (previously "later nice-to-have, not blocking"). No longer a merge
+  loose end at all: the Go dashboard was themed to this project's
+  palette/icons, had two real pre-existing bugs fixed (a tracker-column-
+  count mismatch that was silently dropping resume-builder's Notes/Link
+  data, and a crash on narrow terminal widths), copied into this repo as
+  `dashboard/` (module path + imports rewritten, this repo's copy now
+  authoritative), and wired up as `resume dashboard` (CLI command + menu
+  entry + doctor check). Full writeup in `IDEAS_ARCHIVE.md`.
+  **Decided against, not deferred:** ATS auto-apply/auto-submit and
+  LaTeX rendering.
 
 No implementation has started; this is scope-awareness plus an agreed
 direction for when that build actually begins, not a plan with a start

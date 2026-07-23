@@ -1727,3 +1727,88 @@ every path.
 6 new tests (`profile_paths.sync_roots`/`write_sync_ignore_files`,
 `create_new_profile`'s `.stignore` seeding). Full suite: 876 tests, all
 green.
+
+## Career dashboard: vendored, themed, fixed, and wired in -- done 2026-07-22
+
+Closed out the "Very Hard / Long-term" merge item's dashboard/TUI loose
+end entirely in one day, going from "explicitly deferred" to "shipped."
+Three real, separable pieces:
+
+**1. Tried it against real data (same day, earlier), found and fixed two
+real bugs.** career-ops's Go dashboard (Bubble Tea TUI) had never been
+run against resume-builder's own tracker format:
+- A tracker-column-count mismatch -- the Go parser was still written
+  against career-ops's original 9-column tracker
+  (`# Date Company Role Score Status PDF ReportLink Notes`), silently
+  misreading resume-builder's 10-column one
+  (`... PDF Link Report Notes`): the Link column (a real job-posting URL)
+  never matched the report-link regex (harmlessly empty), but the
+  Report column (a recommendation label) was being read as Notes,
+  silently dropping the real Notes text underneath it -- meaning
+  location/pay/last-contact, all derived from Notes via regex, were
+  coming back empty for every resume-builder-sourced row. Fixed by
+  detecting column count and mapping fields accordingly; the
+  recommendation label now folds into the displayed notes
+  (`[Selective pursue] Austin, TX (Full), $95-130K...`) instead of
+  being lost.
+- A real crash (`strings.Repeat` with an unclamped negative count) in
+  the detail-preview pane on narrow terminal widths, found via a
+  pty-driven smoke test. One-line fix matching a `max(0, ...)` guard
+  already used elsewhere in the same file.
+- New `resume-builder` theme (`internal/theme/resumebuilder.go`) ports
+  `scripts/theme.py`'s exact hex palette (verified byte-exact in real
+  rendered ANSI output); new header icons on both screens honor the same
+  `RESUME_BUILDER_ICONS` convention as the interactive menu. Made the
+  default via a new `-theme` flag (catppuccin-mocha/-latte still
+  selectable).
+
+**2. Closed a real documentation-drift bug, independent of the dashboard
+itself.** While reviewing what was "still undecided" about the merge,
+found that `IDEAS.md`'s own copy of three decisions (persistence layer,
+ATS-provider scope, launchd job layout) had gone stale -- all three were
+actually already decided in the punchlist on 2026-07-16, `IDEAS.md` just
+never got updated to match. Corrected `IDEAS.md` to reflect the
+punchlist's actual decisions rather than re-deciding anything (one real
+near-miss: almost silently overwrote the already-decided "one dispatcher
+job" scheduler layout with a fresh "one job per saved search" answer
+before catching the conflict and confirming the original decision still
+holds, for the reason it was made -- a dispatcher is what makes "one
+notification, one digest per run" simple).
+
+**3. Vendored the dashboard into resume-builder itself, same day.** The
+one genuinely new decision from the merge review -- promote dashboard
+integration from "later nice-to-have" to "near-term scope" -- got built
+immediately rather than just recorded:
+- `dashboard/` (18 `.go` files, module path + every internal import
+  rewritten from `github.com/santifer/career-ops/dashboard` to
+  `github.com/moreganooooo/resume-builder/dashboard`, footer branding
+  updated) now lives inside this repo, builds/vets/tests clean as its
+  own Go module. **This copy is authoritative going forward** --
+  `career-ops/dashboard/` is not deleted, but future dashboard changes
+  land here, not there.
+- New `scripts/dashboard.py`: a thin wrapper, `go run .` (never
+  `go build`, so no compiled binary should ever land in the repo)
+  against the active profile's `data/<profile>/` via
+  `profile_paths.data_dir()` -- inherits stdio rather than capturing
+  output, since the whole point is a live terminal UI the user drives
+  directly, unlike every other subprocess call in this codebase. A
+  friendly pre-flight message ("no applications logged yet") replaces
+  the raw Go error when there's nothing to show yet, and a clear
+  install hint replaces a stack trace when Go itself isn't installed.
+- New `resume dashboard` CLI command, `scripts/resume-cli.sh` shortcut,
+  and "Career Dashboard" interactive-menu entry (next to "Browse &
+  Manage Jobs," since it's the same tracker data, just visualized
+  differently). New `resume doctor` check for the Go toolchain --
+  optional, like the JobRight cookie and signature-image checks, never
+  a hard failure.
+- Verified genuinely end-to-end, not just unit-tested: a real
+  (unmocked) pty-driven launch through the actual
+  `dashboard.run()` -> `subprocess.run(["go", "run", ...])` -> rendered
+  TUI chain, confirming no panic and correct branding, alongside the
+  real CLI command's friendly no-data-yet message against the actual
+  (currently empty) `morgan` profile.
+
+11 new Python tests (6 `scripts/dashboard.py`, 3 menu wiring, 2
+`resume doctor`) on top of the vendored Go module's own pre-existing test
+suite (unchanged, still green as its own `go test ./...`). Full Python
+suite: 912 tests, all green.

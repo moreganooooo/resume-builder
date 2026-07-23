@@ -77,6 +77,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# === GO (dashboard/) ===
+# scripts/dashboard.py always invokes `go run .`, never `go build`, so
+# nothing here is expected to appear -- this just guards against a stray
+# manual `go build` leaving a compiled binary or local module cache.
+/dashboard/dashboard
+/dashboard/rb-dashboard
+
 
 # === MULTI-COMPUTER SYNC (Syncthing) ===
 # Auto-regenerated identically by profile_paths.write_sync_ignore_files()

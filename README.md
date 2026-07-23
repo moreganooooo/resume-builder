@@ -155,6 +155,10 @@ below. Nothing auto-triggers the next stage without you choosing it.
    blank boxes in that terminal window. No Nerd Font handy? Set
    `RESUME_BUILDER_ICONS=unicode` to use plain Unicode symbols instead —
    works everywhere, no special font required.
+7. Optional, only needed for `resume dashboard`: install Go
+   (`brew install go`). Nothing else to configure — `dashboard/` is a
+   vendored Go module, invoked via `go run` on demand, not built ahead of
+   time.
 
 Source `scripts/resume-cli.sh` from your shell profile (`~/.zshrc` or
 `~/.bashrc` both work) to get a `resume` command usable from any directory,
@@ -311,6 +315,22 @@ message itself right there, grounded in your real background; and where
 JobRight has already surfaced a real contact at the company, draft a
 short, specific outreach message to them too — both grounded only in
 real, already-verified people and achievements (never invented).
+
+## Career dashboard
+
+`resume dashboard` (or the menu's "Career Dashboard" entry) launches a
+full-screen terminal dashboard over your real tracker data: a sortable,
+filterable, groupable pipeline table (score, status, location, pay,
+last-contact) plus a progress/analytics view (funnel, score distribution,
+conversion rates, weekly activity). It's themed to match this project's
+own colors and icons.
+
+This is a vendored Go + [Bubble Tea](https://github.com/charmbracelet/bubbletea)
+TUI (`dashboard/`), not Python — the one extra requirement is having Go
+installed (`brew install go`); you'll get a clear message telling you so
+if it's missing. It reads straight from `data/<profile>/applications.md`,
+so there's nothing to configure — press `q` to quit back to the menu when
+you're done.
 
 ## Checking posting liveness
 
@@ -535,9 +555,9 @@ track — is built and in daily use, along with company research (plus a
 search-grounded fallback), situational work-history entries, Browse &
 Manage Jobs, follow-up tracking, the contact/outreach finder, `resume
 polish`, the holistic critique's distinctiveness signals, multi-user
-support (a second profile can already fully use this end to end), and
-multi-computer sync via Syncthing. What's
-still ahead — a background scheduler, the full evidence-bank
+support (a second profile can already fully use this end to end),
+multi-computer sync via Syncthing, and a vendored career-dashboard TUI.
+What's still ahead — a background scheduler, the full evidence-bank
 generalization beyond resume bullets, a long-term merge with two sibling
 projects — is tracked in [`IDEAS.md`](IDEAS.md), organized by difficulty
 and scope, with full build history in

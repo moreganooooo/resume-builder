@@ -18,9 +18,9 @@ scraper for any of career-ops's ~26 providers exists in `scripts/`, and no
 
 **Updated 2026-07-22: every item in section 1 reaffirmed (IDEAS.md's own
 copy of these decisions had gone stale and was fixed to match); dashboard
-status changed from deferred to promoted (see section 5b, new).** Nothing
-else below has moved -- section 5b is the only actual scope change today,
-everything else is documentation catching up to decisions already made.
+went from deferred to promoted to actually built and vendored, all the
+same day (see section 5b, new -- now the only section besides 0 and 2
+that's fully done).** Nothing else below has moved.
 
 Nothing below has a target date. Pull an item into its own design spec +
 implementation plan (the `docs/superpowers/specs/`+`plans/` pattern used
@@ -38,8 +38,9 @@ everywhere else in this repo) when it's actually time to build it.
   (`automator_main.py`/`ats_fillers/`) and all three LaTeX/reportlab
   rendering backends (`document_generator/`). Playwright/HTML stays the one
   renderer; a human always has the final call before any submit, full stop.
-- **career-ops-style dashboard/TUI — promoted into near-term scope,
-  2026-07-22** (previously deferred). See section 5b.
+- **career-ops-style dashboard/TUI — vendored and built, 2026-07-22**
+  (previously deferred; promoted into near-term scope and shipped the
+  same day). See section 5b.
 
 ## Punchlist, roughly in dependency order
 
@@ -210,7 +211,7 @@ nothing here changed, only IDEAS.md did).
 - [ ] **`interview-prep`:** deliberately deferred (Morgan's call, not
       essential right now).
 
-### 5b. Dashboard integration — promoted 2026-07-22 (previously deferred)
+### 5b. Dashboard integration — promoted AND done, 2026-07-22 (previously deferred)
 
 career-ops's Go dashboard (`career-ops/dashboard/`, Bubble Tea TUI) went
 from hypothetical port to actually-proven-out today:
@@ -231,15 +232,25 @@ from hypothetical port to actually-proven-out today:
   suite green, plus a manual pty-driven run confirming no panic and
   correct rendering/coloring).
 
-**What's still not done, i.e. what "near-term scope" actually means going
-forward:** it runs today as a *separate* binary against
-`career-ops/dashboard`, pointed at resume-builder's `data/<profile>/` via
-`-path` -- it is not yet part of resume-builder's own menu/CLI. Porting it
-in means either (a) vendoring/rewriting the Go source as a resume-builder-
-owned artifact the menu can shell out to, or (b) keeping it a separate Go
-module but adding a `resume dashboard` command that locates and invokes
-the built binary. Neither approach has been chosen yet -- that's the next
-real decision here, not yet made.
+- [x] **Integration approach decided and built, same day: (a), vendor it.**
+      `dashboard/` now lives inside resume-builder itself (copied from
+      career-ops, module path + internal imports rewritten to
+      `github.com/moreganooooo/resume-builder/dashboard`, footer branding
+      updated) -- 18/18 `.go` files, builds/vets/tests clean as its own
+      module. `scripts/dashboard.py` shells out to it via `go run .`
+      (never `go build` -- no compiled binary should ever land in the
+      repo), defaulting `-path` to the active profile's `data/<profile>/`
+      via `profile_paths.data_dir()`. New `resume dashboard`
+      CLI command + "Career Dashboard" menu entry + `resume doctor` check
+      (optional, never a hard failure) for the Go toolchain. **This
+      repo's copy is now authoritative** -- career-ops's original is not
+      where future dashboard changes should land, and will drift stale
+      over time; nothing there was deleted, but it's effectively
+      superseded. 9 new Python tests (mocked subprocess/menu wiring) plus
+      the existing vendored Go test suite; full Python suite 912 green.
+
+**Section 5b is fully closed** -- decided, built, and verified same day
+(2026-07-22).
 
 ### 6. Scheduler + notifications (item #9)
 

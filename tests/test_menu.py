@@ -42,6 +42,12 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("browse_jobs", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["browse_jobs"], menu._handle_browse_jobs)
 
+    def test_career_dashboard_entry_is_registered(self):
+        values = [c.value for c in menu._CHOICES]
+        self.assertIn("career_dashboard", values)
+        self.assertIn("career_dashboard", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["career_dashboard"], menu._handle_career_dashboard)
+
     def test_bullet_bank_entry_is_registered(self):
         values = [c.value for c in menu._CHOICES]
         self.assertIn("bullet_bank", values)
@@ -658,6 +664,20 @@ class TestBrowseBulkAction(unittest.TestCase):
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         self.assertTrue(menu._browse_bulk_action(rows))
         self.assertEqual(mock_archive.call_count, 2)
+
+
+class TestHandleCareerDashboard(unittest.TestCase):
+
+    @patch("menu.dashboard_module.run", return_value=(True, ""))
+    def test_always_returns_false(self, mock_run):
+        self.assertFalse(menu._handle_career_dashboard())
+        mock_run.assert_called_once()
+
+    @patch("menu.cli_art.display_error")
+    @patch("menu.dashboard_module.run", return_value=(False, "Go isn't installed"))
+    def test_shows_error_on_failure(self, mock_run, mock_error):
+        menu._handle_career_dashboard()
+        mock_error.assert_called_once_with("Go isn't installed")
 
 
 class TestHandlePolish(unittest.TestCase):
