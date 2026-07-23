@@ -34,18 +34,19 @@ logs/
 *.log
 
 
-# === SCANNED JD POSTINGS (real company data + PII -- JobRight/LinkedIn
-# results can include social_connections with real people's names and
-# LinkedIn URLs) -- only the code that produces/consumes these is tracked,
-# never the postings themselves. dummy_jd.txt is the one deliberate,
-# already-tracked exception (a real fixture, and a .txt not .json).
-# ** matches any depth so this still covers jds/<profile>/... and
-# jds/<profile>/completed|expired/... after the engine/profile split,
-# not just the pre-split top-level/completed/ locations. ===
+# === SCANNED JD POSTINGS & PROFILE-SCOPED JD DIRECTORIES ===
+# real company data + PII -- JobRight/LinkedIn results can include
+# social_connections with real people's names and LinkedIn URLs.
+# Only code is tracked, never the postings themselves.
+# Exceptions: dummy_jd.txt and jds/expired/ (fixtures/historical data).
+# Profile-scoped directories (jds/<profile>/) sync via Syncthing instead.
 jds/**/*.json
+jds/dominick/
+jds/morgan/
 
 
-# === RESUME OUTPUT FILES ===
+# === RESUME OUTPUT & PROFILE-SCOPED DATA ===
+# Generated PDFs, intermediate files, and profile data all sync via Syncthing.
 tailored_resume*.json
 *_tailored.json
 *_resume.json
@@ -55,6 +56,10 @@ MorganEscott_*.pdf
 *_resume.pdf
 *.npy
 *.npz
+profiles/dominick/
+profiles/morgan/
+data/dominick/
+data/morgan/
 
 
 # === PYTHON ===
