@@ -33,9 +33,18 @@ async function runJsonMode(candidatesPath) {
 
   const results = [];
   // Sequential — project rule: never Playwright in parallel
-  for (const candidate of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
     const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
-    console.error(`  ${result.padEnd(14)} ${candidate.source_file}`);
+
+    // Progress indicator: [i/total] + status + reason if applicable
+    const icon = { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' }[result] || '❓';
+    const progress = `[${i + 1}/${candidates.length}]`;
+    console.error(`${progress} ${icon} ${result.padEnd(14)} ${candidate.source_file}`);
+    if (reason && result !== 'active' && result !== 'likely_active') {
+      console.error(`         → ${reason}`);
+    }
+
     results.push({ ...candidate, result, code, reason });
   }
 
