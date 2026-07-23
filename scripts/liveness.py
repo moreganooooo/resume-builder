@@ -99,25 +99,30 @@ def run_liveness_check(refresh: bool = False) -> dict:
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
-    print(
-        f"Checking {len(candidates)} JD(s) via headless browser -- this can "
-        "take a minute or two depending on the count, please wait..."
-    )
+    print(f"\n{'─'*60}")
+    print(f"Checking {len(candidates)} JD(s) via headless browser...")
+    print(f"{'─'*60}")
+    print()
 
     try:
         script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
         proc = subprocess.run(
             ["node", script, "--json-file", LIVENESS_INPUT_PATH],
-            capture_output=True, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         if proc.returncode != 0:
-            print(f"  ⚠️  Liveness check failed:\n{proc.stderr}")
+            print(f"\n  ⚠️  Liveness check failed:\n{proc.stderr}")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0, "error": True}
+
+        # Print incremental progress from stderr as it arrives
+        if proc.stderr.strip():
+            for line in proc.stderr.strip().split('\n'):
+                print(f"  {line}")
 
         try:
             results = json.loads(proc.stdout)
         except json.JSONDecodeError:
-            print(f"  ⚠️  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
+            print(f"\n  ⚠️  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0, "error": True}
     finally:
         if os.path.exists(LIVENESS_INPUT_PATH):
@@ -127,32 +132,57 @@ def run_liveness_check(refresh: bool = False) -> dict:
     moved = 0
     os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
 
+    # Group results by outcome for better visual organization
+    results_by_status = {"active": [], "likely_active": [], "expired": [], "uncertain": []}
     for r in results:
         outcome = r.get("result", "uncertain")
         counts[outcome] = counts.get(outcome, 0) + 1
-        icon = {"active": "✅", "likely_active": "🟡", "expired": "❌", "uncertain": "⚠️"}.get(outcome, "❓")
-        print(f"  {icon} {outcome:<14} {r.get('source_file')}")
-        if outcome not in ("active", "likely_active"):
-            print(f"       {r.get('reason', '')}")
+        results_by_status.setdefault(outcome, []).append(r)
 
+    print()
+
+    # Process and display by status group
+    status_order = ["active", "likely_active", "expired", "uncertain"]
+    icon_map = {"active": "✅", "likely_active": "🟡", "expired": "❌", "uncertain": "⚠️"}
+
+    for status in status_order:
+        status_results = results_by_status.get(status, [])
+        if status_results:
+            status_label = status.replace("_", " ").title()
+            print(f"{icon_map.get(status, '❓')} {status_label}:")
+            for r in status_results:
+                print(f"  • {r.get('source_file')}")
+                if status not in ("active", "likely_active"):
+                    reason = r.get('reason', '')
+                    if reason:
+                        print(f"    → {reason}")
+            print()
+
+    # Save liveness status for all results
+    for r in results:
         source_file = r.get("source_file")
+        outcome = r.get("result", "uncertain")
         if source_file and os.path.exists(source_file):
             jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
 
-        if outcome == "expired":
-            if source_file and os.path.exists(source_file):
-                dest = os.path.join(jd_manager.EXPIRED_DIR, os.path.basename(source_file))
-                shutil.move(source_file, dest)
-                moved += 1
+    # Move expired JDs to expired/ folder
+    for r in results_by_status.get("expired", []):
+        source_file = r.get("source_file")
+        if source_file and os.path.exists(source_file):
+            dest = os.path.join(jd_manager.EXPIRED_DIR, os.path.basename(source_file))
+            shutil.move(source_file, dest)
+            moved += 1
 
-    print(
-        f"\nLiveness summary: {counts.get('active', 0)} active, "
-        f"{counts.get('likely_active', 0)} likely active, "
-        f"{counts.get('expired', 0)} expired (moved to jds/expired/), "
-        f"{counts.get('uncertain', 0)} uncertain (left in place), "
-        f"{skipped} skipped (no source_url), "
-        f"{len(recently_checked)} skipped (checked within {RECENCY_HOURS}h)."
-    )
+    print(f"{'─'*60}")
+    print("Liveness Summary:")
+    print(f"{'─'*60}")
+    print(f"  ✅ Active:                 {counts.get('active', 0)}")
+    print(f"  🟡 Likely active:          {counts.get('likely_active', 0)}")
+    print(f"  ❌ Expired (moved):         {counts.get('expired', 0)}")
+    print(f"  ⚠️  Uncertain (left):       {counts.get('uncertain', 0)}")
+    print(f"  ⏭️  Skipped (no URL):       {skipped}")
+    print(f"  ⏭️  Recently checked:       {len(recently_checked)}")
+    print()
 
     return {
         "active": counts.get("active", 0),
