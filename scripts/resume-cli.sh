@@ -49,6 +49,9 @@ resume() {
     polish)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py polish "$@" )
       ;;
+    dashboard)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py dashboard "$@" )
+      ;;
     test)
       # unittest's own pass/fail reporting goes to stderr; the app code under
       # test prints a lot of its own operational logging (Step 1/2/3..., batch

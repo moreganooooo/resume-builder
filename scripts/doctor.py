@@ -111,6 +111,18 @@ def check_playwright_chromium() -> dict:
     )
 
 
+def check_go() -> dict:
+    # Optional -- only needed for `resume dashboard` (dashboard/, a
+    # vendored Go module); never a hard failure, so this always reports
+    # passed=True.
+    path = shutil.which("go")
+    return _check(
+        "Go toolchain (optional -- only for `resume dashboard`)", True,
+        f"found: {path}" if path else "not found -- fine unless you use `resume dashboard`",
+        "Install Go (https://go.dev, or `brew install go`) to use `resume dashboard`.",
+    )
+
+
 def _env_values() -> dict:
     from dotenv import dotenv_values
     path = profile_paths.env_path()
@@ -182,6 +194,7 @@ CHECKS = [
     check_node,
     check_playwright_npm_package,
     check_playwright_chromium,
+    check_go,
     check_gemini_api_key,
     check_jobright_cookie,
     check_fonts,
