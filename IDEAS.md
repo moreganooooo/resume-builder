@@ -128,23 +128,34 @@ interleave) rather than needing a genuinely new mechanism.
 
 ### Turn the bootstrap flow into a persistent, resumable submenu
 
-Raised 2026-07-17: today "New User? Start Here!" is a single linear
-subprocess run (`bootstrap_bullet_bank.py`, per Phase 0 -> 0.5 -> 1-6) --
-if you back out partway (or it's a multi-session onboarding), there's no
-menu entry to see where you left off short of re-running the whole thing
-and relying on each phase's own internal checkpoint files. The ask:
-a dedicated menu entry (mirroring "Manage Bullet Bank"'s existing status-
-table-across-stages design, `scripts/bullet_bank_menu.py`) that shows
-this profile's own progress -- documents ingested, profile.yml/cv.md/
-background-guide drafted or not, which of the six real pipeline stages
-have run -- and lets you jump back in at whichever step, rather than
-always starting from `bootstrap_bullet_bank.main()`'s top. Most of the
-underlying state already exists (Phase 0's `checkpoint.json`, Phase 0.5's
-now-existing `cv_draft_checkpoint.json`, the six pipeline stages' own
-per-stage outputs) -- this is primarily a UI/menu-wiring exercise over
-already-persisted state, not new tracking logic, closely related to (and
-possibly sharing menu real estate with) the "Maintenance" submenu idea
-below.
+**DONE (2026-07-22).** "New User? Start Here!" no longer runs the whole
+onboarding flow as one opaque subprocess. `scripts/bootstrap_menu.py` (new)
+shows a status table across all 8 steps -- Phase 0 (document ingestion),
+Phase 0.5 (profile setup), and the 6 bullet-bank pipeline stages -- and
+lets you run any one individually, jumping back in wherever you left off.
+
+Reuses `bullet_bank_menu.STAGES`/`_stage_status()`/`_handle_choice()`
+directly for stages 1-6 rather than duplicating them, since
+`bootstrap_bullet_bank.PIPELINE_STAGES` and `bullet_bank_menu.STAGES` are
+the exact same six scripts. Phase 0's status reads document count vs.
+`checkpoint.json`'s done count; Phase 0.5's checks `profile.yml`/`cv.md`
+existence (`cv.md` is the last artifact `run_profile_setup()` writes, so
+its absence signals an interrupted run even if `profile.yml` made it to
+disk). `cli_art.render_bullet_bank_status()` picked up an optional `title`
+param so both menus share the same table renderer.
+
+Fixed a related real bug found along the way: `bootstrap_bullet_bank.py`,
+`bootstrap_profile.py`, and `bullet_bank_menu.py` all compute
+profile-scoped path constants at module level but weren't in
+`profile_paths._RELOAD_ON_PROFILE_SWITCH` -- meaning right after creating
+a brand-new profile mid-session, they'd have silently kept pointing at the
+old profile's paths. All three are now in that reload list.
+
+`scripts/menu.py`'s `_handle_bootstrap()` shrank to just the
+profile-creation/guest-mode gate, then delegates to
+`bootstrap_menu.run_bootstrap_menu()`. Test coverage: new
+`tests/test_bootstrap_menu.py`; `tests/test_menu_bootstrap.py`'s
+now-obsolete subprocess-flow tests replaced with delegation tests.
 
 ### Strengthen evidence-guide.csv for cover letters
 

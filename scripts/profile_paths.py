@@ -47,7 +47,12 @@ def active_profile() -> str:
 # without reloading these leaves them silently pointed at whichever
 # profile was active when the long-running menu/CLI process first
 # started, defeating the entire point of runtime profile-switching.
-_RELOAD_ON_PROFILE_SWITCH = ("jd_manager", "polish")
+# bootstrap_bullet_bank/bootstrap_profile/bullet_bank_menu joined this list
+# once bootstrap_menu.py started reading their KB_DIR-derived constants
+# right after create_new_profile() + set_active_profile() -- the exact
+# same-session "just created this profile, now act on it" sequence this
+# list exists to make safe.
+_RELOAD_ON_PROFILE_SWITCH = ("jd_manager", "polish", "bootstrap_bullet_bank", "bootstrap_profile", "bullet_bank_menu")
 
 
 def set_active_profile(name: str) -> None:
