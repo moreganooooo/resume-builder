@@ -82,6 +82,17 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   instead of restarting — don't delete that folder mid-run.
 - Any local test fixture warning here should point to the active profile's
   JDs directory, not a shared top-level `jds/` path.
+- `resume sample` (`scripts/build_sample.py`) is a QA smoke test: runs the
+  full tailor+render pipeline against the permanent `fixtures/sample_jd.txt`
+  fixture, calling `ResumeEngine.build_tailored_resume()`/
+  `build_tailored_coverletter()` directly rather than going through
+  `orchestrator.run_pipeline()` — deliberately skips the move-to-completed/
+  tracker-logging side effects a real JD gets, since this fixture is meant
+  to be re-run indefinitely, not treated as one real application.
+  `fixtures/sample_jd.txt` lives outside `jds/<profile>/` specifically so
+  `get_pending_jds()` never picks it up in a batch `resume run`. Output
+  overwrites the same `output/<profile>/pdf/...` files each run (checkpoint
+  is cleared first, so it's always a full fresh build).
 
 ## Testing
 - `python -m unittest discover -s tests -v`, run from the project root with
