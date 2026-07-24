@@ -135,25 +135,25 @@ def print_report(report: dict) -> None:
     print(f"\n📄 {path_label}")
 
     if "error" in report:
-        print(f"   {theme.colorize_icon('error')} Error: {report['error']}")
+        print(f"   {theme.colorize_icon_ansi('error')} Error: {report['error']}")
         return
 
     print(f"   Total rows:           {report['total_rows']}")
     print(f"   Fully unscored rows:  {report['fully_unscored_rows']}")
 
     if report.get("note"):
-        print(f"   {theme.colorize_icon('warning')}  {report['note']}")
+        print(f"   {theme.colorize_icon_ansi('warning')}  {report['note']}")
 
     if report["missing_by_col"]:
         print("   Blank counts per score column:")
         for col, count in report["missing_by_col"].items():
-            status = "{theme.colorize_icon('success')}" if count == 0 else "{theme.colorize_icon('warning')} "
+            status = theme.colorize_icon_ansi('success') if count == 0 else theme.colorize_icon_ansi('warning')
             print(f"     {status} {col}: {count} blank")
     else:
-        print("   {theme.colorize_icon('warning')}  No score columns present in this file.")
+        print(f"   {theme.colorize_icon_ansi('warning')}  No score columns present in this file.")
 
     if report["fully_unscored_rows"] == 0:
-        print("   {theme.colorize_icon('success')} All rows scored — nothing to do.")
+        print(f"   {theme.colorize_icon_ansi('success')} All rows scored — nothing to do.")
     else:
         print(f"   🎯 Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.")
 
@@ -198,7 +198,7 @@ def main():
     print(f"Total unscored rows across all files: {total_unscored}")
 
     if total_unscored == 0:
-        print("{theme.colorize_icon('success')} All bullet bank files are fully scored. Nothing to do.")
+        print(f"{theme.colorize_icon_ansi('success')} All bullet bank files are fully scored. Nothing to do.")
     else:
         print("🎯 Run: python scripts/score_keeper_gems.py  to fill blank scores.")
 

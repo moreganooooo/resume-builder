@@ -452,9 +452,9 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     )
 
     if cached_tokens and cached_tokens > 0:
-        print(f"   {theme.colorize_icon('hint')} tokens — {token_part} | {theme.colorize_icon('hint')} cached: {cached_tokens:,}")
+        print(f"   {theme.colorize_icon_ansi('hint')} tokens — {token_part} | {theme.colorize_icon_ansi('hint')} cached: {cached_tokens:,}")
     else:
-        print(f"   {theme.colorize_icon('hint')} tokens — {token_part}")
+        print(f"   {theme.colorize_icon_ansi('hint')} tokens — {token_part}")
 
 
 def _sanitize_none_for_prompt(value):
@@ -984,13 +984,13 @@ class ResumeEngine:
             for filename in KB_ALLOWLIST:
                 filepath = os.path.join(self.kb_dir, filename)
                 if not os.path.exists(filepath):
-                    print(f"  {theme.colorize_icon('warning')} KB allowlist entry not found, skipping: {filename}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} KB allowlist entry not found, skipping: {filename}")
                     continue
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
                         master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} Could not load KB file {filename}: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} Could not load KB file {filename}: {e}")
         return master_context
 
     def build_role_rules_block(self, profile_data: dict) -> str:
@@ -1119,7 +1119,7 @@ class ResumeEngine:
         loop, which reuses this same function across many calls per resume
         build and must not have that cost multiply across them.
         """
-        print(f"\n{theme.colorize_icon('hint')} Loading knowledge base context (Tier 1)...")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Loading knowledge base context (Tier 1)...")
         sections = []
 
         profile_path = os.path.join(self.kb_dir, "profile.yml")
@@ -1127,7 +1127,7 @@ class ResumeEngine:
             try:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
-                print(f"   {theme.colorize_icon('success')} Loaded profile.yml ({len(raw):,} chars)")
+                print(f"   {theme.colorize_icon_ansi('success')} Loaded profile.yml ({len(raw):,} chars)")
                 lines = raw.splitlines()
                 result = []
                 capturing = False
@@ -1141,14 +1141,14 @@ class ResumeEngine:
                         result.append(line)
                 trimmed = "\n".join(result).strip()
                 if trimmed:
-                    print(f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(trimmed):,} chars")
+                    print(f"   {theme.colorize_icon_ansi('hint')} profile.yml trimmed to {len(trimmed):,} chars")
                     sections.append(
                         "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                         "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
                         + trimmed
                     )
             except Exception as e:
-                print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load profile.yml: {e}")
+                print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix: could not load profile.yml: {e}")
 
         for fname, header, note in [
             ("verified_facts.json",
@@ -1166,20 +1166,20 @@ class ResumeEngine:
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
-                    print(f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)")
+                    print(f"   {theme.colorize_icon_ansi('success')} Loaded {fname} ({len(data):,} chars)")
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load {fname}: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix: could not load {fname}: {e}")
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
             try:
                 with open(voice_anchors_path, "r", encoding="utf-8") as f:
                     data = f.read()
-                print(f"   {theme.colorize_icon('success')} Loaded voice-anchors.md ({len(data):,} chars)")
+                print(f"   {theme.colorize_icon_ansi('success')} Loaded voice-anchors.md ({len(data):,} chars)")
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
-                print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}")
+                print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}")
 
         if include_evidence_guide:
             evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
@@ -1187,10 +1187,10 @@ class ResumeEngine:
                 try:
                     with open(evidence_guide_path, "r", encoding="utf-8") as f:
                         data = f.read()
-                    print(f"   {theme.colorize_icon('success')} Loaded evidence-guide.csv ({len(data):,} chars)")
+                    print(f"   {theme.colorize_icon_ansi('success')} Loaded evidence-guide.csv ({len(data):,} chars)")
                     sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}")
 
         return "\n\n".join(sections)
 
@@ -1220,7 +1220,7 @@ class ResumeEngine:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load {fname}: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix_gemma: could not load {fname}: {e}")
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
@@ -1229,7 +1229,7 @@ class ResumeEngine:
                     data = f.read()
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
-                print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}")
+                print(f"  {theme.colorize_icon_ansi('warning')} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}")
 
         return "\n\n".join(sections)
 
@@ -1248,7 +1248,7 @@ class ResumeEngine:
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
         except Exception as e:
-            print(f"  {theme.colorize_icon('warning')} recruiter_context_block: could not load recruiter_memory_patterns.json: {e}")
+            print(f"  {theme.colorize_icon_ansi('warning')} recruiter_context_block: could not load recruiter_memory_patterns.json: {e}")
             return ""
         if not data:
             return ""
@@ -1306,7 +1306,7 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load cv.md: {e}")
+                print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle: could not load cv.md: {e}")
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
@@ -1337,7 +1337,7 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified-claims.csv: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle: could not load verified-claims.csv: {e}")
 
             screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
             if os.path.exists(screenshot_path):
@@ -1347,7 +1347,7 @@ class ResumeEngine:
                     if screenshot_text:
                         sections.append(f"=== SCREENSHOT-SOURCED METRICS ===\n{screenshot_text}")
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load screenshot metrics: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle: could not load screenshot metrics: {e}")
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
@@ -1361,7 +1361,7 @@ class ResumeEngine:
                             + verified_metrics
                         )
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified_metrics.json: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle: could not load verified_metrics.json: {e}")
 
         return "\n\n".join(sections)
 
@@ -1384,7 +1384,7 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load cv.md: {e}")
+                print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle_gemma: could not load cv.md: {e}")
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
@@ -1410,7 +1410,7 @@ class ResumeEngine:
                             + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
                         )
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}")
 
             claims_path = os.path.join(self.kb_dir, "verified-claims.csv")
             if os.path.exists(claims_path):
@@ -1430,7 +1430,7 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}")
 
             screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
             if os.path.exists(screenshot_path):
@@ -1441,7 +1441,7 @@ class ResumeEngine:
                     if screenshot_text:
                         sections.append(f"=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n{screenshot_text}")
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}")
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
@@ -1456,7 +1456,7 @@ class ResumeEngine:
                             + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
                         )
                 except Exception as e:
-                    print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}")
+                    print(f"  {theme.colorize_icon_ansi('warning')} _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}")
 
         return "\n\n".join(sections)
 
@@ -1470,7 +1470,7 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._segment_cache:
-            print(f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand.")
+            print(f"   {theme.colorize_icon_ansi('warning')} Cache miss for {key} — building segment on demand.")
             self._segment_cache[key] = self._build_audit_segment_bundle(company, normalized_tags)
         return self._segment_cache[key]
 
@@ -1481,7 +1481,7 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._gemma_segment_cache:
-            print(f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand.")
+            print(f"   {theme.colorize_icon_ansi('warning')} Gemma cache miss for {key} — building segment on demand.")
             self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, normalized_tags)
         return self._gemma_segment_cache[key]
 
@@ -1502,7 +1502,7 @@ class ResumeEngine:
         self._segment_cache = {}
         self._gemma_segment_cache = {}
         pairs = sorted({(company, self._normalize_tags(tags)) for _, company, tags in bullet_tuples})
-        print(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         print()
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
@@ -1510,8 +1510,8 @@ class ResumeEngine:
             gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
             self._gemma_segment_cache[(company, tags)] = gemma_bundle
             deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(company, self.deep_evidence_keywords) else ""
-            print(f"   {theme.colorize_icon('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
-        print(f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n")
+            print(f"   {theme.colorize_icon_ansi('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
+        print(f"   {theme.colorize_icon_ansi('success')} {len(self._segment_cache)} segment bundles ready.\n")
 
     @staticmethod
     def critique_composite(scores: dict) -> float:
@@ -1535,8 +1535,8 @@ class ResumeEngine:
         Critiques on slim static_prefix (Tier 1+2 cache architecture).
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
-        print(f"\n{theme.colorize_icon('hint')} Loading rules bundle...")
-        print(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Loading rules bundle...")
+        print(f"{theme.colorize_icon_ansi('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
         print()
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
@@ -1550,7 +1550,7 @@ class ResumeEngine:
             return refined_bullets
 
         critique_system = self.build_bullet_critique_system()
-        print(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
+        print(f"   {theme.colorize_icon_ansi('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
         print()
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
@@ -1558,7 +1558,7 @@ class ResumeEngine:
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
         static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        print(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
+        print(f"{theme.colorize_icon_ansi('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
 
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
@@ -1679,13 +1679,13 @@ class ResumeEngine:
         rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
         rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
 
-        print(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
-        print(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
+        print(f"{theme.colorize_icon_ansi('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
+        print(f"{theme.colorize_icon_ansi('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
         print()
-        print(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
-        print(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
+        print(f"{theme.colorize_icon_ansi('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+        print(f"{theme.colorize_icon_ansi('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
         print()
-        print(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars")
+        print(f"{theme.colorize_icon_ansi('hint')} Score system prompt:   {len(critique_system):,} chars")
 
         self.warm_segment_cache(bullet_tuples)
 
@@ -1741,19 +1741,19 @@ class ResumeEngine:
                 gem_flag   = critique_data.get("hidden_gem_flag", False)
                 gem_reason = critique_data.get("hidden_gem_reason", "")
                 if gem_flag:
-                    print(f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}")
+                    print(f"   {theme.colorize_icon_ansi('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}")
                 elif gem_score >= 75:
-                    print(f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}")
+                    print(f"   {theme.colorize_icon_ansi('success')} STRONG: gem_score={gem_score} — {gem_reason}")
 
                 if (critique_data.get("manager_test") == "FAIL" or
                         critique_data.get("believability_score", 100) < 80):
-                    print(f"   {theme.colorize_icon('hint')}  Rewriting with {REWRITE_MODEL}...")
+                    print(f"   {theme.colorize_icon_ansi('hint')}  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
                     segment_bundle       = self.audit_segment_bundle_for(company, tags)
                     segment_bundle_gemma = self.audit_segment_bundle_for_gemma(company, tags)
                     if segment_bundle:
-                        print(f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
+                        print(f"   {theme.colorize_icon_ansi('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
@@ -1833,29 +1833,29 @@ class ResumeEngine:
 
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
-                                print(f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                                print(f"   {theme.colorize_icon_ansi('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
                                 # Use the rescore data for the rewritten bullet
                                 critique_to_record = rescore_data
                                 try:
                                     if bullet_feedback.queue_accepted_rewrite(
                                         bullet, rewritten_bullet, company, tags, critique_to_record
                                     ):
-                                        print(f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)")
+                                        print(f"   {theme.colorize_icon_ansi('hint')} Queued for bank review (needs-review.csv)")
                                 except Exception as feedback_err:
-                                    print(f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}")
+                                    print(f"   {theme.colorize_icon_ansi('warning')}  Could not queue bullet for bank review: {feedback_err}")
                             else:
                                 rewritten_bullet = bullet
-                                print(f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                                print(f"   {theme.colorize_icon_ansi('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
                                 # Use the original critique data
                                 critique_to_record = critique_data
                             break
 
                         except Exception as rw_err:
                             rewrite_parse_failures += 1
-                            print(f"   {theme.colorize_icon('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
+                            print(f"   {theme.colorize_icon_ansi('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}")
                             if (rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
                                     and active_rewrite_model != REWRITE_FALLBACK_MODEL):
-                                print(f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
+                                print(f"   {theme.colorize_icon_ansi('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}")
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
@@ -1864,11 +1864,11 @@ class ResumeEngine:
                     _record(bullet, critique_data)
 
             except Exception as e:
-                print(f"   {theme.colorize_icon('warning')}  Critique error on bullet {i+1}: {e}")
+                print(f"   {theme.colorize_icon_ansi('warning')}  Critique error on bullet {i+1}: {e}")
                 _record(bullet, None)
 
         print(f"\n{'='*60}")
-        print(f"{theme.colorize_icon('success')} Audit complete: {len(refined_bullets)} bullets refined")
+        print(f"{theme.colorize_icon_ansi('success')} Audit complete: {len(refined_bullets)} bullets refined")
 
         # Sort bullets deterministically by manager_test and believability_score.
         # Only apply sorting to bullets processed in this run (not resumed bullets).
@@ -1923,7 +1923,7 @@ class ResumeEngine:
             df   = pd.read_csv(bank_csv)
             embs = np.load(emb_npy)
         except Exception as e:
-            print(f"  {theme.colorize_icon('warning')} Could not load bullet bank: {e}")
+            print(f"  {theme.colorize_icon_ansi('warning')} Could not load bullet bank: {e}")
             return []
 
         if "Bullet Point" not in df.columns:
@@ -1931,7 +1931,7 @@ class ResumeEngine:
             return []
 
         if len(df) != len(embs):
-            print(f"  {theme.colorize_icon('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.")
+            print(f"  {theme.colorize_icon_ansi('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.")
             return []
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
@@ -2022,7 +2022,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}")
+            print(f"  {theme.colorize_icon_ansi('error')} JD file not found: {jd_path}")
             return {}
 
         eval_prompt = self.load_prompt("evaluate_fit.md")
@@ -2080,7 +2080,7 @@ class ResumeEngine:
             print("  ℹ️  Company research skipped: model response couldn't be parsed.")
             return None
 
-        print(f"  {theme.colorize_icon('success')} Company research complete for {company_website}.")
+        print(f"  {theme.colorize_icon_ansi('success')} Company research complete for {company_website}.")
         return research_data
 
     def draft_outreach_message(self, jd_path: str, contact: dict) -> str | None:
@@ -2183,7 +2183,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}")
+            print(f"  {theme.colorize_icon_ansi('error')} JD file not found: {jd_path}")
             return {}
 
         jd_data = _parse_jd_data(jd_text)
@@ -2229,7 +2229,7 @@ class ResumeEngine:
                 letter_data = fixed_data
                 violations = validate_coverletter.validate(letter_data, style_rules)
             if violations:
-                print(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:")
+                print(f"  {theme.colorize_icon_ansi('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:")
                 for v in violations:
                     print(f"    - {v}")
 
@@ -2251,12 +2251,12 @@ class ResumeEngine:
             capture_output=True, text=True
         )
         if pdf_result.returncode != 0:
-            print(f"  {theme.colorize_icon('warning')}  PDF generation failed:\n{pdf_result.stderr}")
+            print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation failed:\n{pdf_result.stderr}")
             return {}
         print(pdf_result.stdout)
 
         letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
-        print(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {pdf_out}")
+        print(f"  {theme.colorize_icon_ansi('success')} Cover letter complete! PDF → {pdf_out}")
         return letter_data
 
     def build_tailored_resume(
@@ -2281,7 +2281,7 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}")
+            print(f"  {theme.colorize_icon_ansi('error')} JD file not found: {jd_path}")
             return {}
 
         situational_candidates = situational_roles.detect_situational_candidates(jd_text)
@@ -2537,13 +2537,13 @@ class ResumeEngine:
                     # continuing just moves on to the next outer attempt with the
                     # same (unchanged) violations, rather than giving up after one
                     # network hiccup with attempts still remaining.
-                    print(f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
+                    print(f"  {theme.colorize_icon_ansi('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
                     continue
                 resume_data = normalize_resume.normalize(fixed)
                 violations = validate_resume.validate(resume_data, style_rules_for_validation)
 
             if violations:
-                print(f"  {theme.colorize_icon('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
+                print(f"  {theme.colorize_icon_ansi('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
                 for v in violations:
                     print(f"    - {v}")
                 return {}
@@ -2736,7 +2736,7 @@ class ResumeEngine:
                 json.dump(resume_data, f, indent=2, ensure_ascii=False)
             print(f"\n  Resume saved to: {output_path}")
         except Exception as e:
-            print(f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}")
+            print(f"  {theme.colorize_icon_ansi('warning')} Could not save resume JSON: {e}")
 
         # --- Step 7: Render HTML + Generate PDF ---
         print(f"\n{'─'*60}")
@@ -2772,7 +2772,7 @@ class ResumeEngine:
                 capture_output=True, text=True
             )
             if pdf_result.returncode != 0:
-                print(f"  {theme.colorize_icon('warning')}  PDF generation failed:\n{pdf_result.stderr}")
+                print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation failed:\n{pdf_result.stderr}")
                 return {}
 
             page_count, size_str = _parse_pdf_result(pdf_result.stdout)
@@ -2822,7 +2822,7 @@ class ResumeEngine:
                 # point is reached before trim_attempt is incremented, so it
                 # must be bumped here too or `continue` would spin on the same
                 # index forever.
-                print(f"  {theme.colorize_icon('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
+                print(f"  {theme.colorize_icon_ansi('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
                       f"keeping prior resume_data and retrying if attempts remain.")
                 trim_attempt += 1
                 continue
@@ -2830,7 +2830,7 @@ class ResumeEngine:
             trimmed_resume_data = normalize_resume.normalize(trimmed)
             trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation)
             if trim_violations:
-                print(f"  {theme.colorize_icon('warning')}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                print(f"  {theme.colorize_icon_ansi('warning')}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:")
                 for v in trim_violations:
                     print(f"    - {v}")
@@ -2842,15 +2842,15 @@ class ResumeEngine:
             trim_attempt += 1
 
         if page_count is not None and page_count > 2:
-            print(f"  {theme.colorize_icon('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
+            print(f"  {theme.colorize_icon_ansi('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
             return {}
 
         final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
         fired_situational_roles = final_companies & set(situational_roles.load_situational_roles()["roles"].keys())
         if fired_situational_roles:
-            print(f"  {theme.colorize_icon('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}")
+            print(f"  {theme.colorize_icon_ansi('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
-        print(f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}")
+        print(f"  {theme.colorize_icon_ansi('success')} Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
         resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
         resume_data["_page_count"] = page_count
@@ -2896,7 +2896,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         try:
             job_key = jd_manager.compute_job_key(path)
         except OSError as e:
-            print(f"  {theme.colorize_icon('error')} Could not read JD file {path}: {e}")
+            print(f"  {theme.colorize_icon_ansi('error')} Could not read JD file {path}: {e}")
             tracker.mark_failed(
                 job_key=f"unreadable:{os.path.basename(path)}",
                 source_file=os.path.basename(path),
@@ -2918,7 +2918,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             )
         except Exception as e:
             result = None
-            print(f"  {theme.colorize_icon('error')} Unhandled exception building resume for {path}: {e}")
+            print(f"  {theme.colorize_icon_ansi('error')} Unhandled exception building resume for {path}: {e}")
 
         if result:
             output_paths = result.get("_output_paths", {})
