@@ -39,36 +39,42 @@ import liveness as liveness_module
 import polish as polish_module
 import theme
 
+def _icon_title(icon_name: str, label: str) -> list:
+    """Build a questionary Choice title as [icon_tuple, text_tuple] so the
+    icon renders in its theme color via prompt_toolkit's native styling."""
+    return [theme.questionary_icon_tuple(icon_name), ("", f"  {label}")]
+
+
 _CHOICES = [
     questionary.Choice(title=[("class:new_user", "--> New User? Start Here!\n")], value="bootstrap"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('bullet_bank')}  Update My Knowledge\n", value="update_knowledge"),
+    questionary.Choice(title=_icon_title("bullet_bank", "Update My Knowledge\n"), value="update_knowledge"),
     questionary.Separator("── Discovery ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('discovery')}  Scan for New Postings", value="scan"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('discovery')}  Check Posting Liveness\n", value="liveness"),
+    questionary.Choice(title=_icon_title("discovery", "Scan for New Postings"), value="scan"),
+    questionary.Choice(title=_icon_title("discovery", "Check Posting Liveness\n"), value="liveness"),
     questionary.Separator("── Evaluation ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('evaluate')}  Evaluate ALL Pending Roles\n", value="evaluate_all"),
+    questionary.Choice(title=_icon_title("evaluate", "Evaluate ALL Pending Roles\n"), value="evaluate_all"),
     questionary.Separator("── Build ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Customize Resume for a Specific Role", value="tailor_pick"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Write Cover Letter for a Specific Role", value="coverletter_pick"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Polish a Resume or Cover Letter with Gemini", value="polish"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Customize Resume for ALL Pending Roles (Batch Run)\n", value="tailor_all"),
+    questionary.Choice(title=_icon_title("build", "Customize Resume for a Specific Role"), value="tailor_pick"),
+    questionary.Choice(title=_icon_title("build", "Write Cover Letter for a Specific Role"), value="coverletter_pick"),
+    questionary.Choice(title=_icon_title("build", "Polish a Resume or Cover Letter with Gemini"), value="polish"),
+    questionary.Choice(title=_icon_title("build", "Customize Resume for ALL Pending Roles (Batch Run)\n"), value="tailor_all"),
     questionary.Separator("── Browse ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Browse & Manage Jobs", value="browse_jobs"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('evaluate')}  Career Dashboard\n", value="career_dashboard"),
+    questionary.Choice(title=_icon_title("utility", "Browse & Manage Jobs"), value="browse_jobs"),
+    questionary.Choice(title=_icon_title("evaluate", "Career Dashboard\n"), value="career_dashboard"),
     questionary.Separator("── Bullet Bank ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('bullet_bank')}  Manage Bullet Bank\n", value="bullet_bank"),
+    questionary.Choice(title=_icon_title("bullet_bank", "Manage Bullet Bank\n"), value="bullet_bank"),
     questionary.Separator("── Maintenance ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Maintenance\n", value="maintenance"),
+    questionary.Choice(title=_icon_title("utility", "Maintenance\n"), value="maintenance"),
     questionary.Separator("── Utility ──"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('hint')}  Help", value="help"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Exit\n", value="exit"),
+    questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
+    questionary.Choice(title=_icon_title("utility", "Exit\n"), value="exit"),
 ]
 
 
 _SCAN_SOURCE_CHOICES = [
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('discovery')}  Both (default)", value="both"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('discovery')}  JobRight only", value="jobright"),
-    questionary.Choice(title=f"{theme.colorize_icon_for_questionary('discovery')}  LinkedIn only", value="linkedin"),
+    questionary.Choice(title=_icon_title("discovery", "Both (default)"), value="both"),
+    questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
+    questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
 ]
 
 
@@ -432,16 +438,16 @@ def _browse_single_action(row: dict) -> bool:
     while True:
         action_choices = [questionary.Choice(title="View More Details", value="details")]
         if row["status"] == "Pending":
-            action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Tailor Resume", value="tailor"))
+            action_choices.append(questionary.Choice(title=_icon_title("build", "Tailor Resume"), value="tailor"))
         if row["status"] == "Completed":
-            action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Write Cover Letter", value="coverletter"))
+            action_choices.append(questionary.Choice(title=_icon_title("build", "Write Cover Letter"), value="coverletter"))
             action_choices.append(questionary.Choice(title="Update Application Status", value="update_status"))
             if row.get("application"):
                 action_choices.append(questionary.Choice(title="Log a Follow-up Sent", value="log_followup"))
                 if followup.compute_urgency(row["application"]) == "overdue":
                     action_choices.append(questionary.Choice(title="Draft Follow-Up Message", value="draft_followup"))
         action_choices.append(questionary.Choice(title="Draft Outreach Message", value="outreach"))
-        action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Archive", value="archive"))
+        action_choices.append(questionary.Choice(title=_icon_title("utility", "Archive"), value="archive"))
         action_choices.append(questionary.Choice(title="Back", value="back"))
 
         action = questionary.select(
@@ -482,12 +488,12 @@ def _browse_bulk_action(rows: list) -> bool:
     any_pending = any(r["status"] == "Pending" for r in rows)
     all_completed = all(r["status"] == "Completed" for r in rows)
 
-    action_choices = [questionary.Choice(title=f"{theme.colorize_icon_for_questionary('evaluate')}  Compare Selected", value="compare")]
+    action_choices = [questionary.Choice(title=_icon_title("evaluate", "Compare Selected"), value="compare")]
     if any_pending:
-        action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Tailor Resumes for Selected", value="tailor"))
+        action_choices.append(questionary.Choice(title=_icon_title("build", "Tailor Resumes for Selected"), value="tailor"))
     if all_completed:
-        action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('build')}  Write Cover Letters for Selected", value="coverletter"))
-    action_choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Archive Selected", value="archive"))
+        action_choices.append(questionary.Choice(title=_icon_title("build", "Write Cover Letters for Selected"), value="coverletter"))
+    action_choices.append(questionary.Choice(title=_icon_title("utility", "Archive Selected"), value="archive"))
     action_choices.append(questionary.Choice(title="Back", value="back"))
 
     action = questionary.select(
@@ -735,13 +741,13 @@ _CHAIN = {
 # chain prompt stays visually consistent with the main menu instead of
 # falling back to plain text.
 _CHAIN_ICONS = {
-    "liveness":         theme.colorize_icon('discovery'),
-    "evaluate_all":     theme.colorize_icon('evaluate'),
-    "tailor_all":       theme.colorize_icon('build'),
-    "tailor_pick":      theme.colorize_icon('build'),
-    "coverletter_pick": theme.colorize_icon('build'),
-    "browse_jobs":      theme.colorize_icon('utility'),
-    "polish":           theme.colorize_icon('build'),
+    "liveness":         "discovery",
+    "evaluate_all":     "evaluate",
+    "tailor_all":       "build",
+    "tailor_pick":      "build",
+    "coverletter_pick": "build",
+    "browse_jobs":      "utility",
+    "polish":           "build",
 }
 
 # Labels for the session-end summary -- only actions worth reporting on
@@ -765,12 +771,12 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     if not did_something or not next_options:
         return
 
-    def _choice_title(label: str, value: str) -> str:
-        icon = _CHAIN_ICONS.get(value)
-        return f"{icon}  {label}" if icon else label
+    def _choice_title(label: str, value: str):
+        icon_name = _CHAIN_ICONS.get(value)
+        return _icon_title(icon_name, label) if icon_name else label
 
     choices = [questionary.Choice(title=_choice_title(label, v), value=v) for label, v in next_options]
-    choices.append(questionary.Choice(title=f"{theme.colorize_icon_for_questionary('utility')}  Back to Menu", value="__back__"))
+    choices.append(questionary.Choice(title=_icon_title("utility", "Back to Menu"), value="__back__"))
     cli_art.display_whats_next_panel()
     choice = questionary.select(
         "Choose one:", choices=choices, style=cli_art.QUESTIONARY_STYLE,
