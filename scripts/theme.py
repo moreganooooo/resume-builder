@@ -84,6 +84,34 @@ _UNICODE_ICONS = {
 # Nerd Font active.
 ICONS = _UNICODE_ICONS if os.environ.get("RESUME_BUILDER_ICONS") == "unicode" else _NERD_ICONS
 
+# Map icon names to Rich markup colors for colorized output
+_ICON_COLORS = {
+    "success": SUCCESS,      # green
+    "error": ERROR,          # red
+    "warning": WARNING,      # gold
+    "hint": BRAND,           # blue
+    "discovery": INFO,       # light blue
+    "evaluate": BRAND_ACCENT,# purple
+    "build": SUCCESS,        # green
+    "utility": BRAND_ACCENT, # purple
+    "bullet_bank": BRAND,    # blue
+    "skip": ERROR,           # red
+    "save": SUCCESS,         # green
+    "resume": BRAND_ACCENT,  # purple
+    "complete": SUCCESS,     # green
+    "gem": WARNING,          # gold
+}
+
+def colorize_icon(name: str) -> str:
+    """Return icon with Rich color markup if available in terminal."""
+    if name not in ICONS:
+        return name
+    icon = ICONS[name]
+    color = _ICON_COLORS.get(name)
+    if color:
+        return f"[{color}]{icon}[/{color}]"
+    return icon
+
 QUESTIONARY_STYLE = Style([
     ("qmark", f"fg:{BRAND_ACCENT} bold"),
     ("question", "bold"),
