@@ -47,8 +47,23 @@ Four stages:
     Records source_cluster_id on saved keeper rows so Stage 3 can
     exclude them by ID on the next run.
 
+    A bullet that stays MANUAL after 3 rewrite attempts is recorded (by
+    cluster_id) in audit-manual-attempts.csv -- NOT in
+    bullet-bank-keepers-audited.csv, since embed_bullet_bank.py and
+    orchestrator.py's mine_bullet_bank() treat every row of that file as
+    resume-ready with no audit_status filtering, and a failed bullet
+    (manager_test=FAIL) has no business being mined into a real resume.
+    Stage 3 excludes these cluster_ids from Source B on future runs, same
+    as it already does for successfully-kept clusters -- otherwise every
+    run without --retry-manual would re-attempt the exact same failures
+    from scratch, burning API calls with the same likely outcome. Pass
+    --retry-manual to include them again (e.g. after adjusting a rule).
+
 Outputs (profiles/<profile>/knowledge_base/):
   bullet-bank-keepers-audited.csv    keepers with refreshed scores + audit_status
+  audit-manual-attempts.csv          cluster_ids that stayed MANUAL after a Stage 4
+                                     attempt -- excluded from future queues unless
+                                     --retry-manual is passed
   audit-discrepancies.csv            cluster-map / keeper mismatches
   audit-rewrite-queue.csv            ranked rewrite queue (Stage 3) — always
                                      overwritten; empty file = nothing left to do
@@ -59,6 +74,9 @@ Usage:
   python audit_keepers.py --auto-rewrite     # Stage 4: run the queue through rewriter
   python audit_keepers.py --auto-rewrite --limit 10
   python audit_keepers.py --skip-rescore     # skip Stage 1 API calls, use existing scores
+  python audit_keepers.py --auto-rewrite --retry-manual
+                                             # re-attempt clusters that previously
+                                             # stayed MANUAL instead of skipping them
   python audit_keepers.py --from-audited --auto-rewrite --skip-rescore
                                              # resume from keepers-audited.csv — only
                                              # MANUAL/NEEDS_REWRITE rows are re-processed;
@@ -119,6 +137,12 @@ CLUSTER_MAP_UPDATED = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv"
 CLUSTER_MAP_IN     = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 DISCREPANCIES_OUT  = os.path.join(KB_DIR, "audit-discrepancies.csv")
 REWRITE_QUEUE_OUT  = os.path.join(KB_DIR, "audit-rewrite-queue.csv")
+MANUAL_ATTEMPTS_OUT = os.path.join(KB_DIR, "audit-manual-attempts.csv")
+
+MANUAL_ATTEMPTS_COLS = [
+    "cluster_id", "Bullet Point", "Role / Company", "Tags",
+    "composite_score", "manager_test", "rewrite_attempts", "last_attempted",
+]
 
 AUDIT_FLUSH_EVERY = 5
 
@@ -134,14 +158,16 @@ AUDIT_FLUSH_EVERY = 5
 # mutated by Stage 1's overwrite.
 # ---------------------------------------------------------------------------
 
-def _read_cluster_ids_from_file(path: str) -> set:
-    """Return the set of source_cluster_id values recorded in a keepers file."""
+def _read_cluster_ids_from_file(path: str, col: str = "source_cluster_id") -> set:
+    """Return the set of cluster ID values recorded in a CSV's `col` column.
+    Keepers files use "source_cluster_id" (the default); audit-manual-attempts.csv
+    uses "cluster_id" (see _known_manual_attempt_cluster_ids())."""
     ids: set = set()
     if not os.path.exists(path):
         return ids
     try:
-        df = pd.read_csv(path, usecols=lambda c: c == "source_cluster_id")
-        raw = df["source_cluster_id"].dropna()
+        df = pd.read_csv(path, usecols=lambda c: c == col)
+        raw = df[col].dropna()
         for v in raw:
             sv = str(v).strip()
             if sv and sv.lower() not in ("", "nan"):
@@ -220,6 +246,39 @@ def _all_known_keeper_cluster_ids() -> set:
     # are included if Stage 3 is called again (not typical, but safe).
     live_ids = _read_cluster_ids_from_file(KEEPERS_AUDITED)
     return _STARTUP_DONE_IDS | live_ids
+
+
+def _known_manual_attempt_cluster_ids() -> set:
+    """Cluster IDs that stayed MANUAL on a prior Stage 4 attempt (read live,
+    same as _all_known_keeper_cluster_ids() -- Stage 4 updates this file
+    incrementally within a run, so a re-attempted cluster in the same run
+    is picked up immediately)."""
+    return _read_cluster_ids_from_file(MANUAL_ATTEMPTS_OUT, col="cluster_id")
+
+
+def _record_manual_attempt(row: "pd.Series", cluster_id, composite_score, manager_test, rewrite_attempts) -> None:
+    """Upsert one cluster's failed-attempt record into audit-manual-attempts.csv
+    so Stage 3 can exclude it from future queues (see _known_manual_attempt_cluster_ids()).
+    Keyed by cluster_id -- a retried cluster (via --retry-manual) overwrites its
+    prior row rather than accumulating duplicates."""
+    new_row = {
+        "cluster_id":       cluster_id,
+        "Bullet Point":     row.get("Bullet Point", ""),
+        "Role / Company":   row.get("Role / Company", ""),
+        "Tags":             row.get("Tags", ""),
+        "composite_score":  composite_score,
+        "manager_test":     manager_test,
+        "rewrite_attempts": rewrite_attempts,
+        "last_attempted":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    if os.path.exists(MANUAL_ATTEMPTS_OUT):
+        df = pd.read_csv(MANUAL_ATTEMPTS_OUT)
+    else:
+        df = pd.DataFrame(columns=MANUAL_ATTEMPTS_COLS)
+    if cluster_id != "" and cluster_id is not None and "cluster_id" in df.columns:
+        df = df[df["cluster_id"].astype(str) != str(cluster_id)]
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    df.to_csv(MANUAL_ATTEMPTS_OUT, index=False)
 
 
 def _all_known_keeper_bullets() -> set:
@@ -550,6 +609,7 @@ def stage2_diff_cluster_map(
 def stage3_build_rewrite_queue(
     df_keepers: pd.DataFrame,
     from_audited: bool = False,
+    retry_manual: bool = False,
 ) -> pd.DataFrame:
     """
     Builds the ranked rewrite queue from:
@@ -558,6 +618,12 @@ def stage3_build_rewrite_queue(
         (Source B — SKIPPED when --from-audited is set, since the audited
         file is already the source of truth and we only want to retry the
         stragglers, not re-inflate the queue with cluster-map rows)
+
+    Clusters recorded in audit-manual-attempts.csv (stayed MANUAL after a
+    prior Stage 4 attempt) are also excluded from Source B by default --
+    otherwise every run would blindly re-attempt the same failures with
+    the same likely outcome. Pass retry_manual=True (--retry-manual) to
+    include them again.
 
     audit-rewrite-queue.csv is ALWAYS overwritten on every run, even when
     the queue is empty. This prevents a stale file from a prior run from
@@ -606,8 +672,11 @@ def stage3_build_rewrite_queue(
 
             df_map_manual = df_map[manual_mask].copy()
 
-            # PRIMARY exclusion: by cluster_id
+            # PRIMARY exclusion: by cluster_id (already-kept clusters, plus
+            # already-failed clusters unless --retry-manual was passed)
             done_ids = _all_known_keeper_cluster_ids()
+            if not retry_manual:
+                done_ids = done_ids | _known_manual_attempt_cluster_ids()
             before   = len(df_map_manual)
 
             if done_ids and "cluster_id" in df_map_manual.columns:
@@ -629,7 +698,8 @@ def stage3_build_rewrite_queue(
 
             excluded = before - len(df_map_manual)
             if excluded:
-                print(f"   Excluded {excluded} already-processed bullets (found in keepers or keepers-audited)")
+                suffix = "" if retry_manual else " (pass --retry-manual to include previously-failed clusters again)"
+                print(f"   Excluded {excluded} already-processed bullets (kept, or previously MANUAL){suffix}")
 
             # Carry over scores if present in the cluster map
             for col in SCORE_COLS:
@@ -751,17 +821,19 @@ def stage4_auto_rewrite(
             start_model=REWRITE_FALLBACK_MODEL,
         )
 
+        # Record the originating cluster_id so Stage 3 can exclude it by ID
+        # on the next run, whether this attempt ends in KEEP or MANUAL
+        # (works even though the saved bullet text may differ from the
+        # original cluster-map text).
+        source_cluster_id = ""
+        if "cluster_id" in row and pd.notna(row["cluster_id"]):
+            try:
+                source_cluster_id = int(float(str(row["cluster_id"])))
+            except (ValueError, TypeError):
+                source_cluster_id = str(row["cluster_id"])
+
         if result["rewrite_status"] == "KEEP":
             n_keep += 1
-
-            # Record the originating cluster_id so Stage 3 can exclude it
-            # by ID on the next run (works even though the bullet text changed).
-            source_cluster_id = ""
-            if "cluster_id" in row and pd.notna(row["cluster_id"]):
-                try:
-                    source_cluster_id = int(float(str(row["cluster_id"])))
-                except (ValueError, TypeError):
-                    source_cluster_id = str(row["cluster_id"])
 
             keeper_row = {
                 "Bullet Point":      result["final_bullet"],
@@ -780,7 +852,15 @@ def stage4_auto_rewrite(
             print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
         else:
             n_manual += 1
-            print(f"   🔧 MANUAL — best version retained, not added to keepers.")
+            _record_manual_attempt(
+                row=row,
+                cluster_id=source_cluster_id,
+                composite_score=row.get("composite_score", ""),
+                manager_test=result.get("manager_test", ""),
+                rewrite_attempts=result.get("rewrite_attempts", 0),
+            )
+            print(f"   🔧 MANUAL — best version retained, not added to keepers. "
+                  f"Recorded (cluster_id={source_cluster_id}) so it won't retry every run.")
 
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -810,6 +890,15 @@ def main():
             "the stragglers without re-processing the full set."
         ),
     )
+    parser.add_argument(
+        "--retry-manual",
+        action="store_true",
+        help=(
+            "Re-include clusters recorded in audit-manual-attempts.csv (stayed "
+            "MANUAL on a prior Stage 4 run). By default these are excluded from "
+            "Source B so every run doesn't blindly re-attempt the same failures."
+        ),
+    )
     args = parser.parse_args()
 
     print("\n" + "#" * 60)
@@ -819,6 +908,7 @@ def main():
     print(f"  skip_rescore: {args.skip_rescore}")
     print(f"  auto_rewrite: {args.auto_rewrite}")
     print(f"  from_audited: {args.from_audited}")
+    print(f"  retry_manual: {args.retry_manual}")
     print(f"  limit:        {args.limit}")
 
     # --- Resolve source file ---
@@ -884,7 +974,7 @@ def main():
 
     # ── Stage 3 ───────────────────────────────────────────────────────────────
     # Pass from_audited so Stage 3 knows to skip Source B (cluster-map MANUALs)
-    df_queue = stage3_build_rewrite_queue(df_keepers, from_audited=args.from_audited)
+    df_queue = stage3_build_rewrite_queue(df_keepers, from_audited=args.from_audited, retry_manual=args.retry_manual)
 
     # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:
