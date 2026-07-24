@@ -8,6 +8,7 @@ copies -- see docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md.
 import os
 
 from questionary import Style
+from rich.console import Console
 
 # Semantic color tokens -- hex, not named ANSI colors. Named colors get
 # remapped by whatever terminal theme is active; this project has already
@@ -102,14 +103,6 @@ _ICON_COLORS = {
     "gem": WARNING,          # gold
 }
 
-def hex_to_ansi(hex_color: str) -> str:
-    """Convert hex color to ANSI 24-bit color escape code."""
-    hex_color = hex_color.lstrip('#')
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return f"\033[38;2;{r};{g};{b}m"
-
 def colorize_icon(name: str) -> str:
     """Return icon with Rich color markup if available in terminal."""
     if name not in ICONS:
@@ -121,15 +114,20 @@ def colorize_icon(name: str) -> str:
     return icon
 
 def colorize_icon_for_questionary(name: str) -> str:
-    """Return icon with ANSI color codes for questionary (doesn't support Rich markup)."""
+    """Return icon with proper ANSI codes for questionary using Rich's renderer."""
     if name not in ICONS:
         return name
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
     if color:
-        ansi_color = hex_to_ansi(color)
-        reset = "\033[0m"
-        return f"{ansi_color}{icon}{reset}"
+        # Use Rich to render markup to ANSI codes
+        from rich.text import Text
+        from io import StringIO
+        text = Text.from_markup(f"[{color}]{icon}[/{color}]")
+        # Render directly to string with ANSI codes
+        console = Console(file=StringIO(), force_terminal=True, width=999, legacy_windows=False)
+        console.print(text, end="")
+        return console.file.getvalue()
     return icon
 
 QUESTIONARY_STYLE = Style([
