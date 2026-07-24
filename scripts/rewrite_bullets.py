@@ -1262,7 +1262,7 @@ def process_bullet(
     rewrite_parse_failures = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        print(f"   {theme.ICONS['hint']}  Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
+        print(f"   {theme.ICONS['hint']} Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
 
         is_gemma_attempt = "gemma" in active_rewrite_model.lower()
         kb_context = kb_context_gemma if is_gemma_attempt else kb_context_full
@@ -1353,6 +1353,7 @@ def process_bullet(
             f"ats={new_scores.get('ats_value')} "
             f"mgr={new_scores.get('manager_test')} → {action}"
         )
+        print()
 
         if action == "KEEP" and new_scores.get("manager_test", "").upper() == "PASS":
             return {
