@@ -113,22 +113,19 @@ def colorize_icon(name: str) -> str:
         return f"[{color}]{icon}[/{color}]"
     return icon
 
-def colorize_icon_for_questionary(name: str) -> str:
-    """Return icon with proper ANSI codes for questionary using Rich's renderer."""
+def questionary_icon_tuple(name: str) -> tuple:
+    """Return (style, icon) tuple for use in questionary Choice title lists.
+    questionary/prompt_toolkit renders titles given as a list of
+    (style, text) tuples natively -- unlike Rich markup or raw ANSI codes
+    embedded in a plain string, which display as literal escape sequences
+    inside prompt_toolkit's own renderer. See _CHOICES's "New User" entry
+    for the pre-existing precedent of this exact pattern."""
     if name not in ICONS:
-        return name
+        return ("", name)
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
-    if color:
-        # Use Rich to render markup to ANSI codes
-        from rich.text import Text
-        from io import StringIO
-        text = Text.from_markup(f"[{color}]{icon}[/{color}]")
-        # Render directly to string with ANSI codes
-        console = Console(file=StringIO(), force_terminal=True, width=999, legacy_windows=False)
-        console.print(text, end="")
-        return console.file.getvalue()
-    return icon
+    style = f"fg:{color}" if color else ""
+    return (style, icon)
 
 QUESTIONARY_STYLE = Style([
     ("qmark", f"fg:{BRAND_ACCENT} bold"),
