@@ -24,10 +24,10 @@ import theme
 # substring anywhere in this app's output stays on-palette.
 console = Console(theme=RichTheme({"repr.str": theme.SUCCESS}))
 
-SUCCESS = f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}]"
-ERROR = f"[bold {theme.ERROR}]{theme.ICONS['error']}[/bold {theme.ERROR}]"
-WARNING = f"[bold {theme.WARNING}]{theme.ICONS['warning']}[/bold {theme.WARNING}]"
-HINT = f"[bold {theme.INFO}]{theme.ICONS['hint']}[/bold {theme.INFO}]"
+SUCCESS = f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}]"
+ERROR = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}]"
+WARNING = f"[bold {theme.WARNING}]{theme.colorize_icon('warning')}[/bold {theme.WARNING}]"
+HINT = f"[bold {theme.INFO}]{theme.colorize_icon('hint')}[/bold {theme.INFO}]"
 
 # Re-exported so menu.py/picker.py's existing `cli_art.QUESTIONARY_STYLE`
 # references keep working unchanged.
@@ -37,14 +37,14 @@ QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 def display_error(message: str) -> None:
     """A failure reads with real visual weight -- a bordered panel, not a
     bare icon-prefixed line."""
-    body = f"[bold {theme.ERROR}]{theme.ICONS['error']}[/bold {theme.ERROR}] {message}"
+    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {message}"
     console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
 
 
 def display_success(message: str) -> None:
     """Stays lightweight (no border) -- this is the common case and a
     bordered panel for every success would get old fast."""
-    console.print(f"[bold {theme.SUCCESS}]{theme.ICONS['success']}[/bold {theme.SUCCESS}] {message}")
+    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {message}")
 
 # Raw block-letter lines, no markup -- color now comes from the diagonal
 # gradient applied per-character in display_main_banner(), not a blanket
@@ -167,7 +167,7 @@ def display_tip() -> None:
     callout rather than blending into the stats line above it."""
     tip = random.choice(TIPS)
     console.print(Panel(
-        f"{theme.ICONS['hint']}  Did you know? {tip}",
+        f"{theme.colorize_icon('hint')}  Did you know? {tip}",
         border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2),
     ))
 
@@ -256,7 +256,7 @@ def render_fit_table(results: list) -> None:
         recommendation_text = f"[{color}]{r['recommendation']}[/{color}]"
         if legitimacy and legitimacy != "High Confidence":
             flag_color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
-            recommendation_text += f" [{flag_color}]({theme.ICONS['warning']} {legitimacy})[/{flag_color}]"
+            recommendation_text += f" [{flag_color}]({theme.colorize_icon('warning')} {legitimacy})[/{flag_color}]"
         table.add_row(
             str(i),
             f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
@@ -451,7 +451,7 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
 
     failed = []
     for c in checks:
-        icon = f"[{theme.SUCCESS}]{theme.ICONS['success']}[/{theme.SUCCESS}]" if c["passed"] else f"[{theme.ERROR}]{theme.ICONS['error']}[/{theme.ERROR}]"
+        icon = f"[{theme.SUCCESS}]{theme.colorize_icon('success')}[/{theme.SUCCESS}]" if c["passed"] else f"[{theme.ERROR}]{theme.colorize_icon('error')}[/{theme.ERROR}]"
         table.add_row(c["name"], icon, c["detail"])
         if not c["passed"]:
             failed.append(c)
@@ -466,6 +466,6 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
     if failed:
         console.print(f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]")
         for c in failed:
-            console.print(f"  {theme.ICONS['warning']} {c['name']}: {c['fix']}")
+            console.print(f"  {theme.colorize_icon('warning')} {c['name']}: {c['fix']}")
     else:
         console.print(f"\n{SUCCESS} All checks passed.")
