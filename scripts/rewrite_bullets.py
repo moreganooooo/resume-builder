@@ -839,16 +839,16 @@ class KnowledgeBase:
     def warm_segment_cache(self, df: pd.DataFrame) -> None:
         self._segment_cache = {}
         self._gemma_segment_cache = {}
-        pairs = df[["Role / Company", "Tags"]].drop_duplicates()
+        raw_pairs = df[["Role / Company", "Tags"]].drop_duplicates()
+        # Normalize tags and deduplicate (same company+tags in different order become one cache entry)
+        unique_pairs = {(str(row["Role / Company"]), self._normalize_tags(str(row["Tags"]))) for _, row in raw_pairs.iterrows()}
+        pairs = sorted(unique_pairs)
         print(f"\n{theme.ICONS['hint']} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
-        for _, row in pairs.iterrows():
-            rc   = str(row["Role / Company"])
-            tags = self._normalize_tags(str(row["Tags"]))
-            key  = (rc, tags)
+        for rc, tags in pairs:
             bundle = self._build_segment_bundle(rc, tags)
-            self._segment_cache[key] = bundle
+            self._segment_cache[(rc, tags)] = bundle
             gemma_bundle = self._build_gemma_segment_bundle(rc, tags)
-            self._gemma_segment_cache[key] = gemma_bundle
+            self._gemma_segment_cache[(rc, tags)] = gemma_bundle
             deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(rc, self.deep_evidence_keywords) else ""
             print(f"   {theme.ICONS['hint']} ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
         print(f"   {theme.ICONS['success']} {len(self._segment_cache)} segment bundles ready.\n")
