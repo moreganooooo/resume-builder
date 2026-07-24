@@ -106,7 +106,7 @@ def load_checkpoint():
         data = np.load(CHECKPOINT_PATH, allow_pickle=False)
         vectors = list(data["vectors"])
         start_index = int(data["next_index"])
-        print(f"   {theme.ICONS['resume']}  Resuming from checkpoint: {start_index} bullets already embedded.")
+        print(f"   {theme.colorize_icon('resume')}  Resuming from checkpoint: {start_index} bullets already embedded.")
         return vectors, start_index
     return [], 0
 
@@ -174,7 +174,7 @@ def main():
     # All done — write final outputs
     matrix = np.array(vectors, dtype=np.float32)  # shape: (N, EMBED_DIM)
     np.save(NPY_PATH, matrix)
-    print(f"\n{theme.ICONS['success']} Saved {matrix.shape} vector matrix → {NPY_PATH}")
+    print(f"\n{theme.colorize_icon('success')} Saved {matrix.shape} vector matrix → {NPY_PATH}")
 
     meta = {
         "model": EMBED_MODEL,
@@ -191,7 +191,7 @@ def main():
         os.remove(CHECKPOINT_PATH)
         print(f"Checkpoint file removed.")
 
-    print("\n{theme.ICONS['complete']} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
+    print("\n{theme.colorize_icon('complete')} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
 
 
 if __name__ == "__main__":
