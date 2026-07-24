@@ -323,7 +323,7 @@ def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
             restored += 1
 
     if restored:
-        print(f"   {theme.colorize_icon('resume')}  Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
+        print(f"   {theme.colorize_icon_ansi('resume')}  Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
 
     return df_keepers
 
@@ -381,7 +381,7 @@ def stage1_audit_keepers(
     df_keepers.loc[already_clean_mask, "audit_status"] = "CLEAN"
 
     if to_score.empty:
-        print("   {theme.colorize_icon('success')} All keepers already clean — no scoring needed.")
+        print(f"   {theme.colorize_icon_ansi('success')} All keepers already clean — no scoring needed.")
     elif skip_rescore:
         print("   ⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
         for idx in to_score.index:
@@ -419,7 +419,7 @@ def stage1_audit_keepers(
             if bullets_since_flush >= AUDIT_FLUSH_EVERY or is_last:
                 df_keepers.to_csv(KEEPERS_AUDITED, index=False)
                 bullets_since_flush = 0
-                print(f"   {theme.colorize_icon('save')} Flushed audited keepers ({i}/{total} scored so far).")
+                print(f"   {theme.colorize_icon_ansi('save')} Flushed audited keepers ({i}/{total} scored so far).")
 
             if i < total:
                 time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -452,7 +452,7 @@ def stage1_audit_keepers(
                 df_keepers.loc[idx, "source_cluster_id"] = stamped
                 restored += 1
         if restored:
-            print(f"   {theme.colorize_icon('resume')} Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
+            print(f"   {theme.colorize_icon_ansi('resume')} Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
 
     return df_keepers
 
@@ -482,9 +482,9 @@ def stage2_diff_cluster_map(
         print(f"   Using updated cluster map: {os.path.basename(map_path)}")
     elif os.path.exists(CLUSTER_MAP_IN):
         map_path = CLUSTER_MAP_IN
-        print(f"   {theme.colorize_icon('warning')}  Updated map not found — falling back to: {os.path.basename(map_path)}")
+        print(f"   {theme.colorize_icon_ansi('warning')}  Updated map not found — falling back to: {os.path.basename(map_path)}")
     else:
-        print("   {theme.colorize_icon('warning')}  No cluster map found — skipping Stage 2.")
+        print(f"   {theme.colorize_icon_ansi('warning')}  No cluster map found — skipping Stage 2.")
         return pd.DataFrame()
 
     df_map = pd.read_csv(map_path)
@@ -533,12 +533,12 @@ def stage2_diff_cluster_map(
 
     if not df_disc.empty:
         df_disc.to_csv(DISCREPANCIES_OUT, index=False)
-        print(f"   {theme.colorize_icon('save')} Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
+        print(f"   {theme.colorize_icon_ansi('save')} Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
         print("   Entries (MANUAL in cluster map, CLEAN in keepers):")
         for _, d in df_disc.iterrows():
-            print(f"      {theme.colorize_icon('warning')}  [{d['map_status']}] {str(d['Bullet Point'])[:70]}")
+            print(f"      {theme.colorize_icon_ansi('warning')}  [{d['map_status']}] {str(d['Bullet Point'])[:70]}")
     else:
-        print("   {theme.colorize_icon('success')} No actionable discrepancies — keepers and cluster map are in sync.")
+        print(f"   {theme.colorize_icon_ansi('success')} No actionable discrepancies — keepers and cluster map are in sync.")
 
     return df_disc
 
@@ -640,7 +640,7 @@ def stage3_build_rewrite_queue(
             queue_rows.append(df_map_manual)
             print(f"   From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
         else:
-            print("   {theme.colorize_icon('warning')}  Cluster map not found — skipping cluster-map MANUAL source.")
+            print(f"   {theme.colorize_icon_ansi('warning')}  Cluster map not found — skipping cluster-map MANUAL source.")
 
     # ------------------------------------------------------------------
     # ALWAYS overwrite the queue file — even when empty.
@@ -653,8 +653,8 @@ def stage3_build_rewrite_queue(
     )
 
     if not queue_rows or all(df.empty for df in queue_rows):
-        print("   {theme.colorize_icon('success')} Queue is empty — nothing to rewrite!")
-        print(f"   {theme.colorize_icon('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
+        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to rewrite!")
+        print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
         return pd.DataFrame()
 
     df_queue = pd.concat(queue_rows, ignore_index=True)
@@ -665,8 +665,8 @@ def stage3_build_rewrite_queue(
     print(f"   Deduplicated: {before_dedup} → {len(df_queue)} unique bullets")
 
     if df_queue.empty:
-        print("   {theme.colorize_icon('success')} Queue is empty — nothing to rewrite!")
-        print(f"   {theme.colorize_icon('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
+        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to rewrite!")
+        print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
         return pd.DataFrame()
 
     # Rank worst-first by composite score
@@ -675,7 +675,7 @@ def stage3_build_rewrite_queue(
     df_queue["queue_rank"] = df_queue.index + 1
 
     df_queue.to_csv(REWRITE_QUEUE_OUT, index=False)
-    print(f"   {theme.colorize_icon('save')} Rewrite queue written ({len(df_queue)} bullets) → {os.path.basename(REWRITE_QUEUE_OUT)}")
+    print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue written ({len(df_queue)} bullets) → {os.path.basename(REWRITE_QUEUE_OUT)}")
     print(f"   Lowest composite: {df_queue['composite_score'].min():.0f}  "
           f"Highest: {df_queue['composite_score'].max():.0f}")
 
@@ -717,7 +717,7 @@ def stage4_auto_rewrite(
     print("─" * 60)
 
     if df_queue.empty:
-        print("   {theme.colorize_icon('success')} Queue is empty — nothing to auto-rewrite.")
+        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to auto-rewrite.")
         return df_keepers
 
     df_run = df_queue.copy()
@@ -777,7 +777,7 @@ def stage4_auto_rewrite(
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_AUDITED)
-            print(f"   {theme.colorize_icon('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
+            print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
         else:
             n_manual += 1
             print(f"   🔧 MANUAL — best version retained, not added to keepers.")
@@ -829,11 +829,11 @@ def main():
     else:
         source_file = KEEPERS_IN
         if args.from_audited:
-            print(f"\n   {theme.colorize_icon('warning')}  --from-audited set but {os.path.basename(KEEPERS_AUDITED)} not found.")
+            print(f"\n   {theme.colorize_icon_ansi('warning')}  --from-audited set but {os.path.basename(KEEPERS_AUDITED)} not found.")
             print(   "      Falling back to keepers.csv.")
 
     if not os.path.exists(source_file):
-        print(f"\n{theme.colorize_icon('error')}  {source_file} not found. Run rewrite_bullets.py first.")
+        print(f"\n{theme.colorize_icon_ansi('error')}  {source_file} not found. Run rewrite_bullets.py first.")
         sys.exit(1)
 
     df_keepers = pd.read_csv(source_file)
@@ -877,7 +877,7 @@ def main():
     # source_cluster_id values are already restored inside stage1_audit_keepers()
     # from _STARTUP_CLUSTER_ID_MAP, so this write preserves them correctly.
     df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-    print(f"\n   {theme.colorize_icon('save')} Audited keepers → {os.path.basename(KEEPERS_AUDITED)}")
+    print(f"\n   {theme.colorize_icon_ansi('save')} Audited keepers → {os.path.basename(KEEPERS_AUDITED)}")
 
     # ── Stage 2 ───────────────────────────────────────────────────────────────
     _df_disc = stage2_diff_cluster_map(df_keepers)
@@ -906,7 +906,7 @@ def main():
             )
             # Final save after Stage 4 rewrites are appended
             df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-            print(f"\n   {theme.colorize_icon('save')} Final audited keepers saved → {os.path.basename(KEEPERS_AUDITED)}")
+            print(f"\n   {theme.colorize_icon_ansi('save')} Final audited keepers saved → {os.path.basename(KEEPERS_AUDITED)}")
     else:
         if not df_queue.empty:
             print(
@@ -915,7 +915,7 @@ def main():
             )
 
     print("\n" + "─" * 60)
-    print("  {theme.colorize_icon('success')}  audit_keepers.py complete")
+    print(f"  {theme.colorize_icon_ansi('success')}  audit_keepers.py complete")
     print(f"     Audited keepers  → {os.path.basename(KEEPERS_AUDITED)}")
     print(f"     Discrepancies    → {os.path.basename(DISCREPANCIES_OUT)}")
     print(f"     Rewrite queue    → {os.path.basename(REWRITE_QUEUE_OUT)}")

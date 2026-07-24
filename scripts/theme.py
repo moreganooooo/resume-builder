@@ -104,13 +104,42 @@ _ICON_COLORS = {
 }
 
 def colorize_icon(name: str) -> str:
-    """Return icon with Rich color markup if available in terminal."""
+    """Return icon with Rich color markup ([hex]icon[/hex]).
+
+    Only renders correctly when passed to a rich.console.Console.print()
+    call -- plain print() does not interpret Rich markup and will show the
+    brackets as literal text. cli_art.py is the only module with an actual
+    Console instance; every other script's print() statements should use
+    colorize_icon_ansi() instead (see that function's docstring)."""
     if name not in ICONS:
         return name
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
     if color:
         return f"[{color}]{icon}[/{color}]"
+    return icon
+
+def _hex_to_ansi_fg(hex_color: str) -> str:
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+    return f"\033[38;2;{r};{g};{b}m"
+
+_ANSI_RESET = "\033[0m"
+
+def colorize_icon_ansi(name: str) -> str:
+    """Return icon wrapped in raw ANSI 24-bit color escape codes.
+
+    Use this (not colorize_icon()) in any script that calls the plain
+    print() builtin directly to a terminal -- a real terminal interprets
+    raw ANSI escapes on its own, unlike Rich markup (which needs a Rich
+    Console to parse it) or prompt_toolkit's renderer (which needs its
+    own (style, text) tuple format -- see questionary_icon_tuple())."""
+    if name not in ICONS:
+        return name
+    icon = ICONS[name]
+    color = _ICON_COLORS.get(name)
+    if color:
+        return f"{_hex_to_ansi_fg(color)}{icon}{_ANSI_RESET}"
     return icon
 
 def questionary_icon_tuple(name: str) -> tuple:

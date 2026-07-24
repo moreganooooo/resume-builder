@@ -243,10 +243,10 @@ def _load_yaml_safe(path: str, label: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-        print(f"   {theme.colorize_icon('success')} Rules loaded: {label}")
+        print(f"   {theme.colorize_icon_ansi('success')} Rules loaded: {label}")
         return data
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load rules {label}: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load rules {label}: {e}")
         return {}
 
 
@@ -259,7 +259,7 @@ def _yaml_to_str(data: dict) -> str:
 
 class RulesBundle:
     def __init__(self, rules_dir: str, scoring_dir: str = None):
-        print(f"\n{theme.colorize_icon('hint')} Loading rules bundle...")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Loading rules bundle...")
 
         # scoring_dir defaults to the sibling "scoring" dir next to rules_dir
         # (resume-engine/rules -> resume-engine/scoring), matching every
@@ -442,9 +442,9 @@ class RulesBundle:
                           "context_anchoring":                    bel.get("context_anchoring", {})}),
         ])
 
-        print(f"   {theme.colorize_icon('hint')} Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
-        print(f"   {theme.colorize_icon('hint')} Gemma rules block (slim): {len(self.rewrite_rules_block_gemma):,} chars")
-        print(f"   {theme.colorize_icon('hint')} Score rules block:   {len(self.score_rules_block):,} chars\n")
+        print(f"   {theme.colorize_icon_ansi('hint')} Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
+        print(f"   {theme.colorize_icon_ansi('hint')} Gemma rules block (slim): {len(self.rewrite_rules_block_gemma):,} chars")
+        print(f"   {theme.colorize_icon_ansi('hint')} Score rules block:   {len(self.score_rules_block):,} chars\n")
 
 
 # ---------------------------------------------------------------------------
@@ -455,10 +455,10 @@ def load_text_file(path: str, label: str) -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
-        print(f"   {theme.colorize_icon('success')} Loaded {label} ({len(content):,} chars)")
+        print(f"   {theme.colorize_icon_ansi('success')} Loaded {label} ({len(content):,} chars)")
         return content
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load {label}: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load {label}: {e}")
         return ""
 
 
@@ -467,10 +467,10 @@ def load_json_file(path: str, label: str) -> str:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         content = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-        print(f"   {theme.colorize_icon('success')} Loaded {label} ({len(content):,} chars)")
+        print(f"   {theme.colorize_icon_ansi('success')} Loaded {label} ({len(content):,} chars)")
         return content
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load {label}: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load {label}: {e}")
         return ""
 
 
@@ -483,10 +483,10 @@ def load_json_entries(path: str, list_key: str) -> list:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         entries = data.get(list_key, []) if isinstance(data, dict) else []
-        print(f"   {theme.colorize_icon('success')} Loaded {list_key} entries ({len(entries)} rows)")
+        print(f"   {theme.colorize_icon_ansi('success')} Loaded {list_key} entries ({len(entries)} rows)")
         return entries
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load {list_key} entries: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load {list_key} entries: {e}")
         return []
 
 
@@ -515,10 +515,10 @@ def load_verified_claims(path: str) -> pd.DataFrame:
         df = pd.read_csv(path)
         if "Use in Resume?" in df.columns:
             df = df[df["Use in Resume?"].str.strip().str.lower().str.startswith("yes")]
-        print(f"   {theme.colorize_icon('success')} Loaded verified-claims ({len(df)} resume-usable rows)")
+        print(f"   {theme.colorize_icon_ansi('success')} Loaded verified-claims ({len(df)} resume-usable rows)")
         return df
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load verified-claims: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load verified-claims: {e}")
         return pd.DataFrame()
 
 
@@ -526,10 +526,10 @@ def load_screenshot_metrics(path: str) -> str:
     try:
         df = pd.read_csv(path)
         content = df.to_csv(index=False)
-        print(f"   {theme.colorize_icon('success')} Loaded screenshot metrics ({len(df)} rows)")
+        print(f"   {theme.colorize_icon_ansi('success')} Loaded screenshot metrics ({len(df)} rows)")
         return content
     except Exception as e:
-        print(f"   {theme.colorize_icon('warning')} Could not load screenshot metrics: {e}")
+        print(f"   {theme.colorize_icon_ansi('warning')} Could not load screenshot metrics: {e}")
         return ""
 
 
@@ -648,7 +648,7 @@ def build_background_summary(tags: str) -> str:
 
 class KnowledgeBase:
     def __init__(self):
-        print(f"\n{theme.colorize_icon('hint')} Loading knowledge base context...")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Loading knowledge base context...")
         self.cv_full           = load_text_file(KB_CV,               "cv.md")
         self.bg_raw            = load_text_file(KB_BACKGROUND,        "user-background-guide.md")
         raw_profile            = load_text_file(KB_PROFILE,           "profile.yml")
@@ -666,13 +666,13 @@ class KnowledgeBase:
         self.voice_anchors      = load_text_file(KB_VOICE_ANCHORS,    "voice-anchors.md")
         self.deep_evidence_keywords = (yaml.safe_load(raw_profile) or {}).get("deep_evidence_keywords") or []
 
-        print(f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(self.profile):,} chars")
+        print(f"   {theme.colorize_icon_ansi('hint')} profile.yml trimmed to {len(self.profile):,} chars")
 
         self.static_prefix = self._build_static_prefix()
-        print(f"   {theme.colorize_icon('hint')} Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets")
+        print(f"   {theme.colorize_icon_ansi('hint')} Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets")
 
         self.gemma_static_prefix = self._build_gemma_static_prefix()
-        print(f"   {theme.colorize_icon('hint')} Gemma static prefix (slim): {len(self.gemma_static_prefix):,} chars — Gemma-only, flash-lite keeps the full tier")
+        print(f"   {theme.colorize_icon_ansi('hint')} Gemma static prefix (slim): {len(self.gemma_static_prefix):,} chars — Gemma-only, flash-lite keeps the full tier")
 
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
@@ -843,21 +843,21 @@ class KnowledgeBase:
         # Normalize tags and deduplicate (same company+tags in different order become one cache entry)
         unique_pairs = {(str(row["Role / Company"]), self._normalize_tags(str(row["Tags"]))) for _, row in raw_pairs.iterrows()}
         pairs = sorted(unique_pairs)
-        print(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        print(f"\n{theme.colorize_icon_ansi('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
         for rc, tags in pairs:
             bundle = self._build_segment_bundle(rc, tags)
             self._segment_cache[(rc, tags)] = bundle
             gemma_bundle = self._build_gemma_segment_bundle(rc, tags)
             self._gemma_segment_cache[(rc, tags)] = gemma_bundle
             deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(rc, self.deep_evidence_keywords) else ""
-            print(f"   {theme.colorize_icon('hint')} ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
-        print(f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n")
+            print(f"   {theme.colorize_icon_ansi('hint')} ({rc[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
+        print(f"   {theme.colorize_icon_ansi('success')} {len(self._segment_cache)} segment bundles ready.\n")
 
     def context_block_for_bullet(self, role_company: str, tags: str) -> str:
         normalized_tags = self._normalize_tags(tags)
         key = (role_company, normalized_tags)
         if key not in self._segment_cache:
-            print(f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand.")
+            print(f"   {theme.colorize_icon_ansi('warning')} Cache miss for {key} — building segment on demand.")
             self._segment_cache[key] = self._build_segment_bundle(role_company, normalized_tags)
         segment = self._segment_cache[key]
         return f"{self.static_prefix}\n\n{segment}" if segment else self.static_prefix
@@ -866,7 +866,7 @@ class KnowledgeBase:
         normalized_tags = self._normalize_tags(tags)
         key = (role_company, normalized_tags)
         if key not in self._gemma_segment_cache:
-            print(f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand.")
+            print(f"   {theme.colorize_icon_ansi('warning')} Gemma cache miss for {key} — building segment on demand.")
             self._gemma_segment_cache[key] = self._build_gemma_segment_bundle(role_company, normalized_tags)
         segment = self._gemma_segment_cache[key]
         return f"{self.gemma_static_prefix}\n\n{segment}" if segment else self.gemma_static_prefix
@@ -943,9 +943,9 @@ def build_system_prompts(rules: RulesBundle, kb: KnowledgeBase) -> tuple:
         rules_block=rules.score_rules_block,
         recruiter_block=kb.recruiter_context_block(),
     )
-    print(f"   {theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
-    print(f"   {theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
-    print(f"   {theme.colorize_icon('hint')} Score system prompt:   {len(score_system):,} chars")
+    print(f"   {theme.colorize_icon_ansi('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+    print(f"   {theme.colorize_icon_ansi('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
+    print(f"   {theme.colorize_icon_ansi('hint')} Score system prompt:   {len(score_system):,} chars")
     return rewrite_system, rewrite_system_gemma, score_system
 
 
@@ -1022,9 +1022,9 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     )
 
     if cached_tokens and cached_tokens > 0:
-        print(f"   {theme.colorize_icon('hint')} tokens — {token_part} | {theme.colorize_icon('hint')} cached: {cached_tokens:,}")
+        print(f"   {theme.colorize_icon_ansi('hint')} tokens — {token_part} | {theme.colorize_icon_ansi('hint')} cached: {cached_tokens:,}")
     else:
-        print(f"   {theme.colorize_icon('hint')} tokens — {token_part}")
+        print(f"   {theme.colorize_icon_ansi('hint')} tokens — {token_part}")
 
 
 # ---------------------------------------------------------------------------
@@ -1132,14 +1132,14 @@ KEEPER_COLS = [
 
 def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
     if os.path.exists(path):
-        print(f"   {theme.colorize_icon('hint')} Loading existing keepers: {path}")
+        print(f"   {theme.colorize_icon_ansi('hint')} Loading existing keepers: {path}")
         df = pd.read_csv(path)
         for col in KEEPER_COLS:
             if col not in df.columns:
                 df[col] = ""
         return df
 
-    print(f"   {theme.colorize_icon('hint')} Seeding keeper CSV from existing KEEP+PASS bullets in cluster map...")
+    print(f"   {theme.colorize_icon_ansi('hint')} Seeding keeper CSV from existing KEEP+PASS bullets in cluster map...")
     mask = (
         (df_map["next_action"].str.strip().str.upper() == "KEEP")
         & (df_map["manager_test"].str.strip().str.upper() == "PASS")
@@ -1156,7 +1156,7 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
             df_seed[col] = ""
     df_keepers = df_seed[KEEPER_COLS].copy()
     df_keepers.to_csv(path, index=False)
-    print(f"   {theme.colorize_icon('success')} Keeper CSV created with {len(df_keepers)} seed bullets: {path}")
+    print(f"   {theme.colorize_icon_ansi('success')} Keeper CSV created with {len(df_keepers)} seed bullets: {path}")
     return df_keepers
 
 
@@ -1211,7 +1211,7 @@ def load_already_processed(output_path: str, keepers_path: str, retry_manual: bo
                 if "final_bullet" in df.columns:
                     done |= set(df.loc[done_mask, "final_bullet"].dropna().str.strip())
         except Exception as e:
-            print(f"   {theme.colorize_icon('warning')} Could not read cluster map output for resume check: {e}")
+            print(f"   {theme.colorize_icon_ansi('warning')} Could not read cluster map output for resume check: {e}")
 
     if os.path.exists(keepers_path):
         try:
@@ -1220,9 +1220,9 @@ def load_already_processed(output_path: str, keepers_path: str, retry_manual: bo
                 done |= set(df_k["Bullet Point"].dropna().str.strip())
             if "final_bullet" in df_k.columns:
                 done |= set(df_k["final_bullet"].dropna().str.strip())
-            print(f"   {theme.colorize_icon('hint')} Keepers CSV: {len(df_k)} rows added to done set.")
+            print(f"   {theme.colorize_icon_ansi('hint')} Keepers CSV: {len(df_k)} rows added to done set.")
         except Exception as e:
-            print(f"   {theme.colorize_icon('warning')} Could not read keepers CSV for resume check: {e}")
+            print(f"   {theme.colorize_icon_ansi('warning')} Could not read keepers CSV for resume check: {e}")
 
     return done
 
@@ -1262,7 +1262,7 @@ def process_bullet(
     rewrite_parse_failures = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        print(f"   {theme.colorize_icon('hint')} Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
+        print(f"   {theme.colorize_icon_ansi('hint')} Attempt {attempt}/{MAX_ATTEMPTS}... (model: {active_rewrite_model})")
 
         is_gemma_attempt = "gemma" in active_rewrite_model.lower()
         kb_context = kb_context_gemma if is_gemma_attempt else kb_context_full
@@ -1314,7 +1314,7 @@ def process_bullet(
                     # exhaustion, not a one-off parse hiccup. Hand off to
                     # flash-lite with the FULL context immediately rather
                     # than retrying Gemma again with the same slim context.
-                    print(f"   {theme.colorize_icon('warning')} Gemma exhausted retries — switching to fallback model: {REWRITE_FALLBACK_MODEL}")
+                    print(f"   {theme.colorize_icon_ansi('warning')} Gemma exhausted retries — switching to fallback model: {REWRITE_FALLBACK_MODEL}")
                     active_rewrite_model = REWRITE_FALLBACK_MODEL
                     time.sleep(SLEEP_ON_RETRY)
                     continue
@@ -1331,9 +1331,9 @@ def process_bullet(
                 raise
             except Exception as e:
                 rewrite_parse_failures += 1
-                print(f"   {theme.colorize_icon('warning')} Rewrite parse error (attempt {attempt}): {e}")
+                print(f"   {theme.colorize_icon_ansi('warning')} Rewrite parse error (attempt {attempt}): {e}")
                 if rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES and active_rewrite_model != REWRITE_FALLBACK_MODEL:
-                    print(f"   {theme.colorize_icon('warning')} Switching to fallback model: {REWRITE_FALLBACK_MODEL}")
+                    print(f"   {theme.colorize_icon_ansi('warning')} Switching to fallback model: {REWRITE_FALLBACK_MODEL}")
                     active_rewrite_model = REWRITE_FALLBACK_MODEL
                 time.sleep(SLEEP_ON_RETRY)
                 continue
@@ -1342,12 +1342,12 @@ def process_bullet(
         last_reasoning = reasoning
         last_gaps     = gaps
 
-        print(f"   {theme.colorize_icon('hint')} Rewritten: {rewritten[:80]}...")
+        print(f"   {theme.colorize_icon_ansi('hint')} Rewritten: {rewritten[:80]}...")
 
         new_scores = score_bullet(rewritten, tags, score_system, dry_run)
         action     = decide_action(new_scores)
         print(
-            f"   {theme.colorize_icon('evaluate')} Scores → accuracy={new_scores.get('accuracy_score')} "
+            f"   {theme.colorize_icon_ansi('evaluate')} Scores → accuracy={new_scores.get('accuracy_score')} "
             f"bel={new_scores.get('believability_score')} "
             f"clarity={new_scores.get('clarity_score')} "
             f"ats={new_scores.get('ats_value')} "
@@ -1375,7 +1375,7 @@ def process_bullet(
         if attempt < MAX_ATTEMPTS:
             time.sleep(SLEEP_ON_RETRY)
 
-    print(f"   {theme.colorize_icon('warning')} Max attempts reached. Marking as MANUAL.")
+    print(f"   {theme.colorize_icon_ansi('warning')} Max attempts reached. Marking as MANUAL.")
     return {
         "final_bullet":      current_bullet,
         "rewrite_status":    "MANUAL",
@@ -1403,9 +1403,9 @@ def main():
     global REWRITE_MODEL
     if args.model:
         REWRITE_MODEL = args.model
-        print(f"{theme.colorize_icon('hint')} Model override: {REWRITE_MODEL}")
+        print(f"{theme.colorize_icon_ansi('hint')} Model override: {REWRITE_MODEL}")
 
-    print(f"\n{theme.colorize_icon('hint')} Loading cluster map: {CLUSTER_MAP_IN}")
+    print(f"\n{theme.colorize_icon_ansi('hint')} Loading cluster map: {CLUSTER_MAP_IN}")
     df_map = pd.read_csv(CLUSTER_MAP_IN)
     df_map = ensure_writable_dtypes(df_map)
 
@@ -1422,22 +1422,22 @@ def main():
     mask_action = df_map["next_action"].str.strip().str.upper().isin(target_actions)
     df_todo     = df_map[mask_rep & mask_action].copy()
 
-    print(f"   {theme.colorize_icon('hint')} Total cluster map rows:         {len(df_map)}")
-    print(f"   {theme.colorize_icon('hint')} Representative + target action: {len(df_todo)}")
+    print(f"   {theme.colorize_icon_ansi('hint')} Total cluster map rows:         {len(df_map)}")
+    print(f"   {theme.colorize_icon_ansi('hint')} Representative + target action: {len(df_todo)}")
 
     already_done = load_already_processed(CLUSTER_MAP_OUT, KEEPERS_OUT, retry_manual=args.retry_manual)
     if already_done:
         before = len(df_todo)
         df_todo = df_todo[~df_todo["Bullet Point"].str.strip().isin(already_done)]
-        print(f"   {theme.colorize_icon('hint')}  Skipping {before - len(df_todo)} already-processed bullets")
+        print(f"   {theme.colorize_icon_ansi('hint')}  Skipping {before - len(df_todo)} already-processed bullets")
 
     if args.limit:
         df_todo = df_todo.head(args.limit)
 
-    print(f"   {theme.colorize_icon('hint')}  Bullets to process this run:    {len(df_todo)}\n")
+    print(f"   {theme.colorize_icon_ansi('hint')}  Bullets to process this run:    {len(df_todo)}\n")
 
     if df_todo.empty:
-        print(f"{theme.colorize_icon('success')} Nothing to process. All bullets are already done.")
+        print(f"{theme.colorize_icon_ansi('success')} Nothing to process. All bullets are already done.")
         return
 
     rules      = RulesBundle(RULES_DIR, SCORING_DIR)
@@ -1498,23 +1498,23 @@ def main():
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_OUT)
-            print(f"   {theme.colorize_icon('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
+            print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
         else:
             n_manual += 1
-            print(f"   {theme.colorize_icon('warning')} MANUAL — best version retained.")
+            print(f"   {theme.colorize_icon_ansi('warning')} MANUAL — best version retained.")
 
         bullets_since_flush += 1
         is_last = (i == total)
         if bullets_since_flush >= CSV_FLUSH_EVERY or is_last:
             df_out.to_csv(CLUSTER_MAP_OUT, index=False)
             bullets_since_flush = 0
-            print(f"   {theme.colorize_icon('hint')} Flushed cluster map ({i}/{total} bullets processed).")
+            print(f"   {theme.colorize_icon_ansi('hint')} Flushed cluster map ({i}/{total} bullets processed).")
 
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
     print(f"\n{'='*60}")
-    print(f"{theme.colorize_icon('success')} Run complete: {total} bullets processed")
+    print(f"{theme.colorize_icon_ansi('success')} Run complete: {total} bullets processed")
     print(f"   KEEP:   {n_keep}")
     print(f"   MANUAL: {n_manual}")
     print(f"   Cluster map → {CLUSTER_MAP_OUT}")

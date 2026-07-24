@@ -34,7 +34,7 @@ def build_sample() -> dict:
     build_tailored_*() call's own return dict ({} on failure, or the real
     data plus an _output_paths key on success)."""
     if not os.path.exists(SAMPLE_JD_PATH):
-        print(f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}")
+        print(f"  {theme.colorize_icon_ansi('error')} Sample fixture not found: {SAMPLE_JD_PATH}")
         return {"resume": {}, "coverletter": {}}
 
     # Clear any leftover checkpoint so this is always a full, fresh run --
@@ -69,13 +69,13 @@ if __name__ == "__main__":
     print("Sample build summary:")
     print(f"{'─'*60}")
     if resume_ok:
-        print(f"  {theme.colorize_icon('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}")
+        print(f"  {theme.colorize_icon_ansi('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}")
     else:
-        print(f"  {theme.colorize_icon('error')} Resume build failed.")
+        print(f"  {theme.colorize_icon_ansi('error')} Resume build failed.")
     if coverletter_ok:
-        print(f"  {theme.colorize_icon('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}")
+        print(f"  {theme.colorize_icon_ansi('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}")
     else:
-        print(f"  {theme.colorize_icon('error')} Cover letter build failed.")
+        print(f"  {theme.colorize_icon_ansi('error')} Cover letter build failed.")
 
     if not (resume_ok and coverletter_ok):
         raise SystemExit(1)
