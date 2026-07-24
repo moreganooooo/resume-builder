@@ -102,6 +102,14 @@ _ICON_COLORS = {
     "gem": WARNING,          # gold
 }
 
+def hex_to_ansi(hex_color: str) -> str:
+    """Convert hex color to ANSI 24-bit color escape code."""
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"\033[38;2;{r};{g};{b}m"
+
 def colorize_icon(name: str) -> str:
     """Return icon with Rich color markup if available in terminal."""
     if name not in ICONS:
@@ -110,6 +118,18 @@ def colorize_icon(name: str) -> str:
     color = _ICON_COLORS.get(name)
     if color:
         return f"[{color}]{icon}[/{color}]"
+    return icon
+
+def colorize_icon_for_questionary(name: str) -> str:
+    """Return icon with ANSI color codes for questionary (doesn't support Rich markup)."""
+    if name not in ICONS:
+        return name
+    icon = ICONS[name]
+    color = _ICON_COLORS.get(name)
+    if color:
+        ansi_color = hex_to_ansi(color)
+        reset = "\033[0m"
+        return f"{ansi_color}{icon}{reset}"
     return icon
 
 QUESTIONARY_STYLE = Style([
