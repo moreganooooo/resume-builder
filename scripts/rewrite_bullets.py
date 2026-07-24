@@ -1126,7 +1126,7 @@ KEEPER_COLS = [
     "Bullet Point", "Role / Company", "Tags",
     "accuracy_score", "believability_score", "clarity_score", "ats_value", "manager_test",
     "weaknesses", "source", "rewrite_attempts", "rewrite_reasoning", "context_gaps",
-    "rewrite_date", "source_cluster_id",
+    "rewrite_date", "source_cluster_id", "audit_status",
 ]
 
 
