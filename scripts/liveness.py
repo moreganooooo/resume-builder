@@ -145,10 +145,10 @@ def run_liveness_check(refresh: bool = False) -> dict:
     # Process and display by status group
     status_order = ["active", "likely_active", "expired", "uncertain"]
     icon_map = {
-        "active": theme.ICONS["success"],
-        "likely_active": theme.ICONS["warning"],
-        "expired": theme.ICONS["error"],
-        "uncertain": theme.ICONS["warning"],
+        "active": theme.colorize_icon('success'),
+        "likely_active": theme.colorize_icon('warning'),
+        "expired": theme.colorize_icon('error'),
+        "uncertain": theme.colorize_icon('warning'),
     }
 
     for status in status_order:
@@ -182,12 +182,12 @@ def run_liveness_check(refresh: bool = False) -> dict:
     print(f"{'─'*60}")
     print("Liveness Summary:")
     print(f"{'─'*60}")
-    print(f"  {theme.ICONS['success']} Active:                 {counts.get('active', 0)}")
-    print(f"  {theme.ICONS['warning']} Likely active:          {counts.get('likely_active', 0)}")
-    print(f"  {theme.ICONS['error']} Expired (moved):         {counts.get('expired', 0)}")
-    print(f"  {theme.ICONS['warning']} Uncertain (left):       {counts.get('uncertain', 0)}")
-    print(f"  {theme.ICONS['skip']} Skipped (no URL):       {skipped}")
-    print(f"  {theme.ICONS['skip']} Recently checked:       {len(recently_checked)}")
+    print(f"  {theme.colorize_icon('success')} Active:                 {counts.get('active', 0)}")
+    print(f"  {theme.colorize_icon('warning')} Likely active:          {counts.get('likely_active', 0)}")
+    print(f"  {theme.colorize_icon('error')} Expired (moved):         {counts.get('expired', 0)}")
+    print(f"  {theme.colorize_icon('warning')} Uncertain (left):       {counts.get('uncertain', 0)}")
+    print(f"  {theme.colorize_icon('skip')} Skipped (no URL):       {skipped}")
+    print(f"  {theme.colorize_icon('skip')} Recently checked:       {len(recently_checked)}")
     print()
 
     return {

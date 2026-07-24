@@ -341,17 +341,17 @@ _CONFIRMATION_GATES = {
 }
 
 _STAGE_HINTS = {
-    0: f"{theme.ICONS['hint']} Quality check time — every bullet gets scored the way a "
+    0: f"{theme.colorize_icon('hint')} Quality check time — every bullet gets scored the way a "
        "skeptical hiring manager would read it. This is the first API-heavy step.",
-    1: f"{theme.ICONS['hint']} Grouping near-duplicate bullets and keeping only the "
+    1: f"{theme.colorize_icon('hint')} Grouping near-duplicate bullets and keeping only the "
        "strongest version of each.",
-    2: f"{theme.ICONS['hint']} Rewriting anything that didn't pass the quality check — "
+    2: f"{theme.colorize_icon('hint')} Rewriting anything that didn't pass the quality check — "
        "the other API-heavy step.",
-    3: f"{theme.ICONS['hint']} Quick re-check on the rewritten bullets to make sure they "
+    3: f"{theme.colorize_icon('hint')} Quick re-check on the rewritten bullets to make sure they "
        "actually improved.",
-    4: f"{theme.ICONS['hint']} Flagging standout 'hidden gem' bullets — the ones a "
+    4: f"{theme.colorize_icon('hint')} Flagging standout 'hidden gem' bullets — the ones a "
        "hiring manager would specifically remember.",
-    5: f"{theme.ICONS['hint']} Last step — converting everything into a format the "
+    5: f"{theme.colorize_icon('hint')} Last step — converting everything into a format the "
        "system can use to intelligently match bullets to a job description "
        "later.",
 }
@@ -384,7 +384,7 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
             print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.")
             return False
 
-    print(f"\n{theme.ICONS['success']} All done! Your bullet bank is ready.")
+    print(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.")
     return True
 
 

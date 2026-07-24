@@ -57,9 +57,9 @@ if os.path.exists(out_path):
             raise ValueError(f"No known bullet column found in checkpoint. Columns: {list(existing.columns)}")
         already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
         results = existing.to_dict("records")
-        print(f"{theme.ICONS['resume']}  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
+        print(f"{theme.colorize_icon('resume')}  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
     except Exception as e:
-        print(f"{theme.ICONS['warning']}  Could not read existing checkpoint ({e}). Starting fresh.")
+        print(f"{theme.colorize_icon('warning')}  Could not read existing checkpoint ({e}). Starting fresh.")
 
 total = len(df)
 skipped = 0
@@ -94,17 +94,17 @@ for i, row in df.iterrows():
             "weaknesses":          data.get("weaknesses"),
         })
     except Exception as e:
-        print(f"  {theme.ICONS['warning']} Error: {e}")
+        print(f"  {theme.colorize_icon('warning')} Error: {e}")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": str(e)})
 
     # --- CHECKPOINT SAVE after every bullet ---
     pd.DataFrame(results).to_csv(out_path, index=False)
-    print(f"   {theme.ICONS['save']} Checkpoint saved ({len(results)} bullets scored)")
+    print(f"   {theme.colorize_icon('save')} Checkpoint saved ({len(results)} bullets scored)")
 
     if i < total - 1:
         time.sleep(SLEEP)
 
-print(f"\n{theme.ICONS['success']} Done. Results saved to {out_path}")
+print(f"\n{theme.colorize_icon('success')} Done. Results saved to {out_path}")
 print(f"   PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
 print(f"   FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
 print(f"   ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")

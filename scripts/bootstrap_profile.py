@@ -585,13 +585,13 @@ def _polish_bullet(
 
 def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
     total = sum(len(role["bullets"]) for role in rows)
-    print(f"\n{theme.ICONS['hint']} Polishing {total} bullet(s) for your cv.md draft...")
+    print(f"\n{theme.colorize_icon('hint')} Polishing {total} bullet(s) for your cv.md draft...")
 
     checkpoint = _load_cv_draft_checkpoint()
     already_done = sum(1 for role in rows for bullet in role["bullets"]
                         if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint)
     if already_done:
-        print(f"   {theme.ICONS['resume']} Resuming: {already_done}/{total} already polished in a prior run.")
+        print(f"   {theme.colorize_icon('resume')} Resuming: {already_done}/{total} already polished in a prior run.")
 
     lines = [f"# {identity['full_name']}", ""]
     contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
@@ -612,7 +612,7 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
             polished = _polish_bullet(
                 bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run, checkpoint,
             )
-            status_icon = theme.ICONS["success"] if polished["rewrite_status"] == "KEEP" else theme.ICONS["warning"]
+            status_icon = theme.colorize_icon('success') if polished["rewrite_status"] == "KEEP" else theme.colorize_icon('warning')
             print(f"   {status_icon} {polished['rewrite_status']}")
             print()
             lines.append(f"- {polished['final_bullet']}")
@@ -801,7 +801,7 @@ def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions:
 
     os.makedirs(os.path.dirname(env_file), exist_ok=True)
     set_key(env_file, var_name, value.strip())
-    print(f"  {theme.ICONS['success']} Saved {var_name} to {env_file}.")
+    print(f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.")
     return True
 
 

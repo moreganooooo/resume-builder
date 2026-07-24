@@ -81,7 +81,7 @@ def detect_col(headers: list[str]) -> str:
         return BULLET_COL
     for col in FALLBACK_COLS:
         if col in headers:
-            print(f"  {theme.ICONS['warning']}  '{BULLET_COL}' not found — using '{col}' instead.")
+            print(f"  {theme.colorize_icon('warning')}  '{BULLET_COL}' not found — using '{col}' instead.")
             return col
     raise ValueError(f"Cannot find bullet text column. Headers: {headers}")
 
@@ -165,11 +165,11 @@ def main():
         rows    = list(reader)
 
     if not rows:
-        print("{theme.ICONS['warning']}  No rows found. Exiting.")
+        print("{theme.colorize_icon('warning')}  No rows found. Exiting.")
         return
 
     bullet_col = detect_col(list(headers))
-    print(f"  {theme.ICONS['success']} {len(rows)} rows loaded. Bullet column: '{bullet_col}'")
+    print(f"  {theme.colorize_icon('success')} {len(rows)} rows loaded. Bullet column: '{bullet_col}'")
 
     # Determine which rows need scoring
     to_score_idx = [
@@ -189,7 +189,7 @@ def main():
         return
 
     if not to_score_idx:
-        print("{theme.ICONS['success']}  All rows already scored. Nothing to do.")
+        print("{theme.colorize_icon('success')}  All rows already scored. Nothing to do.")
         return
 
     system_prompt = build_system_prompt()
@@ -229,10 +229,10 @@ def main():
 
             if flag:
                 gem_count += 1
-                print(f"    {theme.ICONS['gem']} GEM [{score}] {reason}")
+                print(f"    {theme.colorize_icon('gem')} GEM [{score}] {reason}")
             elif score >= 75:
                 strong_count += 1
-                print(f"    {theme.ICONS['gem']} Strong [{score}]")
+                print(f"    {theme.colorize_icon('gem')} Strong [{score}]")
             else:
                 print(f"    📋 Score: {score}")
         else:
@@ -246,12 +246,12 @@ def main():
         if scored_since_flush >= GEM_FLUSH_EVERY or is_last:
             _write_scored_csv(args.output, rows, final_headers)
             scored_since_flush = 0
-            print(f"    {theme.ICONS['save']} Flushed scored CSV ({n}/{len(to_score_idx)} processed).")
+            print(f"    {theme.colorize_icon('save')} Flushed scored CSV ({n}/{len(to_score_idx)} processed).")
 
-    print(f"\n{theme.ICONS['success']} Scored CSV saved: {args.output}")
-    print(f"   {theme.ICONS['gem']} Hidden Gems:  {gem_count}")
-    print(f"   {theme.ICONS['gem']} Strong:        {strong_count}")
-    print(f"   {theme.ICONS['error']} Errors:        {error_count}")
+    print(f"\n{theme.colorize_icon('success')} Scored CSV saved: {args.output}")
+    print(f"   {theme.colorize_icon('gem')} Hidden Gems:  {gem_count}")
+    print(f"   {theme.colorize_icon('gem')} Strong:        {strong_count}")
+    print(f"   {theme.colorize_icon('error')} Errors:        {error_count}")
 
     # Write gems-only CSV
     gem_rows = [r for r in rows if str(r.get("hidden_gem_flag", "")).lower() == "true"]
@@ -261,7 +261,7 @@ def main():
             writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(gem_rows)
-        print(f"   {theme.ICONS['gem']} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)")
+        print(f"   {theme.colorize_icon('gem')} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)")
 
 
 if __name__ == "__main__":
