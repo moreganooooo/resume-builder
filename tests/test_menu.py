@@ -11,6 +11,15 @@ import questionary  # noqa: E402
 import menu  # noqa: E402
 
 
+def _title_text(title) -> str:
+    """Flatten a questionary Choice title -- either a plain string or the
+    [(style, text), ...] tuple-list format menu.py uses for colored icons --
+    into a plain string for substring assertions."""
+    if isinstance(title, str):
+        return title
+    return "".join(text for _, text in title)
+
+
 class TestChoicesAndHandlers(unittest.TestCase):
 
     def test_tailor_pick_and_coverletter_pick_are_registered(self):
@@ -36,7 +45,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
             self.assertNotIn(retired, menu._HANDLERS)
 
     def test_choices_have_the_renamed_labels(self):
-        labels = {c.value: c.title for c in menu._CHOICES}
+        labels = {c.value: _title_text(c.title) for c in menu._CHOICES}
         self.assertIn("Scan for New Postings", labels["scan"])
         self.assertIn("Check Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate ALL Pending Roles", labels["evaluate_all"])
@@ -944,7 +953,7 @@ class TestRunWithChain(unittest.TestCase):
         choices = mock_select.call_args.kwargs["choices"]
         # "somewhere" has no _CHAIN_ICONS entry -> falls back to plain
         # label; "__back__" always gets the utility icon.
-        self.assertEqual([c.title for c in choices], ["Next", f"{menu.theme.colorize_icon_for_questionary('utility')}  Back to Menu"])
+        self.assertEqual([c.title for c in choices], ["Next", menu._icon_title("utility", "Back to Menu")])
         self.assertEqual([c.value for c in choices], ["somewhere", "__back__"])
 
     @patch("menu.questionary.select")
