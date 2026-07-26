@@ -187,7 +187,7 @@ STAGES = [
     },
     {
         "key": "embed", "number": 6, "label": "Embed Bullet Bank (Final Step)",
-        "description": "builds the embeddings real resume builds match against",
+        "description": "builds the embeddings real resume builds match against\n",
         "script": "embed_bullet_bank.py", "inputs": [KEEPERS_AUDITED_CSV], "output": NPY_PATH,
         "api_cost": True, "status_mode": "progress", "progress_fn": _embed_progress,
     },
@@ -352,7 +352,7 @@ def _build_choices() -> list:
     standalone = [entry for entry in MAINTENANCE if entry["after_stage"] is None]
     if standalone:
         choices.append(questionary.Separator(
-            "── Ongoing Maintenance (optional, run anytime -- not tied to a full rebuild) ──"
+            "── Ongoing Maintenance (optional, run anytime) ──"
         ))
         for entry in standalone:
             choices.append(questionary.Choice(

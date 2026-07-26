@@ -413,6 +413,12 @@ def stage1_audit_keepers(
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
+    elif df_keepers["audit_status"].dtype != object:
+        # A fully-blank column round-trips through CSV as all-NaN and gets
+        # inferred as float64; pandas 3.x raises LossySetitemError on any
+        # later `.loc[...] = "CLEAN"` into it, so force it back to a
+        # string-holding dtype before anything writes into it.
+        df_keepers["audit_status"] = df_keepers["audit_status"].astype(object).fillna("")
 
     df_keepers = _merge_prior_audited_progress(df_keepers)
 
