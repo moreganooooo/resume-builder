@@ -114,3 +114,10 @@ yarn-error.log*
 
 # === PERSONAL CONVERSATION EXPORTS (not project code) ===
 resume-builder-conversations-perplexity/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

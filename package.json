@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "scripts": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moreganooooo/resume-builder.git"
@@ -19,5 +17,9 @@
   "homepage": "https://github.com/moreganooooo/resume-builder#readme",
   "dependencies": {
     "playwright": "^1.61.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.1"
   }
 }
