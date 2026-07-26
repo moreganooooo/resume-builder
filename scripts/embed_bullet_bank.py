@@ -124,7 +124,7 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
-    print(f"   Using key: {API_KEY[:8]}... (length {len(API_KEY)})")
+    print("   Using API key from environment (value redacted).")
 
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
