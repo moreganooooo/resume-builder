@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from urllib.parse import urlparse
 from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
@@ -20,7 +21,9 @@ class TestCandidateUrls(unittest.TestCase):
 
     def test_adds_https_scheme_when_missing(self):
         urls = company_research._candidate_urls("acme.com")
-        self.assertTrue(all(u.startswith("https://acme.com") for u in urls))
+        parsed_urls = [urlparse(u) for u in urls]
+        self.assertTrue(all(p.scheme == "https" for p in parsed_urls))
+        self.assertTrue(all(p.hostname == "acme.com" for p in parsed_urls))
 
     def test_strips_trailing_slash_before_appending_paths(self):
         urls = company_research._candidate_urls("https://acme.com/")
