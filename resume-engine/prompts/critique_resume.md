@@ -84,6 +84,9 @@ Using `skills_scoring.yaml`:
 ### Step 6 — Evaluate Role Fit
 
 Using `role_dna.yaml`, `ats_match.yaml`, and `manager_test.yaml`:
+- If `ats_match.yaml`'s `archetype_overrides` has an entry matching the `primary_identity`/
+  `style_rules_archetype` from Step 1, use those weights in place of the top-level
+  `match_weights`/`section_multipliers` defaults for this evaluation
 - Score keyword coverage against JD
 - Run manager-readiness checks
 - Flag gaps between resume positioning and JD requirements

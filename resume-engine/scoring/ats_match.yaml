@@ -19,3 +19,38 @@ thresholds:
 
 hard_requirements:
   penalty: -25 # Point deduction if a skill marked "Required" in JD is entirely missing
+
+# Per-archetype overrides of match_weights/section_multipliers above, keyed to the
+# archetype names in profile.yml's archetypes list. Not derived from data -- a first-pass
+# guess at which match type should carry more weight for each archetype's kind of work.
+# Tune these based on what critique_resume.md actually flags over time. An archetype not
+# listed here just uses the top-level defaults.
+archetype_overrides:
+  "Lifecycle Marketing Specialist":
+    exact_match: 1.0
+    semantic_match: 0.6   # tool-specific work; less credit for "similar enough" tools
+    partial_match: 0.4
+    section_multipliers:
+      recent_experience: 1.3 # ESP/CRM tooling changes fast; recency matters more here
+
+  "Customer Onboarding & Implementation Specialist":
+    exact_match: 1.0
+    semantic_match: 0.6
+    partial_match: 0.4
+    section_multipliers:
+      recent_experience: 1.3
+
+  "Sales Enablement Specialist":
+    exact_match: 0.9
+    semantic_match: 0.85  # playbook/training/voice-governance reads as competence, not tool-name hits
+    partial_match: 0.5
+
+  "B2B Content Strategist":
+    exact_match: 0.8
+    semantic_match: 0.9   # writing quality and voice matter more than exact tool-keyword hits
+    partial_match: 0.5
+
+  "Customer Marketing Manager":
+    exact_match: 0.9
+    semantic_match: 0.75
+    partial_match: 0.45
