@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from urllib.parse import urlparse
 
 import yaml
 
@@ -38,7 +39,12 @@ class TestMorganProfileYmlNewSchema(unittest.TestCase):
 
     def test_protected_bullets_has_four_entries(self):
         self.assertEqual(len(self.data["protected_bullets"]), 4)
-        self.assertTrue(any("Outreach.io" in b for b in self.data["protected_bullets"]))
+        self.assertTrue(
+            any(
+                (urlparse(b).hostname or "").lower() in {"outreach.io", "www.outreach.io"}
+                for b in self.data["protected_bullets"]
+            )
+        )
 
     def test_fixed_credentials_has_certifications_and_education(self):
         creds = self.data["fixed_credentials"]
