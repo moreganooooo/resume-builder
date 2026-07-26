@@ -36,6 +36,7 @@ from render_html import render_html
 from render_coverletter import render_coverletter
 import normalize_resume
 import validate_resume
+import validate_pdf_text
 import validate_coverletter
 import jd_manager
 import bullet_feedback
@@ -565,6 +566,33 @@ def _bullet_removal_trim_instruction(profile_data: dict) -> str:
     else:
         text += "."
     return text
+
+
+def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job_key: str) -> list[str]:
+    """
+    Prompts a y/n approval for each Step 5 critique recommendation before Step
+    5.5 is allowed to apply any of them -- so gap-filling content never lands
+    in the resume without explicit approval. Approval choices are checkpointed
+    under "approved_recommendations" so a resumed run doesn't re-prompt.
+    """
+    approved_recs = checkpoint.get("approved_recommendations")
+    if approved_recs is not None:
+        return approved_recs
+
+    print(f"\n{'─'*60}")
+    print("Step 5.5 review: approve which recommendations to attempt "
+          "(nothing below is applied until you say yes).")
+    approved_recs = []
+    for idx, rec in enumerate(recs, start=1):
+        answer = input(f"  [{idx}/{len(recs)}] {rec}\n    Apply this? [y/N] ").strip().lower()
+        if answer in ("y", "yes"):
+            approved_recs.append(rec)
+
+    checkpoint["approved_recommendations"] = approved_recs
+    jd_manager.save_checkpoint(job_key, checkpoint)
+    if not approved_recs:
+        print("  None approved -- skipping Step 5.5.")
+    return approved_recs
 
 
 def _parse_pdf_result(stdout: str) -> tuple:
@@ -2265,9 +2293,16 @@ class ResumeEngine:
         master_resume: dict,
         output_filename: str = None,
         job_key: str = None,
+        interactive: bool = False,
     ) -> dict:
         """
         Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique.
+
+        interactive=True (single-file `resume run <path>` only -- never batch mode,
+        `resume sample`, or tests) gates Step 5.5's critique-driven recommendations
+        behind an explicit per-recommendation y/n before any of them are applied,
+        so gap-filling content never lands in the resume without approval. Approval
+        choices are checkpointed so a resumed run doesn't re-prompt.
 
         Gap 1 fix: kb_context is placed in builder_system (system_instruction)
         rather than combined_contents. The full ~457k-token KB now forms a
@@ -2634,6 +2669,10 @@ class ResumeEngine:
             "recommendation specifically targets them) ===\n"
             + "\n".join(f"- {m}" for m in distinctive_moments) + "\n\n"
         ) if distinctive_moments else ""
+
+        if recs and interactive:
+            recs = _review_recommendations_interactively(recs, checkpoint, job_key)
+
         if recs:
             state = checkpoint.get("recommendation_actions") or {
                 "resume_data": resume_data, "applied": [], "skipped": [], "needs_polish": [], "next_index": 0,
@@ -2850,6 +2889,13 @@ class ResumeEngine:
         if fired_situational_roles:
             print(f"  {theme.colorize_icon_ansi('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
+        pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data)
+        if pdf_text_warnings:
+            print(f"  {theme.colorize_icon_ansi('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
+                  f"(what an ATS would actually parse from the file, not just the pre-render JSON):")
+            for w in pdf_text_warnings:
+                print(f"    - {w}")
+
         print(f"  {theme.colorize_icon_ansi('success')} Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
         resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
@@ -2915,6 +2961,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 master_resume=master_resume,
                 output_filename=output_filename if jd_path else None,
                 job_key=job_key,
+                interactive=jd_path is not None,
             )
         except Exception as e:
             result = None

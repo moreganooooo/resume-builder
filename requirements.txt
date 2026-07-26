@@ -15,5 +15,6 @@ browser_cookie3
 questionary
 python-docx
 python-pptx
+pdfminer.six
 odfpy
 openpyxl

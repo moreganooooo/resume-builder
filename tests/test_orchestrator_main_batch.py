@@ -54,7 +54,7 @@ class TestMainBatchMode(unittest.TestCase):
     ):
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None):
+        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
             if jd_path == self.good_path:
                 return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
             return {}
@@ -115,7 +115,7 @@ class TestMainBatchMode(unittest.TestCase):
         mock_compute_key.side_effect = compute_key_side_effect
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None):
+        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
             return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
 
         mock_build.side_effect = build_side_effect
@@ -162,7 +162,7 @@ class TestMainBatchMode(unittest.TestCase):
         # (not just a falsy return value); good_path still succeeds.
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None):
+        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
             if jd_path == self.good_path:
                 return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
             raise Exception("boom")
