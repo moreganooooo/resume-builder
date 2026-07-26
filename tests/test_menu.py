@@ -45,10 +45,13 @@ class TestChoicesAndHandlers(unittest.TestCase):
             self.assertNotIn(retired, menu._HANDLERS)
 
     def test_choices_have_the_renamed_labels(self):
+        # Labels as of the 2026-07-26 menu reorg (section separators, Knowledge
+        # Base/Discovery/Evaluation/Build/Polish/Browse groupings) -- see
+        # menu.py's _CHOICES.
         labels = {c.value: _title_text(c.title) for c in menu._CHOICES}
-        self.assertIn("Scan for New Postings", labels["scan"])
-        self.assertIn("Check Posting Liveness", labels["liveness"])
-        self.assertIn("Evaluate ALL Pending Roles", labels["evaluate_all"])
+        self.assertIn("Scan for New Jobs", labels["scan"])
+        self.assertIn("Check Job Posting Liveness", labels["liveness"])
+        self.assertIn("Evaluate Pending Roles", labels["evaluate_all"])
         self.assertIn("Customize Resume for ALL Pending Roles (Batch Run)", labels["tailor_all"])
         self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
 

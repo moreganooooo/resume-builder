@@ -1,7 +1,7 @@
 import os
+import re
 import sys
 import unittest
-from urllib.parse import urlparse
 
 import yaml
 
@@ -38,10 +38,14 @@ class TestMorganProfileYmlNewSchema(unittest.TestCase):
         self.assertTrue(roles["Inside Sales Team"]["must_fit_page_1"])
 
     def test_protected_bullets_has_four_entries(self):
+        # protected_bullets entries are prose bullet descriptions (e.g. "Outreach.io
+        # full platform ownership..."), never URLs -- urlparse(b).hostname would be
+        # None for all of them. A word-boundary match on the product name is the
+        # correct check here, not URL-hostname parsing.
         self.assertEqual(len(self.data["protected_bullets"]), 4)
         self.assertTrue(
             any(
-                (urlparse(b).hostname or "").lower() in {"outreach.io", "www.outreach.io"}
+                re.search(r"\boutreach\.io\b", b, re.IGNORECASE)
                 for b in self.data["protected_bullets"]
             )
         )
