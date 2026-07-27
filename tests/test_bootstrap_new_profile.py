@@ -46,6 +46,25 @@ class TestCreateNewProfile(unittest.TestCase):
         path = os.path.join(self.profile_path, "situational_roles.yaml")
         self.assertTrue(os.path.exists(path))
 
+    def test_scaffolds_valid_board_scanner_config(self):
+        # scan_boards.py/scan_ats.py would otherwise raise FileNotFoundError
+        # the first time this profile runs a scan.
+        import yaml
+
+        bootstrap_bullet_bank.create_new_profile(self.test_profile)
+        board_scanner_dir = os.path.join(self.profile_path, "board_scanner")
+
+        with open(os.path.join(board_scanner_dir, "tracked_companies.yml")) as f:
+            self.assertEqual(yaml.safe_load(f), {"tracked_companies": []})
+
+        with open(os.path.join(board_scanner_dir, "search_queries.yml")) as f:
+            self.assertEqual(yaml.safe_load(f), {"search_queries": []})
+
+        with open(os.path.join(board_scanner_dir, "scan_filters.yml")) as f:
+            filters = yaml.safe_load(f)
+        self.assertEqual(filters["title_filter"], {"positive": [], "negative": []})
+        self.assertIn("Remote", filters["location_filter"]["always_allow"])
+
     def test_seeds_stignore_files_in_every_sync_root(self):
         bootstrap_bullet_bank.create_new_profile(self.test_profile)
         for _label, path in profile_paths.sync_roots(self.test_profile):

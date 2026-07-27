@@ -54,9 +54,14 @@ from bs4 import BeautifulSoup
 
 import profile_paths
 
+# board-scanners/ (repo root) holds only the shared engine code (the Node
+# provider modules + the run_provider.mjs shim) -- generic across every
+# profile, same as any other script in this repo. The actual scan
+# *config* (which companies, which search terms, which title/location
+# keywords) is 100% profile-specific and lives under
+# profiles/<name>/board_scanner/ instead (profile_paths.board_scanner_dir()).
 BOARD_SCANNERS_DIR = os.path.join(profile_paths.PROJECT_ROOT, "board-scanners")
 RUN_PROVIDER_SCRIPT = os.path.join(BOARD_SCANNERS_DIR, "run_provider.mjs")
-FILTERS_PATH = os.path.join(BOARD_SCANNERS_DIR, "scan_filters.yml")
 
 BOARD_PROVIDERS = [
     "remoteok", "remotive", "himalayas", "jobicy", "weworkremotely",
@@ -108,15 +113,23 @@ class ProgressReporter:
         print(f"  [{self.done}/{self.total}] {self.label} {name}...{eta}")
 
 
-_filters_cache = None
+# Keyed by profile name (not a single cached value) -- this gets called
+# once per raw listing inside fetch_board_jobs()'s loop, so it's worth
+# caching for real, but a stale single-value cache would silently keep
+# serving the previously-active profile's filters after a runtime
+# profile switch (profile_paths.set_active_profile(), e.g. the
+# interactive menu's --profile gate) instead of picking up the new
+# profile's own scan_filters.yml.
+_filters_cache = {}
 
 
 def _load_filters() -> dict:
-    global _filters_cache
-    if _filters_cache is None:
-        with open(FILTERS_PATH, "r", encoding="utf-8") as f:
-            _filters_cache = yaml.safe_load(f)
-    return _filters_cache
+    profile = profile_paths.active_profile()
+    if profile not in _filters_cache:
+        path = os.path.join(profile_paths.board_scanner_dir(profile), "scan_filters.yml")
+        with open(path, "r", encoding="utf-8") as f:
+            _filters_cache[profile] = yaml.safe_load(f)
+    return _filters_cache[profile]
 
 
 def _passes_title_filter(title: str) -> bool:
