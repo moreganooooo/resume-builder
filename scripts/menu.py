@@ -77,6 +77,7 @@ _SCAN_SOURCE_CHOICES = [
     questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
     questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
     questionary.Choice(title=_icon_title("discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"), value="boards"),
+    questionary.Choice(title=_icon_title("discovery", "Direct-to-ATS only (Greenhouse, Ashby, Lever, etc.)"), value="ats"),
 ]
 
 
