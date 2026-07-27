@@ -15,6 +15,7 @@ import os
 
 import cli_art
 import jd_manager
+import liveness
 import scan_ats
 import scan_boards
 import scan_jobright
@@ -61,14 +62,27 @@ def _write_jd_file(job: dict) -> str:
     return dest
 
 
-def run_scan(sources: list = None) -> int:
+def run_scan(sources: list = None, verify: bool = True) -> int:
     """Runs each requested source's fetcher, writes new jobs into jds/
-    (skipping anything already known), renders a themed report of what
-    happened, and returns the count of new JD files written."""
+    (skipping anything already known), then -- unless verify=False --
+    runs a real Playwright liveness check on exactly the postings just
+    written (career-ops's default-on `scan.mjs --verify`, ported) and
+    drops any confirmed-expired ones into jds/expired/ before the report
+    ever presents them as a hit. An API/RSS feed can list a posting
+    that's already gone by the time we look (seen live: TheMuse serving
+    a 404 for a listed posting, 2026-07-26) -- _write_jd_file()'s
+    optimistic "confirmed to exist by scan" _liveness seed is a
+    scan-time assumption, not a verified fact. Renders a themed report
+    of what happened and returns the count of new JD files still
+    present in jds/ after verification."""
     sources = sources or list(SOURCE_FETCHERS.keys())
     tracker = jd_manager.JDTracker()
     written = 0
     source_results = []
+    # {path: (source_result_dict, new_jobs_entry_dict)}, so the verify
+    # pass below can find and remove exactly the entries that got moved
+    # to jds/expired/, across every source, without re-deriving anything.
+    written_paths = {}
 
     for source in sources:
         fetch = SOURCE_FETCHERS.get(source)
@@ -77,7 +91,7 @@ def run_scan(sources: list = None) -> int:
             continue
 
         jobs = fetch()
-        result = {"source": source, "fetched": len(jobs), "written": 0, "skipped": 0, "new_jobs": []}
+        result = {"source": source, "fetched": len(jobs), "written": 0, "skipped": 0, "dropped_expired": 0, "new_jobs": []}
 
         for job in jobs:
             company = job.get("company_name", "unknown")
@@ -98,12 +112,26 @@ def run_scan(sources: list = None) -> int:
                 result["skipped"] += 1
                 continue
 
-            _write_jd_file(job)
+            dest = _write_jd_file(job)
             written += 1
             result["written"] += 1
-            result["new_jobs"].append({"company": company, "title": title})
+            new_job_entry = {"company": company, "title": title}
+            result["new_jobs"].append(new_job_entry)
+            written_paths[dest] = (result, new_job_entry)
 
         source_results.append(result)
+
+    if verify and written_paths:
+        verify_result = liveness.verify_jd_paths(list(written_paths.keys()))
+        for path in verify_result.get("expired_paths", []):
+            entry = written_paths.get(path)
+            if not entry:
+                continue
+            result, new_job_entry = entry
+            result["written"] -= 1
+            result["dropped_expired"] += 1
+            result["new_jobs"].remove(new_job_entry)
+            written -= 1
 
     cli_art.render_scan_report(source_results, written)
     return written

@@ -402,23 +402,32 @@ def render_scan_report(source_results: list, total_written: int) -> None:
     version did (noisy after the first run of the day, tens/hundreds of
     lines for zero new information) -- just a Skipped count in the
     summary table; anything genuinely new is what earns a visible line.
-    source_results: [{"source", "fetched", "written", "skipped", "new_jobs":
-    [{"company", "title"}], "error": str|None}, ...]."""
+    source_results: [{"source", "fetched", "written", "skipped",
+    "dropped_expired", "new_jobs": [{"company", "title"}],
+    "error": str|None}, ...]. "dropped_expired" is optional (only present
+    when scan.run_scan()'s verify pass actually ran) -- a real Playwright
+    check caught the posting as already-dead before it ever became a
+    visible hit, distinct from "skipped" (already-known, not re-checked
+    at all)."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("Source")
     table.add_column("Fetched", justify="right")
     table.add_column("New", justify="right")
     table.add_column("Skipped", justify="right")
+    table.add_column("Expired", justify="right")
 
     for r in source_results:
         if r.get("error"):
-            table.add_row(r["source"], "-", "-", "-", style=theme.ERROR)
+            table.add_row(r["source"], "-", "-", "-", "-", style=theme.ERROR)
             continue
         new_count = r["written"]
         new_style = theme.SUCCESS if new_count else "dim"
+        dropped = r.get("dropped_expired", 0)
+        dropped_style = theme.WARNING if dropped else "dim"
         table.add_row(
             r["source"], str(r["fetched"]),
             f"[{new_style}]{new_count}[/{new_style}]", str(r["skipped"]),
+            f"[{dropped_style}]{dropped}[/{dropped_style}]",
         )
 
     console.print(Panel(
@@ -450,8 +459,9 @@ HELP_ENTRIES = [
     ("resume coverletter --pick", "interactively select which pending JD(s) to generate a cover letter for"),
     ("resume evaluate jds/x.txt", "score a JD's fit (go/no-go) without building a resume"),
     ("resume evaluate", "score every pending JD at once"),
-    ("resume scan", "pull new postings from all configured sources into jds/"),
+    ("resume scan", "pull new postings into jds/ (verifies each is actually live via headless browser by default)"),
     ("resume scan --source jobright", "pull from just one source (jobright, linkedin, boards, ats)"),
+    ("resume scan --no-verify", "skip the liveness check on new postings (faster, but stale listings may slip through)"),
     ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
     ("resume polish", "interactively polish an already-generated resume/cover letter"),
     ("resume test", "run the full test suite (compact: dots + summary)"),

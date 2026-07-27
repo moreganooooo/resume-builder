@@ -55,7 +55,7 @@ class TestRunScanDedup(unittest.TestCase):
         with patch.dict(scan.SOURCE_FETCHERS, {"jobright": lambda: [job]}, clear=True), \
              patch("scan.scan_jobright.fetch_jobright_jobs"), \
              patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
-            scan.run_scan(["jobright"])
+            scan.run_scan(["jobright"], verify=False)
         mock_known.assert_called_once_with(
             "abc123", tracker=mock_tracker_cls.return_value,
             source_url="https://example.com/job/1", company_name="Acme",
@@ -73,12 +73,57 @@ class TestRunScanDedup(unittest.TestCase):
         }
         with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: [job]}, clear=True), \
              patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
-            scan.run_scan(["boards"])
+            scan.run_scan(["boards"], verify=False)
         mock_known.assert_called_once_with(
             "https://example.com/job/1", tracker=mock_tracker_cls.return_value,
             source_url="https://example.com/job/1", company_name="Acme",
             job_title="Content Strategist",
         )
+
+
+class TestRunScanVerify(unittest.TestCase):
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_verify_runs_by_default_on_newly_written_paths(self, mock_tracker_cls, mock_known):
+        job = {"company_name": "Acme", "job_title": "Content Strategist", "source_url": "https://x.com/1"}
+        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: [job]}, clear=True), \
+             patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
+             patch("scan.liveness.verify_jd_paths", return_value={"expired_paths": []}) as mock_verify:
+            scan.run_scan(["boards"])
+        mock_verify.assert_called_once_with(["/tmp/fake.json"])
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_verify_false_skips_the_liveness_pass_entirely(self, mock_tracker_cls, mock_known):
+        job = {"company_name": "Acme", "job_title": "Content Strategist", "source_url": "https://x.com/1"}
+        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: [job]}, clear=True), \
+             patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
+             patch("scan.liveness.verify_jd_paths") as mock_verify:
+            scan.run_scan(["boards"], verify=False)
+        mock_verify.assert_not_called()
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_a_posting_verify_finds_expired_is_dropped_from_written_count_and_report(self, mock_tracker_cls, mock_known):
+        jobs = [
+            {"company_name": "Acme", "job_title": "Still Open", "source_url": "https://x.com/1"},
+            {"company_name": "Ghost Co", "job_title": "Already Gone", "source_url": "https://x.com/2"},
+        ]
+        paths = iter(["/tmp/still-open.json", "/tmp/already-gone.json"])
+        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: jobs}, clear=True), \
+             patch.object(scan, "_write_jd_file", side_effect=lambda job: next(paths)), \
+             patch("scan.liveness.verify_jd_paths", return_value={"expired_paths": ["/tmp/already-gone.json"]}), \
+             patch("scan.cli_art.render_scan_report") as mock_report:
+            written = scan.run_scan(["boards"])
+
+        self.assertEqual(written, 1)
+        source_results, total_written = mock_report.call_args[0]
+        self.assertEqual(total_written, 1)
+        boards_result = source_results[0]
+        self.assertEqual(boards_result["written"], 1)
+        self.assertEqual(boards_result["dropped_expired"], 1)
+        self.assertEqual(boards_result["new_jobs"], [{"company": "Acme", "title": "Still Open"}])
 
 
 if __name__ == "__main__":

@@ -176,10 +176,13 @@ def evaluate(jd_file, yes, refresh):
 @click.option("--source", "sources", multiple=True, default=None,
               help="Source to scan (jobright, linkedin, boards -- public job boards like RemoteOK/TheMuse, "
                    "ats -- direct-to-ATS like Greenhouse/Ashby/Lever). Repeatable. Default: all configured sources.")
-def scan_cmd(sources):
+@click.option("--no-verify", is_flag=True, default=False,
+              help="Skip the real-browser liveness check on newly-found postings (faster, but a posting an "
+                   "API/RSS feed still lists as open despite already being taken down may slip through).")
+def scan_cmd(sources, no_verify):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")
-    scan_module.run_scan(list(sources) if sources else None)
+    scan_module.run_scan(list(sources) if sources else None, verify=not no_verify)
 
 
 @cli.command(name="liveness")
