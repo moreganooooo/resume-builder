@@ -72,6 +72,10 @@ class TestPathHelpers(unittest.TestCase):
         expected = os.path.join(profile_paths.data_dir("morgan"), "applications.md")
         self.assertEqual(profile_paths.applications_md_path("morgan"), expected)
 
+    def test_board_scanner_dir_resolves_under_profile_root(self):
+        expected = os.path.join(profile_paths.PROFILES_DIR, "morgan", "board_scanner")
+        self.assertEqual(profile_paths.board_scanner_dir("morgan"), expected)
+
 
 class TestSyncRoots(unittest.TestCase):
 

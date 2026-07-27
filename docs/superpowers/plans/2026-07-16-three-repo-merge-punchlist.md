@@ -348,6 +348,16 @@ nothing here changed, only IDEAS.md did).
         SmartRecruiters' listing API confirmed to need a separate
         per-posting call for description (unlike the others), worth
         revisiting once real companies exist for it.
+        **Profile-scoping fix, 2026-07-27:** `tracked_companies.yml`/
+        `search_queries.yml`/`scan_filters.yml` had been sitting at
+        `board-scanners/` (repo root) -- shared across every profile
+        despite being 100% Morgan-specific data (her curated companies,
+        her search keywords). Moved to `profiles/morgan/board_scanner/`
+        (new `profile_paths.board_scanner_dir()`); `board-scanners/`
+        now holds only the shared Node provider engine code.
+        `bootstrap_bullet_bank.create_new_profile()` seeds a new profile
+        with an empty-but-valid `board_scanner/` so a fresh profile
+        doesn't hit `FileNotFoundError` on its first scan.
       - [x] **Liveness verification pass — done 2026-07-26.** career-ops's
         `scan.mjs --verify` (a Playwright liveness pass over only
         new/deduped postings, right after the API scan, before anything

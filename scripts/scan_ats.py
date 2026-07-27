@@ -10,7 +10,10 @@ scan_boards.py's aggregator providers which work with zero config.
 
 Two real sources of company targets, both vendored verbatim from
 career-ops's portals.yml (Morgan's own real curation, not a template she
-has to rebuild from scratch):
+has to rebuild from scratch) and living under
+profiles/<name>/board_scanner/ (profile_paths.board_scanner_dir()) --
+100% profile-specific data, unlike the shared engine code in
+board-scanners/providers/:
 
 - tracked_companies.yml -- 400 companies, most already resolvable to one
   of the ATS providers above from their careers_url/api (334 of 400 as
@@ -44,10 +47,8 @@ import os
 
 import yaml
 
+import profile_paths
 import scan_boards
-
-TRACKED_COMPANIES_PATH = os.path.join(scan_boards.BOARD_SCANNERS_DIR, "tracked_companies.yml")
-SEARCH_QUERIES_PATH = os.path.join(scan_boards.BOARD_SCANNERS_DIR, "search_queries.yml")
 
 # Mirrors board-scanners/providers/_recognition.mjs's RECOGNITION_RULES,
 # trimmed to only the providers actually vendored here (career-ops's list
@@ -84,12 +85,14 @@ def _resolve_provider_id(entry: dict) -> str:
 
 
 def _load_tracked_companies() -> list:
-    with open(TRACKED_COMPANIES_PATH, "r", encoding="utf-8") as f:
+    path = os.path.join(profile_paths.board_scanner_dir(), "tracked_companies.yml")
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f).get("tracked_companies", [])
 
 
 def _load_search_queries() -> list:
-    with open(SEARCH_QUERIES_PATH, "r", encoding="utf-8") as f:
+    path = os.path.join(profile_paths.board_scanner_dir(), "search_queries.yml")
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f).get("search_queries", [])
 
 
