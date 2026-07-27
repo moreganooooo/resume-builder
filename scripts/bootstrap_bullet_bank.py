@@ -79,14 +79,62 @@ _SITUATIONAL_ROLES_SCAFFOLD = """situational_min_bullets: 2
 roles: []
 """
 
+_TRACKED_COMPANIES_SCAFFOLD = """# board_scanner's "ats" source: companies to check directly on their own
+# ATS (Greenhouse/Ashby/Lever/Recruitee/SmartRecruiters/Workable/Workday).
+# Empty to start -- add companies as you find them worth tracking. Each
+# entry needs a name and a careers_url and/or api URL; provider is
+# auto-detected from the URL (see scan_ats.py's _resolve_provider_id) --
+# only set it explicitly for a non-obvious case. See
+# profiles/morgan/board_scanner/tracked_companies.yml for a real
+# worked example with 400 entries.
+#
+# - name: Acme Corp
+#   careers_url: https://boards.greenhouse.io/acme
+#   enabled: true
+tracked_companies: []
+"""
+
+_SEARCH_QUERIES_SCAFFOLD = """# board_scanner's "ats" source: Brave-search sweep queries for
+# discovering companies NOT already in tracked_companies.yml. Empty to
+# start -- needs BRAVE_API_KEY in this profile's .env to do anything.
+# See profiles/morgan/board_scanner/search_queries.yml for real worked
+# examples (mostly "site:boards.greenhouse.io ... remote" style
+# per-ATS-platform sweeps scoped to target keywords).
+#
+# - name: Greenhouse sweep
+#   query: 'site:boards.greenhouse.io "your target keyword" remote'
+#   enabled: true
+search_queries: []
+"""
+
+_SCAN_FILTERS_SCAFFOLD = """# board_scanner's "boards"/"ats" sources: title/location prefilter
+# applied before a listing becomes a JD file. Empty positive/always_allow
+# lists are permissive by design (an empty title_filter.positive means
+# every title passes; see scan_boards._passes_title_filter) -- add
+# keywords as you learn what's actually worth filtering for/against. See
+# profiles/morgan/board_scanner/scan_filters.yml for a real worked
+# example (100+ positive terms, 300+ negative terms).
+title_filter:
+  positive: []
+  negative: []
+location_filter:
+  always_allow:
+    - "Remote"
+  block: []
+"""
+
 
 def create_new_profile(name: str) -> str:
     """Scaffolds a fresh profiles/<name>/ directory: knowledge_base/ (plus
     its bootstrap/source_documents/ subfolder), a blank fixed_content.py,
-    an empty situational_roles.yaml, and .stignore files in every one of
-    this profile's sync roots (profile_paths.write_sync_ignore_files())
-    so it's ready for Syncthing out of the box. Raises FileExistsError if
-    the profile already exists -- never silently overwrites one."""
+    an empty situational_roles.yaml, an empty-but-valid board_scanner/
+    (tracked_companies.yml/search_queries.yml/scan_filters.yml --
+    scan_boards.py/scan_ats.py would otherwise raise FileNotFoundError
+    the first time this profile runs a scan), and .stignore files in
+    every one of this profile's sync roots
+    (profile_paths.write_sync_ignore_files()) so it's ready for Syncthing
+    out of the box. Raises FileExistsError if the profile already
+    exists -- never silently overwrites one."""
     import profile_paths
 
     profile_root = os.path.join(profile_paths.PROFILES_DIR, name)
@@ -94,12 +142,22 @@ def create_new_profile(name: str) -> str:
         raise FileExistsError(f"profiles/{name}/ already exists -- refusing to overwrite it.")
 
     os.makedirs(os.path.join(profile_root, "knowledge_base", "bootstrap", "source_documents"))
+    os.makedirs(os.path.join(profile_root, "board_scanner"))
 
     with open(os.path.join(profile_root, "fixed_content.py"), "w") as f:
         f.write(_FIXED_CONTENT_SCAFFOLD)
 
     with open(os.path.join(profile_root, "situational_roles.yaml"), "w") as f:
         f.write(_SITUATIONAL_ROLES_SCAFFOLD)
+
+    with open(os.path.join(profile_root, "board_scanner", "tracked_companies.yml"), "w") as f:
+        f.write(_TRACKED_COMPANIES_SCAFFOLD)
+
+    with open(os.path.join(profile_root, "board_scanner", "search_queries.yml"), "w") as f:
+        f.write(_SEARCH_QUERIES_SCAFFOLD)
+
+    with open(os.path.join(profile_root, "board_scanner", "scan_filters.yml"), "w") as f:
+        f.write(_SCAN_FILTERS_SCAFFOLD)
 
     profile_paths.write_sync_ignore_files(name)
 

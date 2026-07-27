@@ -79,6 +79,17 @@ def kb_dir(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "knowledge_base")
 
 
+def board_scanner_dir(profile: str = None) -> str:
+    """profiles/<name>/board_scanner/ -- tracked_companies.yml,
+    search_queries.yml, and scan_filters.yml (scan_boards.py/scan_ats.py's
+    config). 100% profile-specific data (Morgan's own curated target
+    companies, search keywords, title/location filters) -- unlike
+    board-scanners/providers/ (the Node scraper engine code itself, which
+    stays shared/top-level, same split as engine code vs. profile data
+    everywhere else in this project)."""
+    return os.path.join(profile_root(profile), "board_scanner")
+
+
 def situational_roles_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "situational_roles.yaml")
 
