@@ -114,6 +114,15 @@ def _passes_location_filter(location: str) -> bool:
     return True
 
 
+def _scan_warning(msg: str, *, kind: str, provider_id: str, reason: str, url: str = "") -> None:
+    """logging.warning() with structured `extra` fields scan.py's
+    _ScanWarningCollector reads to render a grouped, themed summary
+    instead of a raw wall of WARNING:root: lines -- the plain message is
+    still there for anyone watching logs directly (e.g. `resume test -vv`
+    or a bare terminal without the themed report)."""
+    logging.warning(msg, extra={"scan_warning": True, "kind": kind, "provider_id": provider_id, "reason": reason, "url": url})
+
+
 def _run_node_provider(provider_id: str, entry: dict) -> list:
     try:
         result = subprocess.run(
@@ -121,17 +130,21 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
             capture_output=True, text=True, timeout=NODE_TIMEOUT_SECONDS,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        logging.warning(f"scan_boards: {provider_id} failed to run -- {e}")
+        _scan_warning(f"scan_boards: {provider_id} failed to run -- {e}",
+                      kind="provider_failed", provider_id=provider_id, reason=type(e).__name__)
         return []
 
     if result.returncode != 0:
-        logging.warning(f"scan_boards: {provider_id} -- {result.stderr.strip()}")
+        reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else f"exit {result.returncode}"
+        _scan_warning(f"scan_boards: {provider_id} -- {result.stderr.strip()}",
+                      kind="provider_failed", provider_id=provider_id, reason=reason)
         return []
 
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as e:
-        logging.warning(f"scan_boards: {provider_id} returned invalid JSON -- {e}")
+        _scan_warning(f"scan_boards: {provider_id} returned invalid JSON -- {e}",
+                      kind="provider_failed", provider_id=provider_id, reason="invalid JSON output")
         return []
 
 
@@ -158,7 +171,7 @@ def _html_to_text(markup: str) -> str:
     return text[:MAX_DESCRIPTION_CHARS]
 
 
-def _fetch_posting_text(url: str) -> str:
+def _fetch_posting_text(url: str, provider_id: str = "") -> str:
     """Best-effort plain-text extraction of a posting page. Whole-page
     text, not a per-ATS content selector -- good enough to tailor
     against, not guaranteed clean. Returns "" on any failure; a thin JD
@@ -168,7 +181,9 @@ def _fetch_posting_text(url: str) -> str:
     most providers' own APIs already return one, which is both more
     reliable (no per-posting-page fetch to fail/block/rate-limit) and
     avoids sites like himalayas.app that put their posting pages behind
-    a Cloudflare challenge no plain HTTP request can pass."""
+    a Cloudflare challenge no plain HTTP request can pass. `provider_id`
+    is optional and only used to tag the structured warning on failure
+    (see _scan_warning) -- doesn't affect the fetch itself."""
     try:
         response = requests.get(
             url, timeout=POSTING_FETCH_TIMEOUT_SECONDS,
@@ -176,7 +191,10 @@ def _fetch_posting_text(url: str) -> str:
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        logging.warning(f"scan_boards: couldn't fetch posting text from {url} -- {e}")
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        reason = f"HTTP {status_code}" if status_code else type(e).__name__
+        _scan_warning(f"scan_boards: couldn't fetch posting text from {url} -- {e}",
+                      kind="posting_text_failed", provider_id=provider_id, reason=reason, url=url)
         return ""
 
     return _html_to_text(response.text)
@@ -221,7 +239,7 @@ def fetch_board_jobs(sources: list = None, search_term: str = None) -> list:
             # fetch, which is slower and can be blocked/rate-limited/stale.
             # Only fetch the live page when a provider genuinely has none.
             raw_description = raw.get("description") or ""
-            description = _html_to_text(raw_description) if raw_description else _fetch_posting_text(url)
+            description = _html_to_text(raw_description) if raw_description else _fetch_posting_text(url, provider_id)
 
             jobs.append({
                 "job_title": title,

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import unittest
@@ -124,6 +125,76 @@ class TestRunScanVerify(unittest.TestCase):
         self.assertEqual(boards_result["written"], 1)
         self.assertEqual(boards_result["dropped_expired"], 1)
         self.assertEqual(boards_result["new_jobs"], [{"company": "Acme", "title": "Still Open"}])
+
+
+class TestScanWarningCollection(unittest.TestCase):
+    """scan._ScanWarningCollector / _summarize_warnings -- warnings
+    scan_boards.py/scan_ats.py log via _scan_warning() (posting-text
+    fetch failures, provider failures) get grouped and attached to the
+    themed report instead of dumping as a raw wall of WARNING:root:
+    lines."""
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_warnings_are_grouped_by_provider_kind_and_reason(self, mock_tracker_cls, mock_known):
+        def fake_fetch():
+            for _ in range(3):
+                logging.warning("boom", extra={"scan_warning": True, "kind": "posting_text_failed", "provider_id": "workday", "reason": "HTTP 404"})
+            logging.warning("boom2", extra={"scan_warning": True, "kind": "provider_failed", "provider_id": "greenhouse", "reason": "HTTP 404"})
+            return []
+
+        with patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True), \
+             patch("scan.cli_art.render_scan_report") as mock_report:
+            scan.run_scan(["ats"], verify=False)
+
+        source_results, _ = mock_report.call_args[0]
+        warnings = source_results[0]["warnings"]
+        self.assertEqual(warnings[0], {"provider_id": "workday", "kind": "posting_text_failed", "reason": "HTTP 404", "count": 3})
+        self.assertEqual(warnings[1], {"provider_id": "greenhouse", "kind": "provider_failed", "reason": "HTTP 404", "count": 1})
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_warnings_without_the_scan_warning_marker_are_ignored(self, mock_tracker_cls, mock_known):
+        def fake_fetch():
+            logging.warning("some unrelated warning from somewhere else entirely")
+            return []
+
+        with patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True), \
+             patch("scan.cli_art.render_scan_report") as mock_report:
+            scan.run_scan(["ats"], verify=False)
+
+        source_results, _ = mock_report.call_args[0]
+        self.assertEqual(source_results[0]["warnings"], [])
+
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_warnings_are_scoped_to_the_source_that_produced_them(self, mock_tracker_cls, mock_known):
+        def boards_fetch():
+            logging.warning("boom", extra={"scan_warning": True, "kind": "provider_failed", "provider_id": "himalayas", "reason": "HTTP 403"})
+            return []
+
+        def ats_fetch():
+            return []
+
+        with patch.dict(scan.SOURCE_FETCHERS, {"boards": boards_fetch, "ats": ats_fetch}, clear=True), \
+             patch("scan.cli_art.render_scan_report") as mock_report:
+            scan.run_scan(["boards", "ats"], verify=False)
+
+        source_results, _ = mock_report.call_args[0]
+        boards_result = next(r for r in source_results if r["source"] == "boards")
+        ats_result = next(r for r in source_results if r["source"] == "ats")
+        self.assertEqual(len(boards_result["warnings"]), 1)
+        self.assertEqual(ats_result["warnings"], [])
+
+    def test_removes_the_handler_after_run_so_it_never_accumulates(self):
+        root_logger = logging.getLogger()
+        handlers_before = len(root_logger.handlers)
+        with patch.dict(scan.SOURCE_FETCHERS, {"ats": lambda: []}, clear=True), \
+             patch("scan.jd_manager.job_key_known", return_value=False), \
+             patch("scan.jd_manager.JDTracker"), \
+             patch("scan.cli_art.render_scan_report"):
+            scan.run_scan(["ats"], verify=False)
+        self.assertEqual(len(root_logger.handlers), handlers_before)
 
 
 if __name__ == "__main__":

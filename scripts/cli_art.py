@@ -403,31 +403,39 @@ def render_scan_report(source_results: list, total_written: int) -> None:
     lines for zero new information) -- just a Skipped count in the
     summary table; anything genuinely new is what earns a visible line.
     source_results: [{"source", "fetched", "written", "skipped",
-    "dropped_expired", "new_jobs": [{"company", "title"}],
-    "error": str|None}, ...]. "dropped_expired" is optional (only present
-    when scan.run_scan()'s verify pass actually ran) -- a real Playwright
-    check caught the posting as already-dead before it ever became a
-    visible hit, distinct from "skipped" (already-known, not re-checked
-    at all)."""
+    "dropped_expired", "new_jobs": [{"company", "title"}], "warnings":
+    [{"provider_id", "kind", "reason", "count"}], "error": str|None}, ...].
+    "dropped_expired" is optional (only present when scan.run_scan()'s
+    verify pass actually ran) -- a real Playwright check caught the
+    posting as already-dead before it ever became a visible hit, distinct
+    from "skipped" (already-known, not re-checked at all). "warnings" is
+    pre-grouped by scan._summarize_warnings() (provider_id/kind/reason,
+    most-frequent-first) -- e.g. workday HTTP 404s x44 renders as one row
+    here, not 44 raw WARNING:root: lines the way the old plain-logging
+    version did."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("Source")
     table.add_column("Fetched", justify="right")
     table.add_column("New", justify="right")
     table.add_column("Skipped", justify="right")
     table.add_column("Expired", justify="right")
+    table.add_column("Issues", justify="right")
 
     for r in source_results:
         if r.get("error"):
-            table.add_row(r["source"], "-", "-", "-", "-", style=theme.ERROR)
+            table.add_row(r["source"], "-", "-", "-", "-", "-", style=theme.ERROR)
             continue
         new_count = r["written"]
         new_style = theme.SUCCESS if new_count else "dim"
         dropped = r.get("dropped_expired", 0)
         dropped_style = theme.WARNING if dropped else "dim"
+        issue_count = sum(w["count"] for w in r.get("warnings", []))
+        issue_style = theme.WARNING if issue_count else "dim"
         table.add_row(
             r["source"], str(r["fetched"]),
             f"[{new_style}]{new_count}[/{new_style}]", str(r["skipped"]),
             f"[{dropped_style}]{dropped}[/{dropped_style}]",
+            f"[{issue_style}]{issue_count}[/{issue_style}]",
         )
 
     console.print(Panel(
@@ -442,6 +450,37 @@ def render_scan_report(source_results: list, total_written: int) -> None:
         console.rule(f"[bold {theme.BRAND}]{r['source']}[/bold {theme.BRAND}] — {len(r['new_jobs'])} new", style="dim", align="left")
         for job in r["new_jobs"]:
             console.print(f"  {theme.colorize_icon('success')} [bold]{job['company']}[/bold] — {job['title']}")
+
+    _render_scan_warnings(source_results)
+
+
+_WARNING_KIND_LABELS = {
+    "provider_failed": "listing fetch failed",
+    "posting_text_failed": "description fetch failed",
+}
+
+
+def _render_scan_warnings(source_results: list) -> None:
+    """One grouped table across every source with issues -- see
+    render_scan_report()'s docstring for why grouping matters here."""
+    rows = [
+        (r["source"], w["provider_id"] or "-", _WARNING_KIND_LABELS.get(w["kind"], w["kind"]), w["reason"], w["count"])
+        for r in source_results for w in r.get("warnings", [])
+    ]
+    if not rows:
+        return
+
+    console.print()
+    console.rule(f"[bold {theme.WARNING}]{theme.colorize_icon('warning')} Issues[/bold {theme.WARNING}]", style="dim", align="left")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("Source")
+    table.add_column("Provider")
+    table.add_column("Stage")
+    table.add_column("Reason")
+    table.add_column("Count", justify="right")
+    for source, provider_id, stage, reason, count in rows:
+        table.add_row(source, provider_id, stage, reason, f"[{theme.WARNING}]{count}[/{theme.WARNING}]")
+    console.print(table)
 
 
 # Single source of truth for the shortcuts cheat sheet -- both `resume

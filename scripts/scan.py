@@ -9,8 +9,10 @@ scope decision) -- a scanned job either becomes a JD file ready for
 `resume run`/`resume tailor`, or is skipped as already-known.
 """
 
+import collections
 import datetime
 import json
+import logging
 import os
 
 import cli_art
@@ -21,6 +23,39 @@ import scan_boards
 import scan_jobright
 import scan_linkedin
 import theme
+
+
+class _ScanWarningCollector(logging.Handler):
+    """Captures scan_boards.py/scan_ats.py's structured warnings
+    (posting-text fetch failures, provider failures -- anything logged
+    via scan_boards._scan_warning()) instead of letting Python's default
+    last-resort handler dump them straight to the terminal as raw
+    WARNING:root: lines. Installed on the root logger for the duration
+    of run_scan() and suppresses that default dump entirely (attaching
+    any handler to the root logger takes over from the last-resort
+    fallback) -- render_scan_report() presents a grouped, themed summary
+    from what this collects instead. Only captures records carrying the
+    `scan_warning` marker, so an unrelated stray warning elsewhere in the
+    app during a scan isn't silently swallowed."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.records = []
+
+    def emit(self, record):
+        if getattr(record, "scan_warning", False):
+            self.records.append(record)
+
+
+def _summarize_warnings(records: list) -> list:
+    """Groups captured warning records by (provider_id, kind, reason),
+    sorted most-frequent-first -- "workday: posting text fetch failed
+    (HTTP 404) x44" reads as one line instead of 44 raw ones."""
+    counts = collections.Counter((r.provider_id, r.kind, r.reason) for r in records)
+    return [
+        {"provider_id": provider_id, "kind": kind, "reason": reason, "count": count}
+        for (provider_id, kind, reason), count in sorted(counts.items(), key=lambda kv: -kv[1])
+    ]
 
 # A JD just found by a scan is, by definition, confirmed to exist right
 # now -- seeding _liveness here means it starts inside liveness.py's
@@ -84,42 +119,53 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
     # to jds/expired/, across every source, without re-deriving anything.
     written_paths = {}
 
-    for source in sources:
-        fetch = SOURCE_FETCHERS.get(source)
-        if fetch is None:
-            source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
-            continue
-
-        jobs = fetch()
-        result = {"source": source, "fetched": len(jobs), "written": 0, "skipped": 0, "dropped_expired": 0, "new_jobs": []}
-
-        for job in jobs:
-            company = job.get("company_name", "unknown")
-            title = job.get("job_title", "unknown")
-            job_id = job.get("source_job_id")
-            source_url = job.get("source_url")
-            # Board-provider jobs have no numeric source_job_id, only a
-            # URL -- fall back to it so job_key_known() actually runs for
-            # them instead of silently skipping dedup (job_key used to be
-            # None whenever source_job_id was absent, and the caller only
-            # dedups when job_key is truthy).
-            job_key = str(job_id) if job_id else (source_url or "")
-            if job_key and jd_manager.job_key_known(
-                job_key, tracker=tracker,
-                source_url=source_url, company_name=job.get("company_name"),
-                job_title=job.get("job_title"),
-            ):
-                result["skipped"] += 1
+    collector = _ScanWarningCollector()
+    root_logger = logging.getLogger()
+    root_logger.addHandler(collector)
+    try:
+        for source in sources:
+            fetch = SOURCE_FETCHERS.get(source)
+            if fetch is None:
+                source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
                 continue
 
-            dest = _write_jd_file(job)
-            written += 1
-            result["written"] += 1
-            new_job_entry = {"company": company, "title": title}
-            result["new_jobs"].append(new_job_entry)
-            written_paths[dest] = (result, new_job_entry)
+            warnings_before = len(collector.records)
+            jobs = fetch()
+            source_warnings = collector.records[warnings_before:]
+            result = {
+                "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
+                "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
+            }
 
-        source_results.append(result)
+            for job in jobs:
+                company = job.get("company_name", "unknown")
+                title = job.get("job_title", "unknown")
+                job_id = job.get("source_job_id")
+                source_url = job.get("source_url")
+                # Board-provider jobs have no numeric source_job_id, only a
+                # URL -- fall back to it so job_key_known() actually runs for
+                # them instead of silently skipping dedup (job_key used to be
+                # None whenever source_job_id was absent, and the caller only
+                # dedups when job_key is truthy).
+                job_key = str(job_id) if job_id else (source_url or "")
+                if job_key and jd_manager.job_key_known(
+                    job_key, tracker=tracker,
+                    source_url=source_url, company_name=job.get("company_name"),
+                    job_title=job.get("job_title"),
+                ):
+                    result["skipped"] += 1
+                    continue
+
+                dest = _write_jd_file(job)
+                written += 1
+                result["written"] += 1
+                new_job_entry = {"company": company, "title": title}
+                result["new_jobs"].append(new_job_entry)
+                written_paths[dest] = (result, new_job_entry)
+
+            source_results.append(result)
+    finally:
+        root_logger.removeHandler(collector)
 
     if verify and written_paths:
         verify_result = liveness.verify_jd_paths(list(written_paths.keys()))
