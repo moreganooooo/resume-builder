@@ -73,9 +73,10 @@ _CHOICES = [
 
 
 _SCAN_SOURCE_CHOICES = [
-    questionary.Choice(title=_icon_title("discovery", "Both (default)"), value="both"),
+    questionary.Choice(title=_icon_title("discovery", "All (default)"), value="all"),
     questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
     questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
+    questionary.Choice(title=_icon_title("discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"), value="boards"),
 ]
 
 
@@ -250,7 +251,7 @@ def _handle_scan() -> bool:
     ).ask()
     if not choice:
         return False
-    sources = None if choice == "both" else [choice]
+    sources = None if choice == "all" else [choice]
     written = scan_module.run_scan(sources)
     return written > 0
 
