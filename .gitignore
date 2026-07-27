@@ -121,3 +121,8 @@ resume-builder-conversations-perplexity/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Fedora-only WebKit-via-podman workaround (see .claude.local.md) -- not
+# needed/not relevant on machines where WebKit runs natively.
+/scripts/local-webkit-test.sh
+/scripts/local-webkit-test.Containerfile
