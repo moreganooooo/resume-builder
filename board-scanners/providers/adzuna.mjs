@@ -35,6 +35,11 @@ export default {
         company: j.company?.display_name || entry.name,
         location: j.location?.display_name || '',
         posted_at: j.created || '',
+        // The search API already returns a full description -- Adzuna's
+        // own redirect_url (a click-tracking landing page, not the raw
+        // posting) blocks plain HTTP requests with a 403, so this is the
+        // only reliable source of body text for this provider (2026-07-26).
+        description: j.description || '',
       }));
   },
 };
