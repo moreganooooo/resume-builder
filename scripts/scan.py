@@ -15,6 +15,7 @@ import os
 
 import cli_art
 import jd_manager
+import scan_ats
 import scan_boards
 import scan_jobright
 import scan_linkedin
@@ -30,6 +31,7 @@ SOURCE_FETCHERS = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
     "boards": scan_boards.fetch_board_jobs,
+    "ats": scan_ats.fetch_ats_jobs,
 }
 
 

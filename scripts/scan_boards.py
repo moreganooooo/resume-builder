@@ -2,14 +2,16 @@
 scan_boards.py -- board-scanner source for scan.py, ported from career-ops's
 providers/*.mjs plugin layer (vendored into board-scanners/providers/,
 2026-07-26; see docs/superpowers/plans/2026-07-16-three-repo-merge-punchlist.md
-item 5). Only the zero-config aggregator/search-driven providers are wired
-up here (RemoteOK, Remotive, Himalayas, Jobicy, WeWorkRemotely,
-WorkingNomads, FourDayWeek, NoDesk, AuthenticJobs, CrunchBoard, Jobspresso,
-RealWorkFromAnywhere, PowerToFly, TheMuse, HackerNews) -- none need an API
-key or a curated company list, so they produce results immediately. The
-API-key providers (Adzuna, USAJobs) and the direct-to-ATS providers
-(Greenhouse/Ashby/Lever/etc., which need a curated tracked_companies list)
-are a separate follow-up, not ported yet.
+item 5). Covers the zero-config aggregator/search-driven providers
+(RemoteOK, Remotive, Himalayas, Jobicy, WeWorkRemotely, WorkingNomads,
+FourDayWeek, NoDesk, AuthenticJobs, CrunchBoard, Jobspresso,
+RealWorkFromAnywhere, PowerToFly, TheMuse, HackerNews, plus Adzuna/USAJobs
+which use the exact same mechanism but need an API key in the active
+profile's .env before they return anything). The direct-to-ATS providers
+(Greenhouse/Ashby/Lever/etc., which need a curated company list) are a
+separate module -- see scan_ats.py, which reuses several helpers here
+(_run_node_provider, _passes_title_filter, _passes_location_filter,
+_html_to_text, _fetch_posting_text).
 
 Each provider is a plain ESM module with no shared runtime beyond
 board-scanners/providers/_http.mjs -- resume-builder shells out to
@@ -59,6 +61,11 @@ BOARD_PROVIDERS = [
     "remoteok", "remotive", "himalayas", "jobicy", "weworkremotely",
     "workingnomads", "fourdayweek", "nodesk", "authenticjobs", "crunchboard",
     "jobspresso", "realworkfromanywhere", "powertofly", "themuse", "hackernews",
+    # Same mechanism as everything above -- just needs an API key in the
+    # active profile's .env (ADZUNA_APP_ID/ADZUNA_APP_KEY;
+    # USAJOBS_API_KEY/USAJOBS_EMAIL) or they return nothing (the
+    # provider's own .mjs throws, _run_node_provider logs it and moves on).
+    "adzuna", "usajobs",
 ]
 
 NODE_TIMEOUT_SECONDS = 30

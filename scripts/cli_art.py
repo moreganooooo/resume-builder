@@ -451,7 +451,7 @@ HELP_ENTRIES = [
     ("resume evaluate jds/x.txt", "score a JD's fit (go/no-go) without building a resume"),
     ("resume evaluate", "score every pending JD at once"),
     ("resume scan", "pull new postings from all configured sources into jds/"),
-    ("resume scan --source jobright", "pull from just one source (jobright, linkedin, boards)"),
+    ("resume scan --source jobright", "pull from just one source (jobright, linkedin, boards, ats)"),
     ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
     ("resume polish", "interactively polish an already-generated resume/cover letter"),
     ("resume test", "run the full test suite (compact: dots + summary)"),

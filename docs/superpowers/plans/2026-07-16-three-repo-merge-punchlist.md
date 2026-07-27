@@ -170,7 +170,7 @@ nothing here changed, only IDEAS.md did).
 
 ### 5. Pipeline porting
 
-- [ ] **`scan`:** port **all** of career-ops's ~26 `providers/*.mjs` board
+- [x] **`scan`:** port **all** of career-ops's ~26 `providers/*.mjs` board
       scrapers (decided 2026-07-16, item 1) as parallel source plugins
       alongside job_automater's already-ported LinkedIn/JobRight scrapers
       (done 2026-07-04) -- shell out to each `.mjs` as a subprocess, parse
@@ -252,21 +252,32 @@ nothing here changed, only IDEAS.md did).
         skipped posting, which was tens/hundreds of noise lines on every
         run after the first. Menu label changed from vague "Board scan
         only" to "Public job boards only (RemoteOK, TheMuse, etc.)".
-      - [ ] **Direct-to-ATS** (Greenhouse, Ashby, Lever, SmartRecruiters,
-        Recruitee, Workable) -- only surface results for companies present
-        in a `tracked_companies`-style curated list (18 Greenhouse, 5 Ashby
-        entries exist today in career-ops's `portals.yml`; zero for the
-        other four). Porting the code is just as cheap, but **each will
-        return nothing until someone spends real time hand-picking
-        companies for it** -- that curation pass is a separate, ongoing
-        follow-up task, not part of "porting," and can happen incrementally
-        after the fact (start with what's already curated, expand as
-        Morgan identifies more companies worth tracking on each ATS).
-      - [ ] **API-key providers (Adzuna, USAJobs)** -- code-identical
-        porting effort to the aggregator batch above, just needs
-        `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` and `USAJOBS_API_KEY`/
-        `USAJOBS_EMAIL` in the active profile's `.env` before they'll
-        return anything. Not wired up yet.
+      - [x] **Direct-to-ATS + API-key providers + search sweep — done
+        2026-07-26.** Ashby, Greenhouse, Lever, Recruitee, SmartRecruiters,
+        Workable, Workday vendored into `board-scanners/providers/`;
+        Adzuna/USAJobs added to `scan_boards.BOARD_PROVIDERS` (same
+        mechanism as the aggregator batch, just gated on API keys).
+        New `scripts/scan_ats.py` (`"ats"` source) resolves each
+        `tracked_companies.yml` entry to a provider (explicit `provider:`
+        field, else hostname pattern match) and runs the 68
+        `search_queries.yml` sweep queries through the vendored
+        `websearch.mjs`. **Both config files are career-ops's real
+        curated data, ported wholesale from `portals.yml`, not empty
+        templates** -- 400 tracked companies (292 resolve to Greenhouse
+        alone; 0 of the 400 enabled entries are unresolved) and 68 Brave-
+        search ATS sweep queries. Confirmed live end-to-end against real
+        companies (Duolingo/Greenhouse: 60 postings, ClassDojo/Ashby: 12,
+        ASPCA/Workday: 48). Adzuna/USAJobs need API keys, and the sweep
+        queries need `BRAVE_API_KEY`, before they return anything --
+        Morgan's to add when ready. **Two more real bugs found and fixed
+        while porting:** `workday.mjs` had a stray debug
+        `page.screenshot({ path: 'workday-debug.png' })` call writing a
+        screenshot file on every single fetch, and `websearch.mjs` called
+        `recognizeProvider(r.url)` without ever importing it -- a
+        `ReferenceError` on every search result in career-ops today,
+        silently breaking its "promote a sweep-discovered company to a
+        direct provider" feature. Both fixed in the vendored copies. 10
+        new tests (`tests/test_scan_ats.py`).
       - [ ] **Found during a 2026-07-21 sibling-repo audit:** career-ops's
         `scan.mjs --verify` runs a Playwright liveness pass over only
         new/deduped postings right after the zero-token API scan, before
