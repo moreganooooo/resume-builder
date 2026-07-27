@@ -97,13 +97,13 @@ class TestHandleScan(unittest.TestCase):
     @patch("menu.scan_module.run_scan", return_value=3)
     @patch("menu.questionary.select")
     def test_returns_true_when_postings_written(self, mock_select, mock_run):
-        mock_select.return_value.ask.return_value = "both"
+        mock_select.return_value.ask.return_value = "all"
         self.assertTrue(menu._handle_scan())
 
     @patch("menu.scan_module.run_scan", return_value=0)
     @patch("menu.questionary.select")
     def test_returns_false_when_nothing_written(self, mock_select, mock_run):
-        mock_select.return_value.ask.return_value = "both"
+        mock_select.return_value.ask.return_value = "all"
         self.assertFalse(menu._handle_scan())
 
     @patch("menu.scan_module.run_scan")
@@ -115,8 +115,8 @@ class TestHandleScan(unittest.TestCase):
 
     @patch("menu.scan_module.run_scan", return_value=1)
     @patch("menu.questionary.select")
-    def test_both_choice_passes_none_to_run_scan(self, mock_select, mock_run):
-        mock_select.return_value.ask.return_value = "both"
+    def test_all_choice_passes_none_to_run_scan(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "all"
         menu._handle_scan()
         mock_run.assert_called_once_with(None)
 

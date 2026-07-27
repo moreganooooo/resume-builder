@@ -176,11 +176,83 @@ nothing here changed, only IDEAS.md did).
       (done 2026-07-04) -- shell out to each `.mjs` as a subprocess, parse
       its JSON output, no rewriting. Two real sub-categories, worth keeping
       distinct when sequencing this:
-      - **Aggregator/search-driven** (RemoteOK, Adzuna, USAJobs, Himalayas,
-        WeWorkRemotely, Jobicy, Remotive, etc.) -- one search query/API
-        config each, no per-company list, produce results immediately once
-        wired up. Straightforward to knock out as a batch.
-      - **Direct-to-ATS** (Greenhouse, Ashby, Lever, SmartRecruiters,
+      - [x] **Aggregator/search-driven — done 2026-07-26.** 15 zero-config
+        providers (RemoteOK, Remotive, Himalayas, Jobicy, WeWorkRemotely,
+        WorkingNomads, FourDayWeek, NoDesk, AuthenticJobs, CrunchBoard,
+        Jobspresso, RealWorkFromAnywhere, PowerToFly, TheMuse, HackerNews)
+        vendored into `board-scanners/providers/` + a `run_provider.mjs`
+        CLI shim; `scripts/scan_boards.py` shells out to each and wires
+        into `scan.py`'s `SOURCE_FETCHERS` as a new `"boards"` source
+        (`resume scan --source boards`, also in the interactive menu).
+        Also ported career-ops's `title_filter`/`location_filter`
+        keyword lists from `portals.yml` into `board-scanners/scan_filters.yml`
+        (a Python port of `scan.mjs`'s `buildTitleFilter`/
+        `buildLocationFilter`, applied before a listing becomes a JD file)
+        -- **found and fixed while porting: career-ops's own
+        `location_filter` config shape doesn't match what `buildLocationFilter()`
+        reads (`location_filter:` is a flat list, `block:` is a separate
+        top-level key, not nested `location_filter.block`), so location
+        filtering is silently a no-op in career-ops today. Not ported
+        broken -- fixed in the vendored copy; worth a fix upstream in
+        career-ops too, separately.**
+        Board-provider listings carry no description body (career-ops's
+        own scan.mjs never fetches one either -- its pipeline is a
+        human/Claude reading the URL, not a Gemini batch call), so
+        `scan_boards.py` also does a best-effort full-page-text fetch per
+        surviving posting (whole-page text via BeautifulSoup, not a
+        per-ATS content selector -- good enough to tailor against, not
+        guaranteed clean; a real follow-up would need per-site
+        extraction or Playwright rendering). Also fixed a real
+        pre-existing dedup gap in `scan.py` found while wiring this up:
+        `job_key_known()` was only ever called when a source provided a
+        numeric `source_job_id`, so any URL-only source (all board
+        providers) would silently skip dedup entirely and re-write the
+        same posting every scan -- now falls back to `source_url` as the
+        dedup key. 15 new tests (`tests/test_scan_boards.py`,
+        `tests/test_scan.py`), full suite green (955 tests).
+        **Two more real bugs found on Morgan's actual first live run
+        (2026-07-26), fixed same day:** the hardcoded placeholder passed
+        as `entry.name` ("resume-builder-scan") was leaking into
+        `company_name` on any listing whose raw source had no company
+        field, since providers like remoteok.mjs fall back to
+        `entry.name` themselves (`j.company || entry.name`) -- now uses
+        the provider id instead, so a missing company reads as "we don't
+        know, here's the source" rather than a fake company name; and
+        HTML entities (`&amp;` etc.) weren't decoded on non-RSS
+        providers' title/company text (RSS providers get this via
+        `_rss.mjs`'s `decodeEntities`, JSON-API providers didn't) --
+        fixed with `html.unescape()` at the Python normalization layer,
+        one fix point covering every provider regardless of source
+        format. Also added a guard dropping listings whose title is
+        literally a URL (a handful of feed entries had this). 5 more
+        regression tests (20 total in `test_scan_boards.py`). The 30
+        already-written JD files with the bug baked in from that first
+        run were deleted (with Morgan's confirmation) so a re-scan pulls
+        clean versions instead of those URLs being silently skipped
+        forever as "already known."
+        **Further improvement, same day:** career-ops's providers only
+        ever returned title/company/url/location -- 13 of the 15 vendored
+        providers' own APIs already carry a full description in the same
+        response (career-ops just never mapped it through, since its
+        pipeline never needed one). Each vendored `providers/*.mjs` now
+        maps that field through, and `scan_boards.py` prefers it over a
+        second per-posting-page fetch (faster, and the only way to get a
+        body at all for Himalayas, whose posting pages sit behind a
+        Cloudflare managed challenge no plain HTTP request can pass --
+        that was producing a 403 warning on every run). `_fetch_posting_text()`
+        is now only a fallback for FourDayWeek, the one provider with no
+        native description. Also switched `_html_to_text()`'s tag-join
+        strategy from newline-per-tag (fragmented inline HTML like `<b>`/
+        `<a>` across lines) to space-join with `<br>` preserved as real
+        newlines. 6 more tests (23 total). Also replaced `scan.py`'s
+        plain-print output with a themed Rich report
+        (`cli_art.render_scan_report()`): a per-source Fetched/New/Skipped
+        table plus a divider-separated list of only the newly-written
+        postings -- the old version printed an "already known" line per
+        skipped posting, which was tens/hundreds of noise lines on every
+        run after the first. Menu label changed from vague "Board scan
+        only" to "Public job boards only (RemoteOK, TheMuse, etc.)".
+      - [ ] **Direct-to-ATS** (Greenhouse, Ashby, Lever, SmartRecruiters,
         Recruitee, Workable) -- only surface results for companies present
         in a `tracked_companies`-style curated list (18 Greenhouse, 5 Ashby
         entries exist today in career-ops's `portals.yml`; zero for the
@@ -190,19 +262,24 @@ nothing here changed, only IDEAS.md did).
         follow-up task, not part of "porting," and can happen incrementally
         after the fact (start with what's already curated, expand as
         Morgan identifies more companies worth tracking on each ATS).
-      - **Found during a 2026-07-21 sibling-repo audit:** career-ops's
+      - [ ] **API-key providers (Adzuna, USAJobs)** -- code-identical
+        porting effort to the aggregator batch above, just needs
+        `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` and `USAJOBS_API_KEY`/
+        `USAJOBS_EMAIL` in the active profile's `.env` before they'll
+        return anything. Not wired up yet.
+      - [ ] **Found during a 2026-07-21 sibling-repo audit:** career-ops's
         `scan.mjs --verify` runs a Playwright liveness pass over only
         new/deduped postings right after the zero-token API scan, before
         anything hits the pipeline. Worth designing this porting pass
         together with the already-tracked liveness work (item #16 /
         "Liveness skip-by-recency") rather than treating scan-porting and
         liveness as fully separate efforts.
-- [ ] **`evaluate`:** career-ops's fit-scoring — already ported (done
-      2026-07-04, IDEAS.md item 1.3), but **one gap found 2026-07-21**:
-      career-ops's original 6-block evaluation included a scam/ghost-
-      posting legitimacy check that didn't make it into the port — see
-      IDEAS.md's "Posting-legitimacy check missing from ported evaluate
-      logic." Small, scoped fix; not a merge blocker either way.
+- [x] **`evaluate`:** career-ops's fit-scoring — ported (done 2026-07-04,
+      IDEAS.md item 1.3). The scam/ghost-posting legitimacy gap found
+      2026-07-21 is also closed: `posting_legitimacy`/
+      `posting_legitimacy_notes` are live in `FitEvaluationSchema`,
+      `evaluate_fit.md`'s prompt, `jd_manager.py` persistence, and surfaced
+      in both the single-JD and batch views. See `IDEAS_ARCHIVE.md`.
 - [ ] **`track`:** adopt career-ops's markdown/YAML tracker fully —
       partially done (`applications.md` exists; Score/Report wired to the
       real evaluate stage 2026-07-16). Career-ops's dedup/merge logic

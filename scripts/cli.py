@@ -174,7 +174,8 @@ def evaluate(jd_file, yes, refresh):
 
 @cli.command(name="scan")
 @click.option("--source", "sources", multiple=True, default=None,
-              help="Source to scan (jobright, linkedin). Repeatable. Default: all configured sources.")
+              help="Source to scan (jobright, linkedin, boards -- public job boards like RemoteOK/TheMuse). "
+                   "Repeatable. Default: all configured sources.")
 def scan_cmd(sources):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")

@@ -13,7 +13,9 @@ import datetime
 import json
 import os
 
+import cli_art
 import jd_manager
+import scan_boards
 import scan_jobright
 import scan_linkedin
 import theme
@@ -27,6 +29,7 @@ _SCAN_LIVENESS_REASON = "confirmed to exist by scan"
 SOURCE_FETCHERS = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
+    "boards": scan_boards.fetch_board_jobs,
 }
 
 
@@ -57,40 +60,48 @@ def _write_jd_file(job: dict) -> str:
 
 
 def run_scan(sources: list = None) -> int:
-    """Runs each requested source's fetcher, writes new jobs into jds/ (skipping
-    anything already known), and returns the count of new JD files written."""
+    """Runs each requested source's fetcher, writes new jobs into jds/
+    (skipping anything already known), renders a themed report of what
+    happened, and returns the count of new JD files written."""
     sources = sources or list(SOURCE_FETCHERS.keys())
     tracker = jd_manager.JDTracker()
     written = 0
+    source_results = []
 
     for source in sources:
         fetch = SOURCE_FETCHERS.get(source)
         if fetch is None:
-            print(f"  WARNING: unknown scan source '{source}', skipping. "
-                  f"Known sources: {', '.join(SOURCE_FETCHERS)}")
+            source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
             continue
 
-        print(f"\nScanning {source}...")
         jobs = fetch()
-        total = len(jobs)
-        print(f"  Fetched {total} jobs from {source}.")
+        result = {"source": source, "fetched": len(jobs), "written": 0, "skipped": 0, "new_jobs": []}
 
-        for i, job in enumerate(jobs, 1):
+        for job in jobs:
             company = job.get("company_name", "unknown")
             title = job.get("job_title", "unknown")
             job_id = job.get("source_job_id")
-            job_key = str(job_id) if job_id else None
+            source_url = job.get("source_url")
+            # Board-provider jobs have no numeric source_job_id, only a
+            # URL -- fall back to it so job_key_known() actually runs for
+            # them instead of silently skipping dedup (job_key used to be
+            # None whenever source_job_id was absent, and the caller only
+            # dedups when job_key is truthy).
+            job_key = str(job_id) if job_id else (source_url or "")
             if job_key and jd_manager.job_key_known(
                 job_key, tracker=tracker,
-                source_url=job.get("source_url"), company_name=job.get("company_name"),
+                source_url=source_url, company_name=job.get("company_name"),
                 job_title=job.get("job_title"),
             ):
-                print(f"  [{i}/{total}] Skipping {company} -- {title} (already known)")
+                result["skipped"] += 1
                 continue
 
-            dest = _write_jd_file(job)
+            _write_jd_file(job)
             written += 1
-            print(f"  [{i}/{total}] + {company} -- {title}")
+            result["written"] += 1
+            result["new_jobs"].append({"company": company, "title": title})
 
-    print(f"\nScan summary: {written} new JD file(s) written to jds/.")
+        source_results.append(result)
+
+    cli_art.render_scan_report(source_results, written)
     return written

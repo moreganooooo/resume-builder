@@ -394,6 +394,47 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
     console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED))
 
 
+def render_scan_report(source_results: list, total_written: int) -> None:
+    """Renders scan.run_scan()'s per-source results -- one row per source
+    in a summary table, then the actual new postings grouped under a
+    themed divider per source. Deliberately doesn't print an
+    "already known" line per skipped posting the way the old plain-print
+    version did (noisy after the first run of the day, tens/hundreds of
+    lines for zero new information) -- just a Skipped count in the
+    summary table; anything genuinely new is what earns a visible line.
+    source_results: [{"source", "fetched", "written", "skipped", "new_jobs":
+    [{"company", "title"}], "error": str|None}, ...]."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("Source")
+    table.add_column("Fetched", justify="right")
+    table.add_column("New", justify="right")
+    table.add_column("Skipped", justify="right")
+
+    for r in source_results:
+        if r.get("error"):
+            table.add_row(r["source"], "-", "-", "-", style=theme.ERROR)
+            continue
+        new_count = r["written"]
+        new_style = theme.SUCCESS if new_count else "dim"
+        table.add_row(
+            r["source"], str(r["fetched"]),
+            f"[{new_style}]{new_count}[/{new_style}]", str(r["skipped"]),
+        )
+
+    console.print(Panel(
+        table, title="Scan Results", border_style=theme.BRAND, box=box.ROUNDED,
+        subtitle=f"{total_written} new JD(s) written to jds/",
+    ))
+
+    for r in source_results:
+        if not r.get("new_jobs"):
+            continue
+        console.print()
+        console.rule(f"[bold {theme.BRAND}]{r['source']}[/bold {theme.BRAND}] — {len(r['new_jobs'])} new", style="dim", align="left")
+        for job in r["new_jobs"]:
+            console.print(f"  {theme.colorize_icon('success')} [bold]{job['company']}[/bold] — {job['title']}")
+
+
 # Single source of truth for the shortcuts cheat sheet -- both `resume
 # help` (scripts/resume-cli.sh, which shells out to `python scripts/cli.py
 # help`) and the interactive menu's Help entry render this same list, so
@@ -410,7 +451,7 @@ HELP_ENTRIES = [
     ("resume evaluate jds/x.txt", "score a JD's fit (go/no-go) without building a resume"),
     ("resume evaluate", "score every pending JD at once"),
     ("resume scan", "pull new postings from all configured sources into jds/"),
-    ("resume scan --source jobright", "pull from just one source (jobright, linkedin)"),
+    ("resume scan --source jobright", "pull from just one source (jobright, linkedin, boards)"),
     ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
     ("resume polish", "interactively polish an already-generated resume/cover letter"),
     ("resume test", "run the full test suite (compact: dots + summary)"),
