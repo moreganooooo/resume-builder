@@ -252,6 +252,17 @@ nothing here changed, only IDEAS.md did).
         skipped posting, which was tens/hundreds of noise lines on every
         run after the first. Menu label changed from vague "Board scan
         only" to "Public job boards only (RemoteOK, TheMuse, etc.)".
+        **Same-day follow-up:** scan_boards.py/scan_ats.py's own
+        WARNING:root: lines (posting-text-fetch and provider-listing
+        failures) were still dumping raw and unstyled -- a real "wall of
+        text" on a large `--source ats` run. A new
+        `scan._ScanWarningCollector` (a logging.Handler installed on the
+        root logger for the run) captures them via a `_scan_warning()`
+        helper carrying structured `extra` fields instead, groups by
+        (provider, kind, reason) with a count, and `cli_art`'s report
+        gained an "Issues" column plus a themed grouped table --
+        44 raw "workday ... 404" lines now render as one row: `workday |
+        description fetch failed | HTTP 404 | 44`.
       - [x] **Direct-to-ATS + API-key providers + search sweep — done
         2026-07-26.** Ashby, Greenhouse, Lever, Recruitee, SmartRecruiters,
         Workable, Workday vendored into `board-scanners/providers/`;

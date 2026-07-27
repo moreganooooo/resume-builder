@@ -105,7 +105,7 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
 
     raw_description = raw.get("description") or ""
-    description = scan_boards._html_to_text(raw_description) if raw_description else scan_boards._fetch_posting_text(url)
+    description = scan_boards._html_to_text(raw_description) if raw_description else scan_boards._fetch_posting_text(url, provider_id)
 
     return {
         "job_title": title,
