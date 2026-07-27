@@ -320,8 +320,16 @@ function cleanTitle(raw, companyName) {
 function extractLocation(snippet) {
   const remoteMatch = snippet.match(/\b(remote|fully remote|work from anywhere)\b/i);
   if (remoteMatch) return 'Remote';
-  const locMatch = snippet.match(/\b([A-Z][a-z]+(?:,\s*[A-Z]{2})?(?:,\s*(?:US|USA|United States))?)\b/);
-  return locMatch?.[1] || '';
+  // NOTE (resume-builder, 2026-07-26): this used to also try a generic
+  // capitalized-word regex as a location guess when "remote" wasn't
+  // found -- confirmed live it was matching arbitrary capitalized words
+  // in the snippet ("Partnering", "You", "Explore", "Give"), never real
+  // locations, contradicting this function's own stated intent ("Location
+  // is not reliably available from search snippets, so it defaults to
+  // empty string" -- see the module header comment). Removed rather than
+  // ported broken; empty string lets the location filter treat it the
+  // same permissive way as any other missing-location listing.
+  return '';
 }
 
 /**

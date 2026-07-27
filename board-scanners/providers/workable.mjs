@@ -4,10 +4,16 @@
 // Workable provider — hits the public markdown feed at /<slug>/jobs.md.
 // Workable's documented JSON API requires an auth token; the markdown feed
 // is the only no-auth public surface. Auto-detects from careers_url pattern
-// `https://apply.workable.com/<slug>`. A tracked_companies entry can also
-// set `provider: workable` explicitly to bypass detection.
+// `https://apply.workable.com/<slug>` OR the equivalent `<slug>.workable.com`
+// custom-subdomain form (added 2026-07-26 -- found live: a real tracked
+// company, Doist, uses the subdomain form and career-ops's original never
+// handled it, so it never resolved to any provider at all). Both forms
+// resolve to the same apply.workable.com/<slug>/jobs.md feed URL. A
+// tracked_companies entry can also set `provider: workable` explicitly to
+// bypass detection.
 
 const ALLOWED_WORKABLE_HOSTS = new Set(['apply.workable.com']);
+const RESERVED_WORKABLE_SUBDOMAINS = new Set(['apply', 'www', 'api']);
 
 function assertWorkableUrl(url) {
   let parsed;
@@ -33,10 +39,20 @@ function resolveFeedUrl(entry) {
     return null;
   }
   if (parsed.protocol !== 'https:') return null;
-  if (parsed.hostname !== 'apply.workable.com') return null;
-  const slug = parsed.pathname.split('/').filter(Boolean)[0];
-  if (!slug) return null;
-  return `https://apply.workable.com/${slug}/jobs.md`;
+
+  if (parsed.hostname === 'apply.workable.com') {
+    const slug = parsed.pathname.split('/').filter(Boolean)[0];
+    return slug ? `https://apply.workable.com/${slug}/jobs.md` : null;
+  }
+
+  if (parsed.hostname.endsWith('.workable.com')) {
+    const subdomain = parsed.hostname.slice(0, -'.workable.com'.length);
+    if (subdomain && !subdomain.includes('.') && !RESERVED_WORKABLE_SUBDOMAINS.has(subdomain)) {
+      return `https://apply.workable.com/${subdomain}/jobs.md`;
+    }
+  }
+
+  return null;
 }
 
 /** @type {Provider} */
