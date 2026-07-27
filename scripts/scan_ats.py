@@ -64,11 +64,16 @@ _ATS_HOST_PATTERNS = [
 ]
 
 
+_ATS_PROVIDER_IDS = frozenset(provider_id for provider_id, _ in _ATS_HOST_PATTERNS)
+
+
 def _resolve_provider_id(entry: dict) -> str:
     """Explicit provider field wins (covers both the 7 ATS providers here
     and any of scan_boards.py's aggregator providers a tracked_companies
     entry names directly); otherwise pattern-match careers_url/api.
-    Returns "" when nothing resolves."""
+    Returns "" when nothing resolves. Does NOT filter out aggregator
+    provider ids -- that's fetch_ats_jobs()'s job (see its docstring) --
+    this function just answers "what would this entry resolve to."""
     if entry.get("provider"):
         return entry["provider"]
     haystack = f"{entry.get('careers_url', '')} {entry.get('api', '')}".lower()
@@ -126,14 +131,29 @@ def fetch_ats_jobs(sources: list = None) -> list:
     signature-compatibility with scan.py but unused -- there's no
     meaningful per-call subset the way scan_boards.py has per-provider
     sources; the whole point here is per-company targeting, already
-    expressed in tracked_companies.yml itself (its own `enabled` field)."""
+    expressed in tracked_companies.yml itself (its own `enabled` field).
+
+    Skips any entry resolving to an aggregator provider (not one of the
+    7 real ATS providers) -- found live, 2026-07-27: 34 tracked_companies
+    entries explicitly pin `provider: remoteok`/`jobspresso`/etc. (career-
+    ops's own design, each run twice with search_term "marketing"/
+    "enablement"), but scan_boards.py's "boards" source already fetches
+    those exact same feeds in full and unfiltered. Since "marketing"/
+    "enablement" results are necessarily a subset of the full feed, every
+    posting these entries could return is already covered by "boards" --
+    running them here only re-fetches the same postings under a
+    different company label (the pinned entry's own display name, e.g.
+    "Jobspresso — Marketing" vs. "boards"'s "jobspresso"), which defeats
+    job_key_known()'s source_url+company_name dedup match and produces
+    real duplicate JD files (confirmed live: 31 duplicate-URL groups,
+    62 files, before this fix)."""
     jobs = []
 
     for company in _load_tracked_companies():
         if company.get("enabled") is False:
             continue
         provider_id = _resolve_provider_id(company)
-        if not provider_id:
+        if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
             continue
 
         raw_jobs = scan_boards._run_node_provider(provider_id, company)
@@ -146,7 +166,17 @@ def fetch_ats_jobs(sources: list = None) -> list:
     for query in _load_search_queries():
         if query.get("enabled") is False:
             continue
-        entry = {**query, "name": query.get("name", "websearch"), "scan_query": query.get("query", "")}
+        # _isSweep tells websearch.mjs to prefer the company it extracts
+        # from the result URL over `entry.name` (the sweep query's own
+        # descriptive name, e.g. "Greenhouse — Marketing & Enablement
+        # remote") -- omitting it (found live 2026-07-27) meant every
+        # sweep-discovered posting got stamped with the query's name as
+        # its "company", so the same real posting found via two
+        # different sweep queries produced two JD files with different
+        # fake company names, defeating dedup's source_url+company_name
+        # match. career-ops's own scan.mjs always sets this for
+        # search_queries entries; ported that here.
+        entry = {**query, "name": query.get("name", "websearch"), "scan_query": query.get("query", ""), "_isSweep": True}
         raw_jobs = scan_boards._run_node_provider("websearch", entry)
         logging.info(f"scan_ats: sweep '{query.get('name')}' returned {len(raw_jobs)} raw listing(s).")
         for raw in raw_jobs:
