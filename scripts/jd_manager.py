@@ -99,13 +99,19 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
 
     data["_evaluation"] = {
         "composite_score": evaluation.get("composite_score"),
+        "fit_score": evaluation.get("fit_score"),
+        "interview_odds_score": evaluation.get("interview_odds_score"),
+        "practical_pursue_score": evaluation.get("practical_pursue_score"),
         "recommendation": evaluation.get("recommendation"),
         "why": evaluation.get("why") or "",
+        "recruiter_read": evaluation.get("recruiter_read") or "",
         "hard_blockers": evaluation.get("hard_blockers") or [],
         "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
         "posting_legitimacy_notes": evaluation.get("posting_legitimacy_notes") or "",
         "archetype": evaluation.get("archetype") or "",
-        "dimension_scores": evaluation.get("dimension_scores") or {},
+        "fit_subscores": evaluation.get("fit_subscores") or {},
+        "interview_odds_subscores": evaluation.get("interview_odds_subscores") or {},
+        "practical_pursue_subscores": evaluation.get("practical_pursue_subscores") or {},
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
