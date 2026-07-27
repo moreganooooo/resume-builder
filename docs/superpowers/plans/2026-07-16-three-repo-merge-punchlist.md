@@ -278,6 +278,22 @@ nothing here changed, only IDEAS.md did).
         silently breaking its "promote a sweep-discovered company to a
         direct provider" feature. Both fixed in the vendored copies. 10
         new tests (`tests/test_scan_ats.py`).
+        **Two more real bugs found on Morgan's first live `--source ats`
+        run (2026-07-26), fixed same day:** every single Workday posting
+        across every tracked company 404'd -- `workday.mjs` built job
+        URLs with `new URL(j.externalPath, baseUrl).href`, but
+        `externalPath` always starts with a leading slash, which per the
+        URL spec resolves against the *origin*, silently dropping
+        `baseUrl`'s own tenant-board path segment (e.g. `/ASPCAWebsite`).
+        Confirmed live: the broken URL 404'd, plain string concatenation
+        (`${baseUrl}${j.externalPath}`) returns 200. Fixed in both places
+        it appeared (initial page + pagination loop). Separately, every
+        Adzuna posting's description fetch was hitting a 403 --
+        `redirect_url` is a click-tracking landing page Adzuna blocks
+        from plain HTTP requests, same story as Himalayas's Cloudflare
+        challenge -- and same fix: Adzuna's own search API already
+        returns a full `description`, now mapped through instead of
+        fetching the blocked page at all.
       - [x] **Liveness verification pass — done 2026-07-26.** career-ops's
         `scan.mjs --verify` (a Playwright liveness pass over only
         new/deduped postings, right after the API scan, before anything
