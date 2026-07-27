@@ -95,10 +95,16 @@ export default {
       const postings = Array.isArray(data?.jobPostings) ? data.jobPostings : [];
 
       for (const j of postings) {
-        // Build the canonical job URL from the board base + externalPath
-        const jobUrl = j.externalPath
-          ? new URL(j.externalPath, baseUrl).href
-          : '';
+        // Build the canonical job URL from the board base + externalPath.
+        // NOTE (resume-builder, 2026-07-26): career-ops's original used
+        // `new URL(j.externalPath, baseUrl).href` here -- externalPath
+        // always starts with a leading slash (e.g. "/job/..."), and per
+        // the WHatWG URL spec a leading-slash path resolves against the
+        // *origin*, discarding baseUrl's own tenant-board path segment
+        // (e.g. "/ASPCAWebsite"). Confirmed live: every single Workday
+        // posting across every tracked company 404'd because of this --
+        // plain string concatenation is what was actually intended here.
+        const jobUrl = j.externalPath ? `${baseUrl}${j.externalPath}` : '';
 
         jobs.push({
           title: j.title || '',
@@ -129,7 +135,7 @@ export default {
           const page2 = await res.json();
           const more = Array.isArray(page2?.jobPostings) ? page2.jobPostings : [];
           for (const j of more) {
-            const jobUrl = j.externalPath ? new URL(j.externalPath, baseUrl).href : '';
+            const jobUrl = j.externalPath ? `${baseUrl}${j.externalPath}` : '';  // same fix as above
             jobs.push({
               title: j.title || '',
               url: jobUrl,
