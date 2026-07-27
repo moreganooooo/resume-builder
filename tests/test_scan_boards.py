@@ -120,7 +120,7 @@ class TestFetchBoardJobs(unittest.TestCase):
         ]
         jobs = scan_boards.fetch_board_jobs(sources=["fourdayweek"])
         self.assertEqual(jobs[0]["description"], "fallback text")
-        mock_fetch_text.assert_called_once_with("https://x.com/1")
+        mock_fetch_text.assert_called_once_with("https://x.com/1", "fourdayweek")
 
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_boards._run_node_provider", return_value=[])
