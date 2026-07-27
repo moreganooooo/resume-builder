@@ -1,0 +1,490 @@
+# Vendored from career-ops/portals.yml (search_queries: section),
+# 2026-07-26 -- 68 real, hand-curated Brave-search sweep queries (mostly
+# ATS-platform sweeps: site:boards.greenhouse.io / jobs.ashbyhq.com /
+# jobs.lever.co / apply.workable.com / myworkdayjobs.com, each scoped to
+# Morgan's target keywords) for discovering companies NOT already in
+# tracked_companies.yml. This repo's copy is authoritative going forward.
+#
+# Needs BRAVE_API_KEY in the active profile's .env (free tier: 2,000
+# queries/month at https://api.search.brave.com) -- scripts/scan_ats.py's
+# fetch_ats_jobs() runs these through the vendored websearch.mjs provider
+# alongside tracked_companies.yml; until that key exists, these produce
+# nothing (graceful no-op, not an error -- same pattern as Adzuna/USAJobs
+# without their keys).
+
+search_queries:
+- name: Greenhouse — Onboarding & Implementation Sweep
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (onboarding OR implementation OR
+    "customer success" OR "client services" OR "solutions consultant" OR training OR education OR enablement
+    OR engagement OR adoption OR nurture OR journey OR launch OR activation OR experience OR relationship)
+    remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Greenhouse — Marketing & Enablement remote
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (marketing OR lifecycle OR campaign
+    OR email OR CRM OR content OR communications OR enablement OR retention OR training OR engagement
+    OR copywriting OR writer OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach
+    OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Greenhouse — Onboarding & Success remote
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) (implementation OR onboarding OR
+    "customer success" OR adoption OR retention OR training OR education OR enablement OR engagement OR
+    nurture OR journey OR launch OR activation OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Ashby — Marketing & Enablement remote
+  query: site:jobs.ashbyhq.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: ashby-sweep
+  source_category: ats_sweep
+- name: Ashby — Onboarding & Success remote
+  query: site:jobs.ashbyhq.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: ashby-sweep
+  source_category: ats_sweep
+- name: Lever — Marketing & Enablement remote
+  query: site:jobs.lever.co (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: lever-sweep
+  source_category: ats_sweep
+- name: Lever — Onboarding & Success remote
+  query: site:jobs.lever.co (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: lever-sweep
+  source_category: ats_sweep
+- name: Workable — Marketing & Enablement remote
+  query: site:apply.workable.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: workable-sweep
+  source_category: ats_sweep
+- name: Workable — Onboarding & Success remote
+  query: site:apply.workable.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: workable-sweep
+  source_category: ats_sweep
+- name: Workday — Marketing & Enablement remote
+  query: site:myworkdayjobs.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: workday-sweep
+  source_category: ats_sweep
+- name: Workday — Onboarding & Success remote
+  query: site:myworkdayjobs.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: workday-sweep
+  source_category: ats_sweep
+- name: Greenhouse — Marketing Management Universe
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) ("marketing manager" OR "campaign
+    manager" OR "content marketing manager" OR "customer marketing manager") remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Ashby — Marketing Management Universe
+  query: site:jobs.ashbyhq.com ("marketing manager" OR "campaign manager" OR "content marketing manager"
+    OR "customer marketing manager") remote -recruiter
+  enabled: true
+  source_tag: ashby-sweep
+  source_category: ats_sweep
+- name: Greenhouse — Customer Marketing & Advocacy
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) ("customer marketing" OR "customer
+    engagement" OR "customer advocacy" OR "retention marketing") remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Ashby — Customer Marketing & Advocacy
+  query: site:jobs.ashbyhq.com ("customer marketing" OR "customer engagement" OR "customer advocacy" OR
+    "retention marketing") remote -recruiter
+  enabled: true
+  source_tag: ashby-sweep
+  source_category: ats_sweep
+- name: Greenhouse — Customer Education & Adoption
+  query: (site:boards.greenhouse.io OR site:job-boards.greenhouse.io) ("customer education" OR "product
+    education" OR "learning experience" OR "training specialist" OR "instructional design") remote -recruiter
+  enabled: true
+  source_tag: greenhouse-sweep
+  source_category: ats_sweep
+- name: Ashby — Customer Education & Adoption
+  query: site:jobs.ashbyhq.com ("customer education" OR "product education" OR "learning experience" OR
+    "training specialist" OR "instructional design") remote -recruiter
+  enabled: true
+  source_tag: ashby-sweep
+  source_category: ats_sweep
+- name: We Work Remotely — Marketing & Enablement
+  query: site:weworkremotely.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter
+  enabled: true
+  source_tag: weworkremotely
+  source_category: remote_board
+- name: We Work Remotely — Onboarding & Success
+  query: site:weworkremotely.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) -recruiter
+  enabled: true
+  source_tag: weworkremotely
+  source_category: remote_board
+- name: Remote OK — Marketing & Enablement
+  query: site:remoteok.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter
+  enabled: true
+  source_tag: remoteok
+  source_category: remote_board
+- name: Remote OK — Onboarding & Success
+  query: site:remoteok.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) -recruiter
+  enabled: true
+  source_tag: remoteok
+  source_category: remote_board
+- name: Himalayas — Marketing & Enablement remote
+  query: site:himalayas.app (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: himalayas
+  source_category: remote_board
+- name: Himalayas — Onboarding & Success remote
+  query: site:himalayas.app (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: himalayas
+  source_category: remote_board
+- name: Remote.co — Marketing & Enablement
+  query: site:remote.co/remote-jobs (marketing OR lifecycle OR campaign OR email OR CRM OR content OR
+    communications OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial
+    OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness)
+    -recruiter
+  enabled: true
+  source_tag: remoteco
+  source_category: remote_board
+- name: Remote.co — Onboarding & Success
+  query: site:remote.co/remote-jobs (implementation OR onboarding OR "customer success" OR adoption OR
+    retention OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR
+    activation OR experience OR relationship) -recruiter
+  enabled: true
+  source_tag: remoteco
+  source_category: remote_board
+- name: Remotive — Marketing & Enablement
+  query: site:remotive.com/remote-jobs/marketing (marketing OR lifecycle OR campaign OR email OR CRM OR
+    content OR communications OR enablement OR retention OR training OR engagement OR copywriting OR writer
+    OR editorial OR narrative OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR
+    readiness) -recruiter
+  enabled: true
+  source_tag: remotive
+  source_category: remote_board
+- name: Remotive — Onboarding & Success
+  query: site:remotive.com/remote-jobs/marketing (implementation OR onboarding OR "customer success" OR
+    adoption OR retention OR training OR education OR enablement OR engagement OR nurture OR journey OR
+    launch OR activation OR experience OR relationship) -recruiter
+  enabled: true
+  source_tag: remotive
+  source_category: remote_board
+- name: Just Remote — Marketing & Enablement
+  query: site:justremote.co (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) -recruiter
+  enabled: true
+  source_tag: justremote
+  source_category: remote_board
+- name: Just Remote — Onboarding & Success
+  query: site:justremote.co (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) -recruiter
+  enabled: true
+  source_tag: justremote
+  source_category: remote_board
+- name: Working Nomads — Marketing & Enablement remote
+  query: site:workingnomads.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote
+  enabled: true
+  source_tag: workingnomads
+  source_category: remote_board
+- name: Working Nomads — Onboarding & Success remote
+  query: site:workingnomads.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote
+  enabled: true
+  source_tag: workingnomads
+  source_category: remote_board
+- name: NoDesk — marketing + enablement + implementation
+  query: site:nodesk.co/remote-jobs/marketing (marketing OR lifecycle OR campaign OR email OR content
+    OR communications OR enablement OR implementation OR onboarding OR "customer success" OR adoption
+    OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor
+    OR GTM)
+  enabled: true
+  source_tag: nodesk
+  source_category: remote_board
+- name: RemoteFront — marketing + enablement remote
+  query: site:remotefront.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: remotefront
+  source_category: remote_board
+- name: Wellfound — Marketing & Enablement remote
+  query: site:wellfound.com/jobs (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: wellfound
+  source_category: niche_board
+- name: Wellfound — Onboarding & Success remote
+  query: site:wellfound.com/jobs (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: wellfound
+  source_category: niche_board
+- name: YC / Work at a Startup — Marketing & Enablement remote
+  query: site:workatastartup.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: workatastartup
+  source_category: niche_board
+- name: YC / Work at a Startup — Onboarding & Success remote
+  query: site:workatastartup.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: workatastartup
+  source_category: niche_board
+- name: MKT1 — B2B startup marketing broad sweep
+  query: site:jobs.mkt1.co (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM)
+  enabled: true
+  source_tag: mkt1
+  source_category: niche_board
+- name: Startup.jobs — marketing + enablement + implementation remote
+  query: site:startup.jobs (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: startupjobs
+  source_category: niche_board
+- name: Hey Marketers — startup marketing broad sweep
+  query: site:heymarketers.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness OR "customer success")
+  enabled: true
+  source_tag: heymarketers
+  source_category: niche_board
+- name: Midwest Startups — marketing + enablement
+  query: site:jobs.midweststartups.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM)
+  enabled: true
+  source_tag: midweststartups
+  source_category: niche_board
+- name: Built In — Marketing & Enablement remote
+  query: site:builtin.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: builtin
+  source_category: mainstream_aggregator
+  notes: Also surfaces company list pages (Top EdTech Companies Hiring Remote, etc.).
+- name: Built In — Onboarding & Success remote
+  query: site:builtin.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: builtin
+  source_category: mainstream_aggregator
+- name: ZipRecruiter — Marketing & Enablement remote
+  query: site:ziprecruiter.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness) remote -recruiter
+  enabled: true
+  source_tag: ziprecruiter
+  source_category: mainstream_aggregator
+- name: ZipRecruiter — Onboarding & Success remote
+  query: site:ziprecruiter.com (implementation OR onboarding OR "customer success" OR adoption OR retention
+    OR training OR education OR enablement OR engagement OR nurture OR journey OR launch OR activation
+    OR experience OR relationship) remote -recruiter
+  enabled: true
+  source_tag: ziprecruiter
+  source_category: mainstream_aggregator
+- name: FlexJobs — marketing + enablement + implementation remote
+  query: site:flexjobs.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: flexjobs
+  source_category: mainstream_aggregator
+- name: MarketingHire — marketing + enablement broad sweep
+  query: site:marketinghire.com (marketing OR lifecycle OR campaign OR email OR CRM OR content OR communications
+    OR enablement OR retention OR training OR engagement OR copywriting OR writer OR editorial OR narrative
+    OR messaging OR storytell OR instructional OR outreach OR donor OR GTM OR readiness OR "customer success")
+    remote
+  enabled: true
+  source_tag: marketinghire
+  source_category: mainstream_aggregator
+- name: AMA Job Board — marketing + comms + enablement remote
+  query: site:jobs.ama.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: ama-job-board
+  source_category: mainstream_aggregator
+- name: Authentic Jobs — content + marketing + enablement remote
+  query: site:authenticjobs.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: authenticjobs
+  source_category: mainstream_aggregator
+- name: Jobspresso — marketing + enablement + implementation remote
+  query: site:jobspresso.co (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: jobspresso
+  source_category: mainstream_aggregator
+- name: The Mom Project — marketing + enablement + implementation remote
+  query: site:themomproject.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: themomproject
+  source_category: niche_board
+- name: PowerToFly — marketing + enablement + implementation remote
+  query: site:powertofly.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: powertofly
+  source_category: niche_board
+- name: Idealist — marketing + comms + enablement + implementation remote
+  query: site:idealist.org (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: idealist
+  source_category: niche_board
+- name: NonprofitJobs — marketing + communications + implementation remote
+  query: site:nonprofitjobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR fundraising)
+    remote
+  enabled: true
+  source_tag: nonprofitjobs
+  source_category: niche_board
+- name: GreaterGoodJobs — marketing + comms remote
+  query: site:greatergoodjobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR community) remote
+  enabled: true
+  source_tag: greatergoodjobs
+  source_category: niche_board
+- name: WorkForGood — marketing + comms + implementation remote
+  query: site:work4good.org (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: workforgood
+  source_category: niche_board
+- name: ExecSearches — nonprofit marketing + comms remote
+  query: site:execsearches.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR
+    editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote
+  enabled: true
+  source_tag: execsearches
+  source_category: niche_board
+- name: Tech Jobs for Good — social impact marketing + enablement + implementation
+  query: site:techjobsforgood.com (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: techjobsforgood
+  source_category: niche_board
+- name: GAIN Power — progressive campaigns + nonprofit marketing
+  query: site:gainpower.org/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR
+    editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote
+  enabled: true
+  source_tag: gainpower
+  source_category: niche_board
+- name: Matt's List — progressive digital + marketing
+  query: site:mattslist.org (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: mattslist
+  source_category: niche_board
+- name: Progressive Data Jobs — data-driven organizing + marketing
+  query: site:progressivedatajobs.org (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR donor OR training OR engagement OR copywriting OR
+    editorial OR messaging OR outreach OR GTM OR readiness OR nurture OR experience OR relationship) remote
+  enabled: true
+  source_tag: progressivedatajobs
+  source_category: niche_board
+- name: EdSurge Jobs — marketing + enablement + implementation remote
+  query: site:edsurge.com/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR education) remote
+  enabled: true
+  source_tag: edsurge
+  source_category: niche_board
+- name: EdTechJobs.io — marketing + enablement + implementation
+  query: site:edtechjobs.io (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM OR education) remote
+  enabled: true
+  source_tag: edtechjobs
+  source_category: niche_board
+- name: Himalayas — Remote K-12 / EdTech companies list
+  query: site:himalayas.app/companies "Top remote K 12 Education companies"
+  enabled: true
+  source_tag: himalayas
+  source_category: remote_board
+- name: Built In — EdTech companies hiring remote (collection)
+  query: site:builtin.com "Top Edtech Companies Hiring Remote" OR "Edtech Companies Hiring Remote"
+  enabled: true
+  source_tag: builtin
+  source_category: mainstream_aggregator
+- name: HumanePro — animal welfare marketing + comms + implementation
+  query: site:humanepro.org/jobs (marketing OR lifecycle OR campaign OR email OR content OR communications
+    OR enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: humanepro
+  source_category: niche_board
+- name: NACA — animal care marketing + community + implementation
+  query: site:nacanet.org/career-center-job-board (marketing OR lifecycle OR campaign OR email OR content
+    OR communications OR enablement OR implementation OR onboarding OR "customer success" OR adoption
+    OR retention OR training OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor
+    OR GTM OR "community engagement") remote
+  enabled: true
+  source_tag: naca
+  source_category: niche_board
+- name: Vangst — cannabis industry marketing + enablement
+  query: site:vangst.com (marketing OR lifecycle OR campaign OR email OR content OR communications OR
+    enablement OR implementation OR onboarding OR "customer success" OR adoption OR retention OR training
+    OR engagement OR copywriting OR editorial OR messaging OR outreach OR donor OR GTM) remote
+  enabled: true
+  source_tag: vangst
+  source_category: niche_board
