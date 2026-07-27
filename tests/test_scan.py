@@ -62,6 +62,24 @@ class TestRunScanDedup(unittest.TestCase):
             job_title="Content Strategist",
         )
 
+    @patch("scan.jd_manager.job_key_known", return_value=False)
+    @patch("scan.jd_manager.JDTracker")
+    def test_falls_back_to_source_url_for_dedup_when_no_source_job_id(self, mock_tracker_cls, mock_known):
+        # Board-provider jobs (scan_boards.py) never have a source_job_id,
+        # only a URL -- dedup must still run for them, not silently skip.
+        job = {
+            "company_name": "Acme", "job_title": "Content Strategist",
+            "source_url": "https://example.com/job/1",
+        }
+        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: [job]}, clear=True), \
+             patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
+            scan.run_scan(["boards"])
+        mock_known.assert_called_once_with(
+            "https://example.com/job/1", tracker=mock_tracker_cls.return_value,
+            source_url="https://example.com/job/1", company_name="Acme",
+            job_title="Content Strategist",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
