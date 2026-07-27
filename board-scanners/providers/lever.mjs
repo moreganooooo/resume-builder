@@ -49,6 +49,11 @@ export default {
         company: entry.name,
         location: j.categories?.location || '',
         posted_at: j.createdAt ? new Date(j.createdAt).toISOString().slice(0, 10) : '',
+        // descriptionPlain already includes openingPlain as its prefix;
+        // additionalPlain (closing/EEO section) is genuinely separate
+        // content, not included in descriptionPlain -- confirmed live
+        // against a real posting (2026-07-26).
+        description: [j.descriptionPlain, j.additionalPlain].filter(Boolean).join('\n\n'),
       }));
   },
 };

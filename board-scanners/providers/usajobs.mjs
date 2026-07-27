@@ -42,6 +42,12 @@ export default {
         company: desc.OrganizationName || entry.name,
         location: formatLocation(desc),
         posted_at: desc.PublicationStartDate || '',
+        // Not the full posting (that needs the ApplyURI page), but
+        // QualificationSummary is real substantial content already in
+        // the search response -- better than a page fetch, and
+        // PositionFormattedDescription isn't real content (just a
+        // search-highlight label object).
+        description: desc.QualificationSummary || '',
       }));
   },
 };

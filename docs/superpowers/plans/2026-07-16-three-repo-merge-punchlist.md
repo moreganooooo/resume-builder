@@ -294,6 +294,49 @@ nothing here changed, only IDEAS.md did).
         challenge -- and same fix: Adzuna's own search API already
         returns a full `description`, now mapped through instead of
         fetching the blocked page at all.
+        **Full audit pass across every source, same day, before Morgan's
+        re-run** (she asked "look through our new job search sources...
+        for any similar errors"): Greenhouse (`?content=true`), Ashby
+        (`descriptionPlain`), and Lever (`descriptionPlain` +
+        `additionalPlain`, confirmed live that `descriptionPlain` already
+        includes `openingPlain` as a prefix) all had the same
+        native-description-available-but-unused pattern as the
+        aggregator batch -- all three now map it through, matching
+        Greenhouse/Ashby/Lever's 100%-native-description coverage
+        confirmed live. USAJobs's `QualificationSummary` (real content,
+        not the full posting -- `PositionFormattedDescription` turned out
+        to be a search-highlight label object, not real text) mapped
+        through too. Two more real bugs found and fixed: `workable.mjs`
+        only ever resolved the `apply.workable.com/<slug>` URL form --
+        a real tracked company (Doist) uses the equivalent
+        `<slug>.workable.com` custom-subdomain form, which never
+        resolved to any provider at all; and `fourdayweek.mjs` was
+        reading fields (`j.url`, `j.company` as a string, `j.location` as
+        a string, `j.published_at`) that don't exist in 4dayweek.io's
+        current API response at all (real: `j.slug` + a URL built from
+        it, `j.company` as an object, `j.locations` as an array,
+        `j.posted` as a unix timestamp) -- the provider returned zero
+        results unconditionally, confirmed against the live API and
+        rebuilt against the real shape. Also found and fixed: 
+        `websearch.mjs`'s location-extraction fallback was matching
+        arbitrary capitalized words in search snippets ("Partnering",
+        "You", "Explore", "Give") as if they were real locations,
+        contradicting its own header comment ("Location is not reliably
+        available from search snippets, so it defaults to empty
+        string") -- removed the unreliable fallback so it actually does
+        what it claims. **One known remaining limitation, not fixed:**
+        4dayweek.io's job pages are a pure client-rendered SPA with no
+        server-side content in the initial HTML (confirmed: no embedded
+        data blob either) -- `_fetch_posting_text()`'s plain HTTP GET
+        genuinely can't retrieve real posting text there, same class of
+        problem as Himalayas's Cloudflare block but with no native-API
+        description to fall back to either. Would need Playwright to fix
+        properly; not worth it for one lower-volume provider. Recruitee
+        and SmartRecruiters checked too -- zero real tracked companies
+        for either today, so nothing to verify against yet;
+        SmartRecruiters' listing API confirmed to need a separate
+        per-posting call for description (unlike the others), worth
+        revisiting once real companies exist for it.
       - [x] **Liveness verification pass — done 2026-07-26.** career-ops's
         `scan.mjs --verify` (a Playwright liveness pass over only
         new/deduped postings, right after the API scan, before anything
