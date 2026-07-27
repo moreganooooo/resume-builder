@@ -271,8 +271,8 @@ tracked_companies:
 - name: Headway
   careers_url: https://boards.greenhouse.io/headway
   api: https://boards-api.greenhouse.io/v1/boards/headway/jobs
-  notes: Mental health marketplace. Morgan applied previously. Strong mission fit.
-  enabled: true
+  notes: "Mental health marketplace. Morgan applied previously. Strong mission fit. 2026-07-27: HTTP 404 -- board appears to have moved/closed."
+  enabled: false
 - name: Calm
   careers_url: https://boards.greenhouse.io/calm
   api: https://boards-api.greenhouse.io/v1/boards/calm/jobs
@@ -317,8 +317,8 @@ tracked_companies:
   enabled: false
 - name: Alma
   careers_url: https://job-boards.greenhouse.io/alma
-  notes: Provider-first mental health marketplace; lifecycle and provider marketing roles.
-  enabled: true
+  notes: "Provider-first mental health marketplace; lifecycle and provider marketing roles. 2026-07-27: HTTP 404 -- board appears to have moved/closed."
+  enabled: false
 - name: SonderMind
   careers_url: https://jobs.ashbyhq.com/sondermind
   api: https://api.ashbyhq.com/posting-api/job-board/sondermind
@@ -1370,7 +1370,8 @@ tracked_companies:
 - name: Paystack
   careers_url: https://boards.greenhouse.io/paystack
   api: https://boards-api.greenhouse.io/v1/boards/paystack/jobs
-  enabled: true
+  notes: "2026-07-27: HTTP 404 -- board appears to have moved/closed."
+  enabled: false
 - name: Peloton
   careers_url: https://boards.greenhouse.io/peloton
   api: https://boards-api.greenhouse.io/v1/boards/peloton/jobs
@@ -1602,7 +1603,8 @@ tracked_companies:
 - name: Transcarent
   careers_url: https://boards.greenhouse.io/transcarent
   api: https://boards-api.greenhouse.io/v1/boards/transcarent/jobs
-  enabled: true
+  notes: "2026-07-27: HTTP 404 -- board appears to have moved/closed."
+  enabled: false
 - name: TrueLayer
   careers_url: https://boards.greenhouse.io/truelayer
   api: https://boards-api.greenhouse.io/v1/boards/truelayer/jobs
