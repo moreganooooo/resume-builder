@@ -230,6 +230,30 @@ def _short_why(why: str, max_len: int = 70) -> str:
     return first_sentence[:max_len].rstrip() + "..."
 
 
+# Mirrors orchestrator.STALE_POSTING_THRESHOLD_DAYS -- kept as a plain
+# constant here rather than importing orchestrator (a heavy module with
+# its own Gemini client dependency) into this presentation layer just
+# for one number.
+_POSTING_AGE_STALE_DAYS = 7
+_POSTING_AGE_VERY_STALE_DAYS = 21
+
+
+def _posting_age_cell(days: int | None) -> str:
+    """Colored "Nd" cell for how long a posting's been up -- green within
+    the not-yet-penalized window, amber into the scoring-penalty range,
+    red well past it. "-" when no post date or scan-discovery fallback
+    was available at all (see jd_manager.compute_posting_age_days())."""
+    if days is None:
+        return "-"
+    if days <= _POSTING_AGE_STALE_DAYS:
+        color = theme.SUCCESS
+    elif days <= _POSTING_AGE_VERY_STALE_DAYS:
+        color = theme.WARNING
+    else:
+        color = theme.ERROR
+    return f"[{color}]{days}d[/{color}]"
+
+
 def render_fit_table(results: list) -> None:
     """Renders batch_evaluate.evaluate_all_pending()'s result list as a
     Rich Table, colored by recommendation tier (modeled on job_automater's
@@ -245,11 +269,12 @@ def render_fit_table(results: list) -> None:
     table.add_column("Recommendation")
     table.add_column("Company")
     table.add_column("Title")
+    table.add_column("Posted", justify="right")
     table.add_column("Why")
 
     for i, r in enumerate(results, 1):
         if r["error"]:
-            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-")
+            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-", "-")
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
         legitimacy = r.get("posting_legitimacy")
@@ -263,6 +288,7 @@ def render_fit_table(results: list) -> None:
             recommendation_text,
             r["company_name"],
             r["job_title"],
+            _posting_age_cell(r.get("posting_age_days")),
             _short_why(r.get("why")),
         )
 
@@ -307,6 +333,7 @@ def render_pipeline_table(rows: list) -> None:
     table.add_column("Recommendation")
     table.add_column("Company")
     table.add_column("Title")
+    table.add_column("Posted", justify="right")
     table.add_column("Status")
     table.add_column("Last Liveness")
     table.add_column("Follow-up")
@@ -320,6 +347,7 @@ def render_pipeline_table(rows: list) -> None:
             f"[{color}]{evaluation.get('recommendation')}[/{color}]",
             r["company"] or "?",
             r["title"] or "?",
+            _posting_age_cell(evaluation.get("posting_age_days")),
             r["status"],
             _liveness_cell(r.get("liveness")),
             _followup_cell(r.get("application")),
@@ -357,6 +385,7 @@ def render_comparison_table(rows: list) -> None:
         for r in rows
     ])
     _row("Archetype", [r["evaluation"].get("archetype") or "-" for r in rows])
+    _row("Posted", [_posting_age_cell(r["evaluation"].get("posting_age_days")) for r in rows])
     table.add_section()
 
     for dim, label in _FIT_DIMENSION_LABELS.items():

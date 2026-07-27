@@ -396,16 +396,24 @@ class TestJobKeyKnown(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_job_key_known")
         os.makedirs(self.tmp_dir, exist_ok=True)
         os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "archived"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp_dir, "expired"), exist_ok=True)
         self._real_jds_dir = jd_manager.JDS_DIR
         self._real_completed_dir = jd_manager.COMPLETED_DIR
+        self._real_archived_dir = jd_manager.ARCHIVED_DIR
+        self._real_expired_dir = jd_manager.EXPIRED_DIR
         self._real_tracker_csv = jd_manager.TRACKER_CSV
         jd_manager.JDS_DIR = self.tmp_dir
         jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
+        jd_manager.ARCHIVED_DIR = os.path.join(self.tmp_dir, "archived")
+        jd_manager.EXPIRED_DIR = os.path.join(self.tmp_dir, "expired")
         jd_manager.TRACKER_CSV = os.path.join(self.tmp_dir, "tracker.csv")
 
     def tearDown(self):
         jd_manager.JDS_DIR = self._real_jds_dir
         jd_manager.COMPLETED_DIR = self._real_completed_dir
+        jd_manager.ARCHIVED_DIR = self._real_archived_dir
+        jd_manager.EXPIRED_DIR = self._real_expired_dir
         jd_manager.TRACKER_CSV = self._real_tracker_csv
         for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
             for name in files:
@@ -520,6 +528,27 @@ class TestJobKeyKnown(unittest.TestCase):
         })
         result = jd_manager.job_key_known("new-different-id")
         self.assertFalse(result)
+
+    def test_true_for_a_job_key_match_in_archived_dir(self):
+        # Skip-evaluated JDs get auto-archived -- must not be silently
+        # rediscovered as "new" on the next scan.
+        path = os.path.join(jd_manager.ARCHIVED_DIR, "a.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"source_job_id": "abc123", "company_name": "Acme"}, f)
+        self.assertTrue(jd_manager.job_key_known("abc123"))
+
+    def test_true_for_a_job_key_match_in_expired_dir(self):
+        path = os.path.join(jd_manager.EXPIRED_DIR, "a.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"source_job_id": "abc123", "company_name": "Acme"}, f)
+        self.assertTrue(jd_manager.job_key_known("abc123"))
+
+    def test_true_for_source_url_and_company_match_in_archived_dir(self):
+        path = os.path.join(jd_manager.ARCHIVED_DIR, "a.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"source_job_id": "existing-id", "company_name": "Acme", "source_url": "https://x.com/1"}, f)
+        result = jd_manager.job_key_known("new-id", source_url="https://x.com/1", company_name="Acme")
+        self.assertTrue(result)
 
 
 class TestSaveAndReadEvaluation(unittest.TestCase):
@@ -700,6 +729,62 @@ class TestSaveAndReadLiveness(unittest.TestCase):
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+
+class TestComputePostingAgeDays(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_posting_age")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, data):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return path
+
+    def test_iso_posted_at_ten_days_ago(self):
+        ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat()
+        path = self._write("a.json", {"posted_at": ten_days_ago})
+        self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
+
+    def test_unix_ms_publish_time(self):
+        ten_days_ago_ms = int((datetime.datetime.now() - datetime.timedelta(days=10)).timestamp() * 1000)
+        path = self._write("a.json", {"publish_time": ten_days_ago_ms})
+        self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
+
+    def test_unix_seconds_publish_time(self):
+        ten_days_ago_s = (datetime.datetime.now() - datetime.timedelta(days=10)).timestamp()
+        path = self._write("a.json", {"publish_time": ten_days_ago_s})
+        self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
+
+    def test_falls_back_to_scan_confirmed_liveness_timestamp(self):
+        ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(timespec="seconds")
+        path = self._write("a.json", {"_liveness": {"result": "active", "reason": "confirmed to exist by scan", "checked_at": ten_days_ago}})
+        self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
+
+    def test_does_not_use_a_liveness_recheck_that_isnt_the_scan_seed(self):
+        # A later liveness recheck's checked_at isn't "when this posting
+        # was found" -- only the original scan-time seed counts.
+        recent = datetime.datetime.now().isoformat(timespec="seconds")
+        path = self._write("a.json", {"_liveness": {"result": "active", "reason": "visible apply control detected", "checked_at": recent}})
+        self.assertIsNone(jd_manager.compute_posting_age_days(path))
+
+    def test_no_date_signal_at_all_returns_none(self):
+        path = self._write("a.json", {"job_title": "Role"})
+        self.assertIsNone(jd_manager.compute_posting_age_days(path))
+
+    def test_unparseable_date_string_returns_none(self):
+        path = self._write("a.json", {"posted_at": "not a date"})
+        self.assertIsNone(jd_manager.compute_posting_age_days(path))
+
+    def test_missing_file_returns_none(self):
+        self.assertIsNone(jd_manager.compute_posting_age_days(os.path.join(self.tmp_dir, "nope.json")))
 
 
 class TestSaveAndReadApplicationStatus(unittest.TestCase):

@@ -81,14 +81,24 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
                 "why": "",
                 "hard_blockers": [],
                 "posting_legitimacy": "",
+                "posting_age_days": None,
                 "error": True,
             })
             continue
 
+        job_key = jd_manager.compute_job_key(path)
         jd_manager.save_evaluation(path, evaluation)
 
+        # A JD Morgan's already said no to (Skip) shouldn't sit in the
+        # pending list forever -- archive it immediately rather than
+        # waiting for a manual pass. archive_jd() moves the file, so this
+        # has to happen after compute_job_key()/save_evaluation() above,
+        # both of which need it still at its original path.
+        if evaluation.get("recommendation") == "Skip":
+            path = jd_manager.archive_jd(path)
+
         results.append({
-            "job_key": jd_manager.compute_job_key(path),
+            "job_key": job_key,
             "source_file": path,
             "company_name": company_name or "unknown",
             "job_title": job_title or "unknown",
@@ -97,6 +107,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
             "why": evaluation.get("why") or "",
             "hard_blockers": evaluation.get("hard_blockers") or [],
             "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
+            "posting_age_days": evaluation.get("posting_age_days"),
             "error": False,
         })
 
