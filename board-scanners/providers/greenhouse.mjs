@@ -59,9 +59,15 @@ export default {
     const apiUrl = resolveApiUrl(entry);
     if (!apiUrl) throw new Error(`greenhouse: cannot derive API URL for ${entry.name}`);
     assertGreenhouseUrl(apiUrl);
+    // ?content=true (added 2026-07-26): the boards-api already returns each
+    // posting's full HTML body when asked -- avoids a second per-posting
+    // page fetch entirely (same reasoning as the aggregator providers'
+    // native-description preference).
+    const contentUrl = new URL(apiUrl);
+    contentUrl.searchParams.set('content', 'true');
     // redirect:'error' prevents SSRF via server-side redirects; combined with
     // assertGreenhouseUrl above it guarantees the final hostname stays in the allowlist.
-    const json = await ctx.fetchJson(apiUrl, { redirect: 'error' });
+    const json = await ctx.fetchJson(contentUrl.href, { redirect: 'error' });
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
     return jobs
       .filter(j => j.absolute_url)
@@ -70,6 +76,7 @@ export default {
         title: j.title || '',
         url: j.absolute_url,
         company: entry.name,
+        description: j.content || '',
         location: j.location?.name || '',
         posted_at: j.updated_at || '',
       }));

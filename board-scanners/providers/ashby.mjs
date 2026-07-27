@@ -44,6 +44,7 @@ export default {
       company: entry.name,
       location: resolveLocation(j.location),
       posted_at: j.publishedDate || '',
+      description: j.descriptionPlain || j.descriptionHtml || '',
     }));
   },
 };
