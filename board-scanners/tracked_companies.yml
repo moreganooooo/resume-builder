@@ -47,7 +47,8 @@ tracked_companies:
 - name: Renaissance Learning
   careers_url: https://www.renaissance.com/careers/
   api: https://boards-api.greenhouse.io/v1/boards/newsela/jobs
-  enabled: true
+  notes: "2026-07-27: api field points at Newsela's Greenhouse board (a copy-paste error, not a real Renaissance Learning board -- Newsela has its own correct tracked entry). Disabled rather than silently duplicating Newsela's postings under the wrong company name; re-enable with the real board once found."
+  enabled: false
 - name: Seesaw
   careers_url: https://boards.greenhouse.io/seesaw
   api: https://boards-api.greenhouse.io/v1/boards/seesaw/jobs
@@ -55,7 +56,8 @@ tracked_companies:
 - name: Instructure (Canvas LMS)
   careers_url: https://www.instructure.com/about/careers
   api: https://boards-api.greenhouse.io/v1/boards/seesaw/jobs
-  enabled: true
+  notes: "2026-07-27: api field points at Seesaw's Greenhouse board (a copy-paste error, not a real Instructure board -- Seesaw has its own correct tracked entry). Disabled rather than silently duplicating Seesaw's postings under the wrong company name; re-enable with the real board once found."
+  enabled: false
 - name: ClassDojo
   careers_url: https://jobs.ashbyhq.com/classdojo
   api: https://api.ashbyhq.com/posting-api/job-board/classdojo
@@ -79,7 +81,8 @@ tracked_companies:
 - name: Amplify
   careers_url: https://amplify.com/careers/
   api: https://boards-api.greenhouse.io/v1/boards/goguardian/jobs
-  enabled: true
+  notes: "2026-07-27: api field points at GoGuardian's Greenhouse board (a copy-paste error, not a real Amplify board -- GoGuardian has its own correct tracked entry). Disabled rather than silently duplicating GoGuardian's postings under the wrong company name; re-enable with the real board once found."
+  enabled: false
 - name: PowerSchool
   careers_url: https://careers-powerschool.icims.com/jobs/search
   scan_method: websearch
@@ -264,7 +267,8 @@ tracked_companies:
 - name: NPR / National Public Media
   careers_url: https://boards.greenhouse.io/npr
   api: https://boards-api.greenhouse.io/v1/boards/wikimedia/jobs
-  enabled: true
+  notes: "2026-07-27: api field points at Wikimedia Foundation's Greenhouse board (a copy-paste error, not a real NPR board -- Wikimedia has its own correct tracked entry). The careers_url's own slug (npr) also 404s directly, so NPR's board has likely moved off Greenhouse entirely, not just a bad api field. Disabled rather than silently duplicating Wikimedia's postings under the wrong company name."
+  enabled: false
 - name: PBS
   careers_url: https://vhr-pbs.wd115.myworkdayjobs.com/PBSCareers
   enabled: true
@@ -298,7 +302,8 @@ tracked_companies:
 - name: Noom
   careers_url: https://www.noom.com/careers/job-listings/
   api: https://boards-api.greenhouse.io/v1/boards/modernhealth/jobs
-  enabled: true
+  notes: "2026-07-27: api field points at Modern Health's Greenhouse board (a copy-paste error, not a real Noom board -- Modern Health has its own correct tracked entry). Disabled rather than silently duplicating Modern Health's postings under the wrong company name; re-enable with the real board once found."
+  enabled: false
 - name: Talkspace
   careers_url: https://www.talkspace.com/careers
   api: https://boards-api.greenhouse.io/v1/boards/talkspace/jobs
