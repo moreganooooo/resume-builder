@@ -358,18 +358,34 @@ def render_pipeline_table(rows: list) -> None:
     ))
 
 
-_FIT_DIMENSION_LABELS = {
-    "cv_profile_match": "CV Match", "north_star_alignment": "North Star", "remote_quality": "Remote",
-    "level_fit": "Level Fit", "compensation": "Comp", "growth": "Growth", "time_to_offer": "Speed",
-    "tech_tool_relevance": "Tools", "company_reputation": "Reputation", "cultural_signals": "Culture",
-}
+# (subscore dict key, display label) grouped by layer, so the
+# comparison table can show a section header per layer instead of one
+# flat list of 18 dimensions with no indication of what they mean.
+_FIT_DIMENSION_GROUPS = [
+    ("Fit", "fit_subscores", {
+        "functional_alignment": "Functional", "north_star_alignment": "North Star",
+        "level_plausibility": "Level Fit", "work_style_sustainability": "Sustainability",
+        "tools_process_overlap": "Tools",
+    }),
+    ("Interview odds", "interview_odds_subscores", {
+        "title_continuity": "Title Continuity", "evidence_match": "Evidence Match",
+        "domain_credibility": "Domain Cred.", "recruiter_legibility": "Recruiter Legibility",
+        "narrative_burden": "Narrative Burden", "funnel_friction": "Funnel Friction",
+    }),
+    ("Practical pursue", "practical_pursue_subscores", {
+        "remote_quality": "Remote", "compensation_viability": "Comp", "growth_value": "Growth",
+        "time_to_offer": "Speed", "company_reputation": "Reputation",
+        "cultural_signals": "Culture", "posting_legitimacy_score": "Legitimacy",
+    }),
+]
 
 
 def render_comparison_table(rows: list) -> None:
     """Side-by-side comparison of 2+ already-evaluated JDs (the "Multi-job
     comparison mode" backlog item) -- one column per JD, one row per
-    dimension, so a strength/weakness pattern is visible at a glance
-    rather than needing to hold several single-JD views in your head."""
+    dimension grouped under its layer (fit / interview odds / practical
+    pursue), so a strength/weakness pattern is visible at a glance rather
+    than needing to hold several single-JD views in your head."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("")
     for r in rows:
@@ -386,10 +402,12 @@ def render_comparison_table(rows: list) -> None:
     ])
     _row("Archetype", [r["evaluation"].get("archetype") or "-" for r in rows])
     _row("Posted", [_posting_age_cell(r["evaluation"].get("posting_age_days")) for r in rows])
-    table.add_section()
 
-    for dim, label in _FIT_DIMENSION_LABELS.items():
-        _row(label, [r["evaluation"].get("dimension_scores", {}).get(dim, "-") for r in rows])
+    for group_label, subscores_key, labels in _FIT_DIMENSION_GROUPS:
+        table.add_section()
+        _row(f"[bold]{group_label}[/bold]", ["" for _ in rows])
+        for dim, label in labels.items():
+            _row(label, [r["evaluation"].get(subscores_key, {}).get(dim, "-") for r in rows])
 
     console.print(Panel(
         table, title=f"Comparing {len(rows)} JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
