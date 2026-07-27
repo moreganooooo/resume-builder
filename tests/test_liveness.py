@@ -156,6 +156,76 @@ class TestLiveness(unittest.TestCase):
         self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
 
 
+class TestVerifyJdPaths(unittest.TestCase):
+    """verify_jd_paths() -- scan.py's default-on verify pass, career-ops's
+    scan.mjs --verify ported. No recency skip (unlike run_liveness_check):
+    every path passed in gets checked, always."""
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_liveness_verify")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self.expired_dir = os.path.join(self.tmp_dir, "expired")
+        self._real_expired_dir = jd_manager.EXPIRED_DIR
+        jd_manager.EXPIRED_DIR = self.expired_dir
+
+        self.with_url_path = os.path.join(self.tmp_dir, "with_url.json")
+        with open(self.with_url_path, "w", encoding="utf-8") as f:
+            json.dump({"source_url": "https://example.com/job/1", "job_title": "Test"}, f)
+
+    def tearDown(self):
+        jd_manager.EXPIRED_DIR = self._real_expired_dir
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        if os.path.exists(self.tmp_dir):
+            os.rmdir(self.tmp_dir)
+
+    def test_empty_paths_returns_zeros_without_calling_subprocess(self):
+        with patch("liveness.subprocess.run") as mock_run:
+            result = liveness.verify_jd_paths([])
+        mock_run.assert_not_called()
+        self.assertEqual(result["moved"], 0)
+        self.assertEqual(result["expired_paths"], [])
+
+    @patch("liveness.subprocess.run")
+    def test_expired_path_is_moved_and_reported_in_expired_paths(self, mock_run):
+        mock_run.return_value = _proc(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": self.with_url_path, "url": "https://example.com/job/1",
+             "result": "expired", "code": "http_gone", "reason": "HTTP 404"},
+        ]))
+
+        result = liveness.verify_jd_paths([self.with_url_path])
+
+        self.assertEqual(result["moved"], 1)
+        self.assertEqual(result["expired_paths"], [self.with_url_path])
+        self.assertFalse(os.path.exists(self.with_url_path))
+        self.assertTrue(os.path.exists(os.path.join(self.expired_dir, "with_url.json")))
+
+    @patch("liveness.subprocess.run")
+    def test_active_path_is_not_moved(self, mock_run):
+        mock_run.return_value = _proc(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": self.with_url_path, "url": "https://example.com/job/1",
+             "result": "active", "code": "apply_control_visible", "reason": "ok"},
+        ]))
+
+        result = liveness.verify_jd_paths([self.with_url_path])
+
+        self.assertEqual(result["moved"], 0)
+        self.assertEqual(result["expired_paths"], [])
+        self.assertTrue(os.path.exists(self.with_url_path))
+
+    def test_does_not_call_get_pending_jds(self):
+        # verify_jd_paths operates only on the paths it's given -- it
+        # must never fall back to scanning the whole pending queue.
+        with patch("liveness.jd_manager.get_pending_jds") as mock_pending, \
+             patch("liveness.subprocess.run") as mock_run:
+            mock_run.return_value = _proc(returncode=0, stdout="[]")
+            liveness.verify_jd_paths([self.with_url_path])
+        mock_pending.assert_not_called()
+
+
 class TestRecencySkip(unittest.TestCase):
 
     def setUp(self):

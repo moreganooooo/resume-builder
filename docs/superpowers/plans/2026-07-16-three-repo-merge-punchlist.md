@@ -278,13 +278,32 @@ nothing here changed, only IDEAS.md did).
         silently breaking its "promote a sweep-discovered company to a
         direct provider" feature. Both fixed in the vendored copies. 10
         new tests (`tests/test_scan_ats.py`).
-      - [ ] **Found during a 2026-07-21 sibling-repo audit:** career-ops's
-        `scan.mjs --verify` runs a Playwright liveness pass over only
-        new/deduped postings right after the zero-token API scan, before
-        anything hits the pipeline. Worth designing this porting pass
-        together with the already-tracked liveness work (item #16 /
-        "Liveness skip-by-recency") rather than treating scan-porting and
-        liveness as fully separate efforts.
+      - [x] **Liveness verification pass — done 2026-07-26.** career-ops's
+        `scan.mjs --verify` (a Playwright liveness pass over only
+        new/deduped postings, right after the API scan, before anything
+        is presented as a hit) didn't need a new port -- resume-builder
+        already had its own liveness checker (`liveness.py`/
+        `check-liveness.mjs`, built 2026-07-05 for the standalone
+        `resume liveness` command). Refactored `liveness.py` to split out
+        `_verify_candidates()` (the actual check-and-move-expired core)
+        from `run_liveness_check()`'s pending-queue-plus-recency-split
+        concern, and added `verify_jd_paths(paths)` -- no recency skip,
+        since scan-fresh postings are always worth a real check rather
+        than trusting `_write_jd_file()`'s optimistic "confirmed to exist
+        by scan" seed (a feed can list a posting that's already gone --
+        seen live the same day: TheMuse serving a 404 for a listed
+        posting). `scan.run_scan()` now runs this by default on every
+        newly-written path across all sources in one pass (one browser
+        launch, not one per source) and drops any confirmed-expired
+        posting into `jds/expired/` before the report ever shows it as a
+        hit -- `cli_art.render_scan_report()` gained an "Expired" column
+        for this. `--no-verify` (CLI only, mirrors career-ops's own flag)
+        skips it. Confirmed live end-to-end both ways: 3 new CIA
+        postings via `--source boards` all verified active through a
+        real headless-browser pass; 11 new JobRight postings via
+        `--no-verify` written instantly with no browser launch at all.
+        11 new tests (4 in `test_liveness.py`, 3 in `test_scan.py`), full
+        suite green (978 tests).
 - [x] **`evaluate`:** career-ops's fit-scoring — ported (done 2026-07-04,
       IDEAS.md item 1.3). The scam/ghost-posting legitimacy gap found
       2026-07-21 is also closed: `posting_legitimacy`/
