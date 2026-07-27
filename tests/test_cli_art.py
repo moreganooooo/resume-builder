@@ -239,11 +239,15 @@ class TestRenderComparisonTable(unittest.TestCase):
         rows = [
             {"company": "Acme", "title": "Writer", "evaluation": {
                 "composite_score": 4.5, "recommendation": "Strong pursue", "archetype": "Content Lead",
-                "dimension_scores": {"cv_profile_match": 5, "remote_quality": 4},
+                "fit_subscores": {"functional_alignment": 5, "north_star_alignment": 4},
+                "interview_odds_subscores": {"title_continuity": 4},
+                "practical_pursue_subscores": {"remote_quality": 4},
             }},
             {"company": "Beta", "title": "PM", "evaluation": {
                 "composite_score": 3.0, "recommendation": "Selective pursue", "archetype": "Ops Generalist",
-                "dimension_scores": {"cv_profile_match": 3, "remote_quality": 2},
+                "fit_subscores": {"functional_alignment": 3, "north_star_alignment": 2},
+                "interview_odds_subscores": {"title_continuity": 2},
+                "practical_pursue_subscores": {"remote_quality": 2},
             }},
         ]
         output = _rendered(cli_art.render_comparison_table, rows)
@@ -251,7 +255,7 @@ class TestRenderComparisonTable(unittest.TestCase):
         self.assertIn("Acme", output)
         self.assertIn("Beta", output)
         self.assertIn("Content Lead", output)
-        self.assertIn("CV Match", output)
+        self.assertIn("Functional", output)
 
 
 class TestRenderDoctorReport(unittest.TestCase):

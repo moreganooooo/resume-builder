@@ -620,26 +620,32 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         path = self._write("dummy.txt", "Just plain text.")
         self.assertIsNone(jd_manager.read_evaluation(path))
 
-    def test_save_then_read_round_trips_archetype_and_dimension_scores(self):
-        # Regression test: dimension_scores/archetype used to be computed
+    def test_save_then_read_round_trips_archetype_and_subscores(self):
+        # Regression test: subscores/archetype used to be computed
         # and immediately discarded, same as `why` used to be -- needed
         # for the "List Jobs" browse view's per-JD drill-in detail.
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
         jd_manager.save_evaluation(path, {
             "composite_score": 4.2, "recommendation": "Strong pursue",
             "archetype": "Lifecycle Marketing Manager",
-            "dimension_scores": {"cv_profile_match": 5, "remote_quality": 4},
+            "fit_subscores": {"functional_alignment": 5, "north_star_alignment": 4},
+            "interview_odds_subscores": {"title_continuity": 4},
+            "practical_pursue_subscores": {"remote_quality": 4},
         })
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["archetype"], "Lifecycle Marketing Manager")
-        self.assertEqual(result["dimension_scores"], {"cv_profile_match": 5, "remote_quality": 4})
+        self.assertEqual(result["fit_subscores"], {"functional_alignment": 5, "north_star_alignment": 4})
+        self.assertEqual(result["interview_odds_subscores"], {"title_continuity": 4})
+        self.assertEqual(result["practical_pursue_subscores"], {"remote_quality": 4})
 
-    def test_missing_archetype_and_dimension_scores_persist_as_empty(self):
+    def test_missing_archetype_and_subscores_persist_as_empty(self):
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
         jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["archetype"], "")
-        self.assertEqual(result["dimension_scores"], {})
+        self.assertEqual(result["fit_subscores"], {})
+        self.assertEqual(result["interview_odds_subscores"], {})
+        self.assertEqual(result["practical_pursue_subscores"], {})
 
 
 class TestArchiveJd(unittest.TestCase):

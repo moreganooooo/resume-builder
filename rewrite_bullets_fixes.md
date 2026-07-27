@@ -1607,7 +1607,7 @@ Action: REWRITE  |  Weaknesses: ["The term 'high-impact' is subjective and lacks
 🚩 API error on final attempt — marking MANUAL.
 🚩 MANUAL — best version kept in cluster map.
 
-[2/10] - Developed account-based marketing (ABM) messaging frameworks for Adobe eSign, ...
+[2/10] - Developed account-based marketing (ABM) messaging frameworks for Adobe Sign, ...
 Company: Inside Sales Team  |  Tags: [content]
 Action: REWRITE  |  Weaknesses: The outcome 'two senior-level nominations' is an internal recognition metric tha
 📄 Non-Treering — career context + verified facts/tools injected
@@ -5061,7 +5061,7 @@ Raw preview: '*   User wants a resume bullet rewritten.     *   Persona: General
 📊 tokens — prompt: 14397 | output: 104 | total: 14501 | ✨ cached: 12088
 💾 Cache stats [attempt 3]: kb_context=32,097 chars | cachedContentTokenCount=12,088 ✨
 ⚠️ Rewrite parse error (attempt 3): JSON parse failed — could not extract valid JSON.
-Raw preview: '{   "rewritten_bullet": "Developed an ABM pilot messaging strategy for Adobe eSign that secured a nomination for two senior-level promotions within the agency",   "reasoning": "The rewrite replaces the passive \'nominated\' with an active \'developed\' verb, clearly linking the action (ABM pilot messagi'
+Raw preview: '{   "rewritten_bullet": "Developed an ABM pilot messaging strategy for Adobe Sign that secured a nomination for two senior-level promotions within the agency",   "reasoning": "The rewrite replaces the passive \'nominated\' with an active \'developed\' verb, clearly linking the action (ABM pilot messagi'
 ⚠️ Max attempts reached. Marking as MANUAL.
 🔧 MANUAL — best version retained.
 
@@ -5547,58 +5547,58 @@ Tags: [mgmt] [ops]  |  Action: REWRITE
 ✅ KEEPER saved.
 
 ────────────────────────────────────────────────────────────
-[4/473] - Proposed ABM-informed content strategy for Adobe eSign, al...
+[4/473] - Proposed ABM-informed content strategy for Adobe Sign, al...
 Tags: [content]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14418 | output: 34 | total: 14452 | ✨ cached: 12149
 💾 Cache stats [attempt 1]: kb_context=32,723 chars | cachedContentTokenCount=12,149 ✨
-📝 Rewritten: Architected an ABM-informed content strategy for Adobe eSign, aligning audience ...
+📝 Rewritten: Architected an ABM-informed content strategy for Adobe Sign, aligning audience ...
 📊 tokens — prompt: 2794 | output: 137 | total: 2931
 📊 Scores → accuracy=85 bel=80 clarity=90 ats=85 mgr=PASS → REVIEW
 ✏️  Attempt 2/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14412 | output: 31 | total: 14443 | ✨ cached: 14174
 💾 Cache stats [attempt 2]: kb_context=32,723 chars | cachedContentTokenCount=14,174 ✨
-📝 Rewritten: Developed ABM-informed messaging for Adobe eSign, tailoring content themes to sp...
+📝 Rewritten: Developed ABM-informed messaging for Adobe Sign, tailoring content themes to sp...
 📊 tokens — prompt: 2791 | output: 136 | total: 2927
 📊 Scores → accuracy=90 bel=90 clarity=95 ats=85 mgr=PASS → KEEP
 ✅ KEEPER saved.
 
 ────────────────────────────────────────────────────────────
-[5/473] - Proposed ABM-informed content strategy for Adobe eSign, co...
+[5/473] - Proposed ABM-informed content strategy for Adobe Sign, co...
 Tags: [content] [ops]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14537 | output: 36 | total: 14573 | ✨ cached: 12150
 💾 Cache stats [attempt 1]: kb_context=33,281 chars | cachedContentTokenCount=12,150 ✨
-📝 Rewritten: Developed ABM-informed messaging for Adobe eSign by integrating CRM insights wit...
+📝 Rewritten: Developed ABM-informed messaging for Adobe Sign by integrating CRM insights wit...
 📊 tokens — prompt: 2810 | output: 142 | total: 2952
 📊 Scores → accuracy=85 bel=80 clarity=90 ats=85 mgr=PASS → REVIEW
 ✏️  Attempt 2/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14556 | output: 36 | total: 14592 | ✨ cached: 14176
 💾 Cache stats [attempt 2]: kb_context=33,281 chars | cachedContentTokenCount=14,176 ✨
-📝 Rewritten: Developed ABM-informed messaging for Adobe eSign by integrating CRM insights wit...
+📝 Rewritten: Developed ABM-informed messaging for Adobe Sign by integrating CRM insights wit...
 📊 tokens — prompt: 2805 | output: 136 | total: 2941
 📊 Scores → accuracy=90 bel=90 clarity=95 ats=85 mgr=PASS → KEEP
 ✅ KEEPER saved.
 💾 Flushed cluster map (5/473 bullets processed).
 
 ────────────────────────────────────────────────────────────
-[6/473] - Proposed ABM-inspired strategy for Adobe eSign, earning a ...
+[6/473] - Proposed ABM-inspired strategy for Adobe Sign, earning a ...
 Tags: [writing]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14265 | output: 22 | total: 14287 | ✨ cached: 12148
 💾 Cache stats [attempt 1]: kb_context=32,097 chars | cachedContentTokenCount=12,148 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign to drive targeted outbound engagem...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign to drive targeted outbound engagem...
 📊 tokens — prompt: 2773 | output: 128 | total: 2901
 📊 Scores → accuracy=90 bel=90 clarity=95 ats=85 mgr=PASS → KEEP
 ✅ KEEPER saved.
 
 ────────────────────────────────────────────────────────────
-[7/473] - Proposed an ABM strategy for Adobe eSign that introduced l...
+[7/473] - Proposed an ABM strategy for Adobe Sign that introduced l...
 Tags: [generalist]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14411 | output: 24 | total: 14435 | ✨ cached: 12149
 💾 Cache stats [attempt 1]: kb_context=32,579 chars | cachedContentTokenCount=12,149 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign that introduced lifecycle logic to...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign that introduced lifecycle logic to...
 📊 tokens — prompt: 2775 | output: 138 | total: 2913
 📊 Scores → accuracy=90 bel=90 clarity=95 ats=85 mgr=PASS → KEEP
 ✅ KEEPER saved.
@@ -5609,13 +5609,13 @@ Tags: [writing]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14254 | output: 38 | total: 14292 | ✨ cached: 12148
 💾 Cache stats [attempt 1]: kb_context=32,097 chars | cachedContentTokenCount=12,148 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign and education-sector clients, esta...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign and education-sector clients, esta...
 📊 tokens — prompt: 2789 | output: 140 | total: 2929
 📊 Scores → accuracy=90 bel=85 clarity=90 ats=80 mgr=PASS → REVIEW
 ✏️  Attempt 2/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14273 | output: 36 | total: 14309 | ✨ cached: 14173
 💾 Cache stats [attempt 2]: kb_context=32,097 chars | cachedContentTokenCount=14,173 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign and education-sector clients, crea...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign and education-sector clients, crea...
 📊 tokens — prompt: 2787 | output: 137 | total: 2924
 📊 Scores → accuracy=90 bel=90 clarity=95 ats=85 mgr=PASS → KEEP
 ✅ KEEPER saved.
@@ -5699,13 +5699,13 @@ Tags: [writing]  |  Action: REWRITE
 ✏️  Attempt 1/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14286 | output: 27 | total: 14313 | ✨ cached: 12148
 💾 Cache stats [attempt 1]: kb_context=32,097 chars | cachedContentTokenCount=12,148 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign that earned a nomination for two s...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign that earned a nomination for two s...
 📊 tokens — prompt: 2778 | output: 149 | total: 2927
 📊 Scores → accuracy=80 bel=75 clarity=85 ats=70 mgr=FAIL → REWRITE
 ✏️  Attempt 2/3... (model: gemma-4-31b-it)
 📊 tokens — prompt: 14262 | output: 33 | total: 14295 | ✨ cached: 14173
 💾 Cache stats [attempt 2]: kb_context=32,097 chars | cachedContentTokenCount=14,173 ✨
-📝 Rewritten: Developed ABM pilot messaging for Adobe eSign, delivering high-performance outbo...
+📝 Rewritten: Developed ABM pilot messaging for Adobe Sign, delivering high-performance outbo...
 📊 tokens — prompt: 2784 | output: 141 | total: 2925
 📊 Scores → accuracy=90 bel=85 clarity=95 ats=80 mgr=PASS → REVIEW
 ✏️  Attempt 3/3... (model: gemma-4-31b-it)
@@ -5736,7 +5736,7 @@ Tags: [writing]  |  Action: REWRITE
 ⏳ Server issue/Rate limit. Waiting 17.4s before retry 2/6...
 📊 tokens — prompt: 14267 | output: 37 | total: 14304
 💾 Cache stats [attempt 3]: kb_context=32,097 chars | cachedContentTokenCount=0 (no cache hit this call)
-📝 Rewritten: Authored high-performance ABM pilot messaging for Adobe eSign that drove signifi...
+📝 Rewritten: Authored high-performance ABM pilot messaging for Adobe Sign that drove signifi...
 📊 tokens — prompt: 2788 | output: 135 | total: 2923
 📊 Scores → accuracy=85 bel=80 clarity=85 ats=75 mgr=PASS → REVIEW
 ⚠️ Max attempts reached. Marking as MANUAL.

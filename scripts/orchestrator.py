@@ -644,43 +644,88 @@ class JDKeywordSchema(BaseModel):
     hard_skills:    List[str] = Field(description="Specific methodologies, metrics, and frameworks e.g., Lifecycle Marketing, A/B Testing, Pipeline Generation.")
     core_functions: List[str] = Field(description="Primary responsibilities and domain areas e.g., Content Governance, Enablement Training.")
 
-# Weights ported from career-ops's modes/offer.md weighted-match matrix.
-# The composite score is computed in Python (fit_composite_score below)
-# rather than trusted from the model, so a wrong LLM sum can't silently
-# skew the recommendation.
-FIT_DIMENSION_WEIGHTS = {
-    "cv_profile_match":     0.25,
-    "north_star_alignment": 0.20,
-    "remote_quality":       0.15,
-    "level_fit":            0.15,
-    "compensation":         0.10,
-    "growth":               0.05,
-    "time_to_offer":        0.05,
-    "tech_tool_relevance":  0.03,
-    "company_reputation":   0.01,
-    "cultural_signals":     0.01,
+# Weights ported from career-ops's modes/offer.md weighted-match matrix,
+# now split into three independent layers instead of one blended
+# 10-dimension score: fit ("does this match my background"), interview
+# odds ("will a recruiter believe it fast enough to move me forward"),
+# and practical pursue ("is this worth my time/energy in real terms").
+# These are genuinely different questions -- a role can be a great fit
+# with weak interview odds (title history off, crowded funnel) or the
+# reverse -- and blending them into one number made it impossible to
+# tell *why* a role scored low. All composite math stays in Python
+# (never trusted from the model) so a wrong LLM sum can't silently skew
+# the recommendation.
+FIT_SUBSCORE_WEIGHTS = {
+    "functional_alignment":      0.30,
+    "north_star_alignment":      0.25,
+    "level_plausibility":        0.20,
+    "work_style_sustainability": 0.15,
+    "tools_process_overlap":     0.10,
 }
 
-class FitDimensionScores(BaseModel):
-    cv_profile_match:     int = Field(description="1-5: direct match to core demonstrated work vs. weak/missing")
-    north_star_alignment: int = Field(description="1-5: fit to target role families vs. far from desired direction")
-    remote_quality:       int = Field(description="1-5: fully remote and workable vs. onsite/incompatible")
-    level_fit:            int = Field(description="1-5: screen risk, not prestige; overqualified is safer than underqualified")
-    compensation:         int = Field(description="1-5: vs. stated target/floor, or likely range if unstated")
-    growth:               int = Field(description="1-5: useful momentum/skill-building vs. likely dead end")
-    time_to_offer:        int = Field(description="1-5: likely process speed/friction")
-    tech_tool_relevance:  int = Field(description="1-5: overlap with JD's named tools/systems")
-    company_reputation:   int = Field(description="1-5: reputation/red flags")
-    cultural_signals:     int = Field(description="1-5: promising vs. concerning signals in the JD's own language")
+INTERVIEW_ODDS_WEIGHTS = {
+    "title_continuity":     0.25,
+    "evidence_match":       0.25,
+    "domain_credibility":   0.15,
+    "recruiter_legibility": 0.15,
+    "narrative_burden":     0.10,
+    "funnel_friction":      0.10,
+}
+
+PRACTICAL_PURSUE_WEIGHTS = {
+    "remote_quality":           0.25,
+    "compensation_viability":   0.15,
+    "growth_value":             0.10,
+    "time_to_offer":            0.15,
+    "company_reputation":       0.10,
+    "cultural_signals":         0.10,
+    "posting_legitimacy_score": 0.15,
+}
+
+# Fit and interview odds carry equal primary weight; practical
+# constraints matter but shouldn't dominate the decision the way a hard
+# blocker does (that's handled separately, via hard_blockers).
+COMPOSITE_SCORE_WEIGHTS = {
+    "fit_score":              0.40,
+    "interview_odds_score":   0.40,
+    "practical_pursue_score": 0.20,
+}
+
+class FitSubscores(BaseModel):
+    functional_alignment:      int = Field(description="1-5: direct match to core demonstrated work vs. weak/missing")
+    north_star_alignment:      int = Field(description="1-5: fit to target role families vs. far from desired direction")
+    level_plausibility:        int = Field(description="1-5: screen risk, not prestige; overqualified is safer than underqualified")
+    work_style_sustainability: int = Field(description="1-5: realistically sustainable/energizing vs. brute-force or burnout-prone")
+    tools_process_overlap:     int = Field(description="1-5: overlap with JD's named tools/systems")
+
+class InterviewOddsSubscores(BaseModel):
+    title_continuity:     int = Field(description="1-5: does the resume's title path map cleanly onto this posting's title")
+    evidence_match:       int = Field(description="1-5: can the resume prove the posting's core asks with concrete specifics")
+    domain_credibility:   int = Field(description="1-5: does the company's world feel instantly credible for this candidate")
+    recruiter_legibility: int = Field(description="1-5: how quickly a recruiter can understand the match")
+    narrative_burden:     int = Field(description="1-5: how little explanation is required before the match makes sense")
+    funnel_friction:      int = Field(description="1-5: likely favorable vs. crowded/high-friction funnel")
+
+class PracticalPursueSubscores(BaseModel):
+    remote_quality:           int = Field(description="1-5: fully remote and workable vs. onsite/incompatible")
+    compensation_viability:   int = Field(description="1-5: vs. stated target/floor, or likely range if unstated")
+    growth_value:             int = Field(description="1-5: useful momentum/skill-building vs. likely dead end")
+    time_to_offer:            int = Field(description="1-5: likely process speed/friction")
+    company_reputation:       int = Field(description="1-5: reputation/red flags")
+    cultural_signals:         int = Field(description="1-5: promising vs. concerning signals in the JD's own language")
+    posting_legitimacy_score: int = Field(description="1-5: confidence the posting is real, active, and worth energy")
 
 class FitEvaluationSchema(BaseModel):
-    archetype:                str                = Field(description="Best-matching role archetype, or closest hybrid of two")
-    hard_blockers:            List[str]          = Field(description="Explicit disqualifying constraints found; empty list if none")
-    dimension_scores:         FitDimensionScores
-    recommendation:           Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
-    why:                      str                = Field(description="2-4 plain-language sentences justifying the recommendation")
-    posting_legitimacy:       Literal["High Confidence", "Proceed with Caution", "Suspicious"] = Field(description="Does this posting look real, active, and worth pursuing?")
-    posting_legitimacy_notes: str                = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
+    archetype:                  str                       = Field(description="Best-matching role archetype, or closest hybrid of two")
+    hard_blockers:              List[str]                 = Field(description="Explicit disqualifying constraints found; empty list if none")
+    fit_subscores:              FitSubscores
+    interview_odds_subscores:   InterviewOddsSubscores
+    practical_pursue_subscores: PracticalPursueSubscores
+    recommendation:             Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
+    why:                        str                       = Field(description="2-4 plain-language sentences justifying the recommendation")
+    recruiter_read:             str                       = Field(description="1-2 sentences on how a recruiter is likely to read this candidate for this role at first glance")
+    posting_legitimacy:         Literal["High Confidence", "Proceed with Caution", "Suspicious"] = Field(description="Does this posting look real, active, and worth pursuing?")
+    posting_legitimacy_notes:   str                       = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
 
 
 # Applying early matters a lot, and the scanners now pull in enough
@@ -693,13 +738,36 @@ STALE_POSTING_PENALTY_PER_DAY = 0.03
 STALE_POSTING_MAX_PENALTY = 0.75
 
 
-def fit_composite_score(dimension_scores: dict, posting_age_days: int = None) -> float:
-    """Weighted 1-5 composite from per-dimension scores, per
-    FIT_DIMENSION_WEIGHTS, minus an age penalty for postings older than
+def _weighted_score(subscores: dict, weights: dict) -> float:
+    """1-5 weighted average of a subscore dict against its matching
+    weight dict (FIT_SUBSCORE_WEIGHTS / INTERVIEW_ODDS_WEIGHTS /
+    PRACTICAL_PURSUE_WEIGHTS)."""
+    return round(sum(subscores.get(dim, 0) * weight for dim, weight in weights.items()), 2)
+
+
+def compute_fit_score(fit_subscores: dict) -> float:
+    return _weighted_score(fit_subscores, FIT_SUBSCORE_WEIGHTS)
+
+
+def compute_interview_odds_score(interview_odds_subscores: dict) -> float:
+    return _weighted_score(interview_odds_subscores, INTERVIEW_ODDS_WEIGHTS)
+
+
+def compute_practical_pursue_score(practical_pursue_subscores: dict) -> float:
+    return _weighted_score(practical_pursue_subscores, PRACTICAL_PURSUE_WEIGHTS)
+
+
+def fit_composite_score(fit_score: float, interview_odds_score: float, practical_pursue_score: float, posting_age_days: int = None) -> float:
+    """Weighted 1-5 blend of the three independent layer scores, per
+    COMPOSITE_SCORE_WEIGHTS, minus an age penalty for postings older than
     STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
     for how posting_age_days is derived -- None means no age signal at
     all, so no penalty is applied rather than assuming staleness)."""
-    base = sum(dimension_scores.get(dim, 0) * weight for dim, weight in FIT_DIMENSION_WEIGHTS.items())
+    base = (
+        fit_score * COMPOSITE_SCORE_WEIGHTS["fit_score"]
+        + interview_odds_score * COMPOSITE_SCORE_WEIGHTS["interview_odds_score"]
+        + practical_pursue_score * COMPOSITE_SCORE_WEIGHTS["practical_pursue_score"]
+    )
     penalty = 0.0
     if posting_age_days is not None and posting_age_days > STALE_POSTING_THRESHOLD_DAYS:
         penalty = min(
@@ -2085,8 +2153,17 @@ class ResumeEngine:
             return {}
 
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
+        fit_score = compute_fit_score(evaluation.get("fit_subscores", {}))
+        interview_odds_score = compute_interview_odds_score(evaluation.get("interview_odds_subscores", {}))
+        practical_pursue_score = compute_practical_pursue_score(evaluation.get("practical_pursue_subscores", {}))
+
         evaluation["posting_age_days"] = posting_age_days
-        evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}), posting_age_days)
+        evaluation["fit_score"] = fit_score
+        evaluation["interview_odds_score"] = interview_odds_score
+        evaluation["practical_pursue_score"] = practical_pursue_score
+        evaluation["composite_score"] = fit_composite_score(
+            fit_score, interview_odds_score, practical_pursue_score, posting_age_days,
+        )
         return evaluation
 
     def research_company(self, jd_data: dict) -> dict | None:

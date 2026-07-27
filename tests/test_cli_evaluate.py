@@ -78,7 +78,7 @@ class TestEvaluateSingleFile(unittest.TestCase):
         runner = CliRunner()
         result_dict = {
             "archetype": "x", "composite_score": 4.0, "recommendation": "Strong pursue",
-            "dimension_scores": {},
+            "fit_subscores": {}, "interview_odds_subscores": {}, "practical_pursue_subscores": {},
         }
         with patch("cli.orchestrator.ResumeEngine") as mock_engine_cls, \
              patch("cli.jd_manager.save_evaluation") as mock_save:
@@ -100,7 +100,7 @@ class TestEvaluateSingleFile(unittest.TestCase):
         runner = CliRunner()
         result_dict = {
             "archetype": "x", "composite_score": 1.2, "recommendation": "Skip",
-            "dimension_scores": {},
+            "fit_subscores": {}, "interview_odds_subscores": {}, "practical_pursue_subscores": {},
         }
         with patch("cli.orchestrator.ResumeEngine") as mock_engine_cls, \
              patch("cli.jd_manager.save_evaluation"), \
@@ -114,7 +114,7 @@ class TestEvaluateSingleFile(unittest.TestCase):
         runner = CliRunner()
         result_dict = {
             "archetype": "x", "composite_score": 4.5, "recommendation": "Strong pursue",
-            "dimension_scores": {},
+            "fit_subscores": {}, "interview_odds_subscores": {}, "practical_pursue_subscores": {},
         }
         with patch("cli.orchestrator.ResumeEngine") as mock_engine_cls, \
              patch("cli.jd_manager.save_evaluation"), \

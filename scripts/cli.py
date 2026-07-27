@@ -159,13 +159,21 @@ def evaluate(jd_file, yes, refresh):
         archived_path = jd_manager.archive_jd(jd_file)
         cli_art.console.print(f"[dim]Archived to {archived_path} (Skip recommendation).[/dim]")
 
-    scores = result.get("dimension_scores", {})
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
+    cli_art.console.print(f"[bold]Fit:[/bold] {result.get('fit_score')}/5  "
+                           f"[bold]Interview odds:[/bold] {result.get('interview_odds_score')}/5  "
+                           f"[bold]Practical pursue:[/bold] {result.get('practical_pursue_score')}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")
 
-    for dim, weight in orchestrator.FIT_DIMENSION_WEIGHTS.items():
-        cli_art.console.print(f"  {dim:<22} {scores.get(dim, '-')}/5  (weight {weight:.0%})")
+    for label, scores, weights in (
+        ("Fit", result.get("fit_subscores", {}), orchestrator.FIT_SUBSCORE_WEIGHTS),
+        ("Interview odds", result.get("interview_odds_subscores", {}), orchestrator.INTERVIEW_ODDS_WEIGHTS),
+        ("Practical pursue", result.get("practical_pursue_subscores", {}), orchestrator.PRACTICAL_PURSUE_WEIGHTS),
+    ):
+        cli_art.console.print(f"  [bold]{label}[/bold]")
+        for dim, weight in weights.items():
+            cli_art.console.print(f"    {dim:<26} {scores.get(dim, '-')}/5  (weight {weight:.0%})")
 
     blockers = result.get("hard_blockers") or []
     if blockers:
