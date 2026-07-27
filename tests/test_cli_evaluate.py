@@ -96,6 +96,33 @@ class TestEvaluateSingleFile(unittest.TestCase):
         self.assertEqual(result.exit_code, 1)
         mock_save.assert_not_called()
 
+    def test_skip_recommendation_gets_auto_archived(self):
+        runner = CliRunner()
+        result_dict = {
+            "archetype": "x", "composite_score": 1.2, "recommendation": "Skip",
+            "dimension_scores": {},
+        }
+        with patch("cli.orchestrator.ResumeEngine") as mock_engine_cls, \
+             patch("cli.jd_manager.save_evaluation"), \
+             patch("cli.jd_manager.archive_jd", return_value="jds/archived/README.md") as mock_archive:
+            mock_engine_cls.return_value.evaluate_fit.return_value = result_dict
+            result = runner.invoke(cli.cli, ["evaluate", "README.md"])
+        self.assertEqual(result.exit_code, 0)
+        mock_archive.assert_called_once_with("README.md")
+
+    def test_non_skip_recommendation_is_not_archived(self):
+        runner = CliRunner()
+        result_dict = {
+            "archetype": "x", "composite_score": 4.5, "recommendation": "Strong pursue",
+            "dimension_scores": {},
+        }
+        with patch("cli.orchestrator.ResumeEngine") as mock_engine_cls, \
+             patch("cli.jd_manager.save_evaluation"), \
+             patch("cli.jd_manager.archive_jd") as mock_archive:
+            mock_engine_cls.return_value.evaluate_fit.return_value = result_dict
+            runner.invoke(cli.cli, ["evaluate", "README.md"])
+        mock_archive.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

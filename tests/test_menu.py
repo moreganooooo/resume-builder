@@ -914,7 +914,9 @@ class TestHandleHelp(unittest.TestCase):
 class TestChainContent(unittest.TestCase):
 
     def test_chain_matches_the_designed_pipeline_order(self):
-        self.assertEqual(menu._CHAIN["scan"], [("Check Liveness", "liveness")])
+        # Not "Check Liveness" -- scan.run_scan() already verifies
+        # liveness by default on exactly the postings it just found.
+        self.assertEqual(menu._CHAIN["scan"], [("Evaluate All JDs", "evaluate_all")])
         self.assertEqual(menu._CHAIN["liveness"], [("Evaluate All JDs", "evaluate_all")])
         self.assertEqual(
             menu._CHAIN["evaluate_all"],

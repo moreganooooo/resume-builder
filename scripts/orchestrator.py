@@ -683,12 +683,30 @@ class FitEvaluationSchema(BaseModel):
     posting_legitimacy_notes: str                = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
 
 
-def fit_composite_score(dimension_scores: dict) -> float:
-    """Weighted 1-5 composite from per-dimension scores, per FIT_DIMENSION_WEIGHTS."""
-    return round(
-        sum(dimension_scores.get(dim, 0) * weight for dim, weight in FIT_DIMENSION_WEIGHTS.items()),
-        2,
-    )
+# Applying early matters a lot, and the scanners now pull in enough
+# volume that a posting sitting open for weeks shouldn't rank the same
+# as one found today. Gentle ramp (not a cliff at day 8) and capped so a
+# genuinely strong match a few weeks old still outranks a mediocre fresh
+# one -- age is a tiebreaker/prioritization signal, not an override.
+STALE_POSTING_THRESHOLD_DAYS = 7
+STALE_POSTING_PENALTY_PER_DAY = 0.03
+STALE_POSTING_MAX_PENALTY = 0.75
+
+
+def fit_composite_score(dimension_scores: dict, posting_age_days: int = None) -> float:
+    """Weighted 1-5 composite from per-dimension scores, per
+    FIT_DIMENSION_WEIGHTS, minus an age penalty for postings older than
+    STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
+    for how posting_age_days is derived -- None means no age signal at
+    all, so no penalty is applied rather than assuming staleness)."""
+    base = sum(dimension_scores.get(dim, 0) * weight for dim, weight in FIT_DIMENSION_WEIGHTS.items())
+    penalty = 0.0
+    if posting_age_days is not None and posting_age_days > STALE_POSTING_THRESHOLD_DAYS:
+        penalty = min(
+            (posting_age_days - STALE_POSTING_THRESHOLD_DAYS) * STALE_POSTING_PENALTY_PER_DAY,
+            STALE_POSTING_MAX_PENALTY,
+        )
+    return round(max(base - penalty, 0.0), 2)
 
 class CoverLetterSchema(BaseModel):
     company_name:    str       = Field(description="The hiring company's name, exactly as it appears in the job description.")
@@ -2066,7 +2084,9 @@ class ResumeEngine:
             print("  ERROR: Fit evaluation returned no parseable result.")
             return {}
 
-        evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}))
+        posting_age_days = jd_manager.compute_posting_age_days(jd_path)
+        evaluation["posting_age_days"] = posting_age_days
+        evaluation["composite_score"] = fit_composite_score(evaluation.get("dimension_scores", {}), posting_age_days)
         return evaluation
 
     def research_company(self, jd_data: dict) -> dict | None:
