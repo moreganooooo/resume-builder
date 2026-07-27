@@ -46,6 +46,7 @@ import logging
 import os
 import re
 import subprocess
+import time
 
 import requests
 import yaml
@@ -71,6 +72,41 @@ BOARD_PROVIDERS = [
 NODE_TIMEOUT_SECONDS = 30
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(int(seconds), 0)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m{seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m"
+
+
+class ProgressReporter:
+    """Prints "[i/N] <label> <name>... (~Xm Ys remaining)" per item and
+    tracks a running average time-per-item for the ETA. A scan against
+    scan_ats.py's tracked_companies.yml is ~400 sequential subprocess
+    calls with no feedback otherwise -- reads as "did it hang?" on a
+    real run. ETA only appears from the 2nd item on (nothing to average
+    yet on the 1st)."""
+
+    def __init__(self, total: int, label: str = "Checking"):
+        self.total = total
+        self.label = label
+        self.start = time.time()
+        self.done = 0
+
+    def step(self, name: str) -> None:
+        self.done += 1
+        eta = ""
+        if self.done > 1:
+            avg = (time.time() - self.start) / self.done
+            remaining = avg * (self.total - self.done)
+            eta = f" (~{_format_duration(remaining)} remaining)"
+        print(f"  [{self.done}/{self.total}] {self.label} {name}...{eta}")
+
 
 _filters_cache = None
 
@@ -208,7 +244,9 @@ def fetch_board_jobs(sources: list = None, search_term: str = None) -> list:
     sources = sources or BOARD_PROVIDERS
 
     jobs = []
+    progress = ProgressReporter(len(sources), label="Fetching")
     for provider_id in sources:
+        progress.step(provider_id)
         # `entry.name` is what a provider falls back to for `company` when
         # its own raw listing has none (e.g. remoteok.mjs: `j.company ||
         # entry.name`) -- use the provider id, not a placeholder, so a

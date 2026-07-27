@@ -57,7 +57,6 @@ Rules loaded at startup (resume-engine/rules/):
   - hard_failures.yaml      → 7 critical fail conditions (HF001–HF007)
   - truthfulness_rules.yaml → 4 truthfulness tests
   - style_rules.yaml        → style guidance
-  - ats_rules.yaml          → ATS keyword weights and section placement rules
   - formatting_rules.yaml   → date format and forbidden layout elements
 
 Usage:
@@ -273,11 +272,6 @@ class RulesBundle:
         hf  = _load_yaml_safe(os.path.join(rules_dir, "hard_failures.yaml"),        "hard_failures")
         tr  = _load_yaml_safe(os.path.join(rules_dir, "truthfulness_rules.yaml"),   "truthfulness_rules")
         sr  = _load_yaml_safe(os.path.join(rules_dir, "style_rules.yaml"),          "style_rules")
-        # ats_rules.yaml is documented (see module docstring) but was never
-        # created — score_rules_block below references it regardless via
-        # `ats`, so load it defensively the same way as the other files;
-        # _load_yaml_safe degrades to {} (empty ATS section) if it's absent.
-        ats = _load_yaml_safe(os.path.join(rules_dir, "ats_rules.yaml"),            "ats_rules")
         # manager_test.yaml (full scoring/ rubric — hard_fail_conditions incl.
         # scope_inflation, protected_bullets) and believability.yaml (realism/
         # human_language criteria with worked bad-example patterns) were never

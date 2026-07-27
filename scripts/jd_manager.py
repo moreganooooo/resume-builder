@@ -106,6 +106,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "posting_legitimacy_notes": evaluation.get("posting_legitimacy_notes") or "",
         "archetype": evaluation.get("archetype") or "",
         "dimension_scores": evaluation.get("dimension_scores") or {},
+        "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
     with open(jd_path, "w", encoding="utf-8") as f:
@@ -159,6 +160,77 @@ def read_liveness(jd_path: str) -> dict | None:
     if not isinstance(data, dict):
         return None
     return data.get("_liveness")
+
+
+# Real posted-date field names vary by source: resume-builder's own board/
+# ATS providers (scan_boards.py/scan_ats.py) normalize to posted_at (ISO
+# string); JobRight and LinkedIn (scan_jobright.py/scan_linkedin.py) use
+# publish_time (JobRight: unix ms; LinkedIn: whatever the scraper library
+# hands back -- treated the same way here since _parse_flexible_date
+# tries both ISO and numeric-timestamp parsing regardless of source).
+_POSTED_DATE_FIELDS = ("posted_at", "publish_time")
+
+
+def _parse_flexible_date(raw) -> datetime.datetime | None:
+    """Best-effort parse of a date value that could be an ISO-8601
+    string, a unix timestamp (seconds or milliseconds, by magnitude), or
+    a numeric string. Returns None rather than raising on anything else
+    -- an unparseable/missing date should mean "no age signal," not a
+    crash."""
+    if isinstance(raw, str):
+        try:
+            return datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                raw = float(raw)
+            except ValueError:
+                return None
+    if isinstance(raw, (int, float)):
+        ts = raw / 1000 if raw > 10**12 else raw
+        try:
+            return datetime.datetime.fromtimestamp(ts)
+        except (ValueError, OSError, OverflowError):
+            return None
+    return None
+
+
+def compute_posting_age_days(jd_path: str) -> int | None:
+    """Best-effort days-since-posted for a JD, checked in priority order:
+    a real posted-date field (_POSTED_DATE_FIELDS, however the source
+    encoded it), else the _liveness "confirmed to exist by scan"
+    timestamp (the date this JD was actually discovered by a scan in
+    this program -- the fallback Morgan asked for when a real posted
+    date isn't available), else None (no age signal at all -- callers
+    should treat that as "don't penalize," not "assume old"). Reads the
+    raw JD file directly (not read_jd_text(), which strips underscore-
+    prefixed keys including _liveness -- exactly the fallback this
+    needs)."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    posted = None
+    for field in _POSTED_DATE_FIELDS:
+        raw = data.get(field)
+        if raw:
+            posted = _parse_flexible_date(raw)
+            if posted:
+                break
+
+    if not posted:
+        liveness = data.get("_liveness") or {}
+        if liveness.get("reason") == "confirmed to exist by scan" and liveness.get("checked_at"):
+            posted = _parse_flexible_date(liveness["checked_at"])
+
+    if not posted:
+        return None
+
+    now = datetime.datetime.now(posted.tzinfo)
+    return max((now - posted).days, 0)
 
 
 APPLICATION_STATUSES = ["Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"]
@@ -438,21 +510,25 @@ def _normalize_for_match(text: str) -> str:
 def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = None,
                    company_name: str = None, job_title: str = None) -> bool:
     """True if job_key is already completed in the tracker, or a JD file
-    for it already exists in jds/ (pending) or jds/completed/ -- matched
-    by any of: job_key; (when both source_url and company_name are given)
-    an existing file sharing the same source_url AND company_name; or
-    (when both company_name and job_title are given) an existing file
-    whose company_name and job_title normalize to the same thing. JobRight
-    sometimes assigns a new source_job_id to a posting it's already
-    surfaced once, under an identical apply URL and company name -- the
-    company_name check guards against merging two genuinely different
-    companies that happen to share application infrastructure (e.g.
-    sibling brands on the same Workday tenant). The normalized
-    company+title check separately catches the same real job cross-posted
-    across two different scan sources entirely (e.g. JobRight's aggregated
-    ATS URL vs. a separate LinkedIn scrape of the same opening) -- these
-    share no source_job_id or source_url at all, so only company+title
-    can catch them. Used by scan.py to avoid writing duplicate JD files
+    for it already exists in jds/, jds/completed/, jds/archived/, or
+    jds/expired/ -- matched by any of: job_key; (when both source_url and
+    company_name are given) an existing file sharing the same source_url
+    AND company_name; or (when both company_name and job_title are given)
+    an existing file whose company_name and job_title normalize to the
+    same thing. JobRight sometimes assigns a new source_job_id to a
+    posting it's already surfaced once, under an identical apply URL and
+    company name -- the company_name check guards against merging two
+    genuinely different companies that happen to share application
+    infrastructure (e.g. sibling brands on the same Workday tenant). The
+    normalized company+title check separately catches the same real job
+    cross-posted across two different scan sources entirely (e.g.
+    JobRight's aggregated ATS URL vs. a separate LinkedIn scrape of the
+    same opening) -- these share no source_job_id or source_url at all,
+    so only company+title can catch them. archived/ and expired/ are
+    included so a posting Morgan already said no to (Skip -> auto-
+    archived) or that's already confirmed dead doesn't get silently
+    rediscovered as "new" and re-run through the whole pipeline on the
+    next scan. Used by scan.py to avoid writing duplicate JD files
     across repeated scan runs."""
     tracker = tracker or JDTracker(TRACKER_CSV)
     if tracker.is_completed(job_key):
@@ -462,7 +538,7 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = N
     normalized_title = _normalize_for_match(job_title) if job_title else None
 
     tracker_filename = os.path.basename(TRACKER_CSV)
-    for base_dir in (JDS_DIR, COMPLETED_DIR):
+    for base_dir in (JDS_DIR, COMPLETED_DIR, ARCHIVED_DIR, EXPIRED_DIR):
         if not os.path.isdir(base_dir):
             continue
         for name in os.listdir(base_dir):

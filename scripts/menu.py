@@ -732,7 +732,13 @@ _HANDLERS = {
 
 
 _CHAIN = {
-    "scan": [("Check Liveness", "liveness")],
+    # Not "Check Liveness" -- scan.run_scan() already runs a real
+    # liveness verify pass by default on exactly the postings it just
+    # found (career-ops's scan.mjs --verify, ported 2026-07-26), so
+    # suggesting a liveness check on the same JDs immediately after
+    # would just report back what verify already confirmed. Straight to
+    # evaluate instead, same destination "liveness" itself chains to.
+    "scan": [("Evaluate All JDs", "evaluate_all")],
     "liveness": [("Evaluate All JDs", "evaluate_all")],
     "evaluate_all": [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
     "tailor_all": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],

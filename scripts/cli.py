@@ -155,6 +155,10 @@ def evaluate(jd_file, yes, refresh):
         raise SystemExit(1)
     jd_manager.save_evaluation(jd_file, result)
 
+    if result.get("recommendation") == "Skip":
+        archived_path = jd_manager.archive_jd(jd_file)
+        cli_art.console.print(f"[dim]Archived to {archived_path} (Skip recommendation).[/dim]")
+
     scores = result.get("dimension_scores", {})
     cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
     cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")

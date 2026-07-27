@@ -146,12 +146,17 @@ def fetch_ats_jobs(sources: list = None) -> list:
     "Jobspresso — Marketing" vs. "boards"'s "jobspresso"), which defeats
     job_key_known()'s source_url+company_name dedup match and produces
     real duplicate JD files (confirmed live: 31 duplicate-URL groups,
-    62 files, before this fix)."""
+    62 files, before this fix). Prints a "[i/N] ... (~ETA)" progress
+    line per item (scan_boards.ProgressReporter) -- ~400 sequential
+    subprocess calls with zero feedback otherwise reads as a hang on a
+    real run."""
     jobs = []
+    companies = [c for c in _load_tracked_companies() if c.get("enabled") is not False]
+    queries = [q for q in _load_search_queries() if q.get("enabled") is not False]
+    progress = scan_boards.ProgressReporter(len(companies) + len(queries), label="Checking")
 
-    for company in _load_tracked_companies():
-        if company.get("enabled") is False:
-            continue
+    for company in companies:
+        progress.step(company.get("name") or "?")
         provider_id = _resolve_provider_id(company)
         if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
             continue
@@ -163,9 +168,8 @@ def fetch_ats_jobs(sources: list = None) -> list:
             if job:
                 jobs.append(job)
 
-    for query in _load_search_queries():
-        if query.get("enabled") is False:
-            continue
+    for query in queries:
+        progress.step(query.get("name") or "websearch sweep")
         # _isSweep tells websearch.mjs to prefer the company it extracts
         # from the result URL over `entry.name` (the sweep query's own
         # descriptive name, e.g. "Greenhouse — Marketing & Enablement

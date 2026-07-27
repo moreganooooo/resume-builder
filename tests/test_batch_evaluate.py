@@ -77,6 +77,49 @@ class TestEvaluateAllPendingPersistsEvaluations(unittest.TestCase):
         mock_save.assert_not_called()
 
 
+class TestEvaluateAllPendingAutoArchivesSkip(unittest.TestCase):
+
+    @patch("batch_evaluate.jd_manager.archive_jd", return_value="jds/archived/a.json")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_skip_recommendation_gets_archived(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 1.5, "recommendation": "Skip", "hard_blockers": [],
+        }
+        results = batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_archive.assert_called_once_with("jds/a.json")
+        self.assertEqual(results[0]["source_file"], "jds/archived/a.json")
+
+    @patch("batch_evaluate.jd_manager.archive_jd")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_non_skip_recommendation_is_not_archived(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.5, "recommendation": "Strong pursue", "hard_blockers": [],
+        }
+        results = batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_archive.assert_not_called()
+        self.assertEqual(results[0]["source_file"], "jds/a.json")
+
+    @patch("batch_evaluate.jd_manager.archive_jd", return_value="jds/archived/a.json")
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_job_key_computed_before_the_file_is_moved(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+        # compute_job_key(path) reads the file at `path` -- must be
+        # called before archive_jd() moves it out from under it.
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 1.5, "recommendation": "Skip", "hard_blockers": [],
+        }
+        batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_key.assert_called_once_with("jds/a.json")
+
+
 class TestEvaluateAllPendingPacesCalls(unittest.TestCase):
 
     @patch("batch_evaluate.time.sleep")
