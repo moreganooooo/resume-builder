@@ -392,12 +392,18 @@ class TagTaxonomy(BaseModel):
 class LedgerEntry(BaseModel):
     label: str
     value: str
+    employer: str = ""
+
+
+class NamedLedgerItem(BaseModel):
+    name: str
+    employer: str = ""
 
 
 class LedgerExtraction(BaseModel):
     metrics: list[LedgerEntry] = Field(default_factory=list)
-    tools: list[str] = Field(default_factory=list)
-    projects: list[str] = Field(default_factory=list)
+    tools: list[NamedLedgerItem] = Field(default_factory=list)
+    projects: list[NamedLedgerItem] = Field(default_factory=list)
 
 
 _CONTACT_INFO_PROMPT = """
@@ -488,11 +494,20 @@ rather than padding with invented ones.
 """
 
 _LEDGER_PROMPT = """
-Given a list of resume achievement bullets, extract three things:
+Given a list of resume achievement bullets, each prefixed with the employer
+it belongs to in brackets like "[Acme Corp] Grew pipeline by 22%", extract
+three things:
 - metrics: every quantified result mentioned, as a (label, value) pair
   where value is the number/stat exactly as written (e.g. "22% reply rate")
 - tools: every named tool, platform, or piece of software mentioned
 - projects: every named project or initiative mentioned
+
+For every metric, tool, and project, also set "employer" to the bracketed
+company name of the bullet it came from. If the exact same tool or project
+name appears under more than one employer's bullets, emit one entry per
+employer rather than merging them. Leave employer as an empty string only
+if a bullet has no bracketed company at all -- never guess or invent one.
+
 Only include things explicitly stated in the text. Do not invent numbers,
 tool names, or project names that aren't there.
 """
@@ -636,14 +651,84 @@ def draft_voice_anchors(source_texts: list[str], dry_run: bool = False) -> str:
 def extract_ledger_entries(achievements_text: str, dry_run: bool = False) -> LedgerExtraction:
     """Derives simple metrics/tools/projects lists from already-extracted
     achievement bullets, for the verified_metrics/tools/projects.json
-    ledger files."""
+    ledger files. Single model call over achievements_text as given --
+    callers with a large profile should chunk first via
+    extract_ledger_entries_chunked() rather than passing raw text longer
+    than one call can safely see (see that function's docstring)."""
     if dry_run:
         print("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
         return LedgerExtraction()
 
     raw, _ = GeminiClient.generate(
         model=EXTRACTION_MODEL, system_instruction=_LEDGER_PROMPT,
-        contents=achievements_text[:6000], response_schema=LedgerExtraction, temperature=0.0,
+        contents=achievements_text, response_schema=LedgerExtraction, temperature=0.0,
     )
     data = GeminiClient.parse_json(raw)
     return LedgerExtraction(**data) if data else LedgerExtraction()
+
+
+LEDGER_CHUNK_CHARS = 6000  # matches this call's previous hardcoded truncation cap
+
+
+def _chunk_lines(text: str, max_chars: int) -> list[str]:
+    """Splits text into newline-bounded chunks each under max_chars --
+    never breaks a single line (one bullet) across two chunks."""
+    lines = text.split("\n")
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in lines:
+        added_len = len(line) + (1 if current else 0)
+        if current and current_len + added_len > max_chars:
+            chunks.append("\n".join(current))
+            current, current_len = [], 0
+            added_len = len(line)
+        current.append(line)
+        current_len += added_len
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
+def extract_ledger_entries_chunked(achievements_text: str, dry_run: bool = False) -> LedgerExtraction:
+    """extract_ledger_entries(), but safe for a profile with more
+    achievement text than a single call can see. The old direct call
+    silently truncated achievements_text to 6000 chars, meaning a person
+    with several companies' worth of bullets could have later companies
+    dropped from their verified_metrics/tools/projects.json entirely with
+    no warning. This splits on bullet boundaries into <=6000-char chunks,
+    extracts each independently, and merges the results -- deduping exact
+    repeats (same label/value or name, same employer) that show up in more
+    than one chunk, while keeping the same name/label attributed to two
+    DIFFERENT employers as two separate entries (per _LEDGER_PROMPT)."""
+    if dry_run:
+        print("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        return LedgerExtraction()
+
+    chunks = _chunk_lines(achievements_text, LEDGER_CHUNK_CHARS)
+    metrics: list[LedgerEntry] = []
+    tools: list[NamedLedgerItem] = []
+    projects: list[NamedLedgerItem] = []
+    seen_metrics: set = set()
+    seen_tools: set = set()
+    seen_projects: set = set()
+
+    for chunk in chunks:
+        result = extract_ledger_entries(chunk)
+        for m in result.metrics:
+            key = (m.label.strip().lower(), m.value.strip().lower(), m.employer.strip().lower())
+            if key not in seen_metrics:
+                seen_metrics.add(key)
+                metrics.append(m)
+        for t in result.tools:
+            key = (t.name.strip().lower(), t.employer.strip().lower())
+            if key not in seen_tools:
+                seen_tools.add(key)
+                tools.append(t)
+        for p in result.projects:
+            key = (p.name.strip().lower(), p.employer.strip().lower())
+            if key not in seen_projects:
+                seen_projects.add(key)
+                projects.append(p)
+
+    return LedgerExtraction(metrics=metrics, tools=tools, projects=projects)

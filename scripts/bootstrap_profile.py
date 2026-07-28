@@ -65,11 +65,31 @@ def _load_timeline() -> list:
 
 
 def _achievements_summary_text() -> str:
+    """Bullet text only, joined for prompts that don't need per-bullet
+    employer attribution (e.g. secondary-role suggestion)."""
     if not os.path.exists(bootstrap_bullet_bank.DRAFT_CSV_PATH):
         return ""
     with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return "\n".join(row.get("Bullet Point", "") for row in rows)
+
+
+def _achievements_summary_text_by_employer() -> str:
+    """Same bullets as _achievements_summary_text(), but each line prefixed
+    with its "Role / Company" in brackets -- required by extract_ledger_entries()
+    so extracted metrics/tools/projects can be attributed to the right employer
+    (see _LEDGER_PROMPT in bootstrap_extractors.py). Without this, a fresh
+    profile's verified_metrics/tools/projects.json would have no "employer"
+    field, silently disabling filter_projects_by_employer()'s protection
+    against cross-company content leaking into a rewritten bullet."""
+    if not os.path.exists(bootstrap_bullet_bank.DRAFT_CSV_PATH):
+        return ""
+    with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return "\n".join(
+        f"[{row.get('Role / Company', '')}] {row.get('Bullet Point', '')}"
+        for row in rows
+    )
 
 
 def _resolve_text_or_upload(path: str) -> tuple:
@@ -419,9 +439,9 @@ def write_portals_yml(identity: dict) -> None:
 
 
 def write_verified_ledger(dry_run: bool = False) -> None:
-    achievements_text = _achievements_summary_text()
+    achievements_text = _achievements_summary_text_by_employer()
     extraction = (
-        bootstrap_extractors.extract_ledger_entries(achievements_text, dry_run=dry_run)
+        bootstrap_extractors.extract_ledger_entries_chunked(achievements_text, dry_run=dry_run)
         if achievements_text else bootstrap_extractors.LedgerExtraction()
     )
 
@@ -430,7 +450,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
     metrics_json = {
         "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.metrics)},
         "metrics": [
-            {"id": f"metric_{i + 1:03d}", "label": m.label, "value": m.value}
+            {"id": f"metric_{i + 1:03d}", "label": m.label, "value": m.value, "employer": m.employer}
             for i, m in enumerate(extraction.metrics)
         ],
     }
@@ -439,14 +459,20 @@ def write_verified_ledger(dry_run: bool = False) -> None:
 
     tools_json = {
         "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.tools)},
-        "tools": [{"id": f"tool_{i + 1:03d}", "name": t} for i, t in enumerate(extraction.tools)],
+        "tools": [
+            {"id": f"tool_{i + 1:03d}", "name": t.name, "employer": t.employer}
+            for i, t in enumerate(extraction.tools)
+        ],
     }
     with open(VERIFIED_TOOLS_PATH, "w", encoding="utf-8") as f:
         json.dump(tools_json, f, indent=2)
 
     projects_json = {
         "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.projects)},
-        "projects": [{"id": f"proj_{i + 1:03d}", "name": p} for i, p in enumerate(extraction.projects)],
+        "projects": [
+            {"id": f"proj_{i + 1:03d}", "name": p.name, "employer": p.employer}
+            for i, p in enumerate(extraction.projects)
+        ],
     }
     with open(VERIFIED_PROJECTS_PATH, "w", encoding="utf-8") as f:
         json.dump(projects_json, f, indent=2)

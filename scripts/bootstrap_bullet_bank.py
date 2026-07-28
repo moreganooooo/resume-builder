@@ -9,9 +9,13 @@ guides them through the existing six-stage pipeline (audit -> cluster ->
 rewrite -> audit_keepers -> score_keeper_gems -> embed).
 
 Phase 0 (this file's ingestion logic) is local/fast: extract, attribute to
-a company via a resume/LinkedIn-anchored timeline, auto-tag, and write
-bullet-bank-clean.csv directly -- there's no existing file to protect on a
-first run, so no manual promotion step is needed.
+a company via a resume/LinkedIn-anchored timeline, auto-tag, and append
+onto bullet-bank-clean.csv. Safe to re-run any time you have a new
+document to add, on a brand-new empty bank or an established one --
+already-processed files are skipped via checkpoint.json, and only the
+newly-extracted rows get written; every existing row is left untouched.
+See run_ingestion()'s docstring for the (rare, explicit-opt-in-only)
+force=True full-rebuild path.
 
 Phases 1-6 call the existing pipeline scripts unmodified, as subprocesses,
 with a confirmation gate before each of the two API-heavy stages
@@ -274,31 +278,86 @@ def _write_certifications(certificates: list) -> None:
         json.dump(certificates, f, indent=2)
 
 
-def _write_bullet_bank_clean(matched_rows: list) -> None:
+def _existing_clean_bank_row_count() -> int:
+    if not os.path.exists(BULLET_BANK_CLEAN_PATH):
+        return 0
+    try:
+        with open(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
+            return sum(1 for _ in csv.DictReader(f))
+    except Exception:
+        return 0
+
+
+def _write_bullet_bank_clean(matched_rows: list, overwrite: bool = False) -> None:
     """Auto-tags every row (reusing tag_bullet_bank.assign_tags directly,
-    in-process -- not shelled out to) and writes the final
-    bullet-bank-clean.csv. No manual promotion step: a first-time user has
-    no existing file at risk of being overwritten."""
-    rows = []
+    in-process -- not shelled out to) and writes bullet-bank-clean.csv.
+
+    overwrite=False (the default, and the only mode run_ingestion() uses
+    unless force=True): appends matched_rows onto whatever's already in
+    the file, leaving every existing row byte-for-byte untouched. This is
+    what makes it safe to drop a new document into source_documents/ and
+    run ingestion again against an established, heavily-downstream-refined
+    bank -- run_ingestion() only ever passes the rows extracted from
+    files processed in *this* run here, never the full accumulated set.
+
+    overwrite=True (only reached via run_ingestion(force=True), an
+    explicit, clearly-labeled opt-in) replaces the file's entire contents
+    with just matched_rows -- the original "first-time user" behavior,
+    for the rare case of deliberately starting over."""
+    existing_rows = []
+    if not overwrite and os.path.exists(BULLET_BANK_CLEAN_PATH):
+        with open(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
+            existing_rows = list(csv.DictReader(f))
+
+    new_rows = []
     for company, bullet, _filename, _doc_type, _confidence in matched_rows:
         bullet_text = f"- {bullet}"
         tag_str, _needs_review = tag_bullet_bank.assign_tags(bullet_text)
-        rows.append({"Role / Company": company, "Tags": tag_str, "Bullet Point": bullet_text})
+        new_rows.append({"Role / Company": company, "Tags": tag_str, "Bullet Point": bullet_text})
 
     os.makedirs(os.path.dirname(BULLET_BANK_CLEAN_PATH), exist_ok=True)
     with open(BULLET_BANK_CLEAN_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(existing_rows)
+        writer.writerows(new_rows)
 
 
-def run_ingestion(dry_run: bool = False) -> dict:
+def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     """Runs Phase 0 end to end: extract every file in source_documents/,
     build a timeline from any resume/LinkedIn doc(s), attribute every other
-    achievement against it, then auto-tag and write bullet-bank-clean.csv.
-    Returns a summary dict: {extracted, attributed, flagged, certificates}."""
+    achievement against it, then auto-tag and append the results onto
+    bullet-bank-clean.csv. Returns a summary dict: {extracted, attributed,
+    flagged, certificates}.
+
+    Safe to run repeatedly, on a brand-new empty bank or an established
+    one: files already marked "done" in the checkpoint are skipped (so
+    re-running costs nothing extra), and only rows extracted from files
+    processed in *this* call are written -- every row already in
+    bullet-bank-clean.csv (including anything real downstream work has
+    since built on top of it) is left exactly as it was. Company
+    attribution for the new achievements still uses the FULL historical
+    timeline (built from every resume/LinkedIn doc ever processed, not
+    just new ones this run), so accuracy doesn't degrade just because
+    this call only writes the new rows.
+
+    force=True bypasses all of that and replaces bullet-bank-clean.csv's
+    entire contents with a full reconstruction from the checkpoint --
+    only pass this if you deliberately want to start over; it discards
+    every row that isn't currently reachable from checkpoint.json."""
+    if force:
+        existing_rows = _existing_clean_bank_row_count()
+        if existing_rows:
+            print(
+                f"\n⚠️  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
+                f"existing row(s) in {os.path.basename(BULLET_BANK_CLEAN_PATH)} with a full "
+                "reconstruction from the checkpoint. This discards anything not reachable from "
+                "checkpoint.json and cannot be undone."
+            )
+
     os.makedirs(SOURCE_DOCS_DIR, exist_ok=True)
     checkpoint = _load_checkpoint()
+    already_done_before = {f for f, r in checkpoint.items() if r.get("status") == "done"}
 
     filenames = sorted(
         f for f in os.listdir(SOURCE_DOCS_DIR)
@@ -356,12 +415,25 @@ def run_ingestion(dry_run: bool = False) -> dict:
     _write_draft_csv(matched_rows)
     _write_review_csv(review_rows)
     _write_certifications(certificates)
-    _write_bullet_bank_clean(matched_rows)
+
+    if force:
+        _write_bullet_bank_clean(matched_rows, overwrite=True)
+        rows_written = matched_rows
+    else:
+        # filename is index 2 in every matched_rows tuple (see
+        # already_attributed_rows/pending_achievements above) -- only
+        # rows extracted from files processed in *this* call get written;
+        # everything from a previously-"done" file is already on disk
+        # and must not be touched.
+        rows_written = [row for row in matched_rows if row[2] not in already_done_before]
+        _write_bullet_bank_clean(rows_written, overwrite=False)
+
+    new_review_rows = [row for row in review_rows if row[2] not in already_done_before] if not force else review_rows
 
     return {
-        "extracted": len(matched_rows),
-        "attributed": len(matched_rows) - len(review_rows),
-        "flagged": len(review_rows),
+        "extracted": len(rows_written),
+        "attributed": len(rows_written) - len(new_review_rows),
+        "flagged": len(new_review_rows),
         "certificates": len(certificates),
     }
 
@@ -456,6 +528,15 @@ def main():
              "ingesting new source_documents/ content. Phase 0 (ingestion) always "
              "runs regardless of scope, since it's what processes the new files.",
     )
+    parser.add_argument(
+        "--force-overwrite-clean-bank",
+        action="store_true",
+        help=(
+            "DESTRUCTIVE: overwrite bullet-bank-clean.csv even if it already has "
+            "substantial content, discarding every row. Only pass this if you "
+            "deliberately want to start the bullet bank over from scratch."
+        ),
+    )
     args = parser.parse_args()
 
     # Before Phase 0 -- run_ingestion() itself calls the Gemini API (document
@@ -463,7 +544,7 @@ def main():
     # the very first real call, not just before Phase 0.5's steps.
     bootstrap_profile.collect_secrets(dry_run=args.dry_run)
 
-    summary = run_ingestion(dry_run=args.dry_run)
+    summary = run_ingestion(dry_run=args.dry_run, force=args.force_overwrite_clean_bank)
     print_ingestion_summary(summary)
 
     if args.scope in ("profile", "both"):

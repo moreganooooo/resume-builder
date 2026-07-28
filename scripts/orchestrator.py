@@ -1783,6 +1783,7 @@ class ResumeEngine:
             "punctuation_rules":  style_rules.get("punctuation_rules", []),
             "metrics_rules":      style_rules.get("metrics_rules", {}),
             "tool_mention_rules": style_rules.get("tool_mention_rules", {}),
+            "redundancy_rules":   style_rules.get("redundancy_rules", {}),
         }
         rewrite_rules_block_gemma = _rewrite_block(
             gemma_verb_intent, gemma_style_rules, "=== STYLE RULES (bullet-level subset) ==="

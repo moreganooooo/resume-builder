@@ -244,6 +244,48 @@ tool_mention_rules:
   per_bullet_max: 2
   per_bullet_hard_limit: 3  # 3+ reads as a list not a narrative
 
+# A bullet never needs to restate information the reader already has from
+# its own context -- the resume section header (or the Role/Company column,
+# for bullet-bank rewrites) already establishes which employer this bullet
+# is under, and no one reading a resume needs the exact calendar month
+# something happened. Added 2026-07-27 after a rewrite reintroduced a
+# bullet's own employer name into its own text -- the bullet bank had
+# already been manually cleaned of this exact pattern, but nothing here
+# told the rewrite model not to write it again from scratch.
+redundancy_rules:
+  own_employer_name:
+    rule: >
+      Never restate the candidate's own employer/company name inside a
+      bullet's text -- it's already established by the resume section
+      header (or the Role/Company column, when writing for the bullet
+      bank) and repeating it reads as redundant filler, not specificity.
+    examples:
+      bad: "Built Acme Corp's complete brand identity from scratch"
+      good: "Built a complete brand identity from scratch"
+    exception: >
+      Naming a DIFFERENT company -- a client, partner, vendor, or a prior
+      employer being referenced for context -- is fine and often adds
+      real specificity (e.g. "Authored a 200-page strategy report for a
+      Fortune 500 client" inside an agency-role bullet is a client
+      reference, not a self-reference, and should stay). This rule only
+      forbids a bullet from naming the SAME company it's already filed
+      under.
+  unneeded_calendar_dates:
+    rule: >
+      Do not add a specific month/season + year to a bullet's prose (e.g.
+      "in the January 2022 launch", "the Summer 2020 archive") unless the
+      exact date is materially necessary to distinguish this achievement
+      from another very similar one already on the resume. A recruiter
+      cares about the achievement and its scale, not which calendar month
+      it happened.
+    examples:
+      bad: "Launched 6 Outreach.io sequences in January 2022, achieving a 63% average open rate"
+      good: "Launched 6 Outreach.io sequences, achieving a 63% average open rate"
+    exception: >
+      Job-level start/end dates (e.g. "08/2016 - 08/2024") are a
+      different thing entirely and stay governed by punctuation_rules
+      above, not this rule.
+
 tagline:
   # Empirically measured (Playwright, real DM Sans 14pt rendering at
   # the actual 7.5in content width): realistic uppercase taglines run

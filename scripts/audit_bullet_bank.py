@@ -21,11 +21,20 @@ engine = ResumeEngine()
 critique_prompt = engine.load_prompt("critique_bullet.md")
 manager_test_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "manager_test.yaml"))
 believability_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "believability.yaml"))
+# redundancy_rules (own_employer_name / unneeded_calendar_dates) from
+# style_rules.yaml -- this is the FIRST scoring gate a bullet ever passes
+# through (straight out of bootstrap extraction, before any rewrite), so
+# without this a bullet that already restates its own employer name in
+# its raw extracted text would score fine and never get flagged.
+redundancy_rules = json.dumps(engine.load_yaml(engine.rules_dir, "style_rules.yaml").get("redundancy_rules", {}))
 
 critique_system = (
     f"\n\n{critique_prompt}"
     f"\n\nRULES:\n{manager_test_rules}"
     f"\n\nBELIEVABILITY RULES:\n{believability_rules}"
+    f"\n\nREDUNDANCY RULES (the bullet's own Role/Company is provided in the input -- "
+    f"flag it if the bullet's text restates that SAME company's name, or includes an "
+    f"unneeded specific calendar month/season + year):\n{redundancy_rules}"
 )
 
 csv_path = os.path.join(engine.kb_dir, "bullet-bank-clean.csv")
@@ -66,6 +75,7 @@ skipped = 0
 
 for i, row in df.iterrows():
     bullet = str(row.get("Bullet Point") or row.get("bullet") or row.get("achievement") or row.to_dict())
+    role_company = str(row.get("Role / Company", ""))
 
     # Skip if already scored in a previous run
     if bullet in already_scored_bullets:
@@ -79,7 +89,10 @@ for i, row in df.iterrows():
         critique_text, usage = GeminiClient.generate(
             model="gemini-3.1-flash-lite",
             system_instruction=critique_system,
-            contents=bullet,
+            contents=(
+                f"--- BULLET ---\n{bullet}\n\n"
+                f"--- ROLE / COMPANY (context only -- flag if the bullet redundantly restates this) ---\n{role_company}"
+            ),
             response_schema=CritiqueSchema,
             temperature=0.0
         )

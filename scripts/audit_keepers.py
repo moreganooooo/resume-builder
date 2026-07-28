@@ -35,7 +35,8 @@ Four stages:
     so that bullets already processed by a prior Stage 4 run are not
     re-queued even though the saved keeper text differs from the original.
 
-    When --from-audited is set, Source B (cluster-map MANUAL rows) is
+    When loading from an existing keepers-audited.csv (the default -- see
+    "Source resolution" below), Source B (cluster-map MANUAL rows) is
     skipped entirely. The audited file is already the source of truth;
     only the MANUAL/NEEDS_REWRITE rows from that file need retrying.
 
@@ -69,7 +70,13 @@ Outputs (profiles/<profile>/knowledge_base/):
                                      overwritten; empty file = nothing left to do
 
 Usage:
-  python audit_keepers.py                    # run all four stages, no auto-rewrite
+  python audit_keepers.py                    # run all four stages, no auto-rewrite --
+                                             # loads from keepers-audited.csv by default
+                                             # whenever it already exists (see "Source
+                                             # resolution" below), so any manual edits
+                                             # made directly to that file (e.g. a company
+                                             # retag or a wording fix) are never silently
+                                             # discarded by a routine re-run.
   python audit_keepers.py --dry-run          # score pass is mocked, no API calls
   python audit_keepers.py --auto-rewrite     # Stage 4: run the queue through rewriter
   python audit_keepers.py --auto-rewrite --limit 10
@@ -77,11 +84,25 @@ Usage:
   python audit_keepers.py --auto-rewrite --retry-manual
                                              # re-attempt clusters that previously
                                              # stayed MANUAL instead of skipping them
-  python audit_keepers.py --from-audited --auto-rewrite --skip-rescore
-                                             # resume from keepers-audited.csv — only
-                                             # MANUAL/NEEDS_REWRITE rows are re-processed;
-                                             # CLEAN rows are skipped, cluster-map Source B
-                                             # is skipped entirely (no queue inflation)
+  python audit_keepers.py --rebuild-from-keepers
+                                             # DESTRUCTIVE: ignore keepers-audited.csv
+                                             # entirely and rebuild fresh from
+                                             # keepers.csv -- discards any correction
+                                             # that was only ever applied to the audited
+                                             # file (audit_status/scores are also lost
+                                             # for CLEAN rows, since keepers.csv doesn't
+                                             # carry them). Only pass this if you
+                                             # deliberately want to start over.
+
+Source resolution:
+  If bullet-bank-keepers-audited.csv already exists, it is loaded by
+  default (rows already marked CLEAN are trusted as-is -- no API calls;
+  cluster-map Source B is skipped entirely to prevent queue inflation).
+  This makes the audited file the durable source of truth: any manual
+  correction made directly to it (a retag, a reworded bullet, a fixed
+  metric) survives every future run without needing to remember a flag.
+  Falls back to keepers.csv only if no audited file exists yet, or if
+  --rebuild-from-keepers is passed explicitly.
 """
 
 import argparse
@@ -143,6 +164,98 @@ MANUAL_ATTEMPTS_COLS = [
     "cluster_id", "Bullet Point", "Role / Company", "Tags",
     "composite_score", "manager_test", "rewrite_attempts", "last_attempted",
 ]
+
+
+def resolve_source_file(rebuild_from_keepers: bool, keepers_in: str, keepers_audited: str) -> str:
+    """Picks which file main() loads keepers from. Defaults to
+    keepers_audited whenever it already exists -- it's the durable
+    source of truth and may carry manual corrections (a company retag, a
+    reworded bullet, a fixed metric) that were never backported to
+    keepers_in. Defaulting to keepers_in instead would silently discard
+    those on every routine re-run. rebuild_from_keepers is the explicit,
+    clearly-named opt-in for deliberately starting over from scratch."""
+    if rebuild_from_keepers:
+        return keepers_in
+    if os.path.exists(keepers_audited):
+        return keepers_audited
+    return keepers_in
+
+
+def _normalize_cluster_id(value) -> str:
+    """Renders a cluster_id value the same way regardless of whether
+    pandas read its source column as int64 or float64 -- the deciding
+    factor is just whether ANY row in that column was blank/NaN at read
+    time (a single blank cluster_id, e.g. from a just-triaged row with
+    none assigned yet, forces pandas to upcast the WHOLE column to
+    float64, turning "37" into 37.0). Comparing raw str(value) across two
+    independently-read CSVs breaks exactly when one file has a blank
+    somewhere and the other doesn't -- "37" vs "37.0" silently never
+    match, even though every already-processed row in both files
+    represents the same real ID. Whole numbers (int, or float with no
+    fractional part) always render without a trailing ".0"; anything
+    else (a non-numeric ID, if one ever exists) falls back to a plain
+    stripped string. Returns "" for blank/NaN."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s or s.lower() == "nan":
+        return ""
+    try:
+        f = float(s)
+    except ValueError:
+        return s
+    return str(int(f)) if f.is_integer() else s
+
+
+def merge_new_rows_from_keepers_in(df_audited: pd.DataFrame, df_keepers_in: pd.DataFrame) -> tuple:
+    """Unions any row from df_keepers_in (bullet-bank-keepers.csv, the
+    live landing zone triage_needs_review.py appends new KEEP rows into
+    on every real resume-build session) that isn't already represented
+    in df_audited. Returns (merged_df, count_of_new_rows).
+
+    Matches by source_cluster_id first (falling back to Bullet Point text
+    only for rows with no cluster_id) -- the same primary/secondary
+    matching Stage 3 already uses, and deliberately NOT text-only. A
+    manual correction to the audited file (a retag, a reworded bullet, a
+    fixed metric -- exactly what this file exists to protect) changes the
+    bullet's text, so text-only matching would see the now-different
+    audited row as unrelated to its stale keepers_in counterpart and
+    wrongly re-add the old, uncorrected version as a "new" duplicate.
+    IDs are compared via _normalize_cluster_id(), not raw str() -- see
+    its docstring for the int64/float64 dtype mismatch this guards
+    against (confirmed for real: it misclassified ~810 already-processed
+    rows as "new" the first time this ran against the live bank, the
+    moment a single freshly-triaged row with a blank cluster_id entered
+    keepers.csv).
+
+    Missing columns on the new rows are filled with "" rather than
+    dropped, so a schema mismatch between the two files doesn't silently
+    lose data."""
+    if "Bullet Point" not in df_keepers_in.columns:
+        return df_audited, 0
+
+    known_ids = set()
+    if "source_cluster_id" in df_audited.columns:
+        known_ids = {
+            nid for nid in df_audited["source_cluster_id"].map(_normalize_cluster_id) if nid
+        }
+    known_texts = set(df_audited.get("Bullet Point", pd.Series(dtype=str)).astype(str).str.strip())
+
+    def _is_new(row) -> bool:
+        cid = _normalize_cluster_id(row.get("source_cluster_id"))
+        if cid:
+            return cid not in known_ids
+        return str(row.get("Bullet Point", "")).strip() not in known_texts
+
+    new_rows = df_keepers_in[df_keepers_in.apply(_is_new, axis=1)].copy()
+    if new_rows.empty:
+        return df_audited, 0
+    for col in df_audited.columns:
+        if col not in new_rows.columns:
+            new_rows[col] = ""
+    new_rows = new_rows[df_audited.columns]
+    merged = pd.concat([df_audited, new_rows], ignore_index=True)
+    return merged, len(new_rows)
 
 AUDIT_FLUSH_EVERY = 5
 
@@ -349,9 +462,14 @@ def _safe_str(v) -> str:
 def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
     """Merges in audit_status/scores from an existing keepers-audited.csv
     for any bullet that's already been scored there -- independent of
-    --from-audited, which has its own separate meaning (trust CLEAN rows,
-    skip cluster-map Source B). This is what makes an interrupted Stage 1
-    run resume correctly without needing to remember a flag."""
+    whether this run is loading from the audited file (that has its own
+    separate meaning: trust CLEAN rows, skip cluster-map Source B). This
+    is what makes an interrupted Stage 1 run resume correctly without
+    needing to remember a flag. Only restores audit_status/score columns
+    by exact Bullet Point text match -- it does NOT restore Role/Company
+    or other manual corrections, which is why main()'s source resolution
+    defaults to loading the audited file wholesale instead of trying to
+    diff-and-reapply corrections onto a fresh keepers.csv."""
     if not os.path.exists(KEEPERS_AUDITED):
         return df_keepers
 
@@ -392,15 +510,18 @@ def stage1_audit_keepers(
     score_system: str,
     dry_run: bool = False,
     skip_rescore: bool = False,
-    from_audited: bool = False,
+    using_audited_source: bool = False,
 ) -> pd.DataFrame:
     """
     Re-score keepers that are missing scores or have manager_test != PASS.
     Adds / refreshes: accuracy_score, believability_score, clarity_score,
     ats_value, manager_test, weaknesses, audit_status.
 
-    When --from-audited is set, rows already marked CLEAN are skipped
-    entirely (no API calls, no reclassification) — they stay as-is.
+    When using_audited_source is True (df_keepers was loaded from an
+    existing keepers-audited.csv -- the default whenever that file
+    exists, see main()'s "Source resolution"), rows already marked CLEAN
+    are skipped entirely (no API calls, no reclassification) — they stay
+    as-is.
 
     After scoring, merges source_cluster_id values back from the startup
     snapshot (_STARTUP_CLUSTER_ID_MAP) so that IDs stamped by
@@ -424,10 +545,10 @@ def stage1_audit_keepers(
 
     # When loading from the audited file, rows already marked CLEAN are
     # trusted as-is — no need to re-score or reclassify them.
-    if from_audited:
+    if using_audited_source:
         already_clean_mask = df_keepers["audit_status"].str.strip().str.upper() == "CLEAN"
         needs_score_mask = ~already_clean_mask
-        print(f"   ⚡ --from-audited mode: trusting existing CLEAN rows.")
+        print(f"   ⚡ Loading from keepers-audited.csv: trusting existing CLEAN rows.")
     else:
         needs_score_mask = df_keepers.apply(
             lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
@@ -457,9 +578,10 @@ def stage1_audit_keepers(
         for i, (idx, row) in enumerate(to_score.iterrows(), 1):
             bullet = str(row.get("Bullet Point", "")).strip()
             tags   = str(row.get("Tags", ""))
+            role_company = str(row.get("Role / Company", ""))
             print(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
 
-            scores = score_bullet(bullet, tags, score_system, dry_run=dry_run)
+            scores = score_bullet(bullet, tags, score_system, role_company=role_company, dry_run=dry_run)
 
             for col in SCORE_COLS:
                 if col in NUMERIC_SCORE_COLS:
@@ -614,16 +736,17 @@ def stage2_diff_cluster_map(
 
 def stage3_build_rewrite_queue(
     df_keepers: pd.DataFrame,
-    from_audited: bool = False,
+    using_audited_source: bool = False,
     retry_manual: bool = False,
 ) -> pd.DataFrame:
     """
     Builds the ranked rewrite queue from:
       - NEEDS_REWRITE / MANUAL rows from the audited keepers (Stage 1)
       - MANUAL rows from the cluster map that aren't already processed
-        (Source B — SKIPPED when --from-audited is set, since the audited
-        file is already the source of truth and we only want to retry the
-        stragglers, not re-inflate the queue with cluster-map rows)
+        (Source B — SKIPPED when using_audited_source is True, since the
+        audited file is already the source of truth and we only want to
+        retry the stragglers, not re-inflate the queue with cluster-map
+        rows)
 
     Clusters recorded in audit-manual-attempts.csv (stayed MANUAL after a
     prior Stage 4 attempt) are also excluded from Source B by default --
@@ -652,16 +775,46 @@ def stage3_build_rewrite_queue(
     # Source A: keepers that need attention (MANUAL / NEEDS_REWRITE from Stage 1)
     keeper_bad_mask = df_keepers["audit_status"].isin(["NEEDS_REWRITE", "MANUAL"])
     df_keeper_bad = df_keepers[keeper_bad_mask].copy()
+
+    # Exclude clusters already recorded as a failed Stage 4 attempt -- same
+    # protection Source B already has below. Without this, a bullet that
+    # stayed MANUAL has its keeper row deleted by stage4_auto_rewrite()'s
+    # MANUAL branch, gets silently resurrected from keepers.csv by
+    # merge_new_rows_from_keepers_in() on the very next run (its
+    # source_cluster_id is no longer in the audited file, so it looks
+    # "new"), gets rescored back to MANUAL, and lands right back here --
+    # forever, with no forward progress (confirmed for real: the same 6
+    # bullets kept cycling through --auto-rewrite run after run).
+    if not retry_manual:
+        manual_attempt_ids = _known_manual_attempt_cluster_ids()
+        if manual_attempt_ids and "source_cluster_id" in df_keeper_bad.columns:
+            before_a = len(df_keeper_bad)
+
+            def _to_int_id(v):
+                try:
+                    return int(float(str(v)))
+                except (ValueError, TypeError):
+                    return None
+
+            df_keeper_bad = df_keeper_bad[
+                ~df_keeper_bad["source_cluster_id"].apply(_to_int_id).isin(manual_attempt_ids)
+            ].copy()
+            excluded_a = before_a - len(df_keeper_bad)
+            if excluded_a:
+                print(f"   Excluded {excluded_a} already-attempted MANUAL bullet(s) from keeper audit "
+                      f"(pass --retry-manual to include them again)")
+
     df_keeper_bad["queue_source"] = "keeper_audit"
     queue_rows.append(df_keeper_bad)
     print(f"   From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
 
     # Source B: MANUAL bullets in cluster map not already processed.
-    # SKIPPED when --from-audited is set — the audited file is the source
-    # of truth, and pulling cluster-map MANUALs would re-inflate the queue
-    # back to the full original size (exactly the problem we're fixing).
-    if from_audited:
-        print("   Source B (cluster-map MANUAL): SKIPPED — --from-audited mode.")
+    # SKIPPED when using_audited_source is True — the audited file is the
+    # source of truth, and pulling cluster-map MANUALs would re-inflate
+    # the queue back to the full original size (exactly the problem
+    # we're fixing).
+    if using_audited_source:
+        print("   Source B (cluster-map MANUAL): SKIPPED — loading from keepers-audited.csv.")
         print("   Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.")
     else:
         map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
@@ -771,6 +924,22 @@ def stage3_build_rewrite_queue(
 # STAGE 4: AUTO-REWRITE
 # ---------------------------------------------------------------------------
 
+def _remove_rows_matching_bullet_text(df_keepers: pd.DataFrame, bullet_text: str) -> tuple:
+    """Drops every row whose Bullet Point exactly matches bullet_text.
+    Returns (filtered_df, count_removed). Used by stage4_auto_rewrite() to
+    retire a bullet's original (pre-rewrite) row(s) -- including any
+    duplicate copies of the same text -- once that bullet has been
+    resolved (KEEP or MANUAL), so a superseded row never lingers
+    alongside its replacement to be re-scored and re-queued forever."""
+    if not bullet_text or "Bullet Point" not in df_keepers.columns:
+        return df_keepers, 0
+    mask = df_keepers["Bullet Point"].astype(str).str.strip() == bullet_text
+    n = int(mask.sum())
+    if n == 0:
+        return df_keepers, 0
+    return df_keepers[~mask].reset_index(drop=True), n
+
+
 def stage4_auto_rewrite(
     df_queue: pd.DataFrame,
     kb: KnowledgeBase,
@@ -806,7 +975,8 @@ def stage4_auto_rewrite(
     n_manual = 0
 
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
-        bullet_preview = str(row.get("Bullet Point", ""))[:60]
+        original_bullet_text = str(row.get("Bullet Point", "")).strip()
+        bullet_preview = original_bullet_text[:60]
         print(f"\n{chr(9472) * 60}")
         print(f"[{i}/{total}] {bullet_preview}...")
         print(f"   Source: {row.get('queue_source', '')}  "
@@ -830,13 +1000,36 @@ def stage4_auto_rewrite(
         # Record the originating cluster_id so Stage 3 can exclude it by ID
         # on the next run, whether this attempt ends in KEEP or MANUAL
         # (works even though the saved bullet text may differ from the
-        # original cluster-map text).
+        # original cluster-map text). Source B rows (cluster map) carry
+        # this under "cluster_id"; Source A rows (keepers-audited.csv)
+        # carry it under "source_cluster_id" instead -- checking only
+        # "cluster_id" silently produced an empty ID for every Source A
+        # bullet (confirmed for real: MANUAL bullets originating from
+        # keeper audit were always recorded with cluster_id="", so Stage
+        # 3's manual-attempt exclusion could never match them and they
+        # kept re-queuing every run).
         source_cluster_id = ""
-        if "cluster_id" in row and pd.notna(row["cluster_id"]):
+        raw_cluster_id = row.get("cluster_id")
+        if raw_cluster_id is None or pd.isna(raw_cluster_id):
+            raw_cluster_id = row.get("source_cluster_id")
+        if raw_cluster_id is not None and pd.notna(raw_cluster_id) and str(raw_cluster_id).strip() != "":
             try:
-                source_cluster_id = int(float(str(row["cluster_id"])))
+                source_cluster_id = int(float(str(raw_cluster_id)))
             except (ValueError, TypeError):
-                source_cluster_id = str(row["cluster_id"])
+                source_cluster_id = str(raw_cluster_id)
+
+        # Remove every row in df_keepers whose text exactly matches this
+        # bullet's ORIGINAL (pre-rewrite) text, whether the outcome below
+        # is KEEP or MANUAL. Stage 3 already deduplicates the queue by
+        # exact text before processing, but df_keepers itself can still
+        # hold more than one identical copy (e.g. the same achievement
+        # triaged from two separate real resume-build sessions, with no
+        # dedup on append) -- without this, only the ONE instance that
+        # was actually processed gets resolved, and every duplicate copy
+        # is left behind marked NEEDS_REWRITE/MANUAL forever, silently
+        # re-scored and re-queued on every future run even after this
+        # bullet has already been successfully rewritten.
+        df_keepers, n_superseded = _remove_rows_matching_bullet_text(df_keepers, original_bullet_text)
 
         if result["rewrite_status"] == "KEEP":
             n_keep += 1
@@ -855,7 +1048,8 @@ def stage4_auto_rewrite(
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_AUDITED)
-            print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id}).")
+            print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id})."
+                  f"{f' Removed {n_superseded} superseded duplicate row(s).' if n_superseded else ''}")
         else:
             n_manual += 1
             _record_manual_attempt(
@@ -865,8 +1059,14 @@ def stage4_auto_rewrite(
                 manager_test=result.get("manager_test", ""),
                 rewrite_attempts=result.get("rewrite_attempts", 0),
             )
+            # append_keeper() saves incrementally on the KEEP path; MANUAL
+            # never touches disk otherwise, so the removal above (and any
+            # future interrupted-run resumability) needs its own save
+            # here rather than waiting for main()'s final save.
+            df_keepers.to_csv(KEEPERS_AUDITED, index=False)
             print(f"   🔧 MANUAL — best version retained, not added to keepers. "
-                  f"Recorded (cluster_id={source_cluster_id}) so it won't retry every run.")
+                  f"Recorded (cluster_id={source_cluster_id}) so it won't retry every run."
+                  f"{f' Removed {n_superseded} stale duplicate row(s).' if n_superseded else ''}")
 
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -886,14 +1086,16 @@ def main():
     parser.add_argument("--auto-rewrite", action="store_true", help="Stage 4: run queue through rewriter")
     parser.add_argument("--limit",        type=int, default=None, help="Cap Stage 4 bullets")
     parser.add_argument(
-        "--from-audited",
+        "--rebuild-from-keepers",
         action="store_true",
         help=(
-            "Load from keepers-audited.csv instead of keepers.csv. "
-            "CLEAN rows are trusted as-is (no API calls). Only MANUAL/NEEDS_REWRITE "
-            "rows are re-processed. Cluster-map Source B is skipped entirely to "
-            "prevent queue inflation. Use this after a completed run to retry only "
-            "the stragglers without re-processing the full set."
+            "DESTRUCTIVE: ignore keepers-audited.csv even if it exists, and rebuild "
+            "from keepers.csv instead. Discards any correction that was only ever "
+            "applied to the audited file (a retag, a reworded bullet, a fixed "
+            "metric), and loses audit_status/scores for CLEAN rows too, since "
+            "keepers.csv doesn't carry them. Only pass this if you deliberately "
+            "want to start over -- the default (loading the audited file whenever "
+            "it exists) is almost always what you want."
         ),
     )
     parser.add_argument(
@@ -910,29 +1112,43 @@ def main():
     print("\n" + "#" * 60)
     print("  audit_keepers.py  —  Keeper Audit Pipeline")
     print("#" * 60)
-    print(f"  dry_run:      {args.dry_run}")
-    print(f"  skip_rescore: {args.skip_rescore}")
-    print(f"  auto_rewrite: {args.auto_rewrite}")
-    print(f"  from_audited: {args.from_audited}")
-    print(f"  retry_manual: {args.retry_manual}")
-    print(f"  limit:        {args.limit}")
+    print(f"  dry_run:             {args.dry_run}")
+    print(f"  skip_rescore:        {args.skip_rescore}")
+    print(f"  auto_rewrite:        {args.auto_rewrite}")
+    print(f"  rebuild_from_keepers: {args.rebuild_from_keepers}")
+    print(f"  retry_manual:        {args.retry_manual}")
+    print(f"  limit:               {args.limit}")
 
     # --- Resolve source file ---
-    if args.from_audited and os.path.exists(KEEPERS_AUDITED):
-        source_file = KEEPERS_AUDITED
-        print(f"\n   ⚡ --from-audited: loading from {os.path.basename(KEEPERS_AUDITED)}")
+    source_file = resolve_source_file(args.rebuild_from_keepers, KEEPERS_IN, KEEPERS_AUDITED)
+    if source_file == KEEPERS_AUDITED:
+        print(f"\n   ⚡ Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).")
         print(   "      CLEAN rows will be skipped; cluster-map Source B skipped entirely.")
-    else:
-        source_file = KEEPERS_IN
-        if args.from_audited:
-            print(f"\n   {theme.colorize_icon_ansi('warning')}  --from-audited set but {os.path.basename(KEEPERS_AUDITED)} not found.")
-            print(   "      Falling back to keepers.csv.")
+    elif args.rebuild_from_keepers:
+        print(f"\n   {theme.colorize_icon_ansi('warning')}  --rebuild-from-keepers: loading fresh from "
+              f"{os.path.basename(KEEPERS_IN)}, discarding any correction only present in "
+              f"{os.path.basename(KEEPERS_AUDITED)}.")
+
+    using_audited_source = source_file == KEEPERS_AUDITED
 
     if not os.path.exists(source_file):
         print(f"\n{theme.colorize_icon_ansi('error')}  {source_file} not found. Run rewrite_bullets.py first.")
         sys.exit(1)
 
     df_keepers = pd.read_csv(source_file)
+
+    # Defaulting to KEEPERS_AUDITED (above) protects manual corrections,
+    # but triage_needs_review.py appends new KEEP rows straight into
+    # KEEPERS_IN on every real resume-build session -- those would
+    # otherwise never reach the audited file again once it exists. Union
+    # in anything from KEEPERS_IN not already present here (by Bullet
+    # Point text) so new bullets still get promoted through the pipeline.
+    if using_audited_source and os.path.exists(KEEPERS_IN):
+        df_keepers, n_new = merge_new_rows_from_keepers_in(df_keepers, pd.read_csv(KEEPERS_IN))
+        if n_new:
+            print(f"   {theme.colorize_icon_ansi('hint')} Picked up {n_new} new row(s) from "
+                  f"{os.path.basename(KEEPERS_IN)} not yet in {os.path.basename(KEEPERS_AUDITED)}.")
+
     df_keepers = ensure_writable_dtypes(df_keepers)
 
     # Ensure all expected columns exist
@@ -966,7 +1182,7 @@ def main():
         score_system=score_system or "",
         dry_run=args.dry_run,
         skip_rescore=args.skip_rescore,
-        from_audited=args.from_audited,
+        using_audited_source=using_audited_source,
     )
 
     # Save audited keepers after Stage 1.
@@ -979,8 +1195,8 @@ def main():
     _df_disc = stage2_diff_cluster_map(df_keepers)
 
     # ── Stage 3 ───────────────────────────────────────────────────────────────
-    # Pass from_audited so Stage 3 knows to skip Source B (cluster-map MANUALs)
-    df_queue = stage3_build_rewrite_queue(df_keepers, from_audited=args.from_audited, retry_manual=args.retry_manual)
+    # Pass using_audited_source so Stage 3 knows to skip Source B (cluster-map MANUALs)
+    df_queue = stage3_build_rewrite_queue(df_keepers, using_audited_source=using_audited_source, retry_manual=args.retry_manual)
 
     # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:

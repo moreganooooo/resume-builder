@@ -51,6 +51,7 @@ re-running this script resumes from where it left off instead of
 starting over.
 """
 
+import hashlib
 import os
 import json
 import sys
@@ -229,7 +230,11 @@ def single_linkage_cluster(sim_matrix: np.ndarray, threshold: float) -> list[int
             if sim_matrix[i, j] >= threshold:
                 union(i, j)
 
-    # Normalise cluster IDs to sequential integers
+    # Normalise cluster IDs to sequential integers -- callers should treat
+    # these as opaque group keys, not stable IDs (see stable_cluster_ids()):
+    # this numbering is purely positional, driven by each cluster's lowest
+    # row index in this run's sim_matrix, so it silently reshuffles if
+    # bullet-bank-clean.csv's row order ever changes between runs.
     root_to_id = {}
     result = []
     for i in range(n):
@@ -238,6 +243,36 @@ def single_linkage_cluster(sim_matrix: np.ndarray, threshold: float) -> list[int
             root_to_id[root] = len(root_to_id)
         result.append(root_to_id[root])
     return result
+
+
+def _cluster_content_hash(member_texts: list[str]) -> str:
+    """A cluster's identity, derived from its own members' text rather than
+    its position in this run's bullet order. Sorting before hashing makes
+    the result independent of member order too, so the only thing that can
+    change a cluster's ID is its membership actually changing (a bullet
+    joining or leaving it) -- not an unrelated row shifting elsewhere in
+    bullet-bank-clean.csv. That's the real bug single_linkage_cluster()'s
+    positional numbering has: appending or reordering ANY row can silently
+    renumber every cluster after it, invalidating every source_cluster_id
+    pointer stored in bullet-bank-keepers.csv/audit-manual-attempts.csv
+    (see audit_keepers.py's _normalize_cluster_id(), which already treats
+    a non-numeric cluster_id as valid -- this hash needs no changes there)."""
+    normalized = sorted(normalize_bullet_text(t) for t in member_texts)
+    digest = hashlib.sha1("\n".join(normalized).encode("utf-8")).hexdigest()
+    return digest[:12]
+
+
+def stable_cluster_ids(raw_ids: list, bullets: list[str]) -> list[str]:
+    """Converts single_linkage_cluster()'s positional group numbers into
+    content-derived IDs stable across re-runs. Two bullets single_linkage_cluster()
+    put in the same raw group always land in the same stable cluster; the
+    stable ID itself is a function of which bullets are grouped together,
+    never of row order or the raw group number."""
+    groups: dict = {}
+    for raw_id, bullet in zip(raw_ids, bullets):
+        groups.setdefault(raw_id, []).append(bullet)
+    raw_to_stable = {raw_id: _cluster_content_hash(members) for raw_id, members in groups.items()}
+    return [raw_to_stable[raw_id] for raw_id in raw_ids]
 
 
 # Same candidate list audit_bullet_bank.py uses, so both scripts agree on
@@ -357,7 +392,8 @@ def main():
     print(f"  Computing cosine similarity matrix ({len(bullets)}x{len(bullets)})...")
     sim_matrix = cosine_similarity_matrix(matrix)
     print(f"  Clustering at threshold={SIMILARITY_THRESHOLD}...")
-    cluster_ids = single_linkage_cluster(sim_matrix, SIMILARITY_THRESHOLD)
+    raw_cluster_ids = single_linkage_cluster(sim_matrix, SIMILARITY_THRESHOLD)
+    cluster_ids = stable_cluster_ids(raw_cluster_ids, bullets)
 
     df["cluster_id"]   = cluster_ids
     df["cluster_size"] = df["cluster_id"].map(df["cluster_id"].value_counts())
