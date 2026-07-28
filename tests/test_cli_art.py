@@ -232,6 +232,23 @@ class TestRenderPipelineTable(unittest.TestCase):
         self.assertIn("Applied", output)
         self.assertIn("overdue", output)
 
+    def test_start_index_numbers_the_hash_column_from_an_offset(self):
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+        ]
+        output = _rendered(cli_art.render_pipeline_table, rows, start_index=51)
+        self.assertIn("51", output)
+
+    def test_title_override_replaces_the_default_count_title(self):
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+        ]
+        output = _rendered(cli_art.render_pipeline_table, rows, title="Page 2/3 -- rows 51-52 of 120")
+        self.assertIn("Page 2/3 -- rows 51-52 of 120", output)
+        self.assertNotIn("1 evaluated JD(s)", output)
+
 
 class TestRenderComparisonTable(unittest.TestCase):
 

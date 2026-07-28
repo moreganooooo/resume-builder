@@ -35,11 +35,103 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
     return click.confirm(f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?")
 
 
-def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_confirm: bool = False) -> tuple:
+_PAGE_SIZE = 50
+
+# Sentinel values for the extra "turn the page" / "confirm" entries
+# appended to each page's checkbox choices -- distinguishable from any
+# real JD path/source_file since those always contain a "/" or file
+# extension.
+_NAV_PREV = "__browse_prev_page__"
+_NAV_NEXT = "__browse_next_page__"
+_NAV_DONE = "__browse_done__"
+
+
+def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: int = _PAGE_SIZE) -> set:
+    """Shared pagination engine behind every large multi-select JD picker
+    in this program (the interactive menu's Browse & Manage Jobs /
+    Customize Resume for Specific Role(s) / Write Cover Letter for
+    Specific Role(s), and the `resume run --pick` / `resume coverletter
+    --pick` CLI flows) -- callers differ only in what a "row" is
+    (list_all_evaluated_jds() dicts vs. batch_evaluate results) and how
+    it's rendered/turned into a Choice, both supplied as callbacks so
+    this function itself stays data-shape-agnostic:
+
+    - render_page(start, end): prints that page's bordered "blue box"
+      table (e.g. cli_art.render_pipeline_table()/render_fit_table()).
+    - choices_for_page(start, end, selected): returns that page's real
+      (non-nav) questionary.Choice list, `checked=` reflecting `selected`
+      so a revisited page shows prior checks.
+
+    Bounding both the table and the checkbox to one page at a time (page
+    a page_size, not every evaluated JD/pending JD at once) is what
+    fixes 1000+ JDs otherwise dumping an unbounded console.print() that
+    permanently eats terminal scrollback. "Previous page" / "Next page" /
+    "Done" are appended -- behind a Separator, bold/colored for
+    visibility -- as extra choices in that same checkbox list, so paging
+    and selecting happen in one widget. Selections persist across page
+    turns via a running set, keyed on whatever value each Choice carries.
+    Returns that final set -- empty if count is 0, the prompt is aborted
+    (Ctrl-C), or nothing ends up checked."""
+    if count == 0:
+        return set()
+
+    selected: set = set()
+    total_pages = (count + page_size - 1) // page_size
+    page = 0
+
+    while True:
+        start = page * page_size
+        end = min(start + page_size, count)
+        render_page(start, end)
+
+        real_choices = choices_for_page(start, end, selected)
+        page_values = {c.value for c in real_choices}
+        choices = list(real_choices)
+        choices.append(questionary.Separator())
+        if page > 0:
+            choices.append(questionary.Choice(
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", "◀ Previous page")], value=_NAV_PREV,
+            ))
+        if page < total_pages - 1:
+            choices.append(questionary.Choice(
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", "▶ Next page")], value=_NAV_NEXT,
+            ))
+        choices.append(questionary.Choice(
+            title=[(f"fg:{theme.SUCCESS} bold", f"✔ Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
+        ))
+
+        header = f"Select JD(s) (space to check, enter to confirm this page, {len(selected)} selected so far):"
+        result = questionary.checkbox(header, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask()
+        if result is None:
+            return set()
+
+        nav_choice = None
+        for value in result:
+            if value in (_NAV_PREV, _NAV_NEXT, _NAV_DONE):
+                nav_choice = value
+            else:
+                selected.add(value)
+        for value in page_values:
+            if value not in result:
+                selected.discard(value)
+
+        if nav_choice == _NAV_PREV:
+            page -= 1
+        elif nav_choice == _NAV_NEXT:
+            page += 1
+        else:
+            break
+
+    return selected
+
+
+def pick_and_process(
+    pending_paths: list, process_one, action_verb: str, skip_confirm: bool = False, page_size: int = _PAGE_SIZE,
+) -> tuple:
     """
     Shared flow: confirm gate -> batch_evaluate.evaluate_all_pending() ->
-    cli_art.render_fit_table() -> questionary.checkbox() (labeled via
-    action_verb) -> process_one(path) for each selected path. Returns
+    paginated blue-box table + checkbox (via _paginated_checkbox()) ->
+    process_one(path) for each selected path, best-score-first. Returns
     (completed, failed) -- both 0 if aborted, empty, or nothing
     selected/evaluable. process_one(path) should return truthy on
     success, falsy on failure.
@@ -62,25 +154,34 @@ def pick_and_process(pending_paths: list, process_one, action_verb: str, skip_co
         cli_art.console.print("Nothing could be evaluated -- no picker to show.")
         return (0, 0)
 
-    cli_art.render_fit_table(results)
+    total_pages = (len(results) + page_size - 1) // page_size
 
-    choices = [
-        questionary.Choice(
-            title=f"{r['composite_score']:.2f}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
-            value=r["source_file"],
+    def render_page(start, end):
+        cli_art.render_fit_table(
+            results[start:end], start_index=start + 1,
+            title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
         )
-        for r in valid
-    ]
-    selected_paths = questionary.checkbox(
-        f"Select JD(s) to {action_verb}:", choices=choices, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
-    if not selected_paths:
+
+    def choices_for_page(start, end, selected):
+        choices = []
+        for i, r in enumerate(results[start:end], start=start + 1):
+            if r["error"]:
+                continue
+            choices.append(questionary.Choice(
+                title=f"{i:>4}  {r['composite_score']:.2f}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
+                value=r["source_file"], checked=r["source_file"] in selected,
+            ))
+        return choices
+
+    selected = _paginated_checkbox(len(results), render_page, choices_for_page, page_size=page_size)
+    if not selected:
         cli_art.console.print("No jobs selected, nothing to do.")
         return (0, 0)
 
+    ordered_paths = [r["source_file"] for r in valid if r["source_file"] in selected]
     completed = 0
     failed = 0
-    for path in selected_paths:
+    for path in ordered_paths:
         if process_one(path):
             completed += 1
         else:
@@ -132,13 +233,18 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     return rows
 
 
-def browse_and_select_jds(statuses: list | None = None) -> list:
-    """The shared browse-and-act entry point: renders every evaluated JD
-    (pending or completed, or just one status if statuses is passed) as
-    a table, then a questionary.checkbox() over the same rows so one or
-    many can be selected at once. Returns a list of the selected rows
-    (list_all_evaluated_jds()'s dict shape) -- empty if there's nothing
-    to show or nothing gets checked."""
+def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_SIZE) -> list:
+    """The shared browse-and-act entry point: paginated blue-box table +
+    checkbox (via _paginated_checkbox()) over every evaluated JD (pending
+    or completed, or just one status if statuses is passed) so one or
+    many can be selected at once. Each checkbox row only needs to carry
+    enough to identify itself against the table above it (#,
+    score/recommendation, company, title) -- the table already shows
+    posting age, liveness, and follow-up so the checkbox line doesn't
+    repeat them. Returns a list of the selected rows
+    (list_all_evaluated_jds()'s dict shape, best-score-first) -- empty if
+    there's nothing to show, the prompt is aborted (Ctrl-C), or nothing
+    gets checked."""
     rows = list_all_evaluated_jds(statuses=statuses)
     if not rows:
         if statuses == ["Pending"]:
@@ -150,25 +256,30 @@ def browse_and_select_jds(statuses: list | None = None) -> list:
         cli_art.console.print(hint)
         return []
 
-    cli_art.render_pipeline_table(rows)
+    total_pages = (len(rows) + page_size - 1) // page_size
 
-    choices = []
-    for r in rows:
-        evaluation = r["evaluation"]
-        score_style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
-        label = [
-            (score_style, f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')}"),
-            ("", f" | {r['status']:<9} | {r['company'] or '?'} | {r['title'] or os.path.basename(r['path'])}"),
-        ]
-        choices.append(questionary.Choice(title=label, value=r["path"]))
+    def render_page(start, end):
+        cli_art.render_pipeline_table(
+            rows[start:end], start_index=start + 1,
+            title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(rows)} evaluated JD(s)",
+        )
 
-    selected_paths = questionary.checkbox(
-        "Select JD(s) (space to check, enter to confirm):", choices=choices, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
-    if not selected_paths:
+    def choices_for_page(start, end, selected):
+        choices = []
+        for i, r in enumerate(rows[start:end], start=start + 1):
+            evaluation = r["evaluation"]
+            score_style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
+            label = [
+                ("", f"{i:>4}  "),
+                (score_style, f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')}"),
+                ("", f" | {r['company'] or '?'} | {r['title'] or os.path.basename(r['path'])}"),
+            ]
+            choices.append(questionary.Choice(title=label, value=r["path"], checked=r["path"] in selected))
+        return choices
+
+    selected = _paginated_checkbox(len(rows), render_page, choices_for_page, page_size=page_size)
+    if not selected:
         return []
-
-    by_path = {r["path"]: r for r in rows}
-    return [by_path[p] for p in selected_paths]
+    return [r for r in rows if r["path"] in selected]
 
 

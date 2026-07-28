@@ -18,6 +18,7 @@ import questionary
 import cli_art
 import normalize_resume
 import profile_paths
+import theme
 import validate_coverletter
 import validate_resume
 from gemini_client import GeminiClient
@@ -198,26 +199,72 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     return {"json": json_path, "html": html_path, "pdf": pdf_path}
 
 
-def pick_polish_target() -> str | None:
+_POLISH_PAGE_SIZE = 50
+_POLISH_NAV_PREV = "__polish_prev_page__"
+_POLISH_NAV_NEXT = "__polish_next_page__"
+
+
+def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
     """Interactive picker over every recognized output/json file, newest
-    first. Returns None if there's nothing to pick (empty dir, or the
+    first -- paginated the same way as the JD pickers in picker.py (a
+    bordered "blue box" table per page via cli_art.render_polish_table(),
+    prominent bold/colored Previous/Next nav choices), for visual
+    consistency across every large picker in this program. This one is a
+    single-select prompt (exactly one document gets polished per
+    session), so choosing a real document ends the picker immediately --
+    there's no separate "Done" step the way the multi-select JD pickers
+    need. Returns None if there's nothing to pick (empty dir, or the
     user cancels)."""
     paths = sorted(
         glob.glob(os.path.join(OUTPUT_JSON_DIR, "*.json")),
         key=os.path.getmtime, reverse=True,
     )
-    choices = []
-    for p in paths:
-        doc_type = detect_doc_type(p)
-        if doc_type is None:
-            continue
-        label = "Resume" if doc_type == "resume" else "Cover Letter"
-        choices.append(questionary.Choice(title=f"[{label}] {os.path.basename(p)}", value=p))
-    if not choices:
+    paths = [p for p in paths if detect_doc_type(p) is not None]
+    if not paths:
         return None
-    return questionary.select(
-        "Which document do you want to polish?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+
+    total_pages = (len(paths) + page_size - 1) // page_size
+    page = 0
+
+    while True:
+        start = page * page_size
+        end = min(start + page_size, len(paths))
+        page_paths = paths[start:end]
+        page_rows = [
+            {"path": p, "label": "Resume" if detect_doc_type(p) == "resume" else "Cover Letter"}
+            for p in page_paths
+        ]
+
+        cli_art.render_polish_table(
+            page_rows, start_index=start + 1,
+            title=f"Page {page + 1}/{total_pages} -- rows {start + 1}-{end} of {len(paths)} document(s)",
+        )
+
+        choices = [
+            questionary.Choice(title=f"{i:>4}  [{r['label']}] {os.path.basename(r['path'])}", value=r["path"])
+            for i, r in enumerate(page_rows, start=start + 1)
+        ]
+        choices.append(questionary.Separator())
+        if page > 0:
+            choices.append(questionary.Choice(
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", "◀ Previous page")], value=_POLISH_NAV_PREV,
+            ))
+        if page < total_pages - 1:
+            choices.append(questionary.Choice(
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", "▶ Next page")], value=_POLISH_NAV_NEXT,
+            ))
+
+        result = questionary.select(
+            "Which document do you want to polish?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if result is None:
+            return None
+        if result == _POLISH_NAV_PREV:
+            page -= 1
+        elif result == _POLISH_NAV_NEXT:
+            page += 1
+        else:
+            return result
 
 
 _EXIT_WORDS = {"", "done", "exit", "quit"}
