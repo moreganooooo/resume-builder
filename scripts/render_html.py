@@ -14,6 +14,8 @@ import re
 from html import escape
 from pathlib import Path
 
+import theme
+
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "cv-template.html")
@@ -236,7 +238,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"  ✅ HTML rendered → {output_path}")
+    print(f"  {theme.colorize_icon_ansi('success')} HTML rendered → {output_path}")
     return output_path
 
 

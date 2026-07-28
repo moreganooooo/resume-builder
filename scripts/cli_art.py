@@ -460,7 +460,7 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
     triage/retire scripts. title is overridable so bootstrap_menu.py can
     reuse this exact table shape for onboarding-phase status instead of
     carrying its own near-identical render function."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("#", justify="right", style="dim")
     table.add_column("Stage")
     table.add_column("Status")
@@ -596,7 +596,7 @@ HELP_ENTRIES = [
 
 
 def display_help() -> None:
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("Command")
     table.add_column("What it does")
     for command, description in HELP_ENTRIES:
@@ -618,7 +618,7 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
     was skipped/declined. Ends with a plain-English "N passed, M problems
     found" line and a one-line suggested fix per failing check, so nothing
     requires opening a JSON blob to act on."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("Check")
     table.add_column("Status")
     table.add_column("Detail")
