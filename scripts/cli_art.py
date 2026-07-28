@@ -169,6 +169,7 @@ TIPS = [
 def display_tip() -> None:
     """Boxed and shown last in the launch sequence -- reads as a distinct
     callout rather than blending into the stats line above it."""
+    console.print()  # Blank line before tip for separation
     tip = random.choice(TIPS)
     console.print(Panel(
         f"{theme.colorize_icon('hint')}  Did you know? {tip}",
@@ -179,6 +180,7 @@ def display_tip() -> None:
 def display_breadcrumb() -> None:
     """Replaces a full banner repaint on menu loop-back -- one line, not
     another full-width panel every time an action finishes."""
+    console.print()  # Blank line before breadcrumb for separation
     console.rule(f"[bold {theme.BRAND}]›[/bold {theme.BRAND}] resume-builder", style="dim", align="left")
 
 

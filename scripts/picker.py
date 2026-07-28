@@ -157,9 +157,12 @@ def pick_and_process(
     total_pages = (len(results) + page_size - 1) // page_size
 
     def render_page(start, end):
+        current_page = start // page_size + 1
+        progress_filled = min(current_page, total_pages)
+        progress_bar = "█" * progress_filled + "░" * (total_pages - progress_filled)
         cli_art.render_fit_table(
             results[start:end], start_index=start + 1,
-            title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
+            title=f"Page {current_page}/{total_pages} [{progress_bar}] -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
         )
 
     def choices_for_page(start, end, selected):
