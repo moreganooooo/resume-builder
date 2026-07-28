@@ -147,6 +147,13 @@ class TestListAllEvaluatedJds(unittest.TestCase):
         self.assertEqual([r["path"] for r in rows], ["jds/high.json", "jds/low.json"])
 
 
+def _row(path, score, recommendation, status="Pending", title=None, company=None):
+    return {
+        "path": path, "status": status, "title": title or path, "company": company or "Acme",
+        "evaluation": {"composite_score": score, "recommendation": recommendation},
+    }
+
+
 class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.list_all_evaluated_jds", return_value=[])
@@ -161,11 +168,33 @@ class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.cli_art.render_pipeline_table")
     @patch("picker.list_all_evaluated_jds")
+    def test_renders_the_bordered_table_for_the_current_page_only(self, mock_list, mock_render):
+        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
+        mock_list.return_value = rows
+        mock_question = MagicMock()
+        mock_question.ask.return_value = [picker._NAV_DONE]
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            picker.browse_and_select_jds(page_size=3)
+        mock_render.assert_called_once()
+        page_rows_arg, kwargs = mock_render.call_args[0][0], mock_render.call_args[1]
+        self.assertEqual(len(page_rows_arg), 3)  # first page of a 5-row, page_size=3 list
+        self.assertEqual(kwargs["start_index"], 1)
+        self.assertIn("Page 1/2", kwargs["title"])
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
     def test_nothing_checked_returns_empty(self, mock_list, mock_render):
-        mock_list.return_value = [
-            {"path": "jds/a.json", "status": "Pending", "title": "Role", "company": "Acme",
-             "evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"}},
-        ]
+        mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
+        mock_question = MagicMock()
+        mock_question.ask.return_value = [picker._NAV_DONE]
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            result = picker.browse_and_select_jds()
+        self.assertEqual(result, [])
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_ctrl_c_aborts_and_returns_empty(self, mock_list, mock_render):
+        mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
         mock_question = MagicMock()
         mock_question.ask.return_value = None
         with patch("picker.questionary.checkbox", return_value=mock_question):
@@ -176,16 +205,69 @@ class TestBrowseAndSelectJds(unittest.TestCase):
     @patch("picker.list_all_evaluated_jds")
     def test_returns_the_selected_rows_not_just_paths(self, mock_list, mock_render):
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "title": "Role A", "company": "Acme",
-             "evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"}},
-            {"path": "jds/b.json", "status": "Completed", "title": "Role B", "company": "Beta",
-             "evaluation": {"composite_score": 3.0, "recommendation": "Selective pursue"}},
+            _row("jds/a.json", 4.0, "Strong pursue", status="Pending", title="Role A", company="Acme"),
+            _row("jds/b.json", 3.0, "Selective pursue", status="Completed", title="Role B", company="Beta"),
         ]
         mock_list.return_value = rows
         mock_question = MagicMock()
-        mock_question.ask.return_value = ["jds/b.json"]
+        mock_question.ask.return_value = ["jds/b.json", picker._NAV_DONE]
         with patch("picker.questionary.checkbox", return_value=mock_question):
             result = picker.browse_and_select_jds()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["path"], "jds/b.json")
         self.assertEqual(result[0]["status"], "Completed")
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_result_order_matches_best_score_first_regardless_of_selection_order(self, mock_list, mock_render):
+        rows = [
+            _row("jds/high.json", 4.8, "Strong pursue"),
+            _row("jds/low.json", 2.5, "Low-priority pursue"),
+        ]
+        mock_list.return_value = rows
+        mock_question = MagicMock()
+        # Selected in reverse order -- result should still come back high first.
+        mock_question.ask.return_value = ["jds/low.json", "jds/high.json", picker._NAV_DONE]
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            result = picker.browse_and_select_jds()
+        self.assertEqual([r["path"] for r in result], ["jds/high.json", "jds/low.json"])
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_paginates_at_page_size_and_persists_selection_across_pages(self, mock_list, mock_render):
+        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
+        mock_list.return_value = rows
+
+        page1 = MagicMock()
+        page1.ask.return_value = ["jds/0.json", picker._NAV_NEXT]
+        page2 = MagicMock()
+        page2.ask.return_value = [picker._NAV_DONE]
+        with patch("picker.questionary.checkbox", side_effect=[page1, page2]) as mock_checkbox:
+            result = picker.browse_and_select_jds(page_size=3)
+
+        self.assertEqual(mock_checkbox.call_count, 2)
+        first_call_choices = mock_checkbox.call_args_list[0].kwargs["choices"]
+        # 3 real rows + Separator + "Next page" + "Done" on page 1 of 2.
+        self.assertEqual(len(first_call_choices), 6)
+        self.assertEqual([r["path"] for r in result], ["jds/0.json"])
+
+    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.list_all_evaluated_jds")
+    def test_unchecking_a_row_on_a_revisited_page_drops_it(self, mock_list, mock_render):
+        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(2)]
+        mock_list.return_value = rows
+
+        visit_page0_select = MagicMock()
+        visit_page0_select.ask.return_value = ["jds/0.json", picker._NAV_NEXT]
+        visit_page1_back = MagicMock()
+        visit_page1_back.ask.return_value = [picker._NAV_PREV]
+        visit_page0_uncheck = MagicMock()
+        visit_page0_uncheck.ask.return_value = [picker._NAV_NEXT]  # jds/0.json left unchecked this time
+        visit_page1_done = MagicMock()
+        visit_page1_done.ask.return_value = [picker._NAV_DONE]
+
+        with patch("picker.questionary.checkbox", side_effect=[
+            visit_page0_select, visit_page1_back, visit_page0_uncheck, visit_page1_done,
+        ]):
+            result = picker.browse_and_select_jds(page_size=1)
+        self.assertEqual(result, [])

@@ -266,9 +266,34 @@ class TestPickPolishTarget(unittest.TestCase):
         self.assertEqual(result, newer)
         choices = mock_select.call_args.kwargs["choices"]
         self.assertEqual(choices[0].value, newer)
-        self.assertEqual(choices[0].title, "[Cover Letter] B_CoverLetter.json")
+        self.assertEqual(choices[0].title, "   1  [Cover Letter] B_CoverLetter.json")
         self.assertEqual(choices[1].value, older)
-        self.assertEqual(choices[1].title, "[Resume] A_Resume.json")
+        self.assertEqual(choices[1].title, "   2  [Resume] A_Resume.json")
+
+    @patch("polish.questionary.select")
+    def test_paginates_and_next_page_reveals_more_documents(self, mock_select):
+        paths = [self._touch(f"Doc{i}_Resume.json", -i) for i in range(3)]
+
+        page1 = MagicMock()
+        page1.ask.return_value = polish._POLISH_NAV_NEXT
+        page2 = MagicMock()
+        page2.ask.return_value = paths[2]
+        mock_select.side_effect = [page1, page2]
+
+        result = polish.pick_polish_target(page_size=2)
+
+        self.assertEqual(mock_select.call_count, 2)
+        first_page_choices = mock_select.call_args_list[0].kwargs["choices"]
+        # 2 real docs + Separator + "Next page" on page 1 of a 3-doc, page_size=2 list.
+        self.assertEqual(len(first_page_choices), 4)
+        self.assertEqual(result, paths[2])
+
+    @patch("polish.questionary.select")
+    def test_ctrl_c_during_pagination_returns_none(self, mock_select):
+        self._touch("A_Resume.json", 0)
+        mock_select.return_value.ask.return_value = None
+        result = polish.pick_polish_target()
+        self.assertIsNone(result)
 
 
 class TestRunPolishSession(unittest.TestCase):
