@@ -26,6 +26,7 @@ import doctor
 import maintenance
 import dashboard as dashboard_module
 import build_sample
+import theme
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -39,7 +40,12 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
 
 def _offer_next_steps(action: str, jd_file: str | None = None) -> None:
     """After a CLI command completes successfully, offer next-steps options
-    rather than dropping back to the shell."""
+    rather than dropping back to the shell. Skipped entirely outside a real
+    terminal (piped output, CI, tests) -- there's no one there to answer a
+    prompt, and questionary would otherwise hang or error."""
+    if not cli_art.console.is_terminal:
+        return
+
     choices = [
         questionary.Choice(title="Show Help", value="help"),
         questionary.Choice(title="Return to Main Menu", value="menu"),
@@ -112,7 +118,7 @@ def run_batch(master, pick, yes):
             TaskProgressColumn(),
             console=cli_art.console,
         ) as progress:
-            task = progress.add_task("[bold cyan]Processing JDs...", total=len(pending))
+            task = progress.add_task(f"[bold {theme.BRAND}]Processing JDs...", total=len(pending))
             for i, jd_path in enumerate(pending, 1):
                 jd = jd_manager.read_jd_json(jd_path)
                 company = jd.get("company", "?")
@@ -199,6 +205,7 @@ def evaluate(jd_file, yes, refresh):
         cli_art.display_banner(f"Evaluating {len(to_evaluate)} pending JD(s)")
         results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
         cli_art.render_fit_table(results)
+        _offer_next_steps("evaluate")
         return
 
     cli_art.display_banner(f"Evaluating: {jd_file}")
@@ -237,6 +244,7 @@ def evaluate(jd_file, yes, refresh):
             cli_art.console.print(f"  - {b}")
 
     cli_art.console.print(f"\n[bold]Why:[/bold] {result.get('why', '')}\n")
+    _offer_next_steps("evaluate")
 
 
 @cli.command(name="scan")
@@ -250,6 +258,7 @@ def scan_cmd(sources, no_verify):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")
     scan_module.run_scan(list(sources) if sources else None, verify=not no_verify)
+    _offer_next_steps("scan")
 
 
 @cli.command(name="liveness")
@@ -259,6 +268,7 @@ def liveness_cmd(refresh):
     """Check every pending JD's source_url, moving expired ones to jds/expired/."""
     cli_art.display_banner("Checking posting liveness")
     liveness_module.run_liveness_check(refresh=refresh)
+    _offer_next_steps("liveness")
 
 
 @cli.command()

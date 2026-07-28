@@ -15,6 +15,7 @@ import os
 from html import escape
 
 import profile_paths
+import theme
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
@@ -91,7 +92,7 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"  ✅ Cover letter HTML rendered → {output_path}")
+    print(f"  {theme.colorize_icon_ansi('success')} Cover letter HTML rendered → {output_path}")
     return output_path
 
 

@@ -284,8 +284,9 @@ class TestPickPolishTarget(unittest.TestCase):
 
         self.assertEqual(mock_select.call_count, 2)
         first_page_choices = mock_select.call_args_list[0].kwargs["choices"]
-        # 2 real docs + Separator + "Next page" on page 1 of a 3-doc, page_size=2 list.
-        self.assertEqual(len(first_page_choices), 4)
+        # 2 real docs + Separator + "Next page" + "Back to Main Menu" on page 1
+        # of a 3-doc, page_size=2 list.
+        self.assertEqual(len(first_page_choices), 5)
         self.assertEqual(result, paths[2])
 
     @patch("polish.questionary.select")

@@ -14,6 +14,7 @@ import os
 import shutil
 import subprocess
 
+import cli_art
 import jd_manager
 import theme
 
@@ -92,9 +93,8 @@ def _verify_candidates(candidates: list) -> dict:
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
-    print(f"\n{'─'*60}")
-    print(f"Checking {len(candidates)} JD(s) via headless browser...")
-    print(f"{'─'*60}")
+    cli_art.console.print()
+    cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
     print()
 
     try:
@@ -104,7 +104,7 @@ def _verify_candidates(candidates: list) -> dict:
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         if proc.returncode != 0:
-            print(f"\n  ⚠️  Liveness check failed:\n{proc.stderr}")
+            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed:\n{proc.stderr}")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_paths": [], "error": True}
 
         # Print incremental progress from stderr as it arrives
@@ -115,7 +115,7 @@ def _verify_candidates(candidates: list) -> dict:
         try:
             results = json.loads(proc.stdout)
         except json.JSONDecodeError:
-            print(f"\n  ⚠️  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
+            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_paths": [], "error": True}
     finally:
         if os.path.exists(LIVENESS_INPUT_PATH):
@@ -226,9 +226,7 @@ def run_liveness_check(refresh: bool = False) -> dict:
     result["recently_checked"] = len(recently_checked)
 
     if not result.get("error"):
-        print(f"{'─'*60}")
-        print("Liveness Summary:")
-        print(f"{'─'*60}")
+        cli_art.console.rule(f"[bold {theme.BRAND}]Liveness Summary[/bold {theme.BRAND}]", style="dim")
         print(f"  {theme.colorize_icon_ansi('success')} Active:                 {result['active']}")
         print(f"  {theme.colorize_icon_ansi('warning')} Likely active:          {result['likely_active']}")
         print(f"  {theme.colorize_icon_ansi('error')} Expired (moved):         {result['expired']}")
