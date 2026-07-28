@@ -2,6 +2,7 @@
 cli_art.py style (rich Console/Panel) but trimmed down -- no hand-drawn ASCII
 block art, just a clean styled banner."""
 
+import os
 import random
 import time
 
@@ -254,15 +255,19 @@ def _posting_age_cell(days: int | None) -> str:
     return f"[{color}]{days}d[/{color}]"
 
 
-def render_fit_table(results: list) -> None:
-    """Renders batch_evaluate.evaluate_all_pending()'s result list as a
-    Rich Table, colored by recommendation tier (modeled on job_automater's
-    display_job_table(), cli.py:73-142). results is expected pre-sorted
-    (evaluate_all_pending() already sorts best-first, errors-last). The
-    "Why" column is a short excerpt, not the model's full reasoning --
-    lets a lower-scored-but-higher-priority role get spot-checked at a
-    glance instead of needing to open its JD JSON to see why it scored
-    the way it did."""
+def render_fit_table(results: list, start_index: int = 1, title: str | None = None) -> None:
+    """Renders batch_evaluate.evaluate_all_pending()'s result list -- or a
+    page-sized slice of it -- as a Rich Table, colored by recommendation
+    tier (modeled on job_automater's display_job_table(), cli.py:73-142).
+    results is expected pre-sorted (evaluate_all_pending() already sorts
+    best-first, errors-last). start_index numbers the "#" column from an
+    arbitrary offset so a paginated caller (picker.pick_and_process())
+    can show true positions (51, 52, ...) instead of every page
+    restarting at 1. title overrides the panel's title -- defaults to a
+    plain count for non-paginated callers. The "Why" column is a short
+    excerpt, not the model's full reasoning -- lets a lower-scored-but-
+    higher-priority role get spot-checked at a glance instead of needing
+    to open its JD JSON to see why it scored the way it did."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
@@ -272,7 +277,7 @@ def render_fit_table(results: list) -> None:
     table.add_column("Posted", justify="right")
     table.add_column("Why")
 
-    for i, r in enumerate(results, 1):
+    for i, r in enumerate(results, start_index):
         if r["error"]:
             table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-", "-")
             continue
@@ -294,7 +299,7 @@ def render_fit_table(results: list) -> None:
 
     legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
     console.print(Panel(
-        table, title=f"{len(results)} JD(s) evaluated", subtitle=legend,
+        table, title=title or f"{len(results)} JD(s) evaluated", subtitle=legend,
         border_style=theme.BRAND, box=box.ROUNDED,
     ))
 
@@ -322,11 +327,14 @@ def _followup_cell(application: dict | None) -> str:
     return f"{status} [{color}]({urgency})[/{color}]"
 
 
-def render_pipeline_table(rows: list) -> None:
-    """Renders picker.list_all_evaluated_jds()'s row list -- every
-    evaluated JD, pending or completed, in one browsable table (the "List
-    Jobs" / "View Pipeline" backlog item). rows is expected pre-sorted
-    (list_all_evaluated_jds() already sorts best-first)."""
+def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
+    """Renders picker.list_all_evaluated_jds()'s row list -- or a
+    page-sized slice of it -- as a bordered table (the "blue box" browse
+    view). start_index numbers the "#" column from an arbitrary offset
+    so a paginated caller (picker.browse_and_select_jds()) can show true
+    positions (51, 52, ...) instead of every page restarting at 1. title
+    overrides the panel's title -- defaults to a plain count for
+    non-paginated callers."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
@@ -338,7 +346,7 @@ def render_pipeline_table(rows: list) -> None:
     table.add_column("Last Liveness")
     table.add_column("Follow-up")
 
-    for i, r in enumerate(rows, 1):
+    for i, r in enumerate(rows, start_index):
         evaluation = r["evaluation"]
         color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), "white")
         table.add_row(
@@ -354,7 +362,31 @@ def render_pipeline_table(rows: list) -> None:
         )
 
     console.print(Panel(
-        table, title=f"{len(rows)} evaluated JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
+        table, title=title or f"{len(rows)} evaluated JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
+    ))
+
+
+def render_polish_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
+    """Renders polish.pick_polish_target()'s candidate list -- or a
+    page-sized slice of it -- as a bordered table (the same "blue box"
+    style as render_pipeline_table()/render_fit_table(), for visual
+    consistency across every large picker in this program). Each row is
+    {"path": ..., "label": "Resume" or "Cover Letter"} -- doc-type
+    detection stays in polish.py to avoid a cli_art<->polish import
+    cycle. start_index/title behave exactly like
+    render_pipeline_table()'s."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Type")
+    table.add_column("Filename")
+    table.add_column("Modified", justify="right")
+
+    for i, r in enumerate(rows, start_index):
+        modified = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(r["path"])))
+        table.add_row(str(i), r["label"], os.path.basename(r["path"]), modified)
+
+    console.print(Panel(
+        table, title=title or f"{len(rows)} document(s)", border_style=theme.BRAND, box=box.ROUNDED,
     ))
 
 
