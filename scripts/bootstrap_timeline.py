@@ -135,7 +135,21 @@ def _llm_match(raw_text: str, timeline: list[TimelineEntry]) -> str | None:
         temperature=0.0,
     )
     data = GeminiClient.parse_json(raw)
-    return data.get("matched_company") or None
+    matched = data.get("matched_company") or None
+    if matched is None:
+        return None
+
+    # The model returns free-text, not a constrained choice from `options` --
+    # validate it actually names one of the real timeline entries (same
+    # normalization used everywhere else in this file) before trusting it,
+    # so a hallucinated or reworded company name can't get treated as a
+    # confident match. Return the entry's canonical spelling, not the
+    # model's own wording, so callers always see a real timeline company.
+    matched_key = _normalize_company_name(matched)
+    for entry in timeline:
+        if _normalize_company_name(entry.company) == matched_key:
+            return entry.company
+    return None
 
 
 def match_to_timeline(

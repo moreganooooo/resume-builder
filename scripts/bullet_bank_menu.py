@@ -243,6 +243,22 @@ def _stage_status(stage: dict) -> tuple:
             done, total = progress
             if total > 0 and done < total:
                 return ("In progress", f"{done}/{total} processed ({total - done} pending)")
+            # done >= total (including total == 0): every target bullet
+            # this stage cares about is already handled. The progress
+            # count is authoritative here -- don't fall through to the
+            # mtime-vs-input check below, which would wrongly report
+            # "Stale" whenever an upstream file's mtime moves for a
+            # reason that didn't add real new work (e.g. cluster_bullet_
+            # bank.py rewriting bullet-bank-cluster-map.csv with the same
+            # target bullets under newly-stable cluster IDs -- confirmed
+            # for real: this stage kept reporting Stale immediately after
+            # a run that correctly found 0 bullets left to process).
+            progress_output = stage["output"]
+            if os.path.exists(progress_output):
+                timestamp = datetime.datetime.fromtimestamp(
+                    os.path.getmtime(progress_output)
+                ).strftime("%Y-%m-%d %H:%M")
+                return ("Up to date", f"as of {timestamp}")
 
     output = stage["output"]
     if not os.path.exists(output):
@@ -299,15 +315,23 @@ def _maintenance_status(entry: dict) -> str:
         return "none pending" if pending == 0 else f"{pending} bullet(s) pending retirement"
 
     if entry["key"] == "auto_rewrite":
-        # audit-rewrite-queue.csv is overwritten (even when empty) by every
-        # plain "Re-Audit Keepers" run -- see audit_keepers.py's own Stage 3
-        # docstring -- so an empty/missing file genuinely means nothing is
-        # queued, not just "never checked."
-        if not os.path.exists(path):
+        # audit-rewrite-queue.csv (Stage 3's output) is a snapshot taken
+        # BEFORE Stage 4 processes it -- nothing rewrites this file
+        # afterward, even though Stage 4 (part of this very action) may
+        # have just resolved every one of those bullets. Reading its row
+        # count here would show what went INTO the run, not what's left
+        # OUTSTANDING after it -- confirmed for real: a run that
+        # successfully resolved all 11 queued bullets (0 left MANUAL/
+        # NEEDS_REWRITE in the audited file) still displayed "11 queued"
+        # afterward, making it look like nothing happened. Recompute live
+        # from the audited keepers file instead, same criterion Stage 3's
+        # own Source A uses, so this always reflects current reality.
+        if not os.path.exists(KEEPERS_AUDITED_CSV):
             return "empty -- nothing queued"
-        with open(path, newline="", encoding="utf-8") as f:
-            count = sum(1 for _ in csv.DictReader(f))
-        return "empty -- nothing queued" if count == 0 else f"{count} bullet(s) queued for auto-rewrite"
+        with open(KEEPERS_AUDITED_CSV, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        pending = sum(1 for row in rows if (row.get("audit_status") or "").strip() in ("MANUAL", "NEEDS_REWRITE"))
+        return "empty -- nothing queued" if pending == 0 else f"{pending} bullet(s) queued for auto-rewrite"
 
     return ""
 

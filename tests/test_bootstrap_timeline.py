@@ -120,5 +120,48 @@ class TestMatchToTimeline(unittest.TestCase):
             self.assertEqual(company, "Misc. / Unassigned")
 
 
+class TestLlmMatch(unittest.TestCase):
+    # _llm_match() used to trust the model's matched_company string as-is;
+    # since it's free text (not constrained to the options it was given),
+    # a hallucinated or reworded company name would flow straight through
+    # match_to_timeline() as a confident "medium" match. These lock in the
+    # validation-against-the-real-timeline fix.
+
+    def setUp(self):
+        self.timeline = [
+            bootstrap_timeline.TimelineEntry(company="Acme Corp", title="Sales Manager", start_date="2019", end_date="2022"),
+        ]
+
+    @patch("bootstrap_timeline.GeminiClient.generate")
+    @patch("bootstrap_timeline.GeminiClient.parse_json")
+    def test_exact_match_returns_canonical_company(self, mock_parse, mock_generate):
+        mock_generate.return_value = ("{}", {})
+        mock_parse.return_value = {"matched_company": "Acme Corp"}
+        self.assertEqual(bootstrap_timeline._llm_match("did a thing", self.timeline), "Acme Corp")
+
+    @patch("bootstrap_timeline.GeminiClient.generate")
+    @patch("bootstrap_timeline.GeminiClient.parse_json")
+    def test_fuzzy_spelling_still_resolves_to_canonical_company(self, mock_parse, mock_generate):
+        # Same normalization used elsewhere in this file (case/punctuation-
+        # insensitive) -- a reworded but real match should still count.
+        mock_generate.return_value = ("{}", {})
+        mock_parse.return_value = {"matched_company": "acme corp."}
+        self.assertEqual(bootstrap_timeline._llm_match("did a thing", self.timeline), "Acme Corp")
+
+    @patch("bootstrap_timeline.GeminiClient.generate")
+    @patch("bootstrap_timeline.GeminiClient.parse_json")
+    def test_hallucinated_company_not_in_timeline_is_rejected(self, mock_parse, mock_generate):
+        mock_generate.return_value = ("{}", {})
+        mock_parse.return_value = {"matched_company": "Some Other Company That Was Never Offered"}
+        self.assertIsNone(bootstrap_timeline._llm_match("did a thing", self.timeline))
+
+    @patch("bootstrap_timeline.GeminiClient.generate")
+    @patch("bootstrap_timeline.GeminiClient.parse_json")
+    def test_null_match_returns_none(self, mock_parse, mock_generate):
+        mock_generate.return_value = ("{}", {})
+        mock_parse.return_value = {"matched_company": None}
+        self.assertIsNone(bootstrap_timeline._llm_match("did a thing", self.timeline))
+
+
 if __name__ == "__main__":
     unittest.main()

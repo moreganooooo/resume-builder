@@ -279,7 +279,7 @@ class TestWritePortalsYml(BootstrapProfileTestCase):
 
 class TestWriteVerifiedLedger(BootstrapProfileTestCase):
 
-    @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries")
+    @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries_chunked")
     def test_derives_metrics_tools_projects_from_achievements(self, mock_extract):
         with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
@@ -287,8 +287,9 @@ class TestWriteVerifiedLedger(BootstrapProfileTestCase):
             writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew reply rate to 22% using Outreach.io", "source_file": "resume.txt", "source_type": "resume"})
 
         mock_extract.return_value = bootstrap_extractors.LedgerExtraction(
-            metrics=[bootstrap_extractors.LedgerEntry(label="Reply rate", value="22%")],
-            tools=["Outreach.io"], projects=[],
+            metrics=[bootstrap_extractors.LedgerEntry(label="Reply rate", value="22%", employer="Acme Corp")],
+            tools=[bootstrap_extractors.NamedLedgerItem(name="Outreach.io", employer="Acme Corp")],
+            projects=[],
         )
 
         bootstrap_profile.write_verified_ledger()
@@ -296,9 +297,30 @@ class TestWriteVerifiedLedger(BootstrapProfileTestCase):
         with open(bootstrap_profile.VERIFIED_METRICS_PATH, encoding="utf-8") as f:
             metrics = json.load(f)
         self.assertEqual(metrics["metrics"][0]["value"], "22%")
+        self.assertEqual(metrics["metrics"][0]["employer"], "Acme Corp")
         with open(bootstrap_profile.VERIFIED_TOOLS_PATH, encoding="utf-8") as f:
             tools = json.load(f)
         self.assertEqual(tools["tools"][0]["name"], "Outreach.io")
+        self.assertEqual(tools["tools"][0]["employer"], "Acme Corp")
+
+    @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries_chunked")
+    def test_achievements_passed_to_extraction_are_tagged_with_employer(self, mock_extract):
+        # extract_ledger_entries() needs each bullet's employer visible in
+        # the text it receives so it can attribute metrics/tools/projects
+        # correctly -- without this, a fresh profile's verified_*.json
+        # entries have no "employer" field and filter_projects_by_employer()
+        # silently filters everything out.
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"])
+            writer.writeheader()
+            writer.writerow({"Role / Company": "Acme Corp", "Tags": "", "Bullet Point": "- Grew reply rate to 22%", "source_file": "resume.txt", "source_type": "resume"})
+
+        mock_extract.return_value = bootstrap_extractors.LedgerExtraction()
+        bootstrap_profile.write_verified_ledger()
+
+        sent_text = mock_extract.call_args[0][0]
+        self.assertIn("[Acme Corp]", sent_text)
+        self.assertIn("Grew reply rate to 22%", sent_text)
 
     def test_scaffolds_cross_source_files_empty(self):
         bootstrap_profile.write_verified_ledger(dry_run=True)
