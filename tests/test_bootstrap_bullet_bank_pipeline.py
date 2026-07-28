@@ -101,7 +101,7 @@ class TestMainDryRun(unittest.TestCase):
         mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
         mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
         bootstrap_bullet_bank.main()
-        mock_run_ingestion.assert_called_once_with(dry_run=True)
+        mock_run_ingestion.assert_called_once_with(dry_run=True, force=False)
         mock_run_full_pipeline.assert_not_called()
 
     @patch("bootstrap_bullet_bank.bootstrap_profile.collect_secrets")
@@ -113,7 +113,7 @@ class TestMainDryRun(unittest.TestCase):
         mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
         mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
         bootstrap_bullet_bank.main()
-        mock_run_ingestion.assert_called_once_with(dry_run=False)
+        mock_run_ingestion.assert_called_once_with(dry_run=False, force=False)
         mock_run_full_pipeline.assert_called_once()
 
 

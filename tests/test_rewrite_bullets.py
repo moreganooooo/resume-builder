@@ -10,11 +10,16 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 from rewrite_bullets import (  # noqa: E402
     KB_DIR,
+    RULES_DIR,
+    SCORING_DIR,
     KnowledgeBase,
+    RulesBundle,
     filter_claims_by_tags,
     filter_json_entries_by_tags,
+    filter_projects_by_employer,
     load_json_entries,
     process_bullet,
+    score_bullet,
 )
 
 
@@ -130,6 +135,130 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         full_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
         self.assertIsInstance(gemma_block, str)
         self.assertLessEqual(len(gemma_block), len(full_block))
+
+    def test_static_prefix_never_includes_verified_projects(self):
+        # Regression test: verified_projects.json mixes multiple employers
+        # (Treering, VML, Element 8/Strategy LLC). It used to live in the
+        # static prefix, which is shared byte-for-byte across every bullet
+        # rewrite regardless of company -- the actual root cause of a
+        # Treering bullet's rewrite borrowing the Strategy LLC brand-identity
+        # project. Project detail must only ever reach a rewrite prompt via
+        # the per-bullet, employer-filtered segment bundle.
+        self.assertNotIn("VERIFIED PROJECTS", self.kb.static_prefix)
+        self.assertNotIn("VERIFIED PROJECTS", self.kb.gemma_static_prefix)
+
+    def test_full_tier_segment_scopes_projects_to_own_employer(self):
+        df = pd.DataFrame({
+            "Role / Company": ["Treering Yearbooks", "Element 8 / Strategy LLC", "Inside Sales Team"],
+            "Tags": ["[email]", "[brand]", "[email]"],
+        })
+        self.kb.warm_segment_cache(df)
+
+        treering_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
+        self.assertIn("VERIFIED PROJECTS (Treering Yearbooks only)", treering_block)
+        self.assertNotIn("Strategy LLC Brand Identity", treering_block)
+
+        strategy_block = self.kb.context_block_for_bullet("Element 8 / Strategy LLC", "[brand]")
+        self.assertIn("Strategy LLC Brand Identity", strategy_block)
+        self.assertNotIn("Outreach.io Platform Rollout", strategy_block)  # a Treering project
+
+        ist_block = self.kb.context_block_for_bullet("Inside Sales Team", "[email]")
+        self.assertNotIn("VERIFIED PROJECTS", ist_block)
+
+
+class TestRulesBundleIncludesRedundancyRules(unittest.TestCase):
+    # Regression coverage: style_rules.yaml gaining a new top-level key
+    # (redundancy_rules) only reaches the FULL rewrite tier automatically
+    # -- the Gemma tier (gemma-4-31b-it, this pipeline's primary/highest-
+    # volume rewrite model per this file's own docstring) gets a
+    # hand-picked subset of keys, so a new rule that isn't explicitly
+    # added to that subset would silently never reach the model doing
+    # most of the actual rewriting. This is exactly the class of gap that
+    # let a rewrite reintroduce a bullet's own employer name into its own
+    # text after the bullet bank had already been manually cleaned of it.
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rules = RulesBundle(RULES_DIR, SCORING_DIR)
+
+    def test_redundancy_rules_reach_the_full_tier(self):
+        self.assertIn("redundancy_rules", self.rules.rewrite_rules_block)
+        self.assertIn("own_employer_name", self.rules.rewrite_rules_block)
+        self.assertIn("unneeded_calendar_dates", self.rules.rewrite_rules_block)
+
+    def test_redundancy_rules_reach_the_gemma_slim_tier(self):
+        self.assertIn("redundancy_rules", self.rules.rewrite_rules_block_gemma)
+        self.assertIn("own_employer_name", self.rules.rewrite_rules_block_gemma)
+        self.assertIn("unneeded_calendar_dates", self.rules.rewrite_rules_block_gemma)
+
+    def test_redundancy_rules_reach_the_score_block_too(self):
+        # Scoring (which decides whether a bullet needs a rewrite at all,
+        # not just what a rewrite should avoid) must see this rule too --
+        # otherwise a bullet that already restates its own employer name
+        # (e.g. straight out of bootstrap extraction, before any rewrite
+        # ever touches it) would score fine and never get flagged.
+        self.assertIn("REDUNDANCY", self.rules.score_rules_block)
+        self.assertIn("own_employer_name", self.rules.score_rules_block)
+        self.assertIn("unneeded_calendar_dates", self.rules.score_rules_block)
+
+
+class TestScoreBulletSendsRoleCompanyContext(unittest.TestCase):
+    # Regression coverage: score_bullet() used to send only the bullet
+    # text and a tag-derived persona -- with no company context at all,
+    # the scoring model had no way to know a bullet was restating its own
+    # employer's name, even with the redundancy rule now in its prompt.
+
+    @patch("rewrite_bullets.GeminiClient.generate")
+    def test_role_company_appears_in_the_scoring_payload(self, mock_generate):
+        mock_generate.return_value = ('{"accuracy_score": 90, "believability_score": 90, '
+                                       '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
+                                       '"weaknesses": "None"}', {})
+        score_bullet(
+            "Built a complete brand identity from scratch.",
+            tags="[brand]",
+            score_system="system prompt",
+            role_company="Acme Corp",
+        )
+        sent_contents = mock_generate.call_args.kwargs["contents"]
+        self.assertIn("Acme Corp", sent_contents)
+
+    @patch("rewrite_bullets.GeminiClient.generate")
+    def test_missing_role_company_defaults_to_empty_not_a_crash(self, mock_generate):
+        mock_generate.return_value = ('{"accuracy_score": 90, "believability_score": 90, '
+                                       '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
+                                       '"weaknesses": "None"}', {})
+        score_bullet("A bullet.", tags="[brand]", score_system="system prompt")
+        mock_generate.assert_called_once()
+
+
+class TestFilterProjectsByEmployer(unittest.TestCase):
+
+    PROJECTS = [
+        {"id": "proj_treering", "name": "Outreach.io Platform Rollout", "employer": "Treering Yearbooks"},
+        {"id": "proj_vml", "name": "VML Carlson Hotels Digital Strategy Report", "employer": "VML (agency internship)"},
+        {"id": "proj_strategy", "name": "Strategy LLC Brand Identity System", "employer": "Element 8 → Strategy LLC"},
+    ]
+
+    def test_matches_only_the_bullets_own_employer(self):
+        result = filter_projects_by_employer(self.PROJECTS, "Treering Yearbooks")
+        self.assertEqual([p["id"] for p in result], ["proj_treering"])
+
+    def test_handles_differing_separator_conventions(self):
+        # CSV uses "/" ("Element 8 / Strategy LLC"); verified_projects.json
+        # uses "→" ("Element 8 → Strategy LLC") -- must still match.
+        result = filter_projects_by_employer(self.PROJECTS, "Element 8 / Strategy LLC")
+        self.assertEqual([p["id"] for p in result], ["proj_strategy"])
+
+    def test_matches_despite_parenthetical_suffix(self):
+        result = filter_projects_by_employer(self.PROJECTS, "VML")
+        self.assertEqual([p["id"] for p in result], ["proj_vml"])
+
+    def test_unrelated_company_gets_no_projects(self):
+        result = filter_projects_by_employer(self.PROJECTS, "Inside Sales Team")
+        self.assertEqual(result, [])
+
+    def test_empty_role_company_gets_no_projects(self):
+        self.assertEqual(filter_projects_by_employer(self.PROJECTS, ""), [])
 
 
 class TestProcessBulletGemmaHandoff(unittest.TestCase):

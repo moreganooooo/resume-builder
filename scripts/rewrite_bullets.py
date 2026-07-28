@@ -399,6 +399,7 @@ class RulesBundle:
             "punctuation_rules": sr.get("punctuation_rules", []),
             "metrics_rules":     sr.get("metrics_rules", {}),
             "tool_mention_rules": sr.get("tool_mention_rules", {}),
+            "redundancy_rules":  sr.get("redundancy_rules", {}),
         }
         self.rewrite_rules_block_gemma = _build_rewrite_block(
             gemma_verb_intent, gemma_style_rules, "=== STYLE RULES (bullet-level subset) ==="
@@ -434,6 +435,12 @@ class RulesBundle:
             _yaml_to_str({"believability_criteria_and_examples": bel.get("criteria", {}),
                           "believability_penalties":              bel.get("penalties", {}),
                           "context_anchoring":                    bel.get("context_anchoring", {})}),
+            "",
+            "REDUNDANCY — the bullet's own Role/Company is provided in the input below.",
+            "If the bullet's text restates that SAME company's name, or includes an unneeded",
+            "specific calendar month/season + year, treat it as a clarity_score and",
+            "accuracy_score deduction (adjective_padding-level, not a hard fail) per:",
+            _yaml_to_str(sr.get("redundancy_rules", {})),
         ])
 
         print(f"   {theme.colorize_icon_ansi('hint')} Rewrite rules block: {len(self.rewrite_rules_block):,} chars")
@@ -601,6 +608,42 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MA
     return filtered.head(max_rows)
 
 
+def _employer_tokens(s: str) -> list:
+    """Splits a company/employer string on common multi-name separators
+    ("/", "&", "→", "+") into lowercased tokens, dropping fragments too
+    short to be a meaningful name (e.g. stray punctuation). Shared by
+    filter_projects_by_employer() to compare a bullet's Role/Company
+    value (e.g. "Element 8 / Strategy LLC") against a verified_projects.json
+    entry's employer value (e.g. "Element 8 → Strategy LLC") despite the
+    two files using different separator conventions."""
+    return [t.strip().lower() for t in re.split(r"[/&→+]", s or "") if len(t.strip()) > 2]
+
+
+def filter_projects_by_employer(projects: list, role_company: str) -> list:
+    """Returns only the verified_projects.json entries whose "employer"
+    field actually matches this bullet's own Role/Company -- see the
+    root-cause note on _build_static_prefix()/_build_segment_bundle():
+    verified_projects.json mixes multiple employers (10 Treering entries,
+    1 VML, 1 Element 8/Strategy LLC), so including it whole (or filtering
+    it by TAG alone, which matches on subject-matter keyword overlap, not
+    company) let another employer's real, verified project detail bleed
+    into a bullet under a different company -- e.g. a weak Treering
+    bullet's rewrite borrowing the more vivid Strategy LLC brand-identity
+    project, producing a bullet that's factually accurate but tagged
+    under the wrong employer. Every project record already carries an
+    "employer" field; this is the only filter that should ever gate
+    verified_projects into a rewrite prompt."""
+    rc_tokens = _employer_tokens(role_company)
+    if not rc_tokens:
+        return []
+    matched = []
+    for p in projects:
+        emp_tokens = _employer_tokens(p.get("employer", ""))
+        if any(rt in et or et in rt for rt in rc_tokens for et in emp_tokens):
+            matched.append(p)
+    return matched
+
+
 def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list:
     if not entries:
         return entries
@@ -653,7 +696,6 @@ class KnowledgeBase:
         self.verified_facts    = load_json_file(KB_VERIFIED_FACTS,    "verified_facts.json")
         self.verified_metrics  = load_json_file(KB_VERIFIED_METRICS,  "verified_metrics.json")
         self.metrics_entries   = load_json_entries(KB_VERIFIED_METRICS, "metrics")
-        self.verified_projects = load_json_file(KB_VERIFIED_PROJECTS, "verified_projects.json")
         self.projects_entries  = load_json_entries(KB_VERIFIED_PROJECTS, "projects")
         self.verified_tools    = load_json_file(KB_VERIFIED_TOOLS,    "verified_tools.json")
         self.recruiter_patterns = load_json_file(KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json")
@@ -693,12 +735,14 @@ class KnowledgeBase:
                 "Never claim proficiency with any tool not present in this list.\n"
                 + self.verified_tools
             )
-        if self.verified_projects:
-            sections.append(
-                "=== VERIFIED PROJECTS ===\n"
-                "Use these to add accurate project detail and scope.\n"
-                + self.verified_projects
-            )
+        # verified_projects is deliberately NOT included here -- it mixes
+        # multiple employers (Treering, VML, Element 8/Strategy LLC), so
+        # including it in this prefix (shared identically across every
+        # bullet regardless of company) was the actual root cause of
+        # cross-company content leaking into rewrites -- see
+        # filter_projects_by_employer()'s docstring. It's injected per-bullet
+        # in _build_segment_bundle()/_build_gemma_segment_bundle() instead,
+        # filtered to the bullet's own employer.
         if self.voice_anchors:
             sections.append(
                 "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
@@ -741,15 +785,20 @@ class KnowledgeBase:
         MAX_GEMMA_FILTER_ROWS instead of included whole or at the looser
         MAX_CLAIMS_ROWS cap.
 
-        verified_projects.json is 10/12 Treering-employer entries (the
-        other 2 are VML/Element8) -- filtering it by TAG alone (no company
-        check) let Treering-specific project detail leak into non-Treering
-        bullets purely on keyword overlap (e.g. an "Inside Sales Team"
-        bullet tagged [email] still matched Treering's "Outreach.io
-        Platform Rollout" project). Gating it behind is_deep_evidence_bullet,
-        same as claims/metrics/screenshots below, avoids that cross-
-        contamination -- it's excluded for the 2 non-Treering entries too,
-        but that matches how narrowly this file actually applies."""
+        verified_projects.json mixes multiple employers (10 Treering
+        entries, 1 VML, 1 Element 8/Strategy LLC). This used to filter it
+        by TAG alone (no company check), which let Treering-specific
+        project detail leak into non-Treering bullets purely on keyword
+        overlap (e.g. an "Inside Sales Team" bullet tagged [email] still
+        matched Treering's "Outreach.io Platform Rollout" project) --
+        gating it behind is_deep_evidence_bullet only patched the symptom
+        for Treering-tagged bullets, and as a side effect meant VML/
+        Strategy LLC bullets never got their own real project detail
+        either, since deep_evidence_keywords is Treering-only. Filtering
+        by the project's own "employer" field via
+        filter_projects_by_employer() (see its docstring) fixes both: any
+        company only ever sees its own projects, and every company with
+        real project data gets to use it, not just Treering."""
         sections = []
         cv_section = extract_cv_section(self.cv_full, role_company)
         if cv_section:
@@ -760,15 +809,16 @@ class KnowledgeBase:
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
 
-        if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
-            filtered_projects = filter_json_entries_by_tags(self.projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
-            if filtered_projects:
-                sections.append(
-                    "=== VERIFIED PROJECTS (tag-filtered) ===\n"
-                    "Use these to add accurate project detail and scope.\n"
-                    + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
-                )
+        filtered_projects = filter_projects_by_employer(self.projects_entries, role_company)[:MAX_GEMMA_FILTER_ROWS]
+        if filtered_projects:
+            sections.append(
+                f"=== VERIFIED PROJECTS ({role_company} only) ===\n"
+                "Use these to add accurate project detail and scope. Do NOT use project "
+                "detail from any other employer, even if it seems more impressive.\n"
+                + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+            )
 
+        if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
             claims_text = get_verified_claims_text(filtered_claims)
             if claims_text:
@@ -803,6 +853,16 @@ class KnowledgeBase:
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
+        filtered_projects = filter_projects_by_employer(self.projects_entries, role_company)
+        if filtered_projects:
+            sections.append(
+                f"=== VERIFIED PROJECTS ({role_company} only) ===\n"
+                "Use these to add accurate project detail and scope. Do NOT use project "
+                "detail from any other employer, even if it seems more impressive.\n"
+                + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+            )
+
         if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
             filtered_claims = filter_claims_by_tags(self.df_claims, tags)
             claims_text = get_verified_claims_text(filtered_claims)
@@ -1025,7 +1085,7 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
 # SCORING
 # ---------------------------------------------------------------------------
 
-def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = False) -> dict:
+def score_bullet(bullet: str, tags: str, score_system: str, role_company: str = "", dry_run: bool = False) -> dict:
     if dry_run:
         return {
             "accuracy_score": 90, "believability_score": 90, "clarity_score": 90,
@@ -1037,6 +1097,7 @@ def score_bullet(bullet: str, tags: str, score_system: str, dry_run: bool = Fals
         system_instruction=score_system,
         contents=(
             f"--- BULLET ---\n{bullet}\n\n"
+            f"--- ROLE / COMPANY (context only -- flag if the bullet redundantly restates this) ---\n{role_company}\n\n"
             f"--- TARGET PERSONA ---\n{persona_context(tags)}\n\n"
             "Score this bullet. Respond with JSON only."
         ),
@@ -1338,7 +1399,7 @@ def process_bullet(
 
         print(f"   {theme.colorize_icon_ansi('hint')} Rewritten: {rewritten[:80]}...")
 
-        new_scores = score_bullet(rewritten, tags, score_system, dry_run)
+        new_scores = score_bullet(rewritten, tags, score_system, role_company=role_company, dry_run=dry_run)
         action     = decide_action(new_scores)
         print(
             f"   {theme.colorize_icon_ansi('evaluate')} Scores → accuracy={new_scores.get('accuracy_score')} "

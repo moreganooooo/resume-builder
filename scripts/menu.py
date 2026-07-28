@@ -48,7 +48,7 @@ def _icon_title(icon_name: str, label: str) -> list:
 _CHOICES = [
     questionary.Choice(title=[("class:new_user", "--> New User? Start Here!\n")], value="bootstrap"),
     questionary.Separator("── Knowledge Base ──"),
-    questionary.Choice(title=_icon_title("bullet_bank", "Curate Bullet Bank\n"), value="bullet_bank"),
+    questionary.Choice(title=_icon_title("bullet_bank", "Curate Bullet Bank"), value="bullet_bank"),
     questionary.Choice(title=_icon_title("bullet_bank", "Drop New Knowledge\n"), value="update_knowledge"),
     questionary.Separator("── Discovery ──"),
     questionary.Choice(title=_icon_title("discovery", "Scan for New Jobs"), value="scan"),

@@ -174,7 +174,7 @@ class TestStageStatusProgress(unittest.TestCase):
         self.assertEqual(status, "In progress")
         self.assertEqual(detail, "3/10 processed (7 pending)")
 
-    def test_falls_through_to_mtime_check_when_done_equals_total(self):
+    def test_missing_output_when_done_equals_total_is_never_run(self):
         stage = {
             "status_mode": "progress", "progress_fn": lambda: (10, 10),
             "output": "/does/not/exist.csv", "inputs": [],
@@ -197,6 +197,56 @@ class TestStageStatusProgress(unittest.TestCase):
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
+
+
+class TestStageStatusProgressCompleteWithNewerInput(unittest.TestCase):
+    # Regression coverage: a progress-mode stage (rewrite_bullets.py, for
+    # real) that has genuinely finished every target bullet (done == total)
+    # used to still report "Stale" if an upstream input's mtime moved after
+    # the output was last written -- even though there was nothing left to
+    # do. This happened for real: re-running cluster_bullet_bank.py to pick
+    # up stable cluster IDs bumped bullet-bank-cluster-map.csv's mtime with
+    # the exact same target bullets underneath, and rewrite_bullets.py
+    # correctly found 0 pending -- but the dashboard kept showing "Stale"
+    # because the old code fell through to a raw mtime comparison instead
+    # of trusting the progress count.
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _touch(self, name, mtime_offset=0):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("x")
+        stat = os.stat(path)
+        os.utime(path, (stat.st_atime + mtime_offset, stat.st_mtime + mtime_offset))
+        return path
+
+    def test_done_equals_total_is_up_to_date_even_with_a_newer_input(self):
+        output_path = self._touch("output.csv", mtime_offset=0)
+        input_path = self._touch("input.csv", mtime_offset=10)  # newer than output
+        stage = {
+            "status_mode": "progress", "progress_fn": lambda: (10, 10),
+            "output": output_path, "inputs": [input_path],
+        }
+        status, detail = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Up to date")
+        self.assertIn("as of", detail)
+
+    def test_zero_total_with_existing_output_and_newer_input_is_up_to_date(self):
+        output_path = self._touch("output.csv", mtime_offset=0)
+        input_path = self._touch("input.csv", mtime_offset=10)
+        stage = {
+            "status_mode": "progress", "progress_fn": lambda: (0, 0),
+            "output": output_path, "inputs": [input_path],
+        }
+        status, detail = bullet_bank_menu._stage_status(stage)
+        self.assertEqual(status, "Up to date")
 
 
 class TestAuditProgress(unittest.TestCase):
@@ -515,18 +565,44 @@ class TestMaintenanceStatus(unittest.TestCase):
         self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none pending")
 
     def test_auto_rewrite_missing_file_is_empty(self):
-        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+        with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
+            entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
 
-    def test_auto_rewrite_reports_row_count(self):
-        self._write_csv([{"Bullet Point": "a"}, {"Bullet Point": "b"}, {"Bullet Point": "c"}], ["Bullet Point"])
-        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "3 bullet(s) queued for auto-rewrite")
+    def test_auto_rewrite_reports_live_manual_and_needs_rewrite_count(self):
+        # Regression: this used to read audit-rewrite-queue.csv's row count
+        # -- a Stage-3 snapshot taken BEFORE Stage 4 processes it, so it
+        # kept showing bullets as "queued" even after a run had already
+        # resolved every one of them (confirmed live: a run that resolved
+        # all 11 queued bullets down to 0 MANUAL/NEEDS_REWRITE rows still
+        # displayed "11 queued" afterward). Now computed live from the
+        # audited keepers file's own audit_status column instead.
+        self._write_csv(
+            [
+                {"Bullet Point": "a", "audit_status": "CLEAN"},
+                {"Bullet Point": "b", "audit_status": "MANUAL"},
+                {"Bullet Point": "c", "audit_status": "NEEDS_REWRITE"},
+            ],
+            ["Bullet Point", "audit_status"],
+        )
+        with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
+            entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 bullet(s) queued for auto-rewrite")
+
+    def test_auto_rewrite_all_clean_is_empty(self):
+        self._write_csv(
+            [{"Bullet Point": "a", "audit_status": "CLEAN"}],
+            ["Bullet Point", "audit_status"],
+        )
+        with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
+            entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
 
     def test_auto_rewrite_empty_csv_is_empty(self):
-        self._write_csv([], ["Bullet Point"])
-        entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+        self._write_csv([], ["Bullet Point", "audit_status"])
+        with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
+            entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
+            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
 
 
 class TestHandleChoice(unittest.TestCase):

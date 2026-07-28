@@ -80,6 +80,22 @@ def append_rows(path, rows, fieldnames):
         writer.writerows(rows)
 
 
+def existing_keeper_bullets(path) -> set:
+    """Exact Bullet Point text already present in bullet-bank-keepers.csv.
+    Used to skip re-appending a bullet that's already there -- the same
+    achievement can independently trigger needs-review.csv entries from
+    more than one real resume-build session, and this file has never
+    deduplicated against what it's about to append to."""
+    if not os.path.exists(path):
+        return set()
+    with open(path, newline="", encoding="utf-8") as f:
+        return {
+            row.get("Bullet Point", "").strip()
+            for row in csv.DictReader(f)
+            if row.get("Bullet Point", "").strip()
+        }
+
+
 def main():
     if not os.path.exists(NEEDS_REVIEW):
         print("needs-review.csv not found. Nothing to triage.")
@@ -94,6 +110,12 @@ def main():
     rewrite_rows= []
     retire_rows = []
     leftover    = []
+    n_duplicate = 0
+
+    # Snapshot of what's already in the keeper bank, updated as this batch
+    # adds to it, so two identical rows within the SAME needs-review.csv
+    # (not just across separate past runs) are also caught.
+    known_bullets = existing_keeper_bullets(KEEPERS_CSV)
 
     for row in all_rows:
         mgr_test   = str(row.get("manager_test", "")).strip().upper()
@@ -107,8 +129,14 @@ def main():
             continue
 
         if mgr_test == "PASS" and believ >= 80:
+            bullet_text = str(row.get("Bullet Point", "")).strip()
+            if bullet_text and bullet_text in known_bullets:
+                n_duplicate += 1
+                continue  # already in the keeper bank -- don't re-add it, and don't leave it behind either
             row["rewrite_status"] = "KEEPER"
             keep_rows.append(row)
+            if bullet_text:
+                known_bullets.add(bullet_text)
         elif mgr_test == "FAIL" and attempts < 3:
             row["rewrite_status"] = "REWRITE"
             row["next_action"]    = "REWRITE"
@@ -125,6 +153,7 @@ def main():
     print(f"  KEEP    → {len(keep_rows)}")
     print(f"  REWRITE → {len(rewrite_rows)}")
     print(f"  RETIRE  → {len(retire_rows)}")
+    print(f"  DUPLICATE (already in keeper bank, skipped): {n_duplicate}")
     print(f"  Leftover (needs human): {len(leftover)}")
 
     if keep_rows:

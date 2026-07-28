@@ -52,6 +52,15 @@ class TestFixedContent(unittest.TestCase):
         edu = fixed_content.build_education()
         self.assertEqual(len(edu), 3)
 
+    def test_build_education_omits_graduation_years(self):
+        # Graduation years let a recruiter infer age -- deliberately dropped
+        # from every education entry. render_html.py's build_education_html()
+        # already skips a missing "year" key gracefully (see its meta_parts
+        # truthy filter), so no template change was needed for this.
+        edu = fixed_content.build_education()
+        for entry in edu:
+            self.assertNotIn("year", entry)
+
     def test_template_schema_has_no_free_form_certifications_or_education_fields(self):
         fields = orchestrator.TemplateSchema.model_fields
         self.assertNotIn("CERTIFICATIONS", fields)
