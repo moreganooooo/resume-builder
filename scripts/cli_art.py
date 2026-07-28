@@ -34,6 +34,9 @@ HINT = f"[bold {theme.INFO}]{theme.colorize_icon('hint')}[/bold {theme.INFO}]"
 # references keep working unchanged.
 QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 
+# Unified table header styling (used across all render_*_table functions)
+TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
+
 
 def display_error(message: str) -> None:
     """A failure reads with real visual weight -- a bordered panel, not a
@@ -268,7 +271,7 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     excerpt, not the model's full reasoning -- lets a lower-scored-but-
     higher-priority role get spot-checked at a glance instead of needing
     to open its JD JSON to see why it scored the way it did."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
     table.add_column("Recommendation")
@@ -335,7 +338,7 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     positions (51, 52, ...) instead of every page restarting at 1. title
     overrides the panel's title -- defaults to a plain count for
     non-paginated callers."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("#", justify="right", style="dim")
     table.add_column("Score", justify="right")
     table.add_column("Recommendation")
@@ -375,7 +378,7 @@ def render_polish_table(rows: list, start_index: int = 1, title: str | None = No
     detection stays in polish.py to avoid a cli_art<->polish import
     cycle. start_index/title behave exactly like
     render_pipeline_table()'s."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("#", justify="right", style="dim")
     table.add_column("Type")
     table.add_column("Filename")
@@ -418,7 +421,7 @@ def render_comparison_table(rows: list) -> None:
     dimension grouped under its layer (fit / interview odds / practical
     pursue), so a strength/weakness pattern is visible at a glance rather
     than needing to hold several single-JD views in your head."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("")
     for r in rows:
         table.add_column(f"{r['company'] or '?'}\n{r['title'] or '?'}")
@@ -492,7 +495,7 @@ def render_scan_report(source_results: list, total_written: int) -> None:
     most-frequent-first) -- e.g. workday HTTP 404s x44 renders as one row
     here, not 44 raw WARNING:root: lines the way the old plain-logging
     version did."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("Source")
     table.add_column("Fetched", justify="right")
     table.add_column("New", justify="right")
@@ -551,7 +554,7 @@ def _render_scan_warnings(source_results: list) -> None:
 
     console.print()
     console.rule(f"[bold {theme.WARNING}]{theme.colorize_icon('warning')} Issues[/bold {theme.WARNING}]", style="dim", align="left")
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style="bold magenta")
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("Source")
     table.add_column("Provider")
     table.add_column("Stage")

@@ -65,17 +65,17 @@ _UNICODE_ICONS = {
     "success": "✓",  # ✓
     "error": "✗",  # ✗
     "warning": "⚠",  # ⚠
-    "hint": "💡",  # 💡
-    "discovery": "🔍",  # 🔍
-    "evaluate": "📊",  # 📊
-    "build": "🛠",  # 🛠
-    "utility": "⚙",  # ⚙
-    "bullet_bank": "🗃",  # 🗃
-    "skip": "🚫",  # 🚫
-    "save": "💾",  # 💾
-    "resume": "▶",  # ▶
-    "complete": "✅",  # ✅
-    "gem": "💎",  # 💎
+    "hint": "◆",  # diamond (priority/insight)
+    "discovery": "◎",  # circle (search/explore)
+    "evaluate": "📊",  # bar chart (metrics)
+    "build": "⚡",  # lightning (action/power)
+    "utility": "⚙",  # gear (settings/tools)
+    "bullet_bank": "□",  # box (storage/database)
+    "skip": "🚫",  # ban (rejection)
+    "save": "💾",  # floppy (iconic archive)
+    "resume": "▶",  # play (start/action)
+    "complete": "✓",  # checkmark (done, consistent with success)
+    "gem": "◆",  # diamond (quality/priority)
 }
 
 # Nerd Font is the default -- set RESUME_BUILDER_ICONS=unicode (exact,
