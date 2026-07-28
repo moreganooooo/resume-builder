@@ -6,6 +6,7 @@ import os
 import sys
 
 import click
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -36,6 +37,33 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
     return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
 
 
+def _offer_next_steps(action: str, jd_file: str | None = None) -> None:
+    """After a CLI command completes successfully, offer next-steps options
+    rather than dropping back to the shell."""
+    choices = [
+        questionary.Choice(title="Show Help", value="help"),
+        questionary.Choice(title="Return to Main Menu", value="menu"),
+        questionary.Choice(title="Exit", value="exit"),
+    ]
+
+    if action in ("tailor", "coverletter") and jd_file:
+        doc_type = "Resume" if action == "tailor" else "Cover Letter"
+        choices.insert(0, questionary.Choice(
+            title=f"Polish this {doc_type}", value="polish"
+        ))
+
+    choice = questionary.select(
+        "What's next?", choices=choices, style=cli_art.QUESTIONARY_STYLE
+    ).ask()
+
+    if choice == "menu":
+        menu.run_interactive_menu()
+    elif choice == "help":
+        cli_art.display_help()
+    elif choice == "polish" and jd_file:
+        polish_module.run(jd_file)
+
+
 @click.group(invoke_without_command=True)
 @click.option("--profile", default=None, help="Override RESUME_PROFILE for this invocation only.")
 @click.pass_context
@@ -59,6 +87,7 @@ def tailor(jd_file, master, output):
     )
     if failed and not completed:
         raise SystemExit(1)
+    _offer_next_steps("tailor", jd_file)
 
 
 @cli.command(name="run")
@@ -69,7 +98,32 @@ def run_batch(master, pick, yes):
     """Batch-process every pending JD in jds/."""
     if not pick:
         cli_art.display_banner("Batch run: all pending JDs")
-        orchestrator.run_pipeline(master_resume_path=master)
+        pending = jd_manager.get_pending_jds()
+        if not pending:
+            cli_art.console.print("Nothing to process -- no pending JDs.")
+            return
+
+        completed = 0
+        failed = 0
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=cli_art.console,
+        ) as progress:
+            task = progress.add_task("[bold cyan]Processing JDs...", total=len(pending))
+            for i, jd_path in enumerate(pending, 1):
+                jd = jd_manager.read_jd_json(jd_path)
+                company = jd.get("company", "?")
+                title = jd.get("title", "?")
+                progress.update(task, description=f"[{i}/{len(pending)}] {company} — {title}")
+                c, f = orchestrator.run_pipeline(jd_path=jd_path, master_resume_path=master)
+                completed += c
+                failed += f
+                progress.advance(task)
+
+        cli_art.display_success(f"Batch complete: {completed} tailored, {failed} failed")
         return
 
     def _process_one(path):
@@ -108,6 +162,7 @@ def coverletter(jd_file, pick, yes):
     result = engine.build_tailored_coverletter(jd_file)
     if not result:
         raise SystemExit(1)
+    _offer_next_steps("coverletter", jd_file)
 
 
 @cli.command()
