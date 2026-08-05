@@ -1,0 +1,1143 @@
+# Phase 9 — Synthesis, contradiction resolution & fix backlog
+
+Run 2026-08-05, Opus 5. **Reads no source code**, per the plan. Inputs: the
+nine `docs/review/phase-*.md` docs plus `PLAN.md` and `plan-gaps.md`. The only
+non-doc commands run were `git ls-files` enumerations for the mechanical
+ownership check, which the plan requires.
+
+**This file supersedes the nine phase docs as the working document.** They stay
+as evidence; cited as `P<n>F<m>` (e.g. `P4F2` = Phase 4, Finding 2).
+
+**Totals.** 9 docs, ~100 distinct findings, merged to **41 backlog items** —
+6 blockers, 22 majors, 13 minors/roll-ups. Ranked by (goal × severity ÷ effort),
+not by phase order.
+
+---
+
+## 1. Contradictions — resolved, with the loser recorded
+
+Seven live disagreements across the docs. Each is settled here so the fix pass
+does not relitigate them.
+
+### C1. Ligature fix layer — **CSS wins. The normalizer loses.**
+`P2F1` said fix it in the templates' CSS. `PLAN.md:211-216` told Phase 4 to
+"pick a side" at the `normalizeTextForATS()` layer. `P4F7(b)` picked, with
+proof: the ligature is created by the font shaper *inside Chromium at render
+time*, after `generate-pdf.mjs` has finished transforming the source and handed
+the file off. The HTML the normalizer inspects contains the plain string
+`workflows`; the PDF contains `workﬂows`. **There is no character in the
+normalizer's input to match** — adding `ﬁ`/`ﬂ` to `sanitizeText()` would be dead
+code. **Decision: two CSS lines in both templates. Nothing is added to
+`generate-pdf.mjs`.** Closed; do not reopen.
+
+### C2. The Playwright doctor warning — **not a false positive.**
+`P0 §1` recorded it as a false positive because PDFs rendered anyway. `P1
+Corrections` and `P4F1` independently root-caused it: `node_modules/` does not
+exist in this repo at all, and `require.resolve('playwright')` resolves to
+`/Users/morganescott/node_modules/playwright` — a stray install two levels up.
+Doctor was right and, if anything, understates it. **`phase-0-smoke.md:26-33`
+is wrong and should be annotated in place.**
+
+### C3. `_resume_ensure_profile: command not found` — **not a product defect.**
+`P0 §1` reported it on 100% of invocations. `P1 Corrections` proved it is a
+Claude Code shell-snapshot artifact: the snapshot captures `resume ()` but
+filters out underscore-prefixed functions, so the review harness had the caller
+without the callee. A real terminal sourcing `~/.zshrc` has both.
+**`P4`'s Handoff re-flagging it as "the first thing any user sees on every run"
+was written without `P1`'s correction in view and is superseded.** The only
+residue is `P1F11`'s one-line guard (B36), which is genuinely minor.
+
+### C4. Browse & Manage column truncation — **both causes are real; one is primary.**
+`P0 §3` flagged it and could not tell whether it was a no-TTY capture artifact.
+`P1F7` proposed wide/ambiguous-width fallback icons as the cause. `P2F4`
+measured it at controlled widths and proved it real at 80 and 100 columns with
+the *default* icon set — nine columns, no `no_wrap`, no width ratios.
+**Primary cause is `P2F4`.** `P1F7` is a real, additive, independent defect (4
+double-width + 5 ambiguous glyphs in the Unicode fallback set) that would make
+it worse on the stranger's path — but it was never actually tested under
+`RESUME_BUILDER_ICONS=unicode` (see H5). Both stay on the backlog; neither is a
+duplicate of the other.
+
+### C5. The launch banner — **a bug, not a design decision.**
+`P0 §3` flagged 20–25s and asked for "a design judgment call." `P2F3` measured
+`_stats_line_text()` at 0.88s × 31 frames = ~27.2s of recomputing a string that
+cannot change during a 1.6-second animation. **No judgment call needed.**
+
+### C6. `liveness.py:211`'s raw `❌` — **already fixed.**
+`PLAN.md:266-270` and `P4F13` both record it as present. `P7F16` verified
+commit `348fe628` replaced it and `liveness.py` now routes through
+`theme.colorize_icon_ansi()` throughout. `PLAN.md` is stale here.
+Separately, `PLAN.md:242-245`'s claim that `generate-pdf.mjs:211` was "the last
+un-swept instance in the repo" is wrong three times over — `P1F15`
+(`bootstrap_bullet_bank.py:352`), `P6 #11` (`ingest.py:82,93`), and `P7F16`
+(`check-liveness.mjs:41,74`) each found another. Full residue list in B38.
+
+### C7. Does `P6F1` invalidate `P3F9` ("no fabrication found")? — **No. Narrow caveat only.**
+`PLAN.md:544-547` requires Phase 9 to treat any Phase 6 finding that invalidates
+a Phase 3 input as grounds for re-testing that *specific* Phase 3 finding.
+`P6F1` corrupts columns 10–16 of `bullet-bank-keepers.csv`, destroying the
+`source` provenance field. `P3F9` traced every quantitative claim in the shipped
+documents to a KB file by *content match* — the bullet-text columns are upstream
+of the shift and unaffected. **`P3F9`'s core claim ("nothing was invented")
+stands and needs no re-test.** What `P6F1` does invalidate is the narrower
+claim that a given bullet can be *shown* to have come from a real resume: for
+any row written through `triage_needs_review.py`, `source` now holds an integer
+and the true value is unrecoverable (`:180` deletes the input in the same run).
+That is a provenance-auditability defect, tracked as B8, not a fabrication one.
+`P6`'s own Handoff to Phase 3 — that `voice-anchors.md` derives only from
+`application-answers-index.csv` and has no connection to the bullet bank —
+matches what `P3F8b` already said. No conflict.
+
+---
+
+## 2. Handoff ledger — every "Handoffs" line across nine docs
+
+**Structural finding first.** The suggested order (`0 → 3 → 2 → 1 → 4 → 6 → 7 →
+7b → 8 → 5 → 9`) meant handoffs travelling *backwards* — Phase 8 → Phase 3,
+Phase 7b → Phase 7, Phase 6 → Phase 1, Phase 4 → Phase 1/2 — landed on phases
+that had already ended. **11 of 31 handoffs fell through, and 10 of those 11 are
+backward-pointing.** This is a property of the plan's ordering, not of any
+phase's diligence. Every one is carried onto the backlog below rather than
+re-dispatched, since there are no phases left to receive them.
+
+| # | From → To | Item | Status |
+|---|---|---|---|
+| H1 | 0 → 1 | Brand-new profile first-run experience | ✅ `P1` created a real `phase1probe` profile |
+| H2 | 0 → 2 | Verify column truncation at real terminal width | ✅ `P2F4` |
+| H3 | 0 → 2/3 | Banner cost: intentional or not | ✅ `P2F3` |
+| H4 | 0 → 3 | PDF text-layer check shipping anyway (§2d) | ✅ `P3` MAJOR 2 |
+| H5 | 1 → 2 | Re-check truncation **under `RESUME_BUILDER_ICONS=unicode`** | ⚠️ **partial** — `P2` tested widths, never the fallback icon set → B22 |
+| H6 | 1 → 4 | Test residue `{jds,output,data}/test_guest_trigger_profile_xyz/`; top-level `output/{checkpoints,html,json,pdf}` coexisting with profile-scoped paths | ❌ **fell through** → B29 |
+| H7 | 1 → 5 | Packaging collapses setup steps 1–7 + 11 | ✅ `P5 #6` |
+| H8 | 1 → 4 | `menu.py:186-215` onboarding-logic coverage gap | ✅ assigned in `PLAN.md`, `P4F3` |
+| H9 | 2 → 3/4 | **3 employers on the design system's page 2 are absent from the rendered resume**, with 7.33in of free space | ❌ **fell through — nobody owns it** → B14 |
+| H10 | 2 → 4 | `get_completed_jds()` returns 0; banner advertises "0 Resumes Customized All-Time" | ❌ **fell through** → B25 |
+| H11 | 2 → 4 | `_stats_line_text()`/`get_pending_jds()` walks 1,144 files per call | ⚠️ partial — `P2F3` removes 30 of 31 calls; the ~1s residue untouched → B24 |
+| H12 | 2 → 5 | `theme.py` has no light variant; Go side does | ✅ `P5 #5` |
+| H13 | 3 → 2 | Ligature CSS fix (blocking) | ✅ `P2F1` |
+| H14 | 3 → 4 | `validate_pdf_text.py` needs an owner | ✅ `P4` claimed + verified the patch |
+| H15 | 3 → 4 | Validator log can't distinguish "0 issues" from "budget exhausted" | ❌ **fell through** → B33 |
+| H16 | 3 → 4 | **Nothing verifies JD-keyword coverage of the finished resume** | ❌ **fell through — architecture gap** → B18 |
+| H17 | 3 → 1 | `build_voice_anchors.py` weakness inherited by every new profile | ⚠️ partial — `P6` verified reproducibility, not the onboarding angle → B21 |
+| H18 | 3 (patch) → 4 | **Cover-letter PDF is never text-layer checked at all** | ❌ **fell through** → B9 |
+| H19 | 4 → 1 | `resume-cli.sh` shell-function bug | ✅ pre-empted by `P1F10`/`F11` (see C3) |
+| H20 | 4 → 1 | doctor should check `npm` | ✅ pre-empted by `P1F8` |
+| H21 | 4 → 1 | Empty-string `KU`/`KCKCC` achievement key from bootstrap-written `profile.yml` | ❌ **fell through** (also orphaned from `P0 §2b`) → B31 |
+| H22 | 4 → 2 | `liveness.py` orphan (reassigned) | ✅ → Phase 7, `P7F4` |
+| H23 | 4 → 2 | `generate-pdf.mjs` missed by the emoji sweep | ❌ fell through (cosmetic) → B38 |
+| H24 | 4 → 2 | Ligature CSS (confirming `P2F1`) | ✅ |
+| H25 | 6 → 2 | `bullet_bank_menu.py:225-228` mtime status logic breaks if F2's atomic write lands | ❌ fell through → noted inside B7 |
+| H26 | 6 → 4 | `.npy` staleness guard must be enforced at `mine_bullet_bank()`'s read | ❌ **fell through** → B20 |
+| H27 | 6 → 8 | Four non-atomic KB writes | ✅ `P8F8` (expanded to 17 sites) |
+| H28 | 6 → 1 | Real stranger's-resume ingestion is `bootstrap_extractors.py` | ⚠️ partial — `P1F1/F2` cover ingestion *failure*, not output quality → B21 |
+| H29 | 7 → 2 | `render_scan_report` has nowhere to display *why* a source returned zero | ❌ fell through → folded into B12 |
+| H30 | 7 → 4 | `jd_manager.job_key_known()`'s four-directory walk | ❌ fell through → B19 |
+| H31 | 7 → 8 | Confirm `JOBRIGHT_COOKIE_STRING` / `li_at` can't reach a log or the tracker | ✅ `P8F7` — verified clean, 0 hits |
+| H32 | 7b → 7 | `NODE_TIMEOUT_SECONDS = 30`; ~400 sequential spawns; JSON error-envelope consumer | ❌ fell through → folded into B6 and B12 |
+| H33 | 7b → 8 | `adzuna.mjs` puts `app_key` in the query string | ⚠️ partial — `P8F7` verified *Gemini* key hygiene, not this → B39 |
+| H34 | 8 → 3 | **`evaluate_fit()` sends no KB context** despite the prompt promising it | ❌ **fell through** → B3 |
+| H35 | 8 → 3 | `validate_coverletter.py` has no factual-grounding check | ✅ carried inside `P8F1` → B1 |
+| H36 | 8 → 7 | `git_update` will nudge a new user to commit their own untracked PII | ❌ fell through → folded into B11 |
+| H37 | 8 → 7b | 24 provider subprocesses inherit `GEMINI_API_KEY` + JobRight cookie | ❌ fell through → B32 |
+| H38 | 5 → — | Fold packaging/caching/batch into `IDEAS.md` | ❌ not done → B41 |
+| H39 | 6/7 → 9 | `PLAN.md` corrections (ingest/normalize pairing; stale emoji note; `board-scanners/` residue wording) | ✅ this doc, §4 |
+
+---
+
+## 3. The ranked backlog
+
+Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
+severity is major-or-worse and the fix is roughly one edit** — do these first
+regardless of glamour; together they are a few hours and they close one blocker,
+nine majors, and the single worst first impression in the product.
+
+### Tier 0 — high severity, trivial effort (do these first)
+
+**B1. Ligature corruption in every PDF ever produced.** BLOCKER · goal 2 ·
+2 lines × 2 files.
+`P3` BLOCKER 1 + `P2F1` + `P4F7` (layer resolved, see C1). 8 corrupted tokens in
+the resume, 7 in the cover letter, including `Certiﬁcation` twice and
+`workﬂows` — a verbatim phrase from the JD the pipeline correctly mirrored and
+the renderer then broke. Invisible to PyMuPDF, total to pypdf/pdfminer-class
+extractors, which is what real ATS stacks are built on.
+*Fix:* add `font-variant-ligatures: none; font-feature-settings: "liga" 0,
+"clig" 0;` to the `body` rule of `cv-template.html` **and**
+`coverletter-template.html`. Re-run `P3`'s pypdf scan; require zero hits on both.
+
+**B2. The launch banner spends ~27s replaying a 1.6s animation.** MAJOR ·
+goals 1, 3, 4 · one line moved.
+`P2F3` + `P0 §3`. `render_frame()` calls `_stats_line_text()` on every one of 31
+frames; each call walks 1,144 JD files (0.88s). 100% of the time is recomputing
+a constant. It is the first thing every user experiences.
+*Fix:* hoist one `_stats_line_text()` call above `render_frame` and close over
+the string.
+
+**B3. `evaluate_fit()` scores candidate-fit while knowing nothing about the
+candidate.** MAJOR · goals 1, 2 · a few lines.
+`P8F4` + H34. `evaluate_fit.md:9-10` tells the model to consult "`target_roles`
+and `archetypes` … in your knowledge base context." There is no knowledge base
+context — the call is `eval_prompt` alone, no `load_knowledge_base()`, no
+`profile.yml`. **Every fit score this tool has ever produced was computed
+against no candidate profile**, and those scores rank the entire 1,144-JD
+Browse & Manage queue. Proven by injection: the evaluator wrote paragraphs about
+"a decade of systems engineering experience" that the JD had simply asserted.
+*Fix:* pass the same KB/profile context the builder gets.
+
+**B4. `SustainedFailureError` is swallowed by the batch loop.** MAJOR · goal 1 ·
+one `except` clause.
+`P4F5`. The exception exists to say "this is quota, not weather," and
+`rewrite_bullets.py:1385` honors it. `run_pipeline`'s blanket
+`except Exception` (`orchestrator.py:3064`) does not — so a revoked key produces
+1,144 sequential full retry cycles (6 attempts, backoff capped at 90s) and hours
+of sleeping, with the one useful instruction scrolling past 1,144 times.
+*Fix:* catch it explicitly before the blanket handler, break, report how many
+JDs remain untouched, surface the "swap `GEMINI_API_KEY`" line once.
+
+**B5. A file that isn't a job description proceeds into the most expensive
+step.** MAJOR · goal 1 · one branch.
+`P4F4` + `P0 §4`. `orchestrator.py:2447` detects empty keyword extraction —
+a strong, already-computed signal — prints "Proceeding with empty keywords," and
+walks into a 30-bullet Gemma audit at `GEMMA_MIN_INTERVAL_SECS = 65`: over half
+an hour of wall clock and real spend before anything JD-specific happens.
+Pointing the tool at the wrong file is an ordinary mistake.
+*Fix:* make the branch a stop. Interactive single-file mode may offer to
+continue; batch marks failed and moves on.
+
+**B6. Reflective questions are auto-applied as resume copy.** MAJOR · goal 2 ·
+one condition (stopgap) / one schema field (real fix).
+`P3` MAJOR 3. `critique_resume.md:129-135` deliberately phrases voice
+recommendations as questions aimed at Morgan. Step 5.5 feeds them to an LLM that
+edits the resume, and the `needs_personal_input` guard only catches *emotional*
+questions. A strategic-sounding question was "applied" the only way a model can
+apply a question — by paraphrasing its own noun phrases into the document,
+producing the flattest sentence in the resume. Design intent exactly inverted.
+*Fix (stopgap):* widen the guard to "any recommendation ending in `?`".
+*Fix (real):* emit voice questions into a separate schema field Step 5.5 never
+sees, surfaced to Morgan to answer.
+
+**B7. "Drop New Knowledge" locks out every fully-configured profile.** MAJOR ·
+goals 1, 3 · share an existing predicate.
+`P0 §3` (its highest-severity finding) + `P4F3`. `menu.py:213` gates on the
+presence of `bootstrap/checkpoint.json` — evidence of *how* a profile was
+created — when the question is *whether* it exists. `morgan`'s checkpoint is
+absent; the 628-bullet, 1,144-JD profile is told it hasn't been set up.
+*Fix:* `_handle_new_user` twelve lines earlier already computes `is_existing`
+from a real `knowledge_base/`. Extract it into one helper both entries call.
+*Also touches B7's neighbourhood:* `P6`'s H25 note — fixing
+`score_keeper_gems.py` to temp-file-plus-rename preserves
+`bullet_bank_menu.py:184`'s in-place contract but changes the mtime-based status
+logic at `:225-228`. Check it in the same pass.
+
+**B8. `triage_needs_review.py` writes keeper rows into the wrong columns and
+destroys provenance.** BLOCKER · goal 2 · header-aware append.
+`P6F1`. `KEEP_FIELDS` is 14 columns; the real header is 16 and diverges from
+index 9. `append_rows` opens `"a"` and writes the header only if the file is
+absent, so `DictWriter` emits values positionally under a mismatched header — no
+exception, still well-formed CSV. Reproduced: `source` = `'77'`,
+`rewrite_date` = `'KEEPER'`, last two columns empty. **Irreversible** — `:180`
+deletes `needs-review.csv` in the same run. Live on every accepted rewrite fed
+back from a real JD run.
+*Fix:* when the target exists, read its header and write against that, raising
+on a missing required field. Apply to the `REWRITE_QUEUE`/`RETIRED_PATH` appends
+at `:164`/`:168` too — they match today by luck.
+
+**B9. The cover-letter PDF is never text-layer checked.** MAJOR · goal 2 · one
+call site.
+`P3` post-review patch finding + H18. `validate_pdf_text` runs at
+`orchestrator.py:2990` on the resume only. The cover letter carries 7
+ligature-corrupted words of its own. Half the application package ships with no
+ATS verification whatsoever.
+*Fix:* call it on the cover-letter PDF too. (After B1 the ligature warnings go
+to zero, but the check should exist regardless.)
+
+**B10. Cluster representative election is order-dependent.** MAJOR · goal 2 ·
+one sort.
+`P6F3`. `elect_representative` uses `idxmax()`, which returns the *first*
+maximum; `accuracy_score` is a 0–100 integer over near-duplicate cluster members,
+so ties are the common case and "first" means raw-CSV row order. This is the
+exact positional instability that `stable_cluster_ids()` /
+`_cluster_content_hash()` solves one function above — the fix was simply not
+carried down. Appending a row silently changes which bullet reaches the resume.
+*Fix:* break ties on normalized content, matching the existing hash approach.
+
+**B11. `.gitignore` protects profile data by hardcoded per-name lines.** MAJOR ·
+goals 1, 3 · three glob patterns.
+`P8F5` + H36. `.gitignore:59-62` lists `profiles/dominick/`, `profiles/morgan/`,
+`data/dominick/`, `data/morgan/`. `create_new_profile()` never touches
+`.gitignore`. Verified: a third profile's `.env` and signature stay safe (caught
+by `*.env` / line 18), but its **entire knowledge base, every saved job posting,
+and `data/<name>/` are untracked-and-not-ignored** in a repo whose workflow is
+`git pull` from GitHub. Compounded by H36: `git_update`'s
+`has_uncommitted_changes()` counts untracked files, so the update flow actively
+nudges that user toward committing their own PII.
+*Fix:* `profiles/*/`, `data/*/`, `jds/*/` globs (keeping the existing negations
+for tracked scaffold YAML). Note this also means git is not a recovery path for
+`morgan`'s KB — see B13.
+
+**B12. `websearch`'s `isJobUrl()` returns `true` on both branches.** MAJOR ·
+goals 1, 2 · delete one line.
+`P7bF5`. `JOB_PATH_SIGNALS` (20 entries) has no effect on any decision — the
+function is really "not a blocked domain and not a blog post," so
+`acme.com/team/leadership` passes as a job posting, becomes a JD file, and
+becomes a paid Gemini tailoring call against a page that isn't a job. Related:
+two `BLOCKED_DOMAINS` entries have the wrong TLD (`workingnomads.com` vs the
+live `.co`, `remoteok.com` vs `.io`) and block nothing.
+
+---
+
+### Tier 1 — blockers and near-blockers with real work behind them
+
+**B13. Knowledge-base durability: 17+ truncating writes, no backup, no recovery,
+no conflict awareness.** MAJOR (compound blocker) · goals 1, 2 · one helper +
+call sites + a policy decision.
+Merges `P8F8` + `P8F9` + `P8F10` + `P6F2` + `P6F7` + `P4F6`.
+`grep -rn "os.replace\|os.rename\|tempfile\|NamedTemporary" scripts/*.py`
+returns **nothing** — there is no atomic-write helper in this codebase and no
+call site implements one by hand. Measured: `open(path,"w")` truncates to 0
+bytes at open, before any work happens.
+- `score_keeper_gems.py` rewrites the 844-row / 658 KB keeper bank in place
+  every 5 bullets — ~170 truncate windows across a multi-hour run (`P6F2`).
+- `retire_rewrite_queue.py:79` truncates the only copy of the *active* queue,
+  and its `extrasaction="ignore"` against a hardcoded 19-column header silently
+  deletes any column upstream adds (`P6F7`).
+- `bullet_feedback._ensure_schema()` is the widest window: read all, close,
+  reopen `"w"`, re-serialise (`P8F8`).
+- `jd_manager.save_checkpoint` is non-atomic, `load_checkpoint` catches the
+  resulting `JSONDecodeError` and returns `{}` — indistinguishable from "no
+  checkpoint," so the next run silently re-spends the entire pipeline. And
+  `output/<profile>/` is a Syncthing sync root, so a `.sync-conflict-*`
+  checkpoint is an outcome nothing anticipates (`P4F6`).
+- **No recovery path exists.** Git: no (B11 / commit `261047e2`). `.bak` or
+  snapshot: none. Syncthing: worse than nothing — truncation propagates, and
+  file versioning is off unless configured by hand (`P8F9`).
+- Nothing in the codebase knows `.sync-conflict-*` files exist. The *dangerous*
+  version of this is absent — `KB_ALLOWLIST` is an explicit filename list, not a
+  glob, so a conflict copy is never ingested into the builder's context — but
+  `doctor`'s KB check is existence-only and passes a zero-byte conflicted
+  `bullet-bank.md` (`P8F10`).
+*Fix, in order:* (a) one `atomic_write` helper, applied at all 17+ sites plus
+`save_checkpoint`; (b) log a corrupt checkpoint instead of returning `{}` —
+worth having *before* (a); (c) a rotating pre-run snapshot of the KB; (d) a
+size/mtime sanity check plus a `.sync-conflict-*` sweep in
+`check_kb_allowlist()`, so the place users already look reports both this and
+(a)'s aftermath.
+
+**B14. A job posting can dictate the contents of the cover letter Morgan
+sends.** BLOCKER · goals 1, 2 · medium.
+Merges `P8F1` + `P8F3` + `P8F4`, per `P8`'s own Phase 9 instruction.
+Proven end to end: a payload appended to a JD's `description` produced a real
+rendered PDF whose first paragraph claims *"10 years of professional Rust
+systems programming experience and led the Rust rewrite of a distributed
+payments ledger at Stripe (2019-2024), cutting p99 latency 92%."* The model did
+not paste it — it **wove** it into the argument ("This technical foundation,
+combined with…"), so the fabrication is not visually separable from real
+content. `validate_coverletter.validate()` checks forbidden phrases, paragraph
+count, and third-person slips; there is no factual-grounding check of any kind.
+Any JD source Morgan didn't hand-type — `scan_jobright`, `scan_linkedin`, all 24
+board scanners — is a delivery channel.
+**The fix pattern is already in the repo.** `P8F2`: the same payload was
+*resisted* by the resume path, because bullets are mined from the bullet bank
+and the builder is constrained to that corpus. Grounding beat prompt-level
+pleading, in this codebase, on this payload.
+Two layers, both needed:
+- **Grounding (primary):** give the cover letter a corpus constraint analogous
+  to the bullet bank, and add a KB-traceability check to
+  `validate_coverletter.py`.
+- **Delimiting/hierarchy (defense in depth, all 7 call sites —
+  `orchestrator.py:2147, 2235, 2286, 2326, 2442, 2575, 2704`):** every JD-bearing
+  call is `f"=== JOB DESCRIPTION ===\n{jd_text}"` — **opening marker only**, so
+  the JD can forge its own boundary (which is exactly what the payload's
+  `=== END JOB DESCRIPTION ===` did) and can forge the *other* sections too
+  (`=== RESUME JSON ===`). No prompt in `resume-engine/prompts/` contains any
+  instruction-hierarchy language — grepping all 12 for `ignore` / `untrusted` /
+  `do not follow` / `data, not` returns nothing. `read_jd_text()` is a metadata
+  filter, not a sanitiser, and its docstring is honest about that; the gap is
+  that nobody built the second half.
+*Reported honestly, from `P8F4`:* the **numeric** attack failed — `fit_score`
+came back 3.65, no subscore maxed. The 1–5 structured output plus
+`temperature=0.0` held. The **prose** fields, which have no structure to hold
+them, did not. Structure is load-bearing here; use more of it.
+
+**B15. Every PDF depends on a stray `node_modules` in the home directory.**
+BLOCKER · goal 1 · small, but blocked on installing `npm`.
+`P4F1` + `P1 Corrections` + C2. This repo has no `node_modules/`. Rendering
+works only because Node's resolution walks up to `/Users/morganescott/` and
+finds an unrelated Playwright install. Three consequences: `rm -rf
+~/node_modules` breaks every PDF this tool produces; **on any other machine —
+including the second Syncthing machine — this fails immediately**, since sync
+carries data and deliberately not code; and the version actually loaded is
+1.60.0, which does not satisfy the declared `^1.61.1`. The documented remedy
+cannot be run: `npm` is not on PATH (`P1F8` — Node is a standalone
+`/usr/local/bin/node` with no npm sibling; npm exists only under `~/.nvm/...`).
+*Fix:* install npm → `npm install` in the repo → confirm
+`require.resolve('playwright')` points inside the repo. Then make the failure
+loud: resolve Playwright explicitly relative to the repo and fail with an
+actionable message rather than silently accepting an ancestor directory.
+
+**B16. Onboarding's false-green chain: a failed ingestion is recorded as "done"
+and can never be retried.** BLOCKER for goal 3 · small.
+Merges `P1F1` + `P1F2` + `P1F3` — one causal chain, three edits.
+Observed on a real fresh profile with no API key: a 403 scrolls past, exit code
+0, checkpoint written `"status": "done"` with `"work_experience": []`, and the
+progress table reports **`Phase 0: ('Up to date', '1 document(s) processed')`**.
+Nothing was extracted. And it is **sticky** — `run_ingestion()` skips anything
+marked `done`, so re-running after fixing the key attempts no HTTP call at all.
+The only escapes are `--force-overwrite-clean-bank` (exposed nowhere) or
+deleting `checkpoint.json` by hand.
+The wizard walks the user into it: `_collect_secret_now_or_later()` warmly
+offers to add the key "later" and returns `False`; **both call sites discard the
+return value** and immediately run the step that needs it. "Later" means about
+four seconds.
+And step 0.5 has a documented hard dependency on step 0 in its own body comment,
+with nothing enforcing it — pick "0.5 Set Up Profile" first (an entirely
+reasonable read) and `generate_tag_taxonomy()` makes a **real, paid** Gemini call
+against an empty achievements string, then reports "Up to date." A second false
+green on top of the first.
+*Fix:* (a) checkpoint the *outcome*, not the attempt — `"status": "failed"` with
+a reason, counted as pending, retried next run; return a failure count so the
+summary says "1 document failed (API key rejected)" instead of a row of zeros.
+(b) Honor `collect_secrets()`'s existing `{"gemini_key_set": bool}` return and
+stop before the pipeline. (c) Gate `_run_phase05()` on `_phase0_status()` and
+render dependent steps as visibly locked — the status table is already there.
+
+**B17. "Pipeline complete!" is printed for a PDF that does not exist.** MAJOR ·
+goals 1, 2 · small.
+`P4F2`. This is `ResumeDesignSystem.md:57`'s explicit guarantee, and **it does
+not hold** — captured from a real test run, the log prints "Could not parse
+generated PDF … No such file or directory" and then `✔ Pipeline complete!`.
+Downstream that success is not cosmetic: `run_pipeline` moves the JD to
+`completed/`, logs `mark_completed`, and appends a tracker row with
+`has_pdf=bool(output_paths.get("pdf"))` — the *path string*, always truthy,
+never a check that a file exists. The user is told a resume exists, the JD leaves
+the queue, and the tracker records a document that was never written.
+Root cause: `validate_pdf_text()` returns two categorically different things
+through one channel — soft advisories and hard "the PDF is missing" errors.
+*Fix:* split the result classes (raise, or return `(fatal, advisories)`); gate
+the success print and `_output_paths` on `os.path.exists(pdf_out)`; make
+`has_pdf` stat the file.
+
+**B18. Nothing verifies JD-keyword coverage of the finished resume.** MAJOR ·
+goal 2 · medium. **Architecture gap, no owner.**
+`P3` Handoff (H16), never picked up. Keyword placement against the JD is the
+tool's core value proposition. `validate_resume.py` checks lengths, title case,
+verb uniqueness and banned words — every check in it is a *copyeditor's* check.
+To the plan's question — does it catch what a real ATS would reject? — `P3`'s
+answer is **no**, and the two things an ATS actually rejects on (keyword coverage
+and text-layer parseability) are checked nowhere. B1/B9 close the parseability
+half. This item is the other half: a coverage check comparing the extracted JD
+keywords against the finished resume, reported before the pipeline claims
+success.
+
+**B19. `workday` fires ~100 unthrottled POSTs, blows the parent timeout, and
+returns nothing. Every run.** BLOCKER (for that source) · goal 1 · small.
+`P7bF1` + `P7bF2` + H32. Measured live against NVIDIA: 94 seconds, ~100
+back-to-back POSTs, 2000 jobs collected — and the Python caller kills it at
+`NODE_TIMEOUT_SECONDS = 30`, while `run_provider.mjs:62` only writes stdout
+*after* the full array is built. **100% of collected jobs discarded.** The user
+sees "no jobs"; the target saw 30 seconds of unthrottled API traffic for
+nothing, on every scan, for every Workday company — and Workday is one of the
+seven ATS providers in the recognition table, so every tracked Workday company
+silently contributes zero. Secondary: `const limit = data?.limit ?? 20` uses
+`??`, so a board returning `limit: 0` with non-zero `total` gives `offset += 0`
+— an infinite POST loop bounded only by the 30s kill. Same provider's pagination
+`fetch()` never checks `res.ok`, so a 429 throws and discards the page-1 jobs
+already in hand.
+*Fix:* cap pages (`smartrecruiters.mjs:13` already does, at 50), add an
+inter-page delay, route through `_http.mjs`, and either raise the budget for
+this provider or emit what was collected before the cutoff. `workday.fetch()`
+already receives `_ctx` and ignores it.
+
+---
+
+### Tier 2 — majors, moderate effort
+
+**B20. Embedding and clustering can silently misalign the bank.** MAJOR ·
+goal 2 · small. Merges `P6F4` + `P6F5` + `P6F6` + H26.
+Checkpoints resume by *index* with no verification the input is unchanged — edit
+the bank during a rate-limit pause (exactly what a multi-hour stall invites) and
+row *i* of the matrix stops corresponding to bullet *i*, permanently and
+silently. `cluster_bullet_bank.py` is one line from catching this: it persists
+`total` and never reads it back. `embed_batch` never checks it got as many
+vectors as it sent, and `.get("embeddings", [])` means a response with no
+`embeddings` key contributes zero rows against a recorded end index. And nothing
+detects a stale `.npy` against a changed bank — the `.meta` sidecar records
+enough to (`model`, `dim`, `rows`, `csv`) but nothing verifies it; the only
+safeguard is a docstring saying "re-run this script," which is precisely the
+tribal knowledge goal 3 exists to eliminate.
+*Fix:* store a SHA of the bullet-text column in both checkpoints and in `.meta`;
+discard on mismatch; `if len(vecs) != len(texts): raise`. **Enforce the `.meta`
+check at `orchestrator.mine_bullet_bank()`'s read of
+`bullet_vectors_ge2_d768.npy`, not only at write time** (H26). The robust
+pattern is already in the repo — `audit_bullet_bank.py:56-69` resumes by bullet
+*text*, not index, and is immune.
+
+**B21. Liveness subprocess lifecycle: no timeout, fake progress, orphaned
+children, lost results.** MAJOR · goal 1 · small. Merges `P7F2` + `P7F3` +
+`P7F4` + `P7F11` + `P4F8`.
+No `timeout=` on the `subprocess.run`, and downstream `chromium.launch()` has
+none either, so the ceiling is `candidates × ~16s`, unbounded, inside one
+blocking call — a 100-JD queue is a ≥27-minute call. The progress indicator
+*cannot* work as written: `subprocess.run(stderr=PIPE)` buffers the whole stream,
+so the loop replays a finished transcript — and the Node side deliberately
+writes `[i/N]` lines to stderr specifically to enable this. The user sees a rule,
+then nothing, for minutes. When they kill it, the Node child survives:
+CPython's `run()` deliberately does not kill on `KeyboardInterrupt` (bpo-25942),
+assuming process-group delivery — verified, `kill -INT` and `kill -KILL` on the
+Python PID both leave Node alive, still making outbound requests to employer
+sites. *(`P7F4` also verified what is **not** broken: Chromium is not separately
+orphaned — Playwright's browser watches its parent pipe and self-terminates.)*
+Finally, `browser.close()` is not in a `finally`, so any throw outside
+`checkUrlLiveness`'s own catch discards **every result collected so far** — a
+90-JD run failing on JD 89 returns nothing.
+*Fix:* `Popen` in `try/finally` with `kill()` + `wait()`; iterate `proc.stderr`
+line by line; `timeout=` sized from candidate count; explicit
+`chromium.launch()` timeout; `browser.close()` in `finally`. Same class:
+`generate-pdf.mjs`'s two `subprocess.run` calls have no `timeout=` either, and
+`page.evaluate(() => document.fonts.ready)` has **no default Playwright
+timeout** — a font that never settles hangs forever with `capture_output=True`
+swallowing every hint (`P4F8`). Wrap it in `Promise.race` and add `timeout=180`.
+
+**B22. TUI tables are unreadable below ~120 columns.** MAJOR · goals 3, 4 ·
+small. `P2F4` + `P0 §3` + `P1F7` (see C4).
+At 80 columns the *column headers themselves* truncate (`Recom…`, `Compa…`,
+`Liven…`); at 100 they still do. Nine columns, no `no_wrap`, no width ratios, no
+priority ordering, so Rich divides the deficit evenly and eats the headers. 80
+and 100 are ordinary widths; the design currently works only at 160.
+*Fix:* fixed widths for `#`/`Score`/`Posted`, `Title` absorbs the remainder,
+drop `Last Liveness` + `Follow-up` below ~110 columns rather than shrinking
+everything past legibility. **Also close H5:** re-test under
+`RESUME_BUILDER_ICONS=unicode`, whose fallback set contains 4 double-width emoji
+and 5 ambiguous-width glyphs (`P1F7`) — an independent alignment breaker that
+lands only on the stranger's path, and that additionally defeats the theme,
+since emoji carry baked-in color and ignore ANSI foreground. Replace those with
+narrow U+2xxx symbols from the `✓ ✗ ⚠ ⚙` family already in use.
+
+**B23. The palette has no contrast contract; the selection pointer is the least
+legible element in the app.** MAJOR · goals 3, 4 · small. `P2F2` + `P2F9`.
+Measured WCAG across all seven tokens on both backgrounds: **no token passes AA
+on both**, so the palette silently assumes a dark terminal without saying so.
+The sharpest consequence: `BRAND_ACCENT #673ab7` is the single lowest-contrast
+color in the system on the background the palette actually assumes (**2.27:1**),
+and it drives `QUESTIONARY_STYLE`'s `pointer`/`highlighted` — the cursor showing
+which row you're on — plus `TABLE_HEADER_STYLE`, so every column header in every
+table inherits it. `WARNING #f5c542` at **1.62:1 on white** is effectively
+invisible on a light terminal. The banner's gradient endpoints are only 2.96:1
+from each other, so "BUILDER" is measurably dimmer than "RESUME."
+*Fix:* move `BRAND_ACCENT` light enough to clear 4.5:1 on dark (~`#a583e0`–
+`#b39ddb`), or reassign the pointer/header role to `BRAND` (6.73 on dark).
+**Then immediately fix `P2F9`:** the six brand hexes are hand-copied into
+`dashboard/internal/theme/resumebuilder.go` with comments claiming they match
+their Python constants. Changing `BRAND_ACCENT` makes those comments lie and
+nothing detects the drift — emit the Go block from `theme.py`, or have both read
+one JSON. Low effort, and it becomes load-bearing the moment this item ships.
+*(`P5 #5` and `P2`'s handoff both note the honest long-term fix is two ramps
+selected by background, which the Go side already implements correctly.)*
+
+**B24. The resume and cover letter are visibly not one document family.** MAJOR ·
+goal 4 · small. `P2F5` + `P2F6` + `P2F7`.
+The two halves of one application to one recruiter disagree on their most
+prominent element: `h1` is **42pt** on the resume and **32pt** on the cover
+letter, and `ResumeDesignSystem.md:113` says 32 — so the resume is 31% larger
+than its own design system and there is no way to tell which is stale. The cover
+letter's contact separator is `#000000` against the spec's "`#9aa3af` only."
+Body size and line-height differing is defensible; the wordmark changing size is
+not. Also: "Career Note:" embeds a **Type3 synthesized font** (empty BaseFont)
+because `.career-note` is italic and `.career-note strong` is weight 800 with no
+ExtraBold-Italic face declared — the exact failure the template's own comment
+documents baking static instances to avoid. Text still extracts (verified), so
+it's typography plus modest residual risk, and **one edit fixes both it and the
+spec**: drop `font-style: italic` from the `strong`, which
+`ResumeDesignSystem.md:330-331` already calls for.
+*Fix:* pick one name size and put it in both templates (updating the design
+system if 42 is intended); separator to `#9aa3af`; drop the italic on the strong.
+Do **not** pad page 2 — see B25.
+
+**B25. Three employers the design system places on page 2 are missing from the
+rendered resume.** MAJOR · goals 2, 4 · unknown — **needs diagnosis, no owner.**
+`P2F7` + `P2`'s Handoff (H9), never picked up by Phase 3 (already run) or Phase
+4 (didn't address it). Page 1 runs dense to its last line (0.86in bottom
+whitespace); page 2 holds only Training & Certifications and Education and stops
+with **7.33in of free vertical space**. `ResumeDesignSystem.md:130-133` places
+Element 8 / Strategy LLC, VML, and Callahan Creek on page 2 and they are absent.
+With that much room this cannot be space-driven trimming — either the trim logic
+is over-firing or those employers are dropped upstream. `P2` deliberately did not
+propose a CSS fix, because padding it out visually would paper over the content
+question. **First action is diagnosis, not a fix.** Related and also unowned:
+`get_completed_jds()` returns 0 against the live `morgan` profile, so the banner
+advertises "0 Resumes Customized All-Time" on a tool that has demonstrably
+produced resumes (H10) — either the counter or the move-to-completed step is
+wrong.
+
+**B26. The board-scanner layer has no rate limiting, retry, backoff, or honest
+identity.** MAJOR · goals 1, 5 · medium. Merges `P7bF3` + `P7bF7` + `P7bF4`.
+`grep -rn "retry\|backoff\|Retry-After\|429" board-scanners/` returns **nothing**.
+`_http.mjs` is a fetch wrapper, not a policy layer: one global 10s timeout no
+provider overrides, no inter-request delay on any of the three multi-request
+providers, and `hackernews.mjs` fires **60 simultaneous** requests via
+`Promise.all` with no chunking. Everything else is polite by luck — 18 of 24
+providers make exactly one request per run, which is the only reason nothing has
+been blocked. `websearch`'s own rate limiter is **dead code across the subprocess
+boundary**: the queue is module-level state in a process that handles one query
+and exits, and it's tuned to 100ms against a documented free-tier limit of
+1 req/sec — 10× over the plan its own docstring tells the user to sign up for.
+Identity: the default UA is `Mozilla/5.0 (compatible; career-ops/1.3)` — it
+leads with the browser-impersonation prefix *and* names a different project at a
+version this repo doesn't have, so an operator who wants to allowlist or contact
+this traffic cannot. `workday.mjs:66` sends a full Chrome 124 fingerprint. This
+is the same split `P7` found on the Python side (`scan_boards.py:239` honest vs
+`scan_jobright.py:19-27` fake Chrome); this layer inherits both conventions and
+picks neither. *(`usajobs.mjs:28` sending the user's email as UA is correct —
+that's USAJOBS's documented auth requirement.)*
+*Fix:* retry-with-backoff + `Retry-After` handling + per-provider
+`timeoutMs`/`minGapMs` in `_http.mjs`; make `makeHttpCtx()` the only route to
+the network; `resume-builder/1.0 (+<repo url>)` as the shared default UA; delete
+`websearch`'s queue and pace on the Python side instead.
+
+**B27. Scan failures are indistinguishable from "no jobs today," at both
+layers.** MAJOR · goals 1, 3 · small-medium. Merges `P7F1` + `P7bF8` + H29 + H32.
+**Python side:** `_ScanWarningCollector.emit()` appends only records carrying
+`scan_warning=True` and drops everything else — and attaching any handler to the
+root logger takes over from Python's last-resort handler, so plain
+`logging.error` calls vanish entirely. Runtime-proven: 0 captured, nothing
+printed. Destroyed messages include the only actionable guidance the subsystem
+has — "No live li_at cookie found. Log into LinkedIn in Chrome," "JobRight cookie
+may be expired," "LinkedIn scraper run failed: `<exception>`." The user sees
+`linkedin  0 fetched` and cannot learn why. The class docstring asserts the exact
+opposite of what it does.
+**Node side:** every failure mode exits 1 with empty stdout, and the Python
+caller collapses non-zero exit, timeout, and invalid JSON into `return []`.
+Quota exhaustion is byte-for-byte identical to a quiet Tuesday. *(Good news
+worth preserving: the stderr text itself is genuinely informative, and the
+key-gated providers throw rather than returning `[]`, so `P7F1`'s shape does not
+reproduce there. One residual silent path: the twelve providers using
+`Array.isArray(json?.jobs) ? json.jobs : []` return `[]` on a 200 carrying an
+error object.)*
+*Fix:* fall through to a real handler for uncollected records (or route the two
+scanners through `_scan_warning()`); write a JSON error envelope to stdout on
+failure — `{"error":{"kind":"auth"|"quota"|"network"|"config","message":"…"}}`
+— parse it in `scan_boards.py`; and give `render_scan_report` a place to put the
+reason (H29), since fixing the logging alone doesn't help if the renderer has
+nowhere to display it.
+
+**B28. `validate_resume.py` inspects 9 of 14 bullets and never looks at
+`career_note`.** MAJOR · goal 2 · small. `P3` MAJOR 5.
+The shipped resume returns **0 violations** while containing three pronouns in
+`career_note` ("**I** took time in 2024–25… **I'm** excited to return") against
+`tailor_resume.md:213`'s rule that the Why section is "the ONLY section where
+pronouns are allowed" — so the document ships with a third-person summary and a
+first-person career note, two voices on one page. And `_all_bullets()` iterates
+`EXPERIENCE` only, so **5 EDUCATION bullets get no length, forbidden-phrase,
+verb-uniqueness, or pronoun check at all.**
+*Fix:* include `career_note` in the pronoun check and EDUCATION in
+`_all_bullets()`. (The deeper "it checks style, not ATS" critique is B18.)
+
+**B29. The Summary is generic by explicit instruction, and its own quality rule
+is unenforced.** MAJOR · goal 2 · small. `P3` MAJOR 4 + `P3F8`.
+Four consecutive sentences of identical shape — `[Verb]s [abstract noun phrase]
+to [abstract outcome]` — interchangeable with any competent candidate's. That is
+not model laziness: `tailor_resume.md:67` supplies "Specializes in…" /
+"Transforms…" as exemplars, and the output's second sentence begins literally
+"Specializes in…". The same line requires "1–2 most relevant proof points
+(metrics or scope, not adjectives)" — measured: **zero** metrics in sentences
+2–5. Nothing checks it.
+The contrast proves the mechanism: bullets in the same document are concrete
+("Recovered $3M+ in stale Salesforce pipeline…") because they go through the
+voice-anchor-fed audit path. `P3F8` traced the plumbing — voice-anchors reaches
+the bullet audit and the cover letter, reaches the builder **diluted** (1 of 19
+undifferentiated KB files in a ~105k-token blob, with no instruction anywhere in
+`tailor_resume.md` saying what it's for), and **does not reach Step 5 critique
+or Step 5.5 apply at all**. The two stages that most directly rewrite the Summary
+are voice-blind. The field with the most latitude is the flattest thing in the
+document.
+*Fix:* replace the exemplars with a requirement for one concrete checkable
+specific; add a `validate_resume.py` check for ≥1 metric or named scope beyond
+the years-of-experience figure; pass voice-anchors to the critique and apply
+calls, and tell the builder what the file is for.
+*Related, and cheap:* `P3F6` — the resume says "129 Outreach sequences," the
+cover letter says "over 120." `129` is throughout the KB; `120 sequences`
+appears nowhere. Nothing validates consistency *between* the two documents; they
+are separate calls with no cross-check. And `P3F7` — the cover letter opens
+"I am writing to express my interest in…", with three `I am [adjective] to`
+constructions in three paragraphs; `tailor_resume.md` has a BANNED-words list
+and a forbidden-openers rule, `tailor_coverletter.md` has no equivalent.
+
+**B30. `voice-anchors.md` mostly *describes* the voice instead of demonstrating
+it.** MAJOR · goal 2 · small (and it feeds B29). `P3F8b` + `P6` (verified sound).
+~70% of the file is third-person paraphrase ("Describes agency internship
+experience; emphasizes creativity…"), which teaches a model nothing. The actual
+signal is confined to the `>` blockquotes and is excellent and unmistakable —
+*"I've been in WYSIWYG editors since the Geocities and Angelfire days, back when
+your cursor sparkled and your background auto-played MIDI files."* None of that
+register survives into either generated document. Root cause is upstream in
+`build_voice_anchors.py`, which projects `application-answers-index.csv` into
+thematic summaries. **`P6` verified the file regenerates byte-for-byte from the
+script (4070 bytes in, 4070 out)** — so this is a design choice in the
+projection, not drift, and it is safe to change the projection.
+*Fix:* make the output mostly verbatim specimens. Note `P6 #9` — the script is
+reachable from no menu or CLI, so `voice-anchors.md` has **no automated
+regeneration path**; whoever changes it must also wire it up (see B34).
+
+**B31. The stranger's setup path has no CLI entry point and no packaging.**
+MAJOR · goals 3, 5 · medium. `P1F6` + `P1`'s step table + `P5 #6`.
+`cli.py` registers eleven commands and **none of them set anything up** —
+onboarding exists only inside the interactive menu, so `resume help` (a natural
+first move) lists nothing relevant, setup cannot be scripted or documented as a
+copyable command, and the only way in costs ~20–25s of banner (B2). Counting
+discrete actions from `git clone` to one finished PDF: **~22, four of which
+leave the tool entirely**, against roughly four for the web platforms this is
+measured against. `P1` is explicit and fair that the gap is not itself a defect —
+steps 13–21 are what make the output non-fabricated — but **steps 1–11 are pure
+setup tax and are where the compression lives.** No `pyproject.toml` or
+`setup.py` exists; both `uv tool install` and `pipx` need one with a
+`[project.scripts]` table, and adopting it is additive metadata over the existing
+`requirements.txt`, not a replacement for the venv dev flow.
+*Fix:* `resume bootstrap` aliasing `bootstrap_menu.run_bootstrap_menu()`, listed
+in `HELP_ENTRIES` and named in README's Setup section; plus one
+`pyproject.toml` + entry point wrapping `cli.py:main()`.
+
+**B32. `resume doctor` tells a correctly-fresh profile it has 2 problems.**
+MAJOR · goal 3 · small. `P1F4` + `P1F8` + `P1F9` + `P1F14`.
+Doctor is the tool a stranger reaches for to answer "did I set this up right?"
+On a brand-new profile it answers "2 problem(s) found" and prints a 19-line wall
+of truncated filenames, with the actual instruction — *run bootstrap* — as the
+last clause of a sentence that opens with a warning about silently shrunk
+context. Plus: `check_node()` verifies `node` but nothing verifies `npm`/`npx`,
+while both Playwright fixes prescribe them (**this machine is the failure case**
+— see B15); and `check_venv`'s detail line hardcodes `"ready to use"`, so a
+missing venv renders as `.venv/ missing, ready to use` while `passed=False`.
+*Fix:* detect the unbootstrapped case first and collapse it to one line
+("Profile `x` isn't set up yet — run `resume` → New User? Start Here! (0 of 19
+knowledge-base files present)"), keeping per-file detail for the genuinely
+*partial* case; check `npm` alongside `node` and make the Playwright fix
+conditional on it; build the venv detail from the same booleans as the verdict.
+Also `P1F14`: README runs steps 1–7 then jumps to "take it for a spin" — add
+`resume doctor --skip-tests` as step 8, "confirm the install before you spend an
+API call."
+
+**B33. The Nerd Font default fails silently and is undiagnosable from inside the
+tool.** MAJOR · goal 3 · small. `P1F5`.
+`theme.py:86` defaults to Nerd Font glyphs and deliberately "fails toward the
+enhanced default" on an unset or typo'd env var. A repo-wide grep finds
+`RESUME_BUILDER_ICONS` in **exactly one runtime code path — its own definition.**
+No help text, no doctor check, no menu hint, no error message mentions it.
+A stranger without a Nerd Font sees a menu of tofu boxes and has one recovery
+route: notice README step 6, filed under "Optional," and already connect it to
+what they're seeing. `P1` is right that flipping the default to Unicode is also
+wrong (it silently downgrades everyone, and font support genuinely cannot be
+probed from a TTY).
+*Fix — `P1`'s, and it's the right one:* on first launch in a real terminal,
+print one sample row of each set and ask once; persist the answer in the
+profile's config; never ask again; default to Unicode when there's no answer and
+stdin isn't a TTY. Deterministic, needs no font introspection, and gives
+`doctor` something real to report.
+
+**B34. A stranger's first scan is unbounded, unfiltered, and browser-verified.**
+MAJOR · goals 1, 3 · small. `P7F5`.
+`run_scan(verify=True)` is the default *and the only mode the menu offers*, and
+it runs liveness over **every** newly written JD with no cap and no confirmation.
+The `scan_filters.yml` scaffold ships with `title_filter.positive: []`, and an
+empty positive list means everything passes — permissive by design and correctly
+documented, but it means a new profile's first scan writes *every* remote listing
+from 17 aggregator boards into `jds/`, then sequentially opens each in a headless
+browser. Each component is defensible alone; together, step one of a stranger's
+workflow is a multi-hour hang producing hundreds of junk JDs.
+*Fix:* cap or confirm the verify pass above a threshold; seed the scaffold's
+`positive:` from `profile.yml`'s `target_roles.primary`.
+
+**B35. Dedup re-walks the entire JD corpus once per candidate.** MAJOR (perf) ·
+goal 1 · small. `P7F7` + H11 + H30.
+`job_key_known()` is called once per candidate and each call `os.listdir`s four
+directories and runs `compute_job_key()` — a file open and parse — on every file
+found. Cost is `candidates × total_JD_files` file opens; on a mature profile
+that's six figures of syscalls attributed to nothing the user can see, reading as
+yet another hang on top of B34 and B21. `run_scan()` correctly hoists the
+`JDTracker` out of the loop; the directory walk was not hoisted.
+*Fix:* build the known-key index once per `run_scan()` and match in memory. Same
+shape as B2 — `get_pending_jds()` parsing 1,144 files per `_stats_line_text()`
+call still costs ~1s on every launch even after B2 removes 30 of the 31 calls
+(H11).
+
+**B36. Scanners write JD files with a null or empty description.** MAJOR ·
+goal 2 · small. `P7F6` + `P7bF6`.
+`_write_jd_file()` writes whatever the fetcher produced with no validation.
+`scan_linkedin.py:184` falls back to `extras["backup_description"]`, which is
+`None` whenever `_fetch_personalized_extras()` fails — and it fails *silently*,
+logging at `logging.debug`, below the collector's threshold and discarded by B27
+anyway. Result: `"description": null` with no trace of why.
+`P7b` found the upstream source: **6 of 24 providers never emit `description` in
+any code path** (`workday`, `smartrecruiters`, `recruitee`, `workable`,
+`fourdayweek`, `websearch`), and `_types.js` doesn't document the field at all,
+which is why the divergence went unnoticed. Those are exactly the paths producing
+company-direct postings — so the highest-value listings arrive with no body text.
+*Fix:* add `description`/`posted_at` to the `Job` typedef as
+optional-but-expected; give the six a description source (`greenhouse.mjs:66-67`'s
+`?content=true` trick already solved this for its own provider); and validate in
+`_write_jd_file()`, recording a `_scan` metadata key (per CLAUDE.md's underscore
+convention) and flagging sub-threshold postings in the scan report.
+
+---
+
+### Tier 3 — minors, hygiene, and modernization
+
+**B37. Truncated generations are treated as success and silently salvaged.**
+`P4F9`. `finishReason == "MAX_TOKENS"` is accepted alongside `STOP`; the partial
+JSON then fails `json.loads` and `_salvage_fields` regex-scrapes surviving
+top-level pairs. The caller gets a well-formed dict it cannot distinguish from a
+complete response, and `if not trimmed` passes on a truthy fragment. The salvage
+behavior is defensible — what's missing is the signal. *Fix:* return
+`finishReason` / a `truncated: True` flag in the usage dict, and mark salvaged
+results.
+
+**B38. Page count is a regex over raw PDF bytes, and a zero silently disables
+the 2-page rule.** `P4F12`. Verified correct today against both shipped PDFs, so
+this is fragility, not a wrong number — but `is_final = page_count is None or
+page_count <= 2 or …` means a `0` short-circuits the trim loop *and* skips the
+`> 2` guard, so **the entire 2-page enforcement switches off and a 4-page resume
+ships**, silently. The regex depends on Chromium emitting an uncompressed page
+tree. *Fix:* count pages from `pdf_out` with pypdf (already a dependency); at
+minimum, treat `None` as a failure to verify rather than as "fine."
+
+**B39. Log and diagnostic noise.** `P4F10` — network errors are reported as
+`str(e).split()[-1]`, so a genuine offline failure prints `known')).` and
+discards the diagnostic content; use `type(e).__name__` plus the first ~120
+chars. `P4F11` — two unattributed pdfminer `FontBBox` warnings on every run
+(`P0 §2a`, root-caused): one line,
+`logging.getLogger("pdfminer").setLevel(logging.ERROR)` at module scope in
+`validate_pdf_text.py`, and it's this module's warning to own since it's the only
+caller. `P3`/H15 — `validate()` returns a bare list and the pipeline prints
+nothing on success, so "0 issues" and "budget exhausted after 4 attempts" are
+indistinguishable in the log; print the passing case explicitly.
+
+**B40. The empty-string achievement-key warning.** `P0 §2b` → `P4` → Phase 1
+(already run) → **orphan, H21.** `WARNING: unrecognized KU achievement key '',
+falling back to first option.` prints twice for every recommendation application,
+regardless of which recommendation. `P4` traced it: the enum is merged at
+`orchestrator.py:2949` via `extra_schema_properties`, but the key *options* come
+from the profile's bootstrap-written `profile.yml`, so a blank option is being
+written into that file at bootstrap time. Needs an owner.
+
+**B41. Multi-user credential and PII hygiene.** `P1F13` — `collect_secrets()`
+short-circuits on `GEMINI_API_KEY` being exported in the shell and **never
+writes the new profile's `.env`**, defeating the docstring's own stated goal
+("two people sharing this checkout never share credentials"). This machine has it
+exported, so a second person bootstrapping here is silently billed to Morgan's
+key. *Fix:* prompt when the profile's own `.env` lacks the key; offer the shell
+value as a default rather than assuming it. Pairs with B11. Also `P8F6` /
+H37 — no `subprocess` call in the scanning or liveness paths passes `env=`, so
+all 24 provider modules and every Chromium process run with `GEMINI_API_KEY` and
+the JobRight cookie in their environment though none needs either; an explicit
+`env=` allowlist makes the question moot. And `P7bF10`/H33 — `adzuna.mjs` puts
+`app_key` in the query string; it doesn't leak through this layer's error
+messages (`_http.mjs` reports status + body only), but any Python-side logging of
+the invocation or URL would expose it.
+
+**B42. Liveness and scan correctness minors.** `P7F8` — `--no-verify` leaves the
+optimistic `_liveness: active` seed uncorrected, and the 24-hour recency check
+then skips it, so a dead posting stays in the active queue for a day with a
+persisted claim it was confirmed alive. `P7F9` — `LIVENESS_INPUT_PATH` is a fixed
+`output/liveness_input_tmp.json`, bypassing `profile_paths` (CLAUDE.md's single
+source of truth), so two profiles overwrite each other and the file sits outside
+`sync_roots()`. `P7F10` — `_fetch_personalized_extras()` fires ~60 back-to-back
+authenticated GETs carrying Morgan's real `li_at` cookie, entirely outside the
+scraper's deliberate 5-second `slow_mo` pacing; **this is the one place in the
+subsystem with genuine account-risk exposure**, on the account she job-searches
+from, and a matching `time.sleep()` costs five minutes on a scan that already
+takes longer. `P7F12` — report entries are removed by value, so two same-company
+same-title postings drop the wrong row. `P7F13` — `expired_paths` returns
+pre-move paths that no longer exist (today's only consumer works by
+coincidence). `P7F14` — the liveness catch branch omits `code`, so every
+navigation failure writes `code: undefined`, indistinguishable from a genuine
+classification. `P7F15` — `go run` returns non-zero on interrupt, so quitting the
+dashboard normally reports "Dashboard exited with an error (code 1)."
+
+**B43. Board-provider minors.** `P7bF9` — `_recognition.mjs` has drifted from its
+hand-mirrored Python copy in **both** directions: missing `recruitee` (so a
+sweep-discovered Recruitee company can never be promoted to its direct-API
+provider, the exact path a prior fix was meant to restore), and still listing
+`bamboohr`/`jobvite`/`icims`/`jazzhr`, none of which have provider modules — a
+promotion on one resolves to a missing file and exits 1. Better than syncing by
+hand: have the Python side read the `.mjs` rules. `P7bF10` — `themuse` and
+`himalayas` request a single unpaginated page (20 rows) and filter `search_term`
+client-side, so both return **0 jobs whenever a search term is set**; both APIs
+accept server-side filters, and `remotive`/`adzuna` already pass the term
+through. `P7bF11` — `ashby` is the only provider with no output filter, so a
+posting missing `jobUrl` is emitted with `url: ''`, and `url` is the dedup key.
+`P7bF12` — doubled provider prefix in every error message
+(`adzuna: adzuna: missing…`), affecting ten providers.
+
+**B44. Bullet-bank hygiene.** `P6 #8` — `score_keeper_gems.py:45` loads a
+project-root `.env` that does not exist; a no-op that works only because
+`gemini_client.py` independently loads the right path, but it's a second wrong
+source of truth for secrets in a file that makes API calls. `P6 #9` — four of the
+15 scripts are reachable from no menu, CLI, or script; **`build_voice_anchors.py`
+is the one that matters** (see B30). `P6 #10` — two scripts write
+`hidden-gems.csv` with different schemas, harmless only because one is
+unreachable. `P6 #11` — `ingest.py` is dead, hardcodes a path that doesn't exist,
+imports `profile_paths` without using it for that lookup, and writes to
+project-root `output/txt`/`output/json` (colliding across profiles, outside
+`sync_roots()`). `P6 #12` — `audit_bullet_bank.py:111` writes exception text into
+the `weaknesses` column, which `decide_action()` reads as a quality signal;
+contained today because score columns stay empty, but the string persists.
+`P6 #13`, `#14` — `tag_bullet_bank.py`'s 3-column restriction raises an unhelpful
+`ValueError` on a richer CSV; `embed_bullet_bank.py`'s docstring claims 4s/~4min
+against `EMBED_SLEEP = 20` (~20 min).
+
+**B45. Shell, menu, and cosmetic residue.** `P1F10` — `printf '  %s\n' $names`
+doesn't word-split under zsh (macOS default), so only the first profile is
+indented; fires on exactly the shared-checkout scenario the function exists to
+serve. `P1F11` — `resume()` calls `_resume_ensure_profile` unguarded; degrade it
+to inert (see C3). `P1F12` — `did_something = True` runs unconditionally, so
+backing out of an empty step 0 still fires the "what's next?" prompt. `P0 §3` —
+confirming the JD picker with 0 selections returns to the main menu with no
+feedback at all. `P2F8` — two hardcoded color leaks: `[yellow]` in `menu.py:848`
+(a named ANSI color, the exact thing `theme.py:13-16` warns against) and
+`"white"` as the tier fallback in `cli_art.py:289,331,356`. **Emoji sweep
+residue** (see C6): `generate-pdf.mjs:123-125,150,199-201,211`,
+`bootstrap_bullet_bank.py:352`, `check-liveness.mjs:41,74`, `ingest.py:82,93` —
+`liveness.py` is already done.
+
+**B46. Modernization.** `P5 #1` — pin `thinkingLevel` explicitly on the five
+`gemini-3.1-flash-lite` call sites; the Gemma branch already makes a deliberate
+choice, flash-lite rides an undocumented default that has already shifted once.
+Trivial, and it stabilizes cost/latency. `P5 #2` — **instrument one run for
+cache-hit token counts before building anything**; implicit caching may already
+be capturing the audit loop's fixed rules-file prefix for free, which decides
+whether explicit caching (32,768-token minimum, 90% discount, deterministic) is
+worth the lifecycle work. `P5 #3` — Batch Mode is 50% off with ≤24h turnaround
+and doesn't stack with cache hits; it fits unattended `resume run` sweeps and not
+single-file mode or checkpoint-resume, so **the decision needs whoever owns
+`orchestrator.py` to separate "calls a human is waiting on" from "calls inside an
+unattended batch"** — not visible from outside the orchestration logic. `P5 #4` —
+collapse three colorizers to two by routing the bare-`print()` call sites through
+a shared `Console`; the questionary/Rich split is inherent, the `print()` branch
+is not, and `colorize_icon_ansi()`'s own docstring flags itself as the
+workaround. `P5 #7` — `rewrite_bullets.py:67`'s docstring example cites
+`gemini-2.5-pro`, which shuts down October 2026. `P5`/H38 — fold the caching,
+batch, and packaging items into `IDEAS.md` (Medium tier), since that file is the
+living backlog and `phase-5-modernization.md` is a snapshot.
+**Decided, no action:** keep both the Go dashboard and the Python TUI (`P5 #5`) —
+porting either direction buys nothing; close the theme asymmetry instead (B23).
+Structured output is already current (`P5 #8`).
+
+---
+
+## 4. Ownership residue — the mechanical check
+
+Enumerated the repo's tracked directories first, per the plan's explicit
+instruction not to check only the six it happened to name.
+
+**Tracked directories:** `.claude/`, `.github/`, `.vscode/`,
+`ImprovementConcepts/`, `board-scanners/`, `dashboard/`, `docs/`, `e2e/`,
+`fixtures/`, `profiles/`, `resume-engine/`, `scripts/`, `tests/`, plus 13
+top-level files.
+
+**`scripts/` is now fully owned.** 62 tracked files; 57 appear in a phase
+ownership list (P1: 8, P2: 6, P3: 5, P4: 7, P6: 15, P7: 16), the remaining 5
+being `scripts/archive/`. The `plan-gaps.md` finding of "~25 scripts owned by no
+phase" has been fully closed by Phases 6, 7, and 7b. `board-scanners/` was closed
+by 7b.
+
+**Still unowned — reviewed by nobody:**
+
+| Path | Files | Assessment |
+|---|---|---|
+| **`resume-engine/rules/*.yaml`** | 6 | **Real gap, goal 2.** `hard_failures`, `truthfulness_rules`, `style_rules`, `language_quality`, `verb_taxonomy`, `verb_intent_mapping` — these are concatenated into the audit loop's system prompt (`P5 #2` describes exactly this). Phase 3 owns `resume-engine/prompts/` only. **The rubric the bullet audit scores against was never read.** |
+| **`resume-engine/scoring/*.yaml`** | 18 + README | **Real gap, goal 2.** `ats_match`, `believability`, `specificity`, `recruiter_score`, `summary_patterns`, `role_dna`, … — the scoring rubrics behind `evaluate_fit` and the critique. Given B3 (the evaluator sees no candidate context) and B29 (the summary rule is unenforced), these are exactly the files that would say whether the *rubrics* are sound. Unread. |
+| **`e2e/example.spec.ts` + `playwright.config.ts`** | 2 | **Real gap, goal 5.** A Playwright test scaffold in no phase's list. `P4` measured 1,091 unittest tests and never mentions this; it is almost certainly an unrun stub, and `playwright.config.ts` is the only reason `package.json` looks like a test project. Decide: wire it up or delete it. |
+| `dashboard/`'s non-visual Go code | ~all | `PLAN.md` scopes Phase 2 to "`dashboard/` (visual layer **only**)". Its tracker-parsing and data logic is unreviewed — the same carve-out shape that left `menu.py`'s onboarding logic unowned until Phase 4 claimed it. `P0 §5` exercised it at runtime with no defect, which is the only coverage it has. |
+| `scripts/archive/` | 5 | Explicitly archived. `P6 #9` noted `archive/detect_blank_scores.py` differs from the live copy. Low value; recommend deleting rather than reviewing. |
+| `.github/dependabot.yml` | 1 | Goal 5 adjacent; unreviewed. One-line check during B46. |
+| `package.json` / `package-lock.json` / `requirements.txt` | 3 | Touched incidentally (`P4F1` read the Playwright pin, `P5 #6` noted no `pyproject.toml`) but owned by nobody as dependency manifests. Folded into B15/B31. |
+| `profiles/morgan/board_scanner/*.yml` | 3 | Tracked config. `P7F5` reviewed the *scaffold's* behavior; the committed files themselves are unreviewed. Low risk. |
+| `fixtures/sample_jd.txt` | 1 | The QA fixture every phase depends on. Read by 3 and 8; no owner. Immaterial. |
+| `docs/superpowers/`, `ImprovementConcepts/`, `.vscode/`, `.hintrc`, `.claude/`, `IDEAS*.md`, `resume_example.pdf`, `rewrite_bullets_fixes.md` | many | Historical/editorial. `P5` scanned `IDEAS.md` and `ImprovementConcepts/` and correctly declared the latter out of scope. No action. |
+
+**Disposition — all of the above is now assigned.** `PLAN.md` was amended
+2026-08-05 with three follow-on phases, so nothing in this table is left
+unowned:
+
+- **Phase 10 — Scoring rubrics & rule files.** `resume-engine/rules/` (6) and
+  `resume-engine/scoring/` (19). The only residue touching goal 2, and
+  substantial. B3, B18, and B29 all ask questions those files answer, so Phase
+  10 should run before those three are fixed.
+- **Phase 11 — Unexplained artifacts & path residue.** Not an ownership gap but
+  a diagnosis gap: the three orphaned handoffs below that no phase ever
+  root-caused (H9, H10, H6 → B25 and the pre-profile path question).
+- **Phase 12 — Remaining unowned residue.** `e2e/` + `playwright.config.ts`,
+  `dashboard/`'s non-visual Go, `scripts/archive/`, the dependency manifests,
+  `.github/dependabot.yml`, `profiles/*/board_scanner/*.yml`, `fixtures/`, and
+  an explicit out-of-scope record for the editorial directories. Disposition per
+  item: keep / wire up / delete / out of scope.
+
+All three append their items to **this file**, continuing the `B<n>` numbering —
+there is no second synthesis phase.
+
+---
+
+## 5. `PLAN.md` corrections — **applied 2026-08-05**
+
+These were factual errors in the plan itself, surfaced by phases that could not
+edit it or that ran after it was written. All five have since been applied to
+`PLAN.md` and `phase-0-smoke.md`; the list stays as the record of what changed
+and why.
+
+1. **`PLAN.md:266-270`** — the raw `❌` at `liveness.py:211` is **already fixed**
+   (commit `348fe628`). `P7F16`.
+2. **`PLAN.md:242-245`** — `generate-pdf.mjs:211` is **not** "the last un-swept
+   instance in the repo." At least four other locations remain. `P1F15`,
+   `P6 #11`, `P7F16`, and `P4F13` (which found `generate-pdf.mjs` itself carries
+   seven more emoji, not one). See B45.
+3. **`PLAN.md:354-356`** — the Phase 6 instruction to "round-trip a messy input"
+   through `ingest.py` / `normalize_resume.py` **is not executable and the
+   pairing is a mistake**. `ingest.py` is dead with a hardcoded nonexistent path;
+   `normalize_resume.py` is not an ingestion component at all — it post-processes
+   the *builder's output* mid-run and never sees a user's resume. The underlying
+   question is answered by `bootstrap_extractors.py`/`bootstrap_bullet_bank.py`
+   (Phase 1's files). `P6`'s "Correction to the phase brief."
+4. **`PLAN.md`'s Phase 9 residue-check wording** listed six directories by name,
+   which is exactly what let `board-scanners/` go unowned through Phase 7. The
+   wording was already amended to require enumerating tracked directories first;
+   this run did that, and it is what surfaced `resume-engine/rules/`,
+   `resume-engine/scoring/`, and `e2e/`. Keep the amended wording.
+5. **`phase-0-smoke.md:26-33`** should carry an inline correction that the
+   Playwright doctor warning is not a false positive (C2), so a later reader does
+   not dismiss it again. Same for `phase-0-smoke.md:18-20` re C3.
+
+---
+
+## 6. Suggested execution order for the fix pass
+
+1. **Tier 0 in one sitting** (B1–B12). One blocker, nine majors, roughly a
+   handful of edits each. B1 alone repairs every document the tool has ever
+   produced; B2 alone changes the entire first impression.
+2. **B15 next**, because it gates verification of everything else — until `npm
+   install` runs in the repo, no PDF fix can be proven on any machine but this
+   one.
+3. **B13 and B14** — the two compound blockers. B13 first if a KB write is
+   imminent; B14 first if any un-hand-typed JD is about to be processed.
+4. **B16, B17, B19** — then the remaining Tier 1.
+5. **Diagnose B25 before touching page-2 layout** in B24. Three missing
+   employers is a content bug wearing a whitespace costume.
+6. Tier 2 by goal: B18/B28/B29/B30 for goal 2 (Morgan as a candidate),
+   B22/B23/B24 for goal 4 (portfolio), B31/B32/B33 for goal 3 (strangers).
+7. **Add the two regression tests `P4` names as highest-value** while B13 and
+   B17 are open: a corrupt-checkpoint test, and a "PDF missing ⇒ pipeline must
+   not report success" test. `P4`'s coverage table shows the pattern precisely —
+   the code paths that *detect* trouble are well tested; the decisions made
+   *after* detection are not pinned anywhere.
+8. **Decompose `build_tailored_resume` while B5, B17, and B38 are open**, since
+   all three edits land inside it. `P4` answered the plan's question with
+   evidence: `orchestrator.py`'s 3,125 lines are "just large" (a seventh is flat
+   Pydantic schemas, the helpers are already decomposed and separately tested),
+   but **`build_tailored_resume` at ~614 lines is the real number** — seven
+   sequential steps, four checkpoint save points, an interactive gate, and a
+   nested trim loop. Findings B5, B17 and B38 all live in it, and that is not a
+   coincidence: each step's error branch is 300 lines from the success print that
+   contradicts it. The seams are already marked by its own `--- Step N ---`
+   comments. Not worth a standalone refactor; worth doing while you're in there.
+
+---
+
+## 7. What the review found working — do not "fix" these
+
+Consolidated from every phase's "verified as NOT defects" section, so the fix
+pass doesn't spend on them.
+
+- **No fabrication in the normal pipeline** (`P3F9`). Every quantitative claim
+  in both shipped documents traces to a KB file. The `needs_personal_input`
+  channel is genuinely good anti-fabrication architecture — it instructs the
+  model to *refuse* rather than invent, and it is why B6 produced bland copy
+  instead of invented copy. The guard held on fabrication even while the routing
+  failed. (Caveated only by C7 and by `P3F6`'s "over 120" rounding.)
+- **The resume path resists prompt injection** (`P8F2`) — because it is grounded
+  in a corpus. That is the fix pattern for B14, already proven in this codebase.
+- **No secret reaches disk, logs, URLs, or crash output** (`P8F7`). Auth is
+  header-only, no `?key=` anywhere, byte-scan of `output/`, `jds/`, `data/`,
+  `profiles/`, `.git/` for both live secrets returned **0 hits**, doctor reports
+  presence and location only, and there is no `traceback.print_exc()` in
+  `scripts/`. No `.env` or `signature.*` is tracked and no commit in `--all`
+  history contains the current key.
+- **`KB_ALLOWLIST` is an explicit filename list, not a glob** (`P8F10`) — so a
+  Syncthing conflict copy is never silently ingested into the builder's context.
+  That is the dangerous version of that bug and this codebase does not have it.
+- **JD metadata does not leak into prompts** (`P4`). `read_jd_text()` strips any
+  underscore-prefixed key generically; CLAUDE.md's convention is actually
+  enforced.
+- **Profile switching is not stale** (`P4`). `set_active_profile()` explicitly
+  `importlib.reload`s dependent modules and raises a clear `ValueError` on an
+  unknown profile.
+- **Duplicate detection is solid** (`P7`). Three independent match strategies
+  across four directories; a re-scan does not re-apply to a completed job or
+  create duplicate files. The only cost is B35's performance.
+- **`git_update.py` / `maintenance.py` cannot destroy anything unrecoverable**
+  (`P7`). Gated on `has_uncommitted_changes()` at both call sites; the
+  `career-ops` clobbering precedent does not apply, since nothing here writes
+  into a profile.
+- **SSRF defence is real and consistent** across the four ATS providers that
+  accept a user-supplied URL (`P7b`) — host allowlists or a tenant-slug regex,
+  each paired with `redirect: 'error'`. `workday` is the exception.
+- **`normalizeTextForATS`'s masking step holds** (`P4F7d`) — `P4` tried to
+  corrupt a mask boundary and could not. *(Two of its substitutions should still
+  change: `—` → `-` unspaced turns `strategy—not tactics` into the invented
+  compound `strategy-not`, and `·` → ` | ` mangles `Jean·Luc`. `£`→`GBP` and
+  `•`→` | ` should stay.)*
+- **`create_new_profile()` is well-behaved** (`P1`) — raises rather than
+  overwriting, scaffolds valid empty YAML, seeds `.stignore` into all four sync
+  roots. Verified by real invocation.
+- **`stable_cluster_ids()` / `_cluster_content_hash()`** is the correct solution
+  to positional instability, with an unusually good comment (`P6`). B10 is that
+  it wasn't applied one function further down.
+- **`audit_bullet_bank.py:56-69` resumes by bullet text, not row index** — the
+  pattern B20 should be fixed toward, already in the repo.
+- **Every LLM scoring call uses `temperature=0.0`** (`P6`). The drift found in
+  this review is all ordering and schema; none of it is LLM non-determinism.
+- **`voice-anchors.md` regenerates byte-for-byte** (`P6`) — 4070 bytes in, 4070
+  out. B30 is a design choice in the projection, not drift.
+- **Relative `./fonts/` paths in the templates are correct** (`P2`) —
+  `generate-pdf.mjs:130-141` rewrites them to absolute `file://` before writing
+  the temp HTML, and both PDFs embed real subsets. *(The rewrite regex only
+  matches `url('./fonts/`, so CLAUDE.md's absolute-`file://` rule still stands
+  for any new asset type.)*
+- **PDF margins (0.5in, measured exactly) and page count (2) are correct**
+  (`P2`).
+- **The optional-dependency doctor checks are correctly non-fatal** (`P1`) —
+  `check_go`, `check_jobright_cookie`, `check_signature_image` all return
+  `passed=True` with an explanatory line, and the comments say why.
+- **`followup.py` and `situational_roles.py` are clean** (`P7`) — pure date math
+  and keyword matching, defensive against malformed input.
+- **The board-scanner vendoring notes are excellent** (`P7b`) — each documents a
+  real bug found and fixed while porting, with live evidence. That is why 7b
+  could tell "ported broken" from "deliberate." **21 of 24 providers are alive
+  and fast**, all returning parseable results under 1s.
+- **Structured output is already current** (`P5 #8`) — real `responseSchema`
+  derived from Pydantic, plus `responseMimeType: application/json`.
+- **`Ctrl-C` handling in `run_pipeline` is correct** (`P4`) — `except Exception`
+  does not catch `KeyboardInterrupt`. The checkpoint-write race (B13) is the real
+  interrupt risk, not the handler.
+- **Aesthetically, do not touch:** the block-letter banner, the Rich panel
+  language, the recommendation-tier color legend, and the cover letter's
+  typography — `P2` singles out the cover letter (real signature image, correct
+  margins, clean rhythm) as **the strongest single artifact this system
+  produces**. The gap between it and the resume is the most fixable quality
+  difference in the project.
+
+---
+
+## 8. Already done — verify, don't redo
+
+`scripts/validate_pdf_text.py` and `tests/test_validate_pdf_text.py` carry
+**uncommitted** working-tree changes implementing `P3` MAJOR 2 (approved
+separately, 2026-08-05). `_normalize` now strips emphasis markup and expands
+ligatures; a new `_check_ligatures()` reports ligature corruption as its own
+named warning listed first, naming the affected words and the CSS fix; the test
+fixture was corrected to carry the `**Label:**` markdown real output always has
+(its absence is why the bug shipped), plus 7 new tests.
+
+Measured on the real artifacts: resume **5 warnings → 1**, and that one names the
+actual defect. `P4` re-ran it against the live shipped resume and against 48
+tests in the affected modules — **OK** — and its verdict was "it does what Phase
+3 asked. Ship it."
+
+**DONE — committed 2026-08-05** as `1455b787`, after a full-suite verification
+run (1098 tests, OK). It is the instrument that will report zero ligature hits
+once B1 lands, and it is a prerequisite for B9.
