@@ -22,6 +22,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -390,7 +391,7 @@ def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_
         remote_required=str(bool(identity.get("remote_preference"))).lower(),
     )
     os.makedirs(os.path.dirname(PROFILE_YML_PATH), exist_ok=True)
-    with open(PROFILE_YML_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
         f.write(content)
     return True
 
@@ -434,7 +435,7 @@ def write_portals_yml(identity: dict) -> None:
         title_filter_yaml=_yaml_string_list(title_seed),
     )
     os.makedirs(os.path.dirname(PORTALS_YML_PATH), exist_ok=True)
-    with open(PORTALS_YML_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(PORTALS_YML_PATH, encoding="utf-8") as f:
         f.write(content)
 
 
@@ -454,7 +455,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
             for i, m in enumerate(extraction.metrics)
         ],
     }
-    with open(VERIFIED_METRICS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(VERIFIED_METRICS_PATH, encoding="utf-8") as f:
         json.dump(metrics_json, f, indent=2)
 
     tools_json = {
@@ -464,7 +465,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
             for i, t in enumerate(extraction.tools)
         ],
     }
-    with open(VERIFIED_TOOLS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(VERIFIED_TOOLS_PATH, encoding="utf-8") as f:
         json.dump(tools_json, f, indent=2)
 
     projects_json = {
@@ -474,7 +475,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
             for i, p in enumerate(extraction.projects)
         ],
     }
-    with open(VERIFIED_PROJECTS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(VERIFIED_PROJECTS_PATH, encoding="utf-8") as f:
         json.dump(projects_json, f, indent=2)
 
     empty_facts = {
@@ -482,7 +483,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
                   "note": "Add facts here as you cross-reference multiple sources over time."},
         "facts": [],
     }
-    with open(VERIFIED_FACTS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(VERIFIED_FACTS_PATH, encoding="utf-8") as f:
         json.dump(empty_facts, f, indent=2)
 
     empty_graph = {
@@ -493,24 +494,24 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         },
         "nodes": [], "edges": [],
     }
-    with open(EVIDENCE_GRAPH_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
         json.dump(empty_graph, f, indent=2)
 
-    with open(VERIFIED_CLAIMS_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(VERIFIED_CLAIMS_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "Claim / Finding", "Verification Status", "Source File", "Evidence / Detail",
             "Metric(s)", "Confidence", "Use in Resume?", "Use in Portfolio?", "Next Follow-Up",
         ])
 
-    with open(EVIDENCE_GUIDE_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(EVIDENCE_GUIDE_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "Evidence Cluster", "Finding", "Source File(s)", "Best Detail / Quote", "Best Metric",
             "What This Proves About You", "Where to Use It", "Confidence", "Source URL / Notes",
         ])
 
-    with open(SCREENSHOT_METRICS_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(SCREENSHOT_METRICS_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "Source Batch", "Campaign / Screenshot Title", "Screenshot File(s)", "Contacted",
@@ -522,7 +523,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         "_meta": {"note": "Builds up over real recruiter feedback and application outcomes."},
         "patterns": [],
     }
-    with open(RECRUITER_PATTERNS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
         json.dump(empty_recruiter_patterns, f, indent=2)
 
 
@@ -563,7 +564,7 @@ def _load_cv_draft_checkpoint() -> dict:
 
 def _save_cv_draft_checkpoint(state: dict) -> None:
     os.makedirs(os.path.dirname(CV_DRAFT_CHECKPOINT_PATH), exist_ok=True)
-    with open(CV_DRAFT_CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(CV_DRAFT_CHECKPOINT_PATH, encoding="utf-8") as f:
         json.dump(state, f, indent=2)
 
 
@@ -657,7 +658,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
         print("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.")
         content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
         os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
-        with open(CV_MD_PATH, "w", encoding="utf-8") as f:
+        with atomic_write(CV_MD_PATH, encoding="utf-8") as f:
             f.write(content)
         return
 
@@ -685,7 +686,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
         break
 
     os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
-    with open(CV_MD_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(CV_MD_PATH, encoding="utf-8") as f:
         f.write(content if choice == "accept" else "")
 
 
@@ -710,7 +711,7 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
         print("[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip.")
         draft = bootstrap_extractors.draft_background_guide(source_texts, dry_run=dry_run)
         os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
-        with open(BACKGROUND_GUIDE_PATH, "w", encoding="utf-8") as f:
+        with atomic_write(BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
             f.write(draft)
         return
 
@@ -735,7 +736,7 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
         break
 
     os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
-    with open(BACKGROUND_GUIDE_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
         f.write(draft if choice == "accept" else "")
 
 
@@ -773,7 +774,7 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
         print("[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip.")
         draft = bootstrap_extractors.draft_voice_anchors(source_texts, dry_run=dry_run)
         os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
-        with open(VOICE_ANCHORS_PATH, "w", encoding="utf-8") as f:
+        with atomic_write(VOICE_ANCHORS_PATH, encoding="utf-8") as f:
             f.write(draft)
         return
 
@@ -799,7 +800,7 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
         break
 
     os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
-    with open(VOICE_ANCHORS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(VOICE_ANCHORS_PATH, encoding="utf-8") as f:
         f.write(draft if choice == "accept" else "")
 
 

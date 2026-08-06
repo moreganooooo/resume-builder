@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -170,6 +171,71 @@ class TestCheckSignatureImage(unittest.TestCase):
         # Informational only, per README's documented graceful degradation.
         self.assertTrue(doctor.check_signature_image()["passed"])
         self.assertEqual(doctor.check_signature_image()["fix"], "")
+
+
+class TestCheckKbAllowlist(unittest.TestCase):
+
+    def setUp(self):
+        import orchestrator
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_kb_allowlist")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._kb_patcher = patch("doctor.profile_paths.kb_dir", return_value=self.tmp_dir)
+        self._kb_patcher.start()
+        self._real_allowlist = orchestrator.KB_ALLOWLIST
+        orchestrator.KB_ALLOWLIST = ["bullet-bank.md", "profile.yml"]
+
+    def tearDown(self):
+        import orchestrator
+        orchestrator.KB_ALLOWLIST = self._real_allowlist
+        self._kb_patcher.stop()
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content="content"):
+        with open(os.path.join(self.tmp_dir, name), "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def test_passes_when_all_present_nonempty_and_no_conflicts(self):
+        self._write("bullet-bank.md")
+        self._write("profile.yml")
+        result = doctor.check_kb_allowlist()
+        self.assertTrue(result["passed"], result["detail"])
+        self.assertEqual(result["fix"], "")
+
+    def test_fails_and_lists_missing_files(self):
+        self._write("bullet-bank.md")
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("missing", result["detail"])
+        self.assertIn("profile.yml", result["detail"])
+
+    def test_fails_on_zero_byte_file(self):
+        self._write("bullet-bank.md", content="")
+        self._write("profile.yml")
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("corrupted", result["detail"])
+        self.assertIn("bullet-bank.md", result["detail"])
+
+    def test_fails_on_future_mtime(self):
+        self._write("bullet-bank.md")
+        self._write("profile.yml")
+        future = time.time() + 3600
+        os.utime(os.path.join(self.tmp_dir, "profile.yml"), (future, future))
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("corrupted", result["detail"])
+        self.assertIn("profile.yml", result["detail"])
+
+    def test_fails_on_sync_conflict_file(self):
+        self._write("bullet-bank.md")
+        self._write("profile.yml")
+        self._write("bullet-bank.sync-conflict-20260101-000000.md")
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("conflict", result["detail"])
+        self.assertIn("sync-conflict", result["detail"])
 
 
 class TestRunChecks(unittest.TestCase):

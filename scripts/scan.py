@@ -15,6 +15,7 @@ import json
 import logging
 import os
 
+from atomic_write import atomic_write
 import cli_art
 import jd_manager
 import liveness
@@ -92,7 +93,7 @@ def _write_jd_file(job: dict) -> str:
         "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
 
-    with open(dest, "w", encoding="utf-8") as f:
+    with atomic_write(dest, encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)
     return dest
 

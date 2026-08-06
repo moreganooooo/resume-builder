@@ -179,15 +179,53 @@ def check_signature_image() -> dict:
 
 
 def check_kb_allowlist() -> dict:
+    """Checks KB_ALLOWLIST files for three failure modes doctor previously
+    couldn't see (B13): (1) missing entirely -- the original check; (2)
+    present but zero-byte or with a future mtime -- the signature of a
+    truncated/corrupted write, since KB_ALLOWLIST is an explicit filename
+    list (not a glob), a corrupt file here is never auto-excluded from
+    the builder's context the way an unlisted file would be; (3) any
+    `.sync-conflict-*` file sitting in the KB directory -- Syncthing's own
+    conflict-copy naming, never ingested by the builder (again because
+    KB_ALLOWLIST is explicit), but a sign of an unresolved multi-computer
+    sync collision worth a human's attention."""
     import orchestrator
+    import time
+
     kb_dir = profile_paths.kb_dir()
     missing = [f for f in orchestrator.KB_ALLOWLIST if not os.path.exists(os.path.join(kb_dir, f))]
-    ok = not missing
+
+    now = time.time()
+    corrupted = []
+    for f in orchestrator.KB_ALLOWLIST:
+        path = os.path.join(kb_dir, f)
+        if not os.path.exists(path):
+            continue
+        st = os.stat(path)
+        if st.st_size == 0 or st.st_mtime > now + 60:
+            corrupted.append(f)
+
+    conflicts = sorted(f for f in os.listdir(kb_dir) if ".sync-conflict-" in f) if os.path.isdir(kb_dir) else []
+
+    problems = []
+    if missing:
+        problems.append(f"missing: {', '.join(missing)}")
+    if corrupted:
+        problems.append(f"zero-byte or bad-mtime (likely corrupted): {', '.join(corrupted)}")
+    if conflicts:
+        problems.append(f"Syncthing conflict copies present: {', '.join(conflicts)}")
+
+    ok = not problems
     return _check(
         f"Knowledge-base allowlist files ({profile_paths.active_profile()})", ok,
-        "all present" if ok else f"missing: {', '.join(missing)}",
-        f"Missing files silently shrink the builder's context -- restore them into {kb_dir}/, "
-        "or re-run bootstrap/Update My Knowledge if this is a fresh or partial profile.",
+        "all present and healthy" if ok else "; ".join(problems),
+        "" if ok else (
+            f"Missing or corrupted files silently shrink or poison the builder's context -- restore "
+            f"them into {kb_dir}/, or re-run bootstrap/Update My Knowledge if this is a fresh or "
+            "partial profile. For Syncthing conflict copies: they are never auto-ingested, but "
+            "resolve them by hand (compare the two versions, keep the correct one, delete the rest) "
+            "before they're forgotten and pile up."
+        ),
     )
 
 

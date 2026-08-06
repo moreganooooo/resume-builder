@@ -32,6 +32,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -73,7 +74,7 @@ def _ensure_schema(path: str = NEEDS_REVIEW) -> None:
         rows = list(reader)
     if current_header == FIELDNAMES:
         return
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(path, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)

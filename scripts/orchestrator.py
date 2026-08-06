@@ -41,6 +41,7 @@ import validate_pdf_text
 import validate_coverletter
 import jd_manager
 import bullet_feedback
+import kb_snapshot
 import theme
 
 
@@ -3206,6 +3207,8 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     (completed_count, failed_count) rather than exiting, so callers other
     than the CLI (e.g. scripts/cli.py) can decide how to report failure.
     """
+    kb_snapshot.snapshot_kb()
+
     master_resume = {}
     if master_resume_path:
         try:

@@ -23,6 +23,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -43,7 +44,7 @@ def main():
     if not os.path.exists(SOURCE_CSV):
         raise SystemExit(f"ERROR: {SOURCE_CSV} not found.")
     trimmed_rows = trim_detective_findings()
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(OUTPUT_CSV, newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=KEEP_COLUMNS)
         w.writeheader()
         w.writerows(trimmed_rows)

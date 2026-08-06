@@ -295,6 +295,30 @@ class TestCheckpoints(unittest.TestCase):
         jd_manager.delete_checkpoint(unsafe_key)
         self.assertEqual(jd_manager.load_checkpoint(unsafe_key), {})
 
+    def test_save_checkpoint_leaves_previous_content_intact_on_failure(self):
+        # atomic_write() writes to a sibling temp file first, so a failure
+        # mid-serialization (an unencodable value here) must never truncate
+        # the checkpoint that was already on disk.
+        jd_manager.save_checkpoint("job1", {"jd_keywords": {"skills": ["python"]}})
+        with self.assertRaises(TypeError):
+            jd_manager.save_checkpoint("job1", {"bad": object()})
+        self.assertEqual(jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}})
+        # No leftover temp file in the checkpoints dir either.
+        leftovers = [n for n in os.listdir(self.tmp_dir) if n.endswith(".tmp")]
+        self.assertEqual(leftovers, [])
+
+    def test_load_checkpoint_logs_and_falls_back_on_corrupt_json(self):
+        path = jd_manager._checkpoint_path("job1")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("{not valid json")
+
+        with self.assertLogs(level="ERROR") as logs:
+            result = jd_manager.load_checkpoint("job1")
+
+        self.assertEqual(result, {})
+        self.assertTrue(any("Corrupt checkpoint" in msg and path in msg for msg in logs.output))
+
 
 class TestGetPendingJds(unittest.TestCase):
 

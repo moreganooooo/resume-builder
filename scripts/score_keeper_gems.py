@@ -38,6 +38,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR       = Path(profile_paths.kb_dir())
 SCORING_DIR  = PROJECT_ROOT / "resume-engine" / "scoring"
@@ -139,7 +140,7 @@ def score_bullet(system_prompt: str, bullet: str) -> dict | None:
 
 def _write_scored_csv(path: str, rows: list, final_headers: list) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(path, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
@@ -257,7 +258,7 @@ def main():
     gem_rows = [r for r in rows if str(r.get("hidden_gem_flag", "")).lower() == "true"]
     if gem_rows:
         Path(args.gems).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.gems, "w", newline="", encoding="utf-8") as f:
+        with atomic_write(args.gems, newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(gem_rows)

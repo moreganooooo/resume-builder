@@ -25,6 +25,7 @@ PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR        = profile_paths.kb_dir()
 REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
@@ -76,7 +77,7 @@ def main():
         writer.writerows(retire_rows)
     print(f"  Appended {len(retire_rows)} rows to {RETIRED_PATH}.")
 
-    with open(REWRITE_QUEUE, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(REWRITE_QUEUE, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=REWRITE_HEADER, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(keep_rows)

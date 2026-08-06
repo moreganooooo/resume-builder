@@ -153,8 +153,8 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B15 · B37 · B38 · B39 · B43 · B44 (partial — see below) · B45 · B47 · B48
-> · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+> B13 · B15 · B37 · B38 · B39 · B43 · B44 (partial — see below) · B45 · B47
+> · B48 · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
 >
 > **2026-08-06 — Tier 3, first 11 of 15 items, commit `67aa78b2`.** Worked the
 > hygiene/modernization tier in easiest-to-hardest order (deletions and config
@@ -237,11 +237,57 @@ re-dispatched, since there are no phases left to receive them.
 > validator's 4 fix attempts that a genuinely absent employer needs. Matching
 > is now containment in either direction.
 >
-> **Next up, per §6:** **B13** (KB durability) and **B14** (JD prompt
-> injection) — the two compound blockers in Tier 1 — then B16, B17, B19.
-> B24's page-2 layout work is now unblocked by B60, but re-run `resume
-> sample` first, since restoring the missing employers changes what page 2
-> contains.
+> **2026-08-06 — B13 (KB durability).** `grep -rn
+> "open(.*[\"']w[\"']" scripts/*.py` found **56** candidate sites, not the
+> doc's "17+" — the finding's own count (`P8F8`, phase-8) undercounted
+> because its methodology was `open()`-only; `df.to_csv()` writes (e.g.
+> `cluster_bullet_bank.py`'s `CLUSTER_MAP_CSV`) share the same truncate-at-
+> open risk but a different call shape, and were left alone as a separate,
+> unfiled finding rather than folded into this fix silently. Of the 56,
+> **42 converted** to the new `atomic_write()` helper (`scripts/
+> atomic_write.py` — write to a sibling temp file, `os.replace()` on clean
+> exit, remove the temp file and leave the original untouched on any
+> exception) — every KB writer named in `P8F8` plus its full 18-site
+> `bootstrap_profile.py` range, `bootstrap_bullet_bank.py`'s six KB/
+> checkpoint writes (not individually named in the doc but the same
+> character: the actual `bullet-bank-clean.csv`, ingestion's own
+> checkpoint), `jd_manager.py`'s five (`save_checkpoint` — named explicitly
+> — plus `save_evaluation`/`save_liveness`/`save_application_status`/
+> `split_batch_jds`, all truncating a JD's own already-live JSON file, not
+> just metadata), and `scan.py`'s new-JD write. **14 deliberately excluded**
+> as out of B13's "knowledge base" scope, not oversights: per-JD output
+> artifacts (`orchestrator.py` ×2, `polish.py`, `render_html.py`,
+> `render_coverletter.py`, `detect_blank_scores.py` — the last is B62's
+> wrong-path finding, not this one) and writes already guarded by a
+> not-exists check or flagged as scratch by another backlog item
+> (`profile_paths.py`'s `.stignore`, `liveness.py`'s temp input file per
+> B62, `jd_manager.py`'s `append_application_row` header,
+> `bootstrap_bullet_bank.py`'s five-site `create_new_profile()` scaffold —
+> a fresh profile's boilerplate, not live data). (b) `load_checkpoint` now
+> logs which file and what exception before falling back to `{}`, at the
+> same call site as (a)'s `save_checkpoint` fix. (c) `scripts/
+> kb_snapshot.py` adds a 5-rotation pre-run snapshot (top-level KB files
+> only, not `archive/`/`bootstrap/`) into `profile_paths.kb_snapshot_dir()`
+> — a new path function, `data/<profile>/kb_snapshots/`, following the
+> existing `data_dir()`/sync-root convention rather than a new one — called
+> once from `orchestrator.run_pipeline()` before any JD is processed. (d)
+> `doctor.check_kb_allowlist()` now also flags zero-byte or future-mtime
+> KB_ALLOWLIST files and sweeps the KB directory for `.sync-conflict-*`
+> files, folded into the same check rather than a new one. Full suite: 1155
+> passed (was 1136 after B60's fix), 0 failed — new coverage for
+> `atomic_write` (success/failure/no-leftover-temp-file cases),
+> checkpoint-corruption logging, `kb_snapshot` (copy/no-recurse/rotation),
+> and `check_kb_allowlist`'s three new failure modes. The existing
+> `test_orchestrator_main_batch.py` suite now mocks the new
+> `kb_snapshot.snapshot_kb()` call — without it, every test there
+> (`orchestrator.main()` unmocked) would have copied the real active
+> profile's real `knowledge_base/` into its real `data/<profile>/
+> kb_snapshots/` on every test run.
+>
+> **Next up, per §6:** **B14** (JD prompt injection) — the other compound
+> blocker in Tier 1 — then B16, B17, B19. B24's page-2 layout work is now
+> unblocked by B60, but re-run `resume sample` first, since restoring the
+> missing employers changes what page 2 contains.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

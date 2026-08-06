@@ -76,6 +76,10 @@ class TestPathHelpers(unittest.TestCase):
         expected = os.path.join(profile_paths.PROFILES_DIR, "morgan", "board_scanner")
         self.assertEqual(profile_paths.board_scanner_dir("morgan"), expected)
 
+    def test_kb_snapshot_dir_nests_under_data_dir(self):
+        expected = os.path.join(profile_paths.data_dir("morgan"), "kb_snapshots")
+        self.assertEqual(profile_paths.kb_snapshot_dir("morgan"), expected)
+
 
 class TestSyncRoots(unittest.TestCase):
 

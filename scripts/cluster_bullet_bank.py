@@ -70,6 +70,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 import theme
 
 KB_DIR       = profile_paths.kb_dir()
@@ -468,7 +469,7 @@ def main():
             "representative":  rep_text,
             "members":         members,
         }
-    with open(CLUSTER_MAP, "w", encoding="utf-8") as f:
+    with atomic_write(CLUSTER_MAP, encoding="utf-8") as f:
         json.dump(cluster_map, f, indent=2, ensure_ascii=False)
     print(f"  Wrote cluster map to {CLUSTER_MAP}")
 
