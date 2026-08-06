@@ -56,9 +56,9 @@ const BLOCKED_DOMAINS = new Set([
   'salary.com', 'payscale.com', 'levels.fyi',
 
   // Remote-specific aggregators
-  'flexjobs.com', 'remote.co', 'weworkremotely.com', 'remoteok.com',
+  'flexjobs.com', 'remote.co', 'weworkremotely.com', 'remoteok.io',
   'remoterocketship.com', 'dailyremote.com', 'virtualvocations.com',
-  'justremote.co', 'workingnomads.com', 'nodesk.co', 'remotefront.com',
+  'justremote.co', 'workingnomads.co', 'nodesk.co', 'remotefront.com',
   'jobspresso.co', 'remotive.com', 'remotehub.com', 'remoteleaf.com',
   'remoteco.io', 'workremotely.io',
 
@@ -180,8 +180,11 @@ function isJobUrl(rawUrl) {
 
   const path = parsed.pathname.toLowerCase();
   if (CONTENT_PATH_SIGNALS.some(s => path.includes(s))) return false;
-  if (JOB_PATH_SIGNALS.some(s => path.includes(s))) return true;
-  return true;
+  // Both branches used to return true, which made JOB_PATH_SIGNALS decorative
+  // and the whole function really "not a blocked domain and not a blog post."
+  // acme.com/team/leadership passed as a job posting, became a JD file, and
+  // then became a paid Gemini tailoring call against a page that isn't a job.
+  return JOB_PATH_SIGNALS.some(s => path.includes(s));
 }
 
 /** @type {Provider} */
