@@ -281,6 +281,20 @@ def _check_experience_completeness(resume_data: dict) -> list[str]:
     return violations
 
 
+def _normalize_company(name) -> str:
+    """Company name reduced to lowercase alphanumerics and single spaces.
+
+    Punctuation is dropped because this project's own sources disagree on it
+    for the same employer: `profile.yml` says "Element 8 / Strategy LLC" while
+    `cv.md` says "Element 8 + Strategy, LLC". The builder writes the work
+    history from the KB, so it emits the KB's spelling -- and a roster check
+    that compares punctuation reports a company as missing that is sitting
+    right there in the document. That false "missing" then burns the
+    validator's limited fix attempts asking for an entry that already exists.
+    """
+    return " ".join(re.sub(r"[^0-9a-z]+", " ", str(name).casefold()).split())
+
+
 def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     """Every company the profile declares must have an EXPERIENCE entry.
 
@@ -308,13 +322,11 @@ def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     if not role_roster:
         return []
 
-    present = [
-        str(job.get("company", "")).strip().casefold()
-        for job in resume_data.get("EXPERIENCE", [])
-    ]
+    present = [_normalize_company(job.get("company", ""))
+               for job in resume_data.get("EXPERIENCE", [])]
     violations = []
     for company in role_roster:
-        needle = str(company).strip().casefold()
+        needle = _normalize_company(company)
         if not needle:
             continue
         if not any(needle in entry or entry in needle for entry in present if entry):

@@ -301,6 +301,19 @@ class TestRoleRoster(unittest.TestCase):
         self.assertEqual(len(violations), 1)
         self.assertIn("Callahan Creek", violations[0])
 
+    def test_punctuation_drift_between_kb_and_profile_is_not_a_missing_company(self):
+        """The live failure this check kept reporting for three runs:
+        profile.yml says "Element 8 / Strategy LLC", cv.md says "Element 8 +
+        Strategy, LLC", and the builder writes the work history from the KB --
+        so it emits the KB spelling and the roster check called it missing.
+        VML and Callahan Creek are spelled identically in both sources, which
+        is exactly why they were the only two that ever got 'fixed'."""
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["Element 8 + Strategy, LLC"]), ["Element 8 / Strategy LLC"],
+            ), [],
+        )
+
     def test_matching_ignores_case_and_surrounding_whitespace(self):
         self.assertEqual(
             validate_resume._check_role_roster(
