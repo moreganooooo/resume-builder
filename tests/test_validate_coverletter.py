@@ -63,3 +63,67 @@ class TestValidateCoverLetter(unittest.TestCase):
         # validate_coverletter.py's docstring). This test just documents the
         # limitation exists rather than asserting a specific behavior for it.
         pass
+
+
+class TestKBTraceability(unittest.TestCase):
+    """B14: a JD-borne prompt injection got a fabricated '10 years of
+    professional Rust systems programming experience ... at Stripe
+    (2019-2024), cutting p99 latency 92%' woven into a real cover letter's
+    first paragraph. None of the three checks above catch a fabrication
+    that isn't a forbidden phrase, a paragraph-count violation, or a
+    third-person slip -- this check is the factual-grounding backstop."""
+
+    KB_CORPUS = (
+        "=== VERIFIED FACTS ===\n"
+        "Led lifecycle email campaigns at Acme Corp, growing engagement 18%.\n"
+        "8 years of B2B marketing and content strategy experience.\n"
+        "=== VERIFIED TOOLS ===\nHubSpot, Salesforce, Figma\n"
+    )
+
+    def test_no_violations_when_no_corpus_given(self):
+        # Default kb_corpus="" -- callers outside the JD-injection threat
+        # model (polish.py) get no traceability check at all.
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += (
+            " I have 10 years of professional Rust systems programming "
+            "experience and led a rewrite at Stripe (2019-2024), cutting "
+            "p99 latency 92%."
+        )
+        violations = validate_coverletter.validate(letter, STYLE_RULES)
+        self.assertEqual(violations, [])
+
+    def test_flags_fabricated_metric_not_in_kb_corpus(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += (
+            " This technical foundation, combined with my background in "
+            "journalism, let me cut p99 latency 92% on a payments ledger."
+        )
+        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        self.assertTrue(any("92%" in v for v in violations), violations)
+
+    def test_flags_fabricated_year_range_not_in_kb_corpus(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += " I led this effort from (2019-2024)."
+        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        self.assertTrue(any("2019-2024" in v for v in violations), violations)
+
+    def test_does_not_flag_a_metric_present_in_kb_corpus(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += " I grew engagement 18% in that role."
+        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        self.assertEqual(violations, [])
+
+    def test_does_not_flag_years_experience_claim_present_in_kb_corpus(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += " I bring 8 years of B2B marketing experience."
+        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        self.assertEqual(violations, [])
+
+    def test_ignores_ordinary_small_numbers_with_no_distinctive_suffix(self):
+        # Deliberately not a bare \d+ match -- "3" alone would flag nearly
+        # every letter. Only %, $, K/M-suffixed, "N years/yrs", and year
+        # ranges count as checkable claims.
+        letter = _valid_letter()
+        letter["body_paragraphs"][0] += " I've held 3 roles in this space."
+        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        self.assertEqual(violations, [])

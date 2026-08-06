@@ -2228,7 +2228,7 @@ class ResumeEngine:
             print(f"  {theme.colorize_icon_ansi('warning')} evaluate_fit: no candidate profile "
                   "or archetype library found -- scoring the JD in isolation.")
 
-        sections.append(f"=== JOB DESCRIPTION ===\n{jd_text}")
+        sections.append(f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===")
         return "\n\n".join(sections)
 
     def evaluate_fit(self, jd_path: str) -> dict:
@@ -2337,7 +2337,7 @@ class ResumeEngine:
         text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=prompt,
-            contents=f"=== CONTACT ===\n{contact_block}\n\n=== JOB DESCRIPTION ===\n{jd_text}",
+            contents=f"=== CONTACT ===\n{contact_block}\n\n=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
             temperature=0.3,
         )
         return text.strip() if text else None
@@ -2388,7 +2388,7 @@ class ResumeEngine:
             f"=== FOLLOW-UP NUMBER ===\n{follow_up_count + 1}\n\n"
             f"=== CONTACT ===\n{contact_block}\n\n"
             f"=== CANDIDATE BACKGROUND (cv.md) ===\n{cv_text}\n\n"
-            f"=== JOB DESCRIPTION ===\n{jd_text}"
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ==="
         )
         text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
@@ -2428,7 +2428,7 @@ class ResumeEngine:
         letter_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=system_instruction,
-            contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+            contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
             response_schema=CoverLetterSchema,
             temperature=0.0,
         )
@@ -2438,7 +2438,11 @@ class ResumeEngine:
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
-        violations = validate_coverletter.validate(letter_data, style_rules)
+        # kb_corpus=background_context: the same grounding corpus the model
+        # was given in system_instruction, re-used here so validate() can
+        # check that specific factual claims (metrics, years-of-experience,
+        # date ranges) in the letter actually trace back to it -- see B14.
+        violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
 
         if violations:
             print(f"  Validator found {len(violations)} issue(s), retrying once:")
@@ -2458,7 +2462,7 @@ class ResumeEngine:
             fixed_data = GeminiClient.parse_json(fix_text or "")
             if fixed_data:
                 letter_data = fixed_data
-                violations = validate_coverletter.validate(letter_data, style_rules)
+                violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
             if violations:
                 print(f"  {theme.colorize_icon_ansi('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:")
                 for v in violations:
@@ -2552,7 +2556,7 @@ class ResumeEngine:
             keyword_text, _ = GeminiClient.generate(
                 model=BUILDER_MODEL,
                 system_instruction=extract_prompt,
-                contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+                contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
                 response_schema=JDKeywordSchema,
                 temperature=0.0,
             )
@@ -2702,7 +2706,7 @@ class ResumeEngine:
             )
             combined_contents = (
                 f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
-                f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+                f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
                 f"=== REFINED BULLETS ===\n{bullets_block}"
             )
@@ -2863,7 +2867,7 @@ class ResumeEngine:
                 f"\n\nTOP-THIRD-OF-PAGE-ONE SCORING RUBRIC:\n{top_third_score_rules}"
             )
             critique_contents = (
-                f"=== JOB DESCRIPTION ===\n{jd_text}\n\n"
+                f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
             )
             critique_text, _ = GeminiClient.generate(
