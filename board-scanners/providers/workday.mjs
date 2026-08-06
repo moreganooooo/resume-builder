@@ -44,7 +44,7 @@ export default {
 // while vendoring, not a deliberate feature.
   async fetch(entry, _ctx) {
     const baseUrl = resolveBaseUrl(entry);
-    if (!baseUrl) throw new Error(`workday: cannot derive board URL for ${entry.name}`);
+    if (!baseUrl) throw new Error(`cannot derive board URL for ${entry.name}`);
 
     let chromium;
     try {

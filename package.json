@@ -19,7 +19,6 @@
     "playwright": "1.61.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
     "@types/node": "^26.1.1"
   },
   "allowScripts": {

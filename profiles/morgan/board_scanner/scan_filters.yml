@@ -290,7 +290,6 @@ title_filter:
     - "Sales Strategy"
     - "Sales Operations"
     - "Strategic Partnerships"
-    - "Customer Strategy"
     - "Customer Lifecycle"
     - "Customer Engagement"
     - "Creative Strategist"
@@ -299,17 +298,10 @@ title_filter:
     - "Digital Experience"
     - "Sales Specialist"
     - "Marketing Proposal"
-    - "Digital Experience"
-    - "Web Strategy"
-    - "Media Strategist"
-    - "Creative Strategist"
     - "Partnerships"
     - "Sales Operation"
-    - "Sales Strategy"
     - "RevOps"
     - "Revenue Operations"
-    - "GTM Strategy"
-    - "Go-To-Market"
 
   negative:
     - " Engineer"      # leading space: blocks Software Engineer, Data Engineer, etc. but NOT GTM Engineer (Marketing)
@@ -427,7 +419,6 @@ title_filter:
     - "Compensation"
 
     # Deep technical CRM / Salesforce roles
-    - "Developer"
     - "Database"
     - "Marketo"
 
@@ -493,7 +484,6 @@ title_filter:
     - "P2P"
     - "Early Access"
     - "Workplace Business Partner"
-    - "India"
     - "AWS"
     - "Cloud"
     - "Counsel"
@@ -565,7 +555,6 @@ title_filter:
 
     # Added to eliminate EdTech & Academic
     - "Assessment"
-    - "Curriculum"
 
     # Added to eliminate Auto, Fleet & Property
     - "Hospitality"
@@ -689,7 +678,6 @@ title_filter:
     - "Prague"
     - "Czechia"
     - "Dubai"
-    - "Africa"
     - "Karnataka"
 
     # Added random miscellaneous noise

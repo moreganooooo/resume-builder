@@ -20,11 +20,11 @@ function assertGreenhouseUrl(url) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`greenhouse: invalid URL: ${url}`);
+    throw new Error(`invalid URL: ${url}`);
   }
-  if (parsed.protocol !== 'https:') throw new Error(`greenhouse: URL must use HTTPS: ${url}`);
+  if (parsed.protocol !== 'https:') throw new Error(`URL must use HTTPS: ${url}`);
   if (!ALLOWED_GREENHOUSE_HOSTS.has(parsed.hostname))
-    throw new Error(`greenhouse: untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_GREENHOUSE_HOSTS].join(', ')}`);
+    throw new Error(`untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_GREENHOUSE_HOSTS].join(', ')}`);
   return url;
 }
 
@@ -57,7 +57,7 @@ export default {
 
   async fetch(entry, ctx) {
     const apiUrl = resolveApiUrl(entry);
-    if (!apiUrl) throw new Error(`greenhouse: cannot derive API URL for ${entry.name}`);
+    if (!apiUrl) throw new Error(`cannot derive API URL for ${entry.name}`);
     assertGreenhouseUrl(apiUrl);
     // ?content=true (added 2026-07-26): the boards-api already returns each
     // posting's full HTML body when asked -- avoids a second per-posting

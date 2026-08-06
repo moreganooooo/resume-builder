@@ -19,7 +19,7 @@ export default {
     const apiKey = process.env.USAJOBS_API_KEY;
     const email = process.env.USAJOBS_EMAIL;
     if (!apiKey || !email) {
-      throw new Error('usajobs: missing USAJOBS_API_KEY / USAJOBS_EMAIL environment variables');
+      throw new Error('missing USAJOBS_API_KEY / USAJOBS_EMAIL environment variables');
     }
     const headers = {
       Host: 'data.usajobs.gov',

@@ -38,7 +38,7 @@ export default {
 
   async fetch(entry, ctx) {
     const apiUrl = resolveApiUrl(entry);
-    if (!apiUrl) throw new Error(`lever: cannot derive API URL for ${entry.name}`);
+    if (!apiUrl) throw new Error(`cannot derive API URL for ${entry.name}`);
     const json = await ctx.fetchJson(apiUrl);
     if (!Array.isArray(json)) return [];
     return json

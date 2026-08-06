@@ -31,7 +31,9 @@ _resume_ensure_profile() {
   [ "$count" -gt 1 ] || return
 
   echo "Multiple resume-builder profiles found:"
-  printf '  %s\n' $names
+  while IFS= read -r name; do
+    printf '  %s\n' "$name"
+  done <<< "$names"
   local default
   default="$(printf '%s\n' "$names" | head -1)"
   printf "Which profile for this terminal session? [%s]: " "$default"
@@ -42,7 +44,7 @@ _resume_ensure_profile() {
 }
 
 resume() {
-  _resume_ensure_profile
+  type _resume_ensure_profile >/dev/null 2>&1 && _resume_ensure_profile
   local cmd="$1"
   local all_args=("$@")
   if [ $# -gt 0 ]; then shift; fi

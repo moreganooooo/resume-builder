@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -32,6 +33,22 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self._roster_patch = patch("orchestrator._required_role_roster", return_value=[])
         self._roster_patch.start()
         self.addCleanup(self._roster_patch.stop)
+
+        # _parse_pdf_result now reads the page count from a real PDF via
+        # pypdf (B38) instead of regexing subprocess.run's stdout -- these
+        # tests fake the PDF-generation subprocess and never write a real
+        # file, so restore the old stdout-regex behavior here rather than
+        # rewriting every test to fabricate a PDF pypdf can open.
+        def _regex_parse_pdf_result(stdout, pdf_path=None):
+            m = re.search(r"Pages:\s*(\d+)", stdout)
+            page_count = int(m.group(1)) if m else None
+            sm = re.search(r"Size:\s*([\d.]+\s*\w+)", stdout)
+            size_str = sm.group(1) if sm else "unknown size"
+            return page_count, size_str
+
+        self._parse_pdf_patch = patch("orchestrator._parse_pdf_result", side_effect=_regex_parse_pdf_result)
+        self._parse_pdf_patch.start()
+        self.addCleanup(self._parse_pdf_patch.stop)
 
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
@@ -78,7 +95,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         mock_generate.side_effect = generate_side_effect
-        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
 
         with patch.object(self.engine, "mine_bullet_bank") as mock_mine:
             result = self.engine.build_tailored_resume(
@@ -835,7 +852,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         mock_generate.side_effect = generate_side_effect
-        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
@@ -887,7 +904,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         mock_generate.side_effect = generate_side_effect
-        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
         # Step 4's own initial validation call must stay clean (call 1); the
         # recommendation pass's candidate (call 2) is the one that must fail.
         mock_validate.side_effect = [[], ["FAKE VIOLATION FOR TEST"]]
@@ -943,7 +960,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         mock_generate.side_effect = generate_side_effect
-        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
@@ -1045,7 +1062,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         mock_generate.side_effect = generate_side_effect
-        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(

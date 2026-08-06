@@ -349,7 +349,7 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
         existing_rows = _existing_clean_bank_row_count()
         if existing_rows:
             print(
-                f"\n⚠️  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
+                f"\n{theme.colorize_icon_ansi('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
                 f"existing row(s) in {os.path.basename(BULLET_BANK_CLEAN_PATH)} with a full "
                 "reconstruction from the checkpoint. This discards anything not reachable from "
                 "checkpoint.json and cannot be undone."

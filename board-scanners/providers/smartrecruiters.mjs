@@ -17,11 +17,11 @@ function assertSmartRecruitersUrl(url) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`smartrecruiters: invalid URL: ${url}`);
+    throw new Error(`invalid URL: ${url}`);
   }
-  if (parsed.protocol !== 'https:') throw new Error(`smartrecruiters: URL must use HTTPS: ${url}`);
+  if (parsed.protocol !== 'https:') throw new Error(`URL must use HTTPS: ${url}`);
   if (!ALLOWED_SMARTRECRUITERS_HOSTS.has(parsed.hostname)) {
-    throw new Error(`smartrecruiters: untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_SMARTRECRUITERS_HOSTS].join(', ')}`);
+    throw new Error(`untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_SMARTRECRUITERS_HOSTS].join(', ')}`);
   }
   return url;
 }
@@ -61,7 +61,7 @@ export default {
 
   async fetch(entry, ctx) {
     const slug = resolveSlug(entry);
-    if (!slug) throw new Error(`smartrecruiters: cannot derive API URL for ${entry.name}`);
+    if (!slug) throw new Error(`cannot derive API URL for ${entry.name}`);
 
     const all = [];
     for (let page = 0; page < SR_MAX_PAGES; page++) {

@@ -155,7 +155,16 @@ def main():
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
         w.writeheader()
-        w.writerows(rows)
+        try:
+            w.writerows(rows)
+        except ValueError as e:
+            extra = sorted(set(rows[0].keys()) - set(w.fieldnames)) if rows else []
+            raise ValueError(
+                f"{args.input_csv} has column(s) this script doesn't expect: {extra}. "
+                "tag_bullet_bank.py only accepts a 3-column bullet-bank CSV "
+                "(Role / Company, Tags, Bullet Point) -- point it at "
+                "bullet-bank-clean.csv, not a richer CSV like bullet-bank-keepers.csv."
+            ) from e
 
     if review_rows:
         with open(review_path, "w", newline="", encoding="utf-8") as f:

@@ -17,7 +17,7 @@ Speed:
     Uses batchEmbedContents (up to 20 bullets per API call) instead of
     embedContent (1 bullet per call). At 15 RPM free-tier limit:
       Before: 1209 calls → ~80 minutes
-      After:  ~61 calls  → ~4 minutes
+      After:  ~61 calls  → ~20 minutes (EMBED_SLEEP = 20s between batches)
 
 Resume from checkpoint:
     If interrupted, saves a checkpoint after every batch.
