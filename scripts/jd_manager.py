@@ -400,6 +400,12 @@ class JDTracker:
         return any(row["job_key"] == job_key and row["status"] == "completed"
                    for row in self._read_rows())
 
+    def count_completed(self) -> int:
+        """Number of 'completed' rows in the ledger. Append-only, so this
+        only ever grows -- unlike a count of COMPLETED_DIR, which archive_jd()
+        can decrement."""
+        return sum(1 for row in self._read_rows() if row.get("status") == "completed")
+
     def mark_completed(self, job_key, job_title="", company_name="", source_file="",
                         output_json="", output_pdf="") -> None:
         self._append_row({
@@ -643,6 +649,23 @@ def get_completed_jds() -> list:
         and name != tracker_filename
         and not name.startswith(".")
     )
+
+
+def count_completed_resumes() -> int:
+    """
+    All-time count of resumes actually built, read from the append-only
+    tracker CSV rather than from COMPLETED_DIR's file count.
+
+    The directory is the wrong source for an "all-time" figure because it is
+    mutable in both directions: archive_jd() moves files *out* of it, so
+    archiving an old application would silently decrement a total that is
+    supposed to only ever grow. The tracker gets exactly one row per
+    mark_completed() and is never rewritten, which is what "all-time" means.
+
+    Counts completion *events*, not distinct job_keys -- rebuilding a resume
+    for the same role really is another resume customized.
+    """
+    return JDTracker(TRACKER_CSV).count_completed()
 
 
 def archive_jd(jd_path: str) -> str:
