@@ -597,7 +597,9 @@ All three inherit every operating rule above, including no code changes.
 **Owns:** all of `resume-engine/rules/` (`hard_failures.yaml`,
 `truthfulness_rules.yaml`, `style_rules.yaml`, `language_quality.yaml`,
 `verb_taxonomy.yaml`, `verb_intent_mapping.yaml`) and all of
-`resume-engine/scoring/` (18 YAML files plus its `README.md`).
+`resume-engine/scoring/` (16 YAML files plus its `README.md` — corrected from
+"18" by Phase 10; `competencies_score.yaml` and `education_score.yaml` were
+retired, see `scoring/README.md:28-31`).
 
 **Why this exists.** Phase 3 owns `resume-engine/prompts/` — and *only*
 `prompts/`. These 25 files were owned by nobody through nine phases. They are
@@ -644,7 +646,10 @@ they a well-formed vocabulary nothing reads?
 
 ---
 
-### Phase 11 — Unexplained artifacts & path residue
+### Phase 11 — Unexplained artifacts & path residue — **COMPLETE 2026-08-05**
+
+**Output:** `phase-11-orphans.md`. All three traces root-caused → **B60**,
+**B61**, **B62**; **B25 superseded**.
 
 **Goal served:** 1 and 2. **Cross-cutting — reads narrowly along three traces.**
 **Model:** Opus 5 — this is diagnosis, not inventory.
@@ -764,9 +769,22 @@ evidence is `phase-9-backlog.md` §2.
 
 ## Suggested order
 
-**Run (complete):** `0 → 3 → 2 → 1 → 4 → 6 → 7 → 7b → 8 → 5 → 9`
-**Remaining:** `10 → 11 → 12` — in that order, or any order; they are
-independent of each other and each appends to `phase-9-backlog.md`.
+**Run (complete):** `0 → 3 → 2 → 1 → 4 → 6 → 7 → 7b → 8 → 5 → 9 → 10 → 11 → 12`
+**Nothing remains to review.** Phase 11 ran 2026-08-05
+(`phase-11-orphans.md`) — all three traces root-caused, appended as **B60**
+(missing employers), **B61** (banner counter), **B62** (pre-profile paths +
+test residue); **B25 is closed, superseded by B60/B61.** Phase 12 ran
+2026-08-05 (`phase-12-residue.md`) — every unowned path dispositioned,
+appended as **B55–B59**.
+
+**ID collision, corrected 2026-08-05 during close-out:** Phases 10 and 11 ran
+independently and both claimed `B50`/`B51`/`B52`. Phase 10 was the earlier
+claimant (Phase 12 anchored at `B55`, confirming `B54` was the recognized
+high-water mark), so **Phase 11's trio was renumbered to `B60`/`B61`/`B62`**
+across all five docs. Phase 10's `B50` (`ResumeCritiqueSchema`), `B51` (rubric
+thresholds) and `B52` (archetype vocabularies) keep their numbers. Any note
+written before this date that cites `B50–B52` in a Phase 11 context means
+`B60–B62`.
 
 Phase 0 must be first. Phase 3 is placed early because it carries the most
 value to Morgan as a candidate and its fixes are prompt-level and cheap.
@@ -782,9 +800,10 @@ stay as evidence.
 blocking: **the fix pass can start on `phase-9-backlog.md` Tier 0 immediately
 and does not need to wait for them.** Two soft dependencies are worth honoring
 if you can — run **Phase 10 before fixing B18 or B29** (it decides whether the
-enforcement those items ask for already exists in a rubric), and run **Phase 11
-before touching page-2 layout in B24** (B25 is a content bug wearing a
-whitespace costume, and padding it out would hide the cause).
+enforcement those items ask for already exists in a rubric). The Phase 11
+dependency is now discharged: B25 *was* a content bug wearing a whitespace
+costume — **fix B60 before touching page-2 layout in B24**, since restoring the
+three missing employers changes what page 2 contains.
 
 Phase 7b is placed immediately after Phase 7
 because it answers the half of Phase 7's rate-limit question that Phase 7 could
