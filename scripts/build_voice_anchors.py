@@ -18,6 +18,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -45,7 +46,7 @@ def main():
     if not os.path.exists(INDEX_CSV):
         raise SystemExit(f"ERROR: {INDEX_CSV} not found.")
     content = build_voice_anchors()
-    with open(OUTPUT_MD, "w", encoding="utf-8") as f:
+    with atomic_write(OUTPUT_MD, encoding="utf-8") as f:
         f.write(content)
     print(f"Wrote {OUTPUT_MD}")
 

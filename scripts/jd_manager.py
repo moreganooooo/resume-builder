@@ -10,6 +10,7 @@ import csv
 import datetime
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,6 +22,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 JDS_DIR = profile_paths.jds_dir()
 COMPLETED_DIR = os.path.join(JDS_DIR, "completed")
@@ -115,7 +117,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
-    with open(jd_path, "w", encoding="utf-8") as f:
+    with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -151,7 +153,7 @@ def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
         "reason": reason,
         "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
-    with open(jd_path, "w", encoding="utf-8") as f:
+    with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -282,7 +284,7 @@ def save_application_status(jd_path: str, status: str, log_followup: bool = Fals
         "follow_up_count": follow_up_count,
         "last_followup_at": last_followup_at,
     }
-    with open(jd_path, "w", encoding="utf-8") as f:
+    with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -359,7 +361,7 @@ def split_batch_jds(jd_path: str) -> list:
             dest = os.path.join(JDS_DIR, filename.replace(".json", f"_{counter}.json"))
             counter += 1
 
-        with open(dest, "w", encoding="utf-8") as f:
+        with atomic_write(dest, encoding="utf-8") as f:
             json.dump(job, f, indent=2, ensure_ascii=False)
         new_paths.append(dest)
 
@@ -582,19 +584,31 @@ def _checkpoint_path(job_key: str) -> str:
 
 
 def load_checkpoint(job_key: str) -> dict:
+    """Returns the persisted checkpoint for job_key, or {} if none exists
+    yet. A corrupt checkpoint (truncated/partial JSON -- the exact failure
+    mode save_checkpoint's atomic_write() now prevents going forward, but
+    not for files written before this fix, or corrupted some other way,
+    e.g. a `.sync-conflict-*` merge) also falls back to {}, but is logged
+    loudly first: silently treating "corrupt" the same as "no checkpoint"
+    means the pipeline re-spends this JD's entire progress on the next
+    run without any indication why."""
     path = _checkpoint_path(job_key)
     if not os.path.exists(path):
         return {}
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as e:
+        logging.error(
+            f"Corrupt checkpoint at {path}: {e}. Falling back to an empty "
+            f"checkpoint -- job {job_key!r} will re-run from scratch."
+        )
         return {}
 
 
 def save_checkpoint(job_key: str, data: dict) -> None:
     os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
-    with open(_checkpoint_path(job_key), "w", encoding="utf-8") as f:
+    with atomic_write(_checkpoint_path(job_key), encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 

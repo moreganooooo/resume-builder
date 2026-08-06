@@ -12,6 +12,7 @@ import json
 import os
 
 import profile_paths
+from atomic_write import atomic_write
 
 
 def record_run(task_name: str) -> None:
@@ -28,7 +29,7 @@ def record_run(task_name: str) -> None:
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 log = {}
         log[task_name] = datetime.datetime.now().isoformat(timespec="seconds")
-        with open(path, "w", encoding="utf-8") as f:
+        with atomic_write(path, encoding="utf-8") as f:
             json.dump(log, f, indent=2)
     except OSError:
         pass
