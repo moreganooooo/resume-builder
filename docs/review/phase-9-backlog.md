@@ -175,21 +175,30 @@ re-dispatched, since there are no phases left to receive them.
 > "Removing unused browser…" lines that read like normal cleanup. Recorded in
 > CLAUDE.md's Setup section — **do not loosen the pin.**
 >
-> **🔄 The one thing left open from Tier 0:** B60's *detection* works, but
-> the builder could not reliably *produce* the sixth employer. Live behavior:
-> the `tailor_resume.md` roster rule restored **VML** and **Callahan Creek**
-> across retry attempts but never **Element 8 / Strategy LLC**, and the
-> 4-attempt fix loop then exhausted. Mining is not the problem — the
-> checkpoint confirms 3 refined bullets for Element 8, matching Phase 11.
-> A targeted `MISSING EMPLOYERS` block was added to the fix call
-> (`139786af`), following the loop's own idiom for opening-verb collisions
-> and Skills widows. **A verification `resume sample` run was in flight when
-> the session ended — its result is unknown. Re-run it first thing.** If
-> Element 8 still doesn't appear, the next lever is raising
-> `max_fix_attempts` above 4 for roster violations specifically, or seeding
-> the entry deterministically from `profiles/<name>/fixed_content.py`
-> (`COMPANY_META` + `COMPANY_FIXED_TITLE` already hold its title, period,
-> location and size) rather than asking the model to author it.
+> **🔄 B60 — root-caused, needs one confirming run.** Three consecutive
+> sample runs reported `Element 8 / Strategy LLC` missing while every other
+> violation got fixed (8 → 3 → 1 across attempts) and the 4-attempt loop
+> exhausted on it every time. **The defect was in the check, not the model.**
+> This project's own sources disagree on the name: `profile.yml` says
+> `Element 8 / Strategy LLC`, `cv.md` says `Element 8 + Strategy, LLC`. The
+> builder writes the work history from the KB, so it emits the KB's spelling
+> — and the roster check, comparing punctuation, called a company missing
+> that was already in the document, then spent every fix attempt asking for
+> an entry that existed. The tell: VML and Callahan Creek are spelled
+> identically in both sources, which is why they were the only two that ever
+> appeared to get "fixed". Names are now normalized to lowercase
+> alphanumerics before matching (`1db98f5d`).
+>
+> **Next session: run `resume sample` once to confirm six employers and a
+> completed resume PDF.** Do not reach for `max_fix_attempts` or a
+> deterministic seed from `fixed_content.py` — an earlier version of this
+> note proposed both on the strength of the bad diagnosis, and neither is
+> warranted. Mining was never the problem either (the checkpoint carries 3
+> refined bullets for Element 8, matching Phase 11).
+>
+> **Worth fixing separately, low priority:** the underlying name drift
+> between `cv.md` and `profile.yml` is still there. The check now tolerates
+> it, but any future code that joins on company name will hit the same wall.
 >
 > **Two Tier-0 items came out bigger than filed:** B47 named five rubrics
 > with broken `flags:` blocks — it is **seven** (all fixed, with a test that
