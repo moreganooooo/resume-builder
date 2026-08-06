@@ -521,8 +521,67 @@ def _normalize_for_match(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
 
 
+def build_known_jobs_index() -> dict:
+    """Walks jds/, jds/completed/, jds/archived/, and jds/expired/ exactly
+    once and returns an in-memory index of every job identity found there,
+    for job_key_known() to match against via its index= param instead of
+    re-walking all four directories (and re-running compute_job_key()'s
+    file-open-and-parse on every file found) on every single call --
+    candidates x total_JD_files file opens on a mature profile, attributed
+    to nothing the user can see (B35). run_scan() builds one of these once
+    per scan and reuses it across every candidate, updating it in memory
+    via add_to_known_jobs_index() as new JDs are written so later
+    candidates in the same run are still deduped correctly. Omitting
+    index= from job_key_known() rebuilds one on that single call, so
+    existing single-call callers/tests are unaffected."""
+    tracker_filename = os.path.basename(TRACKER_CSV)
+    job_keys = set()
+    url_company_pairs = set()
+    normalized_pairs = set()
+
+    for base_dir in (JDS_DIR, COMPLETED_DIR, ARCHIVED_DIR, EXPIRED_DIR):
+        if not os.path.isdir(base_dir):
+            continue
+        for name in os.listdir(base_dir):
+            if name == tracker_filename or name.startswith("."):
+                continue
+            path = os.path.join(base_dir, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                job_keys.add(compute_job_key(path))
+            except OSError:
+                continue
+
+            existing_url, existing_company, existing_title = _read_dedup_fields(path)
+            if existing_url and existing_company:
+                url_company_pairs.add((existing_url, existing_company))
+            normalized_pair = (_normalize_for_match(existing_company), _normalize_for_match(existing_title))
+            if normalized_pair[0] and normalized_pair[1]:
+                normalized_pairs.add(normalized_pair)
+
+    return {
+        "job_keys": job_keys,
+        "url_company_pairs": url_company_pairs,
+        "normalized_pairs": normalized_pairs,
+    }
+
+
+def add_to_known_jobs_index(index: dict, job_key: str, source_url: str = None,
+                             company_name: str = None, job_title: str = None) -> None:
+    """Updates an index from build_known_jobs_index() in place with a job
+    just written during the same run_scan() pass, so later candidates in
+    that pass are still deduped against it without a fresh disk walk."""
+    index["job_keys"].add(job_key)
+    if source_url and company_name:
+        index["url_company_pairs"].add((source_url, company_name))
+    normalized_pair = (_normalize_for_match(company_name), _normalize_for_match(job_title))
+    if normalized_pair[0] and normalized_pair[1]:
+        index["normalized_pairs"].add(normalized_pair)
+
+
 def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = None,
-                   company_name: str = None, job_title: str = None) -> bool:
+                   company_name: str = None, job_title: str = None, index: dict = None) -> bool:
     """True if job_key is already completed in the tracker, or a JD file
     for it already exists in jds/, jds/completed/, jds/archived/, or
     jds/expired/ -- matched by any of: job_key; (when both source_url and
@@ -543,39 +602,27 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = N
     archived) or that's already confirmed dead doesn't get silently
     rediscovered as "new" and re-run through the whole pipeline on the
     next scan. Used by scan.py to avoid writing duplicate JD files
-    across repeated scan runs."""
+    across repeated scan runs. index, when given (see
+    build_known_jobs_index()), is matched in memory instead of walking
+    the four directories fresh on this call."""
     tracker = tracker or JDTracker(TRACKER_CSV)
     if tracker.is_completed(job_key):
         return True
 
+    index = index if index is not None else build_known_jobs_index()
+
+    if job_key in index["job_keys"]:
+        return True
+
+    if source_url and company_name and (source_url, company_name) in index["url_company_pairs"]:
+        return True
+
     normalized_company = _normalize_for_match(company_name) if company_name else None
     normalized_title = _normalize_for_match(job_title) if job_title else None
+    if (normalized_company and normalized_title
+            and (normalized_company, normalized_title) in index["normalized_pairs"]):
+        return True
 
-    tracker_filename = os.path.basename(TRACKER_CSV)
-    for base_dir in (JDS_DIR, COMPLETED_DIR, ARCHIVED_DIR, EXPIRED_DIR):
-        if not os.path.isdir(base_dir):
-            continue
-        for name in os.listdir(base_dir):
-            if name == tracker_filename or name.startswith("."):
-                continue
-            path = os.path.join(base_dir, name)
-            if not os.path.isfile(path):
-                continue
-            try:
-                if compute_job_key(path) == job_key:
-                    return True
-            except OSError:
-                continue
-
-            existing_url, existing_company, existing_title = _read_dedup_fields(path)
-
-            if source_url and company_name and existing_url == source_url and existing_company == company_name:
-                return True
-
-            if (normalized_company and normalized_title
-                    and _normalize_for_match(existing_company) == normalized_company
-                    and _normalize_for_match(existing_title) == normalized_title):
-                return True
     return False
 
 

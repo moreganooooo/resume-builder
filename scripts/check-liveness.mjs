@@ -28,28 +28,35 @@ async function runJsonMode(candidatesPath) {
   const text = await readFile(candidatesPath, 'utf-8');
   const candidates = JSON.parse(text);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, timeout: 30_000 });
   const page = await browser.newPage();
 
   const results = [];
-  // Sequential — project rule: never Playwright in parallel
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
+  try {
+    // Sequential — project rule: never Playwright in parallel
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
 
-    // Progress indicator: [i/total] + status + reason if applicable
-    const icon = { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' }[result] || '❓';
-    const progress = `[${i + 1}/${candidates.length}]`;
-    console.error(`${progress} ${icon} ${result.padEnd(14)} ${candidate.source_file}`);
-    if (reason && result !== 'active' && result !== 'likely_active') {
-      console.error(`         → ${reason}`);
+      // Progress indicator: [i/total] + status + reason if applicable
+      const icon = { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' }[result] || '❓';
+      const progress = `[${i + 1}/${candidates.length}]`;
+      console.error(`${progress} ${icon} ${result.padEnd(14)} ${candidate.source_file}`);
+      if (reason && result !== 'active' && result !== 'likely_active') {
+        console.error(`         → ${reason}`);
+      }
+
+      results.push({ ...candidate, result, code, reason });
     }
-
-    results.push({ ...candidate, result, code, reason });
+  } finally {
+    // Both effects matter: closing the browser even on a throw (it
+    // otherwise leaks a headless Chromium process), and printing
+    // whatever's in `results` so far even on a throw (previously, a
+    // failure on candidate 89 of 90 discarded all 88 already-checked
+    // results instead of returning them) (B21).
+    await browser.close();
+    console.log(JSON.stringify(results));
   }
-
-  await browser.close();
-  console.log(JSON.stringify(results));
 }
 
 async function runTextMode(args) {
@@ -63,7 +70,7 @@ async function runTextMode(args) {
 
   console.log(`Checking ${urls.length} URL(s)...\n`);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, timeout: 30_000 });
   const page = await browser.newPage();
 
   let active = 0, expired = 0, uncertain = 0;

@@ -19,12 +19,28 @@ import jd_manager
 import profile_paths
 import theme
 
+# Vars this repo's own subprocess children (Chromium via check-liveness.mjs
+# here, every board/ATS provider via scan_boards.py's own copy of this
+# list) have no legitimate need for, so they're stripped rather than
+# inherited by default -- neither the liveness check nor any scan provider
+# calls Gemini or JobRight, so there's no reason for a Chromium process
+# navigating to arbitrary employer sites to be carrying Morgan's API key
+# or JobRight session cookie in its environment (B41).
+_SUBPROCESS_ENV_STRIP = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "JOBRIGHT_COOKIE_STRING")
+
+
+def _child_env() -> dict:
+    return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Profile-scoped: this used to land at the repo root's output/, outside
 # profile_paths.sync_roots(). It's cleaned up in a finally block, so it only
 # persisted when the process was killed mid-check -- but a stray temp file
 # from one profile sitting in a shared path is still the wrong shape.
 LIVENESS_INPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_input_tmp.json")
+# check-liveness.mjs's results JSON goes to a real file, not a pipe --
+# see _verify_candidates()'s Popen call for why (B21).
+LIVENESS_OUTPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_output_tmp.json")
 
 # How recently a JD needs to have been checked (or scanned -- see
 # scan.py's seeding of _liveness at write time) to skip re-checking it by
@@ -32,6 +48,14 @@ LIVENESS_INPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_input_t
 # evaluated or hasn't), this is time-windowed since a posting can genuinely
 # go stale between runs.
 RECENCY_HOURS = 24
+
+# Sizes subprocess.run's timeout= from the candidate count instead of
+# waiting unbounded -- each candidate is one real Chromium navigation
+# (liveness-browser.mjs's NAV_TIMEOUT_MS=15s + RENDER_WAIT_MS=1.2s +
+# evaluate() overhead), plus a floor covering Node/Chromium startup for
+# even a single candidate (B21).
+NODE_TIMEOUT_PER_CANDIDATE_S = 20
+NODE_TIMEOUT_FLOOR_S = 60
 
 
 def _is_recently_checked(jd_path: str) -> bool:
@@ -82,8 +106,13 @@ def _verify_candidates(candidates: list) -> dict:
     check-liveness.mjs, persists each result via jd_manager.save_liveness(),
     moves any 'expired' result's file to jds/expired/, prints the same
     progress/summary check_liveness_check() always has, and returns a
-    dict with keys active/likely_active/expired/uncertain/moved (plus
-    error=True on a failure path). Candidate-gathering and recency-skip
+    dict with keys active/likely_active/expired/uncertain/moved/
+    expired_source_paths (plus error=True on a failure path).
+    expired_source_paths deliberately holds each moved file's pre-move
+    path, not where it now lives in jds/expired/ -- that's the identity
+    scan.py's run_scan() already has cached in its own written_paths dict
+    (keyed the same way) and needs to look an entry back up by, not a
+    location to open (B42). Candidate-gathering and recency-skip
     stay the caller's concern -- run_liveness_check() derives candidates
     from get_pending_jds() + a recency split; verify_jd_paths() (used by
     scan.py to verify freshly-scanned postings before presenting them as
@@ -92,7 +121,7 @@ def _verify_candidates(candidates: list) -> dict:
     empty candidate list -- callers embedding this in a larger flow
     (scan.py) shouldn't get a standalone "nothing to check" message."""
     if not candidates:
-        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_paths": []}
+        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": []}
 
     os.makedirs(os.path.dirname(LIVENESS_INPUT_PATH), exist_ok=True)
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
@@ -102,29 +131,61 @@ def _verify_candidates(candidates: list) -> dict:
     cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
     print()
 
+    script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
+    timeout_s = max(NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S)
     try:
-        script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
-        proc = subprocess.run(
-            ["node", script, "--json-file", LIVENESS_INPUT_PATH],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
+        # stdout goes to a real file, not a pipe: Node writes the final
+        # JSON blob once, at exit, and it can exceed the OS pipe buffer on
+        # a large scan -- piping it while also reading stderr line-by-line
+        # below would risk the classic subprocess deadlock (child blocks
+        # writing a full stdout pipe, parent blocks reading stderr, or
+        # vice versa).
+        with open(LIVENESS_OUTPUT_PATH, "w", encoding="utf-8") as stdout_file:
+            proc = subprocess.Popen(
+                ["node", script, "--json-file", LIVENESS_INPUT_PATH],
+                stdout=stdout_file, stderr=subprocess.PIPE, text=True, bufsize=1,
+                env=_child_env(),
+            )
+            try:
+                # Stream progress as the Node child writes it, instead of
+                # subprocess.run()'s communicate(), which buffers the
+                # entire stream and only hands it back after the process
+                # has already exited -- the progress "indicator" was
+                # replaying a finished transcript, not showing live
+                # progress (B21).
+                for line in proc.stderr:
+                    print(f"  {line.rstrip()}")
+                proc.wait(timeout=timeout_s)
+            except subprocess.TimeoutExpired:
+                print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check timed out after {timeout_s}s.")
+                return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
+            finally:
+                # subprocess.run() deliberately does not kill the child on
+                # KeyboardInterrupt (bpo-25942), assuming process-group
+                # delivery that doesn't happen here -- verified live: Ctrl-C
+                # on the Python process left the Node child running,
+                # still making outbound requests to employer sites.
+                # Explicit kill()+wait() means an interrupted or timed-out
+                # run never orphans it (B21).
+                if proc.poll() is None:
+                    proc.kill()
+                proc.wait()
+
         if proc.returncode != 0:
-            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed:\n{proc.stderr}")
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_paths": [], "error": True}
+            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed (exit code {proc.returncode}).")
+            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
 
-        # Print incremental progress from stderr as it arrives
-        if proc.stderr.strip():
-            for line in proc.stderr.strip().split('\n'):
-                print(f"  {line}")
-
+        with open(LIVENESS_OUTPUT_PATH, "r", encoding="utf-8") as f:
+            stdout_data = f.read()
         try:
-            results = json.loads(proc.stdout)
+            results = json.loads(stdout_data)
         except json.JSONDecodeError:
-            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{proc.stdout[:500]}")
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_paths": [], "error": True}
+            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}")
+            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
     finally:
-        if os.path.exists(LIVENESS_INPUT_PATH):
-            os.remove(LIVENESS_INPUT_PATH)
+        for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
+            if os.path.exists(path):
+                os.remove(path)
 
     counts = {}
     moved = 0
@@ -169,14 +230,14 @@ def _verify_candidates(candidates: list) -> dict:
             jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
 
     # Move expired JDs to expired/ folder
-    expired_paths = []
+    expired_source_paths = []
     for r in results_by_status.get("expired", []):
         source_file = r.get("source_file")
         if source_file and os.path.exists(source_file):
             dest = os.path.join(jd_manager.EXPIRED_DIR, os.path.basename(source_file))
             shutil.move(source_file, dest)
             moved += 1
-            expired_paths.append(source_file)
+            expired_source_paths.append(source_file)
 
     return {
         "active": counts.get("active", 0),
@@ -184,7 +245,7 @@ def _verify_candidates(candidates: list) -> dict:
         "expired": counts.get("expired", 0),
         "uncertain": counts.get("uncertain", 0),
         "moved": moved,
-        "expired_paths": expired_paths,
+        "expired_source_paths": expired_source_paths,
     }
 
 
