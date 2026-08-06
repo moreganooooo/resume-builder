@@ -134,20 +134,28 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
 
 def _stats_line_text() -> str:
     """Real, live data -- no new persistence. pending count comes from
-    jd_manager.get_pending_jds(); tailored count is jds/completed/'s file
-    count (both already create their directory if missing)."""
+    jd_manager.get_pending_jds(); tailored count comes from the append-only
+    tracker CSV, NOT from jds/completed/'s file count -- archive_jd() moves
+    files out of that directory, which would make an "All-Time" total go
+    down. This walks the whole JD corpus, so it is expensive: call it once
+    and reuse the string, never once per animation frame."""
     pending = len(jd_manager.get_pending_jds())
-    tailored = len(jd_manager.get_completed_jds())
+    tailored = jd_manager.count_completed_resumes()
     return f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
 
 
 def display_main_banner() -> None:
     grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
+    # Hoisted out of render_frame deliberately: the stats are constant for the
+    # length of the animation, but calling this per-frame walked the entire JD
+    # corpus 31 times and turned a 1.6s reveal into ~27s -- the first thing
+    # every user ever experiences. Compute once, close over the string.
+    stats_line = _stats_line_text()
 
     def render_frame(threshold):
         body = _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold)
         body.append(SUBTITLE, style="bold")
-        body.append(_stats_line_text(), style=theme.INFO)
+        body.append(stats_line, style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
     _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)

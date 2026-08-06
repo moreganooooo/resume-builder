@@ -89,7 +89,9 @@
       "Bash(git archive *)",
       "Bash(tar -t)",
       "Bash(pandoc \"/home/morganescott/Documents/Morgammm/job_projects/resume-builder/ImprovementConcepts/primaryenhancementplan.rtf\" -f rtf -t plain -o primaryenhancementplan.txt)",
-      "Bash(pandoc \"/home/morganescott/Documents/Morgammm/job_projects/resume-builder/ImprovementConcepts/resourceideas.rtf\" -f rtf -t plain -o resourceideas.txt)"
+      "Bash(pandoc \"/home/morganescott/Documents/Morgammm/job_projects/resume-builder/ImprovementConcepts/resourceideas.rtf\" -f rtf -t plain -o resourceideas.txt)",
+      "Skill(claude-api)",
+      "Bash(resume doctor *)"
     ]
   }
 }

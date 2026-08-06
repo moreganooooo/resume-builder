@@ -218,6 +218,36 @@ class TestJDTracker(unittest.TestCase):
         second_tracker = jd_manager.JDTracker(self.csv_path)
         self.assertTrue(second_tracker.is_completed("xyz"))
 
+    def test_count_completed_on_missing_ledger_is_zero(self):
+        self.assertEqual(jd_manager.JDTracker(self.csv_path).count_completed(), 0)
+
+    def test_count_completed_ignores_failed_rows(self):
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_completed("a")
+        tracker.mark_failed("b", error_message="boom")
+        tracker.mark_completed("c")
+        self.assertEqual(tracker.count_completed(), 2)
+
+    def test_count_completed_counts_rebuilds_of_the_same_job(self):
+        """B61: the banner's "All-Time" figure counts resumes produced, and
+        rebuilding a role really does produce another resume. Distinct from
+        is_completed(), which is a per-job_key question."""
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_completed("same-job")
+        tracker.mark_completed("same-job")
+        self.assertEqual(tracker.count_completed(), 2)
+
+    def test_count_completed_never_decreases(self):
+        """B61's actual defect: the count used to come from COMPLETED_DIR's file
+        count, so archive_jd() -- which moves files *out* of that directory --
+        silently decremented an all-time total. A ledger row can't be moved."""
+        tracker = jd_manager.JDTracker(self.csv_path)
+        tracker.mark_completed("a")
+        tracker.mark_completed("b")
+        before = tracker.count_completed()
+        tracker.mark_failed("c", error_message="later failure")
+        self.assertGreaterEqual(tracker.count_completed(), before)
+
 
 class TestCheckpoints(unittest.TestCase):
 
