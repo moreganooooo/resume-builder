@@ -27,17 +27,28 @@ OUTPUT_MD = os.path.join(KB_DIR, "voice-anchors.md")
 
 
 def build_voice_anchors(index_csv: str = INDEX_CSV) -> str:
-    """Reads index_csv and returns the voice-anchors.md content as a string."""
+    """Reads index_csv and returns the voice-anchors.md content as a string.
+
+    Only rows with a genuine "Quote Worth Pulling" become a section.
+    "Themes & Highlights" is third-person paraphrase written for a human
+    skimming the index (e.g. "Describes agency internship experience;
+    emphasizes creativity...") -- it teaches a model nothing about this
+    candidate's actual register, so it used to make up ~70% of this file's
+    bytes while the real, verbatim signal sat in the blockquotes (B30,
+    phase-9-backlog.md). A topic with no quote has no voice signal to
+    offer here and is skipped rather than padded with paraphrase alone --
+    this file's only job is specimens, not topical coverage (that's
+    profile.yml/verified_facts.json's job).
+    """
     with open(index_csv, "r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
     sections = []
     for row in rows:
-        parts = [f"### {row['Prompt / Topic']}", row["Themes & Highlights"]]
         quote = (row.get("Quote Worth Pulling") or "").strip()
-        if quote:
-            parts.append(f"> {quote}")
-        sections.append("\n\n".join(parts))
+        if not quote:
+            continue
+        sections.append(f"### {row['Prompt / Topic']}\n\n> {quote}")
 
     return "\n\n".join(sections) + "\n"
 

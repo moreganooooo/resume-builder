@@ -68,11 +68,12 @@ ones apply and what their real option keys are, never any specific school name.
 - Maximum 5 lines of text
 - First sentence MUST be wrapped in `<strong>` tags
 - First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Campaign & CRM Strategist with 10+ years..." not "[Candidate's name] is a..." or "She is a...")
-- Remaining sentences: narrative bridge / exit story + 1–2 most relevant proof points (metrics or scope, not adjectives) — keep the same pronoun-free, name-free voice throughout (e.g. "Specializes in..." / "Transforms..." not "She specializes in..." / "Her background includes...")
+- Remaining sentences: narrative bridge / exit story + at least one concrete, checkable specific — a real metric, a named tool/platform, or a named scope drawn from this candidate's verified profile data, not a generic capability claim — keep the same pronoun-free, name-free voice throughout. Vary your own sentence openers per resume; do not default to a stock verb like "Specializes in..." or "Transforms..." every time — that pattern is exactly what makes a Summary read as interchangeable with any other candidate's
+- Draw tone and register from `voice-anchors.md` (in your knowledge base context) — its `>` blockquoted lines are real verbatim quotes from this candidate. Let them inform word choice and rhythm; don't copy them verbatim into a pronoun-free Summary
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
 - Use the `=== COMPANY RESEARCH ===` context block (if present) as the actual source for this tone-mirroring — its tone_register/pronoun_framing/jargon_density/recurring_keywords fields describe the real signal to match. If no such block is present, skip tone-mirroring entirely rather than guessing from the JD text alone
 - BANNED words and phrases (kept in sync with `resume-engine/scoring/summary_score.yaml`'s `buzzword_openers` hard-failure list — do not let the two drift apart again): passionate, driven, results-oriented, results-driven, dynamic, dynamic professional, synergy, best-in-class, seeking opportunities, visionary, visionary leader, accomplished professional, highly motivated, dedicated professional, seasoned professional, proven track record, strategic thinker
-- No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to the candidate by name; the only section where pronouns are allowed at all is Why
+- No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to the candidate by name; pronouns are allowed only in Why and the auto-filled career note (see "# Career Note" below)
 - No parentheses; replace with commas or semicolons
 
 # Skills Section Rules
@@ -154,6 +155,10 @@ A career note may be auto-filled after generation for a specific role (per this 
 fixed_content data), immediately after that entry's bullets -- not optional, and not something you
 write. Always output `""` for the `career_note` field on every EXPERIENCE entry.
 
+This auto-filled text is deliberately first-person -- it is a second, explicit exception to the
+no-pronouns rule below, alongside Why. It is hand-authored, fixed content describing a real personal
+circumstance, not generated text, so the pronoun rule was never meant to apply to it.
+
 # Protected Bullets — Do Not Aggressively Shorten
 
 See the ROLE RULES context block's "Protected Bullets" list, if present, for this candidate's
@@ -217,7 +222,8 @@ candidate's exact schools, credentials, and bullet counts, in the exact order gi
 - Two short paragraphs, no subheadings
 - Maximum 8 lines total
 - Only the first and last sentences of the entire section are italicized
-- Voice: first-person (I, my, me) — the ONLY section where pronouns are allowed
+- Voice: first-person (I, my, me) — pronouns are allowed here and in the auto-filled career note
+  (see "# Career Note" above); nowhere else
 - Must reference specific company research details and connect each to verified facts from the candidate's history
 - Source those "specific company research details" ONLY from the `=== COMPANY RESEARCH ===` context block's `company_facts` field, if present. If no such block is present, do not include this Why section at all — set SECTION_WHY and WHY_TEXT to empty strings rather than inventing research-sounding details to satisfy this rule
 - If including this section pushes the PDF to 3 pages, remove it entirely
@@ -227,7 +233,7 @@ candidate's exact schools, credentials, and bullet counts, in the exact order gi
 - Spell out whole numbers under 10 unless tied to a unit/metric ("six-email campaign" but "6% reply rate")
 - Always use numerals for: percentages, dollar figures ($3M, $1.1M), decimals (3.56 GPA), quantities over 10, date ranges
 - Use "&" in headings, labels, tagline, category names; use "and" in body prose and bullets
-- No pronouns, first- or third-person (I, my, me, we, our, she, her, hers, he, him, his), in Summary, Skills, Work Experience, Training, or Education
+- No pronouns, first- or third-person (I, my, me, we, our, she, her, hers, he, him, his), in Summary, Skills, Work Experience, Training, or Education -- the auto-filled career note (see "# Career Note" above) is the one deliberate exception within Work Experience
 
 # Trimming Priority (when content exceeds 2 pages)
 

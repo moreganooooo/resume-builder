@@ -39,14 +39,22 @@ class TestBuildVoiceAnchors(unittest.TestCase):
     def test_quote_line_included_when_present(self):
         content = build_voice_anchors.build_voice_anchors(self.tmp_csv)
         self.assertIn("### Why a good fit", content)
-        self.assertIn("Systems + storytelling.", content)
         self.assertIn("> I love building systems that work quietly in the background.", content)
 
-    def test_quote_line_omitted_when_absent(self):
+    def test_third_person_paraphrase_is_dropped(self):
+        # "Themes & Highlights" is written for a human skimming the index,
+        # not a specimen of this candidate's actual voice -- it teaches a
+        # model nothing and shouldn't survive into the output (B30,
+        # phase-9-backlog.md).
         content = build_voice_anchors.build_voice_anchors(self.tmp_csv)
-        self.assertIn("### Prioritizing tasks", content)
-        section = content.split("### Prioritizing tasks")[1].split("###")[0]
-        self.assertNotIn(">", section)
+        self.assertNotIn("Systems + storytelling.", content)
+        self.assertNotIn("Calm execution under pressure.", content)
+
+    def test_topic_with_no_quote_is_omitted_entirely(self):
+        # No verbatim signal to offer -- this file's job is specimens, not
+        # topical coverage, so a quote-less row contributes nothing here.
+        content = build_voice_anchors.build_voice_anchors(self.tmp_csv)
+        self.assertNotIn("### Prioritizing tasks", content)
 
 
 if __name__ == "__main__":

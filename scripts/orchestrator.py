@@ -42,6 +42,7 @@ import validate_coverletter
 import jd_manager
 import bullet_feedback
 import kb_snapshot
+from bullet_bank_hash import bullets_sha
 import theme
 
 
@@ -2094,8 +2095,9 @@ class ResumeEngine:
         near-identical bullets about the same underlying achievement.
         """
         print("\nMining bullet bank...")
-        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
-        emb_npy  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        bank_csv  = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_npy   = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        emb_meta  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
 
         if not os.path.exists(bank_csv):
             print("  WARNING: bullet-bank-keepers-audited.csv not found. Skipping mine.")
@@ -2117,6 +2119,25 @@ class ResumeEngine:
 
         if len(df) != len(embs):
             print(f"  {theme.colorize_icon_ansi('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.")
+            return []
+
+        # H26/B20 (phase-9-backlog.md): the row-count check above can't catch
+        # a same-length bank whose content silently changed since embedding
+        # (e.g. a bullet edited during a rate-limit pause) -- only a content
+        # hash can. embed_bullet_bank.py writes this same hash into the
+        # .meta sidecar it's always written alongside the .npy; enforced
+        # here at read time, not only at write time, since a stale .npy
+        # from before this check existed is exactly the case it must catch.
+        try:
+            with open(emb_meta, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception as e:
+            print(f"  {theme.colorize_icon_ansi('warning')} Could not read {emb_meta}: {e}. Skipping mine.")
+            return []
+        current_sha = bullets_sha(df["Bullet Point"].fillna("").tolist())
+        if meta.get("bullets_sha") != current_sha:
+            print(f"  {theme.colorize_icon_ansi('warning')} bullet_vectors_ge2_d768.npy is stale (bullet bank content "
+                  "changed since it was built) -- run embed_bullet_bank.py again. Skipping mine.")
             return []
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
@@ -3080,7 +3101,16 @@ class ResumeEngine:
                 )
                 rec_text, rec_usage = GeminiClient.generate(
                     model=BUILDER_MODEL,
-                    system_instruction=build_prompt,
+                    # Unlike the fix/trim loops above (deliberately bare
+                    # build_prompt, no KB, to stay cheap on structural
+                    # fixes), these calls make content-quality edits --
+                    # e.g. rewording the Summary -- so they need the same
+                    # voice-anchors.md grounding the critique that produced
+                    # this recommendation already had (B29,
+                    # phase-9-backlog.md). static_prefix is small (~5-10k
+                    # tokens, already built above for the audit loop), not
+                    # the full ~105k-token kb_context.
+                    system_instruction=f"{build_prompt}\n\n{static_prefix}",
                     contents=rec_contents,
                     response_schema=RecommendationApplySchema,
                     temperature=0.0,
@@ -3289,6 +3319,14 @@ class ResumeEngine:
               f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})")
         if coverage["missing"]:
             print(f"    Missing: {', '.join(coverage['missing'])}")
+
+        # B29 (phase-9-backlog.md): same non-blocking, report-not-gate
+        # treatment as the coverage check above, and for the same class of
+        # reason -- see validate_resume.check_summary_specificity()'s
+        # docstring for the real build failure that made this non-blocking.
+        specificity_notes = validate_resume.check_summary_specificity(resume_data)
+        for note in specificity_notes:
+            print(f"  {theme.colorize_icon_ansi('warning')} {note}")
 
         # Belt-and-suspenders on top of the fatal check above: don't claim
         # success or record output paths unless the PDF is actually on disk

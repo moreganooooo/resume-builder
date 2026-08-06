@@ -52,6 +52,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+from bullet_bank_hash import bullets_sha  # noqa: E402
 import theme
 
 load_dotenv(profile_paths.env_path(), override=True)
@@ -96,15 +97,36 @@ def embed_batch(texts: list) -> list:
             continue
         resp.raise_for_status()
         embeddings = resp.json().get("embeddings", [])
-        return [e["values"] for e in embeddings]
+        vecs = [e["values"] for e in embeddings]
+        if len(vecs) != len(texts):
+            # A response with a missing/short "embeddings" key would
+            # otherwise silently contribute fewer rows than sent, shifting
+            # every subsequent bullet's vector out of alignment with its
+            # CSV row (B20, phase-9-backlog.md).
+            raise RuntimeError(
+                f"embed_batch: sent {len(texts)} texts but got {len(vecs)} embeddings back "
+                "-- refusing to silently misalign the vector matrix."
+            )
+        return vecs
 
     raise RuntimeError(f"embed_batch failed after {MAX_RETRIES} retries.")
 
 
-def load_checkpoint():
-    """Load saved vectors and resume index from checkpoint file if it exists."""
+def load_checkpoint(expected_sha: str):
+    """Load saved vectors and resume index from checkpoint file if it
+    exists and its bullet-text hash still matches the current bank --
+    editing the bank during a rate-limit pause (a multi-hour stall
+    invites exactly that) would otherwise resume with row i of the
+    checkpointed matrix no longer corresponding to row i of the CSV,
+    permanently and silently (B20, phase-9-backlog.md)."""
     if os.path.exists(CHECKPOINT_PATH):
         data = np.load(CHECKPOINT_PATH, allow_pickle=False)
+        saved_sha = str(data["bullets_sha"]) if "bullets_sha" in data else None
+        if saved_sha != expected_sha:
+            print(f"   {theme.colorize_icon_ansi('warning')}  Bullet bank changed since this checkpoint was saved "
+                  "-- discarding stale progress and starting over.")
+            os.remove(CHECKPOINT_PATH)
+            return [], 0
         vectors = list(data["vectors"])
         start_index = int(data["next_index"])
         print(f"   {theme.colorize_icon_ansi('resume')}  Resuming from checkpoint: {start_index} bullets already embedded.")
@@ -112,12 +134,13 @@ def load_checkpoint():
     return [], 0
 
 
-def save_checkpoint(vectors: list, next_index: int):
+def save_checkpoint(vectors: list, next_index: int, bullets_sha_value: str):
     """Save current progress to checkpoint file."""
     np.savez(
         CHECKPOINT_PATH,
         vectors=np.array(vectors, dtype=np.float32),
         next_index=np.array(next_index),
+        bullets_sha=np.array(bullets_sha_value),
     )
 
 
@@ -139,12 +162,17 @@ def main():
             break
     if bullet_col is None:
         raise ValueError(f"No known bullet column found. Columns: {list(df.columns)}")
-    bullets = df[bullet_col].astype(str).tolist()
+    # fillna("") before astype(str), not after -- orchestrator.py's
+    # mine_bullet_bank() hashes this same column via .fillna(""), and the
+    # two sides must agree on NaN handling or a bank with no real content
+    # change at all would still produce a hash mismatch ("nan" vs "").
+    bullets = df[bullet_col].fillna("").astype(str).tolist()
 
     total = len(bullets)
     print(f"📄 Loaded {total} bullets from {CSV_PATH}")
+    current_sha = bullets_sha(bullets)
 
-    vectors, start_index = load_checkpoint()
+    vectors, start_index = load_checkpoint(current_sha)
 
     remaining = total - start_index
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
@@ -167,7 +195,7 @@ def main():
         vectors.extend(vecs)
 
         # Checkpoint after every batch
-        save_checkpoint(vectors, batch_end)
+        save_checkpoint(vectors, batch_end, current_sha)
 
         if batch_end < total:
             time.sleep(EMBED_SLEEP)
@@ -183,6 +211,7 @@ def main():
         "rows": total,
         "csv": CSV_PATH,
         "bullet_col": bullet_col or "(stringified row)",
+        "bullets_sha": current_sha,
     }
     with atomic_write(META_PATH) as f:
         json.dump(meta, f, indent=2)
