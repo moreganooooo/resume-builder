@@ -35,10 +35,12 @@ export default {
 
   async fetch(entry, ctx) {
     const apiUrl = resolveApiUrl(entry);
-    if (!apiUrl) throw new Error(`ashby: cannot derive API URL for ${entry.name}`);
+    if (!apiUrl) throw new Error(`cannot derive API URL for ${entry.name}`);
     const json = await ctx.fetchJson(apiUrl);
     const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
-    return jobs.map(j => ({
+    // url is the cross-provider dedup key -- a posting with no jobUrl would
+    // otherwise emit url: '', colliding with every other jobUrl-less posting.
+    return jobs.filter(j => j.jobUrl).map(j => ({
       title: j.title || '',
       url: j.jobUrl || '',
       company: entry.name,

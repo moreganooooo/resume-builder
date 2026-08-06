@@ -20,11 +20,11 @@ function assertWorkableUrl(url) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`workable: invalid URL: ${url}`);
+    throw new Error(`invalid URL: ${url}`);
   }
-  if (parsed.protocol !== 'https:') throw new Error(`workable: URL must use HTTPS: ${url}`);
+  if (parsed.protocol !== 'https:') throw new Error(`URL must use HTTPS: ${url}`);
   if (!ALLOWED_WORKABLE_HOSTS.has(parsed.hostname)) {
-    throw new Error(`workable: untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_WORKABLE_HOSTS].join(', ')}`);
+    throw new Error(`untrusted hostname "${parsed.hostname}" — must be one of: ${[...ALLOWED_WORKABLE_HOSTS].join(', ')}`);
   }
   return url;
 }
@@ -66,7 +66,7 @@ export default {
 
   async fetch(entry, ctx) {
     const feedUrl = resolveFeedUrl(entry);
-    if (!feedUrl) throw new Error(`workable: cannot derive feed URL for ${entry.name}`);
+    if (!feedUrl) throw new Error(`cannot derive feed URL for ${entry.name}`);
     assertWorkableUrl(feedUrl);
     // redirect:'error' prevents SSRF via server-side redirects; combined with
     // assertWorkableUrl above it guarantees the final hostname stays in the allowlist.

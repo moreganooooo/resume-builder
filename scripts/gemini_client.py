@@ -193,7 +193,11 @@ class GeminiClient:
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            return GeminiClient._salvage_fields(cleaned)
+            salvaged = GeminiClient._salvage_fields(cleaned)
+            if salvaged:
+                print(f"    WARNING: parse_json() salvaged {len(salvaged)} field(s) from unterminated "
+                      "JSON -- the response was truncated or malformed; treat this result as partial.")
+            return salvaged
 
     @staticmethod
     def generate(
@@ -311,7 +315,7 @@ class GeminiClient:
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
-                print(f"    WARNING: Network error ({GeminiClient._timeout}s): {str(e).split()[-1].strip()}. "
+                print(f"    WARNING: Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
                       f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...")
                 time.sleep(sleep_dur)
                 continue
@@ -365,6 +369,8 @@ class GeminiClient:
             if finish_reason not in (None, "STOP", "MAX_TOKENS"):
                 print(f"    WARNING: Unexpected finishReason={finish_reason!r}. Not retrying this attempt.")
                 return None, usage
+            if finish_reason == "MAX_TOKENS":
+                usage["truncated"] = True
 
             content = candidates[0].get("content", {})
             parts   = content.get("parts", [])

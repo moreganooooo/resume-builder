@@ -20,9 +20,14 @@ advisory:
     that was never missing while the real keyword damage goes unnoticed.
 """
 
+import logging
 import re
 
 from pdfminer.high_level import extract_text
+
+# pdfminer emits an unattributed "FontBBox" warning on every run against these
+# templates' fonts; this module is the only caller, so it owns silencing it.
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 _TYPOGRAPHIC_SUBSTITUTIONS = {
     "‘": "'", "’": "'",   # curly single quotes

@@ -108,7 +108,7 @@ for i, row in df.iterrows():
         })
     except Exception as e:
         print(f"  {theme.colorize_icon_ansi('warning')} Error: {e}")
-        results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": str(e)})
+        results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": f"[AUDIT_ERROR] {e}"})
 
     # --- CHECKPOINT SAVE after every bullet ---
     pd.DataFrame(results).to_csv(out_path, index=False)

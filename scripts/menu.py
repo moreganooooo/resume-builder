@@ -861,8 +861,8 @@ def run_interactive_menu() -> None:
 
         if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
             cli_art.console.print(
-                "[yellow]Take a look around! Choose \"New User? Start Here!\" when you're "
-                "ready to set up your own profile -- nothing else runs until then.[/yellow]"
+                f"[{theme.BRAND}]Take a look around! Choose \"New User? Start Here!\" when you're "
+                f"ready to set up your own profile -- nothing else runs until then.[/{theme.BRAND}]"
             )
             continue
 

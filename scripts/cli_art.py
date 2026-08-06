@@ -294,7 +294,7 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
         if r["error"]:
             table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-", "-")
             continue
-        color = _RECOMMENDATION_COLORS.get(r["recommendation"], "white")
+        color = _RECOMMENDATION_COLORS.get(r["recommendation"], theme.MUTED)
         legitimacy = r.get("posting_legitimacy")
         recommendation_text = f"[{color}]{r['recommendation']}[/{color}]"
         if legitimacy and legitimacy != "High Confidence":
@@ -336,7 +336,7 @@ def _followup_cell(application: dict | None) -> str:
     urgency = followup.compute_urgency(application)
     if not urgency:
         return status
-    color = _FOLLOWUP_COLORS.get(urgency, "white")
+    color = _FOLLOWUP_COLORS.get(urgency, theme.MUTED)
     return f"{status} [{color}]({urgency})[/{color}]"
 
 
@@ -361,7 +361,7 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
 
     for i, r in enumerate(rows, start_index):
         evaluation = r["evaluation"]
-        color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), "white")
+        color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), theme.MUTED)
         table.add_row(
             str(i),
             f"[{color}]{evaluation.get('composite_score', 0):.2f}/5[/{color}]",

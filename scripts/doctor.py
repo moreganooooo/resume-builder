@@ -28,9 +28,10 @@ REQUIRED_PACKAGES = {
     "pandas": "pandas", "numpy": "numpy", "pyyaml": "yaml", "pydantic": "pydantic",
     "requests": "requests", "python-dotenv": "dotenv", "google-genai": "google.genai",
     "click": "click", "rich": "rich", "linkedin-jobs-scraper": "linkedin_jobs_scraper",
-    "selenium": "selenium", "webdriver-manager": "webdriver_manager",
+    "selenium": "selenium",
     "beautifulsoup4": "bs4", "browser_cookie3": "browser_cookie3", "questionary": "questionary",
-    "python-docx": "docx", "python-pptx": "pptx", "odfpy": "odf", "openpyxl": "openpyxl",
+    "python-docx": "docx", "python-pptx": "pptx", "pdfminer.six": "pdfminer", "pypdf": "pypdf",
+    "odfpy": "odf", "openpyxl": "openpyxl",
 }
 
 FONT_FILES = [
