@@ -277,6 +277,72 @@ class TestWritePortalsYml(BootstrapProfileTestCase):
         self.assertEqual(data["seniority_boost"], [])
 
 
+class TestSeedScanFiltersFromTargetRoles(BootstrapProfileTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.board_scanner_dir = os.path.join(self.tmp_dir, "board_scanner")
+        os.makedirs(self.board_scanner_dir, exist_ok=True)
+        self.scan_filters_path = os.path.join(self.board_scanner_dir, "scan_filters.yml")
+        patcher = patch("bootstrap_profile.profile_paths.board_scanner_dir", return_value=self.board_scanner_dir)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _write_scaffold(self, positive=None, negative=None, always_allow=None, block=None):
+        import yaml
+        data = {
+            "title_filter": {"positive": positive or [], "negative": negative or []},
+            "location_filter": {"always_allow": always_allow or ["Remote"], "block": block or []},
+        }
+        with open(self.scan_filters_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f)
+
+    def _identity(self, primary_roles, secondary_roles=None):
+        return {
+            "full_name": "", "email": "", "phone": "", "location": "", "linkedin_url": "",
+            "portfolio_url": "", "extra_link": "",
+            "primary_roles": primary_roles, "secondary_roles": secondary_roles or [],
+            "remote_preference": True,
+        }
+
+    def test_seeds_empty_scaffold_from_target_roles(self):
+        import yaml
+        self._write_scaffold()
+        result = bootstrap_profile.seed_scan_filters_from_target_roles(
+            self._identity(["Marketing Manager"], ["Customer Education Specialist"])
+        )
+        self.assertTrue(result)
+        with open(self.scan_filters_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertIn("Marketing Manager", data["title_filter"]["positive"])
+        self.assertIn("Customer Education Specialist", data["title_filter"]["positive"])
+        self.assertIn("Remote", data["location_filter"]["always_allow"])
+
+    def test_does_not_overwrite_already_curated_filters(self):
+        import yaml
+        self._write_scaffold(positive=["Existing Title"])
+        result = bootstrap_profile.seed_scan_filters_from_target_roles(self._identity(["New Role"]))
+        self.assertFalse(result)
+        with open(self.scan_filters_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["title_filter"]["positive"], ["Existing Title"])
+        self.assertNotIn("New Role", data["title_filter"]["positive"])
+
+    def test_does_not_overwrite_when_only_negative_is_curated(self):
+        import yaml
+        self._write_scaffold(negative=["Recruiter"])
+        result = bootstrap_profile.seed_scan_filters_from_target_roles(self._identity(["New Role"]))
+        self.assertFalse(result)
+        with open(self.scan_filters_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["title_filter"]["negative"], ["Recruiter"])
+
+    def test_noop_when_scaffold_missing(self):
+        result = bootstrap_profile.seed_scan_filters_from_target_roles(self._identity(["New Role"]))
+        self.assertFalse(result)
+        self.assertFalse(os.path.exists(self.scan_filters_path))
+
+
 class TestWriteVerifiedLedger(BootstrapProfileTestCase):
 
     @patch("bootstrap_profile.bootstrap_extractors.extract_ledger_entries_chunked")
@@ -581,16 +647,58 @@ class TestCollectSecrets(unittest.TestCase):
         self.assertIn("GEMINI_API_KEY", content)
         self.assertIn("test-gemini-key-123", content)
 
-    def test_skips_the_prompt_entirely_when_already_configured_in_the_shell(self):
-        os.environ["GEMINI_API_KEY"] = "already-set-in-shell"
-        os.environ["JOBRIGHT_COOKIE_STRING"] = "already-set-cookie"
+    def test_skips_the_prompt_entirely_when_already_configured_in_this_profiles_own_env(self):
+        with open(self.env_path, "w", encoding="utf-8") as f:
+            f.write("GEMINI_API_KEY=already-in-this-profiles-env\nJOBRIGHT_COOKIE_STRING=already-in-this-profiles-env\n")
         with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
              patch("bootstrap_profile.questionary.password") as mock_password:
             result = bootstrap_profile.collect_secrets(dry_run=False)
             mock_confirm.assert_not_called()
             mock_password.assert_not_called()
         self.assertEqual(result, {"gemini_key_set": True, "jobright_cookie_set": True})
-        self.assertFalse(os.path.exists(self.env_path))  # nothing needed writing
+
+    def test_accepting_the_shell_value_writes_it_to_this_profiles_own_env_instead_of_skipping(self):
+        # A var being exported in the shell used to make collect_secrets()
+        # skip writing anything to this profile's own .env at all --
+        # defeating "two people sharing this checkout never share
+        # credentials" the moment a second profile is bootstrapped on a
+        # machine that already has GEMINI_API_KEY exported (B41). It
+        # should now prompt, offering the shell value as a default.
+        os.environ["GEMINI_API_KEY"] = "already-set-in-shell"
+        os.environ["JOBRIGHT_COOKIE_STRING"] = "already-set-cookie"
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
+             patch("bootstrap_profile.questionary.password") as mock_password:
+            # 1) "Use the shell Gemini key for this profile too?" -> yes
+            # 2) "Optional: set up JobRight scanning now?" -> yes
+            # 3) "Use the shell JobRight cookie for this profile too?" -> yes
+            mock_confirm.return_value.ask.side_effect = [True, True, True]
+
+            result = bootstrap_profile.collect_secrets(dry_run=False)
+            mock_password.assert_not_called()
+
+        self.assertEqual(result, {"gemini_key_set": True, "jobright_cookie_set": True})
+        with open(self.env_path) as f:
+            content = f.read()
+        self.assertIn("already-set-in-shell", content)
+        self.assertIn("already-set-cookie", content)
+
+    def test_declining_the_shell_value_falls_through_to_manual_entry(self):
+        os.environ["GEMINI_API_KEY"] = "already-set-in-shell"
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm, \
+             patch("bootstrap_profile.questionary.password") as mock_password:
+            # 1) "Use the shell Gemini key for this profile too?" -> no
+            # 2) "Enter your Gemini API key now?" -> yes
+            # 3) "Optional: set up JobRight scanning now?" -> no
+            mock_confirm.return_value.ask.side_effect = [False, True, False]
+            mock_password.return_value.ask.return_value = "manually-entered-key"
+
+            result = bootstrap_profile.collect_secrets(dry_run=False)
+
+        self.assertTrue(result["gemini_key_set"])
+        with open(self.env_path) as f:
+            content = f.read()
+        self.assertIn("manually-entered-key", content)
+        self.assertNotIn("already-set-in-shell", content)
 
 
 class TestCollectLinkedinSearchQueries(unittest.TestCase):
@@ -719,6 +827,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
     @patch("bootstrap_profile.write_background_guide")
     @patch("bootstrap_profile.write_cv_md")
     @patch("bootstrap_profile.write_verified_ledger")
+    @patch("bootstrap_profile.seed_scan_filters_from_target_roles")
     @patch("bootstrap_profile.write_portals_yml")
     @patch("bootstrap_profile.write_profile_yml")
     @patch("bootstrap_profile.bootstrap_extractors.generate_tag_taxonomy")
@@ -727,8 +836,8 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
     @patch("bootstrap_profile._guess_recommendations", return_value=[])
     def test_calls_every_writer_in_order(
         self, mock_guess_recs, mock_collect_identity, mock_collect_linkedin, mock_generate_tags,
-        mock_write_profile, mock_write_portals, mock_write_ledger, mock_write_cv, mock_write_bg,
-        mock_write_voice,
+        mock_write_profile, mock_write_portals, mock_seed_scan_filters, mock_write_ledger, mock_write_cv,
+        mock_write_bg, mock_write_voice,
     ):
         mock_collect_identity.return_value = {
             "full_name": "Jamie Rivera", "primary_roles": ["Marketing Manager"], "secondary_roles": [],
@@ -741,6 +850,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_generate_tags.assert_called_once()
         mock_write_profile.assert_called_once()
         mock_write_portals.assert_called_once()
+        mock_seed_scan_filters.assert_called_once()
         mock_write_ledger.assert_called_once()
         mock_write_cv.assert_called_once()
         mock_write_bg.assert_called_once()

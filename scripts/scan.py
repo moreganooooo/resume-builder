@@ -15,6 +15,8 @@ import json
 import logging
 import os
 
+import questionary
+
 from atomic_write import atomic_write
 import cli_art
 import jd_manager
@@ -64,6 +66,17 @@ def _summarize_warnings(records: list) -> list:
 # later.
 _SCAN_LIVENESS_REASON = "confirmed to exist by scan"
 
+# Each verify pass is one real Chromium navigation (~16s, see liveness.py's
+# docstring) run sequentially over every newly-written JD, with no cap and
+# no confirmation -- a permissive scan_filters.yml scaffold (empty
+# positive: list, see seed_scan_filters_from_target_roles() in
+# bootstrap_profile.py) plus 17+ aggregator boards means a stranger's
+# first scan can write hundreds of JDs and then hang for hours verifying
+# all of them (B34). Above this many, ask before running the full verify
+# pass in a real terminal; in a non-interactive context (no one there to
+# answer), cap automatically rather than hang unbounded.
+VERIFY_CONFIRM_THRESHOLD = 25
+
 SOURCE_FETCHERS = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
@@ -85,13 +98,25 @@ def _write_jd_file(job: dict) -> str:
         dest = os.path.join(jd_manager.JDS_DIR, filename.replace(".json", f"_{counter}.json"))
         counter += 1
 
-    # Matches jd_manager.save_liveness()'s exact _liveness shape so
-    # liveness.py's recency check reads it back identically either way.
-    job["_liveness"] = {
-        "result": "active",
-        "reason": _SCAN_LIVENESS_REASON,
-        "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
-    }
+    # Only seed an optimistic _liveness for JDs with no source_url --
+    # those never become liveness candidates (_gather_candidates()
+    # requires a url), so this is the only liveness signal
+    # jd_manager.compute_posting_age_days()'s fallback will ever see for
+    # them. A JD with a source_url gets a real _liveness from the verify
+    # pass (if one runs) via jd_manager.save_liveness(), which
+    # unconditionally overwrites whatever's seeded here -- seeding one
+    # here too would just sit stale and misleadingly "confirmed alive"
+    # for a full jd_manager.RECENCY_HOURS whenever verify doesn't end up
+    # running for this particular posting (--no-verify, or the
+    # VERIFY_CONFIRM_THRESHOLD cap above declining to check everything)
+    # (B42). Matches jd_manager.save_liveness()'s exact _liveness shape
+    # so liveness.py's recency check reads either source back identically.
+    if not job.get("source_url"):
+        job["_liveness"] = {
+            "result": "active",
+            "reason": _SCAN_LIVENESS_REASON,
+            "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
 
     with atomic_write(dest, encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)
@@ -113,6 +138,11 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
     present in jds/ after verification."""
     sources = sources or list(SOURCE_FETCHERS.keys())
     tracker = jd_manager.JDTracker()
+    # Built once and updated in memory as jobs are written below, instead
+    # of job_key_known() re-walking jds/+completed/+archived/+expired/ and
+    # re-parsing every file on every single candidate -- candidates x
+    # total_JD_files file opens on a mature profile otherwise (B35).
+    known_jobs_index = jd_manager.build_known_jobs_index()
     written = 0
     source_results = []
     # {path: (source_result_dict, new_jobs_entry_dict)}, so the verify
@@ -152,12 +182,17 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                 if job_key and jd_manager.job_key_known(
                     job_key, tracker=tracker,
                     source_url=source_url, company_name=job.get("company_name"),
-                    job_title=job.get("job_title"),
+                    job_title=job.get("job_title"), index=known_jobs_index,
                 ):
                     result["skipped"] += 1
                     continue
 
                 dest = _write_jd_file(job)
+                jd_manager.add_to_known_jobs_index(
+                    known_jobs_index, job_key,
+                    source_url=source_url, company_name=job.get("company_name"),
+                    job_title=job.get("job_title"),
+                )
                 written += 1
                 result["written"] += 1
                 new_job_entry = {"company": company, "title": title}
@@ -169,15 +204,36 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
         root_logger.removeHandler(collector)
 
     if verify and written_paths:
-        verify_result = liveness.verify_jd_paths(list(written_paths.keys()))
-        for path in verify_result.get("expired_paths", []):
+        paths_to_verify = list(written_paths.keys())
+        if len(paths_to_verify) > VERIFY_CONFIRM_THRESHOLD:
+            proceed = True
+            if cli_art.console.is_terminal:
+                proceed = questionary.confirm(
+                    f"{len(paths_to_verify)} new postings found -- verify all of them with a "
+                    f"real browser check (~{len(paths_to_verify) * 16 // 60} min)? "
+                    f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
+                    default=False, style=cli_art.QUESTIONARY_STYLE,
+                ).ask()
+            if not proceed:
+                paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
+        verify_result = liveness.verify_jd_paths(paths_to_verify)
+        for path in verify_result.get("expired_source_paths", []):
             entry = written_paths.get(path)
             if not entry:
                 continue
             result, new_job_entry = entry
             result["written"] -= 1
             result["dropped_expired"] += 1
-            result["new_jobs"].remove(new_job_entry)
+            # By identity, not list.remove()'s by-value match -- two
+            # postings can share the same company+title (a real posting
+            # cross-listed, or just coincidence), and .remove() would drop
+            # whichever one happens to come first in the list regardless
+            # of which path this expired_source_paths entry is actually about
+            # (B42).
+            for i, candidate in enumerate(result["new_jobs"]):
+                if candidate is new_job_entry:
+                    del result["new_jobs"][i]
+                    break
             written -= 1
 
     cli_art.render_scan_report(source_results, written)

@@ -14,7 +14,8 @@ import os
 import sys
 
 import questionary
-from dotenv import set_key
+import yaml
+from dotenv import dotenv_values, set_key
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -439,6 +440,62 @@ def write_portals_yml(identity: dict) -> None:
         f.write(content)
 
 
+_SCAN_FILTERS_SEED_TEMPLATE = """# board_scanner's "boards"/"ats" sources: title/location prefilter
+# applied before a listing becomes a JD file. positive seeded from your
+# target roles during bootstrap -- add near-miss titles you keep seeing
+# as you scan real postings. Empty negative/block lists are permissive
+# by design. See profiles/morgan/board_scanner/scan_filters.yml for a
+# real worked example (100+ positive terms, 300+ negative terms).
+title_filter:
+  positive:
+{positive_yaml}
+  negative: []
+location_filter:
+  always_allow:
+{always_allow_yaml}
+  block:
+{block_yaml}
+"""
+
+
+def seed_scan_filters_from_target_roles(identity: dict) -> bool:
+    """Seeds this profile's board_scanner/scan_filters.yml title_filter.positive
+    from the same target-roles identity data profile.yml's target_roles.primary
+    is built from (write_profile_yml() uses this same identity dict). A fresh
+    profile's scaffold (bootstrap_bullet_bank._SCAN_FILTERS_SCAFFOLD) ships
+    with positive: [], which is permissive by design -- meaning a stranger's
+    first scan pulls every posting from every configured source with no
+    title gate at all, then runs a real-browser liveness check on all of
+    them (B34). Only touches the file while it's still at that untouched
+    default (title_filter.positive and .negative both empty) -- never
+    overwrites a profile that already has its own curated filters. Distinct
+    from write_portals_yml()/knowledge_base/portals.yml, which is a
+    separate, deliberately-kept artifact stitched into the tailoring
+    prompt via orchestrator.KB_ALLOWLIST, not the file scan_boards.py
+    actually reads for gating (profile_paths.board_scanner_dir()/
+    scan_filters.yml). Returns whether it actually wrote anything, mostly
+    for tests -- callers don't need to check it."""
+    path = os.path.join(profile_paths.board_scanner_dir(), "scan_filters.yml")
+    if not os.path.exists(path):
+        return False
+    with open(path, "r", encoding="utf-8") as f:
+        existing = yaml.safe_load(f) or {}
+    title_filter = existing.get("title_filter") or {}
+    if title_filter.get("positive") or title_filter.get("negative"):
+        return False
+
+    title_seed = identity["primary_roles"] + identity["secondary_roles"]
+    location_filter = existing.get("location_filter") or {}
+    content = _SCAN_FILTERS_SEED_TEMPLATE.format(
+        positive_yaml=_yaml_string_list(title_seed),
+        always_allow_yaml=_yaml_string_list(location_filter.get("always_allow") or ["Remote"]),
+        block_yaml=_yaml_string_list(location_filter.get("block") or []),
+    )
+    with atomic_write(path, encoding="utf-8") as f:
+        f.write(content)
+    return True
+
+
 def write_verified_ledger(dry_run: bool = False) -> None:
     achievements_text = _achievements_summary_text_by_employer()
     extraction = (
@@ -804,14 +861,37 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
         f.write(draft if choice == "accept" else "")
 
 
-def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions: str, env_file: str) -> bool:
+def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions: str, env_file: str,
+                                  shell_default: str = None) -> bool:
     """Walks the user through one .env var: shows instructions, offers to
     enter it right now (written straight to this profile's own .env via
     python-dotenv's set_key(), which creates the file if it doesn't exist
     yet and updates the line in place if it does) or defer it, printing
     exactly which file to edit and what line to add later. Returns True
-    if a value was actually collected and written."""
+    if a value was actually collected and written.
+
+    shell_default, when given, means var_name is already exported in the
+    shell but this profile's own .env doesn't have it yet -- offered as a
+    one-confirm default (not assumed) so bootstrapping a second profile on
+    a machine that already has GEMINI_API_KEY exported doesn't silently
+    ride on whoever's shell that happens to be, defeating this function's
+    whole point of giving every profile its own credentials (B41)."""
     print(f"\n{instructions}")
+    if shell_default:
+        print(f"  ({var_name} is already set in your shell environment, but this profile's own "
+              f"{env_file} doesn't have its own copy yet -- each profile needs one so credentials "
+              f"aren't silently shared across profiles.)")
+        use_shell_value = questionary.confirm(
+            f"Use the {prompt_label} already in your shell for this profile too?",
+            default=True, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if use_shell_value:
+            os.makedirs(os.path.dirname(env_file), exist_ok=True)
+            set_key(env_file, var_name, shell_default)
+            print(f"  {theme.colorize_icon_ansi('success')} Saved {var_name} to {env_file}.")
+            return True
+        print("  Okay -- you'll be asked for a value for this profile instead.")
+
     set_now = questionary.confirm(
         f"Enter your {prompt_label} now?", default=True, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
@@ -844,13 +924,20 @@ def collect_secrets(dry_run: bool = False) -> dict:
         return {"gemini_key_set": False, "jobright_cookie_set": False}
 
     env_file = profile_paths.env_path()
+    # This profile's own .env, not the merged os.environ -- GEMINI_API_KEY
+    # being exported in the shell (or set by a sibling profile's .env,
+    # already loaded by the time this runs) is not the same thing as this
+    # profile having its own copy. Checking os.environ here used to mean a
+    # profile bootstrapped on a machine that already has the shell var set
+    # skipped writing anything to its own .env and silently rode on
+    # whoever's shell that was -- exactly what this function's own
+    # docstring says it prevents (B41).
+    profile_env = dotenv_values(env_file) if os.path.exists(env_file) else {}
 
     # This can run again on a profile that's already configured (bootstrap
     # is re-runnable to ingest more documents later, not strictly one-time)
-    # -- skip re-prompting for a var that's already set, whether that's in
-    # this profile's own .env (already loaded into os.environ by the
-    # gemini_client import chain by the time this runs) or the shell.
-    already_configured = bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+    # -- skip re-prompting for a var this profile's own .env already has.
+    already_configured = bool(profile_env.get("GEMINI_API_KEY") or profile_env.get("GOOGLE_API_KEY"))
     if already_configured:
         gemini_set = True
     else:
@@ -864,9 +951,10 @@ def collect_secrets(dry_run: bool = False) -> dict:
             "API key (a free tier is available -- get one from Google AI Studio if "
             "you don't already have one).",
             env_file,
+            shell_default=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"),
         )
 
-    jobright_set = bool(os.environ.get("JOBRIGHT_COOKIE_STRING"))
+    jobright_set = bool(profile_env.get("JOBRIGHT_COOKIE_STRING"))
     if not jobright_set:
         wants_jobright = questionary.confirm(
             "\nOptional: set up JobRight scanning now? (only needed for "
@@ -887,6 +975,7 @@ def collect_secrets(dry_run: bool = False) -> dict:
                 "  This cookie goes stale over time -- repeat these steps whenever JobRight\n"
                 "  scanning starts failing with an auth error.",
                 env_file,
+                shell_default=os.environ.get("JOBRIGHT_COOKIE_STRING"),
             )
         else:
             print(f"  Skipped -- add it later by editing {env_file} (create it if it doesn't exist) "
@@ -964,6 +1053,7 @@ def run_profile_setup(dry_run: bool = False) -> dict:
     )
     write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
     write_portals_yml(identity)
+    seed_scan_filters_from_target_roles(identity)
     write_verified_ledger(dry_run=dry_run)
     # background guide + voice anchors before cv.md, not after:
     # rewrite_bullets.KnowledgeBase (which write_cv_md()'s bullet-polishing

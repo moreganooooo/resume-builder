@@ -10,6 +10,20 @@ sys.path.insert(0, SCRIPTS_DIR)
 import scan_boards  # noqa: E402
 
 
+class TestChildEnv(unittest.TestCase):
+
+    def test_strips_secrets_but_keeps_provider_credentials(self):
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "secret-key", "JOBRIGHT_COOKIE_STRING": "secret-cookie",
+            "ADZUNA_APP_KEY": "real-provider-credential", "PATH": os.environ.get("PATH", ""),
+        }):
+            child_env = scan_boards._child_env()
+        self.assertNotIn("GEMINI_API_KEY", child_env)
+        self.assertNotIn("JOBRIGHT_COOKIE_STRING", child_env)
+        self.assertEqual(child_env["ADZUNA_APP_KEY"], "real-provider-credential")
+        self.assertIn("PATH", child_env)
+
+
 class TestFormatDuration(unittest.TestCase):
 
     def test_seconds_only(self):

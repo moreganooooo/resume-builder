@@ -46,9 +46,13 @@ export async function checkUrlLiveness(page, url) {
 
     return classifyLiveness({ status, finalUrl, bodyText, applyControls });
   } catch (err) {
-    // Navigation timeout or hard crash — treat as uncertain
+    // Navigation timeout or hard crash — treat as uncertain. code
+    // matches classifyLiveness()'s vocabulary (liveness-core.mjs) so a
+    // navigation failure is distinguishable from a genuine
+    // classification instead of writing `code: undefined` (B42).
     return {
       result: 'uncertain',
+      code: 'navigation_error',
       reason: `navigation error: ${err.message.split('\n')[0]}`,
     };
   }

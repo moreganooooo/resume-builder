@@ -3,13 +3,17 @@ import logging
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
 import scan  # noqa: E402
+
+
+def _empty_known_jobs_index() -> dict:
+    return {"job_keys": set(), "url_company_pairs": set(), "normalized_pairs": set()}
 
 
 class TestWriteJdFile(unittest.TestCase):
@@ -46,6 +50,11 @@ class TestWriteJdFile(unittest.TestCase):
 
 class TestRunScanDedup(unittest.TestCase):
 
+    def setUp(self):
+        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
     def test_passes_job_title_to_dedup_check(self, mock_tracker_cls, mock_known):
@@ -60,7 +69,7 @@ class TestRunScanDedup(unittest.TestCase):
         mock_known.assert_called_once_with(
             "abc123", tracker=mock_tracker_cls.return_value,
             source_url="https://example.com/job/1", company_name="Acme",
-            job_title="Content Strategist",
+            job_title="Content Strategist", index=ANY,
         )
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
@@ -78,11 +87,16 @@ class TestRunScanDedup(unittest.TestCase):
         mock_known.assert_called_once_with(
             "https://example.com/job/1", tracker=mock_tracker_cls.return_value,
             source_url="https://example.com/job/1", company_name="Acme",
-            job_title="Content Strategist",
+            job_title="Content Strategist", index=ANY,
         )
 
 
 class TestRunScanVerify(unittest.TestCase):
+
+    def setUp(self):
+        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
@@ -90,7 +104,7 @@ class TestRunScanVerify(unittest.TestCase):
         job = {"company_name": "Acme", "job_title": "Content Strategist", "source_url": "https://x.com/1"}
         with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: [job]}, clear=True), \
              patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
-             patch("scan.liveness.verify_jd_paths", return_value={"expired_paths": []}) as mock_verify:
+             patch("scan.liveness.verify_jd_paths", return_value={"expired_source_paths": []}) as mock_verify:
             scan.run_scan(["boards"])
         mock_verify.assert_called_once_with(["/tmp/fake.json"])
 
@@ -114,7 +128,7 @@ class TestRunScanVerify(unittest.TestCase):
         paths = iter(["/tmp/still-open.json", "/tmp/already-gone.json"])
         with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda: jobs}, clear=True), \
              patch.object(scan, "_write_jd_file", side_effect=lambda job: next(paths)), \
-             patch("scan.liveness.verify_jd_paths", return_value={"expired_paths": ["/tmp/already-gone.json"]}), \
+             patch("scan.liveness.verify_jd_paths", return_value={"expired_source_paths": ["/tmp/already-gone.json"]}), \
              patch("scan.cli_art.render_scan_report") as mock_report:
             written = scan.run_scan(["boards"])
 
@@ -133,6 +147,11 @@ class TestScanWarningCollection(unittest.TestCase):
     fetch failures, provider failures) get grouped and attached to the
     themed report instead of dumping as a raw wall of WARNING:root:
     lines."""
+
+    def setUp(self):
+        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")

@@ -79,6 +79,19 @@ POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
 MIN_DESCRIPTION_CHARS = 200
 
+# Vars no board/ATS provider has any legitimate need for (unlike
+# ADZUNA_APP_ID/ADZUNA_APP_KEY, USAJOBS_API_KEY/etc. above, which specific
+# providers genuinely do read from the environment) -- a denylist, not an
+# allowlist, since providers' real credential needs vary per-provider and
+# an allowlist would risk silently breaking one of them. liveness.py keeps
+# its own copy of this same list for check-liveness.mjs's Chromium child
+# (B41).
+_SUBPROCESS_ENV_STRIP = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "JOBRIGHT_COOKIE_STRING")
+
+
+def _child_env() -> dict:
+    return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
+
 def _format_duration(seconds: float) -> str:
     seconds = max(int(seconds), 0)
     if seconds < 60:
@@ -224,6 +237,7 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
         result = subprocess.run(
             ["node", RUN_PROVIDER_SCRIPT, provider_id, json.dumps(entry)],
             capture_output=True, text=True, timeout=NODE_TIMEOUT_SECONDS,
+            env=_child_env(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         _scan_warning(f"scan_boards: {provider_id} failed to run -- {e}",
