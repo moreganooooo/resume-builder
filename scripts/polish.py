@@ -131,6 +131,18 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
 
     sendable = {k: doc.get(k) for k in fields}
     system_instruction = engine.load_prompt(prompt_file)
+    if doc_type != "resume":
+        # B54 (phase-9-backlog.md): resume-engine/scoring/ predates the
+        # cover-letter path, so polish_coverletter.md ran with no scoring
+        # rubric at all -- believability.yaml and ai_risk.yaml are the
+        # smallest useful attachment (metric-credibility and AI-pattern
+        # checks apply to cover-letter prose just as much as to a resume).
+        believability_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "believability.yaml"))
+        ai_risk_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "ai_risk.yaml"))
+        system_instruction += (
+            f"\n\nBELIEVABILITY SCORING RUBRIC:\n{believability_rules}"
+            f"\n\nAI RISK SCORING RUBRIC:\n{ai_risk_rules}"
+        )
     contents = (
         f"=== CURRENT DOCUMENT JSON ===\n{json.dumps(sendable, indent=2)}\n\n"
         f"=== REQUESTED EDIT ===\n{instruction}"

@@ -342,5 +342,55 @@ class TestRoleRoster(unittest.TestCase):
         self.assertTrue(any("VML" in v for v in violations))
 
 
+ATS_MATCH_RULES = {
+    "thresholds": {"excellent_match": 85, "good_match": 70, "weak_match": 50},
+}
+
+
+class TestCheckKeywordCoverage(unittest.TestCase):
+    """B18 (phase-9-backlog.md): deterministic JD-keyword coverage check."""
+
+    def test_all_keywords_present_scores_100_and_excellent(self):
+        jd_keywords = {
+            "tools": [],
+            "hard_skills": ["CRM Strategy", "Segmentation"],
+            "core_functions": [],
+        }
+        report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
+        self.assertEqual(report["score"], 100)
+        self.assertEqual(report["band"], "excellent_match")
+        self.assertEqual(report["missing"], [])
+
+    def test_missing_keywords_are_reported_not_invented(self):
+        jd_keywords = {
+            "tools": ["Salesforce"],
+            "hard_skills": ["Segmentation"],
+            "core_functions": [],
+        }
+        report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
+        self.assertEqual(report["missing"], ["Salesforce"])
+        self.assertEqual(report["matched"], ["Segmentation"])
+        self.assertEqual(report["score"], 50)
+        self.assertEqual(report["band"], "weak_match")
+
+    def test_no_keywords_extracted_scores_100_rather_than_dividing_by_zero(self):
+        jd_keywords = {"tools": [], "hard_skills": [], "core_functions": []}
+        report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
+        self.assertEqual(report["score"], 100)
+        self.assertEqual(report["missing"], [])
+
+    def test_matching_is_case_insensitive_and_word_bounded(self):
+        # "CRM" alone must not spuriously match inside an unrelated word,
+        # and casing in the JD keyword must not matter.
+        jd_keywords = {"tools": [], "hard_skills": ["crm strategy"], "core_functions": []}
+        report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
+        self.assertEqual(report["matched"], ["crm strategy"])
+
+    def test_below_weak_threshold_is_poor_match(self):
+        jd_keywords = {"tools": ["Salesforce", "HubSpot", "Marketo"], "hard_skills": [], "core_functions": []}
+        report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
+        self.assertEqual(report["band"], "poor_match")
+
+
 if __name__ == "__main__":
     unittest.main()

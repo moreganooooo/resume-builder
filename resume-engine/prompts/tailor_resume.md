@@ -71,7 +71,7 @@ ones apply and what their real option keys are, never any specific school name.
 - Remaining sentences: narrative bridge / exit story + 1–2 most relevant proof points (metrics or scope, not adjectives) — keep the same pronoun-free, name-free voice throughout (e.g. "Specializes in..." / "Transforms..." not "She specializes in..." / "Her background includes...")
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
 - Use the `=== COMPANY RESEARCH ===` context block (if present) as the actual source for this tone-mirroring — its tone_register/pronoun_framing/jargon_density/recurring_keywords fields describe the real signal to match. If no such block is present, skip tone-mirroring entirely rather than guessing from the JD text alone
-- BANNED words: passionate, driven, results-oriented, dynamic, synergy, best-in-class, seeking opportunities, visionary
+- BANNED words and phrases (kept in sync with `resume-engine/scoring/summary_score.yaml`'s `buzzword_openers` hard-failure list — do not let the two drift apart again): passionate, driven, results-oriented, results-driven, dynamic, dynamic professional, synergy, best-in-class, seeking opportunities, visionary, visionary leader, accomplished professional, highly motivated, dedicated professional, seasoned professional, proven track record, strategic thinker
 - No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to the candidate by name; the only section where pronouns are allowed at all is Why
 - No parentheses; replace with commas or semicolons
 
