@@ -153,8 +153,12 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B17 · B37 · B38 · B39 · B43 · B44 (partial — see below) ·
-> B45 · B47 · B48 · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B24 · B37 · B38 · B39 · B43 ·
+> B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
+> B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+>
+> **B52 — checked, not fixed: already resolved.** Verified live against the
+> actual files, not the doc's snapshot — see the 2026-08-06 entry below.
 >
 > **2026-08-06 — Tier 3, first 11 of 15 items, commit `67aa78b2`.** Worked the
 > hygiene/modernization tier in easiest-to-hardest order (deletions and config
@@ -485,6 +489,161 @@ re-dispatched, since there are no phases left to receive them.
 > a past deadline returning immediately with nothing fetched. No live
 > Workday call made. Python suite unaffected, as expected (no Python file
 > touched): 1178 passed (same count as after B16), 0 failed.
+>
+> **2026-08-06 — Session 1 of `fix-pass-plan.md` (B24, B49, B50, B51, B52,
+> B53, B54, B18).** Critique/rubric wiring cluster, done together since all
+> but B18 land in the same `orchestrator.py` critique region.
+>
+> **B24 (template family mismatch).** Three edits, verified against a real
+> rendered PDF. `cv-template.html`'s `.header h1` was `42pt`/`line-height:
+> 0.75in`; `ResumeDesignSystem.md:113` and the cover-letter template both
+> say `32pt` -- brought the resume down to `32pt`/`0.5in` (matching the
+> cover letter's ratio, not just the font-size number) rather than
+> reinterpreting the spec, since two independently-built templates agreeing
+> with the written spec was the strongest signal of which one was the
+> outlier. `coverletter-template.html`'s `.contact-row .separator` was
+> `#000000`; spec says separators are `#9aa3af` only -- fixed to match
+> `cv-template.html`'s copy of the same rule, which already had it right.
+> `.career-note strong` (the bold "Career Note:" label) inherited
+> `font-style: italic` from its `.career-note` parent while also being
+> `font-weight: 800` -- no italic-800 face exists, so Chromium was
+> synthesizing a Type3 font for it. Added `font-style: normal` to the
+> `strong` rule, which is what `ResumeDesignSystem.md:330-331` already
+> specifies (bold label, italic note -- not an italic label). **Verified,
+> not just reviewed:** ran `resume sample` before touching anything to get a
+> baseline, then after -- page count held at 2 (resume) / 1 (cover letter),
+> no regression; a `pypdf` scan of every font resource on every page of the
+> freshly-rendered resume PDF found zero `/Subtype /Type3` fonts (was
+> present before, from the career-note label).
+>
+> **B49/B50/B51 (rubric attachment, schema, and hard-failure gate --
+> treated as one item since B50/B51 are strictly downstream of B49's attach
+> point).** `critique_resume.md`'s own "Load and Apply" list named 18
+> files; only 2 (`summary_score.yaml`, `top_third_score.yaml`) were ever
+> attached to the critique call in `orchestrator.py`, so its 9-step
+> evaluation sequence was scoring against rubrics it never received for
+> Steps 1-6. Attached the remaining 16 -- `profile.yml` (item 1) via
+> `static_prefix`, already built earlier in the same method for the bullet
+> audit loop and therefore free to reuse (it also carries `voice-anchors.md`
+> and the verified_* KB files as a bonus, which get to the critique step
+> for the first time too), and the other 15 raw via
+> `json.dumps(self.load_yaml(...))` -- **not** hand-curated per file the
+> way `audit_and_refine_bullets()` curates its rules bundle, a deliberate
+> scope decision: that curation exists because the audit loop multiplies
+> its cost across every bullet in a resume, and critique runs exactly once
+> per build, so the extra ~80KB doesn't compound the way a per-bullet cost
+> would. `ResumeCritiqueSchema` gained the 11 fields the prompt's steps
+> already named with nowhere to return them (`primary_identity`,
+> `secondary_identity`, `tertiary_identity`, `competing_narratives`,
+> `unsupported_positioning`, `recruiter_takeaway`, `strongest_alignment`,
+> `weakest_alignment`, `ungrouped_skills`, `unsupported_skills`,
+> `archetype_mismatch`), plus a new `hard_failures_triggered: List[str]`
+> field for B51's gate. **The gate itself:** any `hard_failures_triggered`
+> entries get prefixed (`"Fix rubric hard failure -- {reason}"`) and folded
+> into `critique_data["recommendations"]` before Step 5.5 runs, so a rubric
+> hard-failure re-enters the pipeline through the exact same
+> apply-and-validate-with-discard loop every other recommendation already
+> uses -- deliberately not a new blocking mechanism, since the safe,
+> grounded path already exists and a hard failure is not categorically
+> different from any other recommendation once it's phrased as one. Chose
+> "wire a gate" over "delete `reject_if`" per the item's own two listed
+> options, since the fields are honest content Phase 10 confirmed rubric
+> authors intended to be load-bearing. **Verified, not just reviewed:** a
+> real `resume sample` run against the live `morgan` profile returned
+> `identity: Content Strategist & Operations Specialist / Lifecycle
+> Marketing Specialist` (new field, populated), scores of 94-96 across all
+> four dimensions, flags drawn from rubric vocabulary
+> (`strong_jd_alignment`, `verified_metrics_present`, `archetype_aligned`,
+> `no_ai_risk_patterns`) that wasn't available to the model before this
+> session, `hard_failures_triggered` empty (this resume cleared every
+> attached rubric's bar -- the gate exists but had nothing to catch this
+> run), 3 recommendations correctly routed through Step 5.5 (1 applied, 2
+> skipped as non-resume-content), and the pipeline completed normally with
+> no schema-validation or parsing errors on the larger response.
+>
+> **B52 (archetype vocabulary) -- checked, not fixed: already resolved.**
+> Read the four files the item named before touching anything.
+> `style_rules.yaml:304` already has a full `archetype_ordering` block
+> (`lifecycle`, `copywriter`, `enablement`, `marketing_ops` -- exactly the
+> four `style_rules_archetype` values `professional_identity_score.yaml`
+> references), and that file already has a complete `archetype_aliases`
+> table (lines 25-69) mapping its own six identity keys to those same four
+> `style_rules_archetype` values. `ats_match.yaml`'s five
+> `archetype_overrides` keys now match `profile.yml`'s five archetype
+> names exactly (`git log` traces this to `57075b3f`, predating this
+> session). The specific dangling reference the item was filed against
+> (`professional_identity_score.yaml:386`'s `style_rules_archetype` lookup
+> having nowhere to resolve) does not exist in the current codebase --
+> resolved between Phase 10's review and now, by whom or exactly when isn't
+> recoverable from this pass. `role_dna.yaml`'s separate snake_case
+> vocabulary (`email_lifecycle`, `sales_enablement`, `marketing_ops_crm`,
+> `generalist_coordinator`) remains genuinely distinct, but its own header
+> comment states it's "used by `tailor_resume.md` and the evidence ranker
+> to match bullets to roles by evidence type" -- a different job
+> (JD-keyword-to-evidence matching) from `style_rules_archetype`'s job
+> (skills-section ordering), not a second copy of the same concept that
+> needs reconciling. No code change made; re-litigating this in a future
+> session should start from this note, not from the original P10F8 finding.
+>
+> **B53 (banned-word lists).** `tailor_resume.md:74` (single words) and
+> `summary_score.yaml`'s `buzzword_openers` (specific 2-word phrases) were
+> still genuinely divergent -- verified by grep immediately before editing,
+> not assumed from the doc. Merged the six phrases the builder's list
+> didn't already substring-cover (`accomplished professional`, `highly
+> motivated`, `dedicated professional`, `seasoned professional`, `proven
+> track record`, `strategic thinker`) into `tailor_resume.md`'s BANNED
+> line, plus the two exact phrase forms (`results-driven`, `dynamic
+> professional`, `visionary leader`) for a future reader's clarity even
+> though their root words were already banned. Added a comment naming
+> `summary_score.yaml` as the source of truth so the two can't drift apart
+> silently again. Not exercised by `resume sample` in a way that isolates
+> it (the builder call ran as part of the same sample build above, no
+> banned-phrase violation surfaced either before or after -- a null
+> result, not confirming evidence).
+>
+> **B54 (cover letter has no rubric).** `polish.py`'s `generate_candidate()`
+> loaded `polish_coverletter.md` with nothing attached beyond the prompt
+> itself -- `style_rules.yaml` was loaded afterward but only for the
+> post-hoc validator, never for the generation call. Attached
+> `believability.yaml` + `ai_risk.yaml` (the item's own "smallest useful
+> version") to the cover-letter generation branch only (`doc_type !=
+> "resume"`), which `ai_risk.yaml` reachable per B49. **Not exercised by
+> `resume sample`** -- `polish.py` is a separate interactive command
+> (`resume polish`) with no existing test coverage of its live Gemini call,
+> so this is reviewed and syntax/import-checked but not run end-to-end this
+> session; flagging honestly rather than claiming verification that didn't
+> happen.
+>
+> Also added 5 new unit tests for B18's `check_keyword_coverage()` (all-
+> matched/excellent, some-missing/weak, zero-keywords-doesn't-divide-by-
+> zero, case-and-word-boundary matching, below-weak-threshold/poor) --
+> the only new tests this session, since the rest of the cluster is
+> prompt-assembly/schema plumbing exercised more meaningfully by the real
+> `resume sample` run above than by mocking Gemini's response. Full suite:
+> 1187 passed (was 1182 after B16/B17/B19), 0 failed.
+>
+> **B18 (JD-keyword coverage) is its own item, not folded into the rubric
+> cluster above, since its fix lives in `validate_resume.py` +
+> `orchestrator.py`'s Step 7, not the critique region.** New
+> `validate_resume.check_keyword_coverage()`: deterministic, exact-match-
+> only (case-insensitive, word-bounded) comparison of the already-extracted
+> Step 1 `jd_keywords` (`tools`/`hard_skills`/`core_functions`) against the
+> finished resume's Summary/Skills/Why/bullets/titles, scored and banded
+> using `ats_match.yaml`'s own `thresholds` -- the exact "weights exist,
+> logic doesn't" gap Phase 10 diagnosed. Deliberately a report, not a
+> `validate()` violation: a missing keyword the candidate doesn't actually
+> have is not something the pipeline should invent to close, so it's
+> printed (matching the item's own "reported before the pipeline claims
+> success" wording) rather than triggering the automated fix-and-revalidate
+> loop the way a real violation does -- that loop exists for objective
+> formatting rules, not for tempting a model to fabricate a skill under
+> pressure to hit 100%. Wired into `build_tailored_resume()` right after
+> the PDF text-layer check, before the "Pipeline complete!" print. **Verified
+> live:** the same `resume sample` run reported `JD-keyword coverage: 79%
+> (good_match, 15/19)` and named the 4 missing keywords by name
+> (`Cybersecurity`, `Integrated marketing`, `Content operations`, `Messaging
+> alignment`) -- all four are genuinely absent from this candidate's real
+> background, so the report is accurate, not a false positive.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first
