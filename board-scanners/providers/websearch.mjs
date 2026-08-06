@@ -21,23 +21,20 @@ import { recognizeProvider } from './_recognition.mjs';
 // Location is not reliably available from search snippets, so it defaults
 // to empty string — the location filter in scan.mjs will pass empty locations
 // through (by design), and the title filter handles the rest.
+//
+// NOTE (resume-builder, B26, docs/review/phase-9-backlog.md): this used to
+// have its own module-level sequential queue here to pace requests at
+// ~10 req/sec. That's dead code across the subprocess boundary --
+// run_provider.mjs spawns one fresh Node process per query, which handles
+// exactly one Brave call and exits, so the queue never had more than one
+// item and its state never survived between invocations. It was also tuned
+// to 10x the free tier's actual 1 req/sec limit above. Real inter-call
+// pacing now happens where multiple websearch calls actually happen
+// sequentially in the same process: scan_ats.py's search_queries.yml sweep
+// loop (scripts/scan_ats.py, fetch_ats_jobs()).
 
 const BRAVE_API_URL = 'https://api.search.brave.com/res/v1/web/search';
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
-
-// Sequential queue with a 100ms gap — ~10 req/sec, well under the paid plan's
-// 50 req/sec limit. Keeps a small buffer in case of clock jitter.
-const RATE_LIMIT_MS = 100;
-let queue = Promise.resolve();
-
-function enqueue(fn) {
-  const next = queue.then(() => fn()).then(
-    result => new Promise(resolve => setTimeout(() => resolve(result), RATE_LIMIT_MS)),
-    err    => new Promise((_, reject) => setTimeout(() => reject(err),  RATE_LIMIT_MS)),
-  );
-  queue = next.then(() => {}, () => {}); // keep queue moving even on error
-  return next;
-}
 
 // Domains that never contain direct job postings — aggregators, content sites,
 // listicles, review sites, social networks, freelance platforms, etc.
@@ -200,7 +197,7 @@ export default {
     return null;
   },
 
-  async fetch(entry, _ctx) {
+  async fetch(entry, ctx) {
     if (!BRAVE_API_KEY) {
       throw new Error(
         'websearch: BRAVE_API_KEY is not set. Add it to your .env file.\n' +
@@ -220,20 +217,15 @@ export default {
       freshness: 'pm',  // past month — keeps results recent
     });
 
-    const json = await enqueue(async () => {
-      const response = await fetch(`${BRAVE_API_URL}?${params}`, {
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip',
-          'X-Subscription-Token': BRAVE_API_KEY,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          `websearch: Brave API error ${response.status} for "${entry.name}" — ${await response.text()}`
-        );
-      }
-      return response.json();
+    // Routed through ctx (B26) instead of a raw fetch() -- picks up the
+    // shared timeout, retry/backoff, and honest User-Agent instead of
+    // bypassing all three.
+    const json = await ctx.fetchJson(`${BRAVE_API_URL}?${params}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip',
+        'X-Subscription-Token': BRAVE_API_KEY,
+      },
     });
 
     const results = /** @type {any[]} */ (json?.web?.results || []);
@@ -243,16 +235,24 @@ export default {
       .map(r => {
         const urlCompany = extractCompanyFromUrl(r.url);
         const recognizedProvider = recognizeProvider(r.url);
+        const snippet = r.description || r.extra_snippets?.[0] || '';
 
         // For sweeps, prefer the URL-extracted company name.
         // For tracked companies, use entry.name as the source of truth.
         const companyName = (/** @type {any} */(entry)._isSweep && urlCompany) ? urlCompany : entry.name;
-        
+
         return {
           title: cleanTitle(r.title, companyName),
           url: r.url,
           company: companyName,
-          location: extractLocation(r.description || r.extra_snippets?.[0] || ''),
+          location: extractLocation(snippet),
+          // B36: a search snippet is a thin substitute for a real posting
+          // body, but it's real signal already computed above for
+          // extractLocation() and previously just discarded -- better than
+          // the null this used to leave for _write_jd_file() to write
+          // as-is. scan_boards.py's thin-description check still flags it
+          // if it's short, same as any other provider's weak description.
+          description: snippet,
           _promotedPortal: recognizedProvider ? { provider: recognizedProvider, url: r.url } : null
         };
       });

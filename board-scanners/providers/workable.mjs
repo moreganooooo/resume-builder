@@ -15,6 +15,15 @@
 const ALLOWED_WORKABLE_HOSTS = new Set(['apply.workable.com']);
 const RESERVED_WORKABLE_SUBDOMAINS = new Set(['apply', 'www', 'api']);
 
+// B36 (docs/review/phase-9-backlog.md): the jobs.md table above has no
+// description column, but each row's own [View] link (before this parser
+// strips it down to the human-facing URL below) already points at a
+// `<id>.md` detail page -- a plain markdown document, no second API or
+// per-ATS selector needed. Bounded by count since a large board can list
+// hundreds of postings and each one is an extra request.
+const WORKABLE_DETAIL_FETCH_CAP = 40;
+const WORKABLE_DETAIL_TIME_BUDGET_MS = 15_000;
+
 function assertWorkableUrl(url) {
   let parsed;
   try {
@@ -71,9 +80,37 @@ export default {
     // redirect:'error' prevents SSRF via server-side redirects; combined with
     // assertWorkableUrl above it guarantees the final hostname stays in the allowlist.
     const text = await ctx.fetchText(feedUrl, { redirect: 'error' });
-    return parseWorkableMarkdown(text, entry.name);
+    const jobs = parseWorkableMarkdown(text, entry.name);
+
+    const deadline = Date.now() + WORKABLE_DETAIL_TIME_BUDGET_MS;
+    for (const job of jobs.slice(0, WORKABLE_DETAIL_FETCH_CAP)) {
+      if (Date.now() >= deadline) break;
+      if (!job._detailUrl) continue;
+      job.description = await fetchPostingDescription(ctx, job._detailUrl);
+      delete job._detailUrl;
+    }
+
+    return jobs;
   },
 };
+
+/**
+ * Fetches one posting's own `.md` detail page and returns it as-is -- it's
+ * already plain markdown, not HTML, so no extraction step is needed before
+ * scan_boards.py's _html_to_text() (which passes plain text through
+ * unchanged). Best-effort: any failure returns "" so one bad posting
+ * doesn't drop the whole board's results.
+ * @param {import('./_types.js').Context} ctx
+ * @param {string} detailUrl
+ * @returns {Promise<string>}
+ */
+async function fetchPostingDescription(ctx, detailUrl) {
+  try {
+    return await ctx.fetchText(detailUrl, { redirect: 'error' });
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Parse Workable's public markdown feed. Exported as a named export for unit
@@ -84,9 +121,15 @@ export default {
  * URLs are validated against `https://apply.workable.com/` — off-domain or
  * non-HTTPS [View] links are skipped (not emitted).
  *
+ * B36 (docs/review/phase-9-backlog.md): the same [View] link, before the
+ * `.md` suffix is stripped for the human-facing `url`, is itself a fetchable
+ * per-posting markdown detail page -- kept as `_detailUrl` (not part of the
+ * Job contract; fetch()'s detail-fetch loop consumes and deletes it) so the
+ * description doesn't have to come from a second guess at the URL shape.
+ *
  * @param {string} text — markdown body
  * @param {string} companyName — value to write into job.company
- * @returns {Array<{title: string, url: string, company: string, location: string}>}
+ * @returns {Array<{title: string, url: string, company: string, location: string, _detailUrl: string}>}
  */
 export function parseWorkableMarkdown(text, companyName) {
   if (typeof text !== 'string') return [];
@@ -100,20 +143,23 @@ export function parseWorkableMarkdown(text, companyName) {
     if (!title || title === 'Title') continue;
     const location = cols[3] || '';
     const urlMatch = line.match(/\[View\]\(([^)]+)\)/);
-    let url = urlMatch ? urlMatch[1] : '';
-    if (url.endsWith('.md')) url = url.slice(0, -3);
-    if (!url) continue;  // skip rows with no resolvable URL (e.g., malformed [View] link)
+    let detailUrl = urlMatch ? urlMatch[1] : '';
+    if (!detailUrl) continue;  // skip rows with no resolvable URL (e.g., malformed [View] link)
+    let url = detailUrl.endsWith('.md') ? detailUrl.slice(0, -3) : detailUrl;
 
-    // Validate the extracted URL — must parse as https://apply.workable.com/...
+    // Validate both URLs — must parse as https://apply.workable.com/...
     try {
       const parsedUrl = new URL(url);
+      const parsedDetailUrl = new URL(detailUrl);
       if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'apply.workable.com') continue;
+      if (parsedDetailUrl.protocol !== 'https:' || parsedDetailUrl.hostname !== 'apply.workable.com') continue;
       url = parsedUrl.href;
+      detailUrl = parsedDetailUrl.href;
     } catch {
       continue;
     }
 
-    jobs.push({ title, url, location, company: companyName });
+    jobs.push({ title, url, location, company: companyName, _detailUrl: detailUrl });
   }
   return jobs;
 }

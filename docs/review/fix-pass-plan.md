@@ -71,7 +71,7 @@ bundled here rather than given its own session.
 
 ---
 
-## Session 3 — Board-scanner hygiene
+## Session 3 — Board-scanner hygiene — ✅ DONE 2026-08-06
 
 **Items, in order:** B26 → B27 → B36.
 
@@ -79,7 +79,21 @@ bundled here rather than given its own session.
 B27's error-envelope and B36's missing-description fix are natural additions
 once `_http.mjs` is open for B26's backoff/retry logic.
 
-**Files:** `board-scanners/_http.mjs`, ~8 provider `.mjs` files, `scan_boards.py`.
+**Outcome:** all 3 done. B36 turned out bigger than "small" — two of its six
+providers (SmartRecruiters, Workday) need a bounded per-posting detail fetch,
+not just a field mapping; asked Morgan, she chose the full fix over deferring
+it. That pulled `scripts/scan_ats.py` into scope too (not in the file list
+below) since it's the only caller that actually reaches `websearch.mjs`
+sequentially and the four ATS-only providers, and it already imports/reuses
+`scan_boards.py`'s helpers by convention. Full detail, the per-provider
+verification method, and exact test counts are in `phase-9-backlog.md`'s
+2026-08-06 Session 3 changelog entry. Test suite: 1218 → 1231 (Python), plus
+40 new `node:test` cases (this repo had none outside `workday.test.mjs`
+before this session) — not verified against a live scan (no credentials/
+tracked-company data in this checkout to exercise safely).
+
+**Files:** `board-scanners/_http.mjs`, ~8 provider `.mjs` files,
+`scan_boards.py` — plus `scan_ats.py` and `cli_art.py` (see Outcome above).
 
 **Clear after this session.**
 

@@ -132,5 +132,65 @@ class TestFetchAtsJobs(unittest.TestCase):
         self.assertEqual(scan_ats.fetch_ats_jobs(), [])
 
 
+class TestWebsearchPacing(unittest.TestCase):
+    """websearch.mjs used to pace itself against Brave's free-tier 1
+    req/sec limit with a module-level queue -- dead code across the
+    subprocess boundary, since run_provider.mjs spawns one fresh Node
+    process per query (see B26, docs/review/phase-9-backlog.md). Real
+    pacing now lives in fetch_ats_jobs()'s sweep loop instead."""
+
+    @patch("time.sleep")
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_ats._load_tracked_companies", return_value=[])
+    @patch("scan_ats._load_search_queries")
+    def test_no_sleep_before_the_first_websearch_call(self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep):
+        mock_queries.return_value = [{"name": "Only Query", "query": "q", "enabled": True}]
+        scan_ats.fetch_ats_jobs()
+        mock_sleep.assert_not_called()
+
+    @patch("time.sleep")
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_ats._load_tracked_companies", return_value=[])
+    @patch("scan_ats._load_search_queries")
+    def test_sleeps_between_multiple_websearch_calls(self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep):
+        mock_queries.return_value = [
+            {"name": "Query One", "query": "q1", "enabled": True},
+            {"name": "Query Two", "query": "q2", "enabled": True},
+            {"name": "Query Three", "query": "q3", "enabled": True},
+        ]
+        scan_ats.fetch_ats_jobs()
+        # One sleep call before each of the 2nd and 3rd calls -- never
+        # before the 1st.
+        self.assertEqual(mock_sleep.call_count, 2)
+        self.assertEqual(mock_run.call_count, 3)
+
+    @patch("time.sleep")
+    @patch("time.monotonic")
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_ats._load_tracked_companies", return_value=[])
+    @patch("scan_ats._load_search_queries")
+    def test_does_not_sleep_the_full_gap_when_the_call_itself_already_took_a_while(
+        self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_monotonic, mock_sleep,
+    ):
+        # Measures from the previous call's *start*, not a blind fixed
+        # sleep -- if the call itself already consumed the whole gap
+        # (network latency), the next iteration shouldn't sleep on top of
+        # that.
+        mock_queries.return_value = [
+            {"name": "Query One", "query": "q1", "enabled": True},
+            {"name": "Query Two", "query": "q2", "enabled": True},
+        ]
+        # time.monotonic() is called 3 times across 2 queries: once to
+        # record the 1st call's start, once for the 2nd iteration's
+        # elapsed-time check (already >= the 1s gap here), once to record
+        # the 2nd call's own start.
+        mock_monotonic.side_effect = [0.0, 1.5, 1.5]
+        scan_ats.fetch_ats_jobs()
+        mock_sleep.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
