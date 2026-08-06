@@ -153,7 +153,8 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B24 · B37 · B38 · B39 · B43 ·
+> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B24 · B28 · B29 · B30 ·
+> B37 · B38 · B39 · B43 ·
 > B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
 > B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
 >
@@ -644,6 +645,108 @@ re-dispatched, since there are no phases left to receive them.
 > (`Cybersecurity`, `Integrated marketing`, `Content operations`, `Messaging
 > alignment`) -- all four are genuinely absent from this candidate's real
 > background, so the report is accurate, not a false positive.
+>
+> **2026-08-06 — Session 2 of `fix-pass-plan.md` (B28, B29, B30, B20).**
+> Voice/summary quality + bullet-bank integrity cluster. Two items landed
+> differently than the plan's literal fix text, both caught by running the
+> real pipeline rather than trusting the test suite alone -- worth reading
+> before touching either check again.
+>
+> **B28 (`validate_resume.py` blind to `career_note`/EDUCATION).**
+> `_all_bullets()` now also pulls `EDUCATION[i]["bullets"]`, so all 14
+> bullets get length/forbidden-phrase/verb-uniqueness/pronoun checks, not
+> 9. The `career_note` half of the item's own fix text ("include
+> career_note in the pronoun check") was **not** implemented as written --
+> `career_note` is hand-authored fixed content
+> (`fixed_content.CAREER_NOTE`), unconditionally reapplied by
+> `normalize_resume.normalize()` on every pass including inside the
+> fix-retry loop, so flagging its deliberate first-person pronouns would
+> hard-fail every build touching the Treering Yearbooks entry, forever --
+> the LLM has no power to change fixed content. Asked Morgan; she chose
+> "document it as a second allowed exception" over "rewrite the personal
+> note" or "silently skip the check." `tailor_resume.md`'s three pronoun
+> rules (Summary, Why, the blanket Work-Experience-and-elsewhere list) now
+> all name `career_note` as the second exception alongside Why --
+> `ResumeDesignSystem.md:332` already documented this as intentional, so
+> `tailor_resume.md` was the one out of sync, not the design intent.
+> **Verified live:** `resume sample` built a clean 2-page PDF with the
+> Treering career note intact.
+>
+> **B29 (Summary specificity + voice-anchors into critique/apply).**
+> Prompt half: `tailor_resume.md`'s Summary Rules no longer offer
+> "Specializes in..."/"Transforms..." as copyable exemplars (the model was
+> parroting them verbatim) and now explicitly require a concrete, checkable
+> specific; both it and `critique_resume.md`'s Voice Calibration Reference
+> now name `voice-anchors.md` and what its `>` blockquotes are for --
+> previously present in `static_prefix`/`kb_context` but never explained
+> in prose anywhere a builder or critique call could read. `orchestrator.py`'s
+> Step 5.5 recommendation-apply call (`system_instruction=build_prompt`,
+> unchanged since it was deliberately bare for cost) now gets
+> `static_prefix` appended -- small (~5-10k tokens), not the full ~105k
+> `kb_context` -- so content-quality edits are voice-grounded the same way
+> Step 5's critique already is (via `static_prefix` reuse, landed in B49
+> last session). Validator half landed differently than written: a first,
+> blocking `validate_resume.py` check for "≥1 metric beyond the
+> years-of-experience figure" **caused a real `resume sample` build to fail
+> outright** -- the retry loop's `fix_contents` only ever contains
+> `resume_data` + already-selected bullets (deliberately, for cost), and
+> those bullets' metrics are already claimed by `metrics_rules`' own
+> "appears at most ONCE across the CV" rule, so the model oscillated
+> between "no metric" / "duplicate metric" for all 4 attempts with no way
+> out. Asked Morgan; she chose non-blocking over "feed the retry loop more
+> material" or "accept occasional failures." `check_summary_specificity()`
+> is now a standalone report (same precedent as `check_keyword_coverage()`)
+> printed alongside JD-keyword coverage in Step 7, not gated on. **Verified
+> live, twice** -- the blocking version's failure, then the non-blocking
+> version's success (2-page PDF + cover letter, specificity gap correctly
+> surfaced as a warning, not a failure).
+>
+> **B30 (`voice-anchors.md` mostly paraphrase).** `build_voice_anchors.py`
+> now emits only rows with a genuine "Quote Worth Pulling" (`### <topic>` +
+> `> <verbatim quote>`), dropping "Themes & Highlights" third-person
+> paraphrase entirely and skipping the 4/14 rows in
+> `application-answers-index.csv` that have no quote at all -- nothing to
+> demonstrate, so nothing kept. Regenerated the real
+> `profiles/morgan/knowledge_base/voice-anchors.md`: 4,100 -> 1,426 bytes,
+> now pure verbatim specimens. **Verified live:** `resume sample` completed
+> normally (resume + cover letter PDFs both generated) with the new file.
+>
+> **B20 (embedding/clustering can silently misalign the bank).** New
+> `scripts/bullet_bank_hash.py` (`bullets_sha()`, SHA256 of the bullet-text
+> column in row order) shared by the write side
+> (`embed_bullet_bank.py`/`cluster_bullet_bank.py`) and read side
+> (`orchestrator.py`'s `mine_bullet_bank()`) -- a staleness check only
+> means something if both sides compute the hash the same way, so this is
+> one function, not three copies. `embed_batch()` in both embedder scripts
+> now raises if the API returns fewer embeddings than texts sent (was
+> `.get("embeddings", [])` silently contributing zero rows). Both scripts'
+> checkpoints now carry `bullets_sha` and discard-and-restart on mismatch;
+> `cluster_bullet_bank.py`'s checkpoint also now verifies `total` on
+> load -- it already persisted `total`, per the item's own note, and simply
+> never read it back. `cluster_bullet_bank.py`'s `VECTOR_CACHE` gained a
+> `.meta` sidecar (it had none before) so a same-shape cache with changed
+> content is caught, not just a shape mismatch. `mine_bullet_bank()` now
+> reads `bullet_vectors_ge2_d768.meta`, computes the bank's current hash,
+> and skips mining (same graceful-skip pattern as its existing
+> missing-file/row-count checks) on any mismatch or unreadable/missing
+> `.meta` -- enforced at read time per H26, not only at write time.
+> `embed_bullet_bank.py`'s NaN handling changed from `.astype(str)` (NaN ->
+> `"nan"`) to `.fillna("").astype(str)` (NaN -> `""`) to match
+> `mine_bullet_bank()`'s `.fillna("")` -- the two sides must agree on this
+> or an unrelated NaN would produce a spurious hash mismatch even with no
+> real content change. **Backfilled, not regenerated:** the real
+> `profiles/morgan/knowledge_base/bullet_vectors_ge2_d768.meta` predates
+> `bullets_sha` and the underlying CSV hadn't changed since it was written,
+> so patched the field in directly rather than burning API calls/time on a
+> needless re-embed. 26 new tests across `test_bullet_bank_hash.py`
+> (new), `test_embed_bullet_bank.py` (new), `test_cluster_bullet_bank.py`,
+> and `test_mine_bullet_bank.py` (which also needed its two existing
+> fixtures updated to write a matching `.meta`, or they'd have started
+> failing under the new read-time check). **Verified live:** `resume
+> sample` mined 30 bullets (23 from guaranteed per-company minimums)
+> against the real, backfilled `.meta` with zero staleness warnings.
+>
+> Full suite: 1218 passed (was 1187 after session 1), 0 failed.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

@@ -202,8 +202,11 @@ TOP 3 RECOMMENDATIONS
 Use this candidate's `voice_calibration_example` (in profile.yml, provided
 in your knowledge base context) as the calibration anchor for judging
 whether a section reads as distinctive/flat, and how much personality is
-appropriate per section -- contrast it against these two illustrative
-extremes to judge where a given section falls:
+appropriate per section. `voice-anchors.md`, also in your knowledge base
+context, has more of these -- its `>` blockquoted lines are real verbatim
+quotes from this candidate and are a richer source of the same signal.
+Contrast either against these two illustrative extremes to judge where a
+given section falls:
 
 **Contrast examples (same underlying idea, different execution):**
 - Generic/Professional: "I'm writing to express my interest in the role."
