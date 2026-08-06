@@ -158,6 +158,11 @@ aggressively shortened during trimming.
 
 # Per-Role Bullet Count Targets
 
+**Every company in that table gets its own EXPERIENCE entry. No exceptions.** The table is the
+candidate's complete work history, not a menu -- dropping a company is not a way to save space, is
+never the right answer to a JD that doesn't mention that employer, and is not an acceptable outcome
+of trimming. If a role feels less relevant, give it its Min number of bullets; do not omit it.
+
 See the ROLE RULES context block's "Per-Role Bullet Count Targets" table for this candidate's exact
 Min/Target/Page values per company. These are exact targets -- do not over-fill or under-fill any
 role. The total across all roles must fit the 2-page layout.

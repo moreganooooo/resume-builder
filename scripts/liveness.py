@@ -16,10 +16,15 @@ import subprocess
 
 import cli_art
 import jd_manager
+import profile_paths
 import theme
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LIVENESS_INPUT_PATH = os.path.join(jd_manager.PROJECT_ROOT, "output", "liveness_input_tmp.json")
+# Profile-scoped: this used to land at the repo root's output/, outside
+# profile_paths.sync_roots(). It's cleaned up in a finally block, so it only
+# persisted when the process was killed mid-check -- but a stray temp file
+# from one profile sitting in a shared path is still the wrong shape.
+LIVENESS_INPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_input_tmp.json")
 
 # How recently a JD needs to have been checked (or scanned -- see
 # scan.py's seeding of _liveness at write time) to skip re-checking it by

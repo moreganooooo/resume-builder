@@ -537,6 +537,23 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
     )
 
 
+def _required_role_roster(profile_data: dict) -> list[str]:
+    """profile.yml's roles: names, minus any situational role.
+
+    Situational roles are conditional by design -- they fire only when a JD
+    calls for them -- so their absence from a given resume is correct and must
+    not read as a violation. Every other declared company is unconditional:
+    the profile says the candidate worked there, so the resume has to say so
+    too. See validate_resume._check_role_roster() for what happened without
+    this.
+    """
+    situational = set(situational_roles.load_situational_roles()["roles"].keys())
+    return [
+        name for role in (profile_data.get("roles") or [])
+        if (name := str(role.get("name", "")).strip()) and name not in situational
+    ]
+
+
 def _confirm_continue_without_keywords() -> bool:
     """Single-file interactive escape hatch for the empty-keywords stop. Only
     ever reached with interactive=True, so a non-TTY (batch, `resume sample`,
@@ -2628,6 +2645,9 @@ class ResumeEngine:
         # from a checkpoint, so style_rules_for_validation must be in scope
         # even when the fresh-build branch below never executes.
         style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
+        # Same reason, same place: the post-trim gate runs on the resumed path
+        # too, so the roster can't be computed inside the fresh-build branch.
+        role_roster = _required_role_roster(self.load_yaml(self.kb_dir, "profile.yml"))
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
@@ -2712,7 +2732,7 @@ class ResumeEngine:
 
             resume_data = normalize_resume.normalize(resume_data)
 
-            violations = validate_resume.validate(resume_data, style_rules_for_validation)
+            violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster)
             max_fix_attempts = 4
             fix_attempt = 0
             while violations and fix_attempt < max_fix_attempts:
@@ -2776,7 +2796,7 @@ class ResumeEngine:
                     print(f"  {theme.colorize_icon_ansi('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
                     continue
                 resume_data = normalize_resume.normalize(fixed)
-                violations = validate_resume.validate(resume_data, style_rules_for_validation)
+                violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster)
 
             if violations:
                 print(f"  {theme.colorize_icon_ansi('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
@@ -2951,7 +2971,7 @@ class ResumeEngine:
                     this_skipped = rec_result.pop("skipped_recommendations", [])
                     this_needs_input = rec_result.pop("needs_personal_input", [])
                     candidate_resume_data = normalize_resume.normalize(rec_result)
-                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation)
+                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation, role_roster)
                     if rec_violations:
                         print(f"    WARNING: introduced {len(rec_violations)} validator violation(s); "
                               f"discarding just this recommendation:")
@@ -3094,7 +3114,7 @@ class ResumeEngine:
                 continue
 
             trimmed_resume_data = normalize_resume.normalize(trimmed)
-            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation)
+            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation, role_roster)
             if trim_violations:
                 print(f"  {theme.colorize_icon_ansi('warning')}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:")

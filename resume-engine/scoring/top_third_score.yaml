@@ -88,12 +88,11 @@ hidden_gem_rules:
     - measurable_business_outcome
 
 flags:
-
-  unclear_identity
-  buried_accomplishments
-  weak_top_section
-  slow_recruiter_comprehension
-  generic_positioning
+  - unclear_identity
+  - buried_accomplishments
+  - weak_top_section
+  - slow_recruiter_comprehension
+  - generic_positioning
 
 final_question:
 

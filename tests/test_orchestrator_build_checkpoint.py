@@ -25,6 +25,14 @@ def _pass_critique_json():
 class TestBuildCheckpointResume(unittest.TestCase):
 
     def setUp(self):
+        # These fixtures build a synthetic 1-company resume against the live
+        # profile, whose roster declares six. B60's roster check is correct to
+        # reject that, but it isn't what any test in this class is about --
+        # _check_role_roster has its own coverage in test_validate_resume.py.
+        self._roster_patch = patch("orchestrator._required_role_roster", return_value=[])
+        self._roster_patch.start()
+        self.addCleanup(self._roster_patch.stop)
+
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
         with open(self.jd_path, "w", encoding="utf-8") as f:
@@ -480,7 +488,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
                 }), {})
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
-        def validate_side_effect(resume_data, rules):
+        def validate_side_effect(resume_data, rules, role_roster=None):
             validation_call_count["n"] += 1
             # First validation call: return a violation
             if validation_call_count["n"] == 1:
@@ -530,7 +538,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
                 return (json.dumps(always_bad), {})
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
-        def validate_side_effect(resume_data, rules):
+        def validate_side_effect(resume_data, rules, role_roster=None):
             # Always return a violation
             return ["SUMMARY_TEXT contains forbidden keyword: 'results-driven'"]
 

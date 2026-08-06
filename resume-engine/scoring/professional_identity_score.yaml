@@ -440,10 +440,9 @@ example_output:
     - Strengthen RevOps positioning in summary
 
 flags:
-
-  unclear_professional_identity
-  competing_narratives
-  unsupported_positioning
-  weak_role_alignment
-  buried_specialization
-  hidden_gems_buried
+  - unclear_professional_identity
+  - competing_narratives
+  - unsupported_positioning
+  - weak_role_alignment
+  - buried_specialization
+  - hidden_gems_buried
