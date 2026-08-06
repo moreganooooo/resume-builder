@@ -252,7 +252,7 @@ MAX_BACKOFF_SECS   = 90
 # GEMINI CLIENT  (raw REST)
 # ---------------------------------------------------------------------------
 
-from gemini_client import GeminiClient  # replaces the inline class
+from gemini_client import GeminiClient, SustainedFailureError  # replaces the inline class
 
 
 # ---------------------------------------------------------------------------
@@ -535,6 +535,37 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
         "line or wraps to a fuller second line. Leave every other bullet "
         "exactly as-is.\n" + "\n".join(f"- {b}" for b in widow_bullets)
     )
+
+
+def _confirm_continue_without_keywords() -> bool:
+    """Single-file interactive escape hatch for the empty-keywords stop. Only
+    ever reached with interactive=True, so a non-TTY (batch, `resume sample`,
+    tests) can never block on it; treats an unreadable stdin as 'no'."""
+    try:
+        answer = input("    Build the resume anyway, with no JD keywords? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer in ("y", "yes")
+
+
+def _trim_profile_yaml(raw: str) -> str:
+    """Keeps only the AUDIT_PROFILE_KEEP sections of a raw profile.yml (the
+    candidate-identity ones: target_roles, archetypes, narrative, superpowers,
+    background_context, deal_breakers), dropping everything from the first
+    AUDIT_PROFILE_STOP heading onward. Shared by build_audit_static_prefix()
+    and evaluate_fit() so both send the model the same view of the candidate."""
+    result = []
+    capturing = False
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if any(stripped.startswith(s) for s in AUDIT_PROFILE_KEEP):
+            capturing = True
+        elif any(stripped.startswith(s) for s in AUDIT_PROFILE_STOP):
+            capturing = False
+        if capturing:
+            result.append(line)
+    return "\n".join(result).strip()
 
 
 def _bullet_removal_trim_instruction(profile_data: dict) -> str:
@@ -1242,18 +1273,7 @@ class ResumeEngine:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
                 print(f"   {theme.colorize_icon_ansi('success')} Loaded profile.yml ({len(raw):,} chars)")
-                lines = raw.splitlines()
-                result = []
-                capturing = False
-                for line in lines:
-                    stripped = line.strip()
-                    if any(stripped.startswith(s) for s in AUDIT_PROFILE_KEEP):
-                        capturing = True
-                    elif any(stripped.startswith(s) for s in AUDIT_PROFILE_STOP):
-                        capturing = False
-                    if capturing:
-                        result.append(line)
-                trimmed = "\n".join(result).strip()
+                trimmed = _trim_profile_yaml(raw)
                 if trimmed:
                     print(f"   {theme.colorize_icon_ansi('hint')} profile.yml trimmed to {len(trimmed):,} chars")
                     sections.append(
@@ -2126,6 +2146,67 @@ class ResumeEngine:
               f"({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).")
         return list(zip(bullets_out, company_out, tags_out))
 
+    def build_fit_evaluation_context(self, jd_text: str) -> str:
+        """
+        Builds evaluate_fit()'s user-content block: the candidate first, then
+        the JD.
+
+        This exists because evaluate_fit.md tells the model to consult
+        "target_roles and archetypes ... in your knowledge base context" and
+        for the entire life of the tool no such context was ever constructed
+        -- the call was the JD alone. A fit score computed against no
+        candidate isn't a weak fit score, it's a summary of the posting, and
+        those scores rank the whole Browse & Manage queue. Symptom: the
+        evaluator would write confidently about experience the JD had merely
+        asserted it wanted.
+
+        Two blocks, both cheap:
+          - profile.yml, trimmed to the identity sections, so "does this
+            candidate fit" has a candidate.
+          - role_dna.yaml, so the returned `archetype` is drawn from the
+            project's own controlled vocabulary rather than freeformed. It is
+            the archetype library and, per the review, is loaded by nothing
+            else today.
+
+        Both are optional: a freshly-bootstrapped profile with neither still
+        evaluates, just without the corresponding block, matching how
+        build_role_rules_block() degrades.
+        """
+        sections = []
+
+        profile_path = os.path.join(self.kb_dir, "profile.yml")
+        if os.path.exists(profile_path):
+            try:
+                with open(profile_path, "r", encoding="utf-8") as f:
+                    trimmed = _trim_profile_yaml(f.read())
+                if trimmed:
+                    sections.append(
+                        "=== CANDIDATE PROFILE (from profile.yml) ===\n"
+                        "This is the candidate you are scoring the job against. "
+                        "The target_roles and archetypes referenced by your "
+                        "instructions are here.\n" + trimmed
+                    )
+            except Exception as e:
+                print(f"  {theme.colorize_icon_ansi('warning')} evaluate_fit: could not load profile.yml: {e}")
+
+        try:
+            role_dna = self.load_yaml(self.scoring_dir, "role_dna.yaml")
+            if role_dna:
+                sections.append(
+                    "=== ROLE ARCHETYPE LIBRARY (from role_dna.yaml) ===\n"
+                    "Choose the returned `archetype` from these keys. Do not invent one.\n"
+                    + json.dumps(role_dna)
+                )
+        except Exception as e:
+            print(f"  {theme.colorize_icon_ansi('warning')} evaluate_fit: could not load role_dna.yaml: {e}")
+
+        if not sections:
+            print(f"  {theme.colorize_icon_ansi('warning')} evaluate_fit: no candidate profile "
+                  "or archetype library found -- scoring the JD in isolation.")
+
+        sections.append(f"=== JOB DESCRIPTION ===\n{jd_text}")
+        return "\n\n".join(sections)
+
     def evaluate_fit(self, jd_path: str) -> dict:
         """
         Standalone go/no-go fit check for a JD -- independent of the tailor+
@@ -2144,7 +2225,7 @@ class ResumeEngine:
         eval_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=eval_prompt,
-            contents=f"=== JOB DESCRIPTION ===\n{jd_text}",
+            contents=self.build_fit_evaluation_context(jd_text),
             response_schema=FitEvaluationSchema,
             temperature=0.0,
         )
@@ -2392,7 +2473,7 @@ class ResumeEngine:
         output_filename: str = None,
         job_key: str = None,
         interactive: bool = False,
-    ) -> dict:
+    ) -> dict | None:
         """
         Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique.
 
@@ -2445,7 +2526,21 @@ class ResumeEngine:
             )
             jd_keywords = GeminiClient.parse_json(keyword_text or "")
             if not jd_keywords:
-                print("  WARNING: JD keyword extraction returned empty. Proceeding with empty keywords.")
+                # Stop here, deliberately. Empty keyword extraction is a strong,
+                # already-paid-for signal that this file isn't a job description
+                # -- and the very next step is a 30-bullet Gemma audit gated at
+                # GEMMA_MIN_INTERVAL_SECS, i.e. half an hour of wall clock and
+                # real spend before anything JD-specific happens. Pointing the
+                # tool at the wrong file is an ordinary mistake; it shouldn't
+                # cost that. Interactive callers may override; batch marks the
+                # JD failed and moves to the next one.
+                print(f"  {theme.colorize_icon_ansi('error')} JD keyword extraction returned nothing.")
+                print("    This usually means the file isn't a job description "
+                      "(wrong path, an empty export, or a login/error page saved as text).")
+                if not (interactive and _confirm_continue_without_keywords()):
+                    print("    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1.")
+                    return None
+                print("    Continuing at your request, with empty keywords.")
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
         print(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
@@ -3035,8 +3130,9 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
 
     completed_count = 0
     failed_count = 0
+    aborted_remaining = 0
 
-    for path in jd_paths:
+    for index, path in enumerate(jd_paths):
         try:
             job_key = jd_manager.compute_job_key(path)
         except OSError as e:
@@ -3061,6 +3157,28 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 job_key=job_key,
                 interactive=jd_path is not None,
             )
+        except SustainedFailureError as e:
+            # Caught ahead of the blanket handler on purpose. This exception
+            # means "quota, not weather" -- retries and the model fallback are
+            # already exhausted. Treating it as a per-JD failure would make a
+            # revoked key run the full 6-attempt/90s-backoff cycle once per
+            # pending JD (1,100+ of them), scrolling the one actionable
+            # instruction past hundreds of times over several hours. Stop, and
+            # say how much work is still waiting.
+            tracker.mark_failed(
+                job_key=job_key,
+                job_title=job_title,
+                company_name=company_name,
+                source_file=os.path.basename(path),
+                error_message=str(e),
+            )
+            failed_count += 1
+            aborted_remaining = len(jd_paths) - (index + 1)
+            print(f"\n  {theme.colorize_icon_ansi('error')} Sustained API failure -- stopping the batch.")
+            print(f"    {e}")
+            if aborted_remaining:
+                print(f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped.")
+            break
         except Exception as e:
             result = None
             print(f"  {theme.colorize_icon_ansi('error')} Unhandled exception building resume for {path}: {e}")
@@ -3098,7 +3216,10 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             failed_count += 1
             print(f"\nERROR: Resume build failed for {path}. It stays pending and will be retried next run.")
 
-    print(f"\nBatch summary: {completed_count} completed, {failed_count} failed.")
+    summary = f"\nBatch summary: {completed_count} completed, {failed_count} failed."
+    if aborted_remaining:
+        summary += f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted."
+    print(summary)
     return completed_count, failed_count
 
 

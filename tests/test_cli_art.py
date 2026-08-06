@@ -108,7 +108,7 @@ class TestRevealBanner(unittest.TestCase):
 
 class TestDisplayMainBanner(unittest.TestCase):
 
-    @patch("cli_art.jd_manager.get_completed_jds", return_value=["a.json"])
+    @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
     @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json", "c.json"])
     def test_runs_without_error_in_non_terminal_mode(self, mock_pending, mock_completed):
         console = Console(record=True, width=100, force_terminal=False)
@@ -126,10 +126,28 @@ class TestDisplayMainBanner(unittest.TestCase):
         self.assertIn("2 Roles Currently Awaiting Resume Creation", output)
         self.assertIn("1 Resumes Customized All-Time", output)
 
+    @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
+    @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json"])
+    def test_stats_are_computed_once_not_per_frame(self, mock_pending, mock_completed):
+        """B2: the stats line is constant for the length of the reveal, but was
+        recomputed on all 31 frames -- each call walks the whole JD corpus, which
+        turned a 1.6s animation into ~27s. Pin the hoist, since the symptom is
+        pure latency and nothing else in the suite would notice a regression."""
+        console = Console(record=True, width=100, force_terminal=True)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            with patch("cli_art.time.sleep"):
+                cli_art.display_main_banner()
+        finally:
+            cli_art.console = original
+        self.assertEqual(mock_pending.call_count, 1)
+        self.assertEqual(mock_completed.call_count, 1)
+
 
 class TestDisplayStatsLine(unittest.TestCase):
 
-    @patch("cli_art.jd_manager.get_completed_jds", return_value=["a.json", "b.json"])
+    @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)
     @patch("cli_art.jd_manager.get_pending_jds", return_value=["c.json"])
     def test_prints_real_pending_and_tailored_counts(self, mock_pending, mock_completed):
         console = Console(record=True, width=100)

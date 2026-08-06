@@ -63,6 +63,13 @@
     background: #ffffff;
     padding: 0;
     margin: 0;
+    /* Ligatures OFF, deliberately. DM Sans renders "fi"/"fl" as single glyphs
+       (U+FB01/U+FB02); PyMuPDF silently expands those back, but pypdf and
+       pdfminer -- what real ATS stacks are built on -- extract them verbatim,
+       so "Certification" arrives as "Certiﬁcation" and stops matching the
+       keyword. Cosmetically invisible, functionally fatal. Never remove. */
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "clig" 0;
   }
 
   .page { width: 100%; max-width: {{PAGE_WIDTH}}; margin: 0 auto; padding: 0; }
