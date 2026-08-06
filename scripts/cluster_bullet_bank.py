@@ -71,6 +71,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+from bullet_bank_hash import bullets_sha  # noqa: E402
 import theme
 
 KB_DIR       = profile_paths.kb_dir()
@@ -83,6 +84,7 @@ CLUSTER_MAP_CSV         = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP             = os.path.join(KB_DIR, "cluster-map.json")
 REWRITE_QUEUE           = os.path.join(KB_DIR, "rewrite-queue.csv")
 VECTOR_CACHE            = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.npy")
+VECTOR_CACHE_META       = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.meta")
 CLUSTER_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz")
 
 AUDIT_SCORE_COLS = [
@@ -130,7 +132,17 @@ def embed_batch(texts: list) -> list:
             continue
         resp.raise_for_status()
         embeddings = resp.json().get("embeddings", [])
-        return [e["values"] for e in embeddings]
+        vecs = [e["values"] for e in embeddings]
+        if len(vecs) != len(texts):
+            # A response with a missing/short "embeddings" key would
+            # otherwise silently contribute fewer rows than sent, shifting
+            # every subsequent bullet's vector out of alignment with its
+            # CSV row (B20, phase-9-backlog.md).
+            raise RuntimeError(
+                f"embed_batch: sent {len(texts)} texts but got {len(vecs)} embeddings back "
+                "-- refusing to silently misalign the vector matrix."
+            )
+        return vecs
 
     raise RuntimeError(
         f"embed_batch failed after {MAX_RETRIES} retries -- still rate-limited. "
@@ -139,9 +151,22 @@ def embed_batch(texts: list) -> list:
     )
 
 
-def load_checkpoint() -> tuple:
+def load_checkpoint(expected_sha: str, expected_total: int) -> tuple:
+    """Discards the checkpoint (rather than resuming from it) if the bank's
+    bullet-text hash or row count no longer matches what was saved --
+    cluster_bullet_bank.py used to persist `total` and never read it back,
+    so editing the bank during a rate-limit pause went undetected and row i
+    of the resumed matrix silently stopped corresponding to bullet i
+    (B20, phase-9-backlog.md)."""
     if os.path.exists(CLUSTER_CHECKPOINT_PATH):
         data = np.load(CLUSTER_CHECKPOINT_PATH, allow_pickle=False)
+        saved_sha = str(data["bullets_sha"]) if "bullets_sha" in data else None
+        saved_total = int(data["total"]) if "total" in data else None
+        if saved_sha != expected_sha or saved_total != expected_total:
+            print("  Bullet bank changed since this checkpoint was saved -- "
+                  "discarding stale progress and starting over.")
+            os.remove(CLUSTER_CHECKPOINT_PATH)
+            return [], 0
         vectors = list(data["vectors"])
         next_index = int(data["next_index"])
         print(f"  Resuming from checkpoint: {next_index} bullets already embedded.")
@@ -149,32 +174,43 @@ def load_checkpoint() -> tuple:
     return [], 0
 
 
-def save_checkpoint(vectors: list, next_index: int, total: int) -> None:
+def save_checkpoint(vectors: list, next_index: int, total: int, bullets_sha_value: str) -> None:
     np.savez(
         CLUSTER_CHECKPOINT_PATH,
         vectors=np.array(vectors, dtype=np.float32),
         next_index=np.array(next_index),
         total=np.array(total),
+        bullets_sha=np.array(bullets_sha_value),
     )
 
 
 def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
     """
-    Load cached vectors if they exist and match the current bullet count;
-    otherwise embed in batches of BATCH_SIZE, checkpointing after every
-    batch so an interruption (rate limit, Ctrl-C) can resume instead of
-    re-embedding from scratch.
+    Load cached vectors if they exist and match the current bank (both row
+    count and bullet-text hash -- a same-length bank whose content changed
+    would otherwise pass the old shape-only check and silently pair the
+    wrong vector with each bullet); otherwise embed in batches of
+    BATCH_SIZE, checkpointing after every batch so an interruption (rate
+    limit, Ctrl-C) can resume instead of re-embedding from scratch.
     """
+    current_sha = bullets_sha(bullets)
+
     if os.path.exists(VECTOR_CACHE):
         cached = np.load(VECTOR_CACHE)
-        if cached.shape == (len(bullets), EMBED_DIM):
+        cache_meta = {}
+        if os.path.exists(VECTOR_CACHE_META):
+            with open(VECTOR_CACHE_META, "r", encoding="utf-8") as f:
+                cache_meta = json.load(f)
+        if cached.shape == (len(bullets), EMBED_DIM) and cache_meta.get("bullets_sha") == current_sha:
             print(f"  Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}")
             return cached
-        else:
+        elif cached.shape != (len(bullets), EMBED_DIM):
             print(f"  Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding...")
+        else:
+            print("  Cache is stale (bullet bank content changed since it was built). Re-embedding...")
 
     total = len(bullets)
-    vectors, start_index = load_checkpoint()
+    vectors, start_index = load_checkpoint(current_sha, total)
     print(f"  Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})...")
 
     for batch_start in range(start_index, total, BATCH_SIZE):
@@ -183,12 +219,14 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
         print(f"    {batch_end}/{total}...")
         vecs = embed_batch(batch)
         vectors.extend(vecs)
-        save_checkpoint(vectors, batch_end, total)
+        save_checkpoint(vectors, batch_end, total, current_sha)
         if batch_end < total:
             time.sleep(EMBED_SLEEP)
 
     matrix = np.array(vectors, dtype=np.float32)
     np.save(VECTOR_CACHE, matrix)
+    with atomic_write(VECTOR_CACHE_META) as f:
+        json.dump({"rows": total, "dim": EMBED_DIM, "bullets_sha": current_sha}, f, indent=2)
     print(f"  Saved {total} vectors to {VECTOR_CACHE}")
     if os.path.exists(CLUSTER_CHECKPOINT_PATH):
         os.remove(CLUSTER_CHECKPOINT_PATH)

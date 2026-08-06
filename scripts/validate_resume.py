@@ -24,6 +24,11 @@ _COMPOUND_LABEL_PREFIX = re.compile(r"[A-Za-z][-–—]$")
 # also plain coincidences like a "10-person team" vs "Top 10 Performer")
 # aren't treated as the same metric repeated.
 _METRIC_CONTEXT_WORD = re.compile(r"^[-–—]?\s?(\w+)")
+# tailor_resume.md wraps the Summary's first sentence (identity + years of
+# experience) in <strong> tags -- used to isolate "the remaining sentences"
+# so the specificity check below doesn't credit the years-of-experience
+# figure itself as the proof point it's checking for.
+_STRONG_TAG_PATTERN = re.compile(r"<strong>.*?</strong>", re.IGNORECASE | re.DOTALL)
 
 
 def _strip_html(text: str) -> str:
@@ -34,7 +39,53 @@ def _all_bullets(resume_data: dict) -> list[str]:
     bullets = []
     for job in resume_data.get("EXPERIENCE", []):
         bullets.extend(job.get("achievements", []))
+    for entry in resume_data.get("EDUCATION", []):
+        bullets.extend(entry.get("bullets", []))
     return bullets
+
+
+def check_summary_specificity(resume_data: dict) -> list[str]:
+    """
+    tailor_resume.md requires the Summary's sentences after the opening
+    years-of-experience line to include "at least one concrete, checkable
+    specific -- a real metric, a named tool/platform, or a named scope."
+    Nothing enforced that: a real shipped resume had zero metrics in
+    sentences 2-5, four consecutive sentences of the shape "[Verb]s
+    [abstract noun phrase] to [abstract outcome]" (B29, phase-9-backlog.md).
+
+    Only the metric half of the rule is mechanically checkable here --
+    detecting a "named tool/platform" would need a verified-tools list,
+    which this module deliberately doesn't load (see module docstring:
+    pure function, no filesystem access).
+
+    Deliberately NOT part of validate()'s blocking checks, and not gated
+    on -- same reasoning as check_keyword_coverage() below. A first attempt
+    at making this blocking caused a real `resume sample` build to fail
+    outright: the retry loop's fix_contents only ever contains resume_data
+    + the already-selected bullets (no fresh KB material, by cost-saving
+    design -- see orchestrator.py), and those bullets' metrics are already
+    claimed by metrics_rules' "appears at most ONCE across the entire CV"
+    rule, so the model oscillated between "no metric" and "duplicate
+    metric" for all 4 attempts with no way out. Reported for a human to
+    see (or for `resume polish`), not auto-corrected.
+
+    Only fires when a remainder actually exists: a bare one-sentence
+    Summary is a different, narrower problem (no "narrative bridge / exit
+    story" at all) than the one this rule targets -- a *populated*
+    remainder that never earns its place with a real proof point, which is
+    what the real shipped resume that prompted this check actually had.
+    """
+    raw = resume_data.get("SUMMARY_TEXT", "") or ""
+    if not raw:
+        return []
+    remainder = _strip_html(_STRONG_TAG_PATTERN.sub("", raw, count=1))
+    if remainder.strip() and not _METRIC_PATTERN.search(remainder):
+        return [
+            "Summary has no concrete metric beyond the opening years-of-experience figure -- "
+            f"consider adding a real proof point (metric, named tool/platform, or named scope) "
+            f"to the remaining sentences: {_strip_html(raw)!r}"
+        ]
+    return []
 
 
 def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
@@ -214,6 +265,15 @@ def _check_skills_title_case(resume_data: dict) -> list[str]:
 
 
 def _check_pronouns_outside_why(resume_data: dict) -> list[str]:
+    """
+    Deliberately does not check EXPERIENCE[i]["career_note"]: that field is
+    hand-authored fixed content (fixed_content.CAREER_NOTE), unconditionally
+    reapplied by normalize_resume.normalize() on every pass including inside
+    the fix-retry loop, so a pronoun violation there could never be resolved
+    by the LLM and would hard-fail the pipeline every run. tailor_resume.md's
+    "Career Note" section documents it as a second, deliberate exception to
+    the no-pronouns rule, alongside Why.
+    """
     violations = []
     checked_fields = {
         "SUMMARY_TEXT": _strip_html(resume_data.get("SUMMARY_TEXT", "")),

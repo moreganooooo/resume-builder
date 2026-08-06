@@ -17,7 +17,7 @@ STYLE_RULES = {
 
 def _valid_resume():
     return {
-        "SUMMARY_TEXT": "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> Returning to full-time work after a caregiving pause.",
+        "SUMMARY_TEXT": "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> Scaled outreach to 50,000+ contacts monthly before returning to full-time work after a caregiving pause.",
         "SKILLS": ["**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns"],
         "EXPERIENCE": [
             {"title": "Lifecycle Marketing Manager", "company": "Treering", "period": "08/2016 – 08/2024", "achievements": [
@@ -101,6 +101,25 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("architected" in v.lower() and "unique" in v.lower() for v in violations))
 
+    def test_flags_forbidden_opener_in_education_bullet(self):
+        # EDUCATION bullets used to be invisible to _all_bullets() entirely --
+        # 5 EDUCATION bullets got no length/forbidden-phrase/verb-uniqueness/
+        # pronoun check at all (B28, phase-9-backlog.md).
+        resume = _valid_resume()
+        resume["EDUCATION"] = [
+            {"institution": "University of Kansas", "bullets": ["Responsible for the school paper"]},
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("forbidden opener" in v.lower() for v in violations))
+
+    def test_flags_pronoun_in_education_bullet(self):
+        resume = _valid_resume()
+        resume["EDUCATION"] = [
+            {"institution": "University of Kansas", "bullets": ["I led the school paper"]},
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("pronoun" in v.lower() for v in violations))
+
     def test_flags_bullet_exceeding_two_liner_max_chars(self):
         resume = _valid_resume()
         resume["EXPERIENCE"][0]["achievements"].append("X" * 221)
@@ -144,6 +163,21 @@ class TestValidateResume(unittest.TestCase):
     def test_allows_pronoun_inside_why_section(self):
         resume = _valid_resume()
         resume["WHY_TEXT"] = "<p><em>I built the SDR Process Map at Treering for exactly this reason.</em></p>"
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertEqual(violations, [])
+
+    def test_allows_pronoun_inside_career_note(self):
+        # career_note is hand-authored fixed content, unconditionally
+        # reapplied by normalize_resume.normalize() on every retry pass --
+        # flagging it here would make the fix-loop hard-fail every run
+        # since the LLM has no power to change it. tailor_resume.md
+        # documents it as a second deliberate pronoun exception, alongside
+        # Why (see B28, phase-9-backlog.md).
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["career_note"] = (
+            "After a fulfilling run here, I took time to support a loved one's health. "
+            "I'm excited to return to work with renewed focus."
+        )
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertEqual(violations, [])
 
@@ -390,6 +424,65 @@ class TestCheckKeywordCoverage(unittest.TestCase):
         jd_keywords = {"tools": ["Salesforce", "HubSpot", "Marketo"], "hard_skills": [], "core_functions": []}
         report = validate_resume.check_keyword_coverage(_valid_resume(), jd_keywords, ATS_MATCH_RULES)
         self.assertEqual(report["band"], "poor_match")
+
+
+class TestCheckSummarySpecificity(unittest.TestCase):
+    """B29 (phase-9-backlog.md): flags a Summary whose sentences after the
+    opening years-of-experience line never earn their place with a real
+    proof point. Deliberately NOT part of validate()'s blocking checks --
+    an earlier, blocking version of this check caused a real `resume
+    sample` build to fail outright, oscillating between "no metric" and
+    "duplicate metric" (metrics_rules' own uniqueness check) with no way
+    out inside the retry loop's limited context. Same non-blocking,
+    report-not-gate precedent as check_keyword_coverage above."""
+
+    def test_flags_summary_with_no_metric_beyond_years_of_experience(self):
+        # A real shipped resume had zero metrics in sentences 2-5 -- four
+        # consecutive sentences of "[Verb]s [abstract noun] to [abstract
+        # outcome]", interchangeable with any competent candidate's.
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> "
+            "Specializes in building systems that scale. Transforms scattered "
+            "data into a coherent revenue engine."
+        )
+        report = validate_resume.check_summary_specificity(resume)
+        self.assertTrue(any("no concrete metric" in v.lower() for v in report))
+
+    def test_allows_summary_with_metric_beyond_years_of_experience(self):
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> "
+            "Recovered $3M in dormant pipeline through systematic CRM audits."
+        )
+        report = validate_resume.check_summary_specificity(resume)
+        self.assertEqual(report, [])
+
+    def test_does_not_credit_a_metric_inside_the_first_sentence_itself(self):
+        # The years-of-experience figure lives inside the <strong> tag --
+        # it shouldn't satisfy the rule on its own even if it's the only
+        # number in the whole Summary.
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> Builds durable revenue systems."
+        report = validate_resume.check_summary_specificity(resume)
+        self.assertTrue(any("no concrete metric" in v.lower() for v in report))
+
+    def test_a_bare_one_sentence_summary_is_not_flagged(self):
+        # No "remaining sentences" at all is a different, narrower problem
+        # than this check targets -- see the check's own docstring.
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong>"
+        report = validate_resume.check_summary_specificity(resume)
+        self.assertEqual(report, [])
+
+    def test_not_part_of_validates_blocking_violations(self):
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> "
+            "Specializes in building systems that scale."
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("no concrete metric" in v.lower() for v in violations))
 
 
 if __name__ == "__main__":
