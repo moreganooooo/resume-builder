@@ -287,20 +287,13 @@ cohesion_diagnosis:
     - weak_jd_alignment
 
 flags:
-
-  unclear_professional_identity
-
-  competing_narratives
-
-  unsupported_summary
-
-  unsupported_skills
-
-  weak_jd_alignment
-
-  buried_accomplishments
-
-  low_evidence_density
+  - unclear_professional_identity
+  - competing_narratives
+  - unsupported_summary
+  - unsupported_skills
+  - weak_jd_alignment
+  - buried_accomplishments
+  - low_evidence_density
 
 final_output:
 

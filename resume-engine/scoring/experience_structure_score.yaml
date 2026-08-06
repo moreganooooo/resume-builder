@@ -104,9 +104,8 @@ role_quality_check:
       weight: 15
 
 flags:
-
-  weak_recent_role
-  buried_accomplishments
-  responsibility_heavy
-  progression_unclear
-  timeline_confusion
+  - weak_recent_role
+  - buried_accomplishments
+  - responsibility_heavy
+  - progression_unclear
+  - timeline_confusion

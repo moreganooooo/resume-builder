@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import profile_paths
 import theme
 
 # ---------------------------------------------------------------------------
@@ -31,7 +32,10 @@ import theme
 SCRIPT_DIR   = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 KB_DIR       = PROJECT_ROOT / "resume-engine" / "knowledge_base"
-OUTPUT_DIR   = PROJECT_ROOT / "output" / "json"
+# Profile-scoped, not a shared output/json/. This wrote real profile-derived
+# bullet-bank data to a path outside profile_paths.sync_roots(), so a second
+# profile would overwrite it and Syncthing would never see it.
+OUTPUT_DIR   = Path(profile_paths.output_dir()) / "json"
 
 # Columns considered "score columns" — a blank in any of these flags the row.
 SCORE_COLS = [

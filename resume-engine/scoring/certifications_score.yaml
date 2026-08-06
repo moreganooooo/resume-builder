@@ -69,7 +69,6 @@ penalties:
   certification_spam: -15
 
 flags:
-
-  low_relevance
-  expired_credentials
-  excessive_certifications
+  - low_relevance
+  - expired_credentials
+  - excessive_certifications

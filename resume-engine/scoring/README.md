@@ -10,12 +10,12 @@ audit loop and the document-level critique driven by
 |---|---|---|
 | `manager_test.yaml` | `orchestrator.py`, `critique_resume.md` | Pass/fail rules the Skeptical Editor uses to judge bullets |
 | `believability.yaml` | `orchestrator.py`, `score_keeper_gems.py`, `critique_resume.md` | Rubric for bullet-level believability scoring (0-100) |
-| `ai_risk.yaml` | `orchestrator.py`, `critique_resume.md` | Definitions of high-risk AI-sounding language patterns |
+| `ai_risk.yaml` | `critique_resume.md` only | Definitions of high-risk AI-sounding language patterns. Deliberately *not* loaded by `orchestrator.py` -- `CritiqueSchema` has no `ai_risk` field, so there is nowhere for a result to land (see `orchestrator.py`'s comment at the rubric-attach site). |
 | `professional_identity_score.yaml` | `critique_resume.md` | Identity/archetype detection driving all downstream document-level scoring |
 | `resume_cohesion_score.yaml` | `critique_resume.md` | Cross-section narrative alignment and identity consistency |
 | `experience_structure_score.yaml` | `critique_resume.md` | Bullet structure, depth, and role-level formatting |
 | `skills_scoring.yaml` | `critique_resume.md` | Skills grouping relevance, evidence support, archetype alignment; also the canonical skills-vocabulary bank |
-| `role_dna.yaml` | `tailor_resume.md`, `critique_resume.md` | Archetype library (evidence signals + summary framing) shared between building and scoring |
+| `role_dna.yaml` | `orchestrator.py` (`evaluate_fit`), `critique_resume.md` | Archetype library (evidence signals + summary framing). Referenced by `critique_resume.md`, and attached to the fit-evaluation call so the returned `archetype` comes from a controlled vocabulary. It is *not* referenced by `tailor_resume.md`, despite an earlier version of this row. |
 | `ats_match.yaml` | `critique_resume.md` | ATS keyword-match weighting against the JD |
 | `evidence_alignment.yaml` | `critique_resume.md` | Achievement-to-claim support -- traces every metric/tool/claim back to verified evidence |
 | `summary_patterns.yaml` | `critique_resume.md` | Summary-level pattern scoring (opener style, specificity, length) |
