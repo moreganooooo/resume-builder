@@ -293,22 +293,35 @@ def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     _check_experience_completeness() validates fields on entries that *are*
     present and structurally cannot see an absent company.
 
-    Matching is on normalized company name so casing and surrounding
-    whitespace don't produce a false violation. Situational roles are excluded
-    by the caller: they're conditional by design and their absence is correct.
+    Matching is deliberately loose -- normalized case/whitespace, and a
+    containment test in either direction. The resume legitimately annotates a
+    company name the profile states plainly ("Inside Sales Team" in profile.yml
+    vs. "Inside Sales Team (Now Alleyoop)" in the document), and an exact-match
+    check flags that as missing. That false positive isn't just noise: each one
+    consumes an attempt from the validator's 4-attempt fix loop that a genuinely
+    absent employer needed. This check exists to catch a company that is *gone*,
+    so it should only fire when no entry mentions it at all.
+
+    Situational roles are excluded by the caller: they're conditional by design
+    and their absence is correct.
     """
     if not role_roster:
         return []
 
-    present = {
+    present = [
         str(job.get("company", "")).strip().casefold()
         for job in resume_data.get("EXPERIENCE", [])
-    }
-    return [
-        f"Role roster: {company!r} is declared in the profile but has no EXPERIENCE entry"
-        for company in role_roster
-        if str(company).strip().casefold() not in present
     ]
+    violations = []
+    for company in role_roster:
+        needle = str(company).strip().casefold()
+        if not needle:
+            continue
+        if not any(needle in entry or entry in needle for entry in present if entry):
+            violations.append(
+                f"Role roster: {company!r} is declared in the profile but has no EXPERIENCE entry"
+            )
+    return violations
 
 
 def validate(resume_data: dict, style_rules: dict, role_roster: list[str] = None) -> list[str]:
