@@ -146,6 +146,66 @@ re-dispatched, since there are no phases left to receive them.
 
 ## 3. The ranked backlog
 
+> ### ⛳ FIX-PASS STATUS — start here next session (updated 2026-08-05)
+>
+> **Tier 0 is COMPLETE, plus B15.** 18 items across five commits
+> (`37e70126`, `323e92c9`, `3839f980`, `b8542292`, `139786af`). Test suite
+> 1098 → 1135, all passing.
+>
+> **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
+> B15 · B47 · B48 · B60 · B61 · B62
+>
+> **Verified against real artifacts, not just tests:**
+> - **B1** — ligature corruption **7 corrupted tokens → 0** on a freshly
+>   rendered PDF, with `workflows` (the JD phrase the renderer used to break)
+>   extracting intact. Baseline captured pre-fix from the shipped PDFs:
+>   resume 7, cover letter 7.
+> - **B9** — cover-letter text-layer check ran clean across 3 paragraphs.
+> - **B60** — detection confirmed live: caught all three missing employers
+>   and correctly refused to ship the incomplete resume.
+> - **B15** — see the correction below; rendering works again.
+>
+> **⚠️ B15 was not what this document assumed.** `npm install` alone does not
+> close it. This machine is macOS 12.7.6 and **Playwright ≥1.62 dropped macOS
+> 12 support** — `npx playwright install chromium` refuses outright, so no
+> browser lands and every render dies at `chromium.launch()`. Now pinned to
+> **exact `1.61.1`** (no caret) in `package.json`; that is the last release
+> supporting macOS 12, and it pins Chromium 1228. The trap: `npm install`
+> *succeeds*, only the browser step fails, and it fails after printing
+> "Removing unused browser…" lines that read like normal cleanup. Recorded in
+> CLAUDE.md's Setup section — **do not loosen the pin.**
+>
+> **🔄 The one thing left open from Tier 0:** B60's *detection* works, but
+> the builder could not reliably *produce* the sixth employer. Live behavior:
+> the `tailor_resume.md` roster rule restored **VML** and **Callahan Creek**
+> across retry attempts but never **Element 8 / Strategy LLC**, and the
+> 4-attempt fix loop then exhausted. Mining is not the problem — the
+> checkpoint confirms 3 refined bullets for Element 8, matching Phase 11.
+> A targeted `MISSING EMPLOYERS` block was added to the fix call
+> (`139786af`), following the loop's own idiom for opening-verb collisions
+> and Skills widows. **A verification `resume sample` run was in flight when
+> the session ended — its result is unknown. Re-run it first thing.** If
+> Element 8 still doesn't appear, the next lever is raising
+> `max_fix_attempts` above 4 for roster violations specifically, or seeding
+> the entry deterministically from `profiles/<name>/fixed_content.py`
+> (`COMPANY_META` + `COMPANY_FIXED_TITLE` already hold its title, period,
+> location and size) rather than asking the model to author it.
+>
+> **Two Tier-0 items came out bigger than filed:** B47 named five rubrics
+> with broken `flags:` blocks — it is **seven** (all fixed, with a test that
+> checks every rubric so a new file can't reintroduce the shape). And B60's
+> roster check needed a follow-up: exact-match name comparison produced a
+> false positive on `Inside Sales Team` vs. `Inside Sales Team (Now
+> Alleyoop)`, which mattered because each false positive consumes one of the
+> validator's 4 fix attempts that a genuinely absent employer needs. Matching
+> is now containment in either direction.
+>
+> **Next up, per §6:** **B13** (KB durability) and **B14** (JD prompt
+> injection) — the two compound blockers in Tier 1 — then B16, B17, B19.
+> B24's page-2 layout work is now unblocked by B60, but re-run `resume
+> sample` first, since restoring the missing employers changes what page 2
+> contains.
+
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first
 regardless of glamour; together they are a few hours and they close one blocker,

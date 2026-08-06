@@ -770,7 +770,12 @@ evidence is `phase-9-backlog.md` §2.
 ## Suggested order
 
 **Run (complete):** `0 → 3 → 2 → 1 → 4 → 6 → 7 → 7b → 8 → 5 → 9 → 10 → 11 → 12`
-**Nothing remains to review.** Phase 11 ran 2026-08-05
+**Nothing remains to review. The review is closed; the fix pass is underway
+— `phase-9-backlog.md` is the only live document, and its §3 opens with a
+FIX-PASS STATUS block naming exactly where to resume.** Tier 0 plus B15 are
+done (18 items, five commits, suite 1098 → 1135 green); Tier 1's B13 and B14
+are next.
+ Phase 11 ran 2026-08-05
 (`phase-11-orphans.md`) — all three traces root-caused, appended as **B60**
 (missing employers), **B61** (banner counter), **B62** (pre-profile paths +
 test residue); **B25 is closed, superseded by B60/B61.** Phase 12 ran
