@@ -209,7 +209,7 @@ export default {
     }
 
     const query = /** @type {any} */ (entry).scan_query;
-    if (!query) throw new Error(`websearch: no scan_query defined for ${entry.name}`);
+    if (!query) throw new Error(`no scan_query defined for ${entry.name}`);
 
     const params = new URLSearchParams({
       q: query,

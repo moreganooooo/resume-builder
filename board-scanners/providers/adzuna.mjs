@@ -16,7 +16,7 @@ export default {
     const appId = process.env.ADZUNA_APP_ID;
     const appKey = process.env.ADZUNA_APP_KEY;
     if (!appId || !appKey) {
-      throw new Error('adzuna: missing ADZUNA_APP_ID / ADZUNA_APP_KEY environment variables');
+      throw new Error('missing ADZUNA_APP_ID / ADZUNA_APP_KEY environment variables');
     }
     const params = new URLSearchParams({
       app_id: appId,

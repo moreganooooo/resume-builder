@@ -54,7 +54,10 @@ def _phase05_status() -> tuple:
     return ("Up to date", "")
 
 
-def _run_phase0() -> None:
+def _run_phase0() -> bool:
+    """Returns True if ingestion actually ran, False if it just printed
+    instructions for an empty source-docs folder -- the caller uses this so
+    backing out of an empty Step 0 doesn't fire the "what's next?" chain."""
     source_docs_dir = bootstrap_bullet_bank.SOURCE_DOCS_DIR
     os.makedirs(source_docs_dir, exist_ok=True)
     files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
@@ -64,11 +67,12 @@ def _run_phase0() -> None:
         # it only runs once both modules are already fully loaded.
         import menu
         menu._print_source_docs_instructions(source_docs_dir)
-        return
+        return False
 
     bootstrap_profile.collect_secrets()
     summary = bootstrap_bullet_bank.run_ingestion()
     bootstrap_bullet_bank.print_ingestion_summary(summary)
+    return True
 
 
 def _run_phase05() -> None:
@@ -122,9 +126,10 @@ def run_bootstrap_menu() -> bool:
             return did_something
 
         if choice == "phase0":
-            _run_phase0()
+            did_something = _run_phase0() or did_something
         elif choice == "phase05":
             _run_phase05()
+            did_something = True
         else:
             bullet_bank_menu._handle_choice(choice)
-        did_something = True
+            did_something = True

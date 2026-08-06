@@ -14,11 +14,11 @@ function assertRecruiteeUrl(url) {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`recruitee: invalid URL: ${url}`);
+    throw new Error(`invalid URL: ${url}`);
   }
-  if (parsed.protocol !== 'https:') throw new Error(`recruitee: URL must use HTTPS: ${url}`);
+  if (parsed.protocol !== 'https:') throw new Error(`URL must use HTTPS: ${url}`);
   if (!RECRUITEE_HOST_RE.test(parsed.hostname)) {
-    throw new Error(`recruitee: untrusted hostname "${parsed.hostname}" — must match <slug>.recruitee.com`);
+    throw new Error(`untrusted hostname "${parsed.hostname}" — must match <slug>.recruitee.com`);
   }
   return url;
 }
@@ -48,7 +48,7 @@ export default {
 
   async fetch(entry, ctx) {
     const apiUrl = resolveApiUrl(entry);
-    if (!apiUrl) throw new Error(`recruitee: cannot derive API URL for ${entry.name}`);
+    if (!apiUrl) throw new Error(`cannot derive API URL for ${entry.name}`);
     assertRecruiteeUrl(apiUrl);
     const json = await ctx.fetchJson(apiUrl, { redirect: 'error' });
     return parseRecruiteeResponse(json, entry.name);

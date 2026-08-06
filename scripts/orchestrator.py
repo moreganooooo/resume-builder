@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import subprocess
 import shutil
+from pypdf import PdfReader
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Literal, Tuple
@@ -643,12 +644,17 @@ def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job
     return approved_recs
 
 
-def _parse_pdf_result(stdout: str) -> tuple:
-    """Extracts (page_count, size_str) from generate-pdf.mjs's stdout --
-    page_count is None and size_str is "unknown size" if either line
-    isn't found."""
-    page_count_match = re.search(r"Pages:\s*(\d+)", stdout)
-    page_count = int(page_count_match.group(1)) if page_count_match else None
+def _parse_pdf_result(stdout: str, pdf_path: str) -> tuple:
+    """Extracts (page_count, size_str). page_count is read directly from the
+    rendered PDF via pypdf, not regexed out of generate-pdf.mjs's stdout --
+    that regex depended on Chromium emitting an uncompressed page tree, and a
+    miss silently disabled the 2-page rule instead of failing loud. page_count
+    is None only if pypdf itself can't open the file. size_str is still
+    cosmetic and comes from stdout."""
+    try:
+        page_count = len(PdfReader(pdf_path).pages)
+    except Exception:
+        page_count = None
     size_match = re.search(r"Size:\s*([\d.]+\s*\w+)", stdout)
     size_str = size_match.group(1) if size_match else "unknown size"
     return page_count, size_str
@@ -3093,8 +3099,12 @@ class ResumeEngine:
                 print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation failed:\n{pdf_result.stderr}")
                 return {}
 
-            page_count, size_str = _parse_pdf_result(pdf_result.stdout)
-            is_final = page_count is None or page_count <= 2 or trim_attempt >= max_trim_attempts
+            page_count, size_str = _parse_pdf_result(pdf_result.stdout, pdf_out)
+            if page_count is None:
+                print(f"  {theme.colorize_icon_ansi('error')} Could not verify PDF page count via pypdf -- "
+                      "treating as a failure rather than silently passing the 2-page rule.")
+                return {}
+            is_final = page_count <= 2 or trim_attempt >= max_trim_attempts
             if is_final:
                 print(pdf_result.stdout)
                 break
@@ -3159,7 +3169,7 @@ class ResumeEngine:
             render_html(resume_data, html_out)
             trim_attempt += 1
 
-        if page_count is not None and page_count > 2:
+        if page_count > 2:
             print(f"  {theme.colorize_icon_ansi('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.")
             return {}
 
@@ -3174,6 +3184,8 @@ class ResumeEngine:
                   f"(what an ATS would actually parse from the file, not just the pre-render JSON):")
             for w in pdf_text_warnings:
                 print(f"    - {w}")
+        else:
+            print(f"  {theme.colorize_icon_ansi('success')} PDF text-layer check: 0 issues.")
 
         print(f"  {theme.colorize_icon_ansi('success')} Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)

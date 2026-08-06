@@ -42,7 +42,7 @@ import profile_paths  # noqa: E402
 KB_DIR       = Path(profile_paths.kb_dir())
 SCORING_DIR  = PROJECT_ROOT / "resume-engine" / "scoring"
 
-load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(profile_paths.env_path())
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
