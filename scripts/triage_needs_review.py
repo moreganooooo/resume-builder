@@ -53,6 +53,12 @@ KEEP_FIELDS = [
     "final_bullet", "rewrite_status",
 ]
 
+# The columns that make a row traceable at all. Everything else in
+# KEEP_FIELDS/QUEUE_FIELDS is either a score or a later-stage annotation, and a
+# target file that predates those columns is normal; a target file missing
+# these is a different file than we think it is.
+REQUIRED_FIELDS = ["Bullet Point", "Role / Company"]
+
 QUEUE_FIELDS = [
     "cluster_id", "cluster_size", "is_representative", "next_action",
     "Bullet Point", "Role / Company", "Tags",
@@ -70,14 +76,58 @@ def safe_int(val, default=0):
         return default
 
 
+def read_existing_header(path) -> list | None:
+    """The header actually on disk, or None if the file is absent or empty."""
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", newline="", encoding="utf-8") as f:
+        return next(csv.reader(f), None)
+
+
 def append_rows(path, rows, fieldnames):
-    """Append rows to CSV, writing header only if file doesn't exist."""
-    exists = os.path.exists(path)
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        if not exists:
+    """Append rows to a CSV, writing against the header that is actually on
+    disk rather than the caller's expected field list.
+
+    This used to trust `fieldnames` unconditionally and write the header only
+    when the file was absent. When the two disagreed, DictWriter emitted
+    values *positionally* under the existing header -- no exception, still
+    well-formed CSV, silently wrong from the first differing column onward.
+    That is what happened to bullet-bank-keepers.csv: KEEP_FIELDS is 14
+    columns, the real file has 16 and diverges at index 9, so every accepted
+    rewrite landed with source='77' and rewrite_date='KEEPER'. Irreversible,
+    because the caller deletes needs-review.csv in the same run.
+
+    Columns present on disk but not supplied by the caller are written empty;
+    a caller field that has no column on disk is a real schema mismatch and
+    raises, because silently dropping it is how provenance was lost.
+    """
+    disk_header = read_existing_header(path)
+    if disk_header is None:
+        with open(path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
-        writer.writerows(rows)
+            writer.writerows(rows)
+        return
+
+    missing_required = [name for name in REQUIRED_FIELDS if name not in disk_header]
+    if missing_required:
+        raise ValueError(
+            f"{path} is missing required column(s) {missing_required}. "
+            f"On disk: {disk_header}. Refusing to append -- a bullet without "
+            f"these can't be traced back to anything."
+        )
+
+    dropped = [name for name in fieldnames if name not in disk_header]
+    if dropped:
+        # Not fatal: KEEP_FIELDS carries columns the keepers file legitimately
+        # doesn't have yet (hidden_gem_*, final_bullet, rewrite_status are
+        # added by later stages). Say so out loud rather than dropping them
+        # silently -- silence is what let the column shift go unnoticed.
+        print(f"  Note: {os.path.basename(path)} has no column for {dropped} -- not written.")
+
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=disk_header, extrasaction="ignore")
+        writer.writerows({name: row.get(name, "") for name in disk_header} for row in rows)
 
 
 def existing_keeper_bullets(path) -> set:

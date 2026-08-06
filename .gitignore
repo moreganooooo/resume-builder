@@ -41,8 +41,12 @@ logs/
 # Exceptions: dummy_jd.txt and jds/expired/ (fixtures/historical data).
 # Profile-scoped directories (jds/<profile>/) sync via Syncthing instead.
 jds/**/*.json
-jds/dominick/
-jds/morgan/
+# Glob, not a per-name list. create_new_profile() never touches .gitignore,
+# so hardcoded names meant a third profile's entire saved-JD corpus was
+# untracked-and-not-ignored in a repo whose workflow is `git pull` -- and
+# git_update's has_uncommitted_changes() counts untracked files, so the
+# update flow actively nudged that user toward committing their own PII.
+jds/*/
 
 
 # === RESUME OUTPUT & PROFILE-SCOPED DATA ===
@@ -56,10 +60,14 @@ MorganEscott_*.pdf
 *_resume.pdf
 *.npy
 *.npz
-profiles/dominick/
-profiles/morgan/
-data/dominick/
-data/morgan/
+# Globs, not per-name lines -- see the note in the JD section above. Every
+# profile's knowledge base and data/ is personal by default; the board_scanner
+# YAML below is the one deliberately-tracked exception (committed scaffold,
+# no PII), so it needs both the directory re-included and the file re-included.
+profiles/*/
+!profiles/*/board_scanner/
+!profiles/*/board_scanner/*.yml
+data/*/
 
 
 # === PYTHON ===

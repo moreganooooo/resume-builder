@@ -124,3 +124,34 @@ def validate_pdf_text(pdf_path: str, resume_data: dict) -> list[str]:
             warnings.append(f"Skills line not found intact in PDF text layer: {skill_line[:80]}")
 
     return warnings
+
+
+def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict) -> list[str]:
+    """
+    Same check, cover-letter shaped: body paragraphs and the greeting instead
+    of EXPERIENCE bullets and SKILLS lines.
+
+    Exists because the cover letter is half of every application package and
+    had no text-layer verification at all -- the resume-shaped function can't
+    stand in for it, since letter_data has no EXPERIENCE or SKILLS key and
+    would silently check nothing. Paragraphs are matched whole; a long
+    paragraph that wraps is still one continuous run of text after
+    normalization, exactly like a bullet.
+    """
+    try:
+        extracted_raw = extract_text(pdf_path)
+    except Exception as e:
+        return [f"Could not parse generated cover-letter PDF for verification: {e}"]
+
+    extracted = _normalize(extracted_raw)
+    warnings = _check_ligatures(extracted_raw)
+
+    for para in letter_data.get("body_paragraphs", []) or []:
+        if _normalize(para) not in extracted:
+            warnings.append(f"Paragraph not found intact in PDF text layer: {para[:80]}")
+
+    greeting = letter_data.get("greeting") or ""
+    if greeting and _normalize(greeting) not in extracted:
+        warnings.append(f"Greeting not found intact in PDF text layer: {greeting[:80]}")
+
+    return warnings

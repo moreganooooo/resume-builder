@@ -119,5 +119,78 @@ class TestValidatePdfText(unittest.TestCase):
             self.assertIn("corrupt PDF", warnings[0])
 
 
+def _letter():
+    return {
+        "company_name": "Abnormal AI",
+        "greeting": "Dear Hiring Team,",
+        "body_paragraphs": [
+            "I have spent the last decade building content workflows that hold up under audit.",
+            "Your certification program is the part of the role I would want to own first.",
+        ],
+        "sign_off": "Sincerely,",
+    }
+
+
+class TestValidateCoverletterPdfText(unittest.TestCase):
+    """B9: the cover letter is half of every application package and had no
+    text-layer verification at all. It cannot reuse the resume-shaped check --
+    letter_data has no EXPERIENCE or SKILLS key, so that function would find
+    nothing to look for and return clean on a corrupt file."""
+
+    def test_no_warnings_when_everything_survives_intact(self):
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Dear Hiring Team,\n"
+            "I have spent the last decade building content workflows that hold up under audit.\n"
+            "Your certification program is the part of the role I would want to own first.\n"
+        )):
+            self.assertEqual(
+                validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter()), []
+            )
+
+    def test_flags_a_dropped_paragraph(self):
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Dear Hiring Team,\n"
+            "I have spent the last decade building content workflows that hold up under audit.\n"
+        )):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter())
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("Your certification program", warnings[0])
+
+    def test_flags_a_dropped_greeting(self):
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "I have spent the last decade building content workflows that hold up under audit.\n"
+            "Your certification program is the part of the role I would want to own first.\n"
+        )):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter())
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("Dear Hiring Team", warnings[0])
+
+    def test_ligature_corruption_is_reported_first(self):
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Dear Hiring Team,\n"
+            "I have spent the last decade building content workﬂows that hold up under audit.\n"
+            "Your certiﬁcation program is the part of the role I would want to own first.\n"
+        )):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter())
+            self.assertTrue(warnings)
+            self.assertIn("ligature", warnings[0].lower())
+
+    def test_wrapped_paragraph_is_not_reported_as_missing(self):
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Dear Hiring Team,\n"
+            "I have spent the last decade building\ncontent workflows that hold up under audit.\n"
+            "Your certification program is the part\nof the role I would want to own first.\n"
+        )):
+            self.assertEqual(
+                validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter()), []
+            )
+
+    def test_extraction_failure_returns_single_warning_not_an_exception(self):
+        with patch("validate_pdf_text.extract_text", side_effect=RuntimeError("boom")):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter())
+            self.assertEqual(len(warnings), 1)
+            self.assertIn("cover-letter", warnings[0])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+import pandas as pd
 import unittest
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
@@ -88,6 +89,60 @@ class TestSingleLinkageClusterIntegration(unittest.TestCase):
         id_by_bullet2 = dict(zip(bullets_run2, stable2))
         for bullet in bullets_run1:
             self.assertEqual(id_by_bullet1[bullet], id_by_bullet2[bullet])
+
+
+class TestElectRepresentativeIsOrderIndependent(unittest.TestCase):
+    """B10: elect_representative used a bare idxmax(), which returns the first
+    maximum. accuracy_score is a 0-100 integer over near-duplicate cluster
+    members, so ties are the common case and "first" meant raw-CSV row order --
+    appending an unrelated row could change which bullet reached the resume."""
+
+    BULLET_COL = "Bullet Point"
+
+    def _group(self, rows):
+        return pd.DataFrame(rows)
+
+    def test_tied_scores_elect_the_same_bullet_regardless_of_row_order(self):
+        rows = [
+            {self.BULLET_COL: "Ran the quarterly retention audit.", "accuracy_score": 90},
+            {self.BULLET_COL: "Analyzed the quarterly retention audit.", "accuracy_score": 90},
+            {self.BULLET_COL: "Built the quarterly retention audit.", "accuracy_score": 90},
+        ]
+        elected = []
+        for order in ([0, 1, 2], [2, 0, 1], [1, 2, 0]):
+            group = self._group([rows[i] for i in order])
+            idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
+            elected.append(group.at[idx, self.BULLET_COL])
+        self.assertEqual(len(set(elected)), 1, f"election was order-dependent: {elected}")
+
+    def test_a_strictly_higher_score_still_wins(self):
+        group = self._group([
+            {self.BULLET_COL: "Aaa lower score but sorts first.", "accuracy_score": 70},
+            {self.BULLET_COL: "Zzz highest score.", "accuracy_score": 95},
+        ])
+        idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
+        self.assertEqual(group.at[idx, self.BULLET_COL], "Zzz highest score.")
+
+    def test_tied_lengths_without_scores_are_also_order_independent(self):
+        rows = [
+            {self.BULLET_COL: "Bbbb"},
+            {self.BULLET_COL: "Aaaa"},
+            {self.BULLET_COL: "Cccc"},
+        ]
+        elected = []
+        for order in ([0, 1, 2], [2, 1, 0]):
+            group = self._group([rows[i] for i in order])
+            idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
+            elected.append(group.at[idx, self.BULLET_COL])
+        self.assertEqual(len(set(elected)), 1, f"election was order-dependent: {elected}")
+
+    def test_longest_bullet_still_wins_when_no_scores_are_present(self):
+        group = self._group([
+            {self.BULLET_COL: "- Short one."},
+            {self.BULLET_COL: "- A considerably longer bullet that should win on length."},
+        ])
+        idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
+        self.assertIn("considerably longer", group.at[idx, self.BULLET_COL])
 
 
 if __name__ == "__main__":

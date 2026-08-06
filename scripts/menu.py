@@ -164,15 +164,31 @@ def _print_source_docs_instructions(source_docs_dir: str) -> None:
     )
 
 
-def _handle_bootstrap() -> bool:
+def _profile_is_set_up(profile: str = None) -> bool:
+    """Whether the active (or named) profile has a real knowledge base.
+
+    Deliberately asks *whether* a profile exists, not *how* it came to
+    exist. "Drop New Knowledge" used to gate on the presence of
+    bootstrap/checkpoint.json -- evidence of having gone through the
+    bootstrap wizard -- which told Morgan's own 628-bullet, 1,144-JD profile
+    it hadn't been set up yet, because her knowledge base predates the
+    wizard. A profile hand-assembled, restored from a Syncthing peer, or
+    migrated from another machine is just as set up as a bootstrapped one.
+    """
     import profile_paths
 
     try:
-        current = profile_paths.active_profile()
-        is_existing = os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, current)) and \
-            os.path.isdir(profile_paths.kb_dir(current))
+        name = profile or profile_paths.active_profile()
+        return os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, name)) and \
+            os.path.isdir(profile_paths.kb_dir(name))
     except ValueError:
-        is_existing = False
+        return False
+
+
+def _handle_bootstrap() -> bool:
+    import profile_paths
+
+    is_existing = _profile_is_set_up()
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
         # Either the active profile (whatever it resolved to) has no real
@@ -210,7 +226,7 @@ def _handle_update_knowledge() -> bool:
     stages checkpoint by bullet-text content, not position)."""
     import profile_paths
 
-    if not os.path.exists(bootstrap_bullet_bank.CHECKPOINT_PATH):
+    if not _profile_is_set_up():
         cli_art.console.print(
             "This profile hasn't been set up yet -- use \"New User? Start Here!\" first."
         )

@@ -2462,6 +2462,14 @@ class ResumeEngine:
             return {}
         print(pdf_result.stdout)
 
+        cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data)
+        if cl_text_warnings:
+            print(f"  {theme.colorize_icon_ansi('warning')} Cover-letter PDF text-layer check found "
+                  f"{len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse "
+                  f"from the file, not just the pre-render JSON):")
+            for w in cl_text_warnings:
+                print(f"    - {w}")
+
         letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
         print(f"  {theme.colorize_icon_ansi('success')} Cover letter complete! PDF → {pdf_out}")
         return letter_data
@@ -2856,6 +2864,20 @@ class ResumeEngine:
         # that one attempt, not the other recommendations already applied
         # earlier in the same run.
         recs = (resume_data.get("_critique") or {}).get("recommendations", [])
+        # Questions are never edits. critique_resume.md deliberately phrases its
+        # voice recommendations as questions aimed at Morgan ("What did you
+        # actually change about how the team worked?"), and the only way a model
+        # can "apply" a question is to paraphrase its own noun phrases into the
+        # document -- which is exactly what happened, producing the flattest
+        # sentence in the shipped resume. The model-side needs_personal_input
+        # guard below only catches *emotional* questions, so route every
+        # question-shaped recommendation to needs_polish here, before the call.
+        # Deterministic, and it saves an API round-trip per question.
+        question_recs = [r for r in recs if str(r).strip().endswith("?")]
+        recs = [r for r in recs if not str(r).strip().endswith("?")]
+        if question_recs:
+            print(f"\n  {theme.colorize_icon_ansi('hint')} {len(question_recs)} recommendation(s) "
+                  "are questions for you, not edits -- saved for `resume polish`, not applied.")
         distinctive_moments = (resume_data.get("_critique") or {}).get("distinctive_moments", [])
         protected_block = (
             "=== PROTECTED DISTINCTIVE MOMENTS (preserve verbatim unless THIS "
@@ -2866,12 +2888,18 @@ class ResumeEngine:
         if recs and interactive:
             recs = _review_recommendations_interactively(recs, checkpoint, job_key)
 
-        if recs:
+        if recs or question_recs:
             state = checkpoint.get("recommendation_actions") or {
-                "resume_data": resume_data, "applied": [], "skipped": [], "needs_polish": [], "next_index": 0,
+                # Seeded, not appended later: question_recs must survive even
+                # when they were the *only* recommendations, in which case the
+                # apply loop below never runs.
+                "resume_data": resume_data, "applied": [], "skipped": [],
+                "needs_polish": list(question_recs), "next_index": 0,
             }
             start_index = state["next_index"]
-            if start_index >= len(recs):
+            if not recs:
+                pass
+            elif start_index >= len(recs):
                 print(f"\n{'─'*60}")
                 print("Step 5.5: Resuming: recommendation pass already complete from checkpoint.")
             else:
@@ -2946,6 +2974,12 @@ class ResumeEngine:
                     "needs_polish": needs_polish, "next_index": i + 1,
                 }
                 jd_manager.save_checkpoint(job_key, checkpoint)
+
+            checkpoint["recommendation_actions"] = {
+                "resume_data": resume_data, "applied": applied, "skipped": skipped,
+                "needs_polish": needs_polish, "next_index": len(recs),
+            }
+            jd_manager.save_checkpoint(job_key, checkpoint)
 
             resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped, "needs_polish": needs_polish}
             if applied:
