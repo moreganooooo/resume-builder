@@ -2758,6 +2758,38 @@ class ResumeEngine:
                         f"appear anywhere in this full list -- not just avoid the two bullets named "
                         f"in the issue below.\n\n"
                     )
+                if any(v.startswith("Role roster") for v in violations):
+                    # An absent employer is the one violation the model can't
+                    # fix from the resume JSON alone: the entry it needs to add
+                    # isn't in the document to be edited, and the refined-bullets
+                    # block alone doesn't tell it what title or period to use.
+                    # Observed live -- the roster rule in tailor_resume.md
+                    # restored VML and Callahan Creek across attempts but never
+                    # Element 8 / Strategy LLC, and the loop then exhausted.
+                    # Same idiom as the two blocks around this one: when a
+                    # violation keeps surviving retries, restate what fixing it
+                    # actually requires, here rather than in a huge prompt.
+                    missing = [
+                        v.split("'")[1] for v in violations
+                        if v.startswith("Role roster") and "'" in v
+                    ]
+                    roster_lines = []
+                    for company in missing:
+                        available = [b for b, c, _t in bullet_tuples if c == company]
+                        roster_lines.append(
+                            f"- {company}: {len(available)} refined bullet(s) already available "
+                            f"for it in the block above. Add the EXPERIENCE entry using them."
+                        )
+                    fix_contents += (
+                        "=== MISSING EMPLOYERS -- ADD THESE ENTRIES ===\n"
+                        "These companies are in the candidate's declared work history but have no\n"
+                        "EXPERIENCE entry in the JSON above. This is not a relevance judgment and\n"
+                        "not a way to save space: omitting a real employer leaves an unexplained\n"
+                        "gap in the work history. Add a complete entry for each, with its title,\n"
+                        "period and bullets, in correct reverse-chronological position. Keep every\n"
+                        "entry that is already present.\n"
+                        + "\n".join(roster_lines) + "\n\n"
+                    )
                 if any(v.startswith("Skills line wraps") for v in violations):
                     # Repeated Skills-widow violations across retry attempts
                     # suggest the model needs the fix options spelled out
