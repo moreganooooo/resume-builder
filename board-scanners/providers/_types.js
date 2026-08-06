@@ -13,11 +13,23 @@
  * Normalized job posting — the unit of currency throughout the scanner.
  *
  * @typedef {object} Job
- * @property {string} title    Required, non-empty after trim.
- * @property {string} url      Required, absolute URL — used as the dedup key.
- * @property {string} company  May be empty when the source can't expose it
- *                             at the list-page level; populated downstream.
- * @property {string} location May be empty.
+ * @property {string} title       Required, non-empty after trim.
+ * @property {string} url         Required, absolute URL — used as the dedup key.
+ * @property {string} company     May be empty when the source can't expose it
+ *                                at the list-page level; populated downstream.
+ * @property {string} location    May be empty.
+ * @property {string} [description] Optional but expected: resume-builder's
+ *                                tailor stage needs real JD text, unlike
+ *                                career-ops's own downstream (a human/Claude
+ *                                reading the URL directly). Prefer mapping a
+ *                                native field the source API already returns
+ *                                over leaving this unset — scan_boards.py
+ *                                only falls back to a live page fetch
+ *                                (_fetch_posting_text) when this is absent,
+ *                                which is slower, less reliable, and doesn't
+ *                                work at all against a JS-rendered posting
+ *                                page (see B36, docs/review/phase-9-backlog.md).
+ * @property {string} [posted_at] Optional. ISO 8601 when available.
  */
 
 /**

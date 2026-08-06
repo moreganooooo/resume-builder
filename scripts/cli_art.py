@@ -549,6 +549,14 @@ def render_scan_report(source_results: list, total_written: int) -> None:
 _WARNING_KIND_LABELS = {
     "provider_failed": "listing fetch failed",
     "posting_text_failed": "description fetch failed",
+    # From run_provider.mjs's JSON error envelope (B27) -- a specific reason
+    # instead of the generic "listing fetch failed" above.
+    "auth": "auth failed",
+    "quota": "quota exhausted",
+    "network": "network error",
+    "config": "misconfigured",
+    # From scan_boards.py's own description-quality check (B36).
+    "thin_description": "thin description",
 }
 
 

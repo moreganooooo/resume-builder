@@ -6,15 +6,17 @@
 // exporting a pure function for unit testing rather than exercising a live
 // network call.
 //
-// Only `resolveWorkdayLimit` and `paginateWorkdayJobs` are exercised here --
-// both are pure with respect to the network (fetch is injected via a mocked
-// `ctx`), so none of this touches Playwright or a real Workday tenant.
+// `resolveWorkdayLimit`, `paginateWorkdayJobs`, and (added for B36,
+// docs/review/phase-9-backlog.md) `fetchJobDescription` are exercised here --
+// all three are pure with respect to the network (fetch is injected via a
+// mocked `ctx`), so none of this touches Playwright or a real Workday
+// tenant.
 //
 // Run: node --test board-scanners/providers/workday.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveWorkdayLimit, paginateWorkdayJobs } from './workday.mjs';
+import { resolveWorkdayLimit, paginateWorkdayJobs, fetchJobDescription } from './workday.mjs';
 
 const BASE_URL = 'https://acme.wd1.myworkdayjobs.com/External';
 const API_BASE = 'https://acme.wd1.myworkdayjobs.com/wday/cxs/acme/External/jobs';
@@ -74,6 +76,7 @@ test('paginateWorkdayJobs: walks a paginated sequence to completion, respecting 
     url: `${BASE_URL}/job/100`,
     company: 'Acme',
     location: 'Remote',
+    _externalPath: '/job/100',
   });
 });
 
@@ -160,4 +163,29 @@ test('paginateWorkdayJobs: a wall-clock deadline in the past returns immediately
   });
 
   assert.equal(jobs.length, 0);
+});
+
+test('fetchJobDescription: swaps the trailing /jobs for the posting externalPath and extracts jobDescription', async () => {
+  let requestedUrl;
+  const ctx = {
+    fetchJson: async (url) => {
+      requestedUrl = url;
+      return { jobPostingInfo: { jobDescription: '<p>Do the work.</p>' } };
+    },
+  };
+
+  const description = await fetchJobDescription(ctx, API_BASE, '/job/Marketing-Manager_R1234');
+
+  assert.equal(requestedUrl, 'https://acme.wd1.myworkdayjobs.com/wday/cxs/acme/External/job/Marketing-Manager_R1234');
+  assert.equal(description, '<p>Do the work.</p>');
+});
+
+test('fetchJobDescription: a failed detail fetch degrades to an empty string, not a thrown error', async () => {
+  const ctx = { fetchJson: async () => { throw new Error('boom'); } };
+  assert.equal(await fetchJobDescription(ctx, API_BASE, '/job/x'), '');
+});
+
+test('fetchJobDescription: an unexpected response shape returns an empty string', async () => {
+  const ctx = { fetchJson: async () => ({}) };
+  assert.equal(await fetchJobDescription(ctx, API_BASE, '/job/x'), '');
 });

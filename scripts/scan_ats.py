@@ -44,11 +44,18 @@ scan_boards.py takes.
 import html
 import logging
 import os
+import time
 
 import yaml
 
 import profile_paths
 import scan_boards
+
+# Brave Search's free tier is 1 req/sec (see providers/websearch.mjs's own
+# module docstring) -- the sweep loop below is the only place this repo
+# calls websearch.mjs more than once per process, so it's the only place
+# that needs real inter-call pacing (see B26, docs/review/phase-9-backlog.md).
+_WEBSEARCH_MIN_GAP_SECONDS = 1.0
 
 # Mirrors board-scanners/providers/_recognition.mjs's RECOGNITION_RULES,
 # trimmed to only the providers actually vendored here (career-ops's list
@@ -115,7 +122,7 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     raw_description = raw.get("description") or ""
     description = scan_boards._html_to_text(raw_description) if raw_description else scan_boards._fetch_posting_text(url, provider_id)
 
-    return {
+    job = {
         "job_title": title,
         "company_name": html.unescape((raw.get("company") or entry_name or provider_id).strip()),
         "source_platform": provider_id,
@@ -125,6 +132,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         "posted_at": raw.get("posted_at") or "",
         "description": description,
     }
+    scan_boards._flag_thin_description(job, provider_id, url)
+    return job
 
 
 def fetch_ats_jobs(sources: list = None) -> list:
@@ -171,7 +180,22 @@ def fetch_ats_jobs(sources: list = None) -> list:
             if job:
                 jobs.append(job)
 
+    last_websearch_call_at = None
     for query in queries:
+        # websearch.mjs used to pace itself against Brave's free-tier 1
+        # req/sec limit with a module-level queue -- dead code across the
+        # subprocess boundary, since run_provider.mjs spawns one fresh Node
+        # process per query (see B26, docs/review/phase-9-backlog.md). Real
+        # pacing has to live here instead, where the calls are actually
+        # sequential in the same process. Measures from the previous call's
+        # *start*, not a blind fixed sleep, so a slow call (network latency
+        # already eating into the gap) doesn't also pay a full extra second.
+        if last_websearch_call_at is not None:
+            remaining = _WEBSEARCH_MIN_GAP_SECONDS - (time.monotonic() - last_websearch_call_at)
+            if remaining > 0:
+                time.sleep(remaining)
+        last_websearch_call_at = time.monotonic()
+
         progress.step(query.get("name") or "websearch sweep")
         # _isSweep tells websearch.mjs to prefer the company it extracts
         # from the result URL over `entry.name` (the sweep query's own
