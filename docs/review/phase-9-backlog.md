@@ -333,7 +333,66 @@ re-dispatched, since there are no phases left to receive them.
 > as any other cover-letter violation already did before B14. Full suite:
 > 1165 passed (was 1155 after B13), 0 failed.
 >
-> **Next up, per §6:** B16, B17, B19 (the rest of Tier 1). B24's page-2
+> **2026-08-06 — B16 (onboarding's false-green chain).** Three edits, one
+> causal chain. **(a)** Root cause: `GeminiClient.generate()` already
+> returns `(None, {})` on a real, non-retryable failure (a 403, an
+> exhausted-retries exhaustion, a malformed response) -- `raw` is `None`
+> *only* on a genuine call failure, since a successful call always returns
+> a string, even an empty one. The four ingestion-path extraction functions
+> (`classify_document_type`, `extract_achievements`, `extract_certificate`,
+> `extract_resume_timeline_and_achievements` -- `bootstrap_extractors.py`,
+> `text=` branch only; every one of them is called exclusively from
+> `bootstrap_bullet_bank._process_one_file()`, so this is fully scoped to
+> ingestion) were collapsing that `None` into an empty dict via `raw or {}`
+> and returning an empty-but-valid result instead of surfacing the failure.
+> They now raise a new `IngestionAPIError` instead.
+> `bootstrap_bullet_bank.run_ingestion()` catches it separately from the
+> existing generic `except Exception` (which still handles unsupported file
+> types / doc-conversion failures as `"error"`, unchanged) and checkpoints
+> `{"status": "failed", "reason": str(e)}` -- not `"done"`, so the very
+> next `run_ingestion()` call retries it instead of skipping it (only
+> `"done"` is ever skipped). `run_ingestion()`'s summary dict gained a
+> `failed` count, and `print_ingestion_summary()` now prints "N document(s)
+> failed to process (API error...)" when nonzero. The upload path
+> (`_generate_from_upload`, used for PDF/image source docs) was left alone
+> -- the google-genai SDK it calls already raises on a real API error
+> rather than swallowing it, so that path was never part of this bug.
+> **(b)** `bootstrap_menu.py`'s two wizard call sites that invoke
+> `collect_secrets()` (`_run_phase0()` before `run_ingestion()`,
+> `_run_phase05()` before `run_profile_setup()`) now check its returned
+> `gemini_key_set` and stop with a clear message instead of proceeding --
+> previously both discarded the dict and ran the API-calling step
+> regardless of whether the key was actually set. **(c)** `_run_phase05()`
+> now gates on `_phase0_status()` returning `"Up to date"` before running
+> at all (previously enforced only by a body comment in
+> `bootstrap_profile.py`'s module docstring, which nothing read).
+> `_phase05_status()` returns a new `"Locked"` state when Phase 0 isn't
+> complete, rendered in the same status table `bootstrap_menu.py` already
+> shows (unmapped statuses fall through to `cli_art.py`'s existing `[dim]`
+> style, so no rendering changes were needed).
+> **Proven, not just reviewed:** `tests/test_bootstrap_extractors_llm.py`
+> mocks `GeminiClient.generate` to return `(None, {})` (the exact shape a
+> 403 produces) for each of the four functions and asserts
+> `IngestionAPIError` -- before this fix, three of them asserted an empty
+> result instead. `tests/test_bootstrap_bullet_bank_ingestion.py`'s new
+> `TestRunIngestionAPIFailure` reproduces the real repro end-to-end:
+> `extract_resume_timeline_and_achievements` raises `IngestionAPIError`,
+> confirms the checkpoint says `"failed"` (never `"done"`) with a `reason`
+> field, confirms `summary["failed"] == 1`, then clears the mock's
+> `side_effect` (simulating the key being fixed) and calls
+> `run_ingestion()` again -- confirms the mock is invoked a **second**
+> time (`call_count == 2`), proving a `"failed"` entry is retried, not
+> permanently skipped the way `"done"` is. `tests/test_bootstrap_menu.py`
+> adds `TestRunPhase0DeferredKey` and `TestRunPhase05Gating`: deferred key
+> stops both steps before their API-calling function is ever called;
+> `_run_phase05()` is also blocked when `_phase0_status()` isn't
+> `"Up to date"`, even with a key already set, and even when `profile.yml`/
+> `cv.md` already exist from an earlier completed run (the "Locked" state
+> can re-trigger after a later partial re-ingestion, and Phase 0.5 must not
+> read "Up to date" ahead of it). Full suite: 1178 passed (was 1165 after
+> B14), 0 failed -- 13 new tests, no regressions.
+>
+> **Next up, per §6:** B17, B19 (the rest of Tier 1). B24's page-2
 > layout work is now unblocked by B60, but re-run `resume sample` first,
 > since restoring the missing employers changes what page 2 contains.
 

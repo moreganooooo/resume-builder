@@ -217,5 +217,88 @@ class TestRunIngestionUnsupportedFile(BootstrapIngestionTestCase):
         self.assertEqual(summary["extracted"], 0)
 
 
+class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
+    # B16: reproduces the real bug -- a fresh profile, no API key, a 403 on
+    # ingestion. Before the fix: exit 0, checkpoint "done", work_experience
+    # []. After: checkpoint "failed" (not "done", so not permanently
+    # skipped), a nonzero summary["failed"], and a retry that actually
+    # re-attempts the call once the key is fixed.
+
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    def test_api_failure_checkpoints_failed_not_done(
+        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+    ):
+        self._touch("My_Resume.docx")
+        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError(
+            "Gemini API call failed while extracting the resume/LinkedIn timeline -- "
+            "see the WARNING above for the status code."
+        )
+
+        summary = bootstrap_bullet_bank.run_ingestion()
+
+        self.assertEqual(summary["extracted"], 0)
+        self.assertEqual(summary["failed"], 1)
+        checkpoint = bootstrap_bullet_bank._load_checkpoint()
+        self.assertEqual(checkpoint["My_Resume.docx"]["status"], "failed")
+        self.assertIn("reason", checkpoint["My_Resume.docx"])
+        self.assertNotEqual(checkpoint["My_Resume.docx"]["status"], "done")
+
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    def test_retry_after_failure_actually_reattempts_the_call(
+        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+    ):
+        self._touch("My_Resume.docx")
+        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError("simulated 403")
+
+        summary_1 = bootstrap_bullet_bank.run_ingestion()
+        self.assertEqual(summary_1["failed"], 1)
+        self.assertEqual(mock_extract_resume.call_count, 1)
+
+        # Key is "fixed" -- the next call succeeds for real.
+        mock_extract_resume.side_effect = None
+        mock_extract_resume.return_value = bootstrap_extractors.ResumeExtraction(
+            experience=[
+                bootstrap_extractors.WorkExperienceEntry(
+                    company="Acme Corp", title="Manager", start_date="2019", end_date="2022",
+                    achievements=["Grew email list by 40%"],
+                )
+            ],
+            certifications=[],
+        )
+
+        summary_2 = bootstrap_bullet_bank.run_ingestion()
+
+        # A "done"-marked file is skipped and never re-invokes the mock (see
+        # TestRunIngestionCheckpointResume) -- a "failed"-marked one must
+        # NOT be skipped the same way, or fixing the key would never help.
+        self.assertEqual(mock_extract_resume.call_count, 2, "a 'failed' checkpoint entry must be retried, not skipped")
+        self.assertEqual(summary_2["extracted"], 1)
+        self.assertEqual(summary_2["failed"], 0)
+        checkpoint = bootstrap_bullet_bank._load_checkpoint()
+        self.assertEqual(checkpoint["My_Resume.docx"]["status"], "done")
+
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    def test_summary_print_mentions_failure_count(
+        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+    ):
+        self._touch("My_Resume.docx")
+        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError("simulated 403")
+        summary = bootstrap_bullet_bank.run_ingestion()
+
+        with patch("builtins.print") as mock_print:
+            bootstrap_bullet_bank.print_ingestion_summary(summary)
+        printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
+        self.assertIn("1 document(s) failed", printed)
+
+
 if __name__ == "__main__":
     unittest.main()
