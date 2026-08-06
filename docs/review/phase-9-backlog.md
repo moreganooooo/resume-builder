@@ -153,8 +153,8 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B24 · B26 · B27 · B28 ·
-> B29 · B30 · B36 ·
+> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B21 · B24 · B26 · B27 · B28 ·
+> B29 · B30 · B34 · B35 · B36 · B41 · B42 ·
 > B37 · B38 · B39 · B43 ·
 > B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
 > B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
@@ -879,6 +879,192 @@ re-dispatched, since there are no phases left to receive them.
 > Python tests + 40 new `node:test` cases (previously 8, all in
 > `workday.test.mjs`; this repo had no other `*.test.mjs` file before this
 > session).
+>
+> **2026-08-06 — Session 4 of `fix-pass-plan.md` (B34, B35, B21, B42, B41).**
+> Subprocess & scan sweep — worked in order as planned.
+>
+> **B34 (a stranger's first scan is unbounded, unfiltered, and
+> browser-verified).** Two independent fixes. `scan.run_scan()` now caps
+> the verify pass at `VERIFY_CONFIRM_THRESHOLD` (25): above that, an
+> interactive terminal is asked whether to verify everything found
+> (~16s/JD) or just the first 25; a non-interactive context (piped, CI,
+> the menu without a real TTY — `cli_art.console.is_terminal`) caps
+> automatically rather than hanging unbounded with nobody there to
+> answer. Second: `bootstrap_profile.py` gained
+> `seed_scan_filters_from_target_roles()`, seeding a fresh profile's
+> `board_scanner/scan_filters.yml` (empty `positive: []` by design,
+> per `bootstrap_bullet_bank._SCAN_FILTERS_SCAFFOLD`) from the same
+> `identity["primary_roles"]`/`secondary_roles` data `profile.yml`'s
+> `target_roles.primary` is built from — but **not** by repointing the
+> existing `write_portals_yml()`, which looked like the obvious fix
+> (it already seeds an identically-shaped `title_filter.positive` from
+> the same identity dict) and turned out to be a false lead: asked
+> Morgan to check what `knowledge_base/portals.yml` actually contains,
+> and it's a real, deliberate, separate artifact — Morgan's own
+> hand-curated legacy-career-ops copy, listed in `orchestrator.KB_ALLOWLIST`
+> and stitched into every tailoring prompt as context, not a
+> misdirected write of the board-scanner's own filter (which already
+> lives at `profiles/morgan/board_scanner/scan_filters.yml`, 700 lines,
+> ported and corrected from that same legacy file back on 2026-07-26 per
+> its own header comment). `seed_scan_filters_from_target_roles()` only
+> writes when the scaffold is still at its untouched empty default
+> (never overwrites a profile's real curated filters) and is a new,
+> additional call in `run_profile_setup()`, not a repurposing of
+> anything existing.
+>
+> **B35 (`job_key_known()` re-walks the entire JD corpus once per
+> candidate).** `jd_manager.build_known_jobs_index()` walks
+> jds/+completed/+archived/+expired/ exactly once and returns an
+> in-memory index (job_keys / url+company pairs / normalized
+> company+title pairs); `job_key_known()` gained an `index=` param that
+> matches against it instead of re-walking when given one, and still
+> rebuilds one itself when `index=` is omitted (existing single-call
+> tests/callers unaffected). `scan.run_scan()` builds the index once and
+> updates it in memory via the new `add_to_known_jobs_index()` as jobs
+> are written during the same run, so within-run duplicates (the same
+> posting surfacing via two sources in one scan) are still caught
+> without a fresh disk walk. Fixing this also surfaced that
+> `tests/test_scan.py`'s `TestRunScanDedup`/`TestRunScanVerify`/
+> `TestScanWarningCollection` had never actually been isolated from the
+> real active profile's JD directories — they worked only because
+> `job_key_known()` itself was mocked in every test; the new unconditional
+> `build_known_jobs_index()` call bypassed that mock and started walking
+> real `profiles/morgan/` data mid-test-suite. Fixed by mocking
+> `build_known_jobs_index()` too (a fresh empty index per test via
+> `side_effect`, not a shared `return_value`, so mutations from one test
+> can't leak into the next) — this also cut that file's suite runtime
+> from ~5.2s to ~0.15s, confirming the walk really had been happening.
+>
+> **B21 (liveness subprocess lifecycle: no timeout, fake progress,
+> orphaned children, lost results).** `liveness._verify_candidates()`
+> replaced `subprocess.run()` with `Popen` in `try/finally`:
+> `timeout=` sized from candidate count (`max(60, candidates × 20)`,
+> covering Node/Chromium startup plus each candidate's real nav+render
+> budget); `proc.stderr` iterated live line-by-line instead of
+> `subprocess.run()`'s `communicate()`-based capture, which only handed
+> the whole buffered stream back after the process had already exited —
+> the `[i/N]` progress indicator was replaying a finished transcript, not
+> showing anything live; `kill()`+`wait()` in the `finally` so an
+> interrupted or timed-out run never orphans the Node child (verified
+> live pre-fix: `subprocess.run()` deliberately does not kill on
+> `KeyboardInterrupt`, per bpo-25942, and Ctrl-C left the Node process
+> running, still making outbound requests to employer sites).
+> check-liveness.mjs's results now go to a real file
+> (`LIVENESS_OUTPUT_PATH`), not a pipe — piping stdout while separately
+> reading stderr live risks the classic subprocess deadlock once the
+> results JSON exceeds the OS pipe buffer on a large scan. Node side:
+> `chromium.launch()` now takes an explicit `timeout: 30_000`; `runJsonMode()`
+> wraps its candidate loop in `try/finally` so `browser.close()` (previously
+> skipped entirely on any throw, leaking the headless Chromium process) and
+> `console.log(JSON.stringify(results))` (previously never reached on a
+> throw, discarding every result already collected) both always run. The
+> `generate-pdf.mjs`/`orchestrator.py`/`polish.py` half of this same
+> backlog item ("same class" per its own text — two more `subprocess.run`
+> calls with no `timeout=`, plus an unbounded `page.evaluate(() =>
+> document.fonts.ready)`) was **not** touched — those files aren't in this
+> session's list, `orchestrator.py` especially is the largest and most
+> heavily-tested file in the repo, and unlike B36 in Session 3 this isn't
+> adjacent code that was already open for another reason. Flagging as
+> unaddressed rather than silently dropping it — worth its own session.
+>
+> **B42 (liveness and scan correctness minors).** Five of the seven
+> P7Fxx sub-issues landed; two are out of this session's file scope and
+> flagged rather than silently skipped (below). P7F8 (`--no-verify`
+> leaves the optimistic `_liveness: active` scan-time seed uncorrected,
+> so a dead posting reads as "confirmed alive" for a full 24h recency
+> window even though it was never actually checked) — `scan._write_jd_file()`
+> now only seeds `_liveness` for JDs with **no** `source_url`; those never
+> become liveness candidates at all (`_gather_candidates()` requires a
+> url) so the seed is the only signal `jd_manager.compute_posting_age_days()`'s
+> fallback will ever see for them, and that part was fine. A JD *with* a
+> url gets its real `_liveness` from an actual verify pass via
+> `jd_manager.save_liveness()` if one runs — which unconditionally
+> overwrites any seed anyway — so seeding one for it was pure liability:
+> the only time it stuck around uncorrected was exactly when verify
+> didn't end up running (`--no-verify`, or B34's new threshold cap).
+> P7F9 (LIVENESS_INPUT_PATH bypassing `profile_paths`) — checked, already
+> fixed; the file's own comment confirms it. P7F12 (report entries
+> removed by value) — `scan.run_scan()`'s expired-drop now finds the
+> exact dict object by identity (`is`), not `list.remove()`'s by-value
+> match, which could drop the wrong row for two postings sharing the same
+> company+title. P7F13 (`expired_paths` returns a pre-move path that no
+> longer exists, "today's only consumer works by coincidence") — renamed
+> to `expired_source_paths` everywhere (`liveness.py`'s return dict,
+> `scan.py`'s lookup, both test files) rather than changing the value:
+> the one real consumer (`scan.py`'s `written_paths` lookup) genuinely
+> needs the pre-move path as a lookup key, not a location to open, so the
+> honest fix is naming it what it is instead of quietly relying on two
+> call sites agreeing by accident. P7F14 (liveness catch branch omits
+> `code`, writing `code: undefined` on every navigation failure) —
+> `liveness-browser.mjs`'s catch now returns `code: 'navigation_error'`,
+> matching `classifyLiveness()`'s existing vocabulary
+> (`liveness-core.mjs`). **Not done, flagged:** P7F10 (`scan_linkedin.py`'s
+> `_fetch_personalized_extras()` firing ~60 back-to-back authenticated
+> GETs with Morgan's real `li_at` cookie, no pacing — "the one place in
+> the subsystem with genuine account-risk exposure," per the backlog's
+> own words) and P7F15 (`dashboard.py`'s `go run` misreporting a normal
+> Ctrl-C quit as an error) — neither file is in this session's list, and
+> P7F10 in particular deserves a session of its own given the stated
+> severity rather than a rushed add-on here.
+>
+> **B41 (multi-user credential and PII hygiene).** P1F13 —
+> `bootstrap_profile.collect_secrets()` checked `os.environ` (shell-wide)
+> for `GEMINI_API_KEY` before deciding whether to prompt, so exporting it
+> in the shell (this machine's actual state) made a brand-new profile's
+> own bootstrap silently skip writing anything to that profile's own
+> `.env` — defeating the function's own docstring goal ("two people
+> sharing this checkout never share credentials") the moment a second
+> profile gets bootstrapped here. Now checks the profile's own `.env`
+> file specifically (`dotenv_values()`, not `os.environ`), and when the
+> shell *does* already have a value, offers it as a one-confirm default
+> via `_collect_secret_now_or_later()`'s new `shell_default=` param
+> instead of either assuming it or making the user re-paste it blind.
+> Applied the same fix to `JOBRIGHT_COOKIE_STRING` for consistency (same
+> latent bug, just not the one the finding demonstrated live). The
+> existing test that asserted the old behavior
+> (`test_skips_the_prompt_entirely_when_already_configured_in_the_shell`)
+> was rewritten rather than deleted — it now names and tests the
+> corrected behavior instead of locking in the bug. P8F6/H37 — neither
+> `liveness.py`'s Chromium subprocess nor `scan_boards._run_node_provider()`
+> (the single call point for all 24 board/ATS provider modules, reused
+> directly by `scan_ats.py` too) passed `env=`, so every child process
+> inherited `GEMINI_API_KEY`/`JOBRIGHT_COOKIE_STRING` though none needs
+> either. Both files gained a small `_child_env()` helper (duplicated,
+> not shared — two call sites, unlikely to drift) that copies
+> `os.environ` **minus** those two vars — a denylist rather than an
+> allowlist, deliberately: `scan_boards.py`'s providers have real,
+> varied per-provider credential needs of their own (Adzuna's
+> `ADZUNA_APP_KEY`, USAJobs's `USAJOBS_API_KEY`, etc.), so an allowlist
+> would risk silently breaking one of them. P7bF10 (`adzuna.mjs` putting
+> `app_key` in its query string) — checked, not fixed: verified
+> `scan_boards._scan_warning()`'s only `url=` field is the per-posting
+> `source_url` from Adzuna's parsed response, never Adzuna's own
+> authenticated request URL (which never leaves `adzuna.mjs`), so there
+> is no current Python-side logging path that would expose it. No code
+> change — the risk the finding named doesn't exist yet, and adding a
+> defense for it now would be guarding against something that can't
+> happen today.
+>
+> **Deviations from the stated file list** (`scan.py`, `jd_manager.py`,
+> `liveness.py`): touched `bootstrap_profile.py` (B34's filter seeding,
+> B41's `collect_secrets()` fix), `scan_boards.py` (B41's `env=`
+> allowlist — the actual home of "all 24 provider modules"),
+> `check-liveness.mjs`/`liveness-browser.mjs` (B21/P7F14 — both are
+> `liveness.py`'s own direct Node-side counterpart, not a separate
+> subsystem). Each is documented above with its own reasoning; none were
+> silent.
+>
+> **Verification:** full Python suite only — this session's changes are
+> exercised entirely through mocked `subprocess.Popen`/`subprocess.run`
+> and in-memory index fixtures, not a live scan or liveness run (same
+> constraint as Session 3: no credentials/tracked-company data in this
+> checkout to exercise the real network paths safely). The two touched
+> `.mjs` files were `node --check`'d for syntax but not executed — no
+> `node:test` coverage exists for `check-liveness.mjs`/
+> `liveness-browser.mjs` (the original liveness-checker spec deliberately
+> chose "live-verified" over a new JS test framework for this subsystem,
+> same as `generate-pdf.mjs`). Full suite: 1240 passed (was 1231 after
+> session 3), 0 failed — 9 new Python tests, 0 new JS tests.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

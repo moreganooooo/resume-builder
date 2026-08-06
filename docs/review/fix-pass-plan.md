@@ -99,7 +99,7 @@ tracked-company data in this checkout to exercise safely).
 
 ---
 
-## Session 4 — Subprocess & scan sweep
+## Session 4 — Subprocess & scan sweep — ✅ DONE 2026-08-06
 
 **Items, in order:** B34 → B35 → B21 → B42 → B41.
 
@@ -109,7 +109,27 @@ in `liveness.py`'s subprocess handling. B41 (credential/env allowlist) is
 last because it depends on both the board-scanner (Session 3) and liveness
 subprocess call sites already being settled.
 
-**Files:** `scan.py`, `jd_manager.py`, `liveness.py`.
+**Outcome:** all 5 done, plus a mid-session file-scope call (B34's
+`scan_filters.yml` seeding — the obvious fix, `write_portals_yml()`, turned
+out to write a different, deliberately-kept file; asked Morgan, confirmed
+it was a false lead, wrote a new seed function instead) and two items left
+explicitly unaddressed and flagged rather than silently dropped: B21's
+`generate-pdf.mjs`/`orchestrator.py` half (same backlog item, "same class,"
+but those files are the biggest and most heavily-tested in the repo and
+weren't already open for another reason — worth its own session), and
+B42's P7F10 (`scan_linkedin.py`'s unpaced ~60-request cookie exposure —
+flagged by the backlog itself as the one place in the subsystem with real
+account-risk, deserves its own session not a rushed add-on) and P7F15
+(`dashboard.py`'s Ctrl-C exit-code misreport). Full detail, the exact
+per-item reasoning, and the file-scope deviations are in
+`phase-9-backlog.md`'s 2026-08-06 Session 4 changelog entry. Test suite:
+1231 → 1240, all passing (9 new Python tests; 2 touched `.mjs` files
+`node --check`'d for syntax, not executed — no live scan/liveness run,
+same credential constraint as Session 3).
+
+**Files:** `scan.py`, `jd_manager.py`, `liveness.py` — plus
+`bootstrap_profile.py`, `scan_boards.py`, `check-liveness.mjs`,
+`liveness-browser.mjs` (see Outcome above).
 
 **Clear after this session.**
 
