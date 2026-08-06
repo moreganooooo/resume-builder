@@ -40,6 +40,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 
 def tag_keywords() -> dict:
@@ -152,7 +153,7 @@ def main():
                 "Bullet Point": r["Bullet Point"],
             })
 
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(out_path, newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
         w.writeheader()
         try:
@@ -167,7 +168,7 @@ def main():
             ) from e
 
     if review_rows:
-        with open(review_path, "w", newline="", encoding="utf-8") as f:
+        with atomic_write(review_path, newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
             w.writeheader()
             w.writerows(review_rows)

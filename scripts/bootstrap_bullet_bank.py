@@ -38,6 +38,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -186,7 +187,7 @@ def _load_checkpoint() -> dict:
 
 def _save_checkpoint(state: dict) -> None:
     os.makedirs(BOOTSTRAP_DIR, exist_ok=True)
-    with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(CHECKPOINT_PATH, encoding="utf-8") as f:
         json.dump(state, f, indent=2)
 
 
@@ -240,13 +241,13 @@ def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
 
 def _write_timeline(timeline: list) -> None:
     os.makedirs(BOOTSTRAP_DIR, exist_ok=True)
-    with open(TIMELINE_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(TIMELINE_PATH, encoding="utf-8") as f:
         json.dump([e.model_dump() for e in timeline], f, indent=2)
 
 
 def _write_draft_csv(matched_rows: list) -> None:
     os.makedirs(BOOTSTRAP_DIR, exist_ok=True)
-    with open(DRAFT_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(DRAFT_CSV_PATH, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=DRAFT_CSV_FIELDS)
         writer.writeheader()
         for company, bullet, filename, doc_type, _confidence in matched_rows:
@@ -262,7 +263,7 @@ def _write_review_csv(review_rows: list) -> None:
         if os.path.exists(REVIEW_CSV_PATH):
             os.remove(REVIEW_CSV_PATH)
         return
-    with open(REVIEW_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(REVIEW_CSV_PATH, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=DRAFT_CSV_FIELDS)
         writer.writeheader()
         for company, bullet, filename, doc_type, _confidence in review_rows:
@@ -274,7 +275,7 @@ def _write_review_csv(review_rows: list) -> None:
 
 def _write_certifications(certificates: list) -> None:
     os.makedirs(BOOTSTRAP_DIR, exist_ok=True)
-    with open(CERTIFICATIONS_PATH, "w", encoding="utf-8") as f:
+    with atomic_write(CERTIFICATIONS_PATH, encoding="utf-8") as f:
         json.dump(certificates, f, indent=2)
 
 
@@ -316,7 +317,7 @@ def _write_bullet_bank_clean(matched_rows: list, overwrite: bool = False) -> Non
         new_rows.append({"Role / Company": company, "Tags": tag_str, "Bullet Point": bullet_text})
 
     os.makedirs(os.path.dirname(BULLET_BANK_CLEAN_PATH), exist_ok=True)
-    with open(BULLET_BANK_CLEAN_PATH, "w", newline="", encoding="utf-8") as f:
+    with atomic_write(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
         writer.writeheader()
         writer.writerows(existing_rows)

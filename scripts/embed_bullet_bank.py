@@ -51,6 +51,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+from atomic_write import atomic_write  # noqa: E402
 import theme
 
 load_dotenv(profile_paths.env_path(), override=True)
@@ -183,7 +184,7 @@ def main():
         "csv": CSV_PATH,
         "bullet_col": bullet_col or "(stringified row)",
     }
-    with open(META_PATH, "w") as f:
+    with atomic_write(META_PATH) as f:
         json.dump(meta, f, indent=2)
     print(f"📋 Saved metadata sidecar → {META_PATH}")
 

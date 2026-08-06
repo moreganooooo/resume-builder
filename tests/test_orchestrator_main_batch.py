@@ -36,7 +36,15 @@ class TestMainBatchMode(unittest.TestCase):
         self._real_applications_md = orchestrator.jd_manager.APPLICATIONS_MD
         orchestrator.jd_manager.APPLICATIONS_MD = os.path.join(self.tmp_dir, "applications.md")
 
+        # run_pipeline() now takes a pre-run KB snapshot (B13); without this,
+        # every test below (main() -> run_pipeline(), never mocked) would
+        # copy the real active profile's actual knowledge_base/ into its
+        # real data/<profile>/kb_snapshots/ on every test run.
+        self._snapshot_patcher = patch("orchestrator.kb_snapshot.snapshot_kb")
+        self.mock_snapshot_kb = self._snapshot_patcher.start()
+
     def tearDown(self):
+        self._snapshot_patcher.stop()
         orchestrator.jd_manager.COMPLETED_DIR = self._real_completed_dir
         orchestrator.jd_manager.APPLICATIONS_MD = self._real_applications_md
         for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
@@ -71,6 +79,9 @@ class TestMainBatchMode(unittest.TestCase):
         self.assertFalse(os.path.exists(self.good_path))
         # A failed JD stays in place (pending) for the next run to retry.
         self.assertTrue(os.path.exists(self.bad_path))
+        # B13: a pre-run KB snapshot happens once per run_pipeline() call,
+        # before any JD is processed.
+        self.mock_snapshot_kb.assert_called_once_with()
 
     @patch("orchestrator.jd_manager.JDTracker")
     @patch("orchestrator.jd_manager.get_pending_jds")

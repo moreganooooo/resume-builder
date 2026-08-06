@@ -256,6 +256,18 @@ def write_sync_ignore_files(profile: str = None) -> None:
                 f.write(_SYNC_STIGNORE_CONTENT)
 
 
+def kb_snapshot_dir(profile: str = None) -> str:
+    """profiles/<name>/knowledge_base/ has no backup or recovery path of
+    its own (see B13 -- it's fully gitignored on purpose, and Syncthing
+    propagates corruption rather than guarding against it), so
+    kb_snapshot.snapshot_kb() needs somewhere durable to keep rotating
+    pre-run copies. data/<name>/ is already a sync_roots() member for
+    this profile's operational data (see tracker_csv_path()/
+    applications_md_path()), so snapshots live under it rather than
+    adding a fifth sync root."""
+    return os.path.join(data_dir(profile), "kb_snapshots")
+
+
 def maintenance_log_path(profile: str = None) -> str:
     """Where the Maintenance submenu persists "when did this task last
     run" per background/administrative task (doctor script, etc.) --
