@@ -175,6 +175,87 @@ class TestRunNodeProvider(unittest.TestCase):
     def test_timeout_returns_empty_list_not_an_exception(self, mock_run):
         self.assertEqual(scan_boards._run_node_provider("remoteok", {}), [])
 
+    @patch("scan_boards._scan_warning")
+    @patch("subprocess.run")
+    def test_error_envelope_kind_used_instead_of_guessing_from_stderr(self, mock_run, mock_warn):
+        # run_provider.mjs (B27, docs/review/phase-9-backlog.md) writes a
+        # JSON error envelope to stdout on every failure path -- a specific
+        # kind should now win over the old stderr-last-line heuristic.
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout='{"error":{"kind":"auth","message":"websearch: BRAVE_API_KEY is not set."}}',
+            stderr="websearch: BRAVE_API_KEY is not set.\nAdd it to your .env file.",
+        )
+        self.assertEqual(scan_boards._run_node_provider("websearch", {}), [])
+        mock_warn.assert_called_once()
+        _, kwargs = mock_warn.call_args
+        self.assertEqual(kwargs["kind"], "auth")
+        self.assertEqual(kwargs["reason"], "websearch: BRAVE_API_KEY is not set.")
+
+    @patch("scan_boards._scan_warning")
+    @patch("subprocess.run")
+    def test_falls_back_to_stderr_reason_when_stdout_is_not_an_envelope(self, mock_run, mock_warn):
+        # A crash before run_provider.mjs's own handlers run (e.g. the node
+        # binary itself missing, or something throwing before main()) can
+        # still leave stdout empty or non-JSON -- must not raise, and must
+        # fall back to the pre-B27 behavior.
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="some raw crash\nlast line")
+        self.assertEqual(scan_boards._run_node_provider("remoteok", {}), [])
+        _, kwargs = mock_warn.call_args
+        self.assertEqual(kwargs["kind"], "provider_failed")
+        self.assertEqual(kwargs["reason"], "last line")
+
+
+class TestParseErrorEnvelope(unittest.TestCase):
+
+    def test_valid_envelope(self):
+        self.assertEqual(
+            scan_boards._parse_error_envelope('{"error":{"kind":"quota","message":"rate limited"}}'),
+            {"kind": "quota", "message": "rate limited"},
+        )
+
+    def test_not_json_returns_none(self):
+        self.assertIsNone(scan_boards._parse_error_envelope("not json at all"))
+
+    def test_json_without_error_key_returns_none(self):
+        self.assertIsNone(scan_boards._parse_error_envelope('[{"title": "a job"}]'))
+
+    def test_error_without_kind_returns_none(self):
+        self.assertIsNone(scan_boards._parse_error_envelope('{"error":{"message":"oops"}}'))
+
+
+class TestFlagThinDescription(unittest.TestCase):
+
+    @patch("scan_boards._scan_warning")
+    def test_thin_description_gets_scan_metadata_and_a_warning(self, mock_warn):
+        job = {"description": "too short"}
+        scan_boards._flag_thin_description(job, "workday", "https://x.com/1")
+        self.assertEqual(job["_scan"], {"thin_description": True, "description_chars": 9})
+        mock_warn.assert_called_once()
+        _, kwargs = mock_warn.call_args
+        self.assertEqual(kwargs["kind"], "thin_description")
+        self.assertEqual(kwargs["provider_id"], "workday")
+
+    @patch("scan_boards._scan_warning")
+    def test_empty_description_reason_says_empty_not_zero_chars(self, mock_warn):
+        job = {"description": ""}
+        scan_boards._flag_thin_description(job, "workday", "https://x.com/1")
+        _, kwargs = mock_warn.call_args
+        self.assertEqual(kwargs["reason"], "empty")
+
+    @patch("scan_boards._scan_warning")
+    def test_missing_description_key_is_treated_as_empty(self, mock_warn):
+        job = {}
+        scan_boards._flag_thin_description(job, "workday", "https://x.com/1")
+        self.assertEqual(job["_scan"]["description_chars"], 0)
+
+    @patch("scan_boards._scan_warning")
+    def test_long_enough_description_is_left_alone(self, mock_warn):
+        job = {"description": "x" * 300}
+        scan_boards._flag_thin_description(job, "greenhouse", "https://x.com/1")
+        self.assertNotIn("_scan", job)
+        mock_warn.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

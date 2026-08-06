@@ -59,17 +59,23 @@ export default {
  * Parse a Recruitee /api/offers/ response. Exported for unit tests.
  *
  * Recruitee returns:
- *   { offers: [{ title, careers_url?, url?, city?, country?, remote?, location? }] }
+ *   { offers: [{ title, careers_url?, url?, city?, country?, remote?,
+ *                location?, description?, requirements? }] }
  *
  * - url: prefer `careers_url`, fall back to `url`; validated against
  *   `https://<safe-slug>.recruitee.com` — an off-domain or non-HTTPS URL is
  *   dropped (empty string returned per the Job contract).
  * - location: prefer the explicit `location` field; else assemble from
  *   city/country, appending "Remote" when `remote` is true.
+ * - description: `description` (raw HTML) is already returned by this same
+ *   list endpoint -- no separate detail fetch needed, unlike SmartRecruiters
+ *   or Workday (see B36, docs/review/phase-9-backlog.md). `requirements`
+ *   (also HTML) is appended when present since it's often where the actual
+ *   qualifications live, separate from the narrative `description`.
  *
  * @param {any} json
  * @param {string} companyName
- * @returns {Array<{title: string, url: string, company: string, location: string}>}
+ * @returns {Array<{title: string, url: string, company: string, location: string, description: string}>}
  */
 export function parseRecruiteeResponse(json, companyName) {
   const offers = json?.offers;
@@ -79,6 +85,7 @@ export function parseRecruiteeResponse(json, companyName) {
     const country = j.country || '';
     const remote = j.remote ? 'Remote' : '';
     const location = j.location || [city, country, remote].filter(Boolean).join(', ');
+    const description = [j.description, j.requirements].filter(Boolean).join('\n\n');
 
     // Validate offer URL: must parse as https://<safe-slug>.recruitee.com/...
     let url = '';
@@ -99,6 +106,7 @@ export function parseRecruiteeResponse(json, companyName) {
       url,
       location,
       company: companyName,
+      description,
     };
   });
 }

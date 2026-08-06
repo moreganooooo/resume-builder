@@ -77,6 +77,7 @@ BOARD_PROVIDERS = [
 NODE_TIMEOUT_SECONDS = 30
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
+MIN_DESCRIPTION_CHARS = 200
 
 def _format_duration(seconds: float) -> str:
     seconds = max(int(seconds), 0)
@@ -172,6 +173,52 @@ def _scan_warning(msg: str, *, kind: str, provider_id: str, reason: str, url: st
     logging.warning(msg, extra={"scan_warning": True, "kind": kind, "provider_id": provider_id, "reason": reason, "url": url})
 
 
+def _parse_error_envelope(stdout: str) -> dict | None:
+    """run_provider.mjs writes `{"error": {"kind", "message"}}` to stdout on
+    every failure path (see B27, docs/review/phase-9-backlog.md) instead of
+    leaving it empty -- gives a specific reason (auth/quota/network/config)
+    instead of scan_boards.py having to guess one from the last line of
+    stderr, which used to be the only signal and couldn't tell "LinkedIn
+    cookie expired" apart from "host is down" apart from "bad YAML entry".
+    Returns None when stdout isn't that shape (e.g. the node binary itself
+    is missing, or a crash before run_provider.mjs's own handlers run) --
+    callers fall back to the old stderr-based reason in that case."""
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    if not isinstance(error, dict) or "kind" not in error:
+        return None
+    return error
+
+
+def _flag_thin_description(job: dict, provider_id: str, source_url: str) -> None:
+    """Sets `job["_scan"]` (per CLAUDE.md's underscore-prefixed persisted-
+    metadata convention -- same shape family as `_liveness`/`_evaluation`/
+    `_application`) and raises a `_scan_warning` when a job's description is
+    missing or too thin to tailor against, instead of the posting silently
+    shipping with `"description": null`/near-empty and no trace of why.
+    Six of 24 board-scanner providers never emitted a description at all
+    before B36 (docs/review/phase-9-backlog.md) gave each a real source --
+    this is the safety net for whatever's still thin after that (a
+    provider's detail-fetch failing for one posting, a source that
+    genuinely has nothing, etc.), so it stays visible in the scan report
+    instead of silently degrading. Shared by fetch_board_jobs() below and
+    scan_ats.py's _normalize_raw_job() (scan_ats.py already imports and
+    reuses this module's other helpers the same way -- see its own
+    docstring)."""
+    chars = len((job.get("description") or "").strip())
+    if chars >= MIN_DESCRIPTION_CHARS:
+        return
+    job["_scan"] = {"thin_description": True, "description_chars": chars}
+    _scan_warning(
+        f"scan_boards: {provider_id} posting has a thin/empty description ({chars} chars) -- {source_url}",
+        kind="thin_description", provider_id=provider_id,
+        reason=f"{chars} chars" if chars else "empty", url=source_url,
+    )
+
+
 def _run_node_provider(provider_id: str, entry: dict) -> list:
     try:
         result = subprocess.run(
@@ -180,13 +227,19 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         _scan_warning(f"scan_boards: {provider_id} failed to run -- {e}",
-                      kind="provider_failed", provider_id=provider_id, reason=type(e).__name__)
+                      kind="network" if isinstance(e, subprocess.TimeoutExpired) else "config",
+                      provider_id=provider_id, reason=type(e).__name__)
         return []
 
     if result.returncode != 0:
-        reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else f"exit {result.returncode}"
+        envelope = _parse_error_envelope(result.stdout)
+        if envelope:
+            kind, reason = envelope["kind"], envelope.get("message", "unknown error")
+        else:
+            kind = "provider_failed"
+            reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else f"exit {result.returncode}"
         _scan_warning(f"scan_boards: {provider_id} -- {result.stderr.strip()}",
-                      kind="provider_failed", provider_id=provider_id, reason=reason)
+                      kind=kind, provider_id=provider_id, reason=reason)
         return []
 
     try:
@@ -292,7 +345,7 @@ def fetch_board_jobs(sources: list = None, search_term: str = None) -> list:
             raw_description = raw.get("description") or ""
             description = _html_to_text(raw_description) if raw_description else _fetch_posting_text(url, provider_id)
 
-            jobs.append({
+            job = {
                 "job_title": title,
                 "company_name": html.unescape((raw.get("company") or provider_id).strip()),
                 "source_platform": provider_id,
@@ -301,6 +354,8 @@ def fetch_board_jobs(sources: list = None, search_term: str = None) -> list:
                 "location": raw.get("location") or "",
                 "posted_at": raw.get("posted_at") or "",
                 "description": description,
-            })
+            }
+            _flag_thin_description(job, provider_id, url)
+            jobs.append(job)
 
     return jobs

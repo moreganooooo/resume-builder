@@ -25,6 +25,15 @@ const WORKDAY_PAGE_DELAY_MS = 300;     // politeness delay between paginated POS
 const WORKDAY_TIME_BUDGET_MS = 20_000; // stay well under the 30s parent timeout
 const WORKDAY_DEFAULT_LIMIT = 20;      // fallback when the board reports limit: 0
 
+// B36 (docs/review/phase-9-backlog.md): the search/listing response never
+// carries a description -- only the per-job detail endpoint does, and
+// Workday's public posting *page* is a JS SPA (the whole reason this
+// provider drives Playwright in the first place), so
+// scan_boards.py's plain-GET page-fetch fallback can't scrape one either.
+// Bounded by count; shares the same wall-clock deadline as pagination
+// below rather than a second budget.
+const WORKDAY_DETAIL_FETCH_CAP = 40;
+
 /**
  * Resolves the effective page size from a Workday search response. Exported
  * for unit tests. `data.limit` can come back as `0` on some boards; `||`
@@ -53,7 +62,7 @@ export function resolveWorkdayLimit(data) {
  * @param {number} limit
  * @param {number} total
  * @param {{maxPages?: number, delayMs?: number, deadline?: number}} [opts]
- * @returns {Promise<Array<{title: string, url: string, company: string, location: string}>>}
+ * @returns {Promise<Array<{title: string, url: string, company: string, location: string, _externalPath: string}>>}
  */
 export async function paginateWorkdayJobs(ctx, apiBase, baseUrl, companyName, limit, total, opts = {}) {
   const maxPages = opts.maxPages ?? WORKDAY_MAX_PAGES;
@@ -91,6 +100,9 @@ export async function paginateWorkdayJobs(ctx, apiBase, baseUrl, companyName, li
         url: jobUrl,
         company: companyName,
         location: j.locationsText || '',
+        // Not part of the Job contract (see _types.js) -- carries the raw
+        // path through to fetch()'s detail-fetch loop, which deletes it.
+        _externalPath: j.externalPath || '',
       });
     }
   }
@@ -143,9 +155,10 @@ export default {
 
     const browser = await chromium.launch({ headless: true });
     const jobs = [];
+    let apiBase = '';
 
     try {
-    
+
       const page = await browser.newPage();
       await page.setExtraHTTPHeaders({
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -196,12 +209,23 @@ export default {
           url: jobUrl,
           company: entry.name,
           location: j.locationsText || '',
+          // Not part of the Job contract (see _types.js) -- carries the raw
+          // path through to the detail-fetch loop below, which deletes it.
+          _externalPath: j.externalPath || '',
         });
       }
 
       // Handle pagination — Workday returns total count and offset.
       const total = data?.total ?? postings.length;
       const limit = resolveWorkdayLimit(data);
+
+      // Computed unconditionally (not just when paginating) -- the
+      // detail-fetch loop below needs it regardless of whether this board
+      // fit on a single page.
+      const { origin, pathname } = new URL(baseUrl);
+      const tenant = origin.match(/https?:\/\/([^.]+)\./)?.[1] ?? '';
+      const board = pathname.replace(/^\/en-[A-Z]{2}\//, '/').replace(/^\//, '');
+      apiBase = `${origin}/wday/cxs/${tenant}/${board}/jobs`;
 
       if (total > limit) {
         // Fire subsequent page requests directly through the shared HTTP
@@ -211,11 +235,6 @@ export default {
         // instead of blowing the parent's subprocess timeout and losing
         // everything), and an inter-page delay for politeness toward the
         // target site.
-        const { origin, pathname } = new URL(baseUrl);
-        const tenant = origin.match(/https?:\/\/([^.]+)\./)?.[1] ?? '';
-        const board = pathname.replace(/^\/en-[A-Z]{2}\//, '/').replace(/^\//, '');
-        const apiBase = `${origin}/wday/cxs/${tenant}/${board}/jobs`;
-
         const morePages = await paginateWorkdayJobs(ctx, apiBase, baseUrl, entry.name, limit, total, { deadline });
         jobs.push(...morePages);
       }
@@ -223,6 +242,39 @@ export default {
       await browser.close();
     }
 
+    // B36: description detail-fetches are plain JSON requests through ctx
+    // -- no Playwright needed, so these run after the browser has already
+    // closed. Shares `deadline` with the pagination above rather than a
+    // second budget, so the two together can't exceed
+    // WORKDAY_TIME_BUDGET_MS.
+    for (const job of jobs.slice(0, WORKDAY_DETAIL_FETCH_CAP)) {
+      if (Date.now() >= deadline) break;
+      if (!job._externalPath || !apiBase) continue;
+      job.description = await fetchJobDescription(ctx, apiBase, job._externalPath);
+      delete job._externalPath;
+    }
+
     return jobs;
   },
 };
+
+/**
+ * Fetches one posting's JSON detail via the same `/wday/cxs/.../jobs`
+ * endpoint family (swap the trailing `/jobs` for the posting's own
+ * `externalPath`, which already starts with `/job/...`) and extracts its
+ * description. Best-effort: any failure returns "" rather than throwing, so
+ * one bad posting doesn't drop the whole board's results.
+ * @param {import('./_types.js').Context} ctx
+ * @param {string} apiBase
+ * @param {string} externalPath
+ * @returns {Promise<string>}
+ */
+export async function fetchJobDescription(ctx, apiBase, externalPath) {
+  try {
+    const detailUrl = apiBase.replace(/\/jobs$/, '') + externalPath;
+    const detail = await ctx.fetchJson(detailUrl);
+    return detail?.jobPostingInfo?.jobDescription || '';
+  } catch {
+    return '';
+  }
+}

@@ -153,7 +153,8 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B24 · B28 · B29 · B30 ·
+> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B24 · B26 · B27 · B28 ·
+> B29 · B30 · B36 ·
 > B37 · B38 · B39 · B43 ·
 > B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
 > B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
@@ -747,6 +748,137 @@ re-dispatched, since there are no phases left to receive them.
 > against the real, backfilled `.meta` with zero staleness warnings.
 >
 > Full suite: 1218 passed (was 1187 after session 1), 0 failed.
+>
+> **2026-08-06 — Session 3 of `fix-pass-plan.md` (B26, B27, B36).**
+> Board-scanner hygiene cluster — all three fixes land inside the same
+> provider-request loop, so they were worked together as planned. B36 turned
+> out to be materially larger than its "small" sizing: two of its six
+> providers (SmartRecruiters, Workday) only expose a real description via a
+> *second*, per-posting API call, not the list call the rest of the fix
+> touches. Asked Morgan whether to do that properly now or defer it as its
+> own item; she chose "full fix now." That decision is the reason this
+> session touches `scripts/scan_ats.py`, which isn't in this session's
+> stated file list — `scan_ats.py` already imports and reuses
+> `scan_boards.py`'s other helpers (`_run_node_provider`,
+> `_passes_title_filter`, `_html_to_text`, `_fetch_posting_text` — see its
+> own module docstring), and two of B26/B36's fixes are only real if they
+> reach the callers that actually hit `websearch.mjs` more than once
+> sequentially or the four ATS-only providers, both of which live in
+> `scan_ats.py`, not `scan_boards.py`. Noted here since it's a real
+> deviation from the plan's file list, made deliberately rather than missed.
+>
+> **B26 (no rate limiting, retry, backoff, or honest identity).**
+> `_http.mjs` is now the policy layer the item asked for, not just a fetch
+> wrapper: `fetchWithTimeout` retries 429/5xx/network errors (not
+> `AbortError` — a timeout already spent its budget once, and every call
+> here runs inside `run_provider.mjs`'s own 30s subprocess timeout, so
+> doubling a slow request's wait does more harm than good) with exponential
+> backoff, honoring a real `Retry-After` header over a guessed delay.
+> `makeHttpCtx(providerId)` now takes the calling provider's id and applies
+> a `PROVIDER_HTTP_CONFIG` entry (currently `hackernews`, `smartrecruiters`,
+> `workday`, `workable`) as that ctx's default `timeoutMs`/`minGapMs` — a
+> `minGapMs` provider's calls through that ctx fully serialize (one in
+> flight at a time, at least that far apart) via a closure-local queue,
+> which is what turns `hackernews.mjs`'s 60-simultaneous `Promise.all` into
+> 60 paced calls with **zero changes to `hackernews.mjs` itself** — the
+> pacing lives entirely in the shared layer. Default UA is now
+> `resume-builder/1.0 (+https://github.com/moreganooooo/resume-builder)` —
+> this repo, this version, no browser-impersonation prefix.
+> `websearch.mjs` was the one provider bypassing `ctx` entirely (a raw
+> `fetch()` call, confirmed by grepping every provider for bare `fetch(` —
+> the only hit outside `_http.mjs` itself); routed through `ctx.fetchJson`
+> now, and its own dead module-level rate-limit queue is deleted (it was
+> genuinely inert: `run_provider.mjs` spawns one fresh Node process per
+> call, so the queue never held more than one item across the entire
+> subprocess boundary, and it was tuned to 100ms — 10× over the free tier's
+> real 1 req/sec). Real pacing for that Brave call now lives where it
+> actually needs to: `scan_ats.py`'s `search_queries.yml` sweep loop is the
+> only place this repo calls `websearch.mjs` more than once in the same
+> process, so it now measures wall-clock time since the *previous* call's
+> start (not a blind fixed sleep) and only sleeps the remaining gap.
+>
+> **B27 (scan failures indistinguishable from "no jobs today").** Scoped to
+> the Node-side half explicitly named in this session's file list — the
+> Python-side `_ScanWarningCollector`/last-resort-handler half and
+> `render_scan_report`'s "give it a place to put the reason" (H29) are
+> `scan.py`/`cli_art.py` render-layer work belonging to a later session, not
+> reopened here. `run_provider.mjs` now writes a JSON error envelope —
+> `{"error":{"kind":"auth"|"quota"|"network"|"config","message":"…"}}` — to
+> stdout on every failure path (module load, bad `entry_json`, `fetch()`
+> throwing or returning a non-array), classified by a new `classifyError()`
+> (HTTP status wins when present; falls back to message-text pattern
+> matching; unrecognized errors are conservatively `"config"` rather than a
+> guessed `"network"`, so a real bug doesn't get misread as a transient
+> blip). `scan_boards.py._run_node_provider` parses that envelope for a
+> specific `kind`/`reason` on a non-zero exit, falling back to the old
+> stderr-last-line heuristic when stdout isn't that shape (e.g. the `node`
+> binary itself is missing). `cli_art.py`'s `_WARNING_KIND_LABELS` gained
+> entries for the four new kinds plus B36's `thin_description` — the
+> dict already had a `.get(kind, kind)` fallback, so this was optional
+> polish, not a requirement, but cheap and consistent with the existing
+> two entries.
+>
+> **B36 (6 of 24 providers never emit a description; highest-value
+> company-direct postings arrive with no body text).** `_types.js`'s `Job`
+> typedef now documents `description`/`posted_at` as optional-but-expected,
+> explaining why (this repo's tailor stage needs real JD text up front,
+> unlike career-ops's own downstream). Per-provider, verified against real
+> API docs/behavior before writing code rather than guessed:
+> **websearch.mjs** — the Brave snippet was already being computed for
+> `extractLocation()` and then discarded; now also mapped into
+> `description`. **recruitee.mjs** — confirmed via Recruitee's own API
+> reference that `/api/offers/` already returns `description`/
+> `requirements` (HTML) on the same list call; mapped directly, no second
+> fetch needed. **workable.mjs** — the per-posting `[View](...).md` link
+> was already being computed and then stripped down to the public URL;
+> kept as `_detailUrl` and fetched (it's already plain markdown, no HTML
+> extraction needed), bounded to the first 40 postings / 15s. **
+> smartrecruiters.mjs** — confirmed via SmartRecruiters' own API docs that
+> the list endpoint is summary-only; description lives behind
+> `GET /postings/{id}`'s `jobAd.sections.{companyDescription,
+> jobDescription,qualifications,additionalInformation}.text`, joined and
+> fetched the same bounded way. **workday.mjs** — confirmed the detail
+> pattern (`.../cxs/{tenant}/{site}/job/{externalPath}` →
+> `jobPostingInfo.jobDescription`) against a real reference implementation;
+> this is also the actual root-cause fix, not just an enhancement — a
+> Workday posting's public page is a JS SPA (the reason this provider
+> drives Playwright at all), so `scan_boards.py`'s plain-GET page-fetch
+> fallback could never have scraped one anyway. Detail-fetches run after
+> `browser.close()` (plain JSON over `ctx`, no Playwright needed) and share
+> the existing `WORKDAY_TIME_BUDGET_MS` deadline with pagination rather
+> than adding a second budget. All three detail-fetch providers are
+> best-effort per posting (a failure returns `""`, never throws — one bad
+> posting doesn't drop the whole board) and bounded by both a count cap
+> (40) and a wall-clock budget, the same graceful-degradation shape B19
+> already established for Workday's own pagination. **Safety net:** a new
+> `scan_boards._flag_thin_description()`, shared by `fetch_board_jobs()`
+> and (via the existing `scan_ats.py` → `scan_boards` reuse pattern)
+> `_normalize_raw_job()`, sets a `_scan` metadata key (per CLAUDE.md's
+> underscore convention, same family as `_liveness`/`_evaluation`) and
+> raises a `_scan_warning` (kind `thin_description`) on any posting under
+> 200 chars — catches whatever's still thin after the provider-level fixes
+> above (a detail-fetch failing, a source with genuinely nothing) instead
+> of it silently shipping unflagged.
+>
+> **Not run against a live scan** — this session's board-scanner changes
+> touch external APIs (Brave, SmartRecruiters, Workday, Workable,
+> Recruitee) this checkout has no live credentials/tracked-company data to
+> exercise safely, and a real scan run wasn't part of this session's scope.
+> Every new code path is unit-tested with a mocked `ctx`/`fetch` instead
+> (40 new `node:test` cases across 6 files — `_http.test.mjs`,
+> `run_provider.test.mjs`, and one new test file per touched provider —
+> plus 13 new Python tests), and every detail-fetch degrades safely to the
+> pre-existing behavior (empty description → Python-side fallback) on any
+> failure, so a wrong assumption about an undocumented API shape fails
+> quietly rather than breaking a scan. **Flagging honestly:** this is
+> reviewed and tested in isolation, not verified end-to-end the way
+> `resume sample` verified Sessions 1 and 2 — there's no equivalent
+> `resume sample` fixture for the board-scanner path.
+>
+> Full suite: 1231 passed (was 1218 after session 2), 0 failed — 13 new
+> Python tests + 40 new `node:test` cases (previously 8, all in
+> `workday.test.mjs`; this repo had no other `*.test.mjs` file before this
+> session).
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

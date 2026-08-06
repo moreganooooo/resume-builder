@@ -12,6 +12,17 @@ const SR_CAREERS_HOSTS = new Set(['careers.smartrecruiters.com', 'jobs.smartrecr
 const SR_PAGE_SIZE = 100;
 const SR_MAX_PAGES = 50;  // safety cap (5000 postings @ 100/page)
 
+// B36 (docs/review/phase-9-backlog.md): the /postings listing endpoint above
+// never carries a description -- only GET /postings/{id} does. Detail-fetch
+// is bounded by both count and wall-clock time so a large board (up to 5000
+// postings from the cap above) still returns promptly, with only its
+// highest-page-rank postings getting a real description and the rest
+// falling back to scan_boards.py's page-fetch fallback, instead of either
+// starving the pagination above or blowing run_provider.mjs's parent
+// subprocess timeout (scan_boards.NODE_TIMEOUT_SECONDS = 30s).
+const SR_DETAIL_FETCH_CAP = 40;
+const SR_DETAIL_TIME_BUDGET_MS = 15_000;
+
 function assertSmartRecruitersUrl(url) {
   let parsed;
   try {
@@ -73,9 +84,55 @@ export default {
       all.push(...parsed);
       if (parsed.length < SR_PAGE_SIZE) break;  // last page (short)
     }
+
+    const deadline = Date.now() + SR_DETAIL_TIME_BUDGET_MS;
+    for (const job of all.slice(0, SR_DETAIL_FETCH_CAP)) {
+      if (Date.now() >= deadline) break;
+      if (!job._postingId) continue;
+      job.description = await fetchPostingDescription(ctx, slug, job._postingId);
+      delete job._postingId;
+    }
+
     return all;
   },
 };
+
+/**
+ * Fetches one posting's detail and extracts its description. Best-effort:
+ * any failure (network, 404, unexpected shape) returns "" rather than
+ * throwing, so one bad posting doesn't drop the whole board's results --
+ * scan_boards.py's page-fetch fallback still gets a chance at that posting.
+ * @param {import('./_types.js').Context} ctx
+ * @param {string} slug
+ * @param {string} postingId
+ * @returns {Promise<string>}
+ */
+async function fetchPostingDescription(ctx, slug, postingId) {
+  try {
+    const detail = await ctx.fetchJson(
+      `https://api.smartrecruiters.com/v1/companies/${slug}/postings/${postingId}`,
+      { redirect: 'error' },
+    );
+    return extractJobAdText(detail);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Extracts and joins the free-text sections of a SmartRecruiters
+ * GET /postings/{id} response. Exported for unit tests.
+ *
+ * @param {any} detail
+ * @returns {string}
+ */
+export function extractJobAdText(detail) {
+  const sections = detail?.jobAd?.sections || {};
+  return ['companyDescription', 'jobDescription', 'qualifications', 'additionalInformation']
+    .map((key) => sections[key]?.text)
+    .filter(Boolean)
+    .join('\n\n');
+}
 
 /**
  * Parse a SmartRecruiters /postings response. Exported for unit tests.
@@ -120,6 +177,9 @@ export function parseSmartRecruitersResponse(json, companyName) {
         url = `https://jobs.smartrecruiters.com/${companySlug}/${j.id}-${slugified}`;
       }
     }
-    return { title: j.name || '', url, location, company: companyName };
+    // _postingId is not part of the Job contract (see _types.js) -- carries
+    // the id through to fetch()'s detail-fetch loop above, which deletes it
+    // before returning.
+    return { title: j.name || '', url, location, company: companyName, _postingId: j.id || null };
   });
 }
