@@ -336,6 +336,62 @@ def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     return violations
 
 
+def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules: dict) -> dict:
+    """Deterministic JD-keyword coverage check (B18, phase-9-backlog.md).
+    Neither half of this existed before: ats_match.yaml supplied weights
+    and thresholds with no extraction/matching logic behind them, and
+    extract_keywords.md's Step-1 output (jd_keywords, already computed
+    before the builder ever runs) was never routed anywhere to be checked
+    against the finished document. This is the matching logic, using
+    ats_match.yaml's own threshold bands to report the result.
+
+    Exact-match only: a keyword's phrase found verbatim (case-insensitive,
+    word-bounded) anywhere in the resume text. No semantic/partial
+    matching is attempted -- that would need its own LLM call, and is an
+    honest limitation, not an oversight.
+
+    Returns a report dict, never a pass/fail violation. A missing keyword
+    the candidate genuinely doesn't have is not something the pipeline
+    should invent to close the gap, so this is surfaced for a human to
+    see, not auto-corrected the way validate()'s violations are."""
+    haystack = " ".join([
+        _strip_html(resume_data.get("SUMMARY_TEXT", "")),
+        _strip_html(resume_data.get("WHY_TEXT", "")),
+        " ".join(resume_data.get("SKILLS", [])),
+        " ".join(_all_bullets(resume_data)),
+        " ".join(job.get("title", "") for job in resume_data.get("EXPERIENCE", [])),
+    ]).lower()
+
+    all_keywords = (
+        list(jd_keywords.get("tools", []))
+        + list(jd_keywords.get("hard_skills", []))
+        + list(jd_keywords.get("core_functions", []))
+    )
+    matched, missing = [], []
+    for kw in all_keywords:
+        if not kw:
+            continue
+        if re.search(rf"\b{re.escape(kw.lower())}\b", haystack):
+            matched.append(kw)
+        else:
+            missing.append(kw)
+
+    total = len(matched) + len(missing)
+    score = round(100 * len(matched) / total) if total else 100
+
+    thresholds = ats_match_rules.get("thresholds", {}) or {}
+    if score >= thresholds.get("excellent_match", 85):
+        band = "excellent_match"
+    elif score >= thresholds.get("good_match", 70):
+        band = "good_match"
+    elif score >= thresholds.get("weak_match", 50):
+        band = "weak_match"
+    else:
+        band = "poor_match"
+
+    return {"score": score, "band": band, "matched": matched, "missing": missing}
+
+
 def validate(resume_data: dict, style_rules: dict, role_roster: list[str] = None) -> list[str]:
     """role_roster is optional so callers that legitimately validate a partial
     document (polish.py's single-section edits) aren't forced to supply one;

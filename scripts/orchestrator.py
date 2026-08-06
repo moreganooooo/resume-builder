@@ -971,6 +971,32 @@ class ResumeCritiqueSchema(BaseModel):
         "that read as competent but generic -- interchangeable with other "
         "candidates' resumes."
     ))
+    # Step 1 (professional_identity_score.yaml) -- see B49/B50 in
+    # phase-9-backlog.md: these outputs were named by critique_resume.md's
+    # evaluation sequence but had no schema field to return them in, so
+    # steps 1-6 were being silently discarded at the schema boundary.
+    primary_identity:        str       = Field(description="Step 1: the detected primary professional identity/archetype.")
+    secondary_identity:      str       = Field(description="Step 1: the detected secondary identity, if any. Empty string if none.")
+    tertiary_identity:       str       = Field(description="Step 1: the detected tertiary identity, if any. Empty string if none.")
+    competing_narratives:    List[str] = Field(description="Step 1: any competing/conflicting identity narratives found. Empty if none.")
+    unsupported_positioning: List[str] = Field(description="Step 1: any positioning claims not supported by the resume content. Empty if none.")
+    # Step 2 (resume_cohesion_score.yaml)
+    recruiter_takeaway:      str       = Field(description="Step 2: one-sentence recruiter takeaway from the cohesion check.")
+    strongest_alignment:     str       = Field(description="Step 2: name of the strongest-passing alignment_check.")
+    weakest_alignment:       str       = Field(description="Step 2: name of the weakest-passing (or failing) alignment_check.")
+    # Step 5 (skills_scoring.yaml)
+    ungrouped_skills:        List[str] = Field(description="Step 5: skills present but not cleanly grouped under a category. Empty if none.")
+    unsupported_skills:      List[str] = Field(description="Step 5: skills listed with no evidence elsewhere in the resume. Empty if none.")
+    archetype_mismatch:      bool      = Field(description="Step 5: True if the skills grouping/ordering doesn't match the style_rules_archetype from Step 1.")
+    # B51: every reject_if.score_below / pass_threshold / hard_failures trip
+    # across every attached rubric, so a resume that fails a rubric's own
+    # stated bar has a channel to say so instead of shipping silently.
+    hard_failures_triggered: List[str] = Field(description=(
+        "Every reject_if.score_below, pass_threshold, or hard_failures rule "
+        "(from any attached scoring/rules file) that this resume actually "
+        "trips, each as '<rubric file>: <specific reason>'. Empty list if "
+        "the resume clears every attached rubric's stated bar."
+    ))
 
 class CertItem(BaseModel):
     title: str = Field(description="Full certification or training name.")
@@ -2859,12 +2885,43 @@ class ResumeEngine:
             resume_data["_critique"] = critique_data
         else:
             critique_prompt = self.load_prompt("critique_resume.md")
-            summary_score_rules    = json.dumps(self.load_yaml(self.scoring_dir, "summary_score.yaml"))
-            top_third_score_rules  = json.dumps(self.load_yaml(self.scoring_dir, "top_third_score.yaml"))
+            # B49 (phase-9-backlog.md): critique_resume.md's "Load and Apply"
+            # list names 18 files; only summary_score.yaml/top_third_score.yaml
+            # were ever attached, so its own evaluation Steps 1-6 had no
+            # rubric to score against. `static_prefix` (already built above
+            # for the bullet audit loop) covers item 1 -- profile.yml,
+            # trimmed -- plus voice-anchors.md as a bonus. The remaining 16
+            # named files are attached raw below, not hand-curated per file
+            # the way audit_and_refine_bullets curates its rules bundle:
+            # this call fires once per resume build, not once per bullet, so
+            # the extra ~80KB doesn't multiply the way a per-bullet cost would.
+            rubric_files = [
+                (self.rules_dir,   "style_rules.yaml",                 "STYLE RULES"),
+                (self.scoring_dir, "professional_identity_score.yaml", "PROFESSIONAL IDENTITY SCORING RUBRIC"),
+                (self.scoring_dir, "resume_cohesion_score.yaml",       "RESUME COHESION SCORING RUBRIC"),
+                (self.scoring_dir, "believability.yaml",               "BELIEVABILITY SCORING RUBRIC"),
+                (self.scoring_dir, "experience_structure_score.yaml",  "EXPERIENCE STRUCTURE SCORING RUBRIC"),
+                (self.scoring_dir, "manager_test.yaml",                "MANAGER TEST SCORING RUBRIC"),
+                (self.scoring_dir, "skills_scoring.yaml",              "SKILLS SCORING RUBRIC"),
+                (self.scoring_dir, "role_dna.yaml",                    "ROLE DNA SCORING RUBRIC"),
+                (self.scoring_dir, "ats_match.yaml",                   "ATS MATCH SCORING RUBRIC"),
+                (self.scoring_dir, "ai_risk.yaml",                     "AI RISK SCORING RUBRIC"),
+                (self.scoring_dir, "evidence_alignment.yaml",          "EVIDENCE ALIGNMENT SCORING RUBRIC"),
+                (self.scoring_dir, "summary_patterns.yaml",            "SUMMARY PATTERNS SCORING RUBRIC"),
+                (self.scoring_dir, "certifications_score.yaml",        "CERTIFICATIONS SCORING RUBRIC"),
+                (self.scoring_dir, "recruiter_score.yaml",             "RECRUITER SCORE SCORING RUBRIC"),
+                (self.scoring_dir, "specificity.yaml",                 "SPECIFICITY SCORING RUBRIC"),
+                (self.scoring_dir, "summary_score.yaml",               "SUMMARY SCORING RUBRIC"),
+                (self.scoring_dir, "top_third_score.yaml",             "TOP-THIRD-OF-PAGE-ONE SCORING RUBRIC"),
+            ]
+            rubric_blocks = "".join(
+                f"\n\n{label}:\n{json.dumps(self.load_yaml(dir_path, filename))}"
+                for dir_path, filename, label in rubric_files
+            )
             critique_system = (
                 f"{critique_prompt}"
-                f"\n\nSUMMARY SCORING RUBRIC:\n{summary_score_rules}"
-                f"\n\nTOP-THIRD-OF-PAGE-ONE SCORING RUBRIC:\n{top_third_score_rules}"
+                f"\n\n=== CANDIDATE PROFILE & VOICE (from knowledge base) ===\n{static_prefix}"
+                f"{rubric_blocks}"
             )
             critique_contents = (
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
@@ -2879,12 +2936,35 @@ class ResumeEngine:
             )
             if critique_text:
                 critique_data = GeminiClient.parse_json(critique_text)
+
+                # B51 (phase-9-backlog.md): fold any rubric hard-failure/
+                # threshold trip into recommendations so it re-enters the
+                # pipeline through the same apply-and-validate loop Step 5.5
+                # already runs on every other recommendation. Previously
+                # only `recommendations` and `distinctive_moments` re-entered
+                # the pipeline -- a resume tripping a rubric's own stated bar
+                # shipped unchanged.
+                hard_failures = critique_data.get("hard_failures_triggered", []) or []
+                if hard_failures:
+                    critique_data["recommendations"] = list(critique_data.get("recommendations", []) or []) + [
+                        f"Fix rubric hard failure -- {hf}" for hf in hard_failures
+                    ]
+
                 print(f"  Holistic critique scores:")
                 print(f"    summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
                 print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
                 print(f"    top_third         : {critique_data.get('top_third_score',         '?')}")
                 print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
+                identity_line = critique_data.get('primary_identity', '?')
+                if critique_data.get('secondary_identity'):
+                    identity_line += f" / {critique_data['secondary_identity']}"
+                print(f"    identity          : {identity_line}")
                 print()
+                if hard_failures:
+                    print(f"  {theme.colorize_icon_ansi('error')} Hard rubric failures (added to recommendations):")
+                    for hf in hard_failures:
+                        print(f"    - {hf}")
+                    print()
                 flags = critique_data.get("flags", [])
                 if flags:
                     print("  Flags:")
@@ -3197,6 +3277,18 @@ class ResumeEngine:
                 print(f"    - {w}")
         else:
             print(f"  {theme.colorize_icon_ansi('success')} PDF text-layer check: 0 issues.")
+
+        # B18 (phase-9-backlog.md): reported before the pipeline claims
+        # success, per the backlog item's own wording -- not gated. See
+        # validate_resume.check_keyword_coverage()'s docstring for why a
+        # missing keyword doesn't block the build.
+        ats_match_rules = self.load_yaml(self.scoring_dir, "ats_match.yaml")
+        coverage = validate_resume.check_keyword_coverage(resume_data, jd_keywords, ats_match_rules)
+        coverage_icon = 'success' if coverage["band"] in ("excellent_match", "good_match") else 'warning'
+        print(f"  {theme.colorize_icon_ansi(coverage_icon)} JD-keyword coverage: {coverage['score']}% "
+              f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})")
+        if coverage["missing"]:
+            print(f"    Missing: {', '.join(coverage['missing'])}")
 
         # Belt-and-suspenders on top of the fatal check above: don't claim
         # success or record output paths unless the PDF is actually on disk
