@@ -296,11 +296,25 @@ def elect_representative(group: pd.DataFrame, bullet_col: str) -> int:
     if any member of the cluster has one, otherwise the longest bullet text
     after stripping leading `- ` or `* `.
     Returns the index of the elected row.
+
+    Ties break on normalized bullet text, not on row order. This used to be a
+    bare idxmax(), which returns the *first* maximum -- and since
+    accuracy_score is a 0-100 integer over near-duplicate cluster members,
+    ties are the common case, so "first" meant raw-CSV row order. Appending an
+    unrelated row could silently change which bullet reaches the resume. It is
+    the same positional instability _cluster_content_hash() solves one
+    function above; the fix simply hadn't been carried down.
     """
     if "accuracy_score" in group.columns and group["accuracy_score"].notna().any():
-        return group["accuracy_score"].idxmax()
-    lengths = group[bullet_col].str.strip().str.lstrip("-* ").str.len()
-    return lengths.idxmax()
+        scores = group["accuracy_score"]
+        candidates = group.index[scores == scores.max()]
+    else:
+        lengths = group[bullet_col].str.strip().str.lstrip("-* ").str.len()
+        candidates = group.index[lengths == lengths.max()]
+
+    if len(candidates) == 1:
+        return candidates[0]
+    return min(candidates, key=lambda idx: normalize_bullet_text(group.at[idx, bullet_col]))
 
 
 # ---------------------------------------------------------------------------
