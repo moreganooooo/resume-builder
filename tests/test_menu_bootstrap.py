@@ -53,7 +53,12 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
     def tearDown(self):
         import shutil
         import profile_paths
-        shutil.rmtree(os.path.join(profile_paths.PROFILES_DIR, self.test_profile_name), ignore_errors=True)
+        # Iterate sync_roots() rather than removing profiles/<name>/ alone.
+        # create_new_profile() seeds all four, so removing one left
+        # jds/, output/ and data/ test_guest_trigger_profile_xyz/ orphaned in
+        # the repo -- each with a stray .stignore -- since 2026-07-22.
+        for _label, path in profile_paths.sync_roots(self.test_profile_name):
+            shutil.rmtree(path, ignore_errors=True)
         for var, orig in (("RESUME_PROFILE", self._orig_profile), ("RESUME_GUEST_MODE", self._orig_guest)):
             if orig is None:
                 os.environ.pop(var, None)
@@ -85,6 +90,12 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         self.assertEqual(os.environ.get("RESUME_PROFILE"), self.test_profile_name)
         import profile_paths
         self.assertTrue(os.path.isdir(profile_paths.kb_dir(self.test_profile_name)))
+        # All four sync roots, not just profiles/. Nothing verified this
+        # before, which is the same gap that let the teardown leak three of
+        # them: if create_new_profile() ever stopped seeding one, no test
+        # would notice and that data would silently fall out of Syncthing.
+        for label, path in profile_paths.sync_roots(self.test_profile_name):
+            self.assertTrue(os.path.isdir(path), f"sync root {label!r} was not created: {path}")
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.bootstrap_bullet_bank.create_new_profile")

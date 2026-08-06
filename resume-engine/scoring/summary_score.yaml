@@ -96,10 +96,9 @@ scoring_rules:
       - filler_language
 
 flags:
-
-  generic_summary
-  buzzword_heavy
-  unsupported_claim
-  role_mismatch
-  too_long
-  low_specificity
+  - generic_summary
+  - buzzword_heavy
+  - unsupported_claim
+  - role_mismatch
+  - too_long
+  - low_specificity

@@ -509,9 +509,8 @@ excellent_characteristics:
   - archetype_aligned
 
 flags:
-
-  ungrouped_skills
-  unsupported_skills
-  excessive_keywords
-  poor_organization
-  archetype_mismatch
+  - ungrouped_skills
+  - unsupported_skills
+  - excessive_keywords
+  - poor_organization
+  - archetype_mismatch

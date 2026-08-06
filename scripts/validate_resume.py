@@ -281,7 +281,40 @@ def _check_experience_completeness(resume_data: dict) -> list[str]:
     return violations
 
 
-def validate(resume_data: dict, style_rules: dict) -> list[str]:
+def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
+    """Every company the profile declares must have an EXPERIENCE entry.
+
+    Nothing enforced this before, at any layer, and three employers -- Element
+    8 / Strategy LLC, VML and Callahan Creek, the entire page-2 work history --
+    were silently absent from the shipped resume. The roster reached the model
+    as prose only; the one clause that said "every company must appear" lived
+    in a schema `description`, and sanitize_schema() strips descriptions before
+    they reach the API, so it was never actually sent. Meanwhile
+    _check_experience_completeness() validates fields on entries that *are*
+    present and structurally cannot see an absent company.
+
+    Matching is on normalized company name so casing and surrounding
+    whitespace don't produce a false violation. Situational roles are excluded
+    by the caller: they're conditional by design and their absence is correct.
+    """
+    if not role_roster:
+        return []
+
+    present = {
+        str(job.get("company", "")).strip().casefold()
+        for job in resume_data.get("EXPERIENCE", [])
+    }
+    return [
+        f"Role roster: {company!r} is declared in the profile but has no EXPERIENCE entry"
+        for company in role_roster
+        if str(company).strip().casefold() not in present
+    ]
+
+
+def validate(resume_data: dict, style_rules: dict, role_roster: list[str] = None) -> list[str]:
+    """role_roster is optional so callers that legitimately validate a partial
+    document (polish.py's single-section edits) aren't forced to supply one;
+    omitting it skips the roster check rather than failing it."""
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
@@ -293,4 +326,5 @@ def validate(resume_data: dict, style_rules: dict) -> list[str]:
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
+    violations.extend(_check_role_roster(resume_data, role_roster or []))
     return violations

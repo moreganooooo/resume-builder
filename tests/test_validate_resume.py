@@ -239,5 +239,68 @@ class TestValidateResume(unittest.TestCase):
         self.assertTrue(any("results-driven" in v for v in violations2))
 
 
+class TestRoleRoster(unittest.TestCase):
+    """B60: profile.yml declared six roles and the shipped resume contained
+    three -- Element 8 / Strategy LLC, VML and Callahan Creek, the whole
+    page-2 work history, silently absent. Nothing at any layer required one
+    EXPERIENCE entry per declared company: the rule lived only in a schema
+    `description`, which sanitize_schema() strips before the API call, and
+    _check_experience_completeness() can only see entries that are present."""
+
+    def _resume(self, companies):
+        return {"EXPERIENCE": [
+            {"title": "Some Title", "company": c, "period": "2020-2024",
+             "achievements": ["Did a thing."]}
+            for c in companies
+        ]}
+
+    def test_missing_company_is_a_violation_that_names_it(self):
+        violations = validate_resume._check_role_roster(
+            self._resume(["Acme", "Globex"]), ["Acme", "Globex", "Callahan Creek"],
+        )
+        self.assertEqual(len(violations), 1)
+        self.assertIn("Callahan Creek", violations[0])
+
+    def test_every_missing_company_is_reported_not_just_the_first(self):
+        violations = validate_resume._check_role_roster(
+            self._resume(["Acme"]), ["Acme", "VML", "Callahan Creek", "Element 8"],
+        )
+        self.assertEqual(len(violations), 3)
+
+    def test_complete_roster_produces_no_violation(self):
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["Acme", "Globex"]), ["Acme", "Globex"],
+            ), [],
+        )
+
+    def test_matching_ignores_case_and_surrounding_whitespace(self):
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["  acme  ", "GLOBEX"]), ["Acme", "Globex"],
+            ), [],
+        )
+
+    def test_extra_companies_beyond_the_roster_are_allowed(self):
+        # A situational role that fired is a legitimate extra entry.
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["Acme", "Situational Co"]), ["Acme"],
+            ), [],
+        )
+
+    def test_empty_roster_skips_the_check(self):
+        self.assertEqual(validate_resume._check_role_roster(self._resume([]), []), [])
+
+    def test_validate_omitting_the_roster_does_not_raise_or_flag(self):
+        # polish.py validates partial documents and supplies no roster.
+        violations = validate_resume.validate(self._resume(["Acme"]), {})
+        self.assertFalse([v for v in violations if "Role roster" in v])
+
+    def test_validate_threads_the_roster_through(self):
+        violations = validate_resume.validate(self._resume(["Acme"]), {}, ["Acme", "VML"])
+        self.assertTrue(any("VML" in v for v in violations))
+
+
 if __name__ == "__main__":
     unittest.main()
