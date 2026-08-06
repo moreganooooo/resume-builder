@@ -103,32 +103,39 @@ def _all_bullets(resume_data: dict) -> list[str]:
     return bullets
 
 
-def validate_pdf_text(pdf_path: str, resume_data: dict) -> list[str]:
+def validate_pdf_text(pdf_path: str, resume_data: dict) -> tuple[list[str], list[str]]:
     """
     Extracts text from the rendered PDF and checks that every bullet and skills
     line from the source resume JSON survived intact in the PDF's text layer.
-    Returns a list of warning strings (empty if nothing looks wrong).
+
+    Returns (fatal, advisories) -- two categorically different findings down
+    one channel used to collapse into a single warnings list, which let a
+    missing/unparseable PDF read as just another soft note. `fatal` is
+    non-empty only when the PDF itself couldn't be read at all (missing file,
+    corrupt output); callers must treat that as a build failure, not print
+    success, and not move the JD along. `advisories` are the soft notes
+    (ligatures, a line not found intact) that are fine to report and proceed.
     """
     try:
         extracted_raw = extract_text(pdf_path)
     except Exception as e:
-        return [f"Could not parse generated PDF for verification: {e}"]
+        return [f"Could not parse generated PDF for verification: {e}"], []
 
     extracted = _normalize(extracted_raw)
 
     # Ligature findings come first: they name a real, deterministic defect,
     # and burying them under advisory "not found intact" lines is what made
     # them unreadable in the first place.
-    warnings = _check_ligatures(extracted_raw)
+    advisories = _check_ligatures(extracted_raw)
     for bullet in _all_bullets(resume_data):
         if _normalize(bullet) not in extracted:
-            warnings.append(f"Bullet not found intact in PDF text layer: {bullet[:80]}")
+            advisories.append(f"Bullet not found intact in PDF text layer: {bullet[:80]}")
 
     for skill_line in resume_data.get("SKILLS", []) or []:
         if _normalize(skill_line) not in extracted:
-            warnings.append(f"Skills line not found intact in PDF text layer: {skill_line[:80]}")
+            advisories.append(f"Skills line not found intact in PDF text layer: {skill_line[:80]}")
 
-    return warnings
+    return [], advisories
 
 
 def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict) -> list[str]:
