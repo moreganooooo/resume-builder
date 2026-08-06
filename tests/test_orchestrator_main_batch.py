@@ -111,6 +111,51 @@ class TestMainBatchMode(unittest.TestCase):
     @patch("orchestrator.jd_manager.JDTracker")
     @patch("orchestrator.jd_manager.get_pending_jds")
     @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    def test_tracker_row_has_pdf_false_when_pdf_path_is_set_but_file_is_missing(
+        self, mock_build, mock_get_pending, mock_tracker_cls
+    ):
+        # B17: `has_pdf` used to be `bool(output_paths.get("pdf"))` -- the
+        # truthiness of a *path string*, which a real build always sets
+        # once it decides on an output filename, whether or not the file
+        # was ever written. "p.pdf" here is exactly that: a path that was
+        # never created. has_pdf must now actually stat the file.
+        mock_get_pending.return_value = [self.good_path]
+        mock_build.return_value = {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+
+        with patch.object(sys, "argv", ["orchestrator.py"]):
+            orchestrator.main()
+
+        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+            data_row = [line for line in f if line.startswith("| 1 |")][0]
+        self.assertIn("| ❌ |", data_row)
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch("orchestrator.jd_manager.get_pending_jds")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
+    def test_tracker_row_has_pdf_true_when_the_pdf_file_actually_exists(
+        self, mock_build, mock_get_pending, mock_tracker_cls
+    ):
+        # Non-regression counterpart: a real PDF on disk must still report
+        # has_pdf True, exactly as before this fix.
+        real_pdf_path = os.path.join(self.tmp_dir, "real.pdf")
+        with open(real_pdf_path, "wb") as f:
+            f.write(b"%PDF-1.4 fake but present\n")
+
+        mock_get_pending.return_value = [self.good_path]
+        mock_build.return_value = {
+            "_output_paths": {"json": "j.json", "html": "h.html", "pdf": real_pdf_path}
+        }
+
+        with patch.object(sys, "argv", ["orchestrator.py"]):
+            orchestrator.main()
+
+        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+            data_row = [line for line in f if line.startswith("| 1 |")][0]
+        self.assertIn("| ✅ |", data_row)
+
+    @patch("orchestrator.jd_manager.JDTracker")
+    @patch("orchestrator.jd_manager.get_pending_jds")
+    @patch.object(orchestrator.ResumeEngine, "build_tailored_resume")
     @patch("orchestrator.jd_manager.compute_job_key")
     def test_batch_mode_handles_compute_job_key_oserror(
         self, mock_compute_key, mock_build, mock_get_pending, mock_tracker_cls

@@ -3183,7 +3183,13 @@ class ResumeEngine:
         if fired_situational_roles:
             print(f"  {theme.colorize_icon_ansi('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}")
 
-        pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data)
+        pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data)
+        if pdf_fatal:
+            print(f"  {theme.colorize_icon_ansi('error')} PDF text-layer check could not verify the rendered file "
+                  f"-- treating this as a failed build, not a warning:")
+            for f in pdf_fatal:
+                print(f"    - {f}")
+            return {}
         if pdf_text_warnings:
             print(f"  {theme.colorize_icon_ansi('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
                   f"(what an ATS would actually parse from the file, not just the pre-render JSON):")
@@ -3191,6 +3197,14 @@ class ResumeEngine:
                 print(f"    - {w}")
         else:
             print(f"  {theme.colorize_icon_ansi('success')} PDF text-layer check: 0 issues.")
+
+        # Belt-and-suspenders on top of the fatal check above: don't claim
+        # success or record output paths unless the PDF is actually on disk
+        # (ResumeDesignSystem.md's guarantee -- the system must never claim a
+        # resume exists when generation failed).
+        if not os.path.exists(pdf_out):
+            print(f"  {theme.colorize_icon_ansi('error')} Pipeline did not complete -- expected PDF not found on disk: {pdf_out}")
+            return {}
 
         print(f"  {theme.colorize_icon_ansi('success')} Pipeline complete! PDF → {pdf_out}")
         jd_manager.delete_checkpoint(job_key)
@@ -3304,7 +3318,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             jd_manager.append_application_row(
                 company_name=company_name,
                 job_title=job_title,
-                has_pdf=bool(output_paths.get("pdf")),
+                has_pdf=os.path.exists(output_paths.get("pdf", "")),
                 source_url=source_url,
                 evaluation=evaluation,
             )

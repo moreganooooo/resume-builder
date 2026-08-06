@@ -153,8 +153,8 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B37 · B38 · B39 · B43 · B44 (partial — see below) · B45 ·
-> B47 · B48 · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+> B13 · B14 · B15 · B17 · B37 · B38 · B39 · B43 · B44 (partial — see below) ·
+> B45 · B47 · B48 · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
 >
 > **2026-08-06 — Tier 3, first 11 of 15 items, commit `67aa78b2`.** Worked the
 > hygiene/modernization tier in easiest-to-hardest order (deletions and config
@@ -392,9 +392,55 @@ re-dispatched, since there are no phases left to receive them.
 > read "Up to date" ahead of it). Full suite: 1178 passed (was 1165 after
 > B14), 0 failed -- 13 new tests, no regressions.
 >
-> **Next up, per §6:** B17, B19 (the rest of Tier 1). B24's page-2
-> layout work is now unblocked by B60, but re-run `resume sample` first,
-> since restoring the missing employers changes what page 2 contains.
+> **2026-08-06 — B17 ("Pipeline complete!" printed for a PDF that doesn't
+> exist).** Root cause per the doc: `validate_pdf_text()` collapsed a hard
+> "the PDF is missing/unparseable" failure and soft "line not found intact"
+> advisories into one warnings list, so a caller had no way to tell them
+> apart. It now returns `(fatal, advisories)` -- `fatal` non-empty only when
+> `extract_text()` itself couldn't read the file (the exact "Could not parse
+> generated PDF ... No such file or directory" case from the real captured
+> log). `build_tailored_resume()`'s call site returns `{}` immediately on a
+> non-empty `fatal`, before the "Pipeline complete!" print or the
+> `_output_paths` assignment. Belt-and-suspenders per the doc's own fix list:
+> the success print and `_output_paths` are now *also* gated on
+> `os.path.exists(pdf_out)` directly, independent of what
+> `validate_pdf_text()` reports. `run_pipeline()`'s tracker row -- previously
+> `has_pdf=bool(output_paths.get("pdf"))`, the truthiness of a path *string*,
+> always true once a build decides on a filename whether or not it wrote
+> anything -- now stats the file: `has_pdf=os.path.exists(output_paths.get("pdf", ""))`.
+> Scoped to the resume path only: `ResumeDesignSystem.md:57`'s guarantee
+> names "a resume" specifically, and the concrete harm chain (`run_pipeline`
+> moving a JD to `completed/`, logging `mark_completed`, appending a tracker
+> row) is wired only to `build_tailored_resume()` -- `build_tailored_coverletter()`
+> has the identical "success print not gated on the file" shape
+> (`validate_coverletter_pdf_text()` still returns one plain warnings list),
+> but it isn't called from `run_pipeline()` and nothing moves a JD or writes
+> a tracker row on its behalf, so it's outside this item's scope as filed.
+> Left as a known, undocumented-elsewhere gap for whoever picks up the
+> cover-letter side of this pattern.
+> **Proven, not just reviewed:** `tests/test_orchestrator_build_checkpoint.py`
+> adds `test_pdf_text_layer_fatal_is_not_reported_as_pipeline_success`
+> (mocks `validate_pdf_text.validate_pdf_text` to return the real captured
+> fatal message; confirms `build_tailored_resume()` returns `{}` and stdout
+> never contains "Pipeline complete!") and
+> `test_pdf_missing_on_disk_is_not_reported_as_pipeline_success` (text-layer
+> check reports clean, but `os.path.exists(pdf_out)` says the file isn't
+> there -- confirms the independent gate catches it too). The existing
+> `test_skips_keyword_extraction_and_mining_when_checkpointed` happy path now
+> also asserts "Pipeline complete!" prints and `_output_paths["pdf"]` is
+> truthy, confirming no regression. `tests/test_orchestrator_main_batch.py`
+> adds `test_tracker_row_has_pdf_false_when_pdf_path_is_set_but_file_is_missing`
+> (a set-but-nonexistent `"p.pdf"` path now writes `❌` to the tracker, not
+> `✅`) and `test_tracker_row_has_pdf_true_when_the_pdf_file_actually_exists`
+> (a real on-disk PDF still writes `✅`, no regression).
+> `tests/test_validate_pdf_text.py`'s resume-side test class is updated for
+> the new `(fatal, advisories)` return shape throughout; the cover-letter
+> test class is untouched, matching the scoping decision above. Full suite:
+> 1182 passed (was 1178 after B16), 0 failed -- 4 new tests, no regressions.
+>
+> **Next up, per §6:** B19 (the rest of Tier 1). B24's page-2 layout work
+> is now unblocked by B60, but re-run `resume sample` first, since restoring
+> the missing employers changes what page 2 contains.
 >
 > **2026-08-06 — B19 (`workday` provider discarding every job on every
 > run).** Root cause confirmed exactly as filed: `workday.mjs`'s pagination
