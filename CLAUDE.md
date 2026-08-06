@@ -13,6 +13,13 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   chromium`. `node_modules/` is not guaranteed to already exist — don't
   assume it's there just because `package.json` is committed; check
   before debugging a PDF-generation failure.
+- **Playwright is pinned to an exact `1.61.1`, not `^1.61.1` — do not
+  loosen it.** This machine runs macOS 12, and Playwright ≥1.62 dropped
+  macOS 12 support: `npx playwright install chromium` fails outright with
+  "Playwright does not support chromium on mac12", so every PDF render
+  dies at `chromium.launch()` with a missing-executable error. 1.61.1 is
+  the last release that both supports macOS 12 and pins Chromium 1228.
+  A caret would silently resolve to 1.62.x and break all rendering.
 - Bare `python3` on this machine may resolve to an unrelated stray venv —
   always activate `.venv/` first (see `.claude.local.md`).
 - The interactive menu's icons default to Nerd Font glyphs — if your
