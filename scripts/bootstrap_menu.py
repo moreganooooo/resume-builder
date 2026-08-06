@@ -21,6 +21,7 @@ import bootstrap_bullet_bank
 import bootstrap_profile
 import bullet_bank_menu
 import cli_art
+import theme
 
 
 def _phase0_status() -> tuple:
@@ -46,7 +47,18 @@ def _phase05_status() -> tuple:
     """(status, detail) for profile setup. cv.md is the last artifact
     run_profile_setup() writes, so its absence means an interrupted run
     even if profile.yml made it to disk -- mirrors bullet_bank_menu.py's
-    own "final output file is the real completion signal" convention."""
+    own "final output file is the real completion signal" convention.
+
+    Locked until Phase 0 (ingestion) itself reports "Up to date" --
+    run_profile_setup() drafts identity/tags/cv.md from what ingestion
+    extracted (bootstrap_bullet_bank.DRAFT_CSV_PATH), and running it first
+    fires a real, paid Gemini call against an empty achievements string
+    (B16). This was previously just a body comment in bootstrap_profile.py's
+    module docstring, unenforced -- now it's an actual gate, and "Locked"
+    is visible in this same status table rather than discoverable only by
+    reading source."""
+    if _phase0_status()[0] != "Up to date":
+        return ("Locked", "finish Step 0 (ingestion) first")
     if not os.path.exists(bootstrap_profile.PROFILE_YML_PATH):
         return ("Never run", "")
     if not os.path.exists(bootstrap_profile.CV_MD_PATH):
@@ -56,8 +68,15 @@ def _phase05_status() -> tuple:
 
 def _run_phase0() -> bool:
     """Returns True if ingestion actually ran, False if it just printed
-    instructions for an empty source-docs folder -- the caller uses this so
-    backing out of an empty Step 0 doesn't fire the "what's next?" chain."""
+    instructions for an empty source-docs folder, or was blocked because
+    GEMINI_API_KEY still isn't set -- the caller uses this so backing out
+    of an empty/blocked Step 0 doesn't fire the "what's next?" chain.
+
+    Stops before run_ingestion() if collect_secrets() reports the key
+    wasn't set (deferred "later") rather than proceeding anyway -- ingestion
+    calls the Gemini API for every document, and proceeding without a key
+    was B16's false-green chain (a 403 quietly checkpointed as "done" with
+    nothing extracted)."""
     source_docs_dir = bootstrap_bullet_bank.SOURCE_DOCS_DIR
     os.makedirs(source_docs_dir, exist_ok=True)
     files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
@@ -69,15 +88,49 @@ def _run_phase0() -> bool:
         menu._print_source_docs_instructions(source_docs_dir)
         return False
 
-    bootstrap_profile.collect_secrets()
+    secrets = bootstrap_profile.collect_secrets()
+    if not secrets["gemini_key_set"]:
+        print(
+            f"\n{theme.colorize_icon_ansi('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
+            "Every document ingestion processes needs it. Add it to your profile's .env, then come back "
+            "to this step."
+        )
+        return False
+
     summary = bootstrap_bullet_bank.run_ingestion()
     bootstrap_bullet_bank.print_ingestion_summary(summary)
     return True
 
 
-def _run_phase05() -> None:
-    bootstrap_profile.collect_secrets()
+def _run_phase05() -> bool:
+    """Returns True if profile setup actually ran, False if it was blocked
+    -- Phase 0 not yet complete, or GEMINI_API_KEY still not set -- mirrors
+    _run_phase0()'s "did this actually do anything" convention.
+
+    Gated on _phase0_status() being "Up to date" (see _phase05_status()'s
+    "Locked" state) rather than the unenforced body-comment dependency this
+    used to rely on, and stops before run_profile_setup() the same way
+    _run_phase0() stops before run_ingestion() when the key was deferred
+    (B16)."""
+    if _phase0_status()[0] != "Up to date":
+        print(
+            f"\n{theme.colorize_icon_ansi('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
+            "first -- profile setup drafts your identity, tags, and cv.md from what ingestion extracted, "
+            "and running it first would produce a blank, still-paid-for draft. Finish Step 0, then come "
+            "back."
+        )
+        return False
+
+    secrets = bootstrap_profile.collect_secrets()
+    if not secrets["gemini_key_set"]:
+        print(
+            f"\n{theme.colorize_icon_ansi('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
+            "yet. Add it to your profile's .env, then come back to this step."
+        )
+        return False
+
     bootstrap_profile.run_profile_setup()
+    return True
 
 
 def _build_choices() -> list:
@@ -128,8 +181,7 @@ def run_bootstrap_menu() -> bool:
         if choice == "phase0":
             did_something = _run_phase0() or did_something
         elif choice == "phase05":
-            _run_phase05()
-            did_something = True
+            did_something = _run_phase05() or did_something
         else:
             bullet_bank_menu._handle_choice(choice)
             did_something = True

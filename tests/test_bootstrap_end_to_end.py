@@ -51,7 +51,7 @@ class TestDryRunSmokeTestOnRealFiles(BootstrapEndToEndTestCase):
 
         summary = bootstrap_bullet_bank.run_ingestion(dry_run=True)
 
-        self.assertEqual(summary, {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0})
+        self.assertEqual(summary, {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0, "failed": 0})
         self.assertTrue(os.path.exists(bootstrap_bullet_bank.DRAFT_CSV_PATH))
         self.assertTrue(os.path.exists(bootstrap_bullet_bank.CERTIFICATIONS_PATH))
         self.assertTrue(os.path.exists(bootstrap_bullet_bank.TIMELINE_PATH))

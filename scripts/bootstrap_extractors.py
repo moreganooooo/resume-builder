@@ -152,6 +152,20 @@ class DocumentClassification(BaseModel):
     doc_type: Literal["resume", "linkedin_export", "recommendation_letter", "achievement_notes", "certificate", "other"]
 
 
+class IngestionAPIError(RuntimeError):
+    """Raised by the ingestion-path extraction functions below (classify_
+    document_type/extract_achievements/extract_certificate/extract_resume_
+    timeline_and_achievements, text= branch only) when GeminiClient.generate()
+    itself failed -- returned raw=None -- rather than genuinely finding
+    nothing to extract. raw is None only on a real call failure (permanent
+    HTTP error, exhausted retries, malformed response); a successful call
+    with nothing to say still returns a string. Without this distinction, a
+    failed call (e.g. a 403 from a missing/bad API key) silently produced an
+    empty-but-"done" result -- bootstrap_bullet_bank.run_ingestion() catches
+    this specifically to checkpoint "failed" (retried next run) instead of
+    "done" (permanently skipped). See B16."""
+
+
 _BASE_EXTRACTION_RULES = """
 You are extracting real career achievements from a personal document so they can
 become resume bullet points later. Follow these rules strictly:
@@ -275,6 +289,10 @@ def classify_document_type(filename: str, text: str | None, dry_run: bool = Fals
         response_schema=DocumentClassification,
         temperature=0.0,
     )
+    if raw is None:
+        raise IngestionAPIError(
+            f"Gemini API call failed while classifying {filename!r} -- see the WARNING above for the status code."
+        )
     data = GeminiClient.parse_json(raw)
     return data.get("doc_type", "other")
 
@@ -301,6 +319,11 @@ def extract_achievements(
             model=EXTRACTION_MODEL, system_instruction=system_prompt,
             contents=text, response_schema=RawAchievementList, temperature=0.0,
         )
+        if raw is None:
+            raise IngestionAPIError(
+                f"Gemini API call failed while extracting achievements (doc_type={doc_type!r}) -- "
+                "see the WARNING above for the status code."
+            )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return [RawAchievement(**a) for a in data.get("achievements", [])]
 
@@ -325,6 +348,10 @@ def extract_certificate(
             model=EXTRACTION_MODEL, system_instruction=_CERTIFICATE_PROMPT,
             contents=text, response_schema=Certificate, temperature=0.0,
         )
+        if raw is None:
+            raise IngestionAPIError(
+                "Gemini API call failed while extracting a certificate -- see the WARNING above for the status code."
+            )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     if not data.get("name"):
         return None
@@ -356,6 +383,11 @@ def extract_resume_timeline_and_achievements(
             model=EXTRACTION_MODEL, system_instruction=_RESUME_EXTRACTION_PROMPT,
             contents=text, response_schema=ResumeExtraction, temperature=0.0,
         )
+        if raw is None:
+            raise IngestionAPIError(
+                "Gemini API call failed while extracting the resume/LinkedIn timeline -- "
+                "see the WARNING above for the status code."
+            )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return ResumeExtraction(**data) if data else ResumeExtraction(experience=[], certifications=[])
 
