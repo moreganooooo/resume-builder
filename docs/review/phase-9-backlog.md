@@ -146,14 +146,42 @@ re-dispatched, since there are no phases left to receive them.
 
 ## 3. The ranked backlog
 
-> ### ⛳ FIX-PASS STATUS — start here next session (updated 2026-08-05)
+> ### ⛳ FIX-PASS STATUS — start here next session (updated 2026-08-06)
 >
 > **Tier 0 is COMPLETE, plus B15.** 18 items across five commits
 > (`37e70126`, `323e92c9`, `3839f980`, `b8542292`, `139786af`). Test suite
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B15 · B47 · B48 · B60 · B61 · B62
+> B15 · B37 · B38 · B39 · B43 · B44 (partial — see below) · B45 · B47 · B48
+> · B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+>
+> **2026-08-06 — Tier 3, first 11 of 15 items, commit `67aa78b2`.** Worked the
+> hygiene/modernization tier in easiest-to-hardest order (deletions and config
+> first, then well-specified single-file edits, then multi-file sweeps).
+> Deliberately stopped before B40/B41/B42/B46 — B40 needs a root-cause dig
+> (where `profile.yml` gets a blank achievement key at bootstrap time is still
+> unknown), B41 touches the credential/env-allowlist surface across 24
+> provider subprocesses, and B46 bundles a real architecture decision (the
+> Batch Mode call-site split) in with its trivial pieces — none of those fit
+> the "trivial effort" framing the rest of the tier had. B44 shipped partial:
+> #8 (wrong `.env` path), #11 (dead `ingest.py`, deleted), #12 (exception text
+> in the `weaknesses` column), #13 (unhelpful `ValueError`), and #14 (stale
+> docstring) are done; #9 (unreachable-script inventory, feeds B30) and #10
+> (duplicate `hidden-gems.csv` schemas, already inert per the doc's own note)
+> were left as-is — informational, not actionable within this item. Also left
+> `generate-pdf.mjs`/`check-liveness.mjs`'s raw emoji alone (B45's residue
+> list) — no JS-side theming infrastructure exists to route through, and
+> building one is a new-feature-sized piece of work, not hygiene.
+>
+> **B38 changed a public function's contract** (`_parse_pdf_result` gained a
+> `pdf_path` parameter and now reads pypdf instead of regexing stdout), which
+> broke 8 tests that depended on the old "unverifiable page count treated as
+> fine" behavior. Fixed by updating the tests (a class-level patch restoring
+> the old regex behavior for the 15 tests that fake the PDF subprocess without
+> writing a real file, plus rewriting the 3 tests that exercise
+> `_parse_pdf_result` directly) rather than reverting the fix. Full suite:
+> 1136 passed, 0 failed.
 >
 > **Verified against real artifacts, not just tests:**
 > - **B1** — ligature corruption **7 corrupted tokens → 0** on a freshly
