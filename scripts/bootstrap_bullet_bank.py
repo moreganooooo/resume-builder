@@ -329,7 +329,7 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     build a timeline from any resume/LinkedIn doc(s), attribute every other
     achievement against it, then auto-tag and append the results onto
     bullet-bank-clean.csv. Returns a summary dict: {extracted, attributed,
-    flagged, certificates}.
+    flagged, certificates, failed}.
 
     Safe to run repeatedly, on a brand-new empty bank or an established
     one: files already marked "done" in the checkpoint are skipped (so
@@ -341,6 +341,13 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     timeline (built from every resume/LinkedIn doc ever processed, not
     just new ones this run), so accuracy doesn't degrade just because
     this call only writes the new rows.
+
+    A file whose extraction call genuinely failed (bootstrap_extractors.
+    IngestionAPIError -- a real API failure, not "nothing found") is
+    checkpointed "failed", not "done" -- unlike "done", "failed" is not
+    skipped on the next call, so fixing the API key and re-running actually
+    retries it instead of leaving the checkpoint permanently satisfied with
+    an empty result (B16).
 
     force=True bypasses all of that and replaces bullet-bank-clean.csv's
     entire contents with a full reconstruction from the checkpoint --
@@ -365,12 +372,23 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
         if os.path.isfile(os.path.join(SOURCE_DOCS_DIR, f))
     )
 
+    failures = 0
     for filename in filenames:
         if checkpoint.get(filename, {}).get("status") == "done":
             continue
         path = os.path.join(SOURCE_DOCS_DIR, filename)
         try:
             checkpoint[filename] = _process_one_file(path, filename, dry_run=dry_run)
+        except bootstrap_extractors.IngestionAPIError as e:
+            # The outcome, not the attempt: a real API failure (e.g. a 403
+            # from a missing/bad key) must never checkpoint as "done" -- that
+            # was B16 (silently "done" with empty results, and sticky, since
+            # only "done" is skipped on retry). "failed" is deliberately not
+            # "done", so the next run_ingestion() call retries this file
+            # instead of skipping it.
+            print(f"  API error processing {filename}: {e}")
+            checkpoint[filename] = {"status": "failed", "doc_type": "other", "reason": str(e)}
+            failures += 1
         except Exception as e:
             print(f"  Error processing {filename}: {e}")
             checkpoint[filename] = {"status": "error", "doc_type": "other"}
@@ -436,6 +454,7 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
         "attributed": len(rows_written) - len(new_review_rows),
         "flagged": len(new_review_rows),
         "certificates": len(certificates),
+        "failed": failures,
     }
 
 
@@ -446,6 +465,12 @@ def print_ingestion_summary(summary: dict) -> None:
         f"{summary['flagged']} flagged for review, "
         f"{summary['certificates']} certificate(s) found."
     )
+    if summary.get("failed"):
+        print(
+            f"{theme.colorize_icon_ansi('warning')}  {summary['failed']} document(s) failed to process "
+            "(API error -- see above for details). They'll be retried automatically next time you run "
+            "ingestion; they were not counted as done."
+        )
 
 
 import argparse

@@ -50,6 +50,16 @@ class TestClassifyDocumentType(unittest.TestCase):
             mock_generate.assert_not_called()
             self.assertEqual(result, "other")
 
+    @patch("bootstrap_extractors.GeminiClient.generate")
+    def test_failed_api_call_raises_instead_of_defaulting_to_other(self, mock_generate):
+        # B16: GeminiClient.generate() returns (None, {}) on a real failure
+        # (e.g. a 403 from a missing/bad key) -- this used to silently
+        # collapse to doc_type "other" via GeminiClient.parse_json(None) ->
+        # {}, indistinguishable from a genuinely ambiguous document.
+        mock_generate.return_value = (None, {})
+        with self.assertRaises(bootstrap_extractors.IngestionAPIError):
+            bootstrap_extractors.classify_document_type("document3.txt", "some ambiguous text")
+
 
 class TestExtractAchievements(unittest.TestCase):
 
@@ -94,6 +104,14 @@ class TestExtractAchievements(unittest.TestCase):
             mock_generate.assert_not_called()
             self.assertEqual(result, [])
 
+    @patch("bootstrap_extractors.GeminiClient.generate")
+    def test_failed_api_call_raises_instead_of_returning_empty(self, mock_generate):
+        # B16: a real API failure used to collapse to an empty achievements
+        # list, indistinguishable from "this document genuinely had none."
+        mock_generate.return_value = (None, {})
+        with self.assertRaises(bootstrap_extractors.IngestionAPIError):
+            bootstrap_extractors.extract_achievements("achievement_notes", text="some notes")
+
 
 class TestExtractCertificate(unittest.TestCase):
 
@@ -112,6 +130,12 @@ class TestExtractCertificate(unittest.TestCase):
         mock_generate.return_value = ('{"name": null, "issuer": null, "date": null}', {})
         cert = bootstrap_extractors.extract_certificate(text="not actually a certificate")
         self.assertIsNone(cert)
+
+    @patch("bootstrap_extractors.GeminiClient.generate")
+    def test_failed_api_call_raises_instead_of_returning_none(self, mock_generate):
+        mock_generate.return_value = (None, {})
+        with self.assertRaises(bootstrap_extractors.IngestionAPIError):
+            bootstrap_extractors.extract_certificate(text="AWS Certified Solutions Architect, issued 2023")
 
 
 class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
@@ -150,6 +174,16 @@ class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
             mock_generate.assert_not_called()
             self.assertEqual(result.experience, [])
             self.assertEqual(result.certifications, [])
+
+    @patch("bootstrap_extractors.GeminiClient.generate")
+    def test_failed_api_call_raises_instead_of_returning_empty(self, mock_generate):
+        # This is the exact real-world repro from B16: a fresh profile, no
+        # API key, a 403 on the first document -- GeminiClient.generate()
+        # returns (None, {}), and this used to become an empty-but-"done"
+        # ResumeExtraction (work_experience: []) instead of a real failure.
+        mock_generate.return_value = (None, {})
+        with self.assertRaises(bootstrap_extractors.IngestionAPIError):
+            bootstrap_extractors.extract_resume_timeline_and_achievements(text="fake resume text")
 
 
 class TestGenerateFromUpload(unittest.TestCase):
