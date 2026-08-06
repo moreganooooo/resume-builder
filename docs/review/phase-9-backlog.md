@@ -107,11 +107,11 @@ re-dispatched, since there are no phases left to receive them.
 | H3 | 0 → 2/3 | Banner cost: intentional or not | ✅ `P2F3` |
 | H4 | 0 → 3 | PDF text-layer check shipping anyway (§2d) | ✅ `P3` MAJOR 2 |
 | H5 | 1 → 2 | Re-check truncation **under `RESUME_BUILDER_ICONS=unicode`** | ⚠️ **partial** — `P2` tested widths, never the fallback icon set → B22 |
-| H6 | 1 → 4 | Test residue `{jds,output,data}/test_guest_trigger_profile_xyz/`; top-level `output/{checkpoints,html,json,pdf}` coexisting with profile-scoped paths | ❌ **fell through** → B29 |
+| H6 | 1 → 4 | Test residue `{jds,output,data}/test_guest_trigger_profile_xyz/`; top-level `output/{checkpoints,html,json,pdf}` coexisting with profile-scoped paths | ✅ **picked up by `P11` trace 3** → B62 |
 | H7 | 1 → 5 | Packaging collapses setup steps 1–7 + 11 | ✅ `P5 #6` |
 | H8 | 1 → 4 | `menu.py:186-215` onboarding-logic coverage gap | ✅ assigned in `PLAN.md`, `P4F3` |
-| H9 | 2 → 3/4 | **3 employers on the design system's page 2 are absent from the rendered resume**, with 7.33in of free space | ❌ **fell through — nobody owns it** → B14 |
-| H10 | 2 → 4 | `get_completed_jds()` returns 0; banner advertises "0 Resumes Customized All-Time" | ❌ **fell through** → B25 |
+| H9 | 2 → 3/4 | **3 employers on the design system's page 2 are absent from the rendered resume**, with 7.33in of free space | ✅ **root-caused by `P11` trace 1** → B60 |
+| H10 | 2 → 4 | `get_completed_jds()` returns 0; banner advertises "0 Resumes Customized All-Time" | ✅ **root-caused by `P11` trace 2** → B61 |
 | H11 | 2 → 4 | `_stats_line_text()`/`get_pending_jds()` walks 1,144 files per call | ⚠️ partial — `P2F3` removes 30 of 31 calls; the ~1s residue untouched → B24 |
 | H12 | 2 → 5 | `theme.py` has no light variant; Go side does | ✅ `P5 #5` |
 | H13 | 3 → 2 | Ligature CSS fix (blocking) | ✅ `P2F1` |
@@ -182,6 +182,18 @@ against no candidate profile**, and those scores rank the entire 1,144-JD
 Browse & Manage queue. Proven by injection: the evaluator wrote paragraphs about
 "a decade of systems engineering experience" that the JD had simply asserted.
 *Fix:* pass the same KB/profile context the builder gets.
+**Phase 10 confirms, from the rubric side:** the prompt does not merely omit
+the profile — `evaluate_fit.md:10` directs the model to a knowledge-base context
+block the call site (`orchestrator.py:2143-2150`) has never constructed, and
+then forbids the predictable fallback ("not any example list"). **No `scoring/`
+rubric is attached to `evaluate_fit` either**, and `role_dna.yaml` — the
+archetype library, the one file that could supply "archetypes" independently of
+`profile.yml` — is loaded by nothing (B49). Every `archetype` value ever written
+into a JD's `_evaluation` was picked by a model that had seen neither the
+candidate's archetype list nor the archetype library. *Fix scope:* attaching
+`profile.yml`'s `target_roles`/`archetypes` is the minimum; attaching
+`role_dna.yaml` too is what makes the returned `archetype` a controlled
+vocabulary instead of freeform. See also B52 — four archetype vocabularies.
 
 **B4. `SustainedFailureError` is swallowed by the batch loop.** MAJOR · goal 1 ·
 one `except` clause.
@@ -282,6 +294,115 @@ function is really "not a blocked domain and not a blog post," so
 becomes a paid Gemini tailoring call against a page that isn't a job. Related:
 two `BLOCKED_DOMAINS` entries have the wrong TLD (`workingnomads.com` vs the
 live `.co`, `remoteok.com` vs `.io`) and block nothing.
+
+---
+
+**B47. Five rubrics' `flags:` blocks parse as one run-on string, and two of
+them are live today.** MAJOR · goal 2 · ~27 lines, no code.
+`P10F3`. `flags:` is written as a bare indented block with no `- ` markers, so
+`yaml.safe_load` returns a space-joined scalar instead of a list, in
+`summary_score.yaml:98-105`, `top_third_score.yaml`,
+`experience_structure_score.yaml`, `professional_identity_score.yaml`,
+`skills_scoring.yaml`. The first two are **the only two `scoring/` files
+attached to a live API call** (`orchestrator.py:2696-2697`), so `json.dumps()`
+serialises the mangled scalar straight into the critique prompt — the model is
+shown a run-on token string where a controlled flag vocabulary was intended.
+Verify: `python3 -c "import yaml;print(type(yaml.safe_load(open('resume-engine/scoring/summary_score.yaml'))['flags']))"`.
+*Fix:* add `- ` to each item in all five files. Do this before B48 — the other
+three become live the moment the critique is rewired.
+
+**B48. `scoring/README.md` has two false "Used by" rows.** MINOR · goal 5 ·
+2 lines.
+`P10F10`. `README.md:13` claims `ai_risk.yaml` is used by `orchestrator.py` (it
+appears in no Python file); `:18` claims `role_dna.yaml` is used by
+`tailor_resume.md` (it appears only in `critique_resume.md:24,86`). Every other
+row is correct and `:33-42`'s status section is honest — which is exactly why
+these two matter: an auditor tracing reachability from this table clears both
+files and misses B49. *Fix:* correct the two cells. **Do not delete the status
+section** — it is the only written record of the wiring gap.
+
+**B60. Nothing requires the builder to emit one `EXPERIENCE` entry per role —
+three employers are silently missing from the shipped resume.** BLOCKER ·
+goals 1, 2, 4 · one validator function + one prompt line.
+`P11` trace 1, diagnosing `P2F7`/H9 (**closes the first half of B25**).
+`profile.yml` declares six roles; the live artifact
+`output/morgan/json/MorganEscott_ContentStrategist_AbnormalAI_Resume.json`
+contains three. `Element 8 / Strategy LLC`, `VML` and `Callahan Creek` — the
+entire page-2 work history, 15 years of agency experience — are absent, which
+is also the direct cause of `P2F7`'s 7.33in of dead space.
+**Ruled out by evidence, not argument:** the trim loop cannot remove a company
+(`orchestrator.py:2915-2980` only drops client rosters and bullets-toward-Min,
+and never fired here — the PDF was already 2 pages); mining supplied all three
+(the live checkpoint's 30 `bullet_tuples` include exactly 3 each for Element 8,
+VML and Callahan Creek, their guaranteed `min_bullets` floor); the normalizer
+maps `EXPERIENCE` 1:1 (`normalize_resume.py:59-94`); `fixed_content.py` has all
+three fully configured.
+**Root cause:** the roster reaches Gemini as prose only
+(`build_role_rules_block()`, `orchestrator.py:1129-1179`), and
+`tailor_resume.md:159-168` governs *bullet counts within roles that exist* —
+never "every company in this table must appear." The only clause that says so
+lives in a schema `description` (`orchestrator.py:967-970`), and
+`sanitize_schema()` strips descriptions before they reach the API, so it is not
+merely weak — **it is never sent**. Then `validate_resume.validate()` has no
+roster check: `_check_experience_completeness()` (`:275-281`) validates fields
+on entries that are present and cannot see an absent company. Zero violations,
+PDF renders, JD moves on.
+*Fix:* add `_check_role_roster()` to `validate_resume.py` — every
+`profile.yml` `roles:` name (situational roles excluded) must appear in
+`EXPERIENCE`, violation naming the missing company; it is already wired into
+both the post-build and post-trim validation gates. Add one explicit line to
+`tailor_resume.md`'s Per-Role Bullet Count Targets section: every company in
+the table gets an entry, no exceptions. Re-run `resume sample` and require six
+employers. **Do not pad page 2 with CSS** — `P2` was right, and B25's layout
+half resolves itself once the content is back.
+
+**B61. "Resumes Customized All-Time" counts a directory, not the work done.**
+MAJOR · goals 1, 4 · small.
+`P11` trace 2, diagnosing H10 (**closes the second half of B25**). The premise
+in B25 was wrong: `jds/morgan/completed/` really is empty, `jd_tracker_log.csv`
+does not exist, and both `get_completed_jds()` (`jd_manager.py:629-645`) and
+`run_pipeline`'s move (`orchestrator.py:3070-3072`) are correct as written.
+Every resume this profile has produced came from `resume sample`, which by
+documented design skips the move and the tracker write. **The defect that
+remains** is that `_stats_line_text()` (`cli_art.py:135-141`) derives an
+"All-Time" figure from `len(get_completed_jds())` — a mutable directory count.
+`archive_jd()` (`jd_manager.py:648-660`) moves files *out* of `completed/`, so
+archiving an old application silently decrements an all-time total; two real
+resumes and a cover letter sit in `output/morgan/` while the banner reads zero,
+with no path by which that number can recover them.
+*Fix:* count rows in `jd_tracker_log.csv` (append-only, one per
+`mark_completed()`) instead — the honest ledger, and it already exists for this
+purpose. **Do this with B2** (same line of the same banner: B2 makes it fast,
+B61 makes it true). **Not the same bug as B17** — B17 is the move firing when
+no PDF exists; this is the counter reading a directory instead of a ledger.
+Neither fix implies the other.
+
+**B62. Pre-profile `output/` writes and a test teardown that misses three of
+four sync roots.** MINOR · goals 4, 5 · small.
+`P11` trace 3, picking up H6 — never owned by any phase. Both halves land
+outside `profile_paths.sync_roots()`, so anything they write is invisible to
+Syncthing, in a repo whose CLAUDE.md names `profile_paths.py` the single source
+of truth for every profile-scoped path.
+**(a)** `ingest.py` was the *visible* offender (already in B44), not the only
+one. `detect_blank_scores.py:34,206-207` is **live** and `mkdir(parents=True)`s
+a shared `output/json/` to write `unscored_bullets.json` — real profile-derived
+bullet-bank data on a path a second profile would overwrite.
+`liveness.py:22,92-93` writes `output/liveness_input_tmp.json` at the repo root
+(cleaned up in a `finally`, so it only persists if the process is killed
+mid-check). The four empty top-level `output/{checkpoints,html,json,pdf}/`
+directories are all dated Jul 18, four days before the profile migration —
+pre-migration residue, not evidence of a current writer; only `output/json/`
+has a live writer that recreates it.
+**(b)** `tests/test_menu_bootstrap.py:53-57` creates a real profile, but
+`tearDown()` removes only `profiles/<name>/` while `create_new_profile()` seeds
+all four `sync_roots()` — leaving `jds/`, `output/` and `data/`
+`test_guest_trigger_profile_xyz/` orphaned since 2026-07-22, each holding a
+stray `.stignore`.
+*Fix:* route `detect_blank_scores.py` and `liveness.py` through
+`profile_paths.output_dir()`; iterate `profile_paths.sync_roots(name)` in the
+teardown (and assert on it in the test — the leak sits next to a real coverage
+gap, since nothing currently verifies the other three roots were created);
+delete the four empty pre-migration directories and the three residue ones.
 
 ---
 
@@ -427,6 +548,17 @@ and text-layer parseability) are checked nowhere. B1/B9 close the parseability
 half. This item is the other half: a coverage check comparing the extracted JD
 keywords against the finished resume, reported before the pipeline claims
 success.
+**Phase 10 answers the plan's question — yes, `ats_match.yaml` is meant to be
+this check, and it is wired to nothing.** `critique_resume.md:25` and `:86-91`
+place it in exactly that role; no Python file loads it (B49). Even attached it
+is only half the check: pure weighting (`exact_match: 1.0 / semantic_match: 0.7
+/ partial_match: 0.4`, section multipliers, a `-25` hard-requirement penalty)
+with no keyword-extraction step, and `extract_keywords.md`'s output is not
+routed to it. Its own comment (`:23-27`) admits the archetype weights are "a
+first-pass guess" to be tuned "based on what critique_resume.md actually flags
+over time" — a feedback loop that cannot close while the file never reaches the
+model. *So this item stays open as written*: the coverage check has to be built,
+and `ats_match.yaml` supplies its weights, not its logic.
 
 **B19. `workday` fires ~100 unthrottled POSTs, blows the parent timeout, and
 returns nothing. Every run.** BLOCKER (for that source) · goal 1 · small.
@@ -446,6 +578,59 @@ already in hand.
 inter-page delay, route through `_http.mjs`, and either raise the budget for
 this provider or emit what was collected before the cutoff. `workday.fetch()`
 already receives `_ctx` and ignores it.
+
+---
+
+**B49. 14 of the 18 rubrics `critique_resume.md` requires are never attached,
+and the guard against that cannot fire.** BLOCKER · goals 1, 2 · medium.
+`P10F1` + `P10F2`. `critique_resume.md:14-37` lists 18 scoring files to "load
+and apply"; `orchestrator.py:2698-2702` attaches exactly two
+(`summary_score.yaml`, `top_third_score.yaml`) — not `profile.yml`, not
+`style_rules.yaml`, not the other 14. **12 of the 16 files in
+`resume-engine/scoring/` are read by no code anywhere in this repo.** The
+prompt's 9-step sequence then orders steps that are impossible: Step 1 "Using
+`professional_identity_score.yaml`", Step 2 "Run all 7 `alignment_checks` with
+their `pass_threshold` values", Step 6 "use `ats_match.yaml`'s
+`archetype_overrides`". What the model returns for steps 1–6 is invention
+conditioned on a filename, and it feeds the recommendation-rewrite pass at
+`:2763`. `critique_resume.md:39-40` anticipates exactly this ("If a file is
+listed here but not attached, flag it as missing rather than proceeding") and
+is inert: `flags` is the resume-issue channel the recommendation loop consumes,
+and nothing on the Python side inspects it for a plumbing signal.
+*Fix:* attach the rubrics' real content, following
+`orchestrator.py:1686-1720`'s curation pattern rather than dumping them raw —
+all 14 unabridged is ~80KB per critique call. **Ships with B50 or it buys
+nothing.**
+
+**B50. `ResumeCritiqueSchema` cannot hold what the critique prompt computes.**
+MAJOR · goal 2 · small, but coupled to B49.
+`P10F4`. The schema (`orchestrator.py:901-918`) is 4 ints + 4 string lists. The
+prompt names these outputs with no field to return them in: `primary_identity`,
+`secondary_identity`, `tertiary_identity`, `competing_narratives`,
+`unsupported_positioning`, `recruiter_takeaway`, `strongest_alignment`,
+`weakest_alignment`, `ungrouped_skills`, `unsupported_skills`,
+`archetype_mismatch`. Structured output means the surplus is never generated
+rather than truncated with a warning. Fixing B49 alone would attach the
+rubrics, evaluate them, and discard the results at the schema boundary.
+*Fix:* extend the schema alongside B49, and add the hard-failure/threshold
+field B51 needs.
+
+**B51. No threshold in any rubric is implemented anywhere.** MAJOR · goals 1, 2
+· small once B50 lands.
+`P10F5`. `reject_if.score_below` appears in 5 `scoring/` files;
+`pass_threshold` in `resume_cohesion_score.yaml` and
+`professional_identity_score.yaml`; `ats_match.yaml:15-18` defines
+excellent/good/weak bands; `summary_score.yaml:15-21` defines 5
+`hard_failures`. `grep -rn "reject_if\|score_below" scripts/` returns nothing
+outside `scripts/archive/`. The critique's four scores are printed
+(`:2716-2720`) and stored; only `recommendations` and `distinctive_moments`
+re-enter the pipeline. **A resume can score 10/100 on every dimension and
+ship.** Concretely: `P10F9` hand-scored the shipped AbnormalAI Summary at
+≈53/100 against `summary_score.yaml` — a rubric that *is* attached — and the
+pipeline could not tell 53 from 85.
+*Fix:* either wire a gate on the critique scores, or delete the `reject_if`
+blocks. Leaving them is how the next reader concludes the scores mean
+something.
 
 ---
 
@@ -553,7 +738,9 @@ system if 42 is intended); separator to `#9aa3af`; drop the italic on the strong
 Do **not** pad page 2 — see B25.
 
 **B25. Three employers the design system places on page 2 are missing from the
-rendered resume.** MAJOR · goals 2, 4 · unknown — **needs diagnosis, no owner.**
+rendered resume.** MAJOR · goals 2, 4 · **DIAGNOSED 2026-08-05 by `P11` —
+superseded by B60 (employers) and B61 (banner counter). Kept for the trail; fix
+those two, not this.**
 `P2F7` + `P2`'s Handoff (H9), never picked up by Phase 3 (already run) or Phase
 4 (didn't address it). Page 1 runs dense to its last line (0.86in bottom
 whitespace); page 2 holds only Training & Certifications and Education and stops
@@ -660,6 +847,20 @@ are separate calls with no cross-check. And `P3F7` — the cover letter opens
 "I am writing to express my interest in…", with three `I am [adjective] to`
 constructions in three paragraphs; `tailor_resume.md` has a BANNED-words list
 and a forbidden-openers rule, `tailor_coverletter.md` has no equivalent.
+**Phase 10 answers the plan's question — yes, `summary_score.yaml` already
+encodes the rule, and it is one of only two rubrics actually attached.** Hand-
+scored against the shipped AbnormalAI Summary: `relevance_to_jd` ~15/30 (opener
+says "Campaign & CRM Strategist" against a Content Strategist JD →
+`no_target_role_signal`), `specificity_and_evidence` ~8/25 (**zero platforms
+named**, despite Outreach.io and HubSpot being verified profile tools),
+`role_alignment` ~10/20, `credibility` ~13/15, `readability` ~7/10 —
+**≈53/100**, with `generic_professional_summary` arguably tripped. The rubric
+independently reproduced `P3` MAJOR 4. The failure is downstream: the rubric
+declares 5 `hard_failures` and `ResumeCritiqueSchema` exposes
+`summary_alignment_score: int` and nothing else, so 53 and 85 are the same
+object to the pipeline (B50, B51). *Implication for the fix:* the missing piece
+is not a new rule — it is a return path and a gate. Also see B53, the diverging
+banned-word lists.
 
 **B30. `voice-anchors.md` mostly *describes* the voice instead of demonstrating
 it.** MAJOR · goal 2 · small (and it feeds B29). `P3F8b` + `P6` (verified sound).
@@ -774,6 +975,51 @@ optional-but-expected; give the six a description source (`greenhouse.mjs:66-67`
 `?content=true` trick already solved this for its own provider); and validate in
 `_write_jd_file()`, recording a `_scan` metadata key (per CLAUDE.md's underscore
 convention) and flagging sub-threshold postings in the scan report.
+
+---
+
+**B52. Four incompatible archetype vocabularies, terminating in a key that
+does not exist.** MAJOR · goal 2 · medium.
+`P10F8`. `profile.yml` uses job titles (`Lifecycle Marketing Specialist`);
+`ats_match.yaml:28-56` uses job titles but includes `Customer Onboarding &
+Implementation Specialist`, which is not a `profile.yml` archetype, so that
+override can never match; `role_dna.yaml` uses snake_case
+(`email_lifecycle`, `b2b_content_copywriter`, `marketing_ops_crm`);
+`professional_identity_score.yaml` uses a fourth set (`marketing_ops`,
+`enablement`, `lifecycle`, `copywriter`). No mapping table between any pair.
+The chain then dangles: `professional_identity_score.yaml:386` says
+`style_rules_archetype: string # maps to style_rules.yaml archetype_ordering
+key`, and **`style_rules.yaml` has no `archetype_ordering` key** — its top-level
+keys are `version, philosophy, writing_style, bullet_structure, verb_rules,
+vague_verbs, verb_upgrades, forbidden_openers, forbidden_phrases,
+punctuation_rules, metrics_rules, pronoun_rules, tool_mention_rules,
+redundancy_rules, tagline, skills_section, ats_rules, layout_rules,
+typography`. `critique_resume.md:52-53` makes every later step depend on
+resolving that lookup. *Fix:* pick one vocabulary (`profile.yml`'s names are
+the only user-authored set), and either add the `archetype_ordering` block to
+`style_rules.yaml` or drop the concept from `professional_identity_score.yaml`.
+
+**B53. Builder and scorer ban different words.** MINOR · goal 2 · one list.
+`P10F9`. `tailor_resume.md:70` bans `passionate, driven, results-oriented,
+dynamic, synergy, best-in-class, seeking opportunities, visionary`;
+`summary_score.yaml:23-33` treats `results-driven, dynamic professional,
+accomplished professional, highly motivated, dedicated professional, seasoned
+professional, proven track record, strategic thinker, visionary leader` as
+`buzzword_opener` hard failures. Neither is a superset: the builder may write
+five phrases the scorer hard-fails, and the scorer permits three the builder
+bans. Live today — `summary_score.yaml` is attached. *Fix:* one shared list,
+sourced from the rubric.
+
+**B54. The cover-letter path has no rubric at all.** MAJOR · goal 2 · medium.
+`P10` staleness check. `resume-engine/scoring/` predates the cover-letter path
+and nothing was added for it. `tailor_coverletter.md` and
+`polish_coverletter.md` run with `style_rules.yaml` only — no believability, no
+AI-risk, no specificity scoring on the document that is *more* prone to generic
+AI voice than the resume is. Interacts with B9 (cover-letter PDF never
+text-layer checked): between them the cover letter has neither a content gate
+nor an output gate. *Fix:* smallest useful version is attaching
+`believability.yaml` + `ai_risk.yaml` to the polish call — after B49 makes
+`ai_risk.yaml` reachable at all.
 
 ---
 
@@ -919,6 +1165,81 @@ living backlog and `phase-5-modernization.md` is a snapshot.
 porting either direction buys nothing; close the theme asymmetry instead (B23).
 Structured output is already current (`P5 #8`).
 
+**B55. The Playwright e2e scaffold is dead and points at the wrong site.**
+MINOR · goal 5 · delete two files.
+`P12`. `e2e/example.spec.ts` + `playwright.config.ts` are the unedited output of
+`npm init playwright@latest` — both tests call `page.goto('https://playwright.dev/')`
+and assert on that site's own title/heading, not anything this app renders.
+`playwright.config.ts` has no `baseURL` and its `webServer` block is commented
+out, so there is no path by which it was ever pointed at this repo. Verified
+unreachable from every angle: `package.json`'s `"scripts"` is `{}` (no `test`
+entry), `.github/` contains only `dependabot.yml` — no workflow ever invokes
+`playwright test` — and `node_modules/` doesn't exist in this repo at all (see
+B15), so `npx playwright test` cannot even resolve the `@playwright/test`
+import today. `git log` shows exactly one commit touching either file
+(`4984907c`), the same commit that added them. This is also the reason
+`package.json` misleadingly looks like a test project: `@playwright/test` is
+its only `devDependency`. Nothing in this app has a browser-navigable UI to
+e2e-test in the Playwright sense — the "web" surface is a rendered PDF/HTML
+file opened by Chromium as a renderer, not a page the app serves — so there is
+no natural target to wire this up *to*.
+*Fix:* delete `e2e/` and `playwright.config.ts`; drop `@playwright/test` from
+`package.json`'s `devDependencies` (leave the `playwright` runtime dependency,
+which `generate-pdf.mjs` genuinely uses to drive Chromium).
+
+**B56. `dependabot.yml` is the unfilled template — it updates nothing.** MINOR
+· goal 5 · a few lines.
+`P12`. `.github/dependabot.yml:8` reads `package-ecosystem: ""` — the literal
+empty-string placeholder from GitHub's default scaffold, never replaced with a
+real value (`pip`, `npm`, `gomod`, etc.). An empty `package-ecosystem` fails
+Dependabot's schema validation, so the one `updates:` entry present is inert;
+functionally this file configures zero ecosystems. The repo actually has
+three: `requirements.txt` (pip), `package.json`/`package-lock.json` (npm), and
+`dashboard/go.mod` (gomod) — none is covered.
+*Fix:* three `updates:` entries, one per ecosystem, each with its own
+`directory:` (`/`, `/`, `/dashboard`).
+
+**B57. `scripts/archive/` is confirmed dead — safe to delete.** MINOR · goal 5
+· delete 5 files.
+`P12`, closing the "confirm nothing imports them first" check `PLAN.md` asked
+for. `grep -rn` across every tracked `.py` file for each archived module's
+name (`backfill_cluster_ids`, `detect_blank_scores`, `fix`,
+`merge_queue_to_cluster_map`, `rewrite_bullets_backup`) returns no import or
+`archive/`-relative reference anywhere outside the files themselves. `P6 #9`'s
+observation still holds and is now quantified: `scripts/archive/detect_blank_scores.py`
+diverges completely from the live `scripts/detect_blank_scores.py` — different
+purpose (rewrite-queue population vs. a blank-score report), different CSV
+paths, different CLI surface — confirmed by direct diff, not just "differs."
+*Fix:* delete the directory. Nothing in the fix pass depends on it.
+
+**B58. `webdriver-manager` is an orphaned dependency in `requirements.txt`.**
+MINOR · goal 5 · one line.
+`P12`. `grep -rn "webdriver_manager"` across every tracked `.py` file returns
+nothing — no direct import, and nothing else in `requirements.txt` requires it
+transitively (`pip show webdriver-manager` lists no `Required-by`). Contrast
+with `selenium`, also unimported directly but a genuine transitive dependency
+of `linkedin-jobs-scraper` (`pip show linkedin-jobs-scraper` → `Requires:
+selenium`) — that one earns its place; `webdriver-manager` does not.
+*Fix:* remove the line; re-run `resume doctor` to confirm nothing regresses.
+
+**B59. A board-scanner title filter silently cancels itself on one keyword.**
+MINOR · goal 1 · one line.
+`P12`. `profiles/morgan/board_scanner/scan_filters.yml`'s `title_filter` lists
+`Curriculum` in **both** `positive` (index 47) and `negative` (index 210).
+`scan_boards._passes_title_filter()` (`scan_boards.py:135-147`) checks
+`negative` unconditionally after `positive`, and a negative hit always
+rejects regardless of any positive match — verified by reading the function,
+which has no precedence rule for an overlapping term. Any job title
+containing "curriculum" (e.g. "Curriculum Strategist," a title shape that
+fits several of the profile's own target archetypes) is therefore silently
+dropped from every scan despite being listed as a wanted signal, with the
+`positive` entry existing as dead weight. Lower-value, same file: 8 duplicate
+entries within `positive` (of 104) and 3 within `negative` (of 332) — harmless
+but sloppy.
+*Fix:* drop `Curriculum` from `negative` (the profile's target roles include
+enablement/education-adjacent titles, so `positive` is the intended list);
+dedupe both arrays while there.
+
 ---
 
 ## 4. Ownership residue — the mechanical check
@@ -963,6 +1284,8 @@ unowned:
 - **Phase 11 — Unexplained artifacts & path residue.** Not an ownership gap but
   a diagnosis gap: the three orphaned handoffs below that no phase ever
   root-caused (H9, H10, H6 → B25 and the pre-profile path question).
+  **Run 2026-08-05 — all three root-caused; see `phase-11-orphans.md`. B25 is
+  superseded by B60/B61; H6 is now B62.**
 - **Phase 12 — Remaining unowned residue.** `e2e/` + `playwright.config.ts`,
   `dashboard/`'s non-visual Go, `scripts/archive/`, the dependency manifests,
   `.github/dependabot.yml`, `profiles/*/board_scanner/*.yml`, `fixtures/`, and
