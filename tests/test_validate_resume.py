@@ -274,6 +274,33 @@ class TestRoleRoster(unittest.TestCase):
             ), [],
         )
 
+    def test_an_annotated_company_name_still_counts_as_present(self):
+        """Caught by the first real `resume sample` run after this check
+        landed: profile.yml says "Inside Sales Team", the document says
+        "Inside Sales Team (Now Alleyoop)". Not a missing employer -- and each
+        false positive eats one of the validator's 4 fix attempts that a
+        genuinely absent employer needs."""
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["Inside Sales Team (Now Alleyoop)"]), ["Inside Sales Team"],
+            ), [],
+        )
+
+    def test_a_shortened_company_name_still_counts_as_present(self):
+        self.assertEqual(
+            validate_resume._check_role_roster(
+                self._resume(["Callahan"]), ["Callahan Creek"],
+            ), [],
+        )
+
+    def test_a_genuinely_absent_company_is_still_caught(self):
+        violations = validate_resume._check_role_roster(
+            self._resume(["Mercor", "Treering Yearbooks"]),
+            ["Mercor", "Treering Yearbooks", "Callahan Creek"],
+        )
+        self.assertEqual(len(violations), 1)
+        self.assertIn("Callahan Creek", violations[0])
+
     def test_matching_ignores_case_and_surrounding_whitespace(self):
         self.assertEqual(
             validate_resume._check_role_roster(

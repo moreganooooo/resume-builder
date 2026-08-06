@@ -16,10 +16,13 @@
   },
   "homepage": "https://github.com/moreganooooo/resume-builder#readme",
   "dependencies": {
-    "playwright": "^1.61.1"
+    "playwright": "1.61.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
+    "@playwright/test": "1.61.1",
     "@types/node": "^26.1.1"
+  },
+  "allowScripts": {
+    "fsevents@2.3.2": true
   }
 }
