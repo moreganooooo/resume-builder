@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import re
@@ -10,6 +12,12 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
 import jd_manager  # noqa: E402
+
+# Captured before any test's setUp() patches orchestrator.os.path.exists (B17
+# tests below) -- os.path is one shared module process-wide, so a patch on
+# "orchestrator.os.path.exists" replaces this same name everywhere, and a
+# reference taken after that point would be the mock, not the real function.
+_REAL_OS_PATH_EXISTS = os.path.exists
 
 
 def _pass_critique_json():
@@ -49,6 +57,33 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self._parse_pdf_patch = patch("orchestrator._parse_pdf_result", side_effect=_regex_parse_pdf_result)
         self._parse_pdf_patch.start()
         self.addCleanup(self._parse_pdf_patch.stop)
+
+        # B17: validate_pdf_text() now returns (fatal, advisories), and a
+        # non-empty `fatal` (e.g. the real function's own "file not found"
+        # from a fake PDF path) makes build_tailored_resume() fail the build.
+        # Same reason as the _parse_pdf_result patch above -- these tests
+        # fake the PDF-generation subprocess and never write a real file, so
+        # report the text-layer check clean rather than fabricating PDFs.
+        self._validate_pdf_text_patch = patch(
+            "orchestrator.validate_pdf_text.validate_pdf_text", return_value=([], [])
+        )
+        self._validate_pdf_text_patch.start()
+        self.addCleanup(self._validate_pdf_text_patch.stop)
+
+        # B17 also gates the success path on os.path.exists(pdf_out), for
+        # the same "no real file was written" reason -- delegate everything
+        # else to the real filesystem so unrelated exists() checks (KB
+        # files, checkpoints) still behave normally.
+        real_exists = os.path.exists
+
+        def _fake_exists(path):
+            if str(path).endswith(".pdf"):
+                return True
+            return real_exists(path)
+
+        self._pdf_exists_patch = patch("orchestrator.os.path.exists", side_effect=_fake_exists)
+        self._pdf_exists_patch.start()
+        self.addCleanup(self._pdf_exists_patch.stop)
 
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
@@ -97,7 +132,9 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
 
-        with patch.object(self.engine, "mine_bullet_bank") as mock_mine:
+        stdout_buf = io.StringIO()
+        with patch.object(self.engine, "mine_bullet_bank") as mock_mine, \
+                contextlib.redirect_stdout(stdout_buf):
             result = self.engine.build_tailored_resume(
                 jd_path=self.jd_path,
                 master_resume={},
@@ -108,6 +145,10 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertIn("_output_paths", result)
+        # B17 non-regression: a genuinely successful build must still print
+        # the success message and carry a real pdf path in _output_paths.
+        self.assertIn("Pipeline complete!", stdout_buf.getvalue())
+        self.assertTrue(result["_output_paths"]["pdf"])
         # jd_keywords/bullet_tuples were cached, so GeminiClient.generate should
         # only have been called for: 1 bullet critique + 1 builder call + 1 resume critique.
         self.assertEqual(mock_generate.call_count, 3)
@@ -371,6 +412,104 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(result, {})
         # Checkpoint must survive so the next run doesn't redo the API calls.
         self.assertNotEqual(jd_manager.load_checkpoint(self.job_key), {})
+
+    def test_pdf_text_layer_fatal_is_not_reported_as_pipeline_success(self):
+        # B17: reproduces the real captured bug -- the PDF text-layer check
+        # can't parse the rendered file ("Could not parse generated PDF ...
+        # No such file or directory") yet the pipeline used to print
+        # "Pipeline complete!" and hand back a usable result anyway, which
+        # then let run_pipeline() move the JD to completed/ and record a
+        # tracker row for a resume that was never written. A fatal finding
+        # from validate_pdf_text() must now fail the build outright instead.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        fatal_message = "Could not parse generated PDF for verification: [Errno 2] No such file or directory"
+
+        stdout_buf = io.StringIO()
+        with patch("orchestrator.GeminiClient.generate", side_effect=generate_side_effect), \
+             patch("orchestrator.render_html"), \
+             patch("orchestrator.time.sleep", lambda *a, **kw: None), \
+             patch("orchestrator.subprocess.run",
+                   return_value=MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")), \
+             patch("orchestrator.validate_pdf_text.validate_pdf_text", return_value=([fatal_message], [])), \
+             patch.object(self.engine, "mine_bullet_bank"), \
+             contextlib.redirect_stdout(stdout_buf):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result, {})
+        self.assertNotIn("Pipeline complete!", stdout_buf.getvalue())
+        self.assertIn(fatal_message, stdout_buf.getvalue())
+
+    def test_pdf_missing_on_disk_is_not_reported_as_pipeline_success(self):
+        # B17's second, independent gate: even when the text-layer check
+        # itself reports clean, the success print and _output_paths
+        # assignment must still be gated on os.path.exists(pdf_out) --
+        # belt-and-suspenders on top of the fatal-signal test above, for a
+        # PDF that vanishes (or was never written) without validate_pdf_text
+        # noticing.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        def _fake_exists_missing_pdf(path):
+            if str(path).endswith(".pdf"):
+                return False
+            return _REAL_OS_PATH_EXISTS(path)
+
+        stdout_buf = io.StringIO()
+        with patch("orchestrator.GeminiClient.generate", side_effect=generate_side_effect), \
+             patch("orchestrator.render_html"), \
+             patch("orchestrator.time.sleep", lambda *a, **kw: None), \
+             patch("orchestrator.subprocess.run",
+                   return_value=MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")), \
+             patch("orchestrator.validate_pdf_text.validate_pdf_text", return_value=([], [])), \
+             patch("orchestrator.os.path.exists", side_effect=_fake_exists_missing_pdf), \
+             patch.object(self.engine, "mine_bullet_bank"), \
+             contextlib.redirect_stdout(stdout_buf):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result, {})
+        self.assertNotIn("Pipeline complete!", stdout_buf.getvalue())
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")
