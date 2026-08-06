@@ -395,6 +395,50 @@ re-dispatched, since there are no phases left to receive them.
 > **Next up, per §6:** B17, B19 (the rest of Tier 1). B24's page-2
 > layout work is now unblocked by B60, but re-run `resume sample` first,
 > since restoring the missing employers changes what page 2 contains.
+>
+> **2026-08-06 — B19 (`workday` provider discarding every job on every
+> run).** Root cause confirmed exactly as filed: `workday.mjs`'s pagination
+> loop built the full jobs array before returning, `run_provider.mjs` only
+> writes stdout after `fetch()` resolves, and `scripts/scan_boards.py`'s
+> `NODE_TIMEOUT_SECONDS = 30` kills the subprocess well before a ~100-page,
+> 94-second run (NVIDIA, live) ever gets there -- 100% of collected jobs
+> discarded, every Workday company, every scan. Fix is entirely inside
+> `board-scanners/providers/workday.mjs` (no `scripts/` changes -- B17 was
+> concurrently in progress there): pagination now runs through a new
+> exported `paginateWorkdayJobs()` bounded by three independent guards --
+> a page cap (`WORKDAY_MAX_PAGES = 50`, mirroring `smartrecruiters.mjs:13`),
+> a wall-clock time budget (`WORKDAY_TIME_BUDGET_MS = 20_000`, leaving
+> headroom under the 30s parent kill) checked every iteration, and an
+> inter-page delay (`WORKDAY_PAGE_DELAY_MS = 300`) for politeness -- any of
+> which now yields whatever jobs were already collected instead of the
+> loop silently running until the parent kills the whole process. Requests
+> route through `_http.mjs`'s `ctx.fetchJson` (the `_ctx` parameter --
+> previously received and ignored -- is now used, consistent with every
+> other provider), which both applies its own timeout and throws on a
+> non-ok response; a 429 or any other paginated-request failure is now
+> caught and stops the loop cleanly, returning pages already gathered
+> rather than losing them to an uncaught throw. `const limit = data?.limit
+> ?? 20` is replaced by an exported `resolveWorkdayLimit()` using `||`, so
+> a board reporting `limit: 0` (which `??` let through, turning `offset +=
+> limit` into an infinite loop bounded only by the 30s kill) now falls back
+> to the same default of 20. **Left alone, out of scope:** the *initial*
+> page load's own `page.goto()` (30s) and XHR-intercept (20s) timeouts --
+> separate call sites the doc's fix list doesn't name; the new 20s budget
+> governs only the paginated-fetch phase that follows.
+> No Node test harness exists for `board-scanners/providers/*.mjs`
+> (confirmed: no `package.json` test script, no other `*.test.mjs`/
+> `*.spec.mjs` file in the directory) -- added
+> `board-scanners/providers/workday.test.mjs` using Node's built-in
+> `node:test` + `node:assert`, mirroring `smartrecruiters.mjs`'s existing
+> pattern of exporting a pure function for unit testing rather than
+> exercising a live network call. 8 tests, all passing, mocking
+> `ctx.fetchJson`: normal pagination to completion; the page cap stopping a
+> huge `total` at exactly `maxPages` calls; a `limit: 0` bounded by the cap
+> instead of spinning forever; a mid-loop 429 (`ctx.fetchJson`-shaped
+> thrown error) returning the 2 pages already collected rather than 0; and
+> a past deadline returning immediately with nothing fetched. No live
+> Workday call made. Python suite unaffected, as expected (no Python file
+> touched): 1178 passed (same count as after B16), 0 failed.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

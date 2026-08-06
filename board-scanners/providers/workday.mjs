@@ -15,6 +15,89 @@ const WORKDAY_HOST_RE = /\.myworkdayjobs\.com/;
 // Workday's internal search endpoint path (consistent across tenants)
 const SEARCH_PATH_RE = /\/wday\/cxs\/[^/]+\/[^/]+\/jobs$/;
 
+// Pagination safety net — see B19 (docs/review/phase-9-backlog.md). Measured
+// live against NVIDIA: ~100 back-to-back unthrottled POSTs, 94 seconds total,
+// against `scripts/scan_boards.py`'s NODE_TIMEOUT_SECONDS = 30 subprocess
+// kill. All four bounds below exist so a large board degrades to a partial
+// result instead of the whole run being discarded:
+const WORKDAY_MAX_PAGES = 50;          // mirrors smartrecruiters.mjs:13
+const WORKDAY_PAGE_DELAY_MS = 300;     // politeness delay between paginated POSTs
+const WORKDAY_TIME_BUDGET_MS = 20_000; // stay well under the 30s parent timeout
+const WORKDAY_DEFAULT_LIMIT = 20;      // fallback when the board reports limit: 0
+
+/**
+ * Resolves the effective page size from a Workday search response. Exported
+ * for unit tests. `data.limit` can come back as `0` on some boards; `||`
+ * (not `??`) treats any falsy limit -- 0 included -- as invalid and falls
+ * back to WORKDAY_DEFAULT_LIMIT, closing the `offset += 0` infinite-loop bug
+ * from B19.
+ * @param {any} data
+ * @returns {number}
+ */
+export function resolveWorkdayLimit(data) {
+  return data?.limit || WORKDAY_DEFAULT_LIMIT;
+}
+
+/**
+ * Paginates through Workday's search endpoint via `ctx.fetchJson`, picking
+ * up after the already-collected first page. Exported for unit tests -- see
+ * workday.test.mjs. Bounded by a page cap, a wall-clock time budget, and an
+ * inter-page delay (all overridable so tests don't have to wait on the real
+ * ones); a request failure (429, network error, or any non-ok response --
+ * `ctx.fetchJson` throws on those) stops the loop and returns what has been
+ * collected so far instead of discarding it.
+ * @param {import('./_types.js').Context} ctx
+ * @param {string} apiBase
+ * @param {string} baseUrl
+ * @param {string} companyName
+ * @param {number} limit
+ * @param {number} total
+ * @param {{maxPages?: number, delayMs?: number, deadline?: number}} [opts]
+ * @returns {Promise<Array<{title: string, url: string, company: string, location: string}>>}
+ */
+export async function paginateWorkdayJobs(ctx, apiBase, baseUrl, companyName, limit, total, opts = {}) {
+  const maxPages = opts.maxPages ?? WORKDAY_MAX_PAGES;
+  const delayMs = opts.delayMs ?? WORKDAY_PAGE_DELAY_MS;
+  const deadline = opts.deadline ?? (Date.now() + WORKDAY_TIME_BUDGET_MS);
+  const jobs = [];
+
+  for (
+    let offset = limit, pageNum = 0;
+    offset < total && pageNum < maxPages;
+    offset += limit, pageNum++
+  ) {
+    if (Date.now() >= deadline) break; // out of time budget -- return what we have
+
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+    let page2;
+    try {
+      page2 = await ctx.fetchJson(apiBase, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit, offset, searchText: '', appliedFacets: {} }),
+      });
+    } catch {
+      // Rate limited (429) or other transient failure mid-pagination -- return
+      // the jobs already collected instead of discarding them.
+      break;
+    }
+
+    const more = Array.isArray(page2?.jobPostings) ? page2.jobPostings : [];
+    for (const j of more) {
+      const jobUrl = j.externalPath ? `${baseUrl}${j.externalPath}` : '';  // same fix as above
+      jobs.push({
+        title: j.title || '',
+        url: jobUrl,
+        company: companyName,
+        location: j.locationsText || '',
+      });
+    }
+  }
+
+  return jobs;
+}
+
 function resolveBaseUrl(entry) {
   const url = entry.careers_url || '';
   if (!WORKDAY_HOST_RE.test(url)) return null;
@@ -42,9 +125,11 @@ export default {
 // wrote a screenshot file to whatever the current working directory
 // happened to be on every single fetch -- removed as a real bug found
 // while vendoring, not a deliberate feature.
-  async fetch(entry, _ctx) {
+  async fetch(entry, ctx) {
     const baseUrl = resolveBaseUrl(entry);
     if (!baseUrl) throw new Error(`cannot derive board URL for ${entry.name}`);
+
+    const deadline = Date.now() + WORKDAY_TIME_BUDGET_MS;
 
     let chromium;
     try {
@@ -114,36 +199,25 @@ export default {
         });
       }
 
-      // Handle pagination — Workday returns total count and offset
+      // Handle pagination — Workday returns total count and offset.
       const total = data?.total ?? postings.length;
-      const limit = data?.limit ?? 20;
+      const limit = resolveWorkdayLimit(data);
 
       if (total > limit) {
-        // Fire subsequent page requests directly via fetch — no browser needed
-        // once we have the intercepted endpoint URL pattern
+        // Fire subsequent page requests directly through the shared HTTP
+        // helper — no browser needed once we have the intercepted endpoint
+        // URL pattern. paginateWorkdayJobs bounds this by a page cap, a
+        // wall-clock time budget (so a large board yields a partial result
+        // instead of blowing the parent's subprocess timeout and losing
+        // everything), and an inter-page delay for politeness toward the
+        // target site.
         const { origin, pathname } = new URL(baseUrl);
         const tenant = origin.match(/https?:\/\/([^.]+)\./)?.[1] ?? '';
         const board = pathname.replace(/^\/en-[A-Z]{2}\//, '/').replace(/^\//, '');
         const apiBase = `${origin}/wday/cxs/${tenant}/${board}/jobs`;
 
-        for (let offset = limit; offset < total; offset += limit) {
-          const res = await fetch(apiBase, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ limit, offset, searchText: '', appliedFacets: {} }),
-          });
-          const page2 = await res.json();
-          const more = Array.isArray(page2?.jobPostings) ? page2.jobPostings : [];
-          for (const j of more) {
-            const jobUrl = j.externalPath ? `${baseUrl}${j.externalPath}` : '';  // same fix as above
-            jobs.push({
-              title: j.title || '',
-              url: jobUrl,
-              company: entry.name,
-              location: j.locationsText || '',
-            });
-          }
-        }
+        const morePages = await paginateWorkdayJobs(ctx, apiBase, baseUrl, entry.name, limit, total, { deadline });
+        jobs.push(...morePages);
       }
     } finally {
       await browser.close();
