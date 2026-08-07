@@ -340,6 +340,9 @@ def _followup_cell(application: dict | None) -> str:
     return f"{status} [{color}]({urgency})[/{color}]"
 
 
+_NARROW_TERMINAL_COLUMNS = 110
+
+
 def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
     """Renders picker.list_all_evaluated_jds()'s row list -- or a
     page-sized slice of it -- as a bordered table (the "blue box" browse
@@ -347,22 +350,37 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     so a paginated caller (picker.browse_and_select_jds()) can show true
     positions (51, 52, ...) instead of every page restarting at 1. title
     overrides the panel's title -- defaults to a plain count for
-    non-paginated callers."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
-    table.add_column("#", justify="right", style="dim")
-    table.add_column("Score", justify="right")
-    table.add_column("Recommendation")
-    table.add_column("Company")
-    table.add_column("Title")
-    table.add_column("Posted", justify="right")
-    table.add_column("Status")
-    table.add_column("Last Liveness")
-    table.add_column("Follow-up")
+    non-paginated callers.
+
+    Nine columns with no explicit sizing used to mean Rich divided any
+    width deficit evenly across all of them, eating the header text itself
+    below ~120 columns ("Recom…", "Compa…", "Liven…") -- 80 and 100 are
+    ordinary terminal widths, not edge cases (B22). Fixed widths on the
+    short columns (#/Score/Posted/Status) protect their headers; Title
+    gets the one `ratio` column so it absorbs whatever's left; Last
+    Liveness/Follow-up -- the two least essential at a glance -- drop
+    entirely below _NARROW_TERMINAL_COLUMNS rather than shrinking
+    everything else past legibility."""
+    narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
+    table.add_column("#", justify="right", style="dim", width=3, no_wrap=True)
+    table.add_column("Score", justify="right", width=6, no_wrap=True)
+    table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
+    table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Posted", justify="right", width=8, no_wrap=True)
+    table.add_column("Status", width=10, no_wrap=True, overflow="ellipsis")
+    if not narrow:
+        table.add_column("Last Liveness", width=22, no_wrap=True, overflow="ellipsis")
+        # 20 fits the longest real cell ("Interview (waiting)") without
+        # truncating the urgency word itself -- that's the part that
+        # actually matters at a glance, unlike Last Liveness's date.
+        table.add_column("Follow-up", width=20, no_wrap=True, overflow="ellipsis")
 
     for i, r in enumerate(rows, start_index):
         evaluation = r["evaluation"]
         color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), theme.MUTED)
-        table.add_row(
+        cells = [
             str(i),
             f"[{color}]{evaluation.get('composite_score', 0):.2f}/5[/{color}]",
             f"[{color}]{evaluation.get('recommendation')}[/{color}]",
@@ -370,12 +388,19 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
             r["title"] or "?",
             _posting_age_cell(evaluation.get("posting_age_days")),
             r["status"],
-            _liveness_cell(r.get("liveness")),
-            _followup_cell(r.get("application")),
-        )
+        ]
+        if not narrow:
+            cells.append(_liveness_cell(r.get("liveness")))
+            cells.append(_followup_cell(r.get("application")))
+        table.add_row(*cells)
 
+    subtitle = (
+        "[dim]Last Liveness/Follow-up hidden below ~110 columns -- widen your terminal to see them[/dim]"
+        if narrow else None
+    )
     console.print(Panel(
-        table, title=title or f"{len(rows)} evaluated JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
+        table, title=title or f"{len(rows)} evaluated JD(s)", subtitle=subtitle,
+        border_style=theme.BRAND, box=box.ROUNDED,
     ))
 
 
@@ -589,6 +614,7 @@ def _render_scan_warnings(source_results: list) -> None:
 # there's exactly one place to update instead of two copies drifting apart.
 HELP_ENTRIES = [
     ("resume", "launch the interactive menu"),
+    ("resume bootstrap", "new-user setup: ingest documents, draft your profile, build the bullet bank"),
     ("resume activate", "cd into the project and activate the venv (stays active in this shell)"),
     ("resume cd", "just cd into the project"),
     ("resume run", "tailor+render every pending JD in jds/ (batch mode)"),

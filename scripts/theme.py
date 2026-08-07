@@ -6,6 +6,7 @@ copies -- see docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md.
 """
 
 import os
+import sys
 
 from questionary import Style
 from rich.console import Console
@@ -14,8 +15,12 @@ from rich.console import Console
 # remapped by whatever terminal theme is active; this project has already
 # hit that in practice (see README's "Colors" section: `cyan` washed out
 # to near-invisible gray on a dark-teal theme).
+# BRAND_ACCENT was #673ab7 (2.27:1 against a dark terminal background --
+# the lowest-contrast color in the whole palette, and the one driving the
+# questionary selection pointer/highlighted row plus every table header).
+# Lightened to clear 4.5:1 AA on dark (8.77:1 against black) -- see B23.
 BRAND = "#4dabf7"
-BRAND_ACCENT = "#673ab7"
+BRAND_ACCENT = "#b39ddb"
 SUCCESS = "#4caf50"
 ERROR = "#c96a6a"
 WARNING = "#f5c542"
@@ -61,29 +66,78 @@ _NERD_ICONS = {
 
 # Plain Unicode fallback -- renders correctly with no special font. See
 # README's "Fonts"/Setup notes for how to opt in via RESUME_BUILDER_ICONS.
+#
+# B22/P1F7: four of the original picks here (evaluate/build/skip/save) are
+# real emoji with Emoji_Presentation=Yes -- terminals render those as
+# full-color, double-width glyphs regardless of ANSI foreground, which
+# both breaks Rich's column-width math (it assumes single-width) and
+# ignores the theme entirely. Replaced with plain ASCII, which is
+# guaranteed single-width and colorless-by-default in every terminal/font,
+# same safety class as warning/utility's ⚠/⚙ (Emoji_Presentation=No,
+# render as narrow text glyphs, not touched here since they're already
+# fine). hint/discovery/resume/gem's diamond/circle/triangle glyphs are
+# ambiguous-width (not emoji, but can measure wide under some CJK-font
+# configurations) -- also moved to ASCII rather than relying on locale.
 _UNICODE_ICONS = {
     "success": "✓",  # ✓
     "error": "✗",  # ✗
     "warning": "⚠",  # ⚠
-    "hint": "◆",  # diamond (priority/insight)
-    "discovery": "◎",  # circle (search/explore)
-    "evaluate": "📊",  # bar chart (metrics)
-    "build": "⚡",  # lightning (action/power)
+    "hint": "!",  # note/FYI (was ◆, ambiguous-width)
+    "discovery": "?",  # search/explore (was ◎, ambiguous-width)
+    "evaluate": "%",  # score/metrics (was 📊, double-width emoji)
+    "build": "+",  # action/construct (was ⚡, double-width emoji)
     "utility": "⚙",  # gear (settings/tools)
     "bullet_bank": "□",  # box (storage/database)
-    "skip": "🚫",  # ban (rejection)
-    "save": "💾",  # floppy (iconic archive)
-    "resume": "▶",  # play (start/action)
+    "skip": "-",  # excluded/rejection (was 🚫, double-width emoji)
+    "save": "s",  # save/archive (was 💾, double-width emoji)
+    "resume": ">",  # play/continue (was ▶, ambiguous-width)
     "complete": "✓",  # checkmark (done, consistent with success)
-    "gem": "◆",  # diamond (quality/priority)
+    "gem": "*",  # quality/priority (was ◆, ambiguous-width)
 }
 
-# Nerd Font is the default -- set RESUME_BUILDER_ICONS=unicode (exact,
-# case-sensitive match) to fall back to the plain-Unicode set. Any other
-# or unset value fails toward the enhanced default, not toward breakage --
-# a typo'd env var shouldn't silently degrade someone who does have a
-# Nerd Font active.
-ICONS = _UNICODE_ICONS if os.environ.get("RESUME_BUILDER_ICONS") == "unicode" else _NERD_ICONS
+# Icon-set resolution, in priority order (B33):
+#   1. RESUME_BUILDER_ICONS=unicode (exact, case-sensitive match) -- an
+#      explicit override always wins and is never re-asked.
+#   2. This profile's persisted first-launch answer (ui_config.py), if any.
+#   3. A real terminal with no answer yet: default to Nerd Font (today's
+#      icons) until the interactive prompt (menu._confirm_icon_set(), run
+#      once at startup) asks and persists a real answer.
+#   4. No terminal (piped output, CI, tests) and no answer yet: default to
+#      Unicode -- deterministic and never garbled, unlike guessing at font
+#      support that can't actually be probed from a TTY.
+def _resolve_icon_set_name() -> str:
+    if os.environ.get("RESUME_BUILDER_ICONS") == "unicode":
+        return "unicode"
+    try:
+        import ui_config
+        persisted = ui_config.get_icon_set()
+    except Exception:
+        persisted = None
+    if persisted:
+        return persisted
+    if sys.stdin.isatty():
+        return "nerd"
+    return "unicode"
+
+
+_ICON_SET_NAME = _resolve_icon_set_name()
+ICONS = _UNICODE_ICONS if _ICON_SET_NAME == "unicode" else _NERD_ICONS
+
+
+def set_icon_set(name: str) -> None:
+    """Switches the active icon set at runtime -- called by menu.py's
+    first-launch prompt right after it persists the user's answer, so the
+    rest of the same session reflects the choice immediately rather than
+    needing a restart. Reassigns the module-level ICONS binding in place
+    (mirrors profile_paths.set_active_profile()'s "mutate, don't
+    reimport" convention) so every existing `theme.colorize_icon()` etc.
+    call -- which reads ICONS as a module global at call time, not at
+    def time -- picks up the change immediately."""
+    global ICONS, _ICON_SET_NAME
+    if name not in ("nerd", "unicode"):
+        raise ValueError(f"name must be 'nerd' or 'unicode', got {name!r}")
+    _ICON_SET_NAME = name
+    ICONS = _UNICODE_ICONS if name == "unicode" else _NERD_ICONS
 
 # Map icon names to Rich markup colors for colorized output
 _ICON_COLORS = {
