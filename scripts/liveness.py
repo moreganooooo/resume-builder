@@ -144,7 +144,13 @@ def _verify_candidates(candidates: list) -> dict:
             proc = subprocess.Popen(
                 ["node", script, "--json-file", LIVENESS_INPUT_PATH],
                 stdout=stdout_file, stderr=subprocess.PIPE, text=True, bufsize=1,
-                env=_child_env(),
+                # RESUME_BUILDER_ICONS: check-liveness.mjs's stderr progress
+                # lines are streamed straight to the terminal below (B21),
+                # raw icons and all -- there's no shared theming layer
+                # across the JS/Python boundary, so without this the child
+                # only ever sees an explicit shell-level override, never
+                # this process's resolved preference (B45).
+                env={**_child_env(), "RESUME_BUILDER_ICONS": theme.icon_set_name()},
             )
             try:
                 # Stream progress as the Node child writes it, instead of

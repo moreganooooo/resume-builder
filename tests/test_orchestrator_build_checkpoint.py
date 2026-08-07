@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -400,6 +401,50 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(returncode=1, stdout="", stderr="node crashed")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(result, {})
+        # Checkpoint must survive so the next run doesn't redo the API calls.
+        self.assertNotEqual(jd_manager.load_checkpoint(self.job_key), {})
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_pdf_timeout_leaves_checkpoint_and_returns_falsy(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # B21 "same class" fix: a hung Chromium/font-load used to block this
+        # call forever (no timeout=). Confirms a timeout is now caught and
+        # handled the same way a nonzero returncode already is, rather than
+        # propagating as an uncaught exception.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps({"SUMMARY": "Test summary."}), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.side_effect = subprocess.TimeoutExpired(cmd="node", timeout=180)
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
