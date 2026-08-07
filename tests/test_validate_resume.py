@@ -376,6 +376,218 @@ class TestRoleRoster(unittest.TestCase):
         self.assertTrue(any("VML" in v for v in violations))
 
 
+class TestRoleOrder(unittest.TestCase):
+    """Mercor (08/2025) shipped rendered after Inside Sales Team (10/2015-
+    08/2016) and Treering (08/2016-08/2024), even though profile.yml's
+    roles: list -- already in correct reverse-chronological order -- had
+    Mercor first. Nothing checked that the model's EXPERIENCE ordering
+    actually matched the declared roster order."""
+
+    def _resume(self, companies):
+        return {"EXPERIENCE": [
+            {"title": "Some Title", "company": c, "period": "2020-2024",
+             "achievements": ["Did a thing."]}
+            for c in companies
+        ]}
+
+    def test_correct_order_produces_no_violation(self):
+        self.assertEqual(
+            validate_resume._check_role_order(
+                self._resume(["Mercor", "Treering", "Callahan Creek"]),
+                ["Mercor", "Treering", "Callahan Creek"],
+            ), [],
+        )
+
+    def test_out_of_order_company_is_a_violation(self):
+        violations = validate_resume._check_role_order(
+            self._resume(["Treering", "Inside Sales Team", "Mercor", "Callahan Creek"]),
+            ["Mercor", "Treering", "Inside Sales Team", "Callahan Creek"],
+        )
+        self.assertEqual(len(violations), 1)
+        self.assertIn("Mercor", violations[0])
+
+    def test_a_missing_company_does_not_also_register_as_an_order_violation(self):
+        # Absence is _check_role_roster()'s job; skip it here so one gap
+        # doesn't burn a fix attempt on a phantom order problem too.
+        self.assertEqual(
+            validate_resume._check_role_order(
+                self._resume(["Mercor", "Callahan Creek"]),
+                ["Mercor", "Treering", "Callahan Creek"],
+            ), [],
+        )
+
+    def test_an_annotated_company_name_still_matches_for_ordering(self):
+        self.assertEqual(
+            validate_resume._check_role_order(
+                self._resume(["Mercor", "Inside Sales Team (Now Alleyoop)"]),
+                ["Mercor", "Inside Sales Team"],
+            ), [],
+        )
+
+    def test_extra_company_beyond_the_roster_does_not_break_ordering(self):
+        self.assertEqual(
+            validate_resume._check_role_order(
+                self._resume(["Mercor", "Situational Co", "Treering"]),
+                ["Mercor", "Treering"],
+            ), [],
+        )
+
+    def test_empty_roster_skips_the_check(self):
+        self.assertEqual(validate_resume._check_role_order(self._resume([]), []), [])
+
+    def test_validate_threads_the_order_check_through(self):
+        violations = validate_resume.validate(
+            self._resume(["Treering", "Mercor"]), {}, ["Mercor", "Treering"],
+        )
+        self.assertTrue(any("Work history order" in v for v in violations))
+
+
+class TestBulletCounts(unittest.TestCase):
+    """Element 8 / Strategy LLC, VML, and Callahan Creek each shipped with 2
+    achievement bullets against a declared min_bullets of 3 -- the ROLE
+    RULES block told the model the target, but nothing checked the model
+    hit it."""
+
+    def _resume(self, company_bullet_counts):
+        return {"EXPERIENCE": [
+            {"title": "Some Title", "company": c, "period": "2020-2024",
+             "achievements": [f"Did thing {i}." for i in range(n)]}
+            for c, n in company_bullet_counts.items()
+        ]}
+
+    def test_below_minimum_is_a_violation_naming_company_and_count(self):
+        violations = validate_resume._check_bullet_counts(
+            self._resume({"VML": 2}), {"VML": 3},
+        )
+        self.assertEqual(len(violations), 1)
+        self.assertIn("VML", violations[0])
+        self.assertIn("2", violations[0])
+        self.assertIn("3", violations[0])
+
+    def test_meeting_the_minimum_exactly_produces_no_violation(self):
+        self.assertEqual(
+            validate_resume._check_bullet_counts(self._resume({"VML": 3}), {"VML": 3}),
+            [],
+        )
+
+    def test_exceeding_the_minimum_produces_no_violation(self):
+        self.assertEqual(
+            validate_resume._check_bullet_counts(self._resume({"VML": 5}), {"VML": 3}),
+            [],
+        )
+
+    def test_every_deficient_company_is_reported(self):
+        violations = validate_resume._check_bullet_counts(
+            self._resume({"VML": 2, "Callahan Creek": 1, "Treering": 6}),
+            {"VML": 3, "Callahan Creek": 3, "Treering": 6},
+        )
+        self.assertEqual(len(violations), 2)
+
+    def test_an_annotated_company_name_still_matches_for_bullet_counts(self):
+        self.assertEqual(
+            validate_resume._check_bullet_counts(
+                self._resume({"Callahan Creek (Now BarkleyOKRP)": 3}),
+                {"Callahan Creek": 3},
+            ), [],
+        )
+
+    def test_company_with_no_declared_minimum_is_skipped_not_flagged(self):
+        self.assertEqual(
+            validate_resume._check_bullet_counts(
+                self._resume({"Situational Co": 1}), {"VML": 3},
+            ), [],
+        )
+
+    def test_empty_minimums_skips_the_check(self):
+        self.assertEqual(validate_resume._check_bullet_counts(self._resume({}), {}), [])
+
+    def test_validate_threads_the_minimums_through(self):
+        violations = validate_resume.validate(
+            self._resume({"VML": 1}), {}, role_bullet_minimums={"VML": 3},
+        )
+        self.assertTrue(any("Bullet count" in v for v in violations))
+
+
+class TestBulletWidows(unittest.TestCase):
+    """style_rules.yaml's bullet_structure has declared widow_min_words: 5
+    since it was written, but nothing checked it -- a live resume shipped
+    with bullets wrapping to a 2- and 4-word 2nd line. Confirmed against
+    the actual rendered PDF: the char-120 cutoff correctly identified both
+    real widows (off by one word on the shorter one, which is fine -- the
+    approximation only needs to catch the case, not count exactly)."""
+
+    LIMITS = {"bullet_structure": {"one_liner_max_chars": 120, "two_liner_max_chars": 220, "widow_min_words": 5}}
+
+    def _resume(self, bullets, company="Acme"):
+        return {"EXPERIENCE": [{"title": "Some Title", "company": company, "period": "2020-2024", "achievements": bullets}]}
+
+    def test_flags_a_bullet_with_a_short_widow(self):
+        # Real example from a shipped resume: wraps with a 4-word 2nd line.
+        bullet = ("Produced campaign-ready copy across multiple enterprise accounts, "
+                  "adapting voice and strategy across B2B tech, hospitality, and consumer categories")
+        violations = validate_resume._check_bullet_widows(self._resume([bullet]), self.LIMITS)
+        self.assertEqual(len(violations), 1)
+        self.assertIn(bullet, violations[0])
+
+    def test_one_liner_that_fits_is_not_flagged(self):
+        self.assertEqual(
+            validate_resume._check_bullet_widows(
+                self._resume(["Recovered $3M+ in stale pipeline through a systematic CRM audit"]),
+                self.LIMITS,
+            ), [],
+        )
+
+    def test_two_liner_with_a_full_second_line_is_not_flagged(self):
+        # Wraps to a 2nd line, but a substantial one -- not a widow.
+        bullet = ("Architected a Content Systems case study by founding and chairing the Content "
+                  "Committee, governing 100+ campaign assets and establishing brand voice standards")
+        self.assertEqual(
+            validate_resume._check_bullet_widows(self._resume([bullet]), self.LIMITS), [],
+        )
+
+    def test_bullet_past_two_liner_max_is_not_double_flagged(self):
+        # _check_bullet_lengths()'s job, not this check's.
+        self.assertEqual(
+            validate_resume._check_bullet_widows(self._resume(["X" * 221]), self.LIMITS), [],
+        )
+
+    def test_education_bullets_are_not_checked(self):
+        """Education bullets are fixed Python content (fixed_content.py) with
+        no LLM in the loop -- flagging one here would create a violation the
+        4-attempt fix loop could never resolve, exhausting it every build
+        that happens to select that achievement option."""
+        resume = self._resume([])
+        resume["EDUCATION"] = [{"institution": "KU", "bullets": [
+            "Marketing Intern, Lied Center of Performing Arts, drove 800% social media "
+            "follower growth through organic content strategy and audience engagement",
+        ]}]
+        self.assertEqual(validate_resume._check_bullet_widows(resume, self.LIMITS), [])
+
+    def test_validate_threads_the_widow_check_through(self):
+        bullet = "Worked across the full creative development cycle, from brief and concepting through copy revisions and client presentation"
+        violations = validate_resume.validate(self._resume([bullet]), self.LIMITS)
+        self.assertTrue(any("widow" in v.lower() for v in violations))
+
+
+class TestBulletsWithShortWidow(unittest.TestCase):
+    """bullets_with_short_widow() is the shared helper both
+    validate_resume._check_bullet_widows() and orchestrator.py's
+    _short_widow_bullets() call, so the pre-render fix loop and the
+    page-overflow trim step can never drift onto different thresholds."""
+
+    LIMITS = {"bullet_structure": {"one_liner_max_chars": 120, "two_liner_max_chars": 220, "widow_min_words": 5}}
+
+    def test_returns_bullet_and_word_count_pairs(self):
+        bullet = "Worked across the full creative development cycle, from brief and concepting through copy revisions and client presentation"
+        results = validate_resume.bullets_with_short_widow([bullet], self.LIMITS)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], bullet)
+        self.assertIsInstance(results[0][1], int)
+
+    def test_empty_list_in_empty_list_out(self):
+        self.assertEqual(validate_resume.bullets_with_short_widow([], self.LIMITS), [])
+
+
 ATS_MATCH_RULES = {
     "thresholds": {"excellent_match": 85, "good_match": 70, "weak_match": 50},
 }

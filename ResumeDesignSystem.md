@@ -100,7 +100,7 @@ Before generating any resume, the system must perform a structured research pass
 - Page size: **Letter (8.5 × 11 in)** for US/Canada roles; A4 only for explicitly international roles.[^1][^3]
 - Margins: **0.5 in** on all sides; content width ~7.5 in.[^1]
 - Fonts:
-  - **DM Serif Display 400** – used for the name (32pt) and section headers (16pt).[^1]
+  - **DM Serif Display 400** – used for the name (36pt) and section headers (16pt).[^1]
   - **DM Sans 400/600** – for all body text, tagline, contact row, job metadata, skills, bullets.[^1]
   - Inter is prohibited, because Chromium/Playwright sometimes renders reversed text when copying from PDFs using Inter.[^4]
 - Color palette:
@@ -110,8 +110,8 @@ Before generating any resume, the system must perform a structured research pass
 
 ### Header Block
 
-- Name: DM Serif Display, 32pt, normal weight, black.[^1]
-- Tagline: DM Sans, 14pt, all caps, *hard‑coded* uppercase in HTML (not via CSS `text-transform`) to avoid reversed text bugs.[^1]
+- Name: DM Serif Display, 36pt, normal weight, black. (Bumped from 32pt 2026-08-06 -- the header had visual room to spare.)[^1]
+- Tagline: DM Sans, 15pt, all caps, *hard‑coded* uppercase in HTML (not via CSS `text-transform`) to avoid reversed text bugs. (Bumped from 14pt 2026-08-06 alongside the name; see style_rules.yaml's `tagline.max_chars`, scaled down to 56 to match.)[^1]
 - Contact row: DM Sans, 9.75pt, using separators (`·` or `|`) between phone, email, LinkedIn, location.[^4]
 - Updated: no portfolio link (removed resume-wide); LinkedIn is plain text (spelled-out URL, no hyperlink) rather than a clickable link, since hyperlinks in a resume can read as a red flag to some ATS parsers.
 - Updated: all contact info (name, phone, email, LinkedIn, location) is fixed content -- it doesn't vary by JD, so the builder no longer generates it.
@@ -177,7 +177,7 @@ The tagline is generated automatically from the JD and archetype.[^1]
   - B2B Content → “Brand Voice & Campaign Copywriter”
   - Marketing Ops → “CRM Campaign Systems Specialist”
   - Generalist Coordinator → “Campaign Strategy & Lifecycle Marketing”[^1]
-- Tagline must fit on one printed line; if too long, condense by removing words repeated between the two halves rather than shortening either half awkwardly. Updated: max 60 characters (empirically measured via real 14pt DM Sans rendering -- a prior "70–80 characters" target was wrong; a 65-char tagline already wrapped to a 2nd line).[^1]
+- Tagline must fit on one printed line; if too long, condense by removing words repeated between the two halves rather than shortening either half awkwardly. Updated: max 56 characters (empirically measured via real 14pt DM Sans rendering, then scaled to the current 15pt tagline size -- a prior "70–80 characters" target was wrong; a 65-char tagline already wrapped to a 2nd line at 14pt).[^1]
 
 ### Copywriter/Communications Variants
 

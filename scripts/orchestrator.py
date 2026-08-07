@@ -491,32 +491,22 @@ def _sanitize_none_for_prompt(value):
 def _short_widow_bullets(resume_data: dict, companies: set, style_rules: dict) -> list[str]:
     """
     Returns bullets (verbatim achievement text) belonging to `companies`
-    that wrap to a second line but leave a short widow there -- the same
-    "short widow" concept validate_resume.py's skills-line check already
-    enforces, applied here to bullets instead. The trim call never sees
-    the rendered PDF, so it can't visually judge which bullets wrap with a
-    short widow -- this computes it deterministically from
-    bullet_structure's one_liner_max_chars/two_liner_max_chars/
-    widow_min_words (style_rules.yaml), same character-count-approximation
-    approach the skills-line widow check already uses, rather than asking
-    the model to guess.
+    that wrap to a second line but leave a short widow there. Detection
+    itself lives in validate_resume.bullets_with_short_widow() -- shared
+    with validate()'s own pre-render widow check so the trim step here
+    (page-overflow only) and the general fix loop (runs on every build,
+    independent of page count) can never drift onto different thresholds.
     """
-    limits = style_rules.get("bullet_structure", {})
-    one_liner_max = limits.get("one_liner_max_chars", 120)
-    two_liner_max = limits.get("two_liner_max_chars", 220)
-    widow_min_words = limits.get("widow_min_words", 5)
-
-    candidates = []
-    for job in resume_data.get("EXPERIENCE", []):
-        if job.get("company") not in companies:
-            continue
-        for bullet in job.get("achievements", []):
-            length = len(bullet)
-            if one_liner_max < length <= two_liner_max:
-                overflow_words = len(bullet[one_liner_max:].split())
-                if overflow_words < widow_min_words:
-                    candidates.append(bullet)
-    return candidates
+    bullets = [
+        bullet
+        for job in resume_data.get("EXPERIENCE", [])
+        if job.get("company") in companies
+        for bullet in job.get("achievements", [])
+    ]
+    return [
+        bullet
+        for bullet, _word_count in validate_resume.bullets_with_short_widow(bullets, style_rules)
+    ]
 
 
 def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
@@ -560,6 +550,25 @@ def _required_role_roster(profile_data: dict) -> list[str]:
         name for role in (profile_data.get("roles") or [])
         if (name := str(role.get("name", "")).strip()) and name not in situational
     ]
+
+
+def _required_role_bullet_minimums(profile_data: dict) -> dict[str, int]:
+    """profile.yml's roles: min_bullets, keyed by company name.
+
+    This is the same per-role floor build_role_rules_block()'s "Per-Role
+    Bullet Count Targets" table already tells the model -- nothing
+    checked it was actually followed, which is how Element 8 / Strategy
+    LLC, VML, and Callahan Creek each shipped with 2 bullets against a
+    declared min_bullets of 3. Situational roles are excluded for the
+    same reason _required_role_roster() excludes them.
+    """
+    situational = set(situational_roles.load_situational_roles()["roles"].keys())
+    return {
+        name: role["min_bullets"]
+        for role in (profile_data.get("roles") or [])
+        if (name := str(role.get("name", "")).strip()) and name not in situational
+        and role.get("min_bullets") is not None
+    }
 
 
 def _confirm_continue_without_keywords() -> bool:
@@ -2717,6 +2726,7 @@ class ResumeEngine:
         # Same reason, same place: the post-trim gate runs on the resumed path
         # too, so the roster can't be computed inside the fresh-build branch.
         role_roster = _required_role_roster(self.load_yaml(self.kb_dir, "profile.yml"))
+        role_bullet_minimums = _required_role_bullet_minimums(self.load_yaml(self.kb_dir, "profile.yml"))
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
@@ -2801,7 +2811,7 @@ class ResumeEngine:
 
             resume_data = normalize_resume.normalize(resume_data)
 
-            violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster)
+            violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
             max_fix_attempts = 4
             fix_attempt = 0
             while violations and fix_attempt < max_fix_attempts:
@@ -2897,7 +2907,7 @@ class ResumeEngine:
                     print(f"  {theme.colorize_icon_ansi('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.")
                     continue
                 resume_data = normalize_resume.normalize(fixed)
-                violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster)
+                violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
 
             if violations:
                 print(f"  {theme.colorize_icon_ansi('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:")
@@ -3144,7 +3154,7 @@ class ResumeEngine:
                     this_skipped = rec_result.pop("skipped_recommendations", [])
                     this_needs_input = rec_result.pop("needs_personal_input", [])
                     candidate_resume_data = normalize_resume.normalize(rec_result)
-                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation, role_roster)
+                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
                     if rec_violations:
                         print(f"    WARNING: introduced {len(rec_violations)} validator violation(s); "
                               f"discarding just this recommendation:")
@@ -3297,7 +3307,7 @@ class ResumeEngine:
                 continue
 
             trimmed_resume_data = normalize_resume.normalize(trimmed)
-            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation, role_roster)
+            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
             if trim_violations:
                 print(f"  {theme.colorize_icon_ansi('warning')}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:")
