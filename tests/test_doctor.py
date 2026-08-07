@@ -46,6 +46,16 @@ class TestCheckVenv(unittest.TestCase):
         result = doctor.check_venv()
         self.assertFalse(result["passed"])
 
+    @patch("doctor.os.path.isfile", return_value=False)
+    @patch("doctor.os.path.isdir", return_value=False)
+    def test_failing_detail_does_not_claim_ready_to_use(self, mock_isdir, mock_isfile):
+        # B32: detail used to hardcode "ready to use" regardless of the
+        # actual passed/failed verdict.
+        result = doctor.check_venv()
+        self.assertFalse(result["passed"])
+        self.assertNotIn("ready to use", result["detail"])
+        self.assertIn("not usable", result["detail"])
+
 
 class TestCheckPythonPackages(unittest.TestCase):
 
@@ -81,17 +91,42 @@ class TestCheckNode(unittest.TestCase):
         self.assertIn("nodejs.org", result["fix"])
 
 
+class TestCheckNpm(unittest.TestCase):
+
+    @patch("doctor.shutil.which", side_effect=lambda cmd: f"/usr/local/bin/{cmd}")
+    def test_passes_when_both_found(self, mock_which):
+        result = doctor.check_npm()
+        self.assertTrue(result["passed"])
+
+    @patch("doctor.shutil.which", return_value=None)
+    def test_fails_when_neither_found(self, mock_which):
+        result = doctor.check_npm()
+        self.assertFalse(result["passed"])
+        self.assertIn("nodejs.org", result["fix"])
+
+
 class TestCheckPlaywrightNpmPackage(unittest.TestCase):
 
     @patch("doctor.os.path.isdir", return_value=True)
     def test_passes_when_present(self, mock_isdir):
         self.assertTrue(doctor.check_playwright_npm_package()["passed"])
 
+    @patch("doctor.shutil.which", return_value="/usr/local/bin/npm")
     @patch("doctor.os.path.isdir", return_value=False)
-    def test_fails_with_npm_install_fix(self, mock_isdir):
+    def test_fails_with_npm_install_fix(self, mock_isdir, mock_which):
         result = doctor.check_playwright_npm_package()
         self.assertFalse(result["passed"])
         self.assertIn("npm install", result["fix"])
+
+    @patch("doctor.shutil.which", return_value=None)
+    @patch("doctor.os.path.isdir", return_value=False)
+    def test_fix_is_conditional_on_npm_being_available(self, mock_isdir, mock_which):
+        # B32: telling someone without npm to run `npm install` with no
+        # other context is a dead end -- the fix should point at the
+        # npm/npx check first.
+        result = doctor.check_playwright_npm_package()
+        self.assertFalse(result["passed"])
+        self.assertIn("npm/npx check", result["fix"])
 
 
 class TestCheckPlaywrightChromium(unittest.TestCase):
@@ -101,11 +136,19 @@ class TestCheckPlaywrightChromium(unittest.TestCase):
     def test_passes_when_a_chromium_install_exists(self, mock_isdir, mock_listdir):
         self.assertTrue(doctor.check_playwright_chromium()["passed"])
 
+    @patch("doctor.shutil.which", return_value="/usr/local/bin/npx")
     @patch("doctor.os.path.isdir", return_value=False)
-    def test_fails_when_cache_dir_missing(self, mock_isdir):
+    def test_fails_when_cache_dir_missing(self, mock_isdir, mock_which):
         result = doctor.check_playwright_chromium()
         self.assertFalse(result["passed"])
         self.assertIn("playwright install chromium", result["fix"])
+
+    @patch("doctor.shutil.which", return_value=None)
+    @patch("doctor.os.path.isdir", return_value=False)
+    def test_fix_is_conditional_on_npx_being_available(self, mock_isdir, mock_which):
+        result = doctor.check_playwright_chromium()
+        self.assertFalse(result["passed"])
+        self.assertIn("npm/npx check", result["fix"])
 
 
 class TestCheckGo(unittest.TestCase):
@@ -173,6 +216,65 @@ class TestCheckSignatureImage(unittest.TestCase):
         self.assertEqual(doctor.check_signature_image()["fix"], "")
 
 
+class TestCheckIconSet(unittest.TestCase):
+
+    def test_always_passes(self):
+        self.assertTrue(doctor.check_icon_set()["passed"])
+
+    @patch.dict(os.environ, {"RESUME_BUILDER_ICONS": "unicode"})
+    def test_reports_env_override(self):
+        result = doctor.check_icon_set()
+        self.assertIn("RESUME_BUILDER_ICONS override", result["detail"])
+
+    @patch.dict(os.environ, {}, clear=False)
+    @patch("ui_config.get_icon_set", return_value="nerd")
+    def test_reports_persisted_choice(self, mock_get):
+        os.environ.pop("RESUME_BUILDER_ICONS", None)
+        result = doctor.check_icon_set()
+        self.assertIn("nerd", result["detail"])
+        self.assertIn("first launch", result["detail"])
+
+    @patch.dict(os.environ, {}, clear=False)
+    @patch("ui_config.get_icon_set", return_value=None)
+    def test_reports_not_yet_chosen(self, mock_get):
+        os.environ.pop("RESUME_BUILDER_ICONS", None)
+        result = doctor.check_icon_set()
+        self.assertIn("not yet chosen", result["detail"])
+
+
+class TestCheckDashboardThemeSync(unittest.TestCase):
+
+    def test_passes_on_the_real_checked_in_file(self):
+        # The committed Go file must already match what the generator
+        # produces from the current theme.py -- this is the actual
+        # regression guard (B23/P2F9): if someone hand-edits the Go file's
+        # hex values, or changes theme.py without re-running the sync
+        # script, this fails.
+        result = doctor.check_dashboard_theme_sync()
+        self.assertTrue(result["passed"], result["detail"])
+
+    def test_fails_when_file_is_out_of_sync(self):
+        import sync_dashboard_theme
+        tmp_path = os.path.join(os.path.dirname(__file__), "_tmp_out_of_sync.go")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write("package theme\n// stale content\n")
+        try:
+            with patch("sync_dashboard_theme.DASHBOARD_THEME_PATH", tmp_path):
+                result = doctor.check_dashboard_theme_sync()
+            self.assertFalse(result["passed"])
+            self.assertIn("sync_dashboard_theme.py", result["fix"])
+        finally:
+            os.remove(tmp_path)
+
+    def test_fails_when_file_is_missing(self):
+        import sync_dashboard_theme
+        missing_path = os.path.join(os.path.dirname(__file__), "_tmp_does_not_exist.go")
+        with patch("sync_dashboard_theme.DASHBOARD_THEME_PATH", missing_path):
+            result = doctor.check_dashboard_theme_sync()
+        self.assertFalse(result["passed"])
+        self.assertIn("not found", result["detail"])
+
+
 class TestCheckKbAllowlist(unittest.TestCase):
 
     def setUp(self):
@@ -236,6 +338,16 @@ class TestCheckKbAllowlist(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("conflict", result["detail"])
         self.assertIn("sync-conflict", result["detail"])
+
+    def test_collapses_to_one_line_when_fully_unbootstrapped(self):
+        # B32: nothing present at all (a brand-new profile) is "never
+        # bootstrapped," not "partially broken" -- collapse instead of
+        # listing every one of KB_ALLOWLIST's filenames.
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("0 of 2 present", result["detail"])
+        self.assertNotIn("bullet-bank.md", result["detail"])
+        self.assertIn("resume bootstrap", result["fix"])
 
 
 class TestRunChecks(unittest.TestCase):

@@ -153,11 +153,15 @@ re-dispatched, since there are no phases left to receive them.
 > 1098 → 1135, all passing.
 >
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
-> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B21 · B24 · B26 · B27 · B28 ·
-> B29 · B30 · B34 · B35 · B36 · B41 · B42 ·
+> B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B21 · B22 · B23 · B24 ·
+> B26 · B27 · B28 ·
+> B29 · B30 · B31 · B32 · B33 · B34 · B35 · B36 · B41 · B42 ·
 > B37 · B38 · B39 · B43 ·
 > B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
 > B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
+>
+> **Fix-pass-plan.md Sessions 1–5 all complete as of 2026-08-06.** Only
+> Session 6 (B40, B46) remains.
 >
 > **B52 — checked, not fixed: already resolved.** Verified live against the
 > actual files, not the doc's snapshot — see the 2026-08-06 entry below.
@@ -1065,6 +1069,140 @@ re-dispatched, since there are no phases left to receive them.
 > chose "live-verified" over a new JS test framework for this subsystem,
 > same as `generate-pdf.mjs`). Full suite: 1240 passed (was 1231 after
 > session 3), 0 failed — 9 new Python tests, 0 new JS tests.
+>
+> **2026-08-06 — Session 5 of `fix-pass-plan.md` (B31, B32, B33, B22, B23).**
+> Stranger path + TUI polish — worked in order as planned, all 5 done.
+>
+> **B31 (the stranger's setup path has no CLI entry point and no
+> packaging).** Added `resume bootstrap` (`cli.py`), a thin Click command
+> aliasing `bootstrap_menu.run_bootstrap_menu()` — listed in
+> `HELP_ENTRIES` and README's CLI reference/Setup section. Added a
+> `pyproject.toml` (`[project.scripts] resume = "scripts.cli:cli"`,
+> `packages = ["scripts"]`, plus an empty `scripts/__init__.py` so
+> setuptools treats it as a package) so `uv tool install .`/
+> `pipx install .` produce a real `resume` binary — verified live with a
+> real `pip install -e .`, confirmed `.venv/bin/resume --help` resolves
+> and every sibling `import theme`/`import cli_art`-style bare import
+> still works (relies on `cli.py`'s own existing `sys.path.insert()`
+> trick, which points at wherever the installed `cli.py` actually lives
+> on disk regardless of how it was imported), then uninstalled the dev
+> copy to leave the venv as found. Additive only, per the backlog's own
+> framing — doesn't touch `requirements.txt` or the venv flow.
+>
+> **B32 (`resume doctor` tells a correctly-fresh profile it has 2
+> problem(s)).** `check_kb_allowlist()` now detects "every one of
+> `KB_ALLOWLIST`'s files missing, nothing else wrong" as its own case —
+> collapses to one line ("0 of 19 present -- profile not bootstrapped
+> yet" / fix: "run `resume` -> New User? Start Here! (or `resume
+> bootstrap` directly)") instead of the old 19-filename wall, while the
+> genuinely-partial case (some present, some not) still gets full
+> per-file detail. Added `check_npm()` (Node ships npm/npx, but a
+> broken/partial install can still put `node` on PATH without them --
+> this machine's own doctor output already showed npm/npx cleanly, so
+> verified via the two new failure-mode unit tests instead of a live
+> broken-Node case) and made both Playwright checks' fix text conditional
+> on it (telling someone without npm to run `npm install` is a dead end).
+> `check_venv()`'s detail no longer hardcodes "ready to use" regardless of
+> pass/fail. README gained step 8: `resume doctor --skip-tests`,
+> "confirm the install before you spend an API call."
+>
+> **B33 (the Nerd Font default fails silently and is undiagnosable from
+> inside the tool).** New `ui_config.py` (same small-JSON-per-profile
+> pattern as `maintenance.py`) persists a first-launch icon-set choice.
+> `theme.py`'s `ICONS` resolution is now a real priority chain: explicit
+> `RESUME_BUILDER_ICONS=unicode` always wins > this profile's persisted
+> answer > a real terminal with no answer yet defaults to Nerd Font
+> (today's behavior, until asked) > no terminal and no answer defaults to
+> **Unicode** — a deliberate reversal of the old "always fails toward the
+> enhanced default," per the backlog's own explicit fix text; `set_icon_set()`
+> mutates the module global in place so a mid-session answer takes effect
+> immediately, no restart. `menu._confirm_icon_set()` (new, called right
+> after `_confirm_active_profile()` so the answer saves against the right
+> profile) shows one sample row of each set and asks once, gated on
+> `cli_art.console.is_terminal` — verified this gate actually holds by
+> running the full `test_profile_gate.py`/`test_cli_bare_invocation.py`
+> suites for real (not mocked) with `_confirm_active_profile` patched but
+> `_confirm_icon_set` running live, confirming zero prompts fire in the
+> non-terminal test environment. Added `doctor.check_icon_set()`
+> (informational, always passes) so doctor finally has something real to
+> report about it. Updated `test_theme.py`'s `TestIconSwitch` wholesale —
+> the old suite asserted the previous default; this is the deliberate
+> behavior change the backlog calls for, not a regression.
+>
+> **B22 (TUI tables are unreadable below ~120 columns).**
+> `render_pipeline_table()` (the nine-column "blue box" browse view) now
+> gives `#`/`Score`/`Posted`/`Status` fixed widths, `Title` a `ratio=1`
+> column that absorbs whatever's left, and drops `Last Liveness`/
+> `Follow-up` entirely below `console.width < 110` rather than shrinking
+> every column past legibility (a subtitle names what's hidden and why).
+> Verified live: rendered the real table at 80/100/140 columns via a
+> recording `Console`, confirmed headers never truncate at 80 or 100 and
+> both dropped columns' data (not just their headers, which the hint
+> subtitle legitimately still names) are actually absent below 110. Also
+> closed H5: `theme.py`'s Unicode fallback set had four real emoji with
+> `Emoji_Presentation=Yes` (`evaluate`/`build`/`skip`/`save` — render
+> full-color and double-width in virtually every terminal, ignoring the
+> theme entirely and breaking Rich's single-width column math) plus four
+> ambiguous-width decorative glyphs (`hint`/`discovery`/`resume`/`gem`);
+> all eight replaced with plain ASCII, which is unconditionally
+> single-width and colorless-by-default everywhere — `warning`/`utility`
+> (`⚠`/`⚙`) were left untouched, already in the same safe
+> non-emoji-presentation class. Not independently verified in an actual
+> terminal under `RESUME_BUILDER_ICONS=unicode` (no interactive TTY
+> available in this environment) — the fix rests on each glyph's Unicode
+> emoji-presentation/east-asian-width properties, documented inline in
+> `theme.py`, not a visual check.
+>
+> **B23 (the palette has no contrast contract; the selection pointer is
+> the least legible element in the app).** `BRAND_ACCENT` moved from
+> `#673ab7` (2.27:1 on dark) to `#b39ddb` (8.77:1 against black, computed
+> via the WCAG relative-luminance formula by hand since no contrast
+> tooling is available in this environment) — inside the backlog's own
+> suggested range, and a single token change since `BRAND_ACCENT` drives
+> the questionary pointer/highlighted, `TABLE_HEADER_STYLE`, panel
+> borders, and three icon colors all at once, not just the pointer.
+> `WARNING`'s light-terminal contrast and the banner gradient's own
+> endpoint-to-endpoint contrast were **not** touched — the backlog's own
+> `*Fix:*` text scopes this item to `BRAND_ACCENT` + the Go sync below,
+> and explicitly defers "two ramps selected by background" as a longer-
+> term fix out of scope here. Then closed P2F9: new
+> `scripts/sync_dashboard_theme.py` regenerates
+> `dashboard/internal/theme/resumebuilder.go`'s accent block from
+> `theme.py`'s live constants instead of six hand-copied hexes that
+> nothing ever checked; ran it for real, diffed the result (only the two
+> `BRAND_ACCENT`-derived hexes changed, comment additions aside), and ran
+> `go build ./...` in `dashboard/` to confirm the generated file is still
+> valid Go (confirmed no stray binary landed in the repo afterward, per
+> this project's "never `go build`" convention for that module). Added
+> `doctor.check_dashboard_theme_sync()` so future drift — someone hand-
+> editing the Go file, or changing `theme.py` without re-running the
+> script — actually gets caught instead of silently lying again.
+>
+> **Deviations from the stated file list** (`cli.py`, `doctor.py`,
+> `theme.py`, `bootstrap_menu.py`, `menu.py`, the Go theme file): also
+> touched `cli_art.py` (B31's `HELP_ENTRIES`, B22's actual table-column
+> fix — `render_pipeline_table()` lives here, not in the five listed
+> files), `profile_paths.py` (B33's `ui_config_path()`, following the
+> existing `maintenance_log_path()` pattern), `README.md` (B31/B32/B33 each
+> call for a specific README update), and two new files:
+> `ui_config.py` (B33's persistence layer) and
+> `sync_dashboard_theme.py` (B23's Go-sync script) — both new, focused
+> modules rather than bloating `theme.py`/`doctor.py` with file-writing
+> concerns a "pure logic, no printing/writing" module shouldn't carry.
+> `bootstrap_menu.py` itself needed no changes — B31 only needed to call
+> its existing `run_bootstrap_menu()`, already built for exactly this.
+>
+> **Verification:** full Python suite: 1246 → 1270 passing (24 new tests
+> across `test_doctor.py`, `test_theme.py`, `test_cli_art.py`, and two new
+> files `test_ui_config.py`/`test_sync_dashboard_theme.py`), 0 failed.
+> B31's packaging and B23's Go build were both verified against the real
+> toolchain (`pip install -e .` + binary invocation; `go build ./...`),
+> not just unit tests. B22's terminal-width behavior was verified via
+> Rich's own recording `Console` at real column counts, not a live
+> terminal. B22's Unicode glyph-safety claim and B33's actual prompt
+> appearance were not visually verified in a live terminal — no
+> interactive TTY available in this environment, same constraint noted in
+> Sessions 3 and 4.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

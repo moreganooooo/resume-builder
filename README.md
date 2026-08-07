@@ -103,6 +103,12 @@ below. Nothing auto-triggers the next stage without you choosing it.
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
+   Prefer a real `resume` command over activating a venv by hand? `pyproject.toml`
+   exposes one via `[project.scripts]` — `uv tool install .` or `pipx install .`
+   from the repo root installs a `resume` binary that works from anywhere,
+   no venv activation needed. This is additive: it doesn't replace steps 2–3
+   below, which still need to happen once (in this venv or another) for
+   dependencies/Playwright to actually be present.
 3. Install Node dependencies and Playwright's Chromium browser (needed by
    `scripts/generate-pdf.mjs`):
    ```bash
@@ -117,10 +123,11 @@ below. Nothing auto-triggers the next stage without you choosing it.
    ```
    GEMINI_API_KEY=your-key-here
    ```
-   The bootstrap wizard (`resume` menu's "New User? Start Here!") walks a
-   new profile through this interactively and offers to write it for
-   you — this manual step is only needed if you're setting up outside
-   that flow.
+   The bootstrap wizard (`resume` menu's "New User? Start Here!", or
+   `resume bootstrap` directly from the command line — same flow, no
+   banner detour) walks a new profile through this interactively and
+   offers to write it for you — this manual step is only needed if
+   you're setting up outside that flow.
 5. Optional, only needed for `resume scan`:
    - **`--source jobright` needs `JOBRIGHT_COOKIE_STRING` in your
      profile's `.env`** — the
@@ -150,15 +157,26 @@ below. Nothing auto-triggers the next stage without you choosing it.
      headlessly).
 6. Optional, for the best icon experience: enable a [Nerd Font](https://www.nerdfonts.com/)
    in your terminal profile (iTerm2: Preferences → Profiles → Text → Font;
-   Terminal.app: Preferences → Profiles → Text → Font). The menu's icons
-   default to Nerd Font glyphs; without one active they'll render as
-   blank boxes in that terminal window. No Nerd Font handy? Set
-   `RESUME_BUILDER_ICONS=unicode` to use plain Unicode symbols instead —
-   works everywhere, no special font required.
+   Terminal.app: Preferences → Profiles → Text → Font). The first time you
+   run `resume` in a real terminal, it shows one sample row of Nerd Font
+   icons and one of plain Unicode symbols and asks which one actually
+   rendered correctly — pick whichever looks right, and it's remembered
+   for that profile from then on, never asked again. No terminal to ask
+   in (piped output, CI)? It defaults to Unicode, which always renders.
+   You can also skip the prompt entirely by setting
+   `RESUME_BUILDER_ICONS=unicode` up front — an explicit override always
+   wins.
 7. Optional, only needed for `resume dashboard`: install Go
    (`brew install go`). Nothing else to configure — `dashboard/` is a
    vendored Go module, invoked via `go run` on demand, not built ahead of
    time.
+8. Confirm the install before you spend an API call:
+   ```bash
+   resume doctor --skip-tests
+   ```
+   Checks dependencies, assets, and config with a plain-English fix per
+   problem found — the fast way to know setup is actually correct instead
+   of finding out mid-tailor.
 
 Source `scripts/resume-cli.sh` from your shell profile (`~/.zshrc` or
 `~/.bashrc` both work) to get a `resume` command usable from any directory,
@@ -200,6 +218,7 @@ call `python scripts/cli.py <command>` underneath.
 | Command | What it does |
 |---|---|
 | `resume` (no arguments) | launch the interactive menu |
+| `resume bootstrap` | new-user setup: ingest source documents, draft your profile, build the bullet bank -- same flow as the menu's "New User? Start Here!", no banner detour |
 | `resume run` | tailor + render every pending JD in `jds/` (batch mode), splitting any multi-job export into per-job files first |
 | `resume run jds/some_file.txt` | tailor + render one specific JD file |
 | `resume run --pick` | evaluate everything pending, then check off which ones to actually build |

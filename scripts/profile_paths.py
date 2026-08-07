@@ -274,3 +274,12 @@ def maintenance_log_path(profile: str = None) -> str:
     already covered by .gitignore's existing `*_log.json` pattern, no
     gitignore change needed."""
     return os.path.join(profile_root(profile), "maintenance_log.json")
+
+
+def ui_config_path(profile: str = None) -> str:
+    """Where per-profile terminal-UI preferences persist -- today just the
+    Nerd Font vs. Unicode icon-set choice from the first-launch prompt
+    (B33), so it's asked once per profile and never again. Already covered
+    by .gitignore's blanket `profiles/*/` pattern, no gitignore change
+    needed."""
+    return os.path.join(profile_root(profile), "ui_config.json")

@@ -64,7 +64,7 @@ def check_venv() -> dict:
     exists = os.path.isdir(venv_path)
     has_python = os.path.isfile(os.path.join(venv_path, "bin", "python"))
     ok = exists and has_python
-    detail = f".venv/ {'found' if exists else 'missing'}, ready to use"
+    detail = f".venv/ {'found' if exists else 'missing'}, {'ready to use' if ok else 'not usable'}"
     return _check(
         ".venv/ exists and is ready", ok, detail,
         "Rebuild .venv/: /usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate && "
@@ -95,12 +95,31 @@ def check_node() -> dict:
     )
 
 
+def check_npm() -> dict:
+    # npm/npx ship with Node, but a broken/partial Node install can still
+    # put `node` on PATH without them -- both Playwright checks below
+    # prescribe `npm install`/`npx playwright install`, so this machine is
+    # exactly the failure case those fixes need to detect first (B32).
+    path = shutil.which("npm")
+    has_npx = shutil.which("npx") is not None
+    ok = path is not None and has_npx
+    detail = path if ok else f"npm {'found' if path else 'not found'}, npx {'found' if has_npx else 'not found'}"
+    return _check(
+        "npm/npx", ok, detail,
+        "Reinstall Node.js (https://nodejs.org) -- npm and npx ship with it. Playwright setup "
+        "(`npm install` / `npx playwright install chromium`) needs both.",
+    )
+
+
 def check_playwright_npm_package() -> dict:
     ok = os.path.isdir(os.path.join(PROJECT_ROOT, "node_modules", "playwright"))
+    has_npm = shutil.which("npm") is not None
+    fix = "npm install (package.json already lists playwright as a dependency)." if has_npm \
+        else "npm isn't available -- fix the npm/npx check above first, then npm install."
     return _check(
         "Playwright npm package", ok,
         "installed" if ok else "node_modules/playwright not found",
-        "npm install (package.json already lists playwright as a dependency).",
+        fix,
     )
 
 
@@ -108,10 +127,13 @@ def check_playwright_chromium() -> dict:
     ok = False
     if os.path.isdir(PLAYWRIGHT_CACHE_DIR):
         ok = any(name.startswith("chromium-") for name in os.listdir(PLAYWRIGHT_CACHE_DIR))
+    has_npx = shutil.which("npx") is not None
+    fix = "npx playwright install chromium" if has_npx \
+        else "npx isn't available -- fix the npm/npx check above first, then npx playwright install chromium."
     return _check(
         "Playwright Chromium browser", ok,
         "found" if ok else f"no chromium-* install found under {PLAYWRIGHT_CACHE_DIR}",
-        "npx playwright install chromium",
+        fix,
     )
 
 
@@ -178,6 +200,55 @@ def check_signature_image() -> dict:
     )
 
 
+def check_dashboard_theme_sync() -> dict:
+    """dashboard/internal/theme/resumebuilder.go's accent colors are
+    generated from theme.py by sync_dashboard_theme.py (B23/P2F9) --
+    before that, they were hand-copied with comments merely claiming they
+    matched, and nothing ever caught it when they drifted. This is that
+    catch: regenerates the expected source in memory and diffs it against
+    what's actually on disk, without writing anything itself."""
+    import sync_dashboard_theme
+
+    path = sync_dashboard_theme.DASHBOARD_THEME_PATH
+    if not os.path.exists(path):
+        return _check(
+            "Dashboard theme sync (Go)", False, f"{path} not found",
+            "Run `python scripts/sync_dashboard_theme.py` to generate it.",
+        )
+    expected = sync_dashboard_theme.build_go_theme_source()
+    with open(path, "r", encoding="utf-8") as f:
+        actual = f.read()
+    ok = actual == expected
+    return _check(
+        "Dashboard theme sync (Go)", ok,
+        "in sync with theme.py" if ok else "out of sync with theme.py's color constants",
+        "Run `python scripts/sync_dashboard_theme.py` to regenerate it.",
+    )
+
+
+def check_icon_set() -> dict:
+    # Always passes -- purely informational (B33). Doctor previously had
+    # nothing to say about RESUME_BUILDER_ICONS at all; this at least
+    # states what will actually render and why, instead of a stranger
+    # discovering tofu boxes with zero diagnostic help anywhere in the tool.
+    import theme
+    import ui_config
+
+    env_override = os.environ.get("RESUME_BUILDER_ICONS")
+    if env_override == "unicode":
+        detail = "unicode (RESUME_BUILDER_ICONS override)"
+    else:
+        persisted = ui_config.get_icon_set()
+        if persisted:
+            detail = f"{persisted} (chosen at first launch, profile {profile_paths.active_profile()})"
+        else:
+            detail = (
+                f"not yet chosen -- will be asked on next interactive launch (`resume` menu); "
+                f"resolving to {theme._ICON_SET_NAME} for this run"
+            )
+    return _check("Icon set (RESUME_BUILDER_ICONS)", True, detail)
+
+
 def check_kb_allowlist() -> dict:
     """Checks KB_ALLOWLIST files for three failure modes doctor previously
     couldn't see (B13): (1) missing entirely -- the original check; (2)
@@ -207,6 +278,19 @@ def check_kb_allowlist() -> dict:
 
     conflicts = sorted(f for f in os.listdir(kb_dir) if ".sync-conflict-" in f) if os.path.isdir(kb_dir) else []
 
+    # Every file missing and nothing else wrong is "never bootstrapped," not
+    # "partially broken" -- collapse it to one actionable line instead of a
+    # 19-filename wall doctor used to print, with the real instruction
+    # buried at the end of a warning about shrunk context (B32).
+    if len(missing) == len(orchestrator.KB_ALLOWLIST) and not corrupted and not conflicts:
+        name = profile_paths.active_profile()
+        return _check(
+            f"Knowledge-base allowlist files ({name})", False,
+            f"0 of {len(orchestrator.KB_ALLOWLIST)} present -- profile not bootstrapped yet",
+            f"Profile `{name}` isn't set up yet -- run `resume` -> New User? Start Here! "
+            "(or `resume bootstrap` directly).",
+        )
+
     problems = []
     if missing:
         problems.append(f"missing: {', '.join(missing)}")
@@ -234,6 +318,7 @@ CHECKS = [
     check_venv,
     check_python_packages,
     check_node,
+    check_npm,
     check_playwright_npm_package,
     check_playwright_chromium,
     check_go,
@@ -241,6 +326,8 @@ CHECKS = [
     check_jobright_cookie,
     check_fonts,
     check_signature_image,
+    check_icon_set,
+    check_dashboard_theme_sync,
     check_kb_allowlist,
 ]
 

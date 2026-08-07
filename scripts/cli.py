@@ -27,6 +27,7 @@ import maintenance
 import dashboard as dashboard_module
 import build_sample
 import theme
+import bootstrap_menu
 
 
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
@@ -79,6 +80,14 @@ def cli(ctx, profile):
         profile_paths.set_active_profile(profile)
     if ctx.invoked_subcommand is None:
         menu.run_interactive_menu()
+
+
+@cli.command(name="bootstrap")
+def bootstrap_cmd():
+    """New-user setup: ingest source documents, draft your profile, then
+    build the bullet bank -- the same "New User? Start Here!" flow the
+    interactive menu offers, reachable directly without a banner detour."""
+    bootstrap_menu.run_bootstrap_menu()
 
 
 @cli.command()
