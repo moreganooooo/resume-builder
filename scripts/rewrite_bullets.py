@@ -64,7 +64,7 @@ Usage:
   python rewrite_bullets.py --limit 20         # cap for testing
   python rewrite_bullets.py --dry-run          # print prompts, no API calls
   python rewrite_bullets.py --retry-manual     # re-run all MANUAL bullets
-  python rewrite_bullets.py --retry-manual --model gemini-2.5-pro
+  python rewrite_bullets.py --retry-manual --model gemma-4-31b-it
 
 Outputs (profiles/<profile>/knowledge_base/):
   bullet-bank-cluster-map-updated.csv   updated cluster map with rewrite results

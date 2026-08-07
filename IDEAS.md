@@ -89,6 +89,44 @@ on the existing 78 rows (read source material, fill in the existing
 columns, verify attribution before adding a row). Non-essential, no
 deadline -- whenever Morgan wants to supply more material.
 
+### Explicit context caching for the audit loop's system prompts
+
+Raised 2026-08-05 (`docs/review/phase-5-modernization.md` #2): `orchestrator.py`'s
+audit loop sends the same fixed system instruction (the rules files --
+`hard_failures.yaml`, `truthfulness_rules.yaml`, `style_rules.yaml`,
+`formatting_rules.yaml`, `verb_taxonomy.yaml`, etc., concatenated into the
+prompt) on every JD processed. Implicit caching is on by default for
+2.5+ models and may already be capturing some of this for free (90%
+discount on a hit, 1,024-2,048 token minimum) -- nobody has measured the
+actual hit rate yet. Explicit caching (32,768-token minimum, same 90%
+discount, deterministic instead of opportunistic) is the more reliable
+lever at this call volume, but building it is real work: cache lifecycle
+management, storage cost accounting, and confirming the cached content is
+actually static across the loop rather than subtly JD-dependent.
+**Before building anything:** instrument one run to see whether implicit
+caching is already firing (Gemini responses include cache-hit token
+counts) -- cheap experiment, and it tells you whether this is "wire up
+explicit caching" or "already free, do nothing."
+
+### Batch Mode for unattended `resume run` sweeps
+
+Raised 2026-08-05 (`docs/review/phase-5-modernization.md` #3): Batch Mode
+is 50% off input+output tokens with up to a 24-hour turnaround, submitted
+as an async job -- and its discount does *not* stack with a cache hit
+(cache wins when both apply). Good fit for genuinely offline, unattended
+work; batch `resume run` (processes every pending JD in one unattended
+sweep) already has that shape, and `cluster_bullet_bank.py`/
+`embed_bullet_bank.py` already do their own manual batching against
+`batchEmbedContents` (a different, older mechanism from Batch Mode). Bad
+fit for single-file `resume run jds/.../file.txt` mode and for the
+checkpoint-resume architecture, both of which assume synchronous
+request/response per JD and a result the user is about to look at.
+**Needs a design decision before implementation:** whoever picks this up
+has to separate "calls a human is waiting on" from "calls that happen
+inside an unattended batch run" in `orchestrator.py` -- that split isn't
+visible from outside the orchestration logic, so it wasn't decided as
+part of the original research.
+
 ## Hard
 
 ### Application pattern analysis

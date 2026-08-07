@@ -165,15 +165,35 @@ Go theme file (`dashboard/internal/theme/resumebuilder.go`) — plus
 
 ---
 
-## Session 6 — Cleanup
+## Session 6 — Cleanup — ✅ DONE 2026-08-06
 
-**Items:** B40 (root-cause investigation, isolated) → B46 (modernization
-grab-bag, mostly trivial independent edits).
+**Items, in order:** B40 (root-cause investigation, isolated) → B46
+(modernization grab-bag, mostly trivial independent edits).
 
-**Files:** `bootstrap_profile.py` (B40), `gemini_client.py` call sites,
-`theme.py` colorizers, `rewrite_bullets.py` docstring (B46).
+**Outcome:** both done. B40's root cause was not in `bootstrap_profile.py`
+as the backlog's own "needs an owner" note guessed — it traced to
+`orchestrator.py`'s Step 5.5 recommendation-apply call missing the
+`extra_schema_properties`/`extra_required` merge the other three
+`TemplateSchema` call sites already had, so `EDU_ACHIEVEMENT_KEY_<n>` was
+never in that call's schema at all; one-line fix, plus a new regression
+assertion (confirmed to actually fail without the fix). B46 landed 3 of
+its 4 sub-items as scoped (`P5#1` thinkingLevel pin, `P5#7` stale
+docstring, `P5/H38` fold caching/Batch-Mode into `IDEAS.md`); `P5#4`
+(collapse three colorizers to two) got a mid-session scope call after
+empirically confirming the literal fix (routing 230 call sites through
+`Console.print()`) risked silently deleting bracketed message content —
+asked Morgan, she chose deduping `colorize_icon_ansi()`'s internals onto
+`rich.style.Style` (zero call-site risk) over the full migration. Full
+detail and the exact verification evidence is in `phase-9-backlog.md`'s
+2026-08-06 Session 6 changelog entry. Test suite: 1270 → 1270 (same
+count — B40 extended an existing test rather than adding one), all
+passing.
 
-No clear needed after — this is the last session in the backlog as it
+**Files:** `orchestrator.py` (B40), `gemini_client.py`, `theme.py`,
+`rewrite_bullets.py`, `IDEAS.md`, `tests/test_orchestrator_build_checkpoint.py`
+(B46) — not `bootstrap_profile.py`, per B40's actual root cause above.
+
+No clear needed after — this was the last session in the backlog as it
 stands today.
 
 ---

@@ -155,13 +155,14 @@ re-dispatched, since there are no phases left to receive them.
 > **Done:** B1 · B2 · B3 · B4 · B5 · B6 · B7 · B8 · B9 · B10 · B11 · B12 ·
 > B13 · B14 · B15 · B16 · B17 · B18 · B19 · B20 · B21 · B22 · B23 · B24 ·
 > B26 · B27 · B28 ·
-> B29 · B30 · B31 · B32 · B33 · B34 · B35 · B36 · B41 · B42 ·
+> B29 · B30 · B31 · B32 · B33 · B34 · B35 · B36 · B40 · B41 · B42 · B46 ·
 > B37 · B38 · B39 · B43 ·
 > B44 (partial — see below) · B45 · B47 · B48 · B49 · B50 · B51 · B53 · B54 ·
 > B55 · B56 · B57 · B58 · B59 · B60 · B61 · B62
 >
-> **Fix-pass-plan.md Sessions 1–5 all complete as of 2026-08-06.** Only
-> Session 6 (B40, B46) remains.
+> **Fix-pass-plan.md Sessions 1–6 all complete as of 2026-08-06.** That was
+> the last session in the plan as it stands today — see "If new items get
+> added" at the end of `fix-pass-plan.md` for what happens next.
 >
 > **B52 — checked, not fixed: already resolved.** Verified live against the
 > actual files, not the doc's snapshot — see the 2026-08-06 entry below.
@@ -1203,6 +1204,80 @@ re-dispatched, since there are no phases left to receive them.
 > appearance were not visually verified in a live terminal — no
 > interactive TTY available in this environment, same constraint noted in
 > Sessions 3 and 4.
+>
+> **2026-08-06 — Session 6 of `fix-pass-plan.md` (B40, B46).** Cleanup —
+> the last session in the backlog as it stands today. Both items landed,
+> one exactly as scoped, one with a real mid-session scope call.
+>
+> **B40 (the empty-string achievement-key warning — root-caused).** Traced
+> past where the doc's own investigation stopped: `profile.yml` was never
+> the problem (its `fixed_credentials.education[].achievement_options`
+> entries are clean, no blank key anywhere). The actual bug is in
+> `orchestrator.py`'s Step 5.5 recommendation-apply call — the only one of
+> four `TemplateSchema`-family `GeminiClient.generate()` call sites in
+> `build_tailored_resume()` that never merged in
+> `edu_schema_properties`/`edu_schema_required`
+> (`build_education_achievement_schema_fields()`'s output, computed once
+> and reused by the build/fix/trim calls at lines 2775, 2873, 3255). Without
+> those, `RecommendationApplySchema`'s response never includes
+> `EDU_ACHIEVEMENT_KEY_<n>` at all — not "blank," genuinely absent — so
+> `normalize_resume.py`'s `result.get(f"EDU_ACHIEVEMENT_KEY_{i}", "")`
+> lands on its default every single time, and `fixed_content.build_education()`
+> silently reverts KU/KCKCC to each school's *first* option on every
+> recommendation applied, not just ones that touch Education, plus prints
+> the warning twice per call (matching the doc's own "prints twice,
+> regardless of which recommendation" observation exactly). Fix: pass
+> `extra_schema_properties=edu_schema_properties,
+> extra_required=edu_schema_required` at that one remaining call site,
+> same as the other three. Added a regression assertion inside the
+> existing `test_recommendation_pass_applies_actionable_and_skips_the_rest`
+> mock (checks the kwargs the call site actually receives, since the mock
+> otherwise doesn't enforce schema shape the way a real Gemini call would)
+> — confirmed it fails without the fix (`AssertionError:
+> 'EDU_ACHIEVEMENT_KEY_1' not found in {}`) and passes with it, via a
+> real stash/pop of just the fix.
+>
+> **B46 (modernization grab-bag).** `P5#1`: `gemini_client.py`'s
+> `thinkingConfig` branch now also matches `"flash-lite" in model.lower()`,
+> pinning `minimal` explicitly (confirmed live-docs-current default,
+> unchanged behavior — this closes the "undocumented default that can
+> move under the code" gap, not a behavior change). `P5#7`:
+> `rewrite_bullets.py:67`'s usage example swapped `--model gemini-2.5-pro`
+> (shuts down October 2026) for `--model gemma-4-31b-it` — a real model
+> already wired into this exact codebase's `MODEL_FALLBACKS`, not a guess
+> at Google's future naming. `P5/H38`: folded `#2` (explicit context
+> caching) and `#3` (Batch Mode) into `IDEAS.md`'s Medium tier verbatim
+> per the doc's own recommendation; `#6` (pipx/`pyproject.toml` packaging)
+> was already delivered in Session 5 (B31), so it needed no folding. `#5`
+> (keep both Go dashboard and Python TUI) and `#8` (structured output
+> already current) were already decisions, not actions — nothing to do.
+> **`P5#4` (collapse three colorizers to two) landed differently than
+> written, on purpose:** the literal fix — route all 230
+> `colorize_icon_ansi()` call sites across 14 files through
+> `Console.print()` — was tested empirically against real Rich behavior
+> first, not assumed safe. Confirmed Rich's markup parser doesn't just
+> miscolor a stray bracket, it **silently deletes** any single-word
+> bracketed token (e.g. a `[STALE]` status tag vanishes entirely, no
+> error) since it parses as a well-formed but unstyled tag — a real
+> silent-data-loss risk given the actual call sites include resume bullet
+> text, exception messages, and dict-stored templates, several behind
+> ternaries rather than a direct `print()` call. Asked Morgan; she chose
+> **dedupe over full migration**: `colorize_icon_ansi()` keeps its exact
+> signature, return value, and every one of its 230 call sites untouched,
+> but now renders via `rich.style.Style(color=...).render(icon,
+> color_system="truecolor")` instead of the hand-rolled
+> `_hex_to_ansi_fg()`/`_ANSI_RESET` (now deleted) — byte-identical output
+> (verified), zero markup-collision risk, and the actual duplicated logic
+> (hex-to-ANSI math) is gone, just not literally "three functions become
+> two." Three colorizers remain by name; the real drift risk the item
+> flagged is closed.
+>
+> **Verification:** full Python suite: 1270 → 1270 passing (B40 added an
+> assertion to an existing test rather than a new test method, so the
+> count didn't move). No live `resume sample` run this session — both
+> items are internal-logic fixes (schema-merge plumbing, ANSI rendering)
+> with existing unit coverage exercising the changed paths directly, same
+> reasoning as Session 5's non-visual items.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

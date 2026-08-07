@@ -252,6 +252,16 @@ class GeminiClient:
                 # discarded but still billed against the 16k TPM cap.
                 # thinkingLevel: "minimal" suppresses them at the source.
                 generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
+            elif "flash-lite" in model.lower():
+                # B46/P5#1 (phase-5-modernization.md): every flash-lite call
+                # (CRITIQUE_MODEL, BUILDER_MODEL, FIND_WEBSITE_MODEL,
+                # SCORE_MODEL) previously sent no thinkingConfig at all, so
+                # it ran at whatever Google's current default is for this
+                # tier -- confirmed "minimal", but this tier's default has
+                # already shifted once (Gemini 3.5 Flash rollout). Pinning
+                # it explicitly keeps today's behavior identical while
+                # making it immune to a future silent default change.
+                generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
 
             raw_schema = None
             if response_schema is not None:
