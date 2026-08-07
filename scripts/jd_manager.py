@@ -459,7 +459,8 @@ def _next_application_row_number(path: str) -> int:
 
 def append_application_row(company_name: str, job_title: str, has_pdf: bool,
                             source_url: str = "", path: str = None,
-                            evaluation: dict = None) -> None:
+                            evaluation: dict = None, jd_data: dict = None,
+                            notes: str = "") -> None:
     """Appends one row to data/applications.md, in career-ops's markdown-table
     tracker format (# | Date | Company | Role | Score | Status | PDF | Link |
     Report | Notes). Link is a clickable "[Apply](source_url)" -- this is
@@ -483,10 +484,12 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
 
     row_number = _next_application_row_number(path)
     date_str = datetime.date.today().isoformat()
-    pdf_cell = "✅" if has_pdf else "❌"
+    pdf_cell = "✓" if has_pdf else "❌"
     company = company_name or "unknown"
     role = job_title or "unknown"
     link_cell = f"[Apply]({source_url})" if source_url else "—"
+
+    status = (jd_data or {}).get("_application", {}).get("status") or "Tailored"
 
     composite_score = (evaluation or {}).get("composite_score")
     score_cell = f"{composite_score:.2f}/5" if isinstance(composite_score, (int, float)) else "NA"
@@ -494,7 +497,7 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
 
     row = (
         f"| {row_number} | {date_str} | {company} | {role} | {score_cell} | "
-        f"Tailored | {pdf_cell} | {link_cell} | {report_cell} |  |\n"
+        f"{status} | {pdf_cell} | {link_cell} | {report_cell} | {notes} |\n"
     )
     with open(path, "a", encoding="utf-8") as f:
         f.write(row)

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-07T17:15:00Z",
+  "title": "Design System: resume-builder",
+  "extensions": {
+    "colorMeta": {
+      "tui-base": { "role": "neutral", "displayName": "Deep Midnight" },
+      "tui-brand": { "role": "primary", "displayName": "Electric Sky" },
+      "tui-accent": { "role": "secondary", "displayName": "Vibrant Mauve" },
+      "print-text": { "role": "neutral", "displayName": "Print Black" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display (Print)", "purpose": "Hero H1" }
+    }
+  },
+  "components": [
+    {
+      "name": "TUI Active Panel",
+      "kind": "card",
+      "refersTo": "tui-active-panel",
+      "description": "A terminal UI panel representing a focused state.",
+      "html": "<div class=\"ds-tui-panel ds-tui-panel-active\">\n  <div class=\"ds-tui-title\">Dashboard</div>\n  <div class=\"ds-tui-content\">Vibrant, tactile data.</div>\n</div>",
+      "css": ".ds-tui-panel { background: #313244; color: #cdd6f4; font-family: monospace; padding: 16px; border: 1px solid #45475a; border-radius: 4px; } .ds-tui-panel-active { border-color: #4dabf7; box-shadow: inset 0 0 0 1px #4dabf7; } .ds-tui-title { color: #b39ddb; font-weight: bold; margin-bottom: 8px; }"
+    },
+    {
+      "name": "Print Section Header",
+      "kind": "custom",
+      "refersTo": "print-section",
+      "description": "The minimalist, typography-driven section header for the PDF.",
+      "html": "<div class=\"ds-print-section\">\n  <div class=\"ds-print-title\">WORK EXPERIENCE</div>\n</div>",
+      "css": ".ds-print-section { background: #ffffff; color: #000000; padding: 16px; } .ds-print-title { font-family: 'DM Serif Display', serif; font-size: 16pt; border-bottom: 1px solid #9aa3af; padding-bottom: 2px; margin-bottom: 10px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Command Center Editor",
+    "overview": "The visual system bridges two distinct worlds: a vibrant, powerful terminal dashboard and pristine, uncompromised print typography. The TUI draws inspiration from the Charm ecosystem—bursting with vibrant colors, rich data grids, and fluid tactile navigation, while avoiding overwhelming density. Conversely, the generated PDF output is completely restrained, serving as a strict editorial canvas that lets the typography and content shine.",
+    "keyCharacteristics": [
+      "Vibrant & Tactile TUI: Distinct panel surfaces, sharp contrast, clear borders, and strong active states.",
+      "Editorial Print Output: High-contrast, black-and-white minimalist layout using strict page budgets.",
+      "Dual Identity: Terminal neon meets classic serif typesetting."
+    ],
+    "rules": [
+      {
+        "name": "The No-Bleed Rule",
+        "body": "Print colors never bleed into the TUI, and TUI neons never bleed into the print output. The boundary is absolute.",
+        "section": "colors"
+      },
+      {
+        "name": "The Strict Ligature Rule",
+        "body": "Ligatures must be explicitly disabled (`font-variant-ligatures: none;`) in the PDF to prevent ATS parsers from failing on joined glyphs.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do lean heavily into vibrant, Charm-like color palettes (magenta, cyan, neon green) when styling the TUI terminal interface.",
+      "Do ensure every interactive TUI panel clearly indicates focus via high-contrast border colors.",
+      "Do adhere strictly to the `DM Serif Display` and `DM Sans` typographic hierarchy in the HTML templates.",
+      "Do use `break-inside: avoid` on all major print blocks (jobs, education, certs) to control PDF pagination cleanly."
+    ],
+    "donts": [
+      "Don't add any color to the generated resume PDF; it must remain strict black, white, and gray.",
+      "Don't use bolding inside resume bullet points; keep them 400-weight to let the content breathe.",
+      "Don't let the TUI dashboard become visually overwhelming; use empty space and muted subtext (#a6adc8) to balance the vibrant brand neons."
+    ]
+  }
+}

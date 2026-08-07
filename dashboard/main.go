@@ -13,6 +13,7 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/menu"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/screens"
 )
 
@@ -22,12 +23,14 @@ const (
 	viewPipeline viewState = iota
 	viewReport
 	viewProgress
+	viewMenu
 )
 
 type appModel struct {
 	pipeline        screens.PipelineModel
 	viewer          screens.ViewerModel
 	progress        screens.ProgressModel
+	menu            menu.MenuModel
 	state           viewState
 	careerOpsPath   string
 	theme           theme.Theme
@@ -42,16 +45,26 @@ func (m *appModel) reloadPipelineData() {
 }
 
 func (m appModel) Init() tea.Cmd {
-	return nil
+	// Start with the main menu
+	m.state = viewMenu
+	m.menu = menu.NewMenuModel(m.theme)
+	return m.menu.Init()
 }
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Ctrl+C is handled here, ahead of the type switch below, so it quits
-	// cleanly from every screen (pipeline/viewer/progress) the same way "q"
+	// cleanly from every screen (pipeline/viewer/progress/menu) the same way "q"
 	// does on the pipeline screen -- rather than being silently swallowed by
 	// whichever sub-model's own KeyMsg handling doesn't recognize it.
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
 		return m, tea.Quit
+	}
+
+	// If we're in the menu view, delegate to the menu model first.
+	if m.state == viewMenu {
+		var cmd tea.Cmd
+		m.menu, cmd = m.menu.Update(msg)
+		return m, cmd
 	}
 
 	switch msg := msg.(type) {
@@ -70,6 +83,22 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.PipelineClosedMsg:
 		return m, tea.Quit
 
+	case menu.MenuSelectMsg:
+		switch msg.Command {
+		case "Pipeline":
+			m.state = viewPipeline
+		case "Progress":
+			m.state = viewProgress
+		case "Reports":
+			m.state = viewReport
+		case "Quit":
+			return m, tea.Quit
+		}
+		return m, nil
+
+	case menu.MenuQuitMsg:
+		return m, tea.Quit
+
 	case screens.PipelineLoadReportMsg:
 		archetype, tldr, remote, comp := data.LoadReportSummary(msg.CareerOpsPath, msg.ReportPath)
 		m.pipeline.EnrichReport(msg.ReportPath, archetype, tldr, remote, comp)
@@ -78,7 +107,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.PipelineUpdateStatusMsg:
 		err := data.UpdateApplicationStatus(msg.CareerOpsPath, msg.App, msg.NewStatus)
 		if err != nil {
-			// Log the error but still reload data to keep UI consistent
 			fmt.Fprintf(os.Stderr, "WARN: status update failed: %v\n", err)
 		}
 		m.reloadPipelineData()
@@ -115,20 +143,21 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case screens.PipelineOpenURLMsg:
-		url := msg.URL
 		return m, func() tea.Msg {
-			var cmd *exec.Cmd
+			var err error
 			switch runtime.GOOS {
 			case "darwin":
-				cmd = exec.Command("open", url)
+				err = exec.Command("open", msg.URL).Run()
 			case "linux":
-				cmd = exec.Command("xdg-open", url)
+				err = exec.Command("xdg-open", msg.URL).Run()
 			case "windows":
-				cmd = exec.Command("cmd", "/c", "start", "", url)
+				err = exec.Command("cmd", "/c", "start", "", msg.URL).Run()
 			default:
-				cmd = exec.Command("xdg-open", url)
+				err = exec.Command("xdg-open", msg.URL).Run()
 			}
-			_ = cmd.Run()
+			if err != nil {
+				// We could return an error message here if needed.
+			}
 			return nil
 		}
 
@@ -155,6 +184,8 @@ func (m appModel) View() string {
 		return m.viewer.View()
 	case viewProgress:
 		return m.progress.View()
+	case viewMenu:
+		return m.menu.View()
 	default:
 		return m.pipeline.View()
 	}

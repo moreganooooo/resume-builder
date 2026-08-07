@@ -3,7 +3,7 @@ package theme
 import "github.com/charmbracelet/lipgloss"
 
 func newCatppuccinMocha() Theme {
-	return Theme{
+	t := Theme{
 		// Catppuccin Mocha palette
 		Base:    lipgloss.Color("#1e1e2e"),
 		Surface: lipgloss.Color("#313244"),
@@ -21,4 +21,23 @@ func newCatppuccinMocha() Theme {
 		Red:    lipgloss.Color("#f38ba8"),
 		Pink:   lipgloss.Color("#f5c2e7"),
 	}
+
+	t.GradientStart = lipgloss.Color(BrandColor)
+	t.GradientEnd = lipgloss.Color(AccentColor)
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.GradientStart = t.GradientStart
+	t.Token.GradientEnd = t.GradientEnd
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons (generic placeholders)
+	t.Icons.Pipeline = "🛠"
+	t.Icons.Progress = "📈"
+	t.Icons.Report = "📄"
+	t.Icons.Quit = "❌"
+	t.Icons.Menu = "☰"
+
+	return t
 }

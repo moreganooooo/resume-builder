@@ -25,8 +25,10 @@ import "github.com/charmbracelet/lipgloss"
 // changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
 // ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
 // this file ever falls out of sync.
+// newCatppuccinMocha moved to catppuccin.go
+
 func newResumeBuilder() Theme {
-	return Theme{
+	t := Theme{
 		// Structural neutrals -- Catppuccin Mocha, untouched.
 		Base:    lipgloss.Color("#1e1e2e"),
 		Surface: lipgloss.Color("#313244"),
@@ -44,4 +46,23 @@ func newResumeBuilder() Theme {
 		Red:    lipgloss.Color("#c96a6a"), // ERROR
 		Pink:   lipgloss.Color("#b39ddb"), // BRAND_ACCENT (reused, unused field)
 	}
+
+	t.GradientStart = lipgloss.Color(BrandColor)
+	t.GradientEnd = lipgloss.Color(AccentColor)
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.GradientStart = t.GradientStart
+	t.Token.GradientEnd = t.GradientEnd
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons (generic placeholders)
+	t.Icons.Pipeline = "🛠"
+	t.Icons.Progress = "📈"
+	t.Icons.Report = "📄"
+	t.Icons.Quit = "❌"
+	t.Icons.Menu = "☰"
+
+	return t
 }
