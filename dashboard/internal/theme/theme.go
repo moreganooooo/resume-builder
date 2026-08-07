@@ -3,6 +3,7 @@ package theme
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/huh"
 	"github.com/muesli/termenv"
 )
 
@@ -24,6 +25,28 @@ type Theme struct {
 	Peach  lipgloss.Color
 	Red    lipgloss.Color
 	Pink   lipgloss.Color
+
+	// Gradients
+	GradientStart lipgloss.Color
+	GradientEnd   lipgloss.Color
+
+	// Token grouping for UI components
+	Token struct {
+		Text          lipgloss.Color
+		Subtext       lipgloss.Color
+		GradientStart lipgloss.Color
+		GradientEnd   lipgloss.Color
+		Mauve         lipgloss.Color
+	}
+
+	// Icon set for UI elements
+	Icons struct {
+		Pipeline string
+		Progress string
+		Report   string
+		Quit     string
+		Menu     string
+	}
 }
 
 // NewTheme creates a theme by name. Use "auto" or "" to detect from terminal background.
