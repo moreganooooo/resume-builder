@@ -22,7 +22,9 @@ import theme
 import validate_coverletter
 import validate_resume
 from gemini_client import GeminiClient
-from orchestrator import BUILDER_MODEL, CoverLetterSchema, ResumeEngine, TemplateSchema
+from orchestrator import (
+    BUILDER_MODEL, CoverLetterSchema, PDF_GENERATION_TIMEOUT_SECONDS, ResumeEngine, TemplateSchema,
+)
 from render_coverletter import render_coverletter
 from render_html import render_html
 
@@ -198,10 +200,18 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         render_coverletter(doc, html_path)
 
     pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
-    result = subprocess.run(
-        ["node", pdf_script, html_path, pdf_path, "--format=letter"],
-        capture_output=True, text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["node", pdf_script, html_path, pdf_path, "--format=letter"],
+            capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+            env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
+        )
+    except subprocess.TimeoutExpired:
+        cli_art.console.print(
+            f"{cli_art.WARNING} PDF generation timed out after {PDF_GENERATION_TIMEOUT_SECONDS}s "
+            "(JSON/HTML were still saved)."
+        )
+        return {"json": json_path, "html": html_path, "pdf": None}
     if result.returncode != 0:
         cli_art.console.print(
             f"{cli_art.WARNING} PDF generation failed (JSON/HTML were still saved):\n{result.stderr}"
