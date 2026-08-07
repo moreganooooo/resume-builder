@@ -97,20 +97,22 @@
 
   .header h1 {
     font-family: 'DM Serif Display', serif;
-    font-size: 32pt;
+    font-size: 36pt;
     font-weight: 400;
     color: #000000;
-    line-height: 0.5in;
+    line-height: 0.5625in;
     margin-bottom: 1px;
   }
 
-  /* Tagline: DM Sans 14pt, hard-coded uppercase in the data string */
+  /* Tagline: DM Sans 15pt, hard-coded uppercase in the data string. See
+     style_rules.yaml's tagline.max_chars for the char budget this size
+     implies -- it's scaled from this size, so the two must move together. */
   .header-tagline {
     font-family: 'DM Sans', sans-serif;
-    font-size: 14pt;
+    font-size: 15pt;
     font-weight: 400;
     color: #000000;
-    line-height: 0.25in;
+    line-height: 0.268in;
     margin-bottom: 3px;
   }
 

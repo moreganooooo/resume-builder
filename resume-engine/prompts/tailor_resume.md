@@ -118,7 +118,7 @@ ones apply and what their real option keys are, never any specific school name.
 - No parentheses in bullets; use commas or semicolons
 - No dashes in prose; en-dashes in date ranges only
 - No bold text inside bullet content
-- Target length: 110–120 chars for one-liners; up to 220 chars for intentional two-liners
+- Target length: ~100 chars for one-liners, hard ceiling 108 chars (empirically measured against real rendering — a bullet past 108 chars risks wrapping to a short widow 2nd line); up to 220 chars for intentional two-liners
 - ~70% one-liners, ~30% two-liners; no bullet exceeds two printed lines
 - Avoid wrapping to a second line with fewer than ~5 words
 - Every metric appears at most ONCE across the entire CV (if it's in Summary, don't repeat it in bullets)
@@ -216,7 +216,7 @@ bold; institution and year are regular weight.
 See the ROLE RULES context block's "Education -- Fixed Order and Bullet Counts" list for this
 candidate's exact schools, credentials, and bullet counts, in the exact order given there.
 
-# Why [Company]? Section (include only when space allows on 2-page resume)
+# Why [Company]? Section (default to including it whenever company research is available)
 
 - Section header: "Why [Real Company Name]?"
 - Two short paragraphs, no subheadings
@@ -225,8 +225,8 @@ candidate's exact schools, credentials, and bullet counts, in the exact order gi
 - Voice: first-person (I, my, me) — pronouns are allowed here and in the auto-filled career note
   (see "# Career Note" above); nowhere else
 - Must reference specific company research details and connect each to verified facts from the candidate's history
-- Source those "specific company research details" ONLY from the `=== COMPANY RESEARCH ===` context block's `company_facts` field, if present. If no such block is present, do not include this Why section at all — set SECTION_WHY and WHY_TEXT to empty strings rather than inventing research-sounding details to satisfy this rule
-- If including this section pushes the PDF to 3 pages, remove it entirely
+- Source those "specific company research details" ONLY from the `=== COMPANY RESEARCH ===` context block's `company_facts` field. If no such block is present, do not include this Why section at all — set SECTION_WHY and WHY_TEXT to empty strings rather than inventing research-sounding details to satisfy this rule
+- **Do not skip this section pre-emptively over a page-count guess.** You have no way to see the actual rendered page count while writing this JSON — a separate, automated pass measures the real PDF afterward and removes this exact section first (see Trimming Priority below) if, and only if, it's genuinely needed. Write it whenever a `=== COMPANY RESEARCH ===` block is present; guessing "this might not fit" and leaving it out up front only produces a resume that's silently missing a section that would have fit.
 
 # Number and Style Rules
 

@@ -689,7 +689,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
                 }), {})
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
-        def validate_side_effect(resume_data, rules, role_roster=None):
+        def validate_side_effect(resume_data, rules, role_roster=None, role_bullet_minimums=None):
             validation_call_count["n"] += 1
             # First validation call: return a violation
             if validation_call_count["n"] == 1:
@@ -739,7 +739,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
                 return (json.dumps(always_bad), {})
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
-        def validate_side_effect(resume_data, rules, role_roster=None):
+        def validate_side_effect(resume_data, rules, role_roster=None, role_bullet_minimums=None):
             # Always return a violation
             return ["SUMMARY_TEXT contains forbidden keyword: 'results-driven'"]
 
