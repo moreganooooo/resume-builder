@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -45,6 +46,14 @@ func (m appModel) Init() tea.Cmd {
 }
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Ctrl+C is handled here, ahead of the type switch below, so it quits
+	// cleanly from every screen (pipeline/viewer/progress) the same way "q"
+	// does on the pipeline screen -- rather than being silently swallowed by
+	// whichever sub-model's own KeyMsg handling doesn't recognize it.
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.pipeline.Resize(msg.Width, msg.Height)
@@ -191,7 +200,12 @@ func main() {
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	// ErrInterrupted is bubbletea's documented return value for a SIGINT/
+	// InterruptMsg (see its doc comment) -- the rare case where Ctrl+C
+	// reaches the process as a signal rather than the KeyMsg the appModel.
+	// Update handler above normally catches. Either way a Ctrl+C quit is not
+	// a crash, so it should not print "Error:" or exit non-zero.
+	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrInterrupted) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

@@ -24,6 +24,18 @@ import { chromium } from 'playwright';
 import { readFile } from 'fs/promises';
 import { checkUrlLiveness } from './liveness-browser.mjs';
 
+// B45: same RESUME_BUILDER_ICONS contract theme.py resolves on the Python
+// side (see its icon_set_name() docstring) -- read directly here since
+// there's no shared theming layer across the JS/Python boundary. Reuses
+// theme.py's own success/warning/error glyphs (unicode_active/expired/
+// uncertain) for consistency rather than inventing new ones; likely_active
+// has no Python-side equivalent to match, so it gets its own plain pick.
+const PLAIN_ICONS = process.env.RESUME_BUILDER_ICONS === 'unicode';
+const RESULT_ICONS = PLAIN_ICONS
+  ? { active: '✓', likely_active: '~', expired: '✗', uncertain: '⚠' }
+  : { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' };
+const UNKNOWN_ICON = PLAIN_ICONS ? '?' : '❓';
+
 async function runJsonMode(candidatesPath) {
   const text = await readFile(candidatesPath, 'utf-8');
   const candidates = JSON.parse(text);
@@ -39,7 +51,7 @@ async function runJsonMode(candidatesPath) {
       const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
 
       // Progress indicator: [i/total] + status + reason if applicable
-      const icon = { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' }[result] || '❓';
+      const icon = RESULT_ICONS[result] || UNKNOWN_ICON;
       const progress = `[${i + 1}/${candidates.length}]`;
       console.error(`${progress} ${icon} ${result.padEnd(14)} ${candidate.source_file}`);
       if (reason && result !== 'active' && result !== 'likely_active') {
@@ -78,7 +90,7 @@ async function runTextMode(args) {
   // Sequential — project rule: never Playwright in parallel
   for (const url of urls) {
     const { result, reason } = await checkUrlLiveness(page, url);
-    const icon = { active: '✅', expired: '❌', uncertain: '⚠️' }[result] || '❓';
+    const icon = RESULT_ICONS[result] || UNKNOWN_ICON;
     console.log(`${icon} ${result.padEnd(10)} ${url}`);
     if (result !== 'active') console.log(`           ${reason}`);
     if (result === 'active') active++;

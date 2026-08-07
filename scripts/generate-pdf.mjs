@@ -22,6 +22,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Ensure output directory exists (fresh setup)
 mkdirSync(resolve(__dirname, '../output'), { recursive: true });
 
+// B45: this file's console output is printed verbatim by its Python callers
+// (orchestrator.py, polish.py) rather than routed through theme.py's
+// icon-set resolution, so it bypassed RESUME_BUILDER_ICONS entirely --
+// same env var, same contract, just read directly here since there's no
+// shared theming layer across the JS/Python boundary. Every glyph below is
+// decorative next to an already-descriptive label, so the plain-Unicode
+// fallback is simply to drop it rather than invent ASCII replacements.
+const PLAIN_ICONS = process.env.RESUME_BUILDER_ICONS === 'unicode';
+const ICON = {
+  input: PLAIN_ICONS ? '' : '📄 ',
+  output: PLAIN_ICONS ? '' : '📁 ',
+  format: PLAIN_ICONS ? '' : '📏 ',
+  cleanup: PLAIN_ICONS ? '' : '🧹 ',
+  success: PLAIN_ICONS ? '' : '✅ ',
+  pages: PLAIN_ICONS ? '' : '📊 ',
+  size: PLAIN_ICONS ? '' : '📦 ',
+  error: PLAIN_ICONS ? '' : '❌ ',
+};
+
 /**
  * Normalize text for ATS compatibility by converting problematic Unicode.
  *
@@ -120,9 +139,9 @@ async function generatePDF() {
     process.exit(1);
   }
 
-  console.log(`📄 Input:  ${inputPath}`);
-  console.log(`📁 Output: ${outputPath}`);
-  console.log(`📏 Format: ${format.toUpperCase()}`);
+  console.log(`${ICON.input}Input:  ${inputPath}`);
+  console.log(`${ICON.output}Output: ${outputPath}`);
+  console.log(`${ICON.format}Format: ${format.toUpperCase()}`);
 
   // Read HTML to inject font paths as absolute file:// URLs
   let html = await readFile(inputPath, 'utf-8');
@@ -147,7 +166,7 @@ async function generatePDF() {
   const totalReplacements = Object.values(normalized.replacements).reduce((a, b) => a + b, 0);
   if (totalReplacements > 0) {
     const breakdown = Object.entries(normalized.replacements).map(([k, v]) => `${k}=${v}`).join(', ');
-    console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
+    console.log(`${ICON.cleanup}ATS normalization: ${totalReplacements} replacements (${breakdown})`);
   }
 
   // page.setContent() + baseURL resolves relative file:// URLs correctly,
@@ -173,8 +192,17 @@ async function generatePDF() {
 
     await page.goto(`file://${tmpHtmlPath}`, { waitUntil: 'networkidle' });
 
-    // Wait for fonts to load
-    await page.evaluate(() => document.fonts.ready);
+    // Wait for fonts to load. document.fonts.ready has no default timeout of
+    // its own -- a font that never settles hung this call forever, with the
+    // Python side's capture_output=True swallowing every hint (P4F8). Race
+    // it against a real ceiling instead.
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error('Timed out waiting for document.fonts.ready after 15s')),
+        15000
+      )),
+    ]);
 
     // Generate PDF
     const pdfBuffer = await page.pdf({
@@ -196,9 +224,9 @@ async function generatePDF() {
     const pdfString = pdfBuffer.toString('latin1');
     const pageCount = (pdfString.match(/\/Type\s*\/Page[^s]/g) || []).length;
 
-    console.log(`✅ PDF generated: ${outputPath}`);
-    console.log(`📊 Pages: ${pageCount}`);
-    console.log(`📦 Size: ${(pdfBuffer.length / 1024).toFixed(1)} KB`);
+    console.log(`${ICON.success}PDF generated: ${outputPath}`);
+    console.log(`${ICON.pages}Pages: ${pageCount}`);
+    console.log(`${ICON.size}Size: ${(pdfBuffer.length / 1024).toFixed(1)} KB`);
 
     return { outputPath, pageCount, size: pdfBuffer.length };
   } finally {
@@ -208,6 +236,6 @@ async function generatePDF() {
 }
 
 generatePDF().catch((err) => {
-  console.error('❌ PDF generation failed:', err.message);
+  console.error(`${ICON.error}PDF generation failed:`, err.message);
   process.exit(1);
 });

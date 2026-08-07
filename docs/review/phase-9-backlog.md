@@ -1278,6 +1278,80 @@ re-dispatched, since there are no phases left to receive them.
 > items are internal-logic fixes (schema-merge plumbing, ANSI rendering)
 > with existing unit coverage exercising the changed paths directly, same
 > reasoning as Session 5's non-visual items.
+>
+> **2026-08-06 — post-fix-pass cleanup: the six items `fix-pass-plan.md`
+> left open (B60's confirming run, the name drift, and B21/B42/B45's
+> deferred halves). All six done.**
+>
+> **B60 — confirmed live, and the fix was incomplete.** `resume sample`
+> now completes cleanly with all 6 employers present and no roster
+> warning, as the earlier note asked for — but the underlying "worth
+> fixing separately" name drift (cv.md vs. profile.yml) turned out to be
+> load-bearing, not cosmetic. `cv.md` was corrected to the canonical
+> spelling (`Element 8 / Strategy LLC`, matching `fixed_content.py`'s
+> dict keys and every test fixture), but a first re-run of `resume
+> sample` **still** produced `"Element 8 + Strategy, LLC"` with the
+> title `"Lead Graphic Designer"` — the fixed-content override
+> (`COMPANY_FIXED_TITLE["Element 8 / Strategy LLC"] = "Design Assistant
+> → Lead Designer"`) never applied. Root cause: `bullet-bank.md`'s "JOB
+> HEADING REFERENCE" table, which explicitly instructs the builder to
+> "use these values verbatim," had its own stale row for this employer —
+> wrong company-name spelling *and* a plain, un-fixed title, drifted from
+> `fixed_content.py`'s actual data. The LLM was correctly following
+> instructions; the instructions were wrong. Fixed the table row (now
+> matches `fixed_content.py` exactly) and re-ran: `Element 8 / Strategy
+> LLC` / `Design Assistant → Lead Designer (Design/Agency/Startup)`, 6
+> employers, `Pipeline complete!`, PDF on disk. This means the fixed
+> title/descriptor/size/location overrides for this employer had never
+> actually applied to any real resume before this fix — confirmed via a
+> direct call to `normalize_resume.normalize()` before and after.
+>
+> **B42/P7F15 (dashboard Ctrl-C exit-code misreport).** Two-part fix in
+> `dashboard/main.go`: `appModel.Update()` now handles `ctrl+c` as an
+> explicit `tea.Quit` ahead of the type switch (previously unhandled —
+> Bubble Tea's own doc comment confirms Ctrl+C normally arrives as a
+> `KeyMsg`, not a signal, when the terminal is in raw mode, so it was
+> being silently swallowed, not just mis-reported); `main()` also now
+> treats `tea.ErrInterrupted` (the rarer signal-delivery path) as a clean
+> exit rather than an error. `go build`/`go test ./...`: pass.
+>
+> **B42/P7F10 (`scan_linkedin.py`'s unpaced ~60 requests on Morgan's real
+> `li_at` cookie).** `_fetch_personalized_extras()` now sleeps
+> `_PERSONALIZED_EXTRAS_DELAY_SECONDS` (5s, matching the scraper's own
+> `slow_mo`) in a `finally` block after every attempted request,
+> success or exception — was previously untested; added
+> `tests/test_scan_linkedin.py` (5 cases, `time.sleep` mocked).
+>
+> **B21's deferred half (`generate-pdf.mjs` + `orchestrator.py`
+> subprocess hardening).** All 3 Python call sites that invoke
+> `generate-pdf.mjs` (`orchestrator.py` ×2, `polish.py` ×1) now pass
+> `timeout=PDF_GENERATION_TIMEOUT_SECONDS` (180s) and catch
+> `subprocess.TimeoutExpired` the same way a nonzero returncode was
+> already handled. JS side: `page.evaluate(() => document.fonts.ready)`
+> is now raced against a 15s `setTimeout` (`Promise.race`) instead of
+> waiting forever with no default timeout of its own. New test:
+> `test_pdf_timeout_leaves_checkpoint_and_returns_falsy`.
+>
+> **B45 residue (raw emoji in `generate-pdf.mjs`/`check-liveness.mjs`).**
+> Turned out smaller than the original "no JS-side theming
+> infrastructure exists" framing suggested — no new infrastructure
+> needed, just reading `RESUME_BUILDER_ICONS` directly (same env var,
+> same contract as `theme.py`) in both files. `generate-pdf.mjs`'s
+> glyphs are all decorative next to already-descriptive labels, so the
+> unicode-mode fallback just drops them; `check-liveness.mjs` reuses
+> `theme.py`'s own success/warning/error glyphs for the 3 overlapping
+> concepts. Also closed the propagation gap this surfaced: Python's
+> resolved icon preference (`theme.icon_set_name()`, new accessor) was
+> never making it into these subprocesses' environment before now — only
+> an explicit shell-level override worked. All 4 call sites
+> (`orchestrator.py` ×2, `polish.py`, `liveness.py`) now pass it
+> explicitly. Verified live: real PDF rendered both with and without
+> `RESUME_BUILDER_ICONS=unicode`, icons present/absent as expected.
+>
+> **Verification:** full Python suite 1270 → 1276 passing; Go
+> `build`/`test ./...` passing; two full live `resume sample` runs (one
+> before, one after the bullet-bank.md fix) plus a standalone
+> `generate-pdf.mjs` invocation in both icon modes.
 
 Ranked by (goals served × severity ÷ effort). **Tier 0 is everything where the
 severity is major-or-worse and the fix is roughly one edit** — do these first

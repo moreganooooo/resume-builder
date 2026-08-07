@@ -143,6 +143,11 @@ conservative and explain the limitation in context_gaps.
 """
 
 # --- TIMING CONSTANTS ---
+# B21 "same class" fix: generate-pdf.mjs's subprocess.run calls had no
+# ceiling, so a hung Chromium/font-load (P4F8) blocked the whole pipeline
+# forever with capture_output=True swallowing every hint. 180s is generous
+# for a single-page render but still a real bound.
+PDF_GENERATION_TIMEOUT_SECONDS = 180
 CRITIQUE_SLEEP     = 4    # seconds between critique calls (free-tier: 15 RPM)
 REWRITE_SLEEP      = 4    # seconds before the rewrite call after a FAIL
 RESCORE_SLEEP      = 8    # seconds before the re-score call after a rewrite
@@ -2528,10 +2533,16 @@ class ResumeEngine:
         render_coverletter(letter_data, html_out)
 
         pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
-        pdf_result = subprocess.run(
-            ["node", pdf_script, html_out, pdf_out, "--format=letter"],
-            capture_output=True, text=True
-        )
+        try:
+            pdf_result = subprocess.run(
+                ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+                capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+                env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
+            )
+        except subprocess.TimeoutExpired:
+            print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation timed out after "
+                  f"{PDF_GENERATION_TIMEOUT_SECONDS}s.")
+            return {}
         if pdf_result.returncode != 0:
             print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation failed:\n{pdf_result.stderr}")
             return {}
@@ -3215,10 +3226,16 @@ class ResumeEngine:
         dropped_optional_clients = False
 
         while True:
-            pdf_result = subprocess.run(
-                ["node", pdf_script, html_out, pdf_out, "--format=letter"],
-                capture_output=True, text=True
-            )
+            try:
+                pdf_result = subprocess.run(
+                    ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+                    capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+                    env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
+                )
+            except subprocess.TimeoutExpired:
+                print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation timed out after "
+                      f"{PDF_GENERATION_TIMEOUT_SECONDS}s.")
+                return {}
             if pdf_result.returncode != 0:
                 print(f"  {theme.colorize_icon_ansi('warning')}  PDF generation failed:\n{pdf_result.stderr}")
                 return {}

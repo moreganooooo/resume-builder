@@ -125,6 +125,18 @@ _ICON_SET_NAME = _resolve_icon_set_name()
 ICONS = _UNICODE_ICONS if _ICON_SET_NAME == "unicode" else _NERD_ICONS
 
 
+def icon_set_name() -> str:
+    """Returns the resolved icon-set name ('nerd' or 'unicode'). Meant to be
+    passed as RESUME_BUILDER_ICONS into the environment of a JS-side
+    subprocess that prints its own icons directly (generate-pdf.mjs,
+    check-liveness.mjs) -- there's no shared theming layer across the JS/
+    Python boundary, so without this those scripts only ever see an
+    explicit shell-level override, never this process's resolved
+    preference (an interactive answer persisted via ui_config.py, or the
+    isatty-based default) (B45)."""
+    return _ICON_SET_NAME
+
+
 def set_icon_set(name: str) -> None:
     """Switches the active icon set at runtime -- called by menu.py's
     first-launch prompt right after it persists the user's answer, so the

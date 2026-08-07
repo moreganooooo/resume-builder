@@ -52,7 +52,7 @@ that's the active context.
 
 ---
 
-## Session 2 — Voice/summary quality + bullet-bank integrity
+## Session 2 — Voice/summary quality + bullet-bank integrity — ✅ DONE 2026-08-06
 
 **Items, in order:** B28 → B29 → B30 → B20.
 
@@ -204,3 +204,17 @@ Follow the same rule used throughout `phase-9-backlog.md`: check whether a
 new item shares files with an existing cluster before giving it its own
 session. Append it to this file in the matching session, or add a new
 session at the end if it doesn't fit anywhere.
+
+---
+
+## Post-fix-pass cleanup — ✅ DONE 2026-08-06
+
+The six items left open after Session 6 (B60's confirming run, the
+cv.md/profile.yml name drift, and B21/B42/B45's deferred halves) are all
+closed. Full detail in `phase-9-backlog.md`'s 2026-08-06 "post-fix-pass
+cleanup" changelog entry — notably, B60's confirming run surfaced that the
+name-drift fix needed to go one file deeper than first diagnosed
+(`bullet-bank.md`'s stale reference table, not just `cv.md`) to actually
+take effect. Test suite: 1270 → 1276, all passing; Go `build`/`test ./...`
+passing; verified against two live `resume sample` runs and a real PDF
+render in both icon modes.

@@ -17,6 +17,7 @@ Differences from the original:
 
 import logging
 import re
+import time
 
 import browser_cookie3
 import requests
@@ -31,6 +32,14 @@ from linkedin_jobs_scraper.filters import (
 )
 
 DEFAULT_JOB_LIMIT_PER_QUERY = 20
+
+# Matches LinkedinScraper's own slow_mo=5 below. Without this,
+# _fetch_personalized_extras() fires one authenticated GET per job (up to
+# ~60 on a full scan) back-to-back on Morgan's real li_at session cookie --
+# the one place in this subsystem with genuine account-ban risk, since it's
+# the account she job-searches from. Costs up to 5 extra minutes on a scan
+# that already takes longer; worth it.
+_PERSONALIZED_EXTRAS_DELAY_SECONDS = 5
 
 
 def get_li_at_cookie() -> str:
@@ -52,7 +61,8 @@ def get_li_at_cookie() -> str:
 def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
     """Authenticated pass over the job page to detect "Top Applicant" status
     and recover a backup description from the page's embedded JSON, using
-    Morgan's live session cookie."""
+    Morgan's live session cookie. Paced by
+    _PERSONALIZED_EXTRAS_DELAY_SECONDS -- see that constant's comment."""
     extras = {"is_top_applicant": False, "backup_description": None}
     if not job_url or not li_at_cookie:
         return extras
@@ -85,6 +95,11 @@ def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
                 break
     except Exception as e:
         logging.debug(f"  [Enhancer] Failed to fetch personalized extras for {job_url}: {e}")
+    finally:
+        # In the finally block (not just after a successful request) since
+        # a timeout/exception still means a request hit LinkedIn's server
+        # and should count toward pacing.
+        time.sleep(_PERSONALIZED_EXTRAS_DELAY_SECONDS)
 
     return extras
 
