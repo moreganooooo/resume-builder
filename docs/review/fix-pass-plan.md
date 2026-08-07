@@ -135,17 +135,31 @@ same credential constraint as Session 3).
 
 ---
 
-## Session 5 — Stranger path + TUI polish
+## Session 5 — Stranger path + TUI polish — ✅ DONE 2026-08-06
 
 **Items, in order:** B31 → B32 → B33 → B22 → B23.
 
-**Why batched:** B31–B33 are one coherent "what does a stranger see first"
-pass (goal 3) across different files, cheaper to review together than
-separately. B22/B23 are the same Rich table/palette code (goal 4) — bundled
-into the same session since it's the last remaining polish tier.
+**Outcome:** all 5 done. `resume bootstrap` + a real `pyproject.toml`
+console-script entry point (verified live via `pip install -e .`); doctor
+collapses the fully-unbootstrapped case to one line and gained an `npm`/`npx`
+check; a persisted, asked-once first-launch icon-set prompt replaces the old
+"always fails toward Nerd Font" default (a deliberate behavior-change for the
+non-interactive/no-answer case, now defaulting to Unicode); the nine-column
+browse table gets fixed widths + a `ratio` column instead of Rich squeezing
+headers below legibility, plus eight Unicode fallback icons swapped off
+real/ambiguous-width emoji glyphs; `BRAND_ACCENT` moved to clear 4.5:1 on
+dark, and the Go dashboard theme file is now generated from `theme.py`
+instead of hand-copied, with a doctor check catching future drift. Full
+detail, the exact file-scope deviations (`cli_art.py`, `profile_paths.py`,
+`README.md`, plus two new files `ui_config.py`/`sync_dashboard_theme.py`),
+and what wasn't visually verified (no live terminal in this environment) are
+in `phase-9-backlog.md`'s 2026-08-06 Session 5 changelog entry. Test suite:
+1246 → 1270, all passing.
 
 **Files:** `cli.py`, `doctor.py`, `theme.py`, `bootstrap_menu.py`, `menu.py`,
-Go theme file (`dashboard/internal/theme/resumebuilder.go`).
+Go theme file (`dashboard/internal/theme/resumebuilder.go`) — plus
+`cli_art.py`, `profile_paths.py`, `README.md`, `ui_config.py`,
+`sync_dashboard_theme.py` (see Outcome above).
 
 **Clear after this session.**
 

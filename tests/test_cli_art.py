@@ -221,6 +221,16 @@ class TestRenderFitTable(unittest.TestCase):
 
 class TestRenderPipelineTable(unittest.TestCase):
 
+    def _rendered_at_width(self, width, *args, **kwargs):
+        console = Console(record=True, width=width)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.render_pipeline_table(*args, **kwargs)
+        finally:
+            cli_art.console = original
+        return console.export_text()
+
     def test_shows_count_status_and_liveness_columns(self):
         rows = [
             {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
@@ -230,12 +240,43 @@ class TestRenderPipelineTable(unittest.TestCase):
              "evaluation": {"composite_score": 3.0, "recommendation": "Selective pursue"},
              "liveness": None},
         ]
-        output = _rendered(cli_art.render_pipeline_table, rows)
+        # Wide enough (>= B22's ~110-column threshold) that Last
+        # Liveness/Follow-up stay in the table.
+        output = self._rendered_at_width(140, rows)
         self.assertIn("2 evaluated JD(s)", output)
         self.assertIn("Pending", output)
         self.assertIn("Completed", output)
         self.assertIn("active", output)
         self.assertIn("2026-07-21", output)
+
+    def test_drops_liveness_and_followup_columns_below_110_columns(self):
+        # B22: rather than shrinking every column past legibility, the two
+        # least-essential-at-a-glance columns disappear entirely below the
+        # narrow threshold, and headers never truncate.
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
+             "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"}},
+        ]
+        output = self._rendered_at_width(80, rows)
+        # The hint subtitle legitimately names both dropped columns, so
+        # check for absence of their actual data instead of their names.
+        self.assertNotIn("active", output)
+        self.assertIn("widen your terminal", output)
+        self.assertIn("Recommendation", output)
+        self.assertIn("Company", output)
+        self.assertIn("Pending", output)
+
+    def test_headers_are_never_truncated_at_80_or_100_columns(self):
+        rows = [
+            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
+             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+        ]
+        for width in (80, 100):
+            output = self._rendered_at_width(width, rows)
+            self.assertIn("Recommendation", output, f"header truncated at width={width}")
+            self.assertIn("Company", output, f"header truncated at width={width}")
+            self.assertIn("Status", output, f"header truncated at width={width}")
 
     def test_shows_followup_status_and_urgency(self):
         import datetime
@@ -246,7 +287,7 @@ class TestRenderPipelineTable(unittest.TestCase):
              "liveness": None,
              "application": {"status": "Applied", "status_changed_at": overdue_at, "follow_up_count": 0}},
         ]
-        output = _rendered(cli_art.render_pipeline_table, rows)
+        output = self._rendered_at_width(140, rows)
         self.assertIn("Applied", output)
         self.assertIn("overdue", output)
 

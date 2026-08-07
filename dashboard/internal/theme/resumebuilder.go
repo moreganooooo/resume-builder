@@ -19,6 +19,12 @@ import "github.com/charmbracelet/lipgloss"
 //   - Pink reuses BRAND_ACCENT (the field is currently unread by every
 //     screen -- see internal/ui/screens -- so any value is a placeholder
 //     until something actually renders it).
+//
+// GENERATED from scripts/theme.py by scripts/sync_dashboard_theme.py --
+// do not hand-edit the accent block below. Re-run that script after
+// changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
+// ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
+// this file ever falls out of sync.
 func newResumeBuilder() Theme {
 	return Theme{
 		// Structural neutrals -- Catppuccin Mocha, untouched.
@@ -30,12 +36,12 @@ func newResumeBuilder() Theme {
 
 		// Accents -- resume-builder's scripts/theme.py tokens.
 		Blue:   lipgloss.Color("#2196f3"), // INFO
-		Mauve:  lipgloss.Color("#673ab7"), // BRAND_ACCENT
+		Mauve:  lipgloss.Color("#b39ddb"), // BRAND_ACCENT
 		Green:  lipgloss.Color("#4caf50"), // SUCCESS
 		Yellow: lipgloss.Color("#f5c542"), // WARNING
 		Sky:    lipgloss.Color("#4dabf7"), // BRAND
 		Peach:  lipgloss.Color("#f5c542"), // WARNING (reused, see above)
 		Red:    lipgloss.Color("#c96a6a"), // ERROR
-		Pink:   lipgloss.Color("#673ab7"), // BRAND_ACCENT (reused, unused field)
+		Pink:   lipgloss.Color("#b39ddb"), // BRAND_ACCENT (reused, unused field)
 	}
 }

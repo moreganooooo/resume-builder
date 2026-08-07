@@ -140,6 +140,49 @@ def _confirm_active_profile() -> None:
     os.environ["RESUME_GUEST_MODE"] = "1"
 
 
+def _confirm_icon_set() -> None:
+    """First-launch icon-set prompt (B33): theme.py's own import-time
+    resolution already picked a reasonable default (Nerd Font in a real
+    terminal, Unicode otherwise) before this ever runs -- this is what
+    turns that guess into a real, permanent answer. Runs once per profile,
+    ever: an explicit RESUME_BUILDER_ICONS override or an already-
+    persisted choice both mean there's nothing left to ask. Must run
+    after _confirm_active_profile() so the answer is saved against the
+    right profile, not whatever RESUME_PROFILE defaulted to before the
+    user was identified."""
+    import ui_config
+
+    if os.environ.get("RESUME_BUILDER_ICONS"):
+        return
+    if ui_config.get_icon_set() is not None:
+        return
+    if not cli_art.console.is_terminal:
+        return
+
+    nerd_row = "  ".join(theme._NERD_ICONS[k] for k in ("success", "error", "warning", "build", "bullet_bank"))
+    unicode_row = "  ".join(theme._UNICODE_ICONS[k] for k in ("success", "error", "warning", "build", "bullet_bank"))
+    cli_art.console.print("\nOne-time setup: which of these rows looks right in this terminal?")
+    cli_art.console.print(f"  Nerd Font:  {nerd_row}")
+    cli_art.console.print(f"  Unicode:    {unicode_row}")
+    cli_art.console.print(
+        "[dim]If the Nerd Font row shows boxes or question marks instead of icons, pick Unicode.[/dim]"
+    )
+
+    choice = questionary.select(
+        "Which one?",
+        choices=[
+            questionary.Choice(title="Nerd Font (the row above with the icons, if they rendered)", value="nerd"),
+            questionary.Choice(title="Unicode (plain symbols, works everywhere)", value="unicode"),
+        ],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not choice:
+        return
+
+    ui_config.save_icon_set(choice)
+    theme.set_icon_set(choice)
+
+
 def _print_source_docs_instructions(source_docs_dir: str) -> None:
     """The proactive "here's what to do first" message for an empty
     source_documents/ folder -- shown whether this is a just-created
@@ -839,6 +882,7 @@ def _session_summary(session_stats: dict) -> str:
 def run_interactive_menu() -> None:
     cli_art.display_main_banner()
     _confirm_active_profile()
+    _confirm_icon_set()
     _prompt_for_update()
     cli_art.display_tip()
 
