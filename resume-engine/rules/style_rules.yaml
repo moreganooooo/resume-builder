@@ -41,8 +41,17 @@ writing_style:
 bullet_structure:
   pattern: "Strong past-tense action verb → task/responsibility → result/outcome (with metric if verified)"
   fallback: "Action verb → task/responsibility"
-  one_liner_target_chars: 110
-  one_liner_max_chars: 120
+  # 2026-08-06: one_liner_max_chars was never empirically measured against
+  # real rendering (unlike the tagline's max_chars below, which was) -- it
+  # was simply wrong, the same class of error the tagline limit already had
+  # once. Playwright test at the real 9.75pt DM Sans .job li rendering,
+  # real 7.5in content width: 109 chars fit on one line; 112, 115, and 120
+  # chars all wrapped, several with a 2-word widow on the 2nd line -- the
+  # live shape of the complaint this was measured to fix. Real ceiling is
+  # ~110; 108 leaves a couple chars of margin for per-bullet character-width
+  # variance, same reasoning as the tagline's conservative cap.
+  one_liner_target_chars: 100
+  one_liner_max_chars: 108
   two_liner_max_chars: 220
   mix: "~70% one-liners, ~30% two-liners"
   max_printed_lines: 2
@@ -287,11 +296,17 @@ redundancy_rules:
       above, not this rule.
 
 tagline:
-  # Empirically measured (Playwright, real DM Sans 14pt rendering at
-  # the actual 7.5in content width): realistic uppercase taglines run
-  # ~0.117-0.119in/char, so even a 65-char tagline can wrap to a 2nd line.
-  # A prior "target 70-80 characters" guess was simply wrong.
-  max_chars: 60
+  # Base measurement: Playwright, real DM Sans 14pt rendering at the actual
+  # 7.5in content width -- realistic uppercase taglines run ~0.117-0.119in/char,
+  # so even a 65-char tagline could wrap to a 2nd line. A prior "target
+  # 70-80 characters" guess was simply wrong.
+  #
+  # 2026-08-06: tagline bumped to 15pt (cv-template.html's .header-tagline)
+  # for more visual presence in the header. Font metrics scale linearly with
+  # point size for the same family/weight, so the char budget is scaled down
+  # by the same ratio (60 * 14/15 = 56) rather than re-measured from scratch --
+  # if the tagline font size changes again, rescale this the same way.
+  max_chars: 56
 
 skills_section:
   position: immediately_after_summary
@@ -335,10 +350,10 @@ layout_rules:
     4: Remove least-relevant bullets from the lowest flex-priority role first (protect this candidate's Protected Bullets list)
 
 typography:
-  name_font: DM Serif Display 400 32pt
+  name_font: DM Serif Display 400 36pt
   section_headers_font: DM Serif Display 400 16pt
   body_font: DM Sans 400/600
-  tagline_size: 14pt
+  tagline_size: 15pt
   body_size: 10.5pt
   contact_size: 9.75pt
   prohibited_fonts: [Inter]  # Chromium/Playwright reversed-text bug

@@ -174,9 +174,10 @@ def _check_tagline_length(resume_data: dict, style_rules: dict) -> list[str]:
     DM Sans 14pt rendering at the real 7.5in content width): realistic
     uppercase taglines run ~0.117-0.119in/char, so even 65 chars can exceed
     the available width. This uses a conservative 60-char cap with margin
-    for that per-character variance.
+    for that per-character variance -- 56 as of the 2026-08-06 tagline
+    font bump (14pt -> 15pt); see style_rules.yaml's tagline.max_chars.
     """
-    max_chars = style_rules.get("tagline", {}).get("max_chars", 60)
+    max_chars = style_rules.get("tagline", {}).get("max_chars", 56)
     tagline = resume_data.get("TAGLINE", "")
     if len(tagline) > max_chars:
         return [f"Tagline exceeds {max_chars}-char max ({len(tagline)} chars) and will wrap to a 2nd line: {tagline!r}"]
@@ -191,6 +192,72 @@ def _check_bullet_lengths(resume_data: dict, style_rules: dict) -> list[str]:
         if len(bullet) > two_liner_max:
             violations.append(f"Bullet exceeds {two_liner_max}-char two-liner max ({len(bullet)} chars): {bullet!r}")
     return violations
+
+
+def bullets_with_short_widow(bullets: list[str], style_rules: dict) -> list[tuple[str, int]]:
+    """Returns (bullet, widow_word_count) for every bullet that clears
+    one_liner_max_chars but not two_liner_max_chars, and whose implied 2nd
+    line -- the text past one_liner_max_chars -- has fewer than
+    widow_min_words words (style_rules.yaml's bullet_structure).
+
+    Same char-count-as-proxy-for-wrap-point approach as
+    _check_skills_line_lengths: no live render is available at validation
+    time, so the text past one_liner_max_chars stands in for "what spills
+    to line 2." Shared by _check_bullet_widows() below (feeds the
+    pre-render fix loop, independent of final page count) and
+    orchestrator.py's _short_widow_bullets() (feeds the page-overflow trim
+    step) so the two never drift onto different thresholds.
+    """
+    limits = style_rules.get("bullet_structure", {})
+    one_liner_max = limits.get("one_liner_max_chars", 108)
+    two_liner_max = limits.get("two_liner_max_chars", 220)
+    widow_min_words = limits.get("widow_min_words", 5)
+
+    results = []
+    for bullet in bullets:
+        length = len(bullet)
+        if length <= one_liner_max or length > two_liner_max:
+            continue
+        remainder = bullet[one_liner_max:].strip()
+        word_count = len(remainder.split())
+        if word_count < widow_min_words:
+            results.append((bullet, word_count))
+    return results
+
+
+def _check_bullet_widows(resume_data: dict, style_rules: dict) -> list[str]:
+    """
+    style_rules.yaml's bullet_structure has declared a widow_rule ("Never
+    wrap to a second line with fewer than 5 words") and widow_min_words: 5
+    since it was written, but nothing ever checked it -- _check_bullet_lengths
+    above only catches a bullet that blows through the 220-char two-liner
+    ceiling entirely, never one that just clears the 120-char one-liner
+    ceiling and strands a 2-3 word scrap on its own second line. That short
+    second line is exactly the shape of a live complaint: several bullets
+    render with an odd, stub-like final line -- on a resume that already
+    fits in 2 pages, so orchestrator.py's page-overflow trim step (which
+    already knew how to fix this) never even ran.
+
+    EXPERIENCE achievements only, deliberately not _all_bullets() (which
+    also pulls in EDUCATION): Education bullets are fixed Python content
+    from fixed_content.py, assembled directly with no LLM in the loop, so
+    a widow violation there has no fix the retry loop could ever apply --
+    it would just burn all 4 attempts and fail the build. Matches
+    orchestrator.py's _short_widow_bullets(), which is EXPERIENCE-only for
+    the same reason.
+    """
+    widow_min_words = style_rules.get("bullet_structure", {}).get("widow_min_words", 5)
+    bullets = [
+        bullet
+        for job in resume_data.get("EXPERIENCE", [])
+        for bullet in job.get("achievements", [])
+    ]
+    return [
+        f"Bullet wraps to a 2nd line but leaves only a {word_count}-word widow "
+        f"(fewer than the required {widow_min_words}) -- tighten it to fit one line, "
+        f"or lengthen it so the 2nd line isn't a stray scrap: {bullet!r}"
+        for bullet, word_count in bullets_with_short_widow(bullets, style_rules)
+    ]
 
 
 def _check_skills_line_lengths(resume_data: dict, style_rules: dict) -> list[str]:
@@ -396,6 +463,78 @@ def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     return violations
 
 
+def _check_role_order(resume_data: dict, role_roster: list[str]) -> list[str]:
+    """EXPERIENCE entries must appear in the same order as profile.yml's
+    roles: list -- that list order is reverse-chronological by each role's
+    actual period dates (verified against COMPANY_META / bullet-bank.md),
+    so it's a fixed fact like Education's fixed order, not a per-JD
+    judgment call the model should be re-deriving every run. Observed
+    live: Mercor (08/2025) rendered after Inside Sales Team (10/2015-
+    08/2016) and Treering (08/2016-08/2024), even though the roster order
+    already had it first.
+
+    Loose matching mirrors _check_role_roster() (title parentheticals like
+    "(Now Alleyoop)"). A company missing entirely is _check_role_roster()'s
+    job, not this one -- it's simply skipped here so one absence doesn't
+    also register as a false order violation.
+    """
+    if not role_roster:
+        return []
+
+    normalized_roster = [_normalize_company(c) for c in role_roster]
+    matched_indices = []
+    for job in resume_data.get("EXPERIENCE", []):
+        entry = _normalize_company(job.get("company", ""))
+        if not entry:
+            continue
+        for i, needle in enumerate(normalized_roster):
+            if needle and (needle in entry or entry in needle):
+                matched_indices.append(i)
+                break
+
+    if matched_indices != sorted(matched_indices):
+        return [
+            "Work history order: EXPERIENCE entries are not in the profile's "
+            "declared reverse-chronological order. Expected order: "
+            + ", ".join(role_roster)
+        ]
+    return []
+
+
+def _check_bullet_counts(resume_data: dict, role_bullet_minimums: dict) -> list[str]:
+    """Each EXPERIENCE entry must meet its role's min_bullets floor from
+    profile.yml -- the same floor build_role_rules_block()'s "Per-Role
+    Bullet Count Targets" table already tells the model, with nothing
+    checking it was followed. Observed live: Element 8 / Strategy LLC,
+    VML, and Callahan Creek each shipped with 2 achievement bullets
+    against a declared min_bullets of 3.
+
+    Loose matching mirrors _check_role_roster() (title parentheticals like
+    "(Now Alleyoop)"). A company with no declared minimum (absent from
+    the roster, or the roster wasn't supplied) is skipped -- this check
+    enforces a floor, not presence.
+    """
+    if not role_bullet_minimums:
+        return []
+
+    violations = []
+    for job in resume_data.get("EXPERIENCE", []):
+        entry = _normalize_company(job.get("company", ""))
+        if not entry:
+            continue
+        for company, minimum in role_bullet_minimums.items():
+            needle = _normalize_company(company)
+            if needle and (needle in entry or entry in needle):
+                count = len(job.get("achievements") or [])
+                if count < minimum:
+                    violations.append(
+                        f"Bullet count: {job.get('company')!r} has {count} achievement "
+                        f"bullet(s), below its required minimum of {minimum}"
+                    )
+                break
+    return violations
+
+
 def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules: dict) -> dict:
     """Deterministic JD-keyword coverage check (B18, phase-9-backlog.md).
     Neither half of this existed before: ats_match.yaml supplied weights
@@ -452,20 +591,29 @@ def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules
     return {"score": score, "band": band, "matched": matched, "missing": missing}
 
 
-def validate(resume_data: dict, style_rules: dict, role_roster: list[str] = None) -> list[str]:
-    """role_roster is optional so callers that legitimately validate a partial
-    document (polish.py's single-section edits) aren't forced to supply one;
-    omitting it skips the roster check rather than failing it."""
+def validate(
+    resume_data: dict,
+    style_rules: dict,
+    role_roster: list[str] = None,
+    role_bullet_minimums: dict = None,
+) -> list[str]:
+    """role_roster and role_bullet_minimums are optional so callers that
+    legitimately validate a partial document (polish.py's single-section
+    edits) aren't forced to supply them; omitting either skips its checks
+    rather than failing them."""
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
     violations.extend(_check_unique_opening_verbs(resume_data))
     violations.extend(_check_tagline_length(resume_data, style_rules))
     violations.extend(_check_bullet_lengths(resume_data, style_rules))
+    violations.extend(_check_bullet_widows(resume_data, style_rules))
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
+    violations.extend(_check_role_order(resume_data, role_roster or []))
+    violations.extend(_check_bullet_counts(resume_data, role_bullet_minimums or {}))
     return violations
