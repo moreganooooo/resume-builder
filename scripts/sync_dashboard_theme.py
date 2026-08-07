@@ -65,19 +65,42 @@ import "github.com/charmbracelet/lipgloss"
 // changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
 // ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
 // this file ever falls out of sync.
-func newResumeBuilder() Theme {
-\treturn Theme{
-\t\t// Structural neutrals -- Catppuccin Mocha, untouched.
-\t\tBase:    lipgloss.Color("#1e1e2e"),
-\t\tSurface: lipgloss.Color("#313244"),
-\t\tOverlay: lipgloss.Color("#45475a"),
-\t\tText:    lipgloss.Color("#cdd6f4"),
-\t\tSubtext: lipgloss.Color("#a6adc8"),
+// newCatppuccinMocha moved to catppuccin.go
 
-\t\t// Accents -- resume-builder's scripts/theme.py tokens.
+func newResumeBuilder() Theme {
+	t := Theme{
+		// Structural neutrals -- Catppuccin Mocha, untouched.
+		Base:    lipgloss.Color("#1e1e2e"),
+		Surface: lipgloss.Color("#313244"),
+		Overlay: lipgloss.Color("#45475a"),
+		Text:    lipgloss.Color("#cdd6f4"),
+		Subtext: lipgloss.Color("#a6adc8"),
+
+		// Accents -- resume-builder's scripts/theme.py tokens.
 '''
 
-_FOOTER = "\t}\n}\n"
+_FOOTER = """	}
+
+	t.GradientStart = lipgloss.Color(BrandColor)
+	t.GradientEnd = lipgloss.Color(AccentColor)
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.GradientStart = t.GradientStart
+	t.Token.GradientEnd = t.GradientEnd
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons (generic placeholders)
+	t.Icons.Pipeline = "🛠"
+	t.Icons.Progress = "📈"
+	t.Icons.Report = "📄"
+	t.Icons.Quit = "❌"
+	t.Icons.Menu = "☰"
+
+	return t
+}
+"""
 
 
 def build_go_theme_source() -> str:

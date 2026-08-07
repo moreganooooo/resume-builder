@@ -19,6 +19,7 @@ type ViewerClosedMsg struct{}
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
 	lines         []string
+	rawContent    string
 	renderedLines []string
 	title         string
 	scrollOffset  int
@@ -40,11 +41,12 @@ func NewViewerModel(t theme.Theme, path, title string, width, height int) Viewer
 	}
 
 	m := ViewerModel{
-		lines:  lines,
-		title:  title,
-		width:  width,
-		height: height,
-		theme:  t,
+		lines:      lines,
+		rawContent: string(content),
+		title:      title,
+		width:      width,
+		height:     height,
+		theme:      t,
 	}
 	m.rebuildRender()
 	return m
@@ -157,14 +159,14 @@ func (m ViewerModel) View() string {
 func (m ViewerModel) renderHeader() string {
 	style := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(m.theme.Text).
+		Foreground(lipgloss.Color(theme.BaseColor)).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 2)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.title)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.BaseColor))
 	scroll := right.Render(func() string {
 		if len(m.renderedLines) == 0 {
 			return ""
@@ -196,10 +198,10 @@ func (m ViewerModel) renderHeader() string {
 
 func (m ViewerModel) renderBody() string {
 	bh := m.bodyHeight()
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 
 	if len(m.renderedLines) == 0 {
-		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.BaseColor))
 		return padStyle.Render(emptyStyle.Render("(empty file)"))
 	}
 
@@ -217,88 +219,15 @@ func (m ViewerModel) renderBody() string {
 
 // renderAll converts every raw markdown line into visual terminal lines.
 func (m ViewerModel) renderAll() []string {
-	var styled []string
-	i := 0
-	for i < len(m.lines) {
-		line := m.lines[i]
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" {
-			styled = append(styled, "")
-			i++
-			continue
-		}
-
-		if isTableLine(line) {
-			tableStart := i
-			for i < len(m.lines) && isTableLine(m.lines[i]) {
-				i++
-			}
-			styled = append(styled, m.renderTableBlock(m.lines[tableStart:i])...)
-			continue
-		}
-
-		if strings.HasPrefix(trimmed, "```") {
-			i++
-			var codeLines []string
-			for i < len(m.lines) {
-				if strings.TrimSpace(m.lines[i]) == "```" {
-					i++
-					break
-				}
-				codeLines = append(codeLines, m.lines[i])
-				i++
-			}
-			codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
-			w := m.width - 6
-			if w < 10 {
-				w = 10
-			}
-			for _, cl := range codeLines {
-				for _, wl := range strings.Split(ansi.Wrap("  "+cl, w, ""), "\n") {
-					styled = append(styled, codeStyle.Render(wl))
-				}
-			}
-			continue
-		}
-
-		if isSpecialBlockLine(trimmed) {
-			styled = append(styled, m.styleLine(line))
-			i++
-			continue
-		}
-
-		start := i
-		for i < len(m.lines) {
-			next := strings.TrimSpace(m.lines[i])
-			if next == "" || isSpecialBlockLine(next) {
-				break
-			}
-			i++
-		}
-		if i > start {
-			paraLines := m.lines[start:i]
-			para := strings.Join(paraLines, " ")
-			w := m.width - 6
-			if w < 10 {
-				w = 10
-			}
-			wrapped := m.wrapParagraph(m.renderInlineElements(para), w)
-			for _, wl := range wrapped {
-				styled = append(styled, wl)
-			}
-		}
+	// Use Glamour to render the raw markdown with the dashboard theme.
+	renderer := theme.MarkdownStyle()
+	rendered, err := renderer.Render(m.rawContent)
+	if err != nil {
+		// Fallback to a simple plain render if Glamour fails.
+		return strings.Split(m.rawContent, "\n")
 	}
-
-	var flat []string
-	for _, s := range styled {
-		if strings.IndexByte(s, '\n') >= 0 {
-			flat = append(flat, strings.Split(s, "\n")...)
-		} else {
-			flat = append(flat, s)
-		}
-	}
-	return flat
+	// Split the rendered output into lines for scrolling.
+	return strings.Split(rendered, "\n")
 }
 
 func isTableLine(line string) bool {
@@ -403,7 +332,7 @@ func (m ViewerModel) renderTableBlock(lines []string) []string {
 	}
 
 	t.StyleFunc(func(row, col int) lipgloss.Style {
-		st := lipgloss.NewStyle().Padding(0, 1)
+		st := theme.PadHorizontal(lipgloss.NewStyle())
 		if row == table.HeaderRow {
 			return st.Bold(true).Foreground(m.theme.Sky)
 		}
@@ -455,7 +384,7 @@ func (m ViewerModel) wrapParagraph(text string, width int) []string {
 }
 
 func (m ViewerModel) renderInlineElements(line string) string {
-	return m.renderInlineElementsAs(line, m.theme.Subtext)
+	return m.renderInlineElementsAs(line, lipgloss.Color(theme.BaseColor))
 }
 
 // renderInlineElementsAs walks the raw line once and reapplies baseColor around
@@ -465,7 +394,7 @@ func (m ViewerModel) renderInlineElementsAs(line string, baseColor lipgloss.Colo
 	baseStyle := lipgloss.NewStyle().Foreground(baseColor)
 	codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Yellow)
-	linkStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentColor))
 
 	var b strings.Builder
 	rest := line
@@ -540,7 +469,7 @@ func (m ViewerModel) styleLine(line string) string {
 	}
 	if strings.HasPrefix(trimmed, "#### ") && !strings.HasPrefix(trimmed, "##### ") {
 		content := strings.TrimPrefix(trimmed, "#### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("    " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(theme.BaseColor)).Width(w).Render("    " + content)
 	}
 	if strings.HasPrefix(trimmed, "##### ") && !strings.HasPrefix(trimmed, "###### ") {
 		content := strings.TrimPrefix(trimmed, "##### ")
@@ -556,7 +485,7 @@ func (m ViewerModel) styleLine(line string) string {
 	if strings.HasPrefix(trimmed, "> ") {
 		content := strings.TrimPrefix(trimmed, "> ")
 		border := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("▎ ")
-		textStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Italic(true)
+		textStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.BaseColor)).Italic(true)
 		wrapped := strings.Split(ansi.Wrap(textStyle.Render(content), w-2, ""), "\n")
 		result := make([]string, 0, len(wrapped))
 		for i, line := range wrapped {
@@ -585,7 +514,7 @@ func (m ViewerModel) styleLine(line string) string {
 		}
 	}
 
-	styled := m.renderInlineElementsAs(trimmed, m.theme.Subtext)
+	styled := m.renderInlineElementsAs(trimmed, lipgloss.Color(theme.BaseColor))
 	return ansi.Wrap(styled, w, "")
 }
 
@@ -610,13 +539,13 @@ func (m ViewerModel) renderListItem(marker, content string, width int) string {
 
 func (m ViewerModel) renderFooter() string {
 	style := lipgloss.NewStyle().
-		Foreground(m.theme.Subtext).
+		Foreground(lipgloss.Color(theme.BaseColor)).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.BaseColor))
 
 	return style.Render(
 		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +

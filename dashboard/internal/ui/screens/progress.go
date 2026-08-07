@@ -124,12 +124,12 @@ func (m ProgressModel) renderHeader() string {
 		Bold(true).
 		Foreground(m.theme.Text).
 		Background(m.theme.Surface).
-		Width(m.width).
-		Padding(0, 2)
+		Width(m.width)
+	style = theme.PadHorizontal(style)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Render(theme.NewIcons().Evaluate + " SEARCH PROGRESS")
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
 	total := len(m.metrics.FunnelStages)
 	totalCount := 0
 	if total > 0 {
@@ -146,14 +146,14 @@ func (m ProgressModel) renderHeader() string {
 }
 
 func (m ProgressModel) renderFunnel() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Pipeline Funnel")))
 
 	if len(m.metrics.FunnelStages) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -195,9 +195,9 @@ func (m ProgressModel) renderFunnel() string {
 			color = stageColors[i]
 		}
 
-		barStyle := lipgloss.NewStyle().Foreground(color)
+		barStyle := lipgloss.NewStyle().Foreground(color) // no padding needed
 		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 
 		bar := barStyle.Render(strings.Repeat("\u2588", barW))
 		label := labelStyle.Render(stage.Label)
@@ -215,14 +215,14 @@ func (m ProgressModel) renderFunnel() string {
 }
 
 func (m ProgressModel) renderScoreDistribution() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Score Distribution")))
 
 	if len(m.metrics.ScoreBuckets) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -266,7 +266,7 @@ func (m ProgressModel) renderScoreDistribution() string {
 
 		barStyle := lipgloss.NewStyle().Foreground(color)
 		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 
 		bar := barStyle.Render(strings.Repeat("\u2588", barW))
 		label := labelStyle.Render(bucket.Label)
@@ -279,7 +279,7 @@ func (m ProgressModel) renderScoreDistribution() string {
 }
 
 func (m ProgressModel) renderRates() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
@@ -307,7 +307,7 @@ func (m ProgressModel) renderRates() string {
 	lines = append(lines, padStyle.Render(rates))
 
 	// Active summary
-	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 	activeInfo := dimStyle.Render(fmt.Sprintf(
 		"%d active applications | %d total offers",
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
@@ -318,14 +318,14 @@ func (m ProgressModel) renderRates() string {
 }
 
 func (m ProgressModel) renderWeeklyActivity() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Weekly Activity")))
 
 	if len(m.metrics.WeeklyActivity) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -354,8 +354,8 @@ func (m ProgressModel) renderWeeklyActivity() string {
 		}
 
 		barStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(labelW)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 
 		// Show short week label (e.g., "W14" from "2026-W14")
 		shortWeek := week.Week
@@ -375,13 +375,13 @@ func (m ProgressModel) renderWeeklyActivity() string {
 
 func (m ProgressModel) renderHelp() string {
 	style := lipgloss.NewStyle().
-		Foreground(m.theme.Subtext).
+		Foreground(m.theme.Blue).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
 
 	brand := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("resume-builder dashboard")
 
