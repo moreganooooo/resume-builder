@@ -10,6 +10,7 @@ import sys
 
 from questionary import Style
 from rich.console import Console
+from rich.style import Style as RichStyle
 
 # Semantic color tokens -- hex, not named ANSI colors. Named colors get
 # remapped by whatever terminal theme is active; this project has already
@@ -173,27 +174,28 @@ def colorize_icon(name: str) -> str:
         return f"[{color}]{icon}[/{color}]"
     return icon
 
-def _hex_to_ansi_fg(hex_color: str) -> str:
-    hex_color = hex_color.lstrip("#")
-    r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-    return f"\033[38;2;{r};{g};{b}m"
-
-_ANSI_RESET = "\033[0m"
-
 def colorize_icon_ansi(name: str) -> str:
     """Return icon wrapped in raw ANSI 24-bit color escape codes.
 
     Use this (not colorize_icon()) in any script that calls the plain
     print() builtin directly to a terminal -- a real terminal interprets
     raw ANSI escapes on its own, unlike Rich markup (which needs a Rich
-    Console to parse it) or prompt_toolkit's renderer (which needs its
-    own (style, text) tuple format -- see questionary_icon_tuple())."""
+    Console to parse it, and -- confirmed empirically, B46/P5#4 -- would
+    silently swallow any single-word bracketed text elsewhere in the same
+    message, e.g. a `[STALE]` status tag, since it looks like a valid but
+    unstyled markup tag) or prompt_toolkit's renderer (which needs its own
+    (style, text) tuple format -- see questionary_icon_tuple()).
+
+    Renders via rich.style.Style rather than hand-rolled hex parsing, so
+    there's exactly one place (Rich's own Style class) that turns a hex
+    color into terminal escape codes, not two -- the RGB math and the
+    reset sequence both come from Rich itself."""
     if name not in ICONS:
         return name
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
     if color:
-        return f"{_hex_to_ansi_fg(color)}{icon}{_ANSI_RESET}"
+        return RichStyle(color=color).render(icon, color_system="truecolor")
     return icon
 
 def questionary_icon_tuple(name: str) -> tuple:

@@ -3113,6 +3113,15 @@ class ResumeEngine:
                     system_instruction=f"{build_prompt}\n\n{static_prefix}",
                     contents=rec_contents,
                     response_schema=RecommendationApplySchema,
+                    # B40: without these, EDU_ACHIEVEMENT_KEY_<n> isn't part
+                    # of this call's schema, so the model never echoes back
+                    # resume_data's existing choice -- normalize_resume.py
+                    # then defaults to "", and fixed_content.build_education()
+                    # silently reverts KU/KCKCC to each school's first option
+                    # (plus a spurious warning) on every single recommendation
+                    # applied, not just ones that touch Education.
+                    extra_schema_properties=edu_schema_properties,
+                    extra_required=edu_schema_required,
                     temperature=0.0,
                 )
                 _log_cache_stats(rec_usage, 0, 0)

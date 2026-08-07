@@ -963,6 +963,15 @@ class TestBuildCheckpointResume(unittest.TestCase):
             if schema is orchestrator.CritiqueSchema:
                 return (_pass_critique_json(), {})
             if schema is orchestrator.RecommendationApplySchema:
+                # B40 regression guard: without extra_schema_properties/
+                # extra_required merged in here, a real Gemini call would
+                # drop EDU_ACHIEVEMENT_KEY_<n> from its response entirely
+                # (not in the schema), so normalize_resume.py would default
+                # both to "" and fixed_content.build_education() would
+                # silently revert to each school's first option -- see
+                # phase-9-backlog.md's B40.
+                self.assertIn("EDU_ACHIEVEMENT_KEY_1", kwargs.get("extra_schema_properties") or {})
+                self.assertIn("EDU_ACHIEVEMENT_KEY_1", kwargs.get("extra_required") or [])
                 rec_call_count["n"] += 1
                 if rec_call_count["n"] == 1:
                     # First recommendation: a concrete resume edit -- applied.
