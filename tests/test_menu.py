@@ -580,10 +580,10 @@ class TestHandleDraftFollowup(unittest.TestCase):
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_no_contacts_drafts_a_generic_message_without_a_prompt(self, mock_confirm, mock_find, mock_engine_cls):
         path = self._write_jd("a.json", {"company_name": "Acme"})
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
@@ -596,12 +596,12 @@ class TestHandleDraftFollowup(unittest.TestCase):
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_single_contact_drafts_without_a_selection_prompt(self, mock_confirm, mock_find, mock_engine_cls):
         path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
         contact = {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""}
         mock_find.return_value = [contact]
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi Jen, ..."
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 1}
@@ -614,7 +614,7 @@ class TestHandleDraftFollowup(unittest.TestCase):
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_multiple_contacts_prompts_and_allows_generic_address(self, mock_confirm, mock_find, mock_engine_cls):
         path = self._write_jd("a.json", {"social_connections": []})
         contacts = [
@@ -622,7 +622,7 @@ class TestHandleDraftFollowup(unittest.TestCase):
             {"name": "Alex Chen", "title": "PM", "connection_type": "Personal company connection", "linkedin_url": ""},
         ]
         mock_find.return_value = contacts
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
@@ -649,10 +649,10 @@ class TestHandleDraftFollowup(unittest.TestCase):
     @patch("menu._handle_log_followup")
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_confirming_sent_logs_the_followup(self, mock_confirm, mock_find, mock_engine_cls, mock_log):
         path = self._write_jd("a.json", {})
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
@@ -664,10 +664,10 @@ class TestHandleDraftFollowup(unittest.TestCase):
     @patch("menu._handle_log_followup")
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_declining_sent_does_not_log_the_followup(self, mock_confirm, mock_find, mock_engine_cls, mock_log):
         path = self._write_jd("a.json", {})
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
