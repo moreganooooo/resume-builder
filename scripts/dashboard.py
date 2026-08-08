@@ -27,6 +27,17 @@ def go_available() -> bool:
     return shutil.which("go") is not None
 
 
+def _export_jobs_to(path: str) -> None:
+    """Writes picker.list_all_evaluated_jds() to path, overwriting
+    whatever's there. Shared by _write_jobs_export() (a fresh temp file
+    per dashboard launch) and dashboard_actions.py (which refreshes the
+    same file an already-running dashboard session is reading from,
+    after a real action changes the underlying JD data)."""
+    rows = picker.list_all_evaluated_jds()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f)
+
+
 def _write_jobs_export(profile: str = None) -> str:
     """Writes picker.list_all_evaluated_jds() to a fresh temp JSON file
     and returns its path, for the Go dashboard's -jobs-path flag. Always
@@ -38,10 +49,9 @@ def _write_jobs_export(profile: str = None) -> str:
     profile=None) never needs the reload."""
     if profile:
         profile_paths.set_active_profile(profile)
-    rows = picker.list_all_evaluated_jds()
     fd, path = tempfile.mkstemp(suffix=".json", prefix="dashboard_jobs_")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(rows, f)
+    os.close(fd)
+    _export_jobs_to(path)
     return path
 
 
