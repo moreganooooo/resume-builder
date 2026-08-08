@@ -880,25 +880,25 @@ class TestHandleCheckUpdates(unittest.TestCase):
     @patch("menu.git_update.pull_updates", return_value=(True, "Updated"))
     @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_returns_true_on_confirmed_successful_pull(self, mock_confirm, mock_dirty, mock_check, mock_pull):
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         self.assertTrue(menu._handle_check_updates())
 
     @patch("menu.git_update.pull_updates", return_value=(False, "Pull failed: conflict"))
     @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_returns_false_on_failed_pull(self, mock_confirm, mock_dirty, mock_check, mock_pull):
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         self.assertFalse(menu._handle_check_updates())
 
     @patch("menu.git_update.pull_updates")
     @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_does_not_pull_when_declined(self, mock_confirm, mock_dirty, mock_check, mock_pull):
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         menu._handle_check_updates()
         mock_pull.assert_not_called()
 

@@ -765,11 +765,10 @@ def _handle_check_updates() -> bool:
 
     if has_updates:
         cli_art.console.print(f"{cli_art.SUCCESS} Updates available: {message}")
-        update = questionary.confirm(
+        update = charm_prompt.confirm(
             "Pull the latest changes?",
             default=True,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
 
         if update:
             success, result = git_update.pull_updates()
