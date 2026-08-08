@@ -505,9 +505,7 @@ def _handle_draft_followup(row: dict) -> None:
 
     cli_art.console.print(f"\n{message}\n")
 
-    sent = questionary.confirm(
-        "Did you send this?", default=False, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    sent = charm_prompt.confirm("Did you send this?", default=False)
     if sent:
         _handle_log_followup(row)
 
