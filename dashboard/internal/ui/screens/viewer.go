@@ -217,17 +217,95 @@ func (m ViewerModel) renderBody() string {
 	return padStyle.Render(strings.Join(flat, "\n"))
 }
 
-// renderAll converts every raw markdown line into visual terminal lines.
+// renderAll converts every raw markdown line into visual terminal lines,
+// walking m.lines and dispatching each block (table, fenced code, heading/
+// quote/list via isSpecialBlockLine, or plain paragraph) to the matching
+// styler below. This is deliberately not routed through Glamour
+// (theme.MarkdownStyle()): Glamour's word-wrap can't hard-wrap an
+// unbroken token (e.g. a long line inside a fenced code block) to fit
+// m.width the way ansi.Wrap here does, since there's no word boundary to
+// break at.
 func (m ViewerModel) renderAll() []string {
-	// Use Glamour to render the raw markdown with the dashboard theme.
-	renderer := theme.MarkdownStyle()
-	rendered, err := renderer.Render(m.rawContent)
-	if err != nil {
-		// Fallback to a simple plain render if Glamour fails.
-		return strings.Split(m.rawContent, "\n")
+	var styled []string
+	i := 0
+	for i < len(m.lines) {
+		line := m.lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" {
+			styled = append(styled, "")
+			i++
+			continue
+		}
+
+		if isTableLine(line) {
+			tableStart := i
+			for i < len(m.lines) && isTableLine(m.lines[i]) {
+				i++
+			}
+			styled = append(styled, m.renderTableBlock(m.lines[tableStart:i])...)
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "```") {
+			i++
+			var codeLines []string
+			for i < len(m.lines) {
+				if strings.TrimSpace(m.lines[i]) == "```" {
+					i++
+					break
+				}
+				codeLines = append(codeLines, m.lines[i])
+				i++
+			}
+			codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
+			w := m.width - 6
+			if w < 10 {
+				w = 10
+			}
+			for _, cl := range codeLines {
+				for _, wl := range strings.Split(ansi.Wrap("  "+cl, w, ""), "\n") {
+					styled = append(styled, codeStyle.Render(wl))
+				}
+			}
+			continue
+		}
+
+		if isSpecialBlockLine(trimmed) {
+			styled = append(styled, m.styleLine(line))
+			i++
+			continue
+		}
+
+		start := i
+		for i < len(m.lines) {
+			next := strings.TrimSpace(m.lines[i])
+			if next == "" || isSpecialBlockLine(next) {
+				break
+			}
+			i++
+		}
+		if i > start {
+			paraLines := m.lines[start:i]
+			para := strings.Join(paraLines, " ")
+			w := m.width - 6
+			if w < 10 {
+				w = 10
+			}
+			wrapped := m.wrapParagraph(m.renderInlineElements(para), w)
+			styled = append(styled, wrapped...)
+		}
 	}
-	// Split the rendered output into lines for scrolling.
-	return strings.Split(rendered, "\n")
+
+	var flat []string
+	for _, s := range styled {
+		if strings.IndexByte(s, '\n') >= 0 {
+			flat = append(flat, strings.Split(s, "\n")...)
+		} else {
+			flat = append(flat, s)
+		}
+	}
+	return flat
 }
 
 func isTableLine(line string) bool {
