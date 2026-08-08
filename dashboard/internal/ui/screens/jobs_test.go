@@ -1,6 +1,9 @@
 package screens
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -130,5 +133,120 @@ func TestViewDoesNotPanicAndIncludesTitle(t *testing.T) {
 	rendered := ansi.Strip(m.View())
 	if !strings.Contains(rendered, "JOBS") {
 		t.Fatalf("expected header to contain %q, got %q", "JOBS", rendered)
+	}
+}
+
+func TestWithActionConfigSetsFields(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig("/tmp/jobs.json", "/tmp/python3", "/tmp/project")
+
+	if m.jobsPath != "/tmp/jobs.json" || m.pythonPath != "/tmp/python3" || m.projectRoot != "/tmp/project" {
+		t.Fatalf("expected action config fields set, got jobsPath=%q pythonPath=%q projectRoot=%q", m.jobsPath, m.pythonPath, m.projectRoot)
+	}
+}
+
+func TestLPressDispatchesLivenessAction(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+
+	if m.actionInProgress != "liveness" {
+		t.Fatalf("expected actionInProgress %q, got %q", "liveness", m.actionInProgress)
+	}
+	if cmd == nil {
+		t.Fatal("expected a command to be dispatched")
+	}
+}
+
+func TestTPressNoOpOnCompletedJob(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select the Completed row (Beta)
+	if job, _ := m.CurrentJob(); job.Status != "Completed" {
+		t.Fatalf("test setup: expected cursor on a Completed job, got %+v", job)
+	}
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+
+	if m.actionInProgress != "" {
+		t.Fatalf("expected no action dispatched for a Completed job, got %q", m.actionInProgress)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command dispatched")
+	}
+}
+
+func TestKeysIgnoredWhileActionInProgress(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m.actionInProgress = "tailor"
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if m.cursor != 0 {
+		t.Fatalf("expected cursor unchanged while action in progress, got %d", m.cursor)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command while an action is in progress")
+	}
+}
+
+func TestKeyPressDismissesActionError(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m.actionError = "something failed"
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if m.actionError != "" {
+		t.Fatal("expected actionError cleared by keypress")
+	}
+	if m.cursor != 0 {
+		t.Fatalf("expected the dismissing keypress itself to be swallowed, cursor should stay 0, got %d", m.cursor)
+	}
+}
+
+func TestActionCompleteMsgSuccessReloadsAndReselects(t *testing.T) {
+	dir := t.TempDir()
+	jobsPath := filepath.Join(dir, "jobs.json")
+	initial := `[{"path":"a.json","status":"Pending","company":"Acme","title":"Role A","evaluation":{"composite_score":4.5}}]`
+	if err := os.WriteFile(jobsPath, []byte(initial), 0o644); err != nil {
+		t.Fatalf("failed to seed jobs file: %v", err)
+	}
+
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig(jobsPath, "python3", dir)
+	m.actionInProgress = "liveness"
+
+	// Simulate the export having been refreshed with different data by the
+	// time the action completes.
+	refreshed := `[{"path":"a.json","status":"Pending","company":"Acme Updated","title":"Role A","evaluation":{"composite_score":4.9}}]`
+	if err := os.WriteFile(jobsPath, []byte(refreshed), 0o644); err != nil {
+		t.Fatalf("failed to update jobs file: %v", err)
+	}
+
+	m, _ = m.Update(jobsActionCompleteMsg{action: "liveness"})
+
+	if m.actionInProgress != "" {
+		t.Fatalf("expected actionInProgress cleared, got %q", m.actionInProgress)
+	}
+	if len(m.rows) != 1 || m.rows[0].Company != "Acme Updated" {
+		t.Fatalf("expected reloaded rows to reflect the refreshed export, got %+v", m.rows)
+	}
+}
+
+func TestActionCompleteMsgFailureSetsErrorWithoutReloading(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig("/does/not/matter.json", "python3", "/tmp")
+	m.actionInProgress = "tailor"
+
+	m, _ = m.Update(jobsActionCompleteMsg{action: "tailor", err: fmt.Errorf("boom"), output: "tailoring failed: rate limited"})
+
+	if m.actionInProgress != "" {
+		t.Fatalf("expected actionInProgress cleared, got %q", m.actionInProgress)
+	}
+	if m.actionError != "tailoring failed: rate limited" {
+		t.Fatalf("expected actionError from output, got %q", m.actionError)
+	}
+	if len(m.rows) != 2 {
+		t.Fatalf("expected rows untouched on failure, got %d", len(m.rows))
 	}
 }
