@@ -24,6 +24,7 @@ import bootstrap_bullet_bank
 import bootstrap_menu
 import build_sample
 import bullet_bank_menu
+import charm_prompt
 import cli_art
 import dashboard as dashboard_module
 import doctor
@@ -229,30 +230,28 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
 
 def _handle_bootstrap() -> bool:
-    import profile_paths
-
-    is_existing = _profile_is_set_up()
-
-    if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
-        # Either the active profile (whatever it resolved to) has no real
-        # knowledge_base/ yet, or RESUME_GUEST_MODE marks this as a
-        # self-identified new person (Task 15's gate) -- without the
-        # guest-mode check, a brand-new user reaching this via "Start new
-        # user setup now" would resolve to Morgan's own already-existing
-        # profile (RESUME_PROFILE unset defaults to "morgan") and this
-        # prompt would be skipped entirely, routing their documents into
-        # her knowledge_base/ instead of a new one.
-        name = questionary.text(
-            "What's your name (used as your profile ID, e.g. 'dominick')?"
-        ).ask()
-        if not name:
-            return False
+    import profile_paths, subprocess, json
+    # Run the Go wizard binary that presents the new‑user onboarding UI.
+    # We execute it from the project root so the relative import works.
+    result = subprocess.run(
+        ["go", "run", "./dashboard/cmd/bootstrap"],
+        cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        cli_art.console.print("[red]Bootstrap wizard failed[/]")
+        return False
+    try:
+        data = json.loads(result.stdout.strip())
+    except json.JSONDecodeError:
+        cli_art.console.print("[red]Failed to parse wizard output[/]")
+        return False
+    name = data.get("profile_name")
+    if name:
         bootstrap_bullet_bank.create_new_profile(name)
-        cli_art.console.print(f"\nCreated profiles/{name}/. Add this to your shell profile, then restart your "
-              f"shell (or run `export RESUME_PROFILE={name}` for this session only):\n")
-        cli_art.console.print(f"  export RESUME_PROFILE={name}\n")
         profile_paths.set_active_profile(name)
-
+    # Continue with the existing detailed bootstrap menu (phase selection, etc.)
     return bootstrap_menu.run_bootstrap_menu()
 
 
@@ -301,9 +300,9 @@ def _handle_update_knowledge() -> bool:
         return False
     scope = "both" if len(scope_choices) == 2 else scope_choices[0]
 
-    proceed = questionary.confirm(
-        f"Ready to process {len(files)} document(s)?", default=True, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    proceed = charm_prompt.confirm(
+        f"Ready to process {len(files)} document(s)?", default=True,
+    )
     if not proceed:
         return False
 
