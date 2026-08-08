@@ -24,12 +24,14 @@ const (
 	viewReport
 	viewProgress
 	viewMenu
+	viewJobs
 )
 
 type appModel struct {
 	pipeline        screens.PipelineModel
 	viewer          screens.ViewerModel
 	progress        screens.ProgressModel
+	jobs            screens.JobsModel
 	menu            menu.MenuModel
 	state           viewState
 	careerOpsPath   string
@@ -76,11 +78,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == viewProgress {
 			m.progress.Resize(msg.Width, msg.Height)
 		}
+		if m.state == viewJobs {
+			m.jobs.Resize(msg.Width, msg.Height)
+		}
 		pm, cmd := m.pipeline.Update(msg)
 		m.pipeline = pm
 		return m, cmd
 
 	case screens.PipelineClosedMsg:
+		return m, tea.Quit
+
+	case screens.JobsClosedMsg:
 		return m, tea.Quit
 
 	case menu.MenuSelectMsg:
@@ -91,6 +99,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = viewProgress
 		case "Reports":
 			m.state = viewReport
+		case "Jobs":
+			m.state = viewJobs
 		case "Quit":
 			return m, tea.Quit
 		}
@@ -172,6 +182,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.progress = pg
 			return m, cmd
 		}
+		if m.state == viewJobs {
+			jm, cmd := m.jobs.Update(msg)
+			m.jobs = jm
+			return m, cmd
+		}
 		pm, cmd := m.pipeline.Update(msg)
 		m.pipeline = pm
 		return m, cmd
@@ -186,6 +201,8 @@ func (m appModel) View() string {
 		return m.progress.View()
 	case viewMenu:
 		return m.menu.View()
+	case viewJobs:
+		return m.jobs.View()
 	default:
 		return m.pipeline.View()
 	}
@@ -193,6 +210,7 @@ func (m appModel) View() string {
 
 func main() {
 	pathFlag := flag.String("path", ".", "Path to career-ops directory")
+	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
 	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
 	flag.Parse()
 
@@ -223,8 +241,20 @@ func main() {
 		}
 	}
 
+	var jobRows []model.JobRow
+	if *jobsPathFlag != "" {
+		rows, err := data.LoadJobs(*jobsPathFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: failed to load jobs export: %v\n", err)
+		} else {
+			jobRows = rows
+		}
+	}
+	jm := screens.NewJobsModel(t, jobRows, 120, 40)
+
 	m := appModel{
 		pipeline:        pm,
+		jobs:            jm,
 		careerOpsPath:   careerOpsPath,
 		theme:           t,
 		progressMetrics: progressMetrics,
