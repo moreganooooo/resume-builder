@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -64,6 +65,21 @@ class TestRun(unittest.TestCase):
         success, message = dashboard.run("morgan")
         self.assertFalse(success)
         self.assertIn("exited with an error", message)
+
+
+class TestExportJobsTo(unittest.TestCase):
+
+    @patch("dashboard.picker.list_all_evaluated_jds")
+    def test_writes_rows_to_the_given_path(self, mock_list):
+        rows = [{"path": "a.json", "status": "Pending"}]
+        mock_list.return_value = rows
+        path = os.path.join(tempfile.gettempdir(), "test_export_jobs_to.json")
+        try:
+            dashboard._export_jobs_to(path)
+            with open(path, "r", encoding="utf-8") as f:
+                self.assertEqual(json.load(f), rows)
+        finally:
+            os.remove(path)
 
 
 class TestWriteJobsExport(unittest.TestCase):
