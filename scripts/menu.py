@@ -739,11 +739,10 @@ def _prompt_for_update() -> None:
         return
 
     cli_art.console.print(f"\n{cli_art.HINT} Updates available: {message}")
-    update = questionary.confirm(
+    update = charm_prompt.confirm(
         "Pull the latest changes from GitHub?",
         default=False,
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    )
 
     if update:
         success, result = git_update.pull_updates()

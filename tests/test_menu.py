@@ -847,9 +847,9 @@ class TestPromptForUpdate(unittest.TestCase):
     @patch("menu.git_update.pull_updates")
     @patch("menu.git_update.check_for_updates", return_value=(True, "2 new commit(s) available"))
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_pulls_when_confirmed(self, mock_confirm, mock_dirty, mock_check, mock_pull):
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         mock_pull.return_value = (True, "Updated")
         menu._prompt_for_update()
         mock_pull.assert_called_once()
@@ -857,9 +857,9 @@ class TestPromptForUpdate(unittest.TestCase):
     @patch("menu.git_update.pull_updates")
     @patch("menu.git_update.check_for_updates", return_value=(True, "2 new commit(s) available"))
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_does_not_pull_when_declined(self, mock_confirm, mock_dirty, mock_check, mock_pull):
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         menu._prompt_for_update()
         mock_pull.assert_not_called()
 
