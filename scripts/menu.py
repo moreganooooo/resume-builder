@@ -660,9 +660,9 @@ def _handle_bullet_bank() -> bool:
 
 def _handle_run_doctor() -> None:
     checks = doctor.run_checks()
-    run_tests = questionary.confirm(
-        "Also run the full test suite? (slower, ~20s)", default=True, style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    run_tests = charm_prompt.confirm(
+        "Also run the full test suite? (slower, ~20s)", default=True,
+    )
     test_result = doctor.run_test_suite() if run_tests else None
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
