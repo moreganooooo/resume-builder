@@ -211,6 +211,8 @@ func (m appModel) View() string {
 func main() {
 	pathFlag := flag.String("path", ".", "Path to career-ops directory")
 	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
+	pythonPathFlag := flag.String("python-path", "python3", "Path to the Python interpreter for dashboard actions (see scripts/dashboard.py)")
+	projectRootFlag := flag.String("project-root", ".", "Path to the resume-builder project root (for locating scripts/dashboard_actions.py)")
 	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
 	flag.Parse()
 
@@ -250,7 +252,7 @@ func main() {
 			jobRows = rows
 		}
 	}
-	jm := screens.NewJobsModel(t, jobRows, 120, 40)
+	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(*jobsPathFlag, *pythonPathFlag, *projectRootFlag)
 
 	m := appModel{
 		pipeline:        pm,
