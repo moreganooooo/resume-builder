@@ -308,3 +308,35 @@ func TestStatusPickerEnterDispatchesStatusAction(t *testing.T) {
 		t.Fatal("expected a command to be dispatched")
 	}
 }
+
+func TestViewShowsSpinnerWhileActionInProgress(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m.actionInProgress = "tailor"
+	rendered := ansi.Strip(m.View())
+	if !strings.Contains(rendered, "Tailoring resume") {
+		t.Fatalf("expected action status line, got %q", rendered)
+	}
+}
+
+func TestViewShowsActionError(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m.actionError = "network timeout"
+	rendered := ansi.Strip(m.View())
+	if !strings.Contains(rendered, "network timeout") {
+		t.Fatalf("expected error message rendered, got %q", rendered)
+	}
+}
+
+func TestRenderSidebarListOverlaysStatusPickerWhenOpen(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m.statusPicker = true
+	rendered := ansi.Strip(m.renderSidebarList(40, 25))
+	if !strings.Contains(rendered, "Set status:") {
+		t.Fatalf("expected status picker overlay, got %q", rendered)
+	}
+	for _, want := range jobsApplicationStatuses {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected status option %q in overlay, got %q", want, rendered)
+		}
+	}
+}
