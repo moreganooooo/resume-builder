@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import picker
@@ -80,7 +81,13 @@ def run(profile: str = None) -> tuple[bool, str]:
     jobs_path = _write_jobs_export(profile)
     try:
         result = subprocess.run(
-            ["go", "run", ".", "-path", data_dir, "-jobs-path", jobs_path],
+            [
+                "go", "run", ".",
+                "-path", data_dir,
+                "-jobs-path", jobs_path,
+                "-python-path", sys.executable,
+                "-project-root", profile_paths.PROJECT_ROOT,
+            ],
             cwd=DASHBOARD_DIR,
         )
     finally:

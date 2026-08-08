@@ -54,6 +54,10 @@ class TestRun(unittest.TestCase):
         self.assertEqual(args[4], expected_data_dir)
         self.assertEqual(args[5], "-jobs-path")
         self.assertTrue(args[6])  # a real temp path was generated; cleanup itself is TestRunCleansUpJobsExport's job
+        self.assertEqual(args[7], "-python-path")
+        self.assertEqual(args[8], dashboard.sys.executable)
+        self.assertEqual(args[9], "-project-root")
+        self.assertEqual(args[10], dashboard.profile_paths.PROJECT_ROOT)
         self.assertEqual(mock_subproc.call_args[1], {"cwd": dashboard.DASHBOARD_DIR})
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
