@@ -2,12 +2,15 @@ package screens
 
 import (
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
@@ -25,6 +28,21 @@ type JobsModel struct {
 	filter        string // "all", "pending", "completed"
 	width, height int
 	theme         theme.Theme
+
+	jobsPath         string
+	pythonPath       string
+	projectRoot      string
+	actionInProgress string // "", "liveness", "tailor", "status"
+	actionError      string
+}
+
+// jobsActionCompleteMsg is emitted when a dashboard_actions.py subprocess
+// finishes. output is stdout+stderr combined, used as the error message
+// on failure (matches what a human running the command directly sees).
+type jobsActionCompleteMsg struct {
+	action string
+	err    error
+	output string
 }
 
 // NewJobsModel creates a new jobs screen from the rows loaded via
@@ -39,6 +57,17 @@ func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsMod
 		theme:  t,
 	}
 	m.applyFilter()
+	return m
+}
+
+// WithActionConfig sets the fields needed to dispatch actions
+// (liveness/tailor/status via dashboard_actions.py). Separate from
+// NewJobsModel so existing callers/tests that don't exercise actions
+// don't need updating.
+func (m JobsModel) WithActionConfig(jobsPath, pythonPath, projectRoot string) JobsModel {
+	m.jobsPath = jobsPath
+	m.pythonPath = pythonPath
+	m.projectRoot = projectRoot
 	return m
 }
 
@@ -87,10 +116,71 @@ func (m *JobsModel) Resize(width, height int) {
 	m.height = height
 }
 
+// runAction builds and runs a dashboard_actions.py subprocess. Bubbletea
+// runs the returned Cmd off the UI thread, so this blocking call doesn't
+// freeze rendering.
+func (m JobsModel) runAction(action, jdPath string, extraArgs ...string) tea.Cmd {
+	return func() tea.Msg {
+		args := append([]string{
+			filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
+			action, jdPath, "--jobs-path", m.jobsPath,
+		}, extraArgs...)
+		cmd := exec.Command(m.pythonPath, args...)
+		cmd.Dir = m.projectRoot
+		out, err := cmd.CombinedOutput()
+		return jobsActionCompleteMsg{action: action, err: err, output: string(out)}
+	}
+}
+
+// reloadAfterAction re-reads m.jobsPath (freshly written by a successful
+// dashboard_actions.py run) and re-selects the previously-current job by
+// Path, mirroring PipelineModel.WithReloadedData's selection-preserving
+// reload.
+func (m JobsModel) reloadAfterAction() JobsModel {
+	rows, err := data.LoadJobs(m.jobsPath)
+	if err != nil {
+		m.actionError = err.Error()
+		return m
+	}
+	var currentPath string
+	if job, ok := m.CurrentJob(); ok {
+		currentPath = job.Path
+	}
+	m.rows = rows
+	m.applyFilter()
+	if currentPath != "" {
+		for i, r := range m.filtered {
+			if r.Path == currentPath {
+				m.cursor = i
+				break
+			}
+		}
+	}
+	return m
+}
+
 // Update handles input for the jobs screen.
 func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case jobsActionCompleteMsg:
+		m.actionInProgress = ""
+		if msg.err != nil {
+			m.actionError = strings.TrimSpace(msg.output)
+			if m.actionError == "" {
+				m.actionError = msg.err.Error()
+			}
+			return m, nil
+		}
+		return m.reloadAfterAction(), nil
+
 	case tea.KeyMsg:
+		if m.actionInProgress != "" {
+			return m, nil
+		}
+		if m.actionError != "" {
+			m.actionError = ""
+			return m, nil
+		}
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -103,6 +193,16 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "f":
 			m.filter = nextJobsFilter(m.filter)
 			m.applyFilter()
+		case "l":
+			if job, ok := m.CurrentJob(); ok {
+				m.actionInProgress = "liveness"
+				return m, m.runAction("liveness", job.Path)
+			}
+		case "t":
+			if job, ok := m.CurrentJob(); ok && job.Status == "Pending" {
+				m.actionInProgress = "tailor"
+				return m, m.runAction("tailor", job.Path)
+			}
 		case "q", "esc":
 			return m, func() tea.Msg { return JobsClosedMsg{} }
 		}
