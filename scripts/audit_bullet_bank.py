@@ -66,9 +66,9 @@ if os.path.exists(out_path):
             raise ValueError(f"No known bullet column found in checkpoint. Columns: {list(existing.columns)}")
         already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
         results = existing.to_dict("records")
-        print(f"{theme.colorize_icon_ansi('resume')}  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
+        cli_info(f"Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
     except Exception as e:
-        print(f"{theme.colorize_icon_ansi('warning')}  Could not read existing checkpoint ({e}). Starting fresh.")
+        cli_warning(f"Could not read existing checkpoint ({e}). Starting fresh.")
 
 total = len(df)
 skipped = 0
@@ -107,17 +107,17 @@ for i, row in df.iterrows():
             "weaknesses":          data.get("weaknesses"),
         })
     except Exception as e:
-        print(f"  {theme.colorize_icon_ansi('warning')} Error: {e}")
+        cli_warning(f"Error: {e}")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": f"[AUDIT_ERROR] {e}"})
 
     # --- CHECKPOINT SAVE after every bullet ---
     pd.DataFrame(results).to_csv(out_path, index=False)
-    print(f"   {theme.colorize_icon_ansi('save')} Checkpoint saved ({len(results)} bullets scored)")
+    cli_success(f"Checkpoint saved ({len(results)} bullets scored)")
 
     if i < total - 1:
         time.sleep(SLEEP)
 
-print(f"\n{theme.colorize_icon_ansi('success')} Done. Results saved to {out_path}")
-print(f"   PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
-print(f"   FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
-print(f"   ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
+cli_success(f"Done. Results saved to {out_path}")
+cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
+cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
+cli_info(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")

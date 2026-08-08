@@ -500,7 +500,7 @@ def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
             restored += 1
 
     if restored:
-        print(f"   {theme.colorize_icon_ansi('resume')}  Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
+        cli_info(f"Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
 
     return df_keepers
 
@@ -528,9 +528,9 @@ def stage1_audit_keepers(
     backfill_cluster_ids.py are never lost when this function is called
     from a fresh keepers.csv that lacks the column.
     """
-    print("\n" + "─" * 60)
-    print("STAGE 1 — Audit Keepers")
-    print("─" * 60)
+    cli_info("\n" + "─" * 60)
+    cli_info("STAGE 1 — Audit Keepers")
+    cli_info("─" * 60)
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
@@ -548,7 +548,7 @@ def stage1_audit_keepers(
     if using_audited_source:
         already_clean_mask = df_keepers["audit_status"].str.strip().str.upper() == "CLEAN"
         needs_score_mask = ~already_clean_mask
-        print(f"   ⚡ Loading from keepers-audited.csv: trusting existing CLEAN rows.")
+        cli_info("⚡ Loading from keepers-audited.csv: trusting existing CLEAN rows.")
     else:
         needs_score_mask = df_keepers.apply(
             lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
@@ -559,17 +559,17 @@ def stage1_audit_keepers(
     to_score = df_keepers[needs_score_mask]
     already_clean = df_keepers[already_clean_mask]
 
-    print(f"   Total keepers:         {len(df_keepers)}")
-    print(f"   Already CLEAN (PASS):  {len(already_clean)}")
-    print(f"   Need scoring/review:   {len(to_score)}")
+    cli_info(f"   Total keepers:         {len(df_keepers)}")
+    cli_info(f"   Already CLEAN (PASS):  {len(already_clean)}")
+    cli_info(f"   Need scoring/review:   {len(to_score)}")
 
     # Mark already-clean rows immediately
     df_keepers.loc[already_clean_mask, "audit_status"] = "CLEAN"
 
     if to_score.empty:
-        print(f"   {theme.colorize_icon_ansi('success')} All keepers already clean — no scoring needed.")
+        cli_success("All keepers already clean — no scoring needed.")
     elif skip_rescore:
-        print("   ⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
+        cli_info("⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
         for idx in to_score.index:
             df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
     else:
@@ -579,7 +579,8 @@ def stage1_audit_keepers(
             bullet = str(row.get("Bullet Point", "")).strip()
             tags   = str(row.get("Tags", ""))
             role_company = str(row.get("Role / Company", ""))
-            print(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
+            
+            cli_info(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
 
             scores = score_bullet(bullet, tags, score_system, role_company=role_company, dry_run=dry_run)
 
@@ -593,20 +594,14 @@ def stage1_audit_keepers(
 
             status = df_keepers.loc[idx, "audit_status"]
             mgr    = str(scores.get("manager_test", "")).upper()
-            print(
-                f"   → status={status}  mgr={mgr}  "
-                f"acc={scores.get('accuracy_score')}  "
-                f"bel={scores.get('believability_score')}  "
-                f"cla={scores.get('clarity_score')}  "
-                f"ats={scores.get('ats_value')}"
-            )
+            cli_info(f"   → status={status}  mgr={mgr}  acc={scores.get('accuracy_score')}  bel={scores.get('believability_score')}  cla={scores.get('clarity_score')}  ats={scores.get('ats_value')}")
 
             bullets_since_flush += 1
             is_last = (i == total)
             if bullets_since_flush >= AUDIT_FLUSH_EVERY or is_last:
                 df_keepers.to_csv(KEEPERS_AUDITED, index=False)
                 bullets_since_flush = 0
-                print(f"   {theme.colorize_icon_ansi('save')} Flushed audited keepers ({i}/{total} scored so far).")
+                cli_success(f"Flushed audited keepers ({i}/{total} scored so far).")
 
             if i < total:
                 time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -614,7 +609,7 @@ def stage1_audit_keepers(
         n_clean   = (df_keepers["audit_status"] == "CLEAN").sum()
         n_rewrite = (df_keepers["audit_status"] == "NEEDS_REWRITE").sum()
         n_manual  = (df_keepers["audit_status"] == "MANUAL").sum()
-        print(f"\n   Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
+        cli_info(f"Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
 
     # ------------------------------------------------------------------
     # Restore source_cluster_id from the startup snapshot.
@@ -639,7 +634,7 @@ def stage1_audit_keepers(
                 df_keepers.loc[idx, "source_cluster_id"] = stamped
                 restored += 1
         if restored:
-            print(f"   {theme.colorize_icon_ansi('resume')} Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
+            cli_info(f"Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
 
     return df_keepers
 
@@ -659,19 +654,19 @@ def stage2_diff_cluster_map(
     not match any row in the cluster map verbatim. They are counted silently
     and shown only as a summary line at the end.
     """
-    print("\n" + "─" * 60)
-    print("STAGE 2 — Diff Against Cluster Map")
-    print("─" * 60)
+    cli_info("\n" + "─" * 60)
+    cli_info("STAGE 2 — Diff Against Cluster Map")
+    cli_info("─" * 60)
 
     # Prefer updated map; fall back to original
     if os.path.exists(CLUSTER_MAP_UPDATED):
         map_path = CLUSTER_MAP_UPDATED
-        print(f"   Using updated cluster map: {os.path.basename(map_path)}")
+        cli_info(f"Using updated cluster map: {os.path.basename(map_path)}")
     elif os.path.exists(CLUSTER_MAP_IN):
         map_path = CLUSTER_MAP_IN
-        print(f"   {theme.colorize_icon_ansi('warning')}  Updated map not found — falling back to: {os.path.basename(map_path)}")
+        cli_warning(f"Updated map not found — falling back to: {os.path.basename(map_path)}")
     else:
-        print(f"   {theme.colorize_icon_ansi('warning')}  No cluster map found — skipping Stage 2.")
+        cli_warning("No cluster map found — skipping Stage 2.")
         return pd.DataFrame()
 
     df_map = pd.read_csv(map_path)
@@ -714,18 +709,18 @@ def stage2_diff_cluster_map(
             n_not_found += 1
 
     df_disc = pd.DataFrame(discrepancies)
-    print(f"   Keepers checked:          {len(df_keepers)}")
-    print(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites ✓)")
-    print(f"   Actionable discrepancies: {len(df_disc)}")
+    cli_info(f"   Keepers checked:          {len(df_keepers)}")
+    cli_info(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites ✓)")
+    cli_info(f"   Actionable discrepancies: {len(df_disc)}")
 
     if not df_disc.empty:
         df_disc.to_csv(DISCREPANCIES_OUT, index=False)
-        print(f"   {theme.colorize_icon_ansi('save')} Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
-        print("   Entries (MANUAL in cluster map, CLEAN in keepers):")
+        cli_success(f"Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
+        cli_info("   Entries (MANUAL in cluster map, CLEAN in keepers):")
         for _, d in df_disc.iterrows():
-            print(f"      {theme.colorize_icon_ansi('warning')}  [{d['map_status']}] {str(d['Bullet Point'])[:70]}")
+            cli_warning(f"[{d['map_status']}] {str(d['Bullet Point'])[:70]}")
     else:
-        print(f"   {theme.colorize_icon_ansi('success')} No actionable discrepancies — keepers and cluster map are in sync.")
+        cli_success("No actionable discrepancies — keepers and cluster map are in sync.")
 
     return df_disc
 
@@ -766,9 +761,9 @@ def stage3_build_rewrite_queue(
 
     Sorted by composite score ascending (worst first).
     """
-    print("\n" + "─" * 60)
-    print("STAGE 3 — Triage Queue")
-    print("─" * 60)
+    cli_info("\n" + "─" * 60)
+    cli_info("STAGE 3 — Triage Queue")
+    cli_info("─" * 60)
 
     queue_rows = []
 
