@@ -11,10 +11,13 @@ copy is no longer where changes land -- see IDEAS_ARCHIVE.md for the full
 writeup.
 """
 
+import json
 import os
 import shutil
 import subprocess
+import tempfile
 
+import picker
 import profile_paths
 
 DASHBOARD_DIR = os.path.join(profile_paths.PROJECT_ROOT, "dashboard")
@@ -22,6 +25,24 @@ DASHBOARD_DIR = os.path.join(profile_paths.PROJECT_ROOT, "dashboard")
 
 def go_available() -> bool:
     return shutil.which("go") is not None
+
+
+def _write_jobs_export(profile: str = None) -> str:
+    """Writes picker.list_all_evaluated_jds() to a fresh temp JSON file
+    and returns its path, for the Go dashboard's -jobs-path flag. Always
+    a fresh snapshot, never cached -- evaluation/liveness/application
+    data changes between dashboard launches via the Python menu, so a
+    stale export would be actively misleading. Only touches the active
+    profile when an explicit one is given (mirrors _handle_bootstrap()'s
+    own pattern in menu.py) -- the real call site (run(), with
+    profile=None) never needs the reload."""
+    if profile:
+        profile_paths.set_active_profile(profile)
+    rows = picker.list_all_evaluated_jds()
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="dashboard_jobs_")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(rows, f)
+    return path
 
 
 def run(profile: str = None) -> tuple[bool, str]:
@@ -46,7 +67,15 @@ def run(profile: str = None) -> tuple[bool, str]:
             "to show."
         )
 
-    result = subprocess.run(["go", "run", ".", "-path", data_dir], cwd=DASHBOARD_DIR)
+    jobs_path = _write_jobs_export(profile)
+    try:
+        result = subprocess.run(
+            ["go", "run", ".", "-path", data_dir, "-jobs-path", jobs_path],
+            cwd=DASHBOARD_DIR,
+        )
+    finally:
+        os.remove(jobs_path)
+
     if result.returncode != 0:
         return False, f"Dashboard exited with an error (code {result.returncode})."
     return True, ""
