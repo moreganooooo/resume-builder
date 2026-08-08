@@ -46,6 +46,7 @@ type Theme struct {
 		Report   string
 		Quit     string
 		Menu     string
+		Jobs     string
 	}
 }
 
