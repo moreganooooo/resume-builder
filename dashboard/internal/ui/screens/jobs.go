@@ -1,9 +1,12 @@
 package screens
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -108,4 +111,235 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		m.height = msg.Height
 	}
 	return m, nil
+}
+
+var jobsFitGroups = []struct {
+	label string
+	get   func(model.Evaluation) map[string]int
+}{
+	{"Fit", func(e model.Evaluation) map[string]int { return e.FitSubscores }},
+	{"Interview odds", func(e model.Evaluation) map[string]int { return e.InterviewOddsSubscores }},
+	{"Practical pursue", func(e model.Evaluation) map[string]int { return e.PracticalPursueSubscores }},
+}
+
+func formatSubscores(scores map[string]int) string {
+	if len(scores) == 0 {
+		return "-"
+	}
+	keys := make([]string, 0, len(scores))
+	for k := range scores {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s: %d", k, scores[k])
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (m JobsModel) chromeAvailHeight() int {
+	h := m.height - 2 // header + help
+	if h < 5 {
+		h = 5
+	}
+	return h
+}
+
+// View renders the jobs screen.
+func (m JobsModel) View() string {
+	header := m.renderHeader()
+	help := m.renderHelp()
+
+	leftWidth := int(float64(m.width) * 0.35)
+	rightWidth := m.width - leftWidth
+	availHeight := m.chromeAvailHeight()
+
+	leftPane := m.renderSidebarList(leftWidth, availHeight)
+	var rightPane string
+	if job, ok := m.CurrentJob(); ok {
+		rightPane = m.renderJobDetailPane(job, rightWidth, availHeight)
+	} else {
+		rightPane = m.renderEmptyDetailPane(rightWidth, availHeight)
+	}
+
+	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+	return lipgloss.JoinVertical(lipgloss.Left, header, splitView, help)
+}
+
+func (m JobsModel) renderHeader() string {
+	style := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.Text).
+		Background(m.theme.Surface).
+		Width(m.width).
+		Padding(0, 2)
+
+	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	info := right.Render(fmt.Sprintf("%d job(s) | filter: %s", len(m.filtered), strings.ToUpper(m.filter)))
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.theme.Icons.Jobs + " JOBS")
+	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
+	if gap < 1 {
+		gap = 1
+	}
+	return style.Render(title + strings.Repeat(" ", gap) + info)
+}
+
+func (m JobsModel) renderSidebarList(width, height int) string {
+	if len(m.filtered) == 0 {
+		emptyStyle := lipgloss.NewStyle().
+			Foreground(m.theme.Blue).
+			Width(width - 2).
+			Height(height - 2).
+			Padding(1, 1).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.Overlay)
+		return emptyStyle.Render("No evaluated jobs match this filter")
+	}
+
+	var lines []string
+	for i, job := range m.filtered {
+		selected := i == m.cursor
+		lines = append(lines, m.renderSidebarLine(job, width-4, selected))
+	}
+
+	body := strings.Join(lines, "\n")
+	bodyLines := strings.Split(body, "\n")
+	if len(bodyLines) > height-2 {
+		bodyLines = bodyLines[:height-2]
+	}
+	content := strings.Join(bodyLines, "\n")
+
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.Blue).
+		Width(width - 2).
+		Height(height - 2).
+		Padding(0, 1)
+
+	return borderStyle.Render(content)
+}
+
+func (m JobsModel) renderSidebarLine(job model.JobRow, width int, selected bool) string {
+	scoreStyle := m.scoreStyle(job.Evaluation.CompositeScore)
+	score := scoreStyle.Render(fmt.Sprintf("%.1f", job.Evaluation.CompositeScore))
+
+	compWidth := width - 6
+	company := truncateRunes(job.Company, compWidth)
+	companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	if selected {
+		companyStyle = companyStyle.Bold(true)
+	}
+	line1 := fmt.Sprintf("%s %s", score, companyStyle.Render(company))
+
+	titleWidth := width - 2
+	title := truncateRunes(job.Title, titleWidth)
+	titleStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	line2 := titleStyle.Render(title)
+
+	block := line1 + "\n" + line2
+	base := theme.PadHorizontal(lipgloss.NewStyle())
+	if selected {
+		base = theme.HoverStyle(base)
+	}
+	return base.Render(block)
+}
+
+func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.Overlay).
+		Width(width - 2).
+		Height(height - 2).
+		Padding(1, 2)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
+	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+
+	var content []string
+	content = append(content, titleStyle.Render(job.Company))
+	content = append(content, valueStyle.Render(job.Title))
+	content = append(content, "")
+
+	eval := job.Evaluation
+	scoreStyle := m.scoreStyle(eval.CompositeScore)
+	content = append(content, subtextStyle.Render("Composite score: ")+scoreStyle.Render(fmt.Sprintf("%.1f/5", eval.CompositeScore)))
+	content = append(content, subtextStyle.Render("Recommendation: ")+valueStyle.Render(eval.Recommendation))
+	content = append(content, subtextStyle.Render("Status: ")+valueStyle.Render(job.Status))
+	content = append(content, "")
+
+	if eval.Why != "" {
+		content = append(content, titleStyle.Render("Why"))
+		content = append(content, valueStyle.Render(truncateRunes(eval.Why, width-6)))
+		content = append(content, "")
+	}
+	if eval.RecruiterRead != "" {
+		content = append(content, titleStyle.Render("Recruiter read"))
+		content = append(content, valueStyle.Render(truncateRunes(eval.RecruiterRead, width-6)))
+		content = append(content, "")
+	}
+	if len(eval.HardBlockers) > 0 {
+		content = append(content, subtextStyle.Render("Hard blockers: ")+valueStyle.Render(strings.Join(eval.HardBlockers, ", ")))
+		content = append(content, "")
+	}
+
+	for _, group := range jobsFitGroups {
+		scores := group.get(eval)
+		if len(scores) == 0 {
+			continue
+		}
+		content = append(content, subtextStyle.Render(group.label+": ")+valueStyle.Render(formatSubscores(scores)))
+	}
+	content = append(content, "")
+
+	if job.Liveness != nil {
+		content = append(content, subtextStyle.Render("Liveness: ")+valueStyle.Render(job.Liveness.Result))
+	}
+	if job.Application != nil {
+		content = append(content, subtextStyle.Render("Application: ")+valueStyle.Render(job.Application.Status))
+	}
+
+	joined := strings.Join(content, "\n")
+	return borderStyle.Render(joined)
+}
+
+func (m JobsModel) renderEmptyDetailPane(width, height int) string {
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.Overlay).
+		Width(width - 2).
+		Height(height - 2).
+		Padding(1, 2)
+	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Blue).Render("Select a job to view details"))
+}
+
+func (m JobsModel) renderHelp() string {
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Blue).
+		Background(m.theme.Surface).
+		Width(m.width).
+		Padding(0, 1)
+
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+
+	return style.Render(
+		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
+			keyStyle.Render("f") + descStyle.Render(" filter  ") +
+			keyStyle.Render("q") + descStyle.Render(" quit"))
+}
+
+func (m JobsModel) scoreStyle(score float64) lipgloss.Style {
+	switch {
+	case score >= 4.2:
+		return lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true)
+	case score >= 3.8:
+		return lipgloss.NewStyle().Foreground(m.theme.Yellow)
+	case score >= 3.0:
+		return lipgloss.NewStyle().Foreground(m.theme.Text)
+	default:
+		return lipgloss.NewStyle().Foreground(m.theme.Red)
+	}
 }

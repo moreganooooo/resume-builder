@@ -1,9 +1,11 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -85,5 +87,48 @@ func TestQPressEmitsJobsClosedMsg(t *testing.T) {
 	}
 	if _, ok := cmd().(JobsClosedMsg); !ok {
 		t.Fatalf("expected JobsClosedMsg, got %T", cmd())
+	}
+}
+
+func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	job := model.JobRow{
+		Company: "Acme", Title: "Marketing Lead", Status: "Pending",
+		Evaluation: model.Evaluation{
+			CompositeScore: 4.66,
+			Recommendation: "Strong pursue",
+			Why:            "Great fit for the role.",
+			RecruiterRead:  "Recruiter will see a match.",
+			HardBlockers:   []string{},
+			FitSubscores:   map[string]int{"functional_alignment": 5},
+		},
+	}
+
+	rendered := ansi.Strip(m.renderJobDetailPane(job, 60, 20))
+
+	for _, want := range []string{
+		"Acme", "Marketing Lead", "4.7/5", "Strong pursue",
+		"Great fit for the role.", "Recruiter will see a match.",
+		"functional_alignment: 5",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected detail pane to contain %q, got %q", want, rendered)
+		}
+	}
+}
+
+func TestRenderSidebarListShowsEmptyStateWhenNoRows(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), nil, 100, 30)
+	rendered := ansi.Strip(m.renderSidebarList(40, 20))
+	if !strings.Contains(rendered, "No evaluated jobs match this filter") {
+		t.Fatalf("expected empty-state message, got %q", rendered)
+	}
+}
+
+func TestViewDoesNotPanicAndIncludesTitle(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	rendered := ansi.Strip(m.View())
+	if !strings.Contains(rendered, "JOBS") {
+		t.Fatalf("expected header to contain %q, got %q", "JOBS", rendered)
 	}
 }
