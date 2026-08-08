@@ -230,27 +230,33 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
 
 def _handle_bootstrap() -> bool:
-    import profile_paths, subprocess, json
-    # Run the Go wizard binary that presents the new‑user onboarding UI.
-    # We execute it from the project root so the relative import works.
-    result = subprocess.run(
-        ["go", "run", "./dashboard/cmd/bootstrap"],
-        cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        cli_art.console.print("[red]Bootstrap wizard failed[/]")
-        return False
-    try:
-        data = json.loads(result.stdout.strip())
-    except json.JSONDecodeError:
-        cli_art.console.print("[red]Failed to parse wizard output[/]")
-        return False
-    name = data.get("profile_name")
-    if name:
-        bootstrap_bullet_bank.create_new_profile(name)
-        profile_paths.set_active_profile(name)
+    import profile_paths
+
+    is_existing = _profile_is_set_up()
+
+    if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
+        # Run the Go wizard binary that presents the new-user onboarding
+        # UI. We execute it from the project root so the relative import
+        # works. subprocess/json are already imported at module level.
+        result = subprocess.run(
+            ["go", "run", "./dashboard/cmd/bootstrap"],
+            cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            cli_art.console.print("[red]Bootstrap wizard failed[/]")
+            return False
+        try:
+            data = json.loads(result.stdout.strip())
+        except json.JSONDecodeError:
+            cli_art.console.print("[red]Failed to parse wizard output[/]")
+            return False
+        name = data.get("profile_name")
+        if name:
+            bootstrap_bullet_bank.create_new_profile(name)
+            profile_paths.set_active_profile(name)
+
     # Continue with the existing detailed bootstrap menu (phase selection, etc.)
     return bootstrap_menu.run_bootstrap_menu()
 
