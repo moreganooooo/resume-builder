@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -36,6 +37,7 @@ type JobsModel struct {
 	actionError      string
 	statusPicker     bool
 	statusCursor     int
+	spinner          spinner.Model
 }
 
 // jobsApplicationStatuses must match jd_manager.APPLICATION_STATUSES
@@ -58,11 +60,12 @@ type jobsActionCompleteMsg struct {
 // picker.list_all_evaluated_jds() on the Python side does).
 func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsModel {
 	m := JobsModel{
-		rows:   rows,
-		filter: "all",
-		width:  width,
-		height: height,
-		theme:  t,
+		rows:    rows,
+		filter:  "all",
+		width:   width,
+		height:  height,
+		theme:   t,
+		spinner: spinner.New(spinner.WithSpinner(spinner.Dot)),
 	}
 	m.applyFilter()
 	return m
@@ -185,7 +188,7 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 		if job, ok := m.CurrentJob(); ok {
 			chosen := jobsApplicationStatuses[m.statusCursor]
 			m.actionInProgress = "status"
-			return m, m.runAction("status", job.Path, chosen)
+			return m, tea.Batch(m.runAction("status", job.Path, chosen), m.spinner.Tick)
 		}
 	}
 	return m, nil
@@ -231,12 +234,12 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "l":
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
-				return m, m.runAction("liveness", job.Path)
+				return m, tea.Batch(m.runAction("liveness", job.Path), m.spinner.Tick)
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok && job.Status == "Pending" {
 				m.actionInProgress = "tailor"
-				return m, m.runAction("tailor", job.Path)
+				return m, tea.Batch(m.runAction("tailor", job.Path), m.spinner.Tick)
 			}
 		case "u":
 			if _, ok := m.CurrentJob(); ok {
@@ -246,6 +249,13 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "q", "esc":
 			return m, func() tea.Msg { return JobsClosedMsg{} }
 		}
+	case spinner.TickMsg:
+		if m.actionInProgress == "" {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -289,6 +299,12 @@ func (m JobsModel) chromeAvailHeight() int {
 // View renders the jobs screen.
 func (m JobsModel) View() string {
 	header := m.renderHeader()
+	var extra string
+	if m.actionInProgress != "" {
+		extra = m.renderActionStatus()
+	} else if m.actionError != "" {
+		extra = m.renderActionError()
+	}
 	help := m.renderHelp()
 
 	leftWidth := int(float64(m.width) * 0.35)
@@ -304,7 +320,41 @@ func (m JobsModel) View() string {
 	}
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+	if extra != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, header, extra, splitView, help)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, header, splitView, help)
+}
+
+func actionLabel(action string) string {
+	switch action {
+	case "liveness":
+		return "Checking liveness"
+	case "tailor":
+		return "Tailoring resume"
+	case "status":
+		return "Updating status"
+	default:
+		return "Working"
+	}
+}
+
+func (m JobsModel) renderActionStatus() string {
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Yellow).
+		Background(m.theme.Surface).
+		Width(m.width).
+		Padding(0, 2)
+	return style.Render(m.spinner.View() + " " + actionLabel(m.actionInProgress) + "...")
+}
+
+func (m JobsModel) renderActionError() string {
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Red).
+		Background(m.theme.Surface).
+		Width(m.width).
+		Padding(0, 2)
+	return style.Render("Error: " + truncateRunes(m.actionError, m.width-12) + " (press any key to dismiss)")
 }
 
 func (m JobsModel) renderHeader() string {
@@ -351,6 +401,10 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	}
 	content := strings.Join(bodyLines, "\n")
 
+	if m.statusPicker {
+		content = m.overlayStatusPicker(content)
+	}
+
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Blue).
@@ -359,6 +413,31 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		Padding(0, 1)
 
 	return borderStyle.Render(content)
+}
+
+func (m JobsModel) overlayStatusPicker(body string) string {
+	bodyLines := strings.Split(body, "\n")
+
+	pickerWidth := 30
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	borderStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true)
+
+	var picker []string
+	picker = append(picker, padStyle.Render(borderStyle.Render("Set status:")))
+	for i, opt := range jobsApplicationStatuses {
+		style := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(pickerWidth)
+		if i == m.statusCursor {
+			style = style.Background(m.theme.Overlay).Bold(true)
+		}
+		prefix := "  "
+		if i == m.statusCursor {
+			prefix = "> "
+		}
+		picker = append(picker, padStyle.Render(style.Render(prefix+opt)))
+	}
+
+	bodyLines = append(bodyLines, picker...)
+	return strings.Join(bodyLines, "\n")
 }
 
 func (m JobsModel) renderSidebarLine(job model.JobRow, width int, selected bool) string {
@@ -468,6 +547,9 @@ func (m JobsModel) renderHelp() string {
 	return style.Render(
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
 			keyStyle.Render("f") + descStyle.Render(" filter  ") +
+			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
+			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
+			keyStyle.Render("u") + descStyle.Render(" status  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
 
