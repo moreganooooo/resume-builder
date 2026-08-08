@@ -1,7 +1,5 @@
 package theme
 
-import "os"
-
 // Icons holds the header-decoration glyphs used alongside the
 // resume-builder theme. Mirrors resume-builder's own Nerd-Font-by-default,
 // RESUME_BUILDER_ICONS=unicode-fallback convention (scripts/theme.py) so a
@@ -13,8 +11,8 @@ type Icons struct {
 }
 
 func NewIcons() Icons {
-	if os.Getenv("RESUME_BUILDER_ICONS") == "unicode" {
-		return Icons{Evaluate: "\U0001F4CA", Utility: "⚙"}
-	}
-	return Icons{Evaluate: "", Utility: ""}
+    // Always use Unicode emoji that work on any terminal.
+    // Evaluate: 📊 (bar chart) – analytics/progress screens
+    // Utility: ⚙ (gear) – pipeline/management screens
+    return Icons{Evaluate: "\U0001F4CA", Utility: "⚙"}
 }
