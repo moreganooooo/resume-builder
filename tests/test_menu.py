@@ -760,9 +760,9 @@ class TestHandleRunDoctor(unittest.TestCase):
     @patch("menu.cli_art.render_doctor_report")
     @patch("menu.doctor.run_test_suite", return_value=(True, "OK"))
     @patch("menu.doctor.run_checks", return_value=[{"name": "x", "passed": True, "detail": "", "fix": ""}])
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_runs_test_suite_when_confirmed(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         menu._handle_run_doctor()
         mock_tests.assert_called_once()
         mock_render.assert_called_once_with(mock_checks.return_value, (True, "OK"))
@@ -772,9 +772,9 @@ class TestHandleRunDoctor(unittest.TestCase):
     @patch("menu.cli_art.render_doctor_report")
     @patch("menu.doctor.run_test_suite")
     @patch("menu.doctor.run_checks", return_value=[])
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     def test_skips_test_suite_when_declined(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         menu._handle_run_doctor()
         mock_tests.assert_not_called()
         mock_render.assert_called_once_with([], None)
