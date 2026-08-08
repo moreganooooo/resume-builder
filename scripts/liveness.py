@@ -129,7 +129,7 @@ def _verify_candidates(candidates: list) -> dict:
 
     cli_art.console.print()
     cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
-    print()
+    cli_art.console.print()
 
     script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
     timeout_s = max(NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S)
@@ -160,10 +160,10 @@ def _verify_candidates(candidates: list) -> dict:
                 # replaying a finished transcript, not showing live
                 # progress (B21).
                 for line in proc.stderr:
-                    print(f"  {line.rstrip()}")
+                    cli_art.console.print(f"  {line.rstrip()}")
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check timed out after {timeout_s}s.")
+                cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check timed out after {timeout_s}s.")
                 return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
             finally:
                 # subprocess.run() deliberately does not kill the child on
@@ -178,7 +178,7 @@ def _verify_candidates(candidates: list) -> dict:
                 proc.wait()
 
         if proc.returncode != 0:
-            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed (exit code {proc.returncode}).")
+            cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed (exit code {proc.returncode}).")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
 
         with open(LIVENESS_OUTPUT_PATH, "r", encoding="utf-8") as f:
@@ -186,7 +186,7 @@ def _verify_candidates(candidates: list) -> dict:
         try:
             results = json.loads(stdout_data)
         except json.JSONDecodeError:
-            print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}")
+            cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}")
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
     finally:
         for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
@@ -204,7 +204,7 @@ def _verify_candidates(candidates: list) -> dict:
         counts[outcome] = counts.get(outcome, 0) + 1
         results_by_status.setdefault(outcome, []).append(r)
 
-    print()
+    cli_art.console.print()
 
     # Process and display by status group
     status_order = ["active", "likely_active", "expired", "uncertain"]
@@ -219,14 +219,14 @@ def _verify_candidates(candidates: list) -> dict:
         status_results = results_by_status.get(status, [])
         if status_results:
             status_label = status.replace("_", " ").title()
-            print(f"{icon_map.get(status, '?')} {status_label}:")
+            cli_art.console.print(f"{icon_map.get(status, '?')} {status_label}:")
             for r in status_results:
-                print(f"  • {r.get('source_file')}")
+                cli_art.console.print(f"  • {r.get('source_file')}")
                 if status not in ("active", "likely_active"):
                     reason = r.get('reason', '')
                     if reason:
-                        print(f"    → {reason}")
-            print()
+                        cli_art.console.print(f"    → {reason}")
+            cli_art.console.print()
 
     # Save liveness status for all results
     for r in results:
@@ -287,10 +287,10 @@ def run_liveness_check(refresh: bool = False) -> dict:
     skipped = len(to_check) - len(candidates)
 
     if recently_checked:
-        print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
+        cli_art.console.print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
 
     if not candidates:
-        print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
+        cli_art.console.print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
         return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0}
 
     result = _verify_candidates(candidates)
@@ -299,12 +299,12 @@ def run_liveness_check(refresh: bool = False) -> dict:
 
     if not result.get("error"):
         cli_art.console.rule(f"[bold {theme.BRAND}]Liveness Summary[/bold {theme.BRAND}]", style="dim")
-        print(f"  {theme.colorize_icon_ansi('success')} Active:                 {result['active']}")
-        print(f"  {theme.colorize_icon_ansi('warning')} Likely active:          {result['likely_active']}")
-        print(f"  {theme.colorize_icon_ansi('error')} Expired (moved):         {result['expired']}")
-        print(f"  {theme.colorize_icon_ansi('warning')} Uncertain (left):       {result['uncertain']}")
-        print(f"  {theme.colorize_icon_ansi('skip')} Skipped (no URL):       {skipped}")
-        print(f"  {theme.colorize_icon_ansi('skip')} Recently checked:       {len(recently_checked)}")
-        print()
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('success')} Active:                 {result['active']}")
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('warning')} Likely active:          {result['likely_active']}")
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('error')} Expired (moved):         {result['expired']}")
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('warning')} Uncertain (left):       {result['uncertain']}")
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('skip')} Skipped (no URL):       {skipped}")
+        cli_art.console.print(f"  {theme.colorize_icon_ansi('skip')} Recently checked:       {len(recently_checked)}")
+        cli_art.console.print()
 
     return result
