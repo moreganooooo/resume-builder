@@ -34,7 +34,15 @@ type JobsModel struct {
 	projectRoot      string
 	actionInProgress string // "", "liveness", "tailor", "status"
 	actionError      string
+	statusPicker     bool
+	statusCursor     int
 }
+
+// jobsApplicationStatuses must match jd_manager.APPLICATION_STATUSES
+// exactly (scripts/jd_manager.py) -- Python is the real validator
+// (dashboard_actions.py's status subcommand rejects anything else), this
+// is just what the picker offers.
+var jobsApplicationStatuses = []string{"Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"}
 
 // jobsActionCompleteMsg is emitted when a dashboard_actions.py subprocess
 // finishes. output is stdout+stderr combined, used as the error message
@@ -159,6 +167,30 @@ func (m JobsModel) reloadAfterAction() JobsModel {
 	return m
 }
 
+func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.statusPicker = false
+		return m, nil
+	case "up", "k":
+		if m.statusCursor > 0 {
+			m.statusCursor--
+		}
+	case "down", "j":
+		if m.statusCursor < len(jobsApplicationStatuses)-1 {
+			m.statusCursor++
+		}
+	case "enter":
+		m.statusPicker = false
+		if job, ok := m.CurrentJob(); ok {
+			chosen := jobsApplicationStatuses[m.statusCursor]
+			m.actionInProgress = "status"
+			return m, m.runAction("status", job.Path, chosen)
+		}
+	}
+	return m, nil
+}
+
 // Update handles input for the jobs screen.
 func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -181,6 +213,9 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.actionError = ""
 			return m, nil
 		}
+		if m.statusPicker {
+			return m.handleStatusPickerKey(msg)
+		}
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
@@ -202,6 +237,11 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			if job, ok := m.CurrentJob(); ok && job.Status == "Pending" {
 				m.actionInProgress = "tailor"
 				return m, m.runAction("tailor", job.Path)
+			}
+		case "u":
+			if _, ok := m.CurrentJob(); ok {
+				m.statusPicker = true
+				m.statusCursor = 0
 			}
 		case "q", "esc":
 			return m, func() tea.Msg { return JobsClosedMsg{} }

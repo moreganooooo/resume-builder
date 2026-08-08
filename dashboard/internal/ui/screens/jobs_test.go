@@ -250,3 +250,61 @@ func TestActionCompleteMsgFailureSetsErrorWithoutReloading(t *testing.T) {
 		t.Fatalf("expected rows untouched on failure, got %d", len(m.rows))
 	}
 }
+
+func TestUOpensStatusPicker(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	if !m.statusPicker {
+		t.Fatal("expected statusPicker to open")
+	}
+	if m.statusCursor != 0 {
+		t.Fatalf("expected statusCursor reset to 0, got %d", m.statusCursor)
+	}
+}
+
+func TestStatusPickerCursorClampsAtBoundaries(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m.statusCursor != 0 {
+		t.Fatalf("expected statusCursor clamped to 0, got %d", m.statusCursor)
+	}
+
+	for range jobsApplicationStatuses {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if m.statusCursor != len(jobsApplicationStatuses)-1 {
+		t.Fatalf("expected statusCursor clamped to %d, got %d", len(jobsApplicationStatuses)-1, m.statusCursor)
+	}
+}
+
+func TestStatusPickerEscCancels(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.statusPicker {
+		t.Fatal("expected statusPicker to close on esc")
+	}
+	if m.actionInProgress != "" {
+		t.Fatal("expected no action dispatched on cancel")
+	}
+}
+
+func TestStatusPickerEnterDispatchesStatusAction(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.statusPicker {
+		t.Fatal("expected statusPicker closed after enter")
+	}
+	if m.actionInProgress != "status" {
+		t.Fatalf("expected actionInProgress %q, got %q", "status", m.actionInProgress)
+	}
+	if cmd == nil {
+		t.Fatal("expected a command to be dispatched")
+	}
+}
