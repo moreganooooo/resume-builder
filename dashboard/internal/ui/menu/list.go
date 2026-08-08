@@ -33,6 +33,7 @@ func NewMenuModel(t theme.Theme) MenuModel {
         MenuItem{title: "Pipeline", desc: "Career pipeline view", icon: t.Icons.Pipeline},
         MenuItem{title: "Progress", desc: "Analytics and funnel", icon: t.Icons.Progress},
         MenuItem{title: "Reports", desc: "Open a markdown report", icon: t.Icons.Report},
+        MenuItem{title: "Jobs", desc: "Evaluated job postings", icon: t.Icons.Jobs},
         MenuItem{title: "Quit", desc: "Exit the dashboard", icon: t.Icons.Quit},
     }
 

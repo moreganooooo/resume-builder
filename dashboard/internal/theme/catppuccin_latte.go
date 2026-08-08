@@ -38,6 +38,7 @@ func newCatppuccinLatte() Theme {
 	t.Icons.Report = "📄"
 	t.Icons.Quit = "❌"
 	t.Icons.Menu = "☰"
+	t.Icons.Jobs = "💼"
 
 	return t
 }
