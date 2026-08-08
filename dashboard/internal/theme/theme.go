@@ -66,4 +66,19 @@ func NewTheme(name string) Theme {
 	default:
 		return newCatppuccinMocha()
 	}
+} 
+// HuhTheme converts the internal Theme into a *huh.Theme that matches the
+// current colour palette. huh.Theme has no flat Base/Secondary/Accent
+// fields (that was never a real huh API) -- it's a full FieldStyles tree,
+// so this starts from huh's own Charm preset and recolors just the
+// pieces our palette actually differs on. Returns a pointer since that's
+// what Form.WithTheme (the only real setter -- there is no Form.Theme
+// method) expects.
+func (t Theme) HuhTheme() *huh.Theme {
+    ht := huh.ThemeCharm()
+    ht.Focused.Title = ht.Focused.Title.Foreground(t.GradientStart)
+    ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.GradientStart)
+    ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
+    return ht
 }
+
