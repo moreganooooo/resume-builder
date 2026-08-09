@@ -679,12 +679,12 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
         icon = SUCCESS if test_passed else ERROR
         console.print(f"\n{icon} Test suite: {test_summary}")
 
-        if failed:
-            console.print(f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]")
-            for c in failed:
-                console.print(f"  {theme.colorize_icon('warning')} {c['name']}: {c['fix']}")
-        else:
-            console.print(f"\n{SUCCESS} All checks passed.")
+    if failed:
+        console.print(f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]")
+        for c in failed:
+            console.print(f"  {theme.colorize_icon('warning')} {c['name']}: {c['fix']}")
+    else:
+        console.print(f"\n{SUCCESS} All checks passed.")
 
 def cli_info(message: str) -> None:
     """Print an informational message with hint icon."""
