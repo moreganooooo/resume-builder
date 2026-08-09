@@ -18,6 +18,7 @@ import (
 	"os"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/log"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/prompt"
 )
@@ -29,14 +30,12 @@ const cancelExitCode = 130
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "prompt: expected exactly one argument, a JSON prompt spec")
-		os.Exit(1)
+		log.Fatal("expected exactly one argument, a JSON prompt spec")
 	}
 
 	var spec prompt.Spec
 	if err := json.Unmarshal([]byte(os.Args[1]), &spec); err != nil {
-		fmt.Fprintf(os.Stderr, "prompt: invalid spec JSON: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("invalid spec JSON: %v", err)
 	}
 
 	t := theme.NewTheme("")
@@ -45,14 +44,12 @@ func main() {
 		if errors.Is(err, huh.ErrUserAborted) {
 			os.Exit(cancelExitCode)
 		}
-		fmt.Fprintf(os.Stderr, "prompt: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("%v", err)
 	}
 
 	out, err := json.Marshal(result)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "prompt: failed to encode result: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to encode result: %v", err)
 	}
 	fmt.Println(string(out))
 }

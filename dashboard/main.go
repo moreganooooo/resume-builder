@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/log"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -221,8 +222,7 @@ func main() {
 	// Load applications
 	apps := data.ParseApplications(careerOpsPath)
 	if apps == nil {
-		fmt.Fprintf(os.Stderr, "Error: could not find applications.md in %s or %s/data/\n", careerOpsPath, careerOpsPath)
-		os.Exit(1)
+		log.Fatalf("could not find applications.md in %s or %s/data/", careerOpsPath, careerOpsPath)
 	}
 
 	// Compute metrics
@@ -247,7 +247,7 @@ func main() {
 	if *jobsPathFlag != "" {
 		rows, err := data.LoadJobs(*jobsPathFlag)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARN: failed to load jobs export: %v\n", err)
+			log.Warnf("failed to load jobs export: %v", err)
 		} else {
 			jobRows = rows
 		}
@@ -269,7 +269,6 @@ func main() {
 	// Update handler above normally catches. Either way a Ctrl+C quit is not
 	// a crash, so it should not print "Error:" or exit non-zero.
 	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrInterrupted) {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("%v", err)
 	}
 }
