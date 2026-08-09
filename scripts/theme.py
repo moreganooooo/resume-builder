@@ -16,17 +16,33 @@ from rich.style import Style as RichStyle
 # remapped by whatever terminal theme is active; this project has already
 # hit that in practice (see README's "Colors" section: `cyan` washed out
 # to near-invisible gray on a dark-teal theme).
-# BRAND_ACCENT was #673ab7 (2.27:1 against a dark terminal background --
-# the lowest-contrast color in the whole palette, and the one driving the
-# questionary selection pointer/highlighted row plus every table header).
-# Lightened to clear 4.5:1 AA on dark (8.77:1 against black) -- see B23.
-BRAND = "#4dabf7"
-BRAND_ACCENT = "#b39ddb"
-SUCCESS = "#4caf50"
-ERROR = "#c96a6a"
-WARNING = "#f5c542"
-INFO = "#2196f3"
+#
+# Sourced from Charmtone (github.com/charmbracelet/x/exp/charmtone), the
+# Charm ecosystem's own branded palette (as used by crush) -- picked for
+# CharmtonePantera's semantic roles: primary/accent/success/error/
+# warning/info. Every value must clear 4.5:1 WCAG AA contrast against the
+# dashboard's actual background (#1e1e2e, not just pure black) -- this bit
+# us once already (BRAND_ACCENT was #673ab7 at 2.27:1 before B23 lightened
+# it to #b39ddb). Two of Charmtone's own picks failed that same check
+# against #1e1e2e -- Charple (BRAND's "primary", 3.29:1) and Sriracha
+# (ERROR, 4.30:1) -- so BRAND uses Charmtone's Hazy and ERROR uses
+# Charmtone's Coral instead, both from the same purple/red family but
+# lighter. All six below pass at >=4.5:1 (verified against #1e1e2e).
+BRAND = "#8B75FF"  # Charmtone Hazy (Charple substitute, contrast fix)
+BRAND_ACCENT = "#FF60FF"  # Charmtone Dolly
+SUCCESS = "#12C78F"  # Charmtone Guac
+ERROR = "#FF577D"  # Charmtone Coral (Sriracha substitute, contrast fix)
+WARNING = "#F5EF34"  # Charmtone Mustard
+INFO = "#00A4FF"  # Charmtone Malibu
 MUTED = "#888888"
+
+# Dashboard-only decorative accents -- no CLI semantic role of their own
+# (Rich/questionary never render these), they exist purely so the
+# dashboard's 8-slot Catppuccin-shaped accent struct (Blue/Mauve/Green/
+# Yellow/Sky/Peach/Red/Pink) has 8 actually-distinct colors instead of
+# reusing two of the six above. See sync_dashboard_theme.py.
+PEACH = "#FF985A"  # Charmtone Tang
+PINK = "#FF84FF"  # Charmtone Blush
 
 # Values match orchestrator.FitEvaluationSchema's `recommendation` Literal
 # exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".

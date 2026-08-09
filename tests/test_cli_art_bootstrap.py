@@ -20,7 +20,7 @@ class TestNewUserStyleToken(unittest.TestCase):
     def test_new_user_token_registered(self):
         style_rules = dict(cli_art.QUESTIONARY_STYLE.style_rules)
         self.assertIn("new_user", style_rules)
-        self.assertIn("#4caf50", style_rules["new_user"])
+        self.assertIn(cli_art.theme.SUCCESS, style_rules["new_user"])
 
 
 class TestDisplayBootstrapIntro(unittest.TestCase):

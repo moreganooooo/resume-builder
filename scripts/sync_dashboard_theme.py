@@ -34,9 +34,9 @@ _ACCENT_FIELDS = [
     ("Green", "SUCCESS", theme.SUCCESS),
     ("Yellow", "WARNING", theme.WARNING),
     ("Sky", "BRAND", theme.BRAND),
-    ("Peach", "WARNING (reused, see above)", theme.WARNING),
+    ("Peach", "PEACH", theme.PEACH),
     ("Red", "ERROR", theme.ERROR),
-    ("Pink", "BRAND_ACCENT (reused, unused field)", theme.BRAND_ACCENT),
+    ("Pink", "PINK", theme.PINK),
 ]
 
 _HEADER = '''package theme
@@ -52,20 +52,19 @@ import "github.com/charmbracelet/lipgloss"
 // terminal theme is active) and Mocha's neutrals are already tuned for
 // exactly this kind of dark-terminal TUI.
 //
-// resume-builder only has six semantic tokens against this struct's eight
-// accent slots, so two get reused rather than invented:
-//   - Peach reuses WARNING (no distinct 5th "orange" tone exists upstream;
-//     the funnel/score-bucket gradients lose one visually distinct step,
-//     which is an honest trade against inventing an unbranded color).
-//   - Pink reuses BRAND_ACCENT (the field is currently unread by every
-//     screen -- see internal/ui/screens -- so any value is a placeholder
-//     until something actually renders it).
+// Colors are Charmtone (github.com/charmbracelet/x/exp/charmtone), the
+// Charm ecosystem's own branded palette -- six carry semantic meaning on
+// the CLI side too (INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/ERROR); Peach
+// and Pink are dashboard-only decorative accents (theme.py's PEACH/PINK)
+// with no CLI role of their own, added so this struct's 8 Catppuccin-
+// shaped accent slots are 8 actually-distinct colors instead of 6 real
+// ones plus 2 reused placeholders.
 //
 // GENERATED from scripts/theme.py by scripts/sync_dashboard_theme.py --
 // do not hand-edit the accent block below. Re-run that script after
 // changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
-// ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
-// this file ever falls out of sync.
+// ERROR/PEACH/PINK constants; doctor.py's check_dashboard_theme_sync()
+// flags it if this file ever falls out of sync.
 // newCatppuccinMocha moved to catppuccin.go
 
 func newResumeBuilder() Theme {
