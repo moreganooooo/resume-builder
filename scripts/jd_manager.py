@@ -484,7 +484,7 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
 
     row_number = _next_application_row_number(path)
     date_str = datetime.date.today().isoformat()
-    pdf_cell = "✓" if has_pdf else "❌"
+    pdf_cell = "✅" if has_pdf else "❌"
     company = company_name or "unknown"
     role = job_title or "unknown"
     link_cell = f"[Apply]({source_url})" if source_url else "—"
