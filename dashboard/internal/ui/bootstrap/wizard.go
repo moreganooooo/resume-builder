@@ -52,7 +52,9 @@ func Run(t theme.Theme) (WizardData, error) {
                     huh.NewOption("Manual markdown", "manual"),
                 ).
                 Value(&data.SourceChoice),
-            // Path to source – only show when not manual.
+            // Path to source. huh v0.4.1's Input has no per-field ShowIf, so
+            // this stays visible even when SourceChoice is "manual" -- the
+            // Validate func below already treats it as a no-op in that case.
             huh.NewInput().
                 Title("📁 Path to source file/folder").
                 Value(&data.IngestPath).
@@ -82,8 +84,7 @@ func Run(t theme.Theme) (WizardData, error) {
                     }
                     _ = info // silence unused variable warning
                     return nil
-                }).
-                ShowIf(func() bool { return data.SourceChoice != "manual" }),
+                }),
             // Whether to generate the bullet bank now.
             huh.NewConfirm().
                 Title("🪄 Build the bullet‑bank now?").
