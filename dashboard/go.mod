@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/charmbracelet/huh v0.4.1
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
+	github.com/charmbracelet/log v1.0.0
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/muesli/termenv v0.16.0
 )
@@ -28,6 +29,7 @@ require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
+	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -42,6 +44,7 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.36.0 // indirect
