@@ -43,15 +43,15 @@ class TestProgressReporter(unittest.TestCase):
 
     def test_no_eta_on_first_step(self):
         reporter = scan_boards.ProgressReporter(3, label="Checking")
-        with patch("builtins.print") as mock_print:
+        with patch("cli_art.console.print") as mock_print:
             reporter.step("Acme")
-        mock_print.assert_called_once_with("  [1/3] Checking Acme...")
+        mock_print.assert_called_once_with("  [1/3] Checking Acme...", markup=False, soft_wrap=True)
 
     def test_eta_appears_from_second_step_on(self):
         reporter = scan_boards.ProgressReporter(3, label="Checking")
-        with patch("builtins.print"):
+        with patch("cli_art.console.print"):
             reporter.step("Acme")
-        with patch("builtins.print") as mock_print:
+        with patch("cli_art.console.print") as mock_print:
             reporter.step("Widgets Inc")
         printed = mock_print.call_args[0][0]
         self.assertIn("[2/3] Checking Widgets Inc...", printed)

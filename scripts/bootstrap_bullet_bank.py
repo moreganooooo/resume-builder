@@ -173,6 +173,7 @@ import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
 import bootstrap_timeline  # noqa: E402
 import tag_bullet_bank  # noqa: E402
+import cli_art
 import theme  # noqa: E402
 
 DRAFT_CSV_FIELDS = ["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"]
@@ -194,16 +195,16 @@ def _save_checkpoint(state: dict) -> None:
 def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
     kind = bootstrap_extractors.detect_file_kind(path)
     if kind == "unsupported":
-        print(f"  Skipping {filename}: unsupported file type.")
+        cli_art.console.print(f"  Skipping {filename}: unsupported file type.", markup=False, soft_wrap=True)
         return {"status": "error", "doc_type": "other"}
 
     if kind == "doc":
         converted = bootstrap_extractors.convert_legacy_doc_to_pdf(path)
         if converted is None:
-            print(
+            cli_art.console.print(
                 f"  Skipping {filename}: legacy .doc format and LibreOffice isn't "
                 f"available. Please re-save it as .docx or .pdf."
-            )
+            , markup=False, soft_wrap=True)
             return {"status": "error", "doc_type": "other"}
         path, kind = converted, "pdf"
 
@@ -356,12 +357,12 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     if force:
         existing_rows = _existing_clean_bank_row_count()
         if existing_rows:
-            print(
-                f"\n{theme.colorize_icon_ansi('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
+            cli_art.console.print(
+                f"\n{theme.colorize_icon('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
                 f"existing row(s) in {os.path.basename(BULLET_BANK_CLEAN_PATH)} with a full "
                 "reconstruction from the checkpoint. This discards anything not reachable from "
                 "checkpoint.json and cannot be undone."
-            )
+            , soft_wrap=True)
 
     os.makedirs(SOURCE_DOCS_DIR, exist_ok=True)
     checkpoint = _load_checkpoint()
@@ -386,11 +387,11 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
             # only "done" is skipped on retry). "failed" is deliberately not
             # "done", so the next run_ingestion() call retries this file
             # instead of skipping it.
-            print(f"  API error processing {filename}: {e}")
+            cli_art.console.print(f"  API error processing {filename}: {e}", markup=False, soft_wrap=True)
             checkpoint[filename] = {"status": "failed", "doc_type": "other", "reason": str(e)}
             failures += 1
         except Exception as e:
-            print(f"  Error processing {filename}: {e}")
+            cli_art.console.print(f"  Error processing {filename}: {e}", markup=False, soft_wrap=True)
             checkpoint[filename] = {"status": "error", "doc_type": "other"}
         _save_checkpoint(checkpoint)
 
@@ -459,18 +460,18 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
 
 
 def print_ingestion_summary(summary: dict) -> None:
-    print(
+    cli_art.console.print(
         f"\nExtracted {summary['extracted']} achievement(s), "
         f"{summary['attributed']} confidently attributed, "
         f"{summary['flagged']} flagged for review, "
         f"{summary['certificates']} certificate(s) found."
-    )
+    , markup=False, soft_wrap=True)
     if summary.get("failed"):
-        print(
-            f"{theme.colorize_icon_ansi('warning')}  {summary['failed']} document(s) failed to process "
+        cli_art.console.print(
+            f"{theme.colorize_icon('warning')}  {summary['failed']} document(s) failed to process "
             "(API error -- see above for details). They'll be retried automatically next time you run "
             "ingestion; they were not counted as done."
-        )
+        , soft_wrap=True)
 
 
 import argparse
@@ -497,17 +498,17 @@ _CONFIRMATION_GATES = {
 }
 
 _STAGE_HINTS = {
-    0: f"{theme.colorize_icon_ansi('hint')} Quality check time — every bullet gets scored the way a "
+    0: f"{theme.colorize_icon('hint')} Quality check time — every bullet gets scored the way a "
        "skeptical hiring manager would read it. This is the first API-heavy step.",
-    1: f"{theme.colorize_icon_ansi('hint')} Grouping near-duplicate bullets and keeping only the "
+    1: f"{theme.colorize_icon('hint')} Grouping near-duplicate bullets and keeping only the "
        "strongest version of each.",
-    2: f"{theme.colorize_icon_ansi('hint')} Rewriting anything that didn't pass the quality check — "
+    2: f"{theme.colorize_icon('hint')} Rewriting anything that didn't pass the quality check — "
        "the other API-heavy step.",
-    3: f"{theme.colorize_icon_ansi('hint')} Quick re-check on the rewritten bullets to make sure they "
+    3: f"{theme.colorize_icon('hint')} Quick re-check on the rewritten bullets to make sure they "
        "actually improved.",
-    4: f"{theme.colorize_icon_ansi('hint')} Flagging standout 'hidden gem' bullets — the ones a "
+    4: f"{theme.colorize_icon('hint')} Flagging standout 'hidden gem' bullets — the ones a "
        "hiring manager would specifically remember.",
-    5: f"{theme.colorize_icon_ansi('hint')} Last step — converting everything into a format the "
+    5: f"{theme.colorize_icon('hint')} Last step — converting everything into a format the "
        "system can use to intelligently match bullets to a job description "
        "later.",
 }
@@ -531,16 +532,16 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
         if i in _CONFIRMATION_GATES and not skip_confirm:
             proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True).ask()
             if not proceed:
-                print("Stopped. Re-run this same command later to continue from here.")
+                cli_art.console.print("Stopped. Re-run this same command later to continue from here.", markup=False, soft_wrap=True)
                 return False
 
-        print(f"\n{_STAGE_HINTS[i]}")
-        print(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {script_name}...")
+        cli_art.console.print(f"\n{_STAGE_HINTS[i]}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {script_name}...", markup=False, soft_wrap=True)
         if not run_stage(script_name):
-            print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.")
+            cli_art.console.print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.", markup=False, soft_wrap=True)
             return False
 
-    print(f"\n{theme.colorize_icon_ansi('success')} All done! Your bullet bank is ready.")
+    cli_art.console.print(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.", soft_wrap=True)
     return True
 
 
@@ -577,7 +578,7 @@ def main():
         bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
 
     if args.dry_run:
-        print("\n--dry-run set: skipping the six-stage pipeline.")
+        cli_art.console.print("\n--dry-run set: skipping the six-stage pipeline.", markup=False, soft_wrap=True)
         return
 
     if args.scope in ("bullets", "both"):
