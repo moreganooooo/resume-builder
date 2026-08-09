@@ -1,12 +1,17 @@
 package screens
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -38,6 +43,15 @@ type JobsModel struct {
 	statusPicker     bool
 	statusCursor     int
 	spinner          spinner.Model
+
+	// actionChan carries progress/completion messages from the goroutine
+	// runAction starts. Only "tailor" ever emits jobsActionProgressMsg (it's
+	// the only action whose subprocess runs orchestrator.py's Step N: ...
+	// pipeline) -- liveness/status stream straight to their completion
+	// message and render the plain spinner instead of the progress bar.
+	actionChan      chan tea.Msg
+	actionStepLabel string
+	progress        progress.Model
 }
 
 // jobsApplicationStatuses must match jd_manager.APPLICATION_STATUSES
@@ -47,25 +61,51 @@ type JobsModel struct {
 var jobsApplicationStatuses = []string{"Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"}
 
 // jobsActionCompleteMsg is emitted when a dashboard_actions.py subprocess
-// finishes. output is stdout+stderr combined, used as the error message
-// on failure (matches what a human running the command directly sees).
+// finishes. output is stderr, used as the error message on failure
+// (matches what a human running the command directly sees).
 type jobsActionCompleteMsg struct {
 	action string
 	err    error
 	output string
 }
 
+// jobsActionProgressMsg is emitted once per "Step N: <label>..." line the
+// tailor subprocess prints to stdout (orchestrator.run_pipeline(), via
+// cli_art.console.print() -- confirmed to flush per-line even when piped,
+// not just on a real terminal). step is the parsed N (e.g. 5.5 for "Step
+// 5.5"), used as step/totalPipelineSteps for the progress bar's percent.
+type jobsActionProgressMsg struct {
+	step  float64
+	label string
+}
+
+// totalPipelineSteps mirrors orchestrator.py's highest step number
+// ("Step 7: Rendering HTML and generating PDF..."). Step 5.5 is
+// conditional (only fires if there are actionable recommendations), so
+// this is an approximation, not an exact step count -- it still produces
+// a monotonically increasing, roughly-accurate percent, which is the
+// actual goal (a real signal, not a fake one -- see jobsActionCompleteMsg's
+// sibling doc comment).
+const totalPipelineSteps = 7.0
+
+var stepLineRe = regexp.MustCompile(`^Step (\d+(?:\.\d+)?): (.+?)\.\.\.?$`)
+
 // NewJobsModel creates a new jobs screen from the rows loaded via
 // data.LoadJobs. rows should already be sorted best-first (as
 // picker.list_all_evaluated_jds() on the Python side does).
 func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsModel {
+	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
+	sp.Style = lipgloss.NewStyle().Foreground(t.Sky)
 	m := JobsModel{
 		rows:    rows,
 		filter:  "all",
 		width:   width,
 		height:  height,
 		theme:   t,
-		spinner: spinner.New(spinner.WithSpinner(spinner.Dot)),
+		spinner: sp,
+		progress: progress.New(
+			progress.WithGradient(string(t.Sky), string(t.Mauve)),
+		),
 	}
 	m.applyFilter()
 	return m
@@ -130,17 +170,62 @@ func (m *JobsModel) Resize(width, height int) {
 // runAction builds and runs a dashboard_actions.py subprocess. Bubbletea
 // runs the returned Cmd off the UI thread, so this blocking call doesn't
 // freeze rendering.
-func (m JobsModel) runAction(action, jdPath string, extraArgs ...string) tea.Cmd {
+// waitForActionMsg blocks on the next message runAction's goroutine sends
+// -- a jobsActionProgressMsg per Step N: line, then exactly one final
+// jobsActionCompleteMsg. Re-issued after every progress message so the
+// listen loop keeps going until completion.
+func waitForActionMsg(ch chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
-		args := append([]string{
-			filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
-			action, jdPath, "--jobs-path", m.jobsPath,
-		}, extraArgs...)
-		cmd := exec.Command(m.pythonPath, args...)
-		cmd.Dir = m.projectRoot
-		out, err := cmd.CombinedOutput()
-		return jobsActionCompleteMsg{action: action, err: err, output: string(out)}
+		return <-ch
 	}
+}
+
+// runAction starts action's dashboard_actions.py subprocess and streams
+// its stdout line-by-line rather than buffering the whole run (the prior
+// cmd.CombinedOutput() behavior) -- stdout lines matching "Step N: ..."
+// (only ever emitted by "tailor", via orchestrator.py's pipeline) become
+// jobsActionProgressMsg so the progress bar reflects real pipeline
+// progress instead of a fake/animated percent. stderr is captured
+// separately for jobsActionCompleteMsg's error-display output, matching
+// the prior behavior's error text.
+func (m JobsModel) runAction(ch chan tea.Msg, action, jdPath string, extraArgs ...string) tea.Cmd {
+	args := append([]string{
+		filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
+		action, jdPath, "--jobs-path", m.jobsPath,
+	}, extraArgs...)
+	cmd := exec.Command(m.pythonPath, args...)
+	cmd.Dir = m.projectRoot
+
+	go func() {
+		var stderrBuf bytes.Buffer
+		cmd.Stderr = &stderrBuf
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			ch <- jobsActionCompleteMsg{action: action, err: err}
+			return
+		}
+		if err := cmd.Start(); err != nil {
+			ch <- jobsActionCompleteMsg{action: action, err: err}
+			return
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if match := stepLineRe.FindStringSubmatch(line); match != nil {
+				step, parseErr := strconv.ParseFloat(match[1], 64)
+				if parseErr == nil {
+					ch <- jobsActionProgressMsg{step: step, label: match[2]}
+				}
+			}
+		}
+
+		waitErr := cmd.Wait()
+		ch <- jobsActionCompleteMsg{action: action, err: waitErr, output: stderrBuf.String()}
+	}()
+
+	return waitForActionMsg(ch)
 }
 
 // reloadAfterAction re-reads m.jobsPath (freshly written by a successful
@@ -188,7 +273,8 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 		if job, ok := m.CurrentJob(); ok {
 			chosen := jobsApplicationStatuses[m.statusCursor]
 			m.actionInProgress = "status"
-			return m, tea.Batch(m.runAction("status", job.Path, chosen), m.spinner.Tick)
+			m.actionChan = make(chan tea.Msg)
+			return m, tea.Batch(m.runAction(m.actionChan, "status", job.Path, chosen), m.spinner.Tick)
 		}
 	}
 	return m, nil
@@ -199,6 +285,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case jobsActionCompleteMsg:
 		m.actionInProgress = ""
+		m.actionChan = nil
 		if msg.err != nil {
 			m.actionError = strings.TrimSpace(msg.output)
 			if m.actionError == "" {
@@ -207,6 +294,21 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			return m, nil
 		}
 		return m.reloadAfterAction(), nil
+
+	case jobsActionProgressMsg:
+		if m.actionInProgress == "" || m.actionChan == nil {
+			return m, nil
+		}
+		m.actionStepLabel = msg.label
+		progressCmd := m.progress.SetPercent(msg.step / totalPipelineSteps)
+		return m, tea.Batch(progressCmd, waitForActionMsg(m.actionChan))
+
+	case progress.FrameMsg:
+		newModel, cmd := m.progress.Update(msg)
+		if pm, ok := newModel.(progress.Model); ok {
+			m.progress = pm
+		}
+		return m, cmd
 
 	case tea.KeyMsg:
 		if m.actionInProgress != "" {
@@ -234,12 +336,16 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "l":
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
-				return m, tea.Batch(m.runAction("liveness", job.Path), m.spinner.Tick)
+				m.actionChan = make(chan tea.Msg)
+				return m, tea.Batch(m.runAction(m.actionChan, "liveness", job.Path), m.spinner.Tick)
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok && job.Status == "Pending" {
 				m.actionInProgress = "tailor"
-				return m, tea.Batch(m.runAction("tailor", job.Path), m.spinner.Tick)
+				m.actionChan = make(chan tea.Msg)
+				m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
+				m.actionStepLabel = ""
+				return m, m.runAction(m.actionChan, "tailor", job.Path)
 			}
 		case "u":
 			if _, ok := m.CurrentJob(); ok {
@@ -345,6 +451,19 @@ func (m JobsModel) renderActionStatus() string {
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 2)
+
+	// "tailor" is the only action with a real progress signal (Step N: ...
+	// lines from orchestrator.py's pipeline, see jobsActionProgressMsg) --
+	// liveness/status have no such signal and stay on the indeterminate
+	// spinner rather than faking a percent.
+	if m.actionInProgress == "tailor" {
+		m.progress.Width = m.width - 6
+		label := m.actionStepLabel
+		if label == "" {
+			label = actionLabel(m.actionInProgress)
+		}
+		return style.Render(label + "\n" + m.progress.View())
+	}
 	return style.Render(m.spinner.View() + " " + actionLabel(m.actionInProgress) + "...")
 }
 
