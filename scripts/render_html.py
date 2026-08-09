@@ -14,6 +14,7 @@ import re
 from html import escape
 from pathlib import Path
 
+import cli_art
 import theme
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -238,7 +239,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"  {theme.colorize_icon_ansi('success')} HTML rendered → {output_path}")
+    cli_art.console.print(f"  {theme.colorize_icon('success')} HTML rendered → {output_path}", soft_wrap=True)
     return output_path
 
 

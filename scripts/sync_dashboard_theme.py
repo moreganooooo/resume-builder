@@ -17,6 +17,7 @@ WARNING/BRAND/ERROR constants:
 
 import os
 
+import cli_art
 import theme
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -129,4 +130,4 @@ def sync() -> bool:
 
 if __name__ == "__main__":
     changed = sync()
-    print(f"{DASHBOARD_THEME_PATH}: {'updated' if changed else 'already in sync'}")
+    cli_art.console.print(f"{DASHBOARD_THEME_PATH}: {'updated' if changed else 'already in sync'}", markup=False, soft_wrap=True)

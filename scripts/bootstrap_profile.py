@@ -171,15 +171,15 @@ def collect_identity(dry_run: bool = False) -> dict:
     primary_guess = _guess_primary_roles(timeline)
 
     if dry_run:
-        print("[DRY RUN] would confirm identity fields:")
-        print()
-        print(f"  Full name: {guessed.full_name or ''}")
-        print(f"  Email: {guessed.email or ''}")
-        print(f"  Phone: {guessed.phone or ''}")
-        print(f"  Location: {guessed.location or ''}")
-        print(f"  LinkedIn URL: {guessed.linkedin_url or ''}")
-        print(f"  Primary target roles: {', '.join(primary_guess)}")
-        print()
+        cli_art.console.print("[DRY RUN] would confirm identity fields:", markup=False, soft_wrap=True)
+        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.console.print(f"  Full name: {guessed.full_name or ''}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  Email: {guessed.email or ''}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  Phone: {guessed.phone or ''}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  Location: {guessed.location or ''}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  LinkedIn URL: {guessed.linkedin_url or ''}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  Primary target roles: {', '.join(primary_guess)}", markup=False, soft_wrap=True)
+        cli_art.console.print(markup=False, soft_wrap=True)
         return {
             "full_name": guessed.full_name or "", "email": guessed.email or "",
             "phone": guessed.phone or "", "location": guessed.location or "",
@@ -376,7 +376,7 @@ def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_
             default=False,
         ).ask()
         if not overwrite:
-            print("Keeping the existing profile.yml unchanged.")
+            cli_art.console.print("Keeping the existing profile.yml unchanged.", markup=False, soft_wrap=True)
             return False
 
     content = _PROFILE_YML_TEMPLATE.format(
@@ -669,13 +669,13 @@ def _polish_bullet(
 
 def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
     total = sum(len(role["bullets"]) for role in rows)
-    print(f"\n{theme.colorize_icon_ansi('hint')} Polishing {total} bullet(s) for your cv.md draft...")
+    cli_art.console.print(f"\n{theme.colorize_icon('hint')} Polishing {total} bullet(s) for your cv.md draft...", soft_wrap=True)
 
     checkpoint = _load_cv_draft_checkpoint()
     already_done = sum(1 for role in rows for bullet in role["bullets"]
                         if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint)
     if already_done:
-        print(f"   {theme.colorize_icon_ansi('resume')} Resuming: {already_done}/{total} already polished in a prior run.")
+        cli_art.console.print(f"   {theme.colorize_icon('resume')} Resuming: {already_done}/{total} already polished in a prior run.", soft_wrap=True)
 
     lines = [f"# {identity['full_name']}", ""]
     contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
@@ -690,15 +690,15 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
         lines.append(header + date_range)
         for bullet in role["bullets"]:
             i += 1
-            print(f"\n{'─'*60}")
-            print(f"[{i}/{total}] {bullet[:60]}...")
-            print(f"   Company: {role['company']}")
+            cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
+            cli_art.console.print(f"[{i}/{total}] {bullet[:60]}...", markup=False, soft_wrap=True)
+            cli_art.console.print(f"   Company: {role['company']}", markup=False, soft_wrap=True)
             polished = _polish_bullet(
                 bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run, checkpoint,
             )
-            status_icon = theme.colorize_icon_ansi('success') if polished["rewrite_status"] == "KEEP" else theme.colorize_icon_ansi('warning')
-            print(f"   {status_icon} {polished['rewrite_status']}")
-            print()
+            status_icon = theme.colorize_icon('success') if polished["rewrite_status"] == "KEEP" else theme.colorize_icon('warning')
+            cli_art.console.print(f"   {status_icon} {polished['rewrite_status']}", markup=False, soft_wrap=True)
+            cli_art.console.print(markup=False, soft_wrap=True)
             lines.append(f"- {polished['final_bullet']}")
         lines.append("")
 
@@ -712,7 +712,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
     rewrite_system, rewrite_system_gemma, score_system = build_system_prompts(rules, kb)
 
     if dry_run:
-        print("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.")
+        cli_art.console.print("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.", markup=False, soft_wrap=True)
         content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
         os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
         with atomic_write(CV_MD_PATH, encoding="utf-8") as f:
@@ -722,9 +722,9 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
     content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
     choice = "skip"
     while True:
-        print("\n--- Draft cv.md ---\n")
-        print(content)
-        print("\n--- End draft ---\n")
+        cli_art.console.print("\n--- Draft cv.md ---\n", markup=False, soft_wrap=True)
+        cli_art.console.print(content, markup=False, soft_wrap=True)
+        cli_art.console.print("\n--- End draft ---\n", markup=False, soft_wrap=True)
         choice = questionary.select(
             "What would you like to do with this draft?",
             choices=[
@@ -765,7 +765,7 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
     source_texts = _gather_background_source_texts(checkpoint)
 
     if dry_run:
-        print("[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip.")
+        cli_art.console.print("[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip.", markup=False, soft_wrap=True)
         draft = bootstrap_extractors.draft_background_guide(source_texts, dry_run=dry_run)
         os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
         with atomic_write(BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
@@ -775,9 +775,9 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
     draft = bootstrap_extractors.draft_background_guide(source_texts) if source_texts else ""
     choice = "skip"
     while True:
-        print("\n--- Draft background guide ---\n")
-        print(draft or "(nothing drafted -- no usable source text found)")
-        print("\n--- End draft ---\n")
+        cli_art.console.print("\n--- Draft background guide ---\n", markup=False, soft_wrap=True)
+        cli_art.console.print(draft or "(nothing drafted -- no usable source text found)", markup=False, soft_wrap=True)
+        cli_art.console.print("\n--- End draft ---\n", markup=False, soft_wrap=True)
         choice = questionary.select(
             "What would you like to do with this draft?",
             choices=[
@@ -828,7 +828,7 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
     source_texts = _gather_voice_anchor_source_texts(checkpoint)
 
     if dry_run:
-        print("[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip.")
+        cli_art.console.print("[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip.", markup=False, soft_wrap=True)
         draft = bootstrap_extractors.draft_voice_anchors(source_texts, dry_run=dry_run)
         os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
         with atomic_write(VOICE_ANCHORS_PATH, encoding="utf-8") as f:
@@ -838,10 +838,10 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
     draft = bootstrap_extractors.draft_voice_anchors(source_texts) if source_texts else ""
     choice = "skip"
     while True:
-        print("\n--- Draft voice anchors ---\n")
-        print(draft or "(nothing drafted -- no usable writing-sample text found; this is "
-                        "optional, skip freely)")
-        print("\n--- End draft ---\n")
+        cli_art.console.print("\n--- Draft voice anchors ---\n", markup=False, soft_wrap=True)
+        cli_art.console.print(draft or "(nothing drafted -- no usable writing-sample text found; this is "
+                        "optional, skip freely)", markup=False, soft_wrap=True)
+        cli_art.console.print("\n--- End draft ---\n", markup=False, soft_wrap=True)
         choice = questionary.select(
             "What would you like to do with this draft?",
             choices=[
@@ -876,11 +876,11 @@ def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions:
     a machine that already has GEMINI_API_KEY exported doesn't silently
     ride on whoever's shell that happens to be, defeating this function's
     whole point of giving every profile its own credentials (B41)."""
-    print(f"\n{instructions}")
+    cli_art.console.print(f"\n{instructions}", markup=False, soft_wrap=True)
     if shell_default:
-        print(f"  ({var_name} is already set in your shell environment, but this profile's own "
+        cli_art.console.print(f"  ({var_name} is already set in your shell environment, but this profile's own "
               f"{env_file} doesn't have its own copy yet -- each profile needs one so credentials "
-              f"aren't silently shared across profiles.)")
+              f"aren't silently shared across profiles.)", markup=False, soft_wrap=True)
         use_shell_value = questionary.confirm(
             f"Use the {prompt_label} already in your shell for this profile too?",
             default=True, style=cli_art.QUESTIONARY_STYLE,
@@ -888,27 +888,27 @@ def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions:
         if use_shell_value:
             os.makedirs(os.path.dirname(env_file), exist_ok=True)
             set_key(env_file, var_name, shell_default)
-            print(f"  {theme.colorize_icon_ansi('success')} Saved {var_name} to {env_file}.")
+            cli_art.console.print(f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.", soft_wrap=True)
             return True
-        print("  Okay -- you'll be asked for a value for this profile instead.")
+        cli_art.console.print("  Okay -- you'll be asked for a value for this profile instead.", markup=False, soft_wrap=True)
 
     set_now = questionary.confirm(
         f"Enter your {prompt_label} now?", default=True, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
     if not set_now:
-        print(f"  No problem -- add it later by editing {env_file} (create it if it doesn't exist) "
-              f"and adding a line:")
-        print(f"    {var_name}=your-value-here")
+        cli_art.console.print(f"  No problem -- add it later by editing {env_file} (create it if it doesn't exist) "
+              f"and adding a line:", markup=False, soft_wrap=True)
+        cli_art.console.print(f"    {var_name}=your-value-here", markup=False, soft_wrap=True)
         return False
 
     value = questionary.password(f"Paste your {prompt_label}:", style=cli_art.QUESTIONARY_STYLE).ask()
     if not value or not value.strip():
-        print(f"  No value entered -- add it later the same way (see instructions above).")
+        cli_art.console.print(f"  No value entered -- add it later the same way (see instructions above).", markup=False, soft_wrap=True)
         return False
 
     os.makedirs(os.path.dirname(env_file), exist_ok=True)
     set_key(env_file, var_name, value.strip())
-    print(f"  {theme.colorize_icon_ansi('success')} Saved {var_name} to {env_file}.")
+    cli_art.console.print(f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.", soft_wrap=True)
     return True
 
 
@@ -920,7 +920,7 @@ def collect_secrets(dry_run: bool = False) -> dict:
     people sharing this checkout never share credentials. Returns
     {"gemini_key_set": bool, "jobright_cookie_set": bool}."""
     if dry_run:
-        print("[DRY RUN] would walk through .env setup (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING).")
+        cli_art.console.print("[DRY RUN] would walk through .env setup (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING).", markup=False, soft_wrap=True)
         return {"gemini_key_set": False, "jobright_cookie_set": False}
 
     env_file = profile_paths.env_path()
@@ -941,9 +941,9 @@ def collect_secrets(dry_run: bool = False) -> dict:
     if already_configured:
         gemini_set = True
     else:
-        print("\n" + "─" * 60)
-        print("API key & cookie setup")
-        print("─" * 60)
+        cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
+        cli_art.console.print("API key & cookie setup", markup=False, soft_wrap=True)
+        cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
         gemini_set = _collect_secret_now_or_later(
             "GEMINI_API_KEY",
             "Gemini API key",
@@ -978,13 +978,13 @@ def collect_secrets(dry_run: bool = False) -> dict:
                 shell_default=os.environ.get("JOBRIGHT_COOKIE_STRING"),
             )
         else:
-            print(f"  Skipped -- add it later by editing {env_file} (create it if it doesn't exist) "
-                  f"and adding a line:")
-            print("    JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ...")
+            cli_art.console.print(f"  Skipped -- add it later by editing {env_file} (create it if it doesn't exist) "
+                  f"and adding a line:", markup=False, soft_wrap=True)
+            cli_art.console.print("    JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ...", markup=False, soft_wrap=True)
 
     if not already_configured or not jobright_set:
-        print("\nNote: LinkedIn scanning needs no .env value at all -- it reads your live,")
-        print("already-logged-in Chrome session automatically, every time.")
+        cli_art.console.print("\nNote: LinkedIn scanning needs no .env value at all -- it reads your live,", markup=False, soft_wrap=True)
+        cli_art.console.print("already-logged-in Chrome session automatically, every time.", markup=False, soft_wrap=True)
 
     return {"gemini_key_set": gemini_set, "jobright_cookie_set": jobright_set}
 
@@ -997,23 +997,23 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     since scan_linkedin.py already falls back to one query per
     target_roles.primary entry when linkedin_search_queries: is empty."""
     if dry_run:
-        print("[DRY RUN] would confirm LinkedIn search terms.")
+        cli_art.console.print("[DRY RUN] would confirm LinkedIn search terms.", markup=False, soft_wrap=True)
         return []
 
-    print("\n" + "─" * 60)
-    print("LinkedIn search terms")
-    print("─" * 60)
-    print()
-    print(
+    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print("LinkedIn search terms", markup=False, soft_wrap=True)
+    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print(markup=False, soft_wrap=True)
+    cli_art.console.print(
         "LinkedIn scanning needs no cookie or login setup -- it reads your live, "
         "already-logged-in Chrome session automatically. It does need to know what "
         "to search for, though."
-    )
-    print()
+    , markup=False, soft_wrap=True)
+    cli_art.console.print(markup=False, soft_wrap=True)
     if primary_roles:
-        print(f"Without anything set here, it'll search for each of your primary target "
-              f"roles one at a time: {', '.join(primary_roles)}.")
-        print()
+        cli_art.console.print(f"Without anything set here, it'll search for each of your primary target "
+              f"roles one at a time: {', '.join(primary_roles)}.", markup=False, soft_wrap=True)
+        cli_art.console.print(markup=False, soft_wrap=True)
 
     wants_custom = questionary.confirm(
         "Set up your own custom search terms now instead? (optional, and not permanent -- "
@@ -1021,14 +1021,14 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
         default=False, style=cli_art.QUESTIONARY_STYLE,
     ).ask()
     if not wants_custom:
-        print(
+        cli_art.console.print(
             "  Using your target roles as-is for now. To fine-tune later, edit "
             f"{PROFILE_YML_PATH}'s linkedin_search_queries: field "
             "(boolean strings like \"Email OR Campaign\")."
-        )
+        , markup=False, soft_wrap=True)
         return []
 
-    print("Enter one search term per line (e.g. \"Email OR Campaign\"). Leave blank when done.")
+    cli_art.console.print("Enter one search term per line (e.g. \"Email OR Campaign\"). Leave blank when done.", markup=False, soft_wrap=True)
     queries = []
     while True:
         q = questionary.text(
@@ -1038,7 +1038,7 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
             break
         queries.append(q.strip())
     if not queries:
-        print("  No terms entered -- falling back to target roles.")
+        cli_art.console.print("  No terms entered -- falling back to target roles.", markup=False, soft_wrap=True)
     return queries
 
 

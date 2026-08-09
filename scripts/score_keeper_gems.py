@@ -49,6 +49,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from gemini_client import GeminiClient  # noqa: E402
+import cli_art
 import theme
 
 # ---------------------------------------------------------------------------
@@ -82,7 +83,7 @@ def detect_col(headers: list[str]) -> str:
         return BULLET_COL
     for col in FALLBACK_COLS:
         if col in headers:
-            print(f"  {theme.colorize_icon_ansi('warning')}  '{BULLET_COL}' not found — using '{col}' instead.")
+            cli_art.console.print(f"  {theme.colorize_icon('warning')}  '{BULLET_COL}' not found — using '{col}' instead.", soft_wrap=True)
             return col
     raise ValueError(f"Cannot find bullet text column. Headers: {headers}")
 
@@ -158,7 +159,7 @@ def main():
     parser.add_argument("--limit",   type=int, default=0,          help="Only score N bullets (0 = all)")
     args = parser.parse_args()
 
-    print(f"\n📥 Loading: {args.input}")
+    cli_art.console.print(f"\n📥 Loading: {args.input}", markup=False, soft_wrap=True)
     rows: list[dict] = []
     with open(args.input, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -166,11 +167,11 @@ def main():
         rows    = list(reader)
 
     if not rows:
-        print(f"{theme.colorize_icon_ansi('warning')}  No rows found. Exiting.")
+        cli_art.console.print(f"{theme.colorize_icon('warning')}  No rows found. Exiting.", soft_wrap=True)
         return
 
     bullet_col = detect_col(list(headers))
-    print(f"  {theme.colorize_icon_ansi('success')} {len(rows)} rows loaded. Bullet column: '{bullet_col}'")
+    cli_art.console.print(f"  {theme.colorize_icon('success')} {len(rows)} rows loaded. Bullet column: '{bullet_col}'", soft_wrap=True)
 
     # Determine which rows need scoring
     to_score_idx = [
@@ -181,16 +182,16 @@ def main():
     if args.limit > 0:
         to_score_idx = to_score_idx[:args.limit]
 
-    print(f"  🎯 Rows needing scoring: {len(to_score_idx)}")
+    cli_art.console.print(f"  🎯 Rows needing scoring: {len(to_score_idx)}", markup=False, soft_wrap=True)
 
     if args.dry_run:
-        print("\n🔍 Dry-run mode — first 5 bullets that would be scored:")
+        cli_art.console.print("\n🔍 Dry-run mode — first 5 bullets that would be scored:", markup=False, soft_wrap=True)
         for i in to_score_idx[:5]:
-            print(f"  [{i}] {rows[i].get(bullet_col, '')[:100]}")
+            cli_art.console.print(f"  [{i}] {rows[i].get(bullet_col, '')[:100]}", markup=False, soft_wrap=True)
         return
 
     if not to_score_idx:
-        print(f"{theme.colorize_icon_ansi('success')}  All rows already scored. Nothing to do.")
+        cli_art.console.print(f"{theme.colorize_icon('success')}  All rows already scored. Nothing to do.", soft_wrap=True)
         return
 
     system_prompt = build_system_prompt()
@@ -213,7 +214,7 @@ def main():
             rows[i]["hidden_gem_reason"] = ""
             continue
 
-        print(f"  [{n}/{len(to_score_idx)}] Scoring: {bullet[:80]}...")
+        cli_art.console.print(f"  [{n}/{len(to_score_idx)}] Scoring: {bullet[:80]}...", markup=False, soft_wrap=True)
 
         if n > 1:
             time.sleep(SLEEP_SECONDS)
@@ -230,12 +231,12 @@ def main():
 
             if flag:
                 gem_count += 1
-                print(f"    {theme.colorize_icon_ansi('gem')} GEM [{score}] {reason}")
+                cli_art.console.print(f"    {theme.colorize_icon('gem')} GEM [{score}] {reason}", soft_wrap=True)
             elif score >= 75:
                 strong_count += 1
-                print(f"    {theme.colorize_icon_ansi('gem')} Strong [{score}]")
+                cli_art.console.print(f"    {theme.colorize_icon('gem')} Strong [{score}]", soft_wrap=True)
             else:
-                print(f"    📋 Score: {score}")
+                cli_art.console.print(f"    📋 Score: {score}", markup=False, soft_wrap=True)
         else:
             rows[i]["hidden_gem_score"]  = ""
             rows[i]["hidden_gem_flag"]   = ""
@@ -247,12 +248,12 @@ def main():
         if scored_since_flush >= GEM_FLUSH_EVERY or is_last:
             _write_scored_csv(args.output, rows, final_headers)
             scored_since_flush = 0
-            print(f"    {theme.colorize_icon_ansi('save')} Flushed scored CSV ({n}/{len(to_score_idx)} processed).")
+            cli_art.console.print(f"    {theme.colorize_icon('save')} Flushed scored CSV ({n}/{len(to_score_idx)} processed).", soft_wrap=True)
 
-    print(f"\n{theme.colorize_icon_ansi('success')} Scored CSV saved: {args.output}")
-    print(f"   {theme.colorize_icon_ansi('gem')} Hidden Gems:  {gem_count}")
-    print(f"   {theme.colorize_icon_ansi('gem')} Strong:        {strong_count}")
-    print(f"   {theme.colorize_icon_ansi('error')} Errors:        {error_count}")
+    cli_art.console.print(f"\n{theme.colorize_icon('success')} Scored CSV saved: {args.output}", soft_wrap=True)
+    cli_art.console.print(f"   {theme.colorize_icon('gem')} Hidden Gems:  {gem_count}", soft_wrap=True)
+    cli_art.console.print(f"   {theme.colorize_icon('gem')} Strong:        {strong_count}", soft_wrap=True)
+    cli_art.console.print(f"   {theme.colorize_icon('error')} Errors:        {error_count}", soft_wrap=True)
 
     # Write gems-only CSV
     gem_rows = [r for r in rows if str(r.get("hidden_gem_flag", "")).lower() == "true"]
@@ -262,7 +263,7 @@ def main():
             writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(gem_rows)
-        print(f"   {theme.colorize_icon_ansi('gem')} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)")
+        cli_art.console.print(f"   {theme.colorize_icon('gem')} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)", soft_wrap=True)
 
 
 if __name__ == "__main__":
