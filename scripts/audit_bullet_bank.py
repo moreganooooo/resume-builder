@@ -13,6 +13,7 @@ load_dotenv(profile_paths.env_path())
 
 # Import shared objects from orchestrator
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
+import cli_art
 import theme
 
 SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
@@ -66,9 +67,9 @@ if os.path.exists(out_path):
             raise ValueError(f"No known bullet column found in checkpoint. Columns: {list(existing.columns)}")
         already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
         results = existing.to_dict("records")
-        cli_info(f"Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
+        cli_art.cli_info(f"Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
     except Exception as e:
-        cli_warning(f"Could not read existing checkpoint ({e}). Starting fresh.")
+        cli_art.cli_warning(f"Could not read existing checkpoint ({e}). Starting fresh.")
 
 total = len(df)
 skipped = 0
@@ -83,7 +84,7 @@ for i, row in df.iterrows():
         continue
 
     processed = len(results) - skipped + 1
-    print(f"  [{i+1}/{total}] {bullet[:60]}...")
+    cli_art.console.print(f"  [{i+1}/{total}] {bullet[:60]}...", markup=False, soft_wrap=True)
 
     try:
         critique_text, usage = GeminiClient.generate(
@@ -107,17 +108,17 @@ for i, row in df.iterrows():
             "weaknesses":          data.get("weaknesses"),
         })
     except Exception as e:
-        cli_warning(f"Error: {e}")
+        cli_art.cli_warning(f"Error: {e}")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": f"[AUDIT_ERROR] {e}"})
 
     # --- CHECKPOINT SAVE after every bullet ---
     pd.DataFrame(results).to_csv(out_path, index=False)
-    cli_success(f"Checkpoint saved ({len(results)} bullets scored)")
+    cli_art.cli_success(f"Checkpoint saved ({len(results)} bullets scored)")
 
     if i < total - 1:
         time.sleep(SLEEP)
 
-cli_success(f"Done. Results saved to {out_path}")
-cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
-cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
-cli_info(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
+cli_art.cli_success(f"Done. Results saved to {out_path}")
+cli_art.cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
+cli_art.cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
+cli_art.cli_info(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")

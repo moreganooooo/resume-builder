@@ -31,6 +31,7 @@ import json
 import os
 import sys
 from pathlib import Path
+import cli_art
 
 # ----------------------------------------------------------------------
 # Helper utilities
@@ -152,7 +153,7 @@ def main(profile: str = "morgan"):
 
     os.makedirs(data_dir, exist_ok=True)
     md_path.write_text(content, encoding="utf-8")
-    print(f"[sync] Wrote {len(rows)} rows to {md_path}")
+    cli_art.console.print(f"[sync] Wrote {len(rows)} rows to {md_path}", markup=False, soft_wrap=True)
 
 if __name__ == "__main__":
     profile_arg = sys.argv[1] if len(sys.argv) > 1 else "morgan"

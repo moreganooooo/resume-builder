@@ -127,9 +127,9 @@ def _verify_candidates(candidates: list) -> dict:
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
-    cli_art.console.print()
+    cli_art.console.print(markup=False, soft_wrap=True)
     cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
-    cli_art.console.print()
+    cli_art.console.print(markup=False, soft_wrap=True)
 
     script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
     timeout_s = max(NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S)
@@ -160,10 +160,10 @@ def _verify_candidates(candidates: list) -> dict:
                 # replaying a finished transcript, not showing live
                 # progress (B21).
                 for line in proc.stderr:
-                    cli_art.console.print(f"  {line.rstrip()}")
+                    cli_art.console.print(f"  {line.rstrip()}", markup=False, soft_wrap=True)
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check timed out after {timeout_s}s.")
+                cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.", soft_wrap=True)
                 return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
             finally:
                 # subprocess.run() deliberately does not kill the child on
@@ -178,7 +178,7 @@ def _verify_candidates(candidates: list) -> dict:
                 proc.wait()
 
         if proc.returncode != 0:
-            cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check failed (exit code {proc.returncode}).")
+            cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).", soft_wrap=True)
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
 
         with open(LIVENESS_OUTPUT_PATH, "r", encoding="utf-8") as f:
@@ -186,7 +186,7 @@ def _verify_candidates(candidates: list) -> dict:
         try:
             results = json.loads(stdout_data)
         except json.JSONDecodeError:
-            cli_art.console.print(f"\n  {theme.colorize_icon_ansi('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}")
+            cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}", soft_wrap=True)
             return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
     finally:
         for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
@@ -204,29 +204,29 @@ def _verify_candidates(candidates: list) -> dict:
         counts[outcome] = counts.get(outcome, 0) + 1
         results_by_status.setdefault(outcome, []).append(r)
 
-    cli_art.console.print()
+    cli_art.console.print(markup=False, soft_wrap=True)
 
     # Process and display by status group
     status_order = ["active", "likely_active", "expired", "uncertain"]
     icon_map = {
-        "active": theme.colorize_icon_ansi('success'),
-        "likely_active": theme.colorize_icon_ansi('warning'),
-        "expired": theme.colorize_icon_ansi('error'),
-        "uncertain": theme.colorize_icon_ansi('warning'),
+        "active": theme.colorize_icon('success'),
+        "likely_active": theme.colorize_icon('warning'),
+        "expired": theme.colorize_icon('error'),
+        "uncertain": theme.colorize_icon('warning'),
     }
 
     for status in status_order:
         status_results = results_by_status.get(status, [])
         if status_results:
             status_label = status.replace("_", " ").title()
-            cli_art.console.print(f"{icon_map.get(status, '?')} {status_label}:")
+            cli_art.console.print(f"{icon_map.get(status, '?')} {status_label}:", markup=False, soft_wrap=True)
             for r in status_results:
-                cli_art.console.print(f"  • {r.get('source_file')}")
+                cli_art.console.print(f"  • {r.get('source_file')}", markup=False, soft_wrap=True)
                 if status not in ("active", "likely_active"):
                     reason = r.get('reason', '')
                     if reason:
-                        cli_art.console.print(f"    → {reason}")
-            cli_art.console.print()
+                        cli_art.console.print(f"    → {reason}", markup=False, soft_wrap=True)
+            cli_art.console.print(markup=False, soft_wrap=True)
 
     # Save liveness status for all results
     for r in results:
@@ -287,10 +287,10 @@ def run_liveness_check(refresh: bool = False) -> dict:
     skipped = len(to_check) - len(candidates)
 
     if recently_checked:
-        cli_art.console.print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
+        cli_art.console.print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)", markup=False, soft_wrap=True)
 
     if not candidates:
-        cli_art.console.print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
+        cli_art.console.print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.", markup=False, soft_wrap=True)
         return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0}
 
     result = _verify_candidates(candidates)
@@ -299,12 +299,12 @@ def run_liveness_check(refresh: bool = False) -> dict:
 
     if not result.get("error"):
         cli_art.console.rule(f"[bold {theme.BRAND}]Liveness Summary[/bold {theme.BRAND}]", style="dim")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('success')} Active:                 {result['active']}")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('warning')} Likely active:          {result['likely_active']}")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('error')} Expired (moved):         {result['expired']}")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('warning')} Uncertain (left):       {result['uncertain']}")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('skip')} Skipped (no URL):       {skipped}")
-        cli_art.console.print(f"  {theme.colorize_icon_ansi('skip')} Recently checked:       {len(recently_checked)}")
-        cli_art.console.print()
+        cli_art.console.print(f"  {theme.colorize_icon('success')} Active:                 {result['active']}", soft_wrap=True)
+        cli_art.console.print(f"  {theme.colorize_icon('warning')} Likely active:          {result['likely_active']}", soft_wrap=True)
+        cli_art.console.print(f"  {theme.colorize_icon('error')} Expired (moved):         {result['expired']}", soft_wrap=True)
+        cli_art.console.print(f"  {theme.colorize_icon('warning')} Uncertain (left):       {result['uncertain']}", soft_wrap=True)
+        cli_art.console.print(f"  {theme.colorize_icon('skip')} Skipped (no URL):       {skipped}", soft_wrap=True)
+        cli_art.console.print(f"  {theme.colorize_icon('skip')} Recently checked:       {len(recently_checked)}", soft_wrap=True)
+        cli_art.console.print(markup=False, soft_wrap=True)
 
     return result

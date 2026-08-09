@@ -53,6 +53,7 @@ import yaml
 from bs4 import BeautifulSoup
 
 import profile_paths
+import cli_art
 
 # board-scanners/ (repo root) holds only the shared engine code (the Node
 # provider modules + the run_provider.mjs shim) -- generic across every
@@ -124,7 +125,7 @@ class ProgressReporter:
             avg = (time.time() - self.start) / self.done
             remaining = avg * (self.total - self.done)
             eta = f" (~{_format_duration(remaining)} remaining)"
-        print(f"  [{self.done}/{self.total}] {self.label} {name}...{eta}")
+        cli_art.console.print(f"  [{self.done}/{self.total}] {self.label} {name}...{eta}", markup=False, soft_wrap=True)
 
 
 # Keyed by profile name (not a single cached value) -- this gets called

@@ -688,11 +688,11 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
 
 def cli_info(message: str) -> None:
     """Print an informational message with hint icon."""
-    console.print(f"{HINT} {message}")
+    console.print(f"{HINT} {message}", soft_wrap=True)
 
 def cli_warning(message: str) -> None:
     """Print a warning message with warning icon."""
-    console.print(f"{WARNING} {message}")
+    console.print(f"{WARNING} {message}", soft_wrap=True)
 
 def cli_error(message: str) -> None:
     """Print an error message using display_error for consistency."""
@@ -700,4 +700,4 @@ def cli_error(message: str) -> None:
 
 def cli_success(message: str) -> None:
     """Print a success message with success icon."""
-    console.print(f"{SUCCESS} {message}")
+    console.print(f"{SUCCESS} {message}", soft_wrap=True)

@@ -19,6 +19,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -59,7 +60,7 @@ def main():
     content = build_voice_anchors()
     with atomic_write(OUTPUT_MD, encoding="utf-8") as f:
         f.write(content)
-    print(f"Wrote {OUTPUT_MD}")
+    cli_art.console.print(f"Wrote {OUTPUT_MD}", markup=False, soft_wrap=True)
 
 
 if __name__ == "__main__":

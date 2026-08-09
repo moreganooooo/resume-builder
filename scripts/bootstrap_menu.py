@@ -90,11 +90,11 @@ def _run_phase0() -> bool:
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
             "Every document ingestion processes needs it. Add it to your profile's .env, then come back "
             "to this step."
-        )
+        , soft_wrap=True)
         return False
 
     summary = bootstrap_bullet_bank.run_ingestion()
@@ -113,20 +113,20 @@ def _run_phase05() -> bool:
     _run_phase0() stops before run_ingestion() when the key was deferred
     (B16)."""
     if _phase0_status()[0] != "Up to date":
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
             "first -- profile setup drafts your identity, tags, and cv.md from what ingestion extracted, "
             "and running it first would produce a blank, still-paid-for draft. Finish Step 0, then come "
             "back."
-        )
+        , soft_wrap=True)
         return False
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
             "yet. Add it to your profile's .env, then come back to this step."
-        )
+        , soft_wrap=True)
         return False
 
     bootstrap_profile.run_profile_setup()

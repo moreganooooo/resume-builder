@@ -15,6 +15,7 @@ import os
 from html import escape
 
 import profile_paths
+import cli_art
 import theme
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
@@ -92,7 +93,7 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"  {theme.colorize_icon_ansi('success')} Cover letter HTML rendered → {output_path}")
+    cli_art.console.print(f"  {theme.colorize_icon('success')} Cover letter HTML rendered → {output_path}", soft_wrap=True)
     return output_path
 
 

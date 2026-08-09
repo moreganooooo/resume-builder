@@ -25,6 +25,7 @@ SAMPLE_JD_PATH = os.path.join(PROJECT_ROOT, "fixtures", "sample_jd.txt")
 
 import jd_manager
 import orchestrator
+import cli_art
 import theme
 
 
@@ -34,7 +35,7 @@ def build_sample() -> dict:
     build_tailored_*() call's own return dict ({} on failure, or the real
     data plus an _output_paths key on success)."""
     if not os.path.exists(SAMPLE_JD_PATH):
-        print(f"  {theme.colorize_icon_ansi('error')} Sample fixture not found: {SAMPLE_JD_PATH}")
+        cli_art.console.print(f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}", soft_wrap=True)
         return {"resume": {}, "coverletter": {}}
 
     # Clear any leftover checkpoint so this is always a full, fresh run --
@@ -45,16 +46,16 @@ def build_sample() -> dict:
 
     engine = orchestrator.ResumeEngine()
 
-    print(f"\n{'─'*60}")
-    print("Building sample resume...")
-    print(f"{'─'*60}")
+    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.print("Building sample resume...", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
     resume_result = engine.build_tailored_resume(
         jd_path=SAMPLE_JD_PATH, master_resume={}, job_key=job_key,
     )
 
-    print(f"\n{'─'*60}")
-    print("Building sample cover letter...")
-    print(f"{'─'*60}")
+    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.print("Building sample cover letter...", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
     coverletter_result = engine.build_tailored_coverletter(SAMPLE_JD_PATH)
 
     return {"resume": resume_result, "coverletter": coverletter_result}
@@ -65,17 +66,17 @@ if __name__ == "__main__":
     resume_ok = bool(result["resume"])
     coverletter_ok = bool(result["coverletter"])
 
-    print(f"\n{'─'*60}")
-    print("Sample build summary:")
-    print(f"{'─'*60}")
+    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.print("Sample build summary:", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
     if resume_ok:
-        print(f"  {theme.colorize_icon_ansi('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}")
+        cli_art.console.print(f"  {theme.colorize_icon('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}", soft_wrap=True)
     else:
-        print(f"  {theme.colorize_icon_ansi('error')} Resume build failed.")
+        cli_art.console.print(f"  {theme.colorize_icon('error')} Resume build failed.", soft_wrap=True)
     if coverletter_ok:
-        print(f"  {theme.colorize_icon_ansi('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}")
+        cli_art.console.print(f"  {theme.colorize_icon('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}", soft_wrap=True)
     else:
-        print(f"  {theme.colorize_icon_ansi('error')} Cover letter build failed.")
+        cli_art.console.print(f"  {theme.colorize_icon('error')} Cover letter build failed.", soft_wrap=True)
 
     if not (resume_ok and coverletter_ok):
         raise SystemExit(1)

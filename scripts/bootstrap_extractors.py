@@ -112,6 +112,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 from gemini_client import GeminiClient  # noqa: E402
+import cli_art
 
 EXTRACTION_MODEL = "gemini-3.1-flash-lite"
 UPLOAD_MODEL = "gemma-4-31b-it"
@@ -278,7 +279,7 @@ def classify_document_type(filename: str, text: str | None, dry_run: bool = Fals
         return "achievement_notes"
 
     if dry_run:
-        print(f"[DRY RUN] would classify {filename!r} via LLM over its text sample.")
+        cli_art.console.print(f"[DRY RUN] would classify {filename!r} via LLM over its text sample.", markup=False, soft_wrap=True)
         return "other"
 
     sample = text[:2000]
@@ -309,7 +310,7 @@ def extract_achievements(
     system_prompt = _EXTRACTION_PROMPTS.get(doc_type, _EXTRACTION_PROMPTS["other"])
 
     if dry_run:
-        print(f"[DRY RUN] would extract achievements (doc_type={doc_type!r}) with prompt:\n{system_prompt}")
+        cli_art.console.print(f"[DRY RUN] would extract achievements (doc_type={doc_type!r}) with prompt:\n{system_prompt}", markup=False, soft_wrap=True)
         return []
 
     if upload_path is not None:
@@ -338,7 +339,7 @@ def extract_certificate(
         raise ValueError("extract_certificate requires exactly one of text or upload_path")
 
     if dry_run:
-        print("[DRY RUN] would extract a certificate.")
+        cli_art.console.print("[DRY RUN] would extract a certificate.", markup=False, soft_wrap=True)
         return None
 
     if upload_path is not None:
@@ -373,7 +374,7 @@ def extract_resume_timeline_and_achievements(
         raise ValueError("extract_resume_timeline_and_achievements requires exactly one of text or upload_path")
 
     if dry_run:
-        print("[DRY RUN] would extract resume/LinkedIn timeline, achievements, and certifications.")
+        cli_art.console.print("[DRY RUN] would extract resume/LinkedIn timeline, achievements, and certifications.", markup=False, soft_wrap=True)
         return ResumeExtraction(experience=[], certifications=[])
 
     if upload_path is not None:
@@ -554,7 +555,7 @@ def extract_contact_info(
         raise ValueError("extract_contact_info requires exactly one of text or upload_path")
 
     if dry_run:
-        print("[DRY RUN] would extract contact info.")
+        cli_art.console.print("[DRY RUN] would extract contact info.", markup=False, soft_wrap=True)
         return ContactInfo()
 
     if upload_path is not None:
@@ -578,7 +579,7 @@ def extract_recommendation_quote(
         raise ValueError("extract_recommendation_quote requires exactly one of text or upload_path")
 
     if dry_run:
-        print("[DRY RUN] would extract a recommendation quote.")
+        cli_art.console.print("[DRY RUN] would extract a recommendation quote.", markup=False, soft_wrap=True)
         return None
 
     if upload_path is not None:
@@ -600,7 +601,7 @@ def suggest_secondary_roles(
     """Suggests 2-3 adjacent target job titles based on confirmed primary
     roles and a sample of real achievement text."""
     if dry_run:
-        print("[DRY RUN] would suggest secondary target roles.")
+        cli_art.console.print("[DRY RUN] would suggest secondary target roles.", markup=False, soft_wrap=True)
         return []
 
     raw, _ = GeminiClient.generate(
@@ -624,7 +625,7 @@ def generate_tag_taxonomy(
     keywords if the model returns nothing usable, so callers always get at
     least one tag to work with."""
     if dry_run:
-        print("[DRY RUN] would generate a tag taxonomy.")
+        cli_art.console.print("[DRY RUN] would generate a tag taxonomy.", markup=False, soft_wrap=True)
         return TagTaxonomy()
 
     roles_text = ", ".join(primary_roles + secondary_roles)
@@ -646,7 +647,7 @@ def draft_background_guide(source_texts: list[str], dry_run: bool = False) -> st
     """Synthesizes a short narrative background guide from resume/rec-letter/
     achievement-notes text already gathered during bootstrap ingestion."""
     if dry_run:
-        print("[DRY RUN] would draft a background guide.")
+        cli_art.console.print("[DRY RUN] would draft a background guide.", markup=False, soft_wrap=True)
         return ""
 
     combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
@@ -667,7 +668,7 @@ def draft_voice_anchors(source_texts: list[str], dry_run: bool = False) -> str:
     first, so an empty/missing file is a fully supported "no signal yet"
     state, not an error."""
     if dry_run:
-        print("[DRY RUN] would draft voice anchors.")
+        cli_art.console.print("[DRY RUN] would draft voice anchors.", markup=False, soft_wrap=True)
         return ""
 
     combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
@@ -688,7 +689,7 @@ def extract_ledger_entries(achievements_text: str, dry_run: bool = False) -> Led
     extract_ledger_entries_chunked() rather than passing raw text longer
     than one call can safely see (see that function's docstring)."""
     if dry_run:
-        print("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        cli_art.console.print("[DRY RUN] would extract ledger entries (metrics/tools/projects).", markup=False, soft_wrap=True)
         return LedgerExtraction()
 
     raw, _ = GeminiClient.generate(
@@ -734,7 +735,7 @@ def extract_ledger_entries_chunked(achievements_text: str, dry_run: bool = False
     than one chunk, while keeping the same name/label attributed to two
     DIFFERENT employers as two separate entries (per _LEDGER_PROMPT)."""
     if dry_run:
-        print("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        cli_art.console.print("[DRY RUN] would extract ledger entries (metrics/tools/projects).", markup=False, soft_wrap=True)
         return LedgerExtraction()
 
     chunks = _chunk_lines(achievements_text, LEDGER_CHUNK_CHARS)

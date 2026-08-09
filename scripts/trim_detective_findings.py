@@ -24,6 +24,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -48,7 +49,7 @@ def main():
         w = csv.DictWriter(f, fieldnames=KEEP_COLUMNS)
         w.writeheader()
         w.writerows(trimmed_rows)
-    print(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)")
+    cli_art.console.print(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)", markup=False, soft_wrap=True)
 
 
 if __name__ == "__main__":

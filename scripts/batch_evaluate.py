@@ -56,7 +56,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
     if skip_evaluated:
         already_evaluated, pending_paths = split_evaluated(pending_paths)
         if already_evaluated:
-            cli_art.console.print(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
+            cli_art.console.print(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).", markup=False, soft_wrap=True)
 
     engine = orchestrator.ResumeEngine()
     results = []
@@ -65,8 +65,8 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
         if i > 0:
             time.sleep(SECONDS_BETWEEN_CALLS)
         job_title, company_name = jd_manager.extract_job_meta(path)
-        cli_art.console.print(f"\n{'─'*60}")
-        cli_art.console.print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...")
+        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...", markup=False, soft_wrap=True)
         with cli_art.console.status(f"Weighing the fit for {company_name or os.path.basename(path)}...", spinner="dots"):
             evaluation = engine.evaluate_fit(path)
 
