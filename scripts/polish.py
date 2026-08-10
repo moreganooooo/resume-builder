@@ -270,14 +270,14 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
         choices.append(questionary.Separator())
         if page > 0:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "◀ Previous page")], value=_POLISH_NAV_PREV,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['prev']} Previous page")], value=_POLISH_NAV_PREV,
             ))
         if page < total_pages - 1:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "▶ Next page")], value=_POLISH_NAV_NEXT,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['next']} Next page")], value=_POLISH_NAV_NEXT,
             ))
         choices.append(questionary.Choice(
-            title=[(f"fg:{theme.BRAND_ACCENT} bold", "← Back to Main Menu")], value=_POLISH_NAV_BACK,
+            title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['back']} Back to Main Menu")], value=_POLISH_NAV_BACK,
         ))
 
         result = questionary.select(

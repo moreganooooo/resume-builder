@@ -40,7 +40,9 @@ SUCCESS = "#12C78F"  # Charmtone Guac
 ERROR = "#FF7B99"  # Charmtone Coral, lightened (Sriracha substitute, contrast fix: 4.14:1 -> 5.12:1 on Surface)
 WARNING = "#F5EF34"  # Charmtone Mustard
 INFO = "#00A4FF"  # Charmtone Malibu
-MUTED = "#888888"
+MUTED = "#A3A3A3"  # lightened neutral gray -- #888888 only cleared 4.63:1 on Base
+# but just 3.55:1 on Surface (fails AA's 4.5:1 floor, same bug class BRAND_ACCENT and
+# ERROR hit above); #A3A3A3 clears ~6.5:1 on Base and ~5.0:1 on Surface.
 
 # Dashboard-only decorative accents -- no CLI semantic role of their own
 # (Rich/questionary never render these), they exist purely so the
@@ -85,6 +87,9 @@ _NERD_ICONS = {
     "resume": "",  # nf-fa-play
     "complete": "",  # nf-fa-check_circle
     "gem": "",  # nf-fa-diamond
+    "prev": "",  # nf-fa-chevron_left
+    "next": "",  # nf-fa-chevron_right
+    "back": "",  # nf-fa-chevron_left
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -116,6 +121,9 @@ _UNICODE_ICONS = {
     "resume": ">",  # play/continue (was ▶, ambiguous-width)
     "complete": "✓",  # checkmark (done, consistent with success)
     "gem": "*",  # quality/priority (was ◆, ambiguous-width)
+    "prev": "<",  # pagination/back (was ◀, ambiguous-width)
+    "next": ">",  # pagination forward, same glyph as "resume"
+    "back": "<",  # navigate back, same glyph as "prev" (was ←, ambiguous-width)
 }
 
 # Icon-set resolution, in priority order (B33):
@@ -190,6 +198,9 @@ _ICON_COLORS = {
     "resume": BRAND_ACCENT,  # purple
     "complete": SUCCESS,     # green
     "gem": WARNING,          # gold
+    "prev": BRAND_ACCENT,    # purple, matches existing pagination style
+    "next": BRAND_ACCENT,    # purple, matches existing pagination style
+    "back": BRAND_ACCENT,    # purple, matches existing pagination style
 }
 
 def colorize_icon(name: str) -> str:
