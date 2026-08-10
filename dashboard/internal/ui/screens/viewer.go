@@ -14,8 +14,11 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// ViewerClosedMsg is emitted when the viewer is dismissed.
-type ViewerClosedMsg struct{}
+// ViewerClosedMsg is emitted when the viewer is dismissed. Quit
+// distinguishes "q" (exit the whole app) from "esc" (back to the screen
+// that opened the viewer), matching Pipeline/Jobs's own PipelineClosedMsg/
+// JobsClosedMsg -- see ProgressClosedMsg's identical doc comment.
+type ViewerClosedMsg struct{ Quit bool }
 
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
@@ -45,6 +48,26 @@ func NewViewerModel(t theme.Theme, path, title string, width, height int) Viewer
 		lines:      lines,
 		rawContent: string(content),
 		title:      title,
+		width:      width,
+		height:     height,
+		theme:      t,
+	}
+	m.rebuildRender()
+	return m
+}
+
+// NewEmptyViewerModel creates a viewer with a placeholder message for when
+// no specific report exists to open yet -- the Main Menu's own "Reports"
+// row has no file path of its own (a real one only exists once a Pipeline
+// application is picked, see PipelineOpenReportMsg in main.go), so this
+// gives that row a real, themed, correctly-sized screen instead of leaving
+// the viewer at its Go zero-value.
+func NewEmptyViewerModel(t theme.Theme, width, height int) ViewerModel {
+	content := "No report selected yet.\n\nOpen Pipeline and press Enter on an application to view its report."
+	m := ViewerModel{
+		lines:      strings.Split(content, "\n"),
+		rawContent: content,
+		title:      "Reports",
 		width:      width,
 		height:     height,
 		theme:      t,
@@ -86,7 +109,10 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc":
+		case "q":
+			return m, func() tea.Msg { return ViewerClosedMsg{Quit: true} }
+
+		case "esc":
 			return m, func() tea.Msg { return ViewerClosedMsg{} }
 
 		case "down", "j":
@@ -167,7 +193,7 @@ func (m ViewerModel) renderHeader() string {
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.title)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	scroll := right.Render(func() string {
 		if len(m.renderedLines) == 0 {
 			return ""
@@ -186,12 +212,9 @@ func (m ViewerModel) renderHeader() string {
 		return fmt.Sprintf("%d%%", pct)
 	}())
 
-	gap := m.width - lipgloss.Width(m.title) - lipgloss.Width(scroll) - 4
-	if gap < 1 {
-		gap = 1
-	}
+	title, scroll, gap := fitBar(title, scroll, m.width, 4)
 
-	return style.Render(title + strings.Repeat(" ", gap) + scroll)
+	return style.Render(title + gap + scroll)
 }
 
 func (m ViewerModel) renderBody() string {
@@ -469,7 +492,7 @@ func (m ViewerModel) renderInlineElementsAs(line string, baseColor lipgloss.Colo
 	baseStyle := lipgloss.NewStyle().Foreground(baseColor)
 	codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Yellow)
-	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentColor))
+	linkStyle := lipgloss.NewStyle().Foreground(m.theme.Token.Mauve)
 
 	var b strings.Builder
 	rest := line
@@ -620,11 +643,12 @@ func (m ViewerModel) renderFooter() string {
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	return style.Render(
 		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
-			keyStyle.Render("q/Esc") + descStyle.Render(" back"))
+			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
+			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
