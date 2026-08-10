@@ -160,7 +160,7 @@ def _verify_candidates(candidates: list) -> dict:
                 # replaying a finished transcript, not showing live
                 # progress (B21).
                 for line in proc.stderr:
-                    cli_art.console.print(f"  {line.rstrip()}", markup=False, soft_wrap=True)
+                    cli_art.print_subprocess_output(f"  {line.rstrip()}")
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
                 cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.", soft_wrap=True)

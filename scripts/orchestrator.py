@@ -5,6 +5,7 @@ import json
 import re
 import random
 import requests
+import questionary
 import company_research
 import situational_roles
 import numpy as np
@@ -575,13 +576,11 @@ def _required_role_bullet_minimums(profile_data: dict) -> dict[str, int]:
 def _confirm_continue_without_keywords() -> bool:
     """Single-file interactive escape hatch for the empty-keywords stop. Only
     ever reached with interactive=True, so a non-TTY (batch, `resume sample`,
-    tests) can never block on it; treats an unreadable stdin as 'no'."""
-    try:
-        answer = input("    Build the resume anyway, with no JD keywords? [y/N] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        cli_art.console.print(markup=False, soft_wrap=True)
-        return False
-    return answer in ("y", "yes")
+    tests) can never block on it; questionary.confirm().ask() returns None on
+    an interrupted/unreadable stdin, and bool(None) already reads as 'no'."""
+    return bool(questionary.confirm(
+        "Build the resume anyway, with no JD keywords?", default=False, style=cli_art.QUESTIONARY_STYLE,
+    ).ask())
 
 
 def _trim_profile_yaml(raw: str) -> str:
@@ -650,8 +649,14 @@ def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job
           "(nothing below is applied until you say yes).", markup=False, soft_wrap=True)
     approved_recs = []
     for idx, rec in enumerate(recs, start=1):
-        answer = input(f"  [{idx}/{len(recs)}] {rec}\n    Apply this? [y/N] ").strip().lower()
-        if answer in ("y", "yes"):
+        answer = questionary.confirm(
+            f"[{idx}/{len(recs)}] {rec}\n    Apply this?", default=False, style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if answer is None:
+            cli_art.console.print(f"  {theme.colorize_icon('warning')} Review interrupted -- treating remaining "
+                  "recommendation(s) as declined.", soft_wrap=True)
+            break
+        if answer:
             approved_recs.append(rec)
 
     checkpoint["approved_recommendations"] = approved_recs
@@ -2556,7 +2561,7 @@ class ResumeEngine:
         if pdf_result.returncode != 0:
             cli_art.console.print(f"  {theme.colorize_icon('warning')}  PDF generation failed:\n{pdf_result.stderr}", soft_wrap=True)
             return {}
-        cli_art.console.print(pdf_result.stdout, markup=False, soft_wrap=True)
+        cli_art.print_subprocess_output(pdf_result.stdout)
 
         cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data)
         if cl_text_warnings:
@@ -3258,7 +3263,7 @@ class ResumeEngine:
                 return {}
             is_final = page_count <= 2 or trim_attempt >= max_trim_attempts
             if is_final:
-                cli_art.console.print(pdf_result.stdout, markup=False, soft_wrap=True)
+                cli_art.print_subprocess_output(pdf_result.stdout)
                 break
 
             if not dropped_optional_clients:

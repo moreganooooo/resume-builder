@@ -137,8 +137,11 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
     returns the Rich renderable for a given frame (threshold=None means
     fully revealed). Falls back to a single fully-revealed print when
     stdout isn't a real terminal (piped output, non-interactive contexts,
-    tests) -- Live's redraws don't compose safely with non-TTY output."""
-    if not console.is_terminal:
+    tests) -- Live's redraws don't compose safely with non-TTY output --
+    or when RESUME_BUILDER_MOTION=reduced, the same opt-out (and env var
+    name) dashboard/main.go's reducedMotion() already offers for the Go
+    side's screen-transition animation."""
+    if not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
         console.print(render_frame(None))
         return
 
@@ -756,6 +759,22 @@ def cli_error(message: str) -> None:
 def cli_success(message: str) -> None:
     """Print a success message with success icon."""
     console.print(f"{SUCCESS} {message}", soft_wrap=True)
+
+
+def print_subprocess_output(text: str) -> None:
+    """Renders output captured from a Node-side subprocess
+    (generate-pdf.mjs, check-liveness.mjs) that has no color output of
+    its own -- both already resolve RESUME_BUILDER_ICONS for their own
+    icons (see generate-pdf.mjs's B45 comment), but printing their text
+    raw and unstyled drops the CLI out of its Charmtone palette for
+    exactly those lines, sandwiched between fully-colored status lines
+    just before and after. Dims each non-blank line to theme.MUTED
+    instead -- distinct from, but still part of, the same palette as its
+    neighbors. style= (not markup) applies the color, so this stays safe
+    against literal '[' / ']' in the subprocess's own text."""
+    for line in text.splitlines():
+        if line.strip():
+            console.print(line, style=theme.MUTED, markup=False, soft_wrap=True)
 
 
 def new_progress(**kwargs) -> Progress:
