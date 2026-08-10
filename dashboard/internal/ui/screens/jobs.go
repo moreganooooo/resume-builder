@@ -42,9 +42,13 @@ type JobsModel struct {
 	projectRoot      string
 	actionInProgress string // "", "liveness", "tailor", "status"
 	actionError      string
-	statusPicker     bool
-	statusCursor     int
-	spinner          spinner.Model
+	// notice explains why a keypress was a no-op (e.g. "t" on a non-Pending
+	// job) instead of silently doing nothing. Dismissed on the next
+	// keypress, same convention as actionError.
+	notice       string
+	statusPicker bool
+	statusCursor int
+	spinner      spinner.Model
 
 	// actionChan carries progress/completion messages from the goroutine
 	// runAction starts. Only "tailor" ever emits jobsActionProgressMsg (it's
@@ -97,7 +101,11 @@ var stepLineRe = regexp.MustCompile(`^Step (\d+(?:\.\d+)?): (.+?)\.\.\.?$`)
 // picker.list_all_evaluated_jds() on the Python side does).
 func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsModel {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
-	sp.Style = lipgloss.NewStyle().Foreground(t.Sky)
+	// Blue (not Sky) -- Sky on Surface measures 3.64:1 under the
+	// resume-builder theme, short of WCAG's 4.5:1 text minimum; Blue clears
+	// 4.5:1+ on Surface across all three themes and is already the header
+	// titles' own "info" accent, so it reads as the same semantic color.
+	sp.Style = lipgloss.NewStyle().Foreground(t.Blue)
 	m := JobsModel{
 		rows:    rows,
 		filter:  "all",
@@ -320,6 +328,10 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.actionError = ""
 			return m, nil
 		}
+		if m.notice != "" {
+			m.notice = ""
+			return m, nil
+		}
 		if m.statusPicker {
 			return m.handleStatusPickerKey(msg)
 		}
@@ -342,12 +354,15 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				return m, tea.Batch(m.runAction(m.actionChan, "liveness", job.Path), m.spinner.Tick)
 			}
 		case "t":
-			if job, ok := m.CurrentJob(); ok && job.Status == "Pending" {
-				m.actionInProgress = "tailor"
-				m.actionChan = make(chan tea.Msg)
-				m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
-				m.actionStepLabel = ""
-				return m, m.runAction(m.actionChan, "tailor", job.Path)
+			if job, ok := m.CurrentJob(); ok {
+				if job.Status == "Pending" {
+					m.actionInProgress = "tailor"
+					m.actionChan = make(chan tea.Msg)
+					m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
+					m.actionStepLabel = ""
+					return m, m.runAction(m.actionChan, "tailor", job.Path)
+				}
+				m.notice = fmt.Sprintf("Only Pending jobs can be tailored (this one is %s)", job.Status)
 			}
 		case "u":
 			if _, ok := m.CurrentJob(); ok {
@@ -398,8 +413,18 @@ func formatSubscores(scores map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
-func (m JobsModel) chromeAvailHeight() int {
+// chromeAvailHeight budgets room for the header and help bars, plus the
+// action-status/error/notice bar when one is showing -- the split-pane's
+// declared Height() previously stayed at height-2 regardless, so whenever
+// extra rendered (any liveness/tailor/status action, or a dismissable
+// notice) the total output grew to height-1 lines, one past the terminal's
+// visible height. Mirrors the reservation status-picker overlays already
+// make for themselves in renderSidebarList below.
+func (m JobsModel) chromeAvailHeight(hasExtra bool) int {
 	h := m.height - 2 // header + help
+	if hasExtra {
+		h--
+	}
 	if h < 5 {
 		h = 5
 	}
@@ -414,12 +439,14 @@ func (m JobsModel) View() string {
 		extra = m.renderActionStatus()
 	} else if m.actionError != "" {
 		extra = m.renderActionError()
+	} else if m.notice != "" {
+		extra = m.renderNotice()
 	}
 	help := m.renderHelp()
 
 	leftWidth := int(float64(m.width) * 0.35)
 	rightWidth := m.width - leftWidth
-	availHeight := m.chromeAvailHeight()
+	availHeight := m.chromeAvailHeight(extra != "")
 
 	leftPane := m.renderSidebarList(leftWidth, availHeight)
 	var rightPane string
@@ -468,7 +495,25 @@ func (m JobsModel) renderActionStatus() string {
 		}
 		return style.Render(label + "\n" + m.progress.View())
 	}
-	return style.Render(m.spinner.View() + " " + actionLabel(m.actionInProgress) + "...")
+
+	// The spinner carries its own pre-rendered style (see NewJobsModel's
+	// sp.Style), which ends in its own SGR reset -- concatenating it raw
+	// into a single style.Render call (the previous form here) wipes this
+	// bar's Yellow-on-Surface styling for everything rendered after it,
+	// confirmed via a raw-ANSI capture: the label text after the spinner
+	// glyph rendered in the terminal's bare default colors, not themed at
+	// all. Every segment (left pad, spinner, label, right pad) is styled
+	// and joined independently instead of nesting the spinner inside one
+	// more Render call, so the Surface fill survives regardless of what
+	// resets the spinner's own style emits.
+	bg := lipgloss.NewStyle().Background(m.theme.Surface)
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Yellow).Background(m.theme.Surface)
+	left := bg.Render("  ") + bg.Render(m.spinner.View()) +
+		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"...")
+	if pad := m.width - lipgloss.Width(left); pad > 0 {
+		left += bg.Render(strings.Repeat(" ", pad))
+	}
+	return left
 }
 
 func (m JobsModel) renderActionError() string {
@@ -480,6 +525,19 @@ func (m JobsModel) renderActionError() string {
 	return style.Render("Error: " + truncateRunes(m.actionError, m.width-12) + " (press any key to dismiss)")
 }
 
+// renderNotice explains why the last keypress was a no-op (see the "t" case
+// in Update), rather than leaving the user to wonder whether it registered
+// at all. Yellow/no "Error:" prefix -- this isn't a failure, it's an
+// unavailable action. Mirrors pipeline.go's renderNotice.
+func (m JobsModel) renderNotice() string {
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Yellow).
+		Background(m.theme.Surface).
+		Width(m.width).
+		Padding(0, 2)
+	return style.Render(truncateRunes(m.notice, m.width-12) + " (press any key to dismiss)")
+}
+
 func (m JobsModel) renderHeader() string {
 	style := lipgloss.NewStyle().
 		Bold(true).
@@ -488,23 +546,20 @@ func (m JobsModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	info := right.Render(fmt.Sprintf("%d job(s) | filter: %s", len(m.filtered), strings.ToUpper(m.filter)))
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.theme.Icons.Jobs + " JOBS")
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
-	if gap < 1 {
-		gap = 1
-	}
-	return style.Render(title + strings.Repeat(" ", gap) + info)
+	title, info, gap := fitBar(title, info, m.width, 4)
+	return style.Render(title + gap + info)
 }
 
 func (m JobsModel) renderSidebarList(width, height int) string {
 	if len(m.filtered) == 0 {
 		emptyStyle := lipgloss.NewStyle().
-			Foreground(m.theme.Blue).
-			Width(width - 2).
-			Height(height - 2).
+			Foreground(m.theme.Subtext).
+			Width(width-2).
+			Height(height-2).
 			Padding(1, 1).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(m.theme.Overlay)
@@ -536,23 +591,32 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	content := strings.Join(bodyLines, "\n")
 
 	if m.statusPicker {
-		content = m.overlayStatusPicker(content)
+		content = m.overlayStatusPicker(content, width-4)
 	}
 
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Blue).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(0, 1)
 
 	return borderStyle.Render(content)
 }
 
-func (m JobsModel) overlayStatusPicker(body string) string {
+// overlayStatusPicker renders the picker at up to 30 columns wide, but
+// never wider than availWidth allows -- see pipeline.go's own
+// overlayStatusPicker for the narrow-terminal overflow this fixes.
+func (m JobsModel) overlayStatusPicker(body string, availWidth int) string {
 	bodyLines := strings.Split(body, "\n")
 
-	pickerWidth := 30
+	pickerWidth := availWidth - 4 // PadHorizontal's own 2+2 columns
+	if pickerWidth > 30 {
+		pickerWidth = 30
+	}
+	if pickerWidth < 10 {
+		pickerWidth = 10
+	}
 	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	borderStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true)
 
@@ -603,12 +667,12 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(1, 2)
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
-	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 
 	var content []string
@@ -662,10 +726,10 @@ func (m JobsModel) renderEmptyDetailPane(width, height int) string {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(1, 2)
-	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Blue).Render("Select a job to view details"))
+	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Select a job to view details"))
 }
 
 func (m JobsModel) renderHelp() string {
@@ -676,7 +740,7 @@ func (m JobsModel) renderHelp() string {
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	return style.Render(
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +

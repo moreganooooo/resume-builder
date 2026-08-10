@@ -20,17 +20,24 @@ from rich.console import Console
 # Charm ecosystem's own branded palette (as used by crush) -- picked for
 # CharmtonePantera's semantic roles: primary/accent/success/error/
 # warning/info. Every value must clear 4.5:1 WCAG AA contrast against the
-# dashboard's actual background (#1e1e2e, not just pure black) -- this bit
-# us once already (BRAND_ACCENT was #673ab7 at 2.27:1 before B23 lightened
-# it to #b39ddb). Two of Charmtone's own picks failed that same check
-# against #1e1e2e -- Charple (BRAND's "primary", 3.29:1) and Sriracha
-# (ERROR, 4.30:1) -- so BRAND uses Charmtone's Hazy and ERROR uses
-# Charmtone's Coral instead, both from the same purple/red family but
-# lighter. All six below pass at >=4.5:1 (verified against #1e1e2e).
+# dashboard's two actual backgrounds -- Base (#1e1e2e) *and* Surface
+# (#313244, the lighter "elevated panel" tone header/status/error bars
+# render on top of) -- this bit us twice now: BRAND_ACCENT was #673ab7 at
+# 2.27:1 before B23 lightened it to #b39ddb, and ERROR was only ever
+# checked against Base (5.40:1 there) -- Surface, being lighter, is the
+# tighter constraint for light-on-dark text and ERROR measured just
+# 4.14:1 against it, failing AA on the dashboard's own error banner
+# (internal/ui/screens/jobs.go's renderActionError) under this exact
+# theme. Two of Charmtone's own picks failed the original Base-only check
+# -- Charple (BRAND's "primary", 3.29:1) and Sriracha (ERROR, 4.30:1) --
+# so BRAND uses Charmtone's Hazy and ERROR uses a lightened Charmtone
+# Coral instead, both from the same purple/red family but lighter. All six
+# below clear >=4.5:1 (most with a real ~5:1+ margin, not sitting right on
+# the line) against both Base and Surface.
 BRAND = "#8B75FF"  # Charmtone Hazy (Charple substitute, contrast fix)
 BRAND_ACCENT = "#FF60FF"  # Charmtone Dolly
 SUCCESS = "#12C78F"  # Charmtone Guac
-ERROR = "#FF577D"  # Charmtone Coral (Sriracha substitute, contrast fix)
+ERROR = "#FF7B99"  # Charmtone Coral, lightened (Sriracha substitute, contrast fix: 4.14:1 -> 5.12:1 on Surface)
 WARNING = "#F5EF34"  # Charmtone Mustard
 INFO = "#00A4FF"  # Charmtone Malibu
 MUTED = "#888888"
