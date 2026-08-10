@@ -56,7 +56,8 @@ def build_voice_anchors(index_csv: str = INDEX_CSV) -> str:
 
 def main():
     if not os.path.exists(INDEX_CSV):
-        raise SystemExit(f"ERROR: {INDEX_CSV} not found.")
+        cli_art.cli_error(f"{INDEX_CSV} not found.")
+        raise SystemExit(1)
     content = build_voice_anchors()
     with atomic_write(OUTPUT_MD, encoding="utf-8") as f:
         f.write(content)

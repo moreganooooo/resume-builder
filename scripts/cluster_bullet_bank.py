@@ -419,16 +419,15 @@ def decide_action(row) -> str:
 # ---------------------------------------------------------------------------
 
 def main():
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print("  CLUSTER BULLET BANK", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule("CLUSTER BULLET BANK", style="dim")
 
     if not os.path.exists(RAW_CSV):
-        cli_art.console.print(f"  ERROR: {RAW_CSV} not found.", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  {cli_art.ERROR} {RAW_CSV} not found.", soft_wrap=True)
         return
 
     if not os.path.exists(AUDITED_CSV):
-        cli_art.console.print(f"  ERROR: {AUDITED_CSV} not found.", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  {cli_art.ERROR} {AUDITED_CSV} not found.", soft_wrap=True)
         cli_art.console.print("  Run audit_bullet_bank.py first to score every bullet — this", markup=False, soft_wrap=True)
         cli_art.console.print("  script needs those scores to assign next_action.", markup=False, soft_wrap=True)
         return

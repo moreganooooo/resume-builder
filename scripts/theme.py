@@ -10,7 +10,6 @@ import sys
 
 from questionary import Style
 from rich.console import Console
-from rich.style import Style as RichStyle
 
 # Semantic color tokens -- hex, not named ANSI colors. Named colors get
 # remapped by whatever terminal theme is active; this project has already
@@ -191,39 +190,16 @@ def colorize_icon(name: str) -> str:
 
     Only renders correctly when passed to a rich.console.Console.print()
     call -- plain print() does not interpret Rich markup and will show the
-    brackets as literal text. cli_art.py is the only module with an actual
-    Console instance; every other script's print() statements should use
-    colorize_icon_ansi() instead (see that function's docstring)."""
+    brackets as literal text. Every script in this codebase routes its
+    icon-bearing output through cli_art.console (the one shared Console
+    instance) rather than the plain print() builtin, so this is always
+    the right call."""
     if name not in ICONS:
         return name
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
     if color:
         return f"[{color}]{icon}[/{color}]"
-    return icon
-
-def colorize_icon_ansi(name: str) -> str:
-    """Return icon wrapped in raw ANSI 24-bit color escape codes.
-
-    Use this (not colorize_icon()) in any script that calls the plain
-    print() builtin directly to a terminal -- a real terminal interprets
-    raw ANSI escapes on its own, unlike Rich markup (which needs a Rich
-    Console to parse it, and -- confirmed empirically, B46/P5#4 -- would
-    silently swallow any single-word bracketed text elsewhere in the same
-    message, e.g. a `[STALE]` status tag, since it looks like a valid but
-    unstyled markup tag) or prompt_toolkit's renderer (which needs its own
-    (style, text) tuple format -- see questionary_icon_tuple()).
-
-    Renders via rich.style.Style rather than hand-rolled hex parsing, so
-    there's exactly one place (Rich's own Style class) that turns a hex
-    color into terminal escape codes, not two -- the RGB math and the
-    reset sequence both come from Rich itself."""
-    if name not in ICONS:
-        return name
-    icon = ICONS[name]
-    color = _ICON_COLORS.get(name)
-    if color:
-        return RichStyle(color=color).render(icon, color_system="truecolor")
     return icon
 
 def questionary_icon_tuple(name: str) -> tuple:

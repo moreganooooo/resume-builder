@@ -134,7 +134,7 @@ def main(profile: str = "morgan"):
     # Gather JSON payloads, sorted for deterministic ordering
     json_files = sorted(jds_dir.glob("*.json"))
     if not json_files:
-        print(f"[sync] No JSON files found under {jds_dir}", file=sys.stderr)
+        cli_art.cli_error(f"[sync] No JSON files found under {jds_dir}")
         sys.exit(1)
 
     rows = []

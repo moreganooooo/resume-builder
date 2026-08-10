@@ -529,9 +529,8 @@ def stage1_audit_keepers(
     backfill_cluster_ids.py are never lost when this function is called
     from a fresh keepers.csv that lacks the column.
     """
-    cli_art.cli_info("\n" + "─" * 60)
-    cli_art.cli_info("STAGE 1 — Audit Keepers")
-    cli_art.cli_info("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 1 — Audit Keepers", style="dim")
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
@@ -549,7 +548,7 @@ def stage1_audit_keepers(
     if using_audited_source:
         already_clean_mask = df_keepers["audit_status"].str.strip().str.upper() == "CLEAN"
         needs_score_mask = ~already_clean_mask
-        cli_art.cli_info("⚡ Loading from keepers-audited.csv: trusting existing CLEAN rows.")
+        cli_art.cli_info(f"{theme.colorize_icon('discovery')} Loading from keepers-audited.csv: trusting existing CLEAN rows.")
     else:
         needs_score_mask = df_keepers.apply(
             lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
@@ -655,9 +654,8 @@ def stage2_diff_cluster_map(
     not match any row in the cluster map verbatim. They are counted silently
     and shown only as a summary line at the end.
     """
-    cli_art.cli_info("\n" + "─" * 60)
-    cli_art.cli_info("STAGE 2 — Diff Against Cluster Map")
-    cli_art.cli_info("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 2 — Diff Against Cluster Map", style="dim")
 
     # Prefer updated map; fall back to original
     if os.path.exists(CLUSTER_MAP_UPDATED):
@@ -711,7 +709,7 @@ def stage2_diff_cluster_map(
 
     df_disc = pd.DataFrame(discrepancies)
     cli_art.cli_info(f"   Keepers checked:          {len(df_keepers)}")
-    cli_art.cli_info(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites ✓)")
+    cli_art.cli_info(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites {theme.colorize_icon('success')})")
     cli_art.cli_info(f"   Actionable discrepancies: {len(df_disc)}")
 
     if not df_disc.empty:
@@ -762,9 +760,8 @@ def stage3_build_rewrite_queue(
 
     Sorted by composite score ascending (worst first).
     """
-    cli_art.cli_info("\n" + "─" * 60)
-    cli_art.cli_info("STAGE 3 — Triage Queue")
-    cli_art.cli_info("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 3 — Triage Queue", style="dim")
 
     queue_rows = []
 
@@ -953,9 +950,8 @@ def stage4_auto_rewrite(
     Records source_cluster_id on each saved keeper row so that Stage 3 can
     exclude that cluster on the next run by ID rather than by bullet text.
     """
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print("STAGE 4 — Auto-Rewrite", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 4 — Auto-Rewrite", style="dim")
 
     if df_queue.empty:
         cli_art.console.print(f"   {theme.colorize_icon('success')} Queue is empty — nothing to auto-rewrite.", soft_wrap=True)
@@ -1060,9 +1056,9 @@ def stage4_auto_rewrite(
             # future interrupted-run resumability) needs its own save
             # here rather than waiting for main()'s final save.
             df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-            cli_art.console.print(f"   🔧 MANUAL — best version retained, not added to keepers. "
+            cli_art.console.print(f"   {theme.colorize_icon('utility')} MANUAL — best version retained, not added to keepers. "
                   f"Recorded (cluster_id={source_cluster_id}) so it won't retry every run."
-                  f"{f' Removed {n_superseded} stale duplicate row(s).' if n_superseded else ''}", markup=False, soft_wrap=True)
+                  f"{f' Removed {n_superseded} stale duplicate row(s).' if n_superseded else ''}", soft_wrap=True)
 
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -1118,7 +1114,7 @@ def main():
     # --- Resolve source file ---
     source_file = resolve_source_file(args.rebuild_from_keepers, KEEPERS_IN, KEEPERS_AUDITED)
     if source_file == KEEPERS_AUDITED:
-        cli_art.console.print(f"\n   ⚡ Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).", markup=False, soft_wrap=True)
+        cli_art.console.print(f"\n   {theme.colorize_icon('discovery')} Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).", soft_wrap=True)
         cli_art.console.print(   "      CLEAN rows will be skipped; cluster-map Source B skipped entirely.", markup=False, soft_wrap=True)
     elif args.rebuild_from_keepers:
         cli_art.console.print(f"\n   {theme.colorize_icon('warning')}  --rebuild-from-keepers: loading fresh from "
@@ -1152,9 +1148,9 @@ def main():
         if col not in df_keepers.columns:
             df_keepers[col] = ""
 
-    cli_art.console.print(f"\n   📂 Loaded keepers: {len(df_keepers)} rows from {os.path.basename(source_file)}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"   📌 Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
-          f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed", markup=False, soft_wrap=True)
+    cli_art.console.print(f"\n   {theme.colorize_icon('bullet_bank')} Loaded keepers: {len(df_keepers)} rows from {os.path.basename(source_file)}", soft_wrap=True)
+    cli_art.console.print(f"   {theme.colorize_icon('hint')} Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
+          f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed", soft_wrap=True)
 
     # --- Load rules + KB only when scoring is needed ---
     rules = kb = rewrite_system = rewrite_system_gemma = score_system = None
@@ -1222,12 +1218,14 @@ def main():
                 f"Run with --auto-rewrite to process them."
             , markup=False, soft_wrap=True)
 
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule(style="dim")
     cli_art.console.print(f"  {theme.colorize_icon('success')}  audit_keepers.py complete", soft_wrap=True)
     cli_art.console.print(f"     Audited keepers  → {os.path.basename(KEEPERS_AUDITED)}", markup=False, soft_wrap=True)
     cli_art.console.print(f"     Discrepancies    → {os.path.basename(DISCREPANCIES_OUT)}", markup=False, soft_wrap=True)
     cli_art.console.print(f"     Rewrite queue    → {os.path.basename(REWRITE_QUEUE_OUT)}", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60 + "\n", markup=False, soft_wrap=True)
+    cli_art.console.rule(style="dim")
+    cli_art.console.print()
 
 
 if __name__ == "__main__":

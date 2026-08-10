@@ -7,6 +7,12 @@ reading from (via dashboard._export_jobs_to()) so the Go side can reload
 fresh state after the subprocess returns.
 
 See docs/superpowers/specs/2026-08-08-jobs-screen-actions-design.md.
+
+Deliberately plain stderr, not cli_art/theme: jobs.go captures this
+subprocess's stderr verbatim into its own error panel (see
+runAction()/jobsActionCompleteMsg in dashboard/internal/ui/screens/jobs.go)
+and styles it there -- Rich markup or ANSI codes emitted here would leak
+into that Go-rendered panel as garbage rather than styled text.
 """
 
 import argparse

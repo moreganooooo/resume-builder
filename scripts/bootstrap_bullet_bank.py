@@ -530,7 +530,7 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
     simply re-running this function later resumes correctly."""
     for i, script_name in enumerate(PIPELINE_STAGES):
         if i in _CONFIRMATION_GATES and not skip_confirm:
-            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True).ask()
+            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE).ask()
             if not proceed:
                 cli_art.console.print("Stopped. Re-run this same command later to continue from here.", markup=False, soft_wrap=True)
                 return False

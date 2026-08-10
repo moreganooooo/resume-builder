@@ -21,8 +21,10 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// JobsClosedMsg is emitted when the jobs screen is dismissed.
-type JobsClosedMsg struct{}
+// JobsClosedMsg is emitted when the jobs screen is dismissed. Quit
+// distinguishes "q" (exit the whole app) from "esc" (back to the screen
+// that opened Jobs -- always the Main Menu today).
+type JobsClosedMsg struct{ Quit bool }
 
 // JobsModel implements the split-pane JD evaluation list+detail screen.
 // Structurally mirrors PipelineModel (see pipeline.go) but scoped to a
@@ -352,8 +354,10 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.statusPicker = true
 				m.statusCursor = 0
 			}
-		case "q", "esc":
-			return m, func() tea.Msg { return JobsClosedMsg{} }
+		case "q":
+			return m, func() tea.Msg { return JobsClosedMsg{Quit: true} }
+		case "esc":
+			return m, func() tea.Msg { return JobsClosedMsg{Quit: false} }
 		}
 	case spinner.TickMsg:
 		if m.actionInProgress == "" {
@@ -669,6 +673,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
+			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
 

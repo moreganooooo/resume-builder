@@ -121,4 +121,4 @@ for i, row in df.iterrows():
 cli_art.cli_success(f"Done. Results saved to {out_path}")
 cli_art.cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
 cli_art.cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
-cli_art.cli_info(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
+cli_art.cli_error(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")

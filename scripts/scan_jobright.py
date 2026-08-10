@@ -15,6 +15,8 @@ import time
 
 import requests
 
+import cli_art
+
 JOBRIGHT_API_BASE_URL = "https://jobright.ai/swan/recommend/list/jobs"
 JOBRIGHT_HEADERS = {
     "accept": "application/json, text/plain, */*", "accept-language": "en-US,en;q=0.9",
@@ -38,7 +40,7 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
     expects from a JD file)."""
     cookie_string = os.environ.get("JOBRIGHT_COOKIE_STRING")
     if not cookie_string:
-        logging.error("JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan.")
+        cli_art.cli_error("JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan.")
         return []
 
     headers = JOBRIGHT_HEADERS.copy()
@@ -54,7 +56,7 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
         try:
             response = requests.get(page_url, headers=headers, timeout=30)
             if response.status_code == 500:
-                logging.error(f"HTTP 500 fetching position {position}, skipping.")
+                cli_art.cli_error(f"HTTP 500 fetching position {position}, skipping.")
                 time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
                 continue
 
@@ -123,14 +125,14 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
 
         except requests.exceptions.HTTPError as e:
-            logging.error(f"HTTP error fetching position {position}: {e}")
+            cli_art.cli_error(f"HTTP error fetching position {position}: {e}")
             if e.response is not None and e.response.status_code in (401, 403):
-                logging.error("Auth error -- JobRight cookie may be expired. Stopping.")
+                cli_art.cli_error("Auth error -- JobRight cookie may be expired. Stopping.")
                 break
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
             continue
         except requests.exceptions.RequestException as e:
-            logging.error(f"Request error fetching position {position}: {e}")
+            cli_art.cli_error(f"Request error fetching position {position}: {e}")
             break
 
     logging.info(f"JobRight scan finished: {len(jobs)} jobs above match-score {MIN_MATCH_SCORE}.")
