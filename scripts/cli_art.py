@@ -70,6 +70,29 @@ MAIN_BANNER_LINES = [
 
 SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
 
+# Glyphs for the banner's decorative sparkle field -- weighted toward the
+# plain small dot so stars stay an accent, not the majority. Plain symbol
+# glyphs only (not emoji-presentation ones like an outlined star with
+# VS16) -- those commonly render double-width and would throw off a row's
+# alignment relative to the others.
+_SPARKLE_GLYPHS = ["·", "·", "·", "⋆", "⋆", "✦", "✧"]
+_SPARKLE_DENSITY = 0.08
+
+
+def _sparkle_field(rows: int, width: int) -> list:
+    """A fresh random scatter (not a fixed pattern) every call -- fills
+    the banner's right side out to the panel's actual inner width (see
+    display_main_banner's caller), so it always reaches the border
+    regardless of terminal size, and looks like a different night sky
+    each launch rather than a static decal."""
+    if width <= 0:
+        return [""] * rows
+    lines = []
+    for _ in range(rows):
+        row = [random.choice(_SPARKLE_GLYPHS) if random.random() < _SPARKLE_DENSITY else " " for _ in range(width)]
+        lines.append("".join(row))
+    return lines
+
 
 def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
     """Linearly interpolates between two '#rrggbb' colors at t in [0, 1]."""
@@ -145,7 +168,24 @@ def _stats_line_text() -> str:
 
 
 def display_main_banner() -> None:
-    grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
+    # Sparkles ride the same diagonal gradient/reveal as the letters
+    # themselves (composed onto each line before the grid is built, not
+    # rendered separately) so they wipe in together as one coherent piece
+    # instead of the letters finishing and sparkles popping in after.
+    #
+    # Fills all the way to the panel's inner right edge: the panel has no
+    # explicit width (so it stretches to console.width), box.DOUBLE costs
+    # 1 column of border on each side, and padding=(1, 2) costs 2 more on
+    # each side -- 6 columns of overhead total.
+    gap = "   "
+    banner_width = max((len(line) for line in MAIN_BANNER_LINES), default=0)
+    sparkle_width = console.width - 6 - banner_width - len(gap)
+    sparkle_lines = _sparkle_field(len(MAIN_BANNER_LINES), sparkle_width)
+    decorated_lines = [
+        line + gap + sparkles
+        for line, sparkles in zip(MAIN_BANNER_LINES, sparkle_lines)
+    ]
+    grid = _gradient_grid(decorated_lines, theme.BRAND, theme.BRAND_ACCENT)
     # Hoisted out of render_frame deliberately: the stats are constant for the
     # length of the animation, but calling this per-frame walked the entire JD
     # corpus 31 times and turned a 1.6s reveal into ~27s -- the first thing
@@ -153,12 +193,12 @@ def display_main_banner() -> None:
     stats_line = _stats_line_text()
 
     def render_frame(threshold):
-        body = _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold)
+        body = _render_grid(decorated_lines, grid, threshold=threshold)
         body.append(SUBTITLE, style="bold")
         body.append(stats_line, style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
-    _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)
+    _reveal_banner(decorated_lines, grid, render_frame)
 
 
 def display_stats_line() -> None:
@@ -183,6 +223,20 @@ def display_tip() -> None:
         f"{theme.colorize_icon('hint')}  Did you know? {tip}",
         border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2),
     ))
+
+
+def display_exit_footer() -> None:
+    """Closing flourish shown once, at session exit -- bookends
+    display_main_banner()'s launch treatment (same BRAND/BRAND_ACCENT
+    gradient pairing and sparkle motif from the banner's own decoration,
+    just condensed to one line instead of a 13-row block)."""
+    console.print()
+    console.rule(
+        f"[{theme.BRAND_ACCENT}]✦[/{theme.BRAND_ACCENT}]  "
+        f"[dim]resume-builder[/dim]  "
+        f"[{theme.BRAND_ACCENT}]✦[/{theme.BRAND_ACCENT}]",
+        style=theme.BRAND,
+    )
 
 
 def display_breadcrumb() -> None:
