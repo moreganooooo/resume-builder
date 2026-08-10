@@ -56,6 +56,18 @@ func NewMenuModel(t theme.Theme) MenuModel {
     delegate.Styles.SelectedDesc = selectedStyle
     l := list.New(items, delegate, 30, 15)
 
+    // list.Model defaults every one of these to true, which renders its own
+    // title/item-count/keybinding-help chrome underneath View()'s own
+    // manually-built header/footer below -- doubling the "MAIN MENU" title
+    // and stacking an unthemed "5 items" status line plus a second, slightly
+    // inconsistent help bar on top of the real one. Filtering ("/") stays on
+    // (untouched by these) since Update already guards global keys against
+    // it via m.list.FilterState().
+    l.SetShowTitle(false)
+    l.SetShowStatusBar(false)
+    l.SetShowHelp(false)
+    l.SetShowPagination(false)
+
     // Header uses a bold, mauve‑styled title with an icon.
     l.Title = lipgloss.NewStyle().
         Bold(true).

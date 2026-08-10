@@ -91,13 +91,11 @@ _FOOTER = """	}
 	t.Token.GradientEnd = t.GradientEnd
 	t.Token.Mauve = t.Mauve
 
-	// Populate Icons (generic placeholders)
-	t.Icons.Pipeline = "🛠"
-	t.Icons.Progress = "📈"
-	t.Icons.Report = "📄"
-	t.Icons.Quit = "❌"
-	t.Icons.Menu = "☰"
-	t.Icons.Jobs = "💼"
+	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-
+	// by-default, RESUME_BUILDER_ICONS=unicode-fallback logic this
+	// replaced (was previously hardcoded emoji, identical in all 3
+	// theme constructors, that ignored the env var entirely).
+	t.Icons = NewMenuIcons()
 
 	return t
 }

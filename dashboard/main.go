@@ -52,6 +52,16 @@ type appModel struct {
 	transitionSpring harmonica.Spring
 	transitionPos    float64
 	transitionVel    float64
+
+	// transitionRender caches the incoming screen's full View() output for
+	// the current tick, computed once in the transitionTickMsg handler
+	// below and reused by View() instead of calling m.renderScreen() a
+	// second time per frame -- screens don't change mid-reveal, so the
+	// second call (styling, and on the Viewer screen a full markdown
+	// re-parse) was pure duplicated work at ~60fps for the reveal's
+	// duration. Cleared in startTransition so a new transition never shows
+	// a stale screen's content before its own first tick lands.
+	transitionRender string
 }
 
 // transitionTickMsg drives the reveal's ~60fps animation loop.
@@ -93,6 +103,7 @@ func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0)
 	m.transitionPos = 0
 	m.transitionVel = 0
+	m.transitionRender = ""
 	return m, tickTransition()
 }
 
@@ -148,7 +159,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.transitioning {
 			return m, nil
 		}
-		target := len(strings.Split(m.renderScreen(), "\n"))
+		m.transitionRender = m.renderScreen()
+		target := len(strings.Split(m.transitionRender, "\n"))
 		m.transitionPos, m.transitionVel = m.transitionSpring.Update(m.transitionPos, m.transitionVel, float64(target))
 		if m.transitionPos >= float64(target)-0.5 {
 			m.transitioning = false
@@ -210,8 +222,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "Pipeline":
 			return m.startTransition(viewPipeline)
 		case "Progress":
+			m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
 			return m.startTransition(viewProgress)
 		case "Reports":
+			// No specific report exists yet at this point -- that only
+			// happens once a Pipeline row is picked (see
+			// PipelineOpenReportMsg below) -- so this can't jump straight
+			// to a real file the way Pipeline's own "Enter" does. Without
+			// this, m.viewer stayed at its Go zero-value (empty theme, 0x0,
+			// no content) because NewViewerModel was never called on this
+			// path, leaving the Main Menu's "Reports" row a blank dead end.
+			m.viewer = screens.NewEmptyViewerModel(m.theme, m.width, m.height)
 			return m.startTransition(viewReport)
 		case "Jobs":
 			return m.startTransition(viewJobs)
@@ -249,6 +270,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startTransition(viewReport)
 
 	case screens.ViewerClosedMsg:
+		if msg.Quit {
+			return m, tea.Quit
+		}
 		return m.startTransition(m.previousState)
 
 	case screens.PipelineOpenProgressMsg:
@@ -260,6 +284,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startTransition(viewProgress)
 
 	case screens.ProgressClosedMsg:
+		if msg.Quit {
+			return m, tea.Quit
+		}
 		return m.startTransition(m.previousState)
 
 	case screens.PipelineOpenURLMsg:
@@ -304,7 +331,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m appModel) View() string {
-	target := m.renderScreen()
+	// Reuse the same render the current tick already computed (see
+	// transitionTickMsg's handler above) instead of paying for a second
+	// full View() pass every frame. Falls back to a fresh render whenever
+	// there's no cached one yet -- e.g. the very first frame, drawn before
+	// any tick message has been processed -- so this is never worse than
+	// the unconditional render it replaces, only cheaper on repeat ticks.
+	target := m.transitionRender
+	if !m.transitioning || target == "" {
+		target = m.renderScreen()
+	}
 	if !m.transitioning {
 		return target
 	}

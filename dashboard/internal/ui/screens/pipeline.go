@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -106,8 +107,6 @@ var statusGroupOrder = []string{"interview", "offer", "responded", "applied", "e
 
 // PipelineModel implements the career pipeline dashboard screen.
 type PipelineModel struct {
-
-
 	apps          []model.CareerApplication
 	filtered      []model.CareerApplication
 	metrics       model.PipelineMetrics
@@ -126,7 +125,12 @@ type PipelineModel struct {
 	// Search sub-state — narrows the active tab by substring on company/role/notes.
 	searchInput bool   // true while the user is typing the query
 	searchQuery string // committed (or in-progress) lowercased query
-	
+
+	// notice explains why a keypress was a no-op (e.g. "o" with no saved
+	// URL) instead of silently doing nothing. Cleared on the next keypress,
+	// same dismiss convention as jobs.go's actionError.
+	notice string
+
 	animDone bool
 }
 
@@ -267,6 +271,11 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 }
 
 func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
+	if m.notice != "" {
+		m.notice = ""
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "esc":
 		// While a search is committed, Esc clears the search first (matches vim's
@@ -359,10 +368,13 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 		}
 
 	case "o":
-		if app, ok := m.CurrentApp(); ok && app.JobURL != "" {
-			return m, func() tea.Msg {
-				return PipelineOpenURLMsg{URL: app.JobURL}
+		if app, ok := m.CurrentApp(); ok {
+			if app.JobURL != "" {
+				return m, func() tea.Msg {
+					return PipelineOpenURLMsg{URL: app.JobURL}
+				}
 			}
+			m.notice = "No job URL saved for this application"
 		}
 
 	case "p":
@@ -616,9 +628,19 @@ func workModeRank(mode string) int {
 	}
 }
 
+// chromeRowsFixed budgets the fixed rows around the split pane: header,
+// tabs (2 lines), metrics, sort bar, help, plus the search bar when one is
+// showing. It previously didn't budget for renderNotice's own row either
+// -- same overflow-by-one this function's jobs.go counterpart
+// (chromeAvailHeight) had, whenever a notice is up (e.g. "o" with no saved
+// URL) the split pane's declared height stayed put while an extra line got
+// inserted above it, pushing the help bar one row past the terminal.
 func (m PipelineModel) chromeRowsFixed() int {
 	rows := 5
 	if m.searchInput || m.searchQuery != "" {
+		rows++
+	}
+	if m.notice != "" {
 		rows++
 	}
 	return rows
@@ -678,6 +700,9 @@ func (m PipelineModel) View() string {
 	if searchBar != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, searchBar)
 	}
+	if notice := m.renderNotice(); notice != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, notice)
+	}
 
 	leftWidth := int(float64(m.width) * 0.35)
 	rightWidth := m.width - leftWidth
@@ -688,7 +713,7 @@ func (m PipelineModel) View() string {
 	}
 
 	leftPane := m.renderSidebarList(leftWidth, availHeight)
-	
+
 	var rightPane string
 	if app, ok := m.CurrentApp(); ok {
 		rightPane = m.renderJobDetailPane(app, rightWidth, availHeight)
@@ -698,7 +723,7 @@ func (m PipelineModel) View() string {
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 	full := lipgloss.JoinVertical(lipgloss.Left, content, splitView, help)
-	
+
 	if !m.animDone {
 		full = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(full)
 	}
@@ -708,9 +733,9 @@ func (m PipelineModel) View() string {
 func (m PipelineModel) renderSidebarList(width, height int) string {
 	if len(m.filtered) == 0 {
 		emptyStyle := lipgloss.NewStyle().
-			Foreground(m.theme.Blue).
-			Width(width - 2).
-			Height(height - 2).
+			Foreground(m.theme.Subtext).
+			Width(width-2).
+			Height(height-2).
 			Padding(1, 1).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(m.theme.Overlay)
@@ -719,7 +744,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 
 	var lines []string
 	prevStatus := ""
-	
+
 	for i, app := range m.filtered {
 		norm := data.NormalizeStatus(app.Status)
 
@@ -734,7 +759,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 		}
 
 		selected := i == m.cursor
-		line := m.renderSidebarAppLine(app, width-4, selected) 
+		line := m.renderSidebarAppLine(app, width-4, selected)
 		lines = append(lines, line)
 	}
 
@@ -766,80 +791,78 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 	content := strings.Join(bodyLines, "\n")
 
 	if m.statusPicker {
-		content = m.overlayStatusPicker(content)
+		content = m.overlayStatusPicker(content, width-4)
 	}
 
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		BorderForeground(m.theme.Blue).
+		Width(width-2).
+		Height(height-2).
 		Padding(0, 1)
-
-	borderStyle = borderStyle.BorderForeground(m.theme.Blue)
 
 	return borderStyle.Render(content)
 }
 
 func (m PipelineModel) renderSidebarAppLine(app model.CareerApplication, width int, selected bool) string {
-    scoreStyle := m.scoreStyle(app.Score)
-    score := scoreStyle.Render(fmt.Sprintf("%.1f", app.Score))
+	scoreStyle := m.scoreStyle(app.Score)
+	score := scoreStyle.Render(fmt.Sprintf("%.1f", app.Score))
 
-    compWidth := width - 6 
-    company := truncateRunes(app.Company, compWidth)
-    companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-    if selected {
-        companyStyle = companyStyle.Bold(true)
-    }
-    line1 := fmt.Sprintf("%s %s", score, companyStyle.Render(company))
+	compWidth := width - 6
+	company := truncateRunes(app.Company, compWidth)
+	companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	if selected {
+		companyStyle = companyStyle.Bold(true)
+	}
+	line1 := fmt.Sprintf("%s %s", score, companyStyle.Render(company))
 
-    roleWidth := width - 2
-    role := truncateRunes(app.Role, roleWidth)
-    roleStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-    line2 := roleStyle.Render(role)
+	roleWidth := width - 2
+	role := truncateRunes(app.Role, roleWidth)
+	roleStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	line2 := roleStyle.Render(role)
 
-    block := line1 + "\n" + line2
-    base := theme.PadHorizontal(lipgloss.NewStyle())
-    if selected {
-        base = theme.HoverStyle(base, m.theme)
-    }
-    return base.Render(block)
+	block := line1 + "\n" + line2
+	base := theme.PadHorizontal(lipgloss.NewStyle())
+	if selected {
+		base = theme.HoverStyle(base, m.theme)
+	}
+	return base.Render(block)
 }
 
 func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, height int) string {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(1, 2)
-	
+
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
-	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	
+
 	var content []string
-	
+
 	// HEADER: Company & Role
 	content = append(content, titleStyle.Render(app.Company))
 	content = append(content, valueStyle.Render(app.Role))
 	content = append(content, "")
-	
+
 	// PROOF: Score, Status, Date
 	scoreStyle := m.scoreStyle(app.Score)
 	norm := data.NormalizeStatus(app.Status)
 	statusColor := m.statusColorMap()[norm]
-	
-	content = append(content, subtextStyle.Render("Interview Probability: ") + scoreStyle.Render(fmt.Sprintf("%.1f", app.Score)))
-	content = append(content, subtextStyle.Render("Status: ") + lipgloss.NewStyle().Foreground(statusColor).Render(statusLabel(norm)))
-	
+
+	content = append(content, subtextStyle.Render("Interview Probability: ")+scoreStyle.Render(fmt.Sprintf("%.1f", app.Score)))
+	content = append(content, subtextStyle.Render("Status: ")+lipgloss.NewStyle().Foreground(statusColor).Render(statusLabel(norm)))
+
 	dateStr := app.Date
 	if dateStr == "" {
 		dateStr = "Unknown"
 	}
-	content = append(content, subtextStyle.Render("Date Scanned/Posted: ") + valueStyle.Render(dateStr))
+	content = append(content, subtextStyle.Render("Date Scanned/Posted: ")+valueStyle.Render(dateStr))
 	content = append(content, "")
-	
+
 	// QUICK FACTS
 	if app.WorkMode != "" || app.Location != "" || app.PayRange != "" {
 		facts := ""
@@ -852,7 +875,7 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 		if app.PayRange != "" {
 			facts += "| " + app.PayRange
 		}
-		content = append(content, subtextStyle.Render("Details: ") + valueStyle.Render(facts))
+		content = append(content, subtextStyle.Render("Details: ")+valueStyle.Render(facts))
 		content = append(content, "")
 	}
 
@@ -864,7 +887,7 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 			content = append(content, "")
 		}
 		if summary.archetype != "" {
-			content = append(content, subtextStyle.Render("Archetype: ") + valueStyle.Render(summary.archetype))
+			content = append(content, subtextStyle.Render("Archetype: ")+valueStyle.Render(summary.archetype))
 		}
 	} else if app.Notes != "" {
 		content = append(content, titleStyle.Render("Notes"))
@@ -880,11 +903,11 @@ func (m PipelineModel) renderEmptyDetailPane(width, height int) string {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(1, 2)
-	
-	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Blue).Render("Select a job to view details"))
+
+	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Select a job to view details"))
 }
 
 // renderSearchBar returns an empty string when there is no active or in-progress
@@ -902,7 +925,7 @@ func (m PipelineModel) renderSearchBar() string {
 
 	prompt := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
 	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	display := queryStyle.Render(m.searchQuery)
 	if m.searchInput {
@@ -922,6 +945,22 @@ func (m PipelineModel) renderSearchBar() string {
 	return style.Render(prompt + " " + display + matchInfo + hint)
 }
 
+// renderNotice explains why the last keypress was a no-op (see the "o" case
+// in handleKey), rather than leaving the user to wonder whether it
+// registered at all. Yellow/no-prefix, distinct from renderActionStatus's
+// "Error:" framing in jobs.go -- this isn't a failure, it's an unavailable
+// action.
+func (m PipelineModel) renderNotice() string {
+	if m.notice == "" {
+		return ""
+	}
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Yellow).
+		Width(m.width).
+		Padding(0, 2)
+	return style.Render(m.notice + " (press any key to dismiss)")
+}
+
 func (m PipelineModel) renderHeader() string {
 	style := lipgloss.NewStyle().
 		Bold(true).
@@ -930,17 +969,14 @@ func (m PipelineModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
 	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.theme.Icons.Pipeline + " CAREER PIPELINE")
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
-	if gap < 1 {
-		gap = 1
-	}
+	title, info, gap := fitBar(title, info, m.width, 4)
 
-	return style.Render(title + strings.Repeat(" ", gap) + info)
+	return style.Render(title + gap + info)
 }
 
 func (m PipelineModel) renderTabs() string {
@@ -970,6 +1006,20 @@ func (m PipelineModel) renderTabs() string {
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 	underline := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render(strings.Join(underParts, ""))
+
+	// All 8 tabs joined at full label width routinely exceed a narrow
+	// terminal -- unlike the header/help/search bars (see fitBar in
+	// bars.go), this row previously had no width awareness at all, so it
+	// would overflow rather than degrade. ansi.Truncate is ANSI-escape-
+	// aware, same as fitBar's own use of it, so it can safely shorten the
+	// already-styled/rendered row and underline without corrupting color
+	// codes mid-escape-sequence.
+	if lipgloss.Width(row) > m.width {
+		row = ansi.Truncate(row, m.width, "…")
+	}
+	if lipgloss.Width(underline) > m.width {
+		underline = ansi.Truncate(underline, m.width, "")
+	}
 
 	padStyle := theme.PadVertical(lipgloss.NewStyle())
 	return padStyle.Render(row) + "\n" + padStyle.Render(underline)
@@ -1018,7 +1068,7 @@ func (m PipelineModel) renderMetrics() string {
 }
 
 func (m PipelineModel) renderSortBar() string {
-	style := lipgloss.NewStyle().Foreground(m.theme.Blue).
+	style := lipgloss.NewStyle().Foreground(m.theme.Subtext).
 		Width(m.width).
 		Padding(0, 2)
 
@@ -1037,7 +1087,7 @@ func (m PipelineModel) renderHelp() string {
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	if m.statusPicker {
 		return style.Render(
@@ -1069,19 +1119,27 @@ func (m PipelineModel) renderHelp() string {
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
 
-	gap := m.width - lipgloss.Width(keys) - lipgloss.Width(brand) - 2
-	if gap < 1 {
-		gap = 1
-	}
+	keys, brand, gap := fitBar(keys, brand, m.width, 2)
 
-	return style.Render(keys + strings.Repeat(" ", gap) + brand)
+	return style.Render(keys + gap + brand)
 }
 
-func (m PipelineModel) overlayStatusPicker(body string) string {
+// overlayStatusPicker renders the picker at up to 30 columns wide, but
+// never wider than availWidth allows -- the previous hardcoded pickerWidth
+// of 30 ignored the sidebar's actual width (~35% of the terminal), so on
+// any terminal narrower than roughly 100 columns the picker's own rows
+// overflowed the bordered box they're meant to sit inside.
+func (m PipelineModel) overlayStatusPicker(body string, availWidth int) string {
 	// Render status picker inline at bottom of body
 	bodyLines := strings.Split(body, "\n")
 
-	pickerWidth := 30
+	pickerWidth := availWidth - 4 // PadHorizontal's own 2+2 columns
+	if pickerWidth > 30 {
+		pickerWidth = 30
+	}
+	if pickerWidth < 10 {
+		pickerWidth = 10
+	}
 	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	borderStyle := lipgloss.NewStyle().
 		Foreground(m.theme.Blue).
@@ -1122,6 +1180,16 @@ func (m PipelineModel) scoreStyle(score float64) lipgloss.Style {
 	}
 }
 
+// statusColorMap gives each pipeline status a distinct color so the metrics
+// bar and detail pane carry meaning at a glance, not just a label. Closed-out
+// statuses (rejected/discarded) get the theme's own muted Subtext tone --
+// previously all three of responded/rejected/discarded shared theme.Blue,
+// so a rejected application read identically to one that had just gotten a
+// response, undercutting the whole point of a color-coded pipeline. Overlay
+// (the border/divider token) was the first instinct for "muted" but measures
+// as low as 1.4:1 against the metrics bar's Surface background -- Subtext is
+// the token actually designed to be read as dimmed body text (4.7-7.4:1
+// across all three themes' Surface/Base pairs).
 func (m PipelineModel) statusColorMap() map[string]lipgloss.Color {
 	return map[string]lipgloss.Color{
 		"interview": m.theme.Green,
@@ -1130,8 +1198,8 @@ func (m PipelineModel) statusColorMap() map[string]lipgloss.Color {
 		"responded": m.theme.Blue,
 		"evaluated": m.theme.Text,
 		"skip":      m.theme.Red,
-		"rejected":  m.theme.Blue,
-		"discarded": m.theme.Blue,
+		"rejected":  m.theme.Subtext,
+		"discarded": m.theme.Subtext,
 	}
 }
 
@@ -1165,7 +1233,13 @@ func formatTimeAgo(dateStr string) string {
 }
 
 // truncateRunes truncates a string to at most maxRunes runes, appending "..." if truncated.
+// maxRunes is floored at 0 -- callers derive it from terminal-width arithmetic
+// (e.g. paneWidth - 6) that goes negative on a sufficiently narrow terminal,
+// and runes[:maxRunes] panics on a negative index.
 func truncateRunes(s string, maxRunes int) string {
+	if maxRunes < 0 {
+		maxRunes = 0
+	}
 	runes := []rune(s)
 	if len(runes) <= maxRunes {
 		return s

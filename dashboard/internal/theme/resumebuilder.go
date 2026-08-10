@@ -42,7 +42,7 @@ func newResumeBuilder() Theme {
 		Yellow: lipgloss.Color("#F5EF34"), // WARNING
 		Sky:    lipgloss.Color("#8B75FF"), // BRAND
 		Peach:  lipgloss.Color("#FF985A"), // PEACH
-		Red:    lipgloss.Color("#FF577D"), // ERROR
+		Red:    lipgloss.Color("#FF7B99"), // ERROR
 		Pink:   lipgloss.Color("#FF84FF"), // PINK
 	}
 

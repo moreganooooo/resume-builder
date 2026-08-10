@@ -11,8 +11,12 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// ProgressClosedMsg is emitted when the progress screen is dismissed.
-type ProgressClosedMsg struct{}
+// ProgressClosedMsg is emitted when the progress screen is dismissed. Quit
+// distinguishes "q" (exit the whole app) from "esc" (back to the screen
+// that opened Progress), matching Pipeline/Jobs's own PipelineClosedMsg/
+// JobsClosedMsg -- previously both keys did the same thing here (always
+// "back"), so "q" quit the app everywhere except this screen and Reports.
+type ProgressClosedMsg struct{ Quit bool }
 
 // ProgressModel implements the progress analytics screen.
 type ProgressModel struct {
@@ -49,7 +53,9 @@ func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc":
+		case "q":
+			return m, func() tea.Msg { return ProgressClosedMsg{Quit: true} }
+		case "esc":
 			return m, func() tea.Msg { return ProgressClosedMsg{} }
 		case "down", "j":
 			m.scrollOffset++
@@ -129,7 +135,7 @@ func (m ProgressModel) renderHeader() string {
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Render(m.theme.Icons.Progress + " SEARCH PROGRESS")
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	total := len(m.metrics.FunnelStages)
 	totalCount := 0
 	if total > 0 {
@@ -137,12 +143,9 @@ func (m ProgressModel) renderHeader() string {
 	}
 	info := right.Render(fmt.Sprintf("%d evaluated | %.1f avg score", totalCount, m.metrics.AvgScore))
 
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
-	if gap < 1 {
-		gap = 1
-	}
+	title, info, gap := fitBar(title, info, m.width, 4)
 
-	return style.Render(title + strings.Repeat(" ", gap) + info)
+	return style.Render(title + gap + info)
 }
 
 func (m ProgressModel) renderFunnel() string {
@@ -153,7 +156,7 @@ func (m ProgressModel) renderFunnel() string {
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Pipeline Funnel")))
 
 	if len(m.metrics.FunnelStages) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -197,7 +200,7 @@ func (m ProgressModel) renderFunnel() string {
 
 		barStyle := lipgloss.NewStyle().Foreground(color) // no padding needed
 		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 		bar := barStyle.Render(strings.Repeat("\u2588", barW))
 		label := labelStyle.Render(stage.Label)
@@ -222,7 +225,7 @@ func (m ProgressModel) renderScoreDistribution() string {
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Score Distribution")))
 
 	if len(m.metrics.ScoreBuckets) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -266,7 +269,7 @@ func (m ProgressModel) renderScoreDistribution() string {
 
 		barStyle := lipgloss.NewStyle().Foreground(color)
 		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 		bar := barStyle.Render(strings.Repeat("\u2588", barW))
 		label := labelStyle.Render(bucket.Label)
@@ -307,7 +310,7 @@ func (m ProgressModel) renderRates() string {
 	lines = append(lines, padStyle.Render(rates))
 
 	// Active summary
-	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	activeInfo := dimStyle.Render(fmt.Sprintf(
 		"%d active applications | %d total offers",
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
@@ -325,7 +328,7 @@ func (m ProgressModel) renderWeeklyActivity() string {
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Weekly Activity")))
 
 	if len(m.metrics.WeeklyActivity) == 0 {
-		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
 		return strings.Join(lines, "\n")
 	}
@@ -354,8 +357,8 @@ func (m ProgressModel) renderWeeklyActivity() string {
 		}
 
 		barStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(labelW)
-		countStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
+		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 		// Show short week label (e.g., "W14" from "2026-W14")
 		shortWeek := week.Week
@@ -381,20 +384,18 @@ func (m ProgressModel) renderHelp() string {
 		Padding(0, 1)
 
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	brand := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("resume-builder dashboard")
 
 	keys := keyStyle.Render("\u2191\u2193") + descStyle.Render(" scroll  ") +
 		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-		keyStyle.Render("q/Esc") + descStyle.Render(" back")
+		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
+		keyStyle.Render("q") + descStyle.Render(" quit")
 
-	gap := m.width - lipgloss.Width(keys) - lipgloss.Width(brand) - 2
-	if gap < 1 {
-		gap = 1
-	}
+	keys, brand, gap := fitBar(keys, brand, m.width, 2)
 
-	return style.Render(keys + strings.Repeat(" ", gap) + brand)
+	return style.Render(keys + gap + brand)
 }
 
 // rateColor returns a color based on the rate value.

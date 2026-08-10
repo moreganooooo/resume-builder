@@ -2,8 +2,8 @@
 package theme
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
 
@@ -67,7 +67,8 @@ func NewTheme(name string) Theme {
 	default:
 		return newCatppuccinMocha()
 	}
-} 
+}
+
 // HuhTheme converts the internal Theme into a *huh.Theme that matches the
 // current colour palette. huh.Theme has no flat Base/Secondary/Accent
 // fields (that was never a real huh API) -- it's a full FieldStyles tree,
@@ -75,11 +76,19 @@ func NewTheme(name string) Theme {
 // pieces our palette actually differs on. Returns a pointer since that's
 // what Form.WithTheme (the only real setter -- there is no Form.Theme
 // method) expects.
+//
+// Focused.Title/SelectSelector use Token.Mauve, not GradientStart --
+// GradientStart is always BrandColor (a hardcoded module constant, the
+// same hex in every theme, see tokens.go), which is exactly the
+// cross-theme-drift bug the Main Menu's own selected-row style was
+// already rewritten to avoid (see list.go's NewMenuModel comment).
+// BrandColor measures 6.63:1 against the dark themes' Base but only
+// 2.19:1 against Catppuccin Latte's -- unreadable for a focused field's
+// own label under the one theme that needed a real per-theme token here.
 func (t Theme) HuhTheme() *huh.Theme {
-    ht := huh.ThemeCharm()
-    ht.Focused.Title = ht.Focused.Title.Foreground(t.GradientStart)
-    ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.GradientStart)
-    ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
-    return ht
+	ht := huh.ThemeCharm()
+	ht.Focused.Title = ht.Focused.Title.Foreground(t.Token.Mauve)
+	ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.Token.Mauve)
+	ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
+	return ht
 }
-

@@ -11,15 +11,33 @@ func newCatppuccinLatte() Theme {
 		Text:    lipgloss.Color("#4c4f69"),
 		Subtext: lipgloss.Color("#5c5f77"),
 
-		// Accents
-		Blue:   lipgloss.Color("#1e66f5"),
-		Mauve:  lipgloss.Color("#8839ef"),
-		Green:  lipgloss.Color("#40a02b"),
-		Yellow: lipgloss.Color("#df8e1d"),
-		Sky:    lipgloss.Color("#04a5e5"),
-		Peach:  lipgloss.Color("#fe640b"),
-		Red:    lipgloss.Color("#d20f39"),
-		Pink:   lipgloss.Color("#ea76cb"),
+		// Accents. Every one of these is darkened from stock Catppuccin
+		// Latte -- this dashboard renders them at body-text size (scoreStyle,
+		// statusColorMap, rateColor, and the funnel/score-distribution bar
+		// labels all use these directly as foreground text, not just as
+		// decorative fills), and stock Latte's pastel accents are tuned for
+		// large-surface use, not 4.5:1 text contrast on Base (#eff1f5) or
+		// Surface (#dce0e8) -- stock Green measured 2.96:1 on Base and
+		// 2.53:1 on Surface, Yellow 2.31/1.98, Sky 2.47/2.11, Peach
+		// 2.64/2.25, Pink 2.34/2.00, and Mauve/Red each cleared Base but
+		// still failed on Surface (4.09/4.10). Blue was the first of these
+		// fixed (originally #1e66f5, 4.35:1 on Base); the rest follow the
+		// same approach: same hue held constant, lightness walked down
+		// until contrast against the tighter of the two backgrounds
+		// (Surface, since it's darker than Base) clears ~5:1 for a real
+		// margin rather than sitting right on the AA line. Yellow and Peach
+		// necessarily read as a darker amber/rust at this lightness --
+		// a true yellow or orange hue cannot reach 4.5:1 on a near-white
+		// background without doing that; this is the actual color, not a
+		// rendering bug.
+		Blue:   lipgloss.Color("#1a56db"),
+		Mauve:  lipgloss.Color("#761aed"),
+		Green:  lipgloss.Color("#29681c"),
+		Yellow: lipgloss.Color("#805211"),
+		Sky:    lipgloss.Color("#026288"),
+		Peach:  lipgloss.Color("#a03b01"),
+		Red:    lipgloss.Color("#b80d32"),
+		Pink:   lipgloss.Color("#a81a82"),
 	}
 
 	t.GradientStart = lipgloss.Color(BrandColor)

@@ -21,7 +21,18 @@ var literalPattern = regexp.MustCompile(`lipgloss\.Color\("?#?[0-9a-fA-F]{3,6}"?
 // module-level BrandColor/AccentColor constants in tokens.go) while this
 // linter reported a clean pass: neither issue was a literal hex string,
 // and neither file was even under the walked root (see roots below).
-var identifierPattern = regexp.MustCompile(`lipgloss\.Color\(([A-Za-z_][A-Za-z0-9_]*)\)`)
+//
+// The identifier segment allows dots (package.Const, or a dotted field
+// chain) -- the original bare-identifier-only version couldn't see
+// lipgloss.Color(theme.AccentColor) either, which let viewer.go's link
+// color hardcode that same module-level constant well after the Main
+// Menu fix above. Theme fields (t.Blue, m.theme.Token.Mauve, ...) are
+// already lipgloss.Color-typed and are never legitimately re-wrapped in
+// another lipgloss.Color(...) call, so this widened pattern has no new
+// false positives against real token usage -- every current match in the
+// codebase outside themeConstructorFiles is exactly the bug class this
+// linter exists to catch.
+var identifierPattern = regexp.MustCompile(`lipgloss\.Color\(([A-Za-z_][A-Za-z0-9_.]*)\)`)
 
 // themeConstructorFiles lists the files where literal hex (or the
 // BrandColor/AccentColor/BaseColor/PrintColor constants) are the
