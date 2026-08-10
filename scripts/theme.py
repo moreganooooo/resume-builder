@@ -249,6 +249,7 @@ QUESTIONARY_STYLE = Style([
     ("selected", f"fg:{SUCCESS}"),
     ("separator", f"fg:{INFO} bold"),
     ("new_user", f"fg:{SUCCESS} bold"),
+    ("exit_flourish", f"fg:{BRAND_ACCENT} bold"),
     ("instruction", ""),
     ("text", ""),
     ("description", f"fg:{MUTED} italic"),

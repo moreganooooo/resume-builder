@@ -48,37 +48,82 @@ def _icon_title(icon_name: str, label: str) -> list:
 
 _CHOICES = [
     questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Knowledge Base ──"),
     questionary.Choice(title=_icon_title("bullet_bank", "Curate Bullet Bank"), value="bullet_bank"),
     questionary.Choice(title=_icon_title("bullet_bank", "Drop New Knowledge"), value="update_knowledge"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Discovery ──"),
     questionary.Choice(title=_icon_title("discovery", "Scan for New Jobs"), value="scan"),
     questionary.Choice(title=_icon_title("discovery", "Check Job Posting Liveness"), value="liveness"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Evaluation ──"),
     questionary.Choice(title=_icon_title("evaluate", "Evaluate Pending Roles"), value="evaluate_all"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Build ──"),
     questionary.Choice(title=_icon_title("build", "Customize Resume for Specific Role(s)"), value="tailor_pick"),
     questionary.Choice(title=_icon_title("build", "Customize Resume for ALL Pending Roles (Batch Run)"), value="tailor_all"),
     questionary.Choice(title=_icon_title("build", "Write Cover Letter for Specific Role(s)"), value="coverletter_pick"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Polish ──"),
     questionary.Choice(title=_icon_title("build", "Polish a Resume or Cover Letter with Gemini"), value="polish"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Browse ──"),
     questionary.Choice(title=_icon_title("utility", "Browse & Manage Jobs"), value="browse_jobs"),
     questionary.Choice(title=_icon_title("evaluate", "Career Dashboard"), value="career_dashboard"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Maintenance ──"),
     questionary.Choice(title=_icon_title("utility", "Maintenance"), value="maintenance"),
-    questionary.Separator(""),
+    questionary.Separator(" "),
     questionary.Separator("── Utility ──"),
     questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
     questionary.Choice(title=_icon_title("utility", "Exit"), value="exit"),
 ]
+
+
+def _flourish_line() -> "questionary.Separator":
+    """Echoes cli_art.display_exit_footer()'s sparkle motif and full-width
+    dashed rule here too, so it's visible under Exit on every menu
+    render, not just after actually choosing it. Built fresh per call
+    (not a _CHOICES constant) so its width tracks the terminal's actual
+    current size, same reasoning as cli_art._sparkle_field().
+
+    A real questionary.Separator, not a disabled Choice -- tried that
+    first (custom title=[("class:exit_flourish", ...)] for the pink
+    accent color), but questionary's choice renderer only skips the
+    leading "- " marker for an actual Separator instance (isinstance
+    check), never for a Choice regardless of its disabled value. Only a
+    real Separator renders clean, which costs the custom color: its
+    render path does "{}".format(choice.title), a plain str.format, so a
+    style-tuple list would print its literal Python repr instead of
+    rendering -- title has to be a plain string, picking up the
+    generic "separator" class color (the same blue as the other
+    "── Section ──" headers) instead of exit_flourish's pink."""
+    label = "✦  resume-builder  ✦"
+    # -4: rough allowance for the list's own pointer/indent prefix (see
+    # cli_art._sparkle_field's docstring for the same reasoning against
+    # the banner panel's border+padding overhead).
+    available = max(cli_art.console.width - 4, len(label))
+    pad_total = available - len(label)
+    left = pad_total // 2
+    right = pad_total - left
+    return questionary.Separator("─" * left + label + "─" * right)
+
+
+def _menu_choices() -> list:
+    """_CHOICES (minus "New User? Start Here!" once a profile is actually
+    set up -- for a returning user it's dead weight at the top of every
+    single menu render; guest mode, no real profile yet, see
+    _confirm_active_profile(), always keeps it: it's the only choice that
+    does anything until a real profile exists, run_interactive_menu()'s
+    own guest-mode guard blocks everything else) plus the flourish, with
+    a blank line above and below it for breathing room -- otherwise it
+    sits flush against the bottom of the terminal, hard to notice."""
+    if os.environ.get("RESUME_GUEST_MODE") or not _profile_is_set_up():
+        choices = _CHOICES
+    else:
+        choices = [c for c in _CHOICES if getattr(c, "value", None) != "bootstrap"]
+    return choices + [questionary.Separator(" "), _flourish_line(), questionary.Separator(" ")]
 
 
 _SCAN_SOURCE_CHOICES = [
@@ -108,6 +153,7 @@ def _confirm_active_profile() -> None:
         choices=names + ["I'm new here"],
         default=current if current in names else names[0],
         style=cli_art.QUESTIONARY_STYLE,
+        erase_when_done=True,
     ).ask()
 
     if choice in names:
@@ -735,9 +781,19 @@ def _prompt_for_update() -> None:
     """Check for git updates and prompt the user if updates are available.
     This is called at startup before displaying the main menu."""
     if git_update.has_uncommitted_changes():
-        cli_art.console.print(
-            f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
-        )
+        # Shown briefly, then erased (rich.live.Live's own transient=True
+        # cleanup, the same mechanism a spinner uses to vanish when it's
+        # done) -- a plain console.print() has no equivalent to
+        # questionary's erase_when_done, so this is the same "readable,
+        # then gone" treatment for a line that isn't an interactive prompt.
+        import time
+        from rich.live import Live
+
+        with Live(
+            f"{cli_art.WARNING} You have uncommitted changes -- skipping update check.",
+            console=cli_art.console, transient=True,
+        ):
+            time.sleep(1.2)
         return
 
     has_updates, message = git_update.check_for_updates()
@@ -881,6 +937,16 @@ def _session_summary(session_stats: dict) -> str:
 
 
 def run_interactive_menu() -> None:
+    # NOT wrapped in cli_art.console.screen() (alt-screen) -- tried that
+    # for just this launch sequence, but alt-screen buffers have no
+    # scrollback at all, so once the banner + profile/icon/update prompts'
+    # combined height exceeds the terminal's actual visible rows, whatever
+    # scrolls past the top is gone for good instead of just scrolled (as
+    # it is here, in normal scrollback). A real "stays visible" launch
+    # sequence needs a genuine full-screen layout (fixed header/footer,
+    # scrollable body via prompt_toolkit's own full_screen Application),
+    # not a wrapper around sequential prints -- same scope as the full
+    # immersive-CLI rewrite this was meant to be a small taste of.
     cli_art.display_main_banner()
     _confirm_active_profile()
     _confirm_icon_set()
@@ -897,11 +963,12 @@ def run_interactive_menu() -> None:
             cli_art.display_breadcrumb()
         cli_art.console.print()
         choice = questionary.select(
-            "What would you like to do?", choices=_CHOICES, style=cli_art.QUESTIONARY_STYLE,
+            "What would you like to do?", choices=_menu_choices(), style=cli_art.QUESTIONARY_STYLE,
         ).ask()
 
         if choice == "exit" or not choice:
             cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
+            cli_art.display_exit_footer()
             break
 
         if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
