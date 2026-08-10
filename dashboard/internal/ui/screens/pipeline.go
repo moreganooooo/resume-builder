@@ -16,7 +16,9 @@ import (
 )
 
 // PipelineClosedMsg is emitted when the pipeline screen is dismissed.
-type PipelineClosedMsg struct{}
+// Quit distinguishes "q" (exit the whole app) from "esc" (back to the
+// screen that opened Pipeline -- always the Main Menu today).
+type PipelineClosedMsg struct{ Quit bool }
 
 // PipelineOpenReportMsg is emitted when a report should be opened in FileViewer.
 type PipelineOpenReportMsg struct {
@@ -267,9 +269,11 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// While a search is committed, Esc clears the search (matches vim's `:nohl`
-		// ergonomics). With no query, Esc is a no-op — q is the only quit key, which
-		// keeps the help bar honest and avoids accidental exits.
+		// While a search is committed, Esc clears the search first (matches vim's
+		// `:nohl` ergonomics) rather than leaving the screen -- a cleared filter is
+		// itself the useful "undo" here. With no query, Esc backs out to the Main
+		// Menu; "q" alone still quits the whole app, so this can't reopen the
+		// accidental-exit risk the old no-op was guarding against.
 		if m.searchQuery != "" {
 			m.searchQuery = ""
 			m.applyFilterAndSort()
@@ -277,10 +281,10 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 			m.scrollOffset = 0
 			return m, m.loadCurrentReport()
 		}
-		return m, nil
+		return m, func() tea.Msg { return PipelineClosedMsg{Quit: false} }
 
 	case "q":
-		return m, func() tea.Msg { return PipelineClosedMsg{} }
+		return m, func() tea.Msg { return PipelineClosedMsg{Quit: true} }
 
 	case "/":
 		// Open search input. Pre-fill with the current query so refining is one keystroke away.
@@ -1011,296 +1015,6 @@ func (m PipelineModel) renderSortBar() string {
 	return style.Render(fmt.Sprintf("%s  %s  %s", sortLabel, viewLabel, count))
 }
 
-func (m PipelineModel) renderBody() string {
-	if len(m.filtered) == 0 {
-		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).
-			Padding(1, 2)
-		return emptyStyle.Render("No offers match this filter")
-	}
-
-	var lines []string
-	prevStatus := ""
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-
-	for i, app := range m.filtered {
-		norm := data.NormalizeStatus(app.Status)
-
-		// Group header in grouped mode
-		if m.viewMode == "grouped" && norm != prevStatus {
-			count := m.countByNormStatus(norm)
-			headerStyle := lipgloss.NewStyle().
-				Bold(true).
-				Foreground(m.theme.Blue)
-			lines = append(lines, padStyle.Render(
-				headerStyle.Render(fmt.Sprintf("── %s (%d) %s",
-					strings.ToUpper(statusLabel(norm)), count,
-					strings.Repeat("─", max(0, m.width-30-len(statusLabel(norm)))))),
-			))
-			prevStatus = norm
-		}
-
-		selected := i == m.cursor
-		line := m.renderAppLine(app, selected)
-		lines = append(lines, line)
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// colWidths holds per-column rune budgets for the table. The location and
-// last-contact columns are adaptive: they appear only when the terminal is wide
-// enough, so narrow windows keep the original compact layout.
-type colWidths struct {
-	num, score, date, company, status, pdf, loc, pay, last, role int
-}
-
-func (m PipelineModel) columnWidths() colWidths {
-	c := colWidths{num: 5, score: 5, date: 10, company: 16, status: 12, pdf: 2, pay: 16}
-	if m.width >= 110 {
-		c.loc = 20
-	}
-	if m.width >= 132 {
-		c.last = 10
-	}
-	fixed := c.num + c.score + c.date + c.company + c.status + c.pdf + c.pay + c.loc + c.last
-	c.role = m.width - fixed - 14 // separators + outer padding
-	if c.role < 15 {
-		c.role = 15
-	}
-	return c
-}
-
-// renderLocCell renders the work-mode + city column, e.g. "Remote",
-// "Hybrid · Charlotte, NC", "Full · Austin, TX".
-// renderPDFCell renders a checkmark if the application has an associated PDF.
-func (m PipelineModel) renderPDFCell(app model.CareerApplication, width int) string {
-	glyph := "—"
-	if app.HasPDF {
-		glyph = "✓"
-	}
-	style := lipgloss.NewStyle().Foreground(m.theme.Green).Width(width)
-	return style.Render(glyph)
-}
-func (m PipelineModel) renderLocCell(app model.CareerApplication, width int) string {
-	color := m.theme.Blue
-	switch app.WorkMode {
-	case "Remote":
-		color = m.theme.Green
-	case "Hybrid":
-		color = m.theme.Yellow
-	case "Full":
-		color = m.theme.Red
-	}
-	text := app.WorkMode
-	if app.Location != "" {
-		if text != "" {
-			text += " · " + app.Location
-		} else {
-			text = app.Location
-		}
-	}
-	if text == "" {
-		text = "—"
-	}
-	return lipgloss.NewStyle().Foreground(color).Width(width).Render(truncateRunes(text, width))
-}
-
-// renderPayCell prefers the pay range parsed from notes and falls back to the
-// report-cache comp estimate (the pre-column behavior). POSTED bands render
-// green; estimates stay yellow.
-func (m PipelineModel) renderPayCell(app model.CareerApplication, width int) string {
-	text := app.PayRange
-	color := m.theme.Yellow
-	if app.PaySource == "POSTED" {
-		color = m.theme.Green
-	}
-	if text == "" {
-		if summary, ok := m.reportCache[app.ReportPath]; ok && summary.comp != "" {
-			text = summary.comp
-		}
-	}
-	if text == "" {
-		return lipgloss.NewStyle().Width(width).Render("")
-	}
-	return lipgloss.NewStyle().Foreground(color).Width(width).Render(truncateRunes(text, width-1))
-}
-
-// renderColumnHeader labels the table columns; widths mirror renderAppLine.
-func (m PipelineModel) renderColumnHeader() string {
-	cw := m.columnWidths()
-	h := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true)
-	cell := func(label string, width int) string {
-		return h.Width(width).Render(truncateRunes(label, width))
-	}
-
-	segments := []string{
-		cell("#", cw.num),
-		h.Render("FIT"), // score cell is unpadded, always 3 runes wide
-		cell("APPLIED", cw.date),
-		cell("COMPANY", cw.company),
-		cell("ROLE", cw.role),
-		cell("STATUS", cw.status),
-	}
-	if cw.loc > 0 {
-		segments = append(segments, cell("LOCATION", cw.loc))
-	}
-	segments = append(segments, cell("PAY", cw.pay))
-	if cw.last > 0 {
-		segments = append(segments, cell("LAST", cw.last))
-	}
-
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	return padStyle.Render(" " + strings.Join(segments, " "))
-}
-
-func (m PipelineModel) renderAppLine(app model.CareerApplication, selected bool) string {
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	cw := m.columnWidths()
-
-	// Tracker number (fixed width)
-	numText := "#—"
-	if app.Number > 0 {
-		numText = fmt.Sprintf("#%d", app.Number)
-	}
-	numStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true).Width(cw.num)
-
-	// Score with color
-	scoreStyle := m.scoreStyle(app.Score)
-	score := scoreStyle.Render(fmt.Sprintf("%.1f", app.Score))
-
-	// Company (truncate)
-	company := truncateRunes(app.Company, cw.company)
-	companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(cw.company)
-
-	// Date (fixed width)
-	dateText := app.Date
-	if dateText == "" {
-		dateText = "—"
-	}
-	dateStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(cw.date)
-
-	// Role (truncate)
-	role := truncateRunes(app.Role, cw.role)
-	roleStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(cw.role)
-
-	// Status with color -- fixed column
-	norm := data.NormalizeStatus(app.Status)
-	statusColor := m.statusColorMap()[norm]
-	statusStyle := lipgloss.NewStyle().Foreground(statusColor).Width(cw.status)
-	statusText := statusStyle.Render(statusLabel(norm))
-
-	segments := []string{
-		numStyle.Render(truncateRunes(numText, cw.num)),
-		score,
-		dateStyle.Render(truncateRunes(dateText, cw.date)),
-		companyStyle.Render(company),
-		roleStyle.Render(role),
-		statusText,
-		m.renderPDFCell(app, cw.pdf),
-	}
-
-	if cw.loc > 0 {
-		segments = append(segments, m.renderLocCell(app, cw.loc))
-	}
-	segments = append(segments, m.renderPayCell(app, cw.pay))
-	if cw.last > 0 {
-		lastText := "—"
-		if app.LastContact != "" {
-			lastText = formatTimeAgo(app.LastContact)
-		}
-		lastStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(cw.last)
-		if app.LastContact != "" && app.LastContact != app.Date {
-			// Activity after applying (rejection, recruiter view, screen) — surface it.
-			lastStyle = lastStyle.Foreground(m.theme.Text)
-		}
-		segments = append(segments, lastStyle.Render(truncateRunes(lastText, cw.last)))
-	}
-
-	line := " " + strings.Join(segments, " ")
-
-	if selected {
-		selStyle := lipgloss.NewStyle().
-			Background(m.theme.Overlay).
-			Width(m.width - 4)
-		return padStyle.Render(selStyle.Render(line))
-	}
-	return padStyle.Render(line)
-}
-
-func (m PipelineModel) renderPreview() string {
-	app, ok := m.CurrentApp()
-	if !ok {
-		return ""
-	}
-
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	divider := lipgloss.NewStyle().Foreground(m.theme.Overlay)
-
-	var lines []string
-	lines = append(lines, padStyle.Render(divider.Render(strings.Repeat("─", max(0, m.width-4)))))
-
-	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Sky).Bold(true)
-	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-
-	// Quick facts derived from notes — available even when there is no report,
-	// and the only place narrow terminals see location/pay/last-contact.
-	var facts []string
-	if app.WorkMode != "" || app.Location != "" {
-		loc := app.WorkMode
-		if app.Location != "" {
-			if loc != "" {
-				loc += " · " + app.Location
-			} else {
-				loc = app.Location
-			}
-		}
-		facts = append(facts, labelStyle.Render("Loc: ")+valueStyle.Render(loc))
-	}
-	if app.PayRange != "" {
-		pay := app.PayRange
-		if app.PaySource != "" {
-			pay += " (" + app.PaySource + ")"
-		}
-		facts = append(facts, labelStyle.Render("Pay: ")+valueStyle.Render(pay))
-	}
-	if app.LastContact != "" {
-		facts = append(facts, labelStyle.Render("Last contact: ")+
-			valueStyle.Render(fmt.Sprintf("%s (%s)", app.LastContact, formatTimeAgo(app.LastContact))))
-	}
-	if len(facts) > 0 {
-		lines = append(lines, padStyle.Render(strings.Join(facts, "   ")))
-	}
-
-	// Check report cache
-	if summary, ok := m.reportCache[app.ReportPath]; ok {
-		if summary.archetype != "" {
-			lines = append(lines, padStyle.Render(
-				labelStyle.Render("Arquetipo: ")+valueStyle.Render(summary.archetype)))
-		}
-		if summary.tldr != "" {
-			lines = append(lines, padStyle.Render(
-				labelStyle.Render("TL;DR: ")+valueStyle.Render(summary.tldr)))
-		}
-		if summary.comp != "" {
-			lines = append(lines, padStyle.Render(
-				labelStyle.Render("Comp: ")+valueStyle.Render(summary.comp)))
-		}
-		if summary.remote != "" {
-			lines = append(lines, padStyle.Render(
-				labelStyle.Render("Remote: ")+valueStyle.Render(summary.remote)))
-		}
-	} else if app.Notes != "" {
-		// Fallback: show notes
-		notes := truncateRunes(app.Notes, m.width-10)
-		lines = append(lines, padStyle.Render(dimStyle.Render(notes)))
-	} else {
-		lines = append(lines, padStyle.Render(dimStyle.Render("Loading preview...")))
-	}
-
-	return strings.Join(lines, "\n")
-}
-
 func (m PipelineModel) renderHelp() string {
 	style := lipgloss.NewStyle().
 		Foreground(m.theme.Blue).
@@ -1334,10 +1048,11 @@ func (m PipelineModel) renderHelp() string {
 		keyStyle.Render("s") + descStyle.Render(" sort  ") +
 		keyStyle.Render("r") + descStyle.Render(" refresh  ") +
 		keyStyle.Render("Enter") + descStyle.Render(" report  ") +
-		keyStyle.Render("o") + descStyle.Render(" open URL  ") +
+		keyStyle.Render("o") + descStyle.Render(" url  ") +
 		keyStyle.Render("c") + descStyle.Render(" change  ") +
 		keyStyle.Render("v") + descStyle.Render(" view  ") +
 		keyStyle.Render("p") + descStyle.Render(" progress  ") +
+		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
 
 	gap := m.width - lipgloss.Width(keys) - lipgloss.Width(brand) - 2

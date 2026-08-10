@@ -58,12 +58,11 @@ BELIEVABILITY_MIN   = 90   # believability_score >= this (combined with accuracy
 # ---------------------------------------------------------------------------
 
 def main():
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print("  DETECT HIDDEN GEMS", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule("DETECT HIDDEN GEMS", style="dim")
 
     if not os.path.exists(KEEPERS_CSV):
-        cli_art.console.print(f"  ERROR: {KEEPERS_CSV} not found.", markup=False, soft_wrap=True)
+        cli_art.console.print(f"  {cli_art.ERROR} {KEEPERS_CSV} not found.", soft_wrap=True)
         cli_art.console.print("  Run the audit + rewrite pipeline first to produce keepers.", markup=False, soft_wrap=True)
         return
 

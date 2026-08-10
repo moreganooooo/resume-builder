@@ -941,9 +941,8 @@ def collect_secrets(dry_run: bool = False) -> dict:
     if already_configured:
         gemini_set = True
     else:
-        cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-        cli_art.console.print("API key & cookie setup", markup=False, soft_wrap=True)
-        cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+        cli_art.console.print()
+        cli_art.console.rule("API key & cookie setup", style="dim")
         gemini_set = _collect_secret_now_or_later(
             "GEMINI_API_KEY",
             "Gemini API key",
@@ -1000,9 +999,8 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
         cli_art.console.print("[DRY RUN] would confirm LinkedIn search terms.", markup=False, soft_wrap=True)
         return []
 
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print("LinkedIn search terms", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule("LinkedIn search terms", style="dim")
     cli_art.console.print(markup=False, soft_wrap=True)
     cli_art.console.print(
         "LinkedIn scanning needs no cookie or login setup -- it reads your live, "

@@ -2115,10 +2115,10 @@ class ResumeEngine:
         emb_meta  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
 
         if not os.path.exists(bank_csv):
-            cli_art.console.print("  WARNING: bullet-bank-keepers-audited.csv not found. Skipping mine.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.WARNING} bullet-bank-keepers-audited.csv not found. Skipping mine.", soft_wrap=True)
             return []
         if not os.path.exists(emb_npy):
-            cli_art.console.print("  WARNING: bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.WARNING} bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.", soft_wrap=True)
             return []
 
         try:
@@ -2129,7 +2129,7 @@ class ResumeEngine:
             return []
 
         if "Bullet Point" not in df.columns:
-            cli_art.console.print("  WARNING: 'Bullet Point' column not found in bullet bank CSV.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.WARNING} 'Bullet Point' column not found in bullet bank CSV.", soft_wrap=True)
             return []
 
         if len(df) != len(embs):
@@ -2157,7 +2157,7 @@ class ResumeEngine:
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
         if jd_emb is None:
-            cli_art.console.print("  WARNING: JD embedding failed. Falling back to first TOP_K_BULLETS rows.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.", soft_wrap=True)
             bullets_col  = df["Bullet Point"].fillna("").tolist()
             company_col  = df["Role / Company"].fillna("").tolist()  if "Role / Company" in df.columns else ["" ] * len(df)
             tags_col     = df["Tags"].fillna("").tolist()            if "Tags"           in df.columns else ["" ] * len(df)
@@ -2317,7 +2317,7 @@ class ResumeEngine:
         )
         evaluation = GeminiClient.parse_json(eval_text or "")
         if not evaluation:
-            cli_art.console.print("  ERROR: Fit evaluation returned no parseable result.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.ERROR} Fit evaluation returned no parseable result.", soft_wrap=True)
             return {}
 
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
@@ -2496,7 +2496,7 @@ class ResumeEngine:
         )
         letter_data = GeminiClient.parse_json(letter_text or "")
         if not letter_data:
-            cli_art.console.print("  ERROR: Cover letter generation returned no parseable result.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {cli_art.ERROR} Cover letter generation returned no parseable result.", soft_wrap=True)
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
@@ -2801,12 +2801,12 @@ class ResumeEngine:
             _log_cache_stats(usage, 0, 0)
 
             if not resume_text:
-                cli_art.console.print("  ERROR: Builder returned empty response.", markup=False, soft_wrap=True)
+                cli_art.console.print(f"  {cli_art.ERROR} Builder returned empty response.", soft_wrap=True)
                 return {}
 
             resume_data = GeminiClient.parse_json(resume_text)
             if not resume_data:
-                cli_art.console.print("  ERROR: Could not parse builder JSON.", markup=False, soft_wrap=True)
+                cli_art.console.print(f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True)
                 cli_art.console.print(f"  Raw response (first 500 chars):\n{resume_text[:500]}", markup=False, soft_wrap=True)
                 return {}
 
@@ -3036,7 +3036,7 @@ class ResumeEngine:
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
             else:
-                cli_art.console.print("  WARNING: Holistic critique returned empty.", markup=False, soft_wrap=True)
+                cli_art.console.print(f"  {cli_art.WARNING} Holistic critique returned empty.", soft_wrap=True)
 
         # --- Step 5.5: Apply actionable recommendations, one at a time ---
         # Only recommendations that are concrete edits to this resume's own
@@ -3149,7 +3149,7 @@ class ResumeEngine:
                 _log_cache_stats(rec_usage, 0, 0)
                 rec_result = GeminiClient.parse_json(rec_text or "")
                 if not rec_result:
-                    cli_art.console.print("    WARNING: unparseable JSON; leaving resume as-is for this recommendation.", markup=False, soft_wrap=True)
+                    cli_art.console.print(f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.", soft_wrap=True)
                 else:
                     this_applied = rec_result.pop("applied_recommendations", [])
                     this_skipped = rec_result.pop("skipped_recommendations", [])
@@ -3157,8 +3157,8 @@ class ResumeEngine:
                     candidate_resume_data = normalize_resume.normalize(rec_result)
                     rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
                     if rec_violations:
-                        cli_art.console.print(f"    WARNING: introduced {len(rec_violations)} validator violation(s); "
-                              f"discarding just this recommendation:", markup=False, soft_wrap=True)
+                        cli_art.console.print(f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
+                              f"discarding just this recommendation:", soft_wrap=True)
                         for v in rec_violations:
                             cli_art.console.print(f"      - {v}", markup=False, soft_wrap=True)
                         skipped.append(f"{rec} (attempted, discarded: introduced a validator violation)")
@@ -3310,7 +3310,7 @@ class ResumeEngine:
             trimmed_resume_data = normalize_resume.normalize(trimmed)
             trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
             if trim_violations:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')}  WARNING: Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                cli_art.console.print(f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:", soft_wrap=True)
                 for v in trim_violations:
                     cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
@@ -3401,7 +3401,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 master_resume = json.load(f)
             cli_art.console.print(f"Loaded master resume from: {master_resume_path}", markup=False, soft_wrap=True)
         except Exception as e:
-            cli_art.console.print(f"WARNING: Could not load master resume: {e}. Proceeding with empty dict.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.", soft_wrap=True)
 
     engine = ResumeEngine()
     tracker = jd_manager.JDTracker()
@@ -3500,7 +3500,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 error_message="Resume build failed. Check output above for details.",
             )
             failed_count += 1
-            cli_art.console.print(f"\nERROR: Resume build failed for {path}. It stays pending and will be retried next run.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.", soft_wrap=True)
 
     summary = f"\nBatch summary: {completed_count} completed, {failed_count} failed."
     if aborted_remaining:

@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
@@ -755,3 +756,28 @@ def cli_error(message: str) -> None:
 def cli_success(message: str) -> None:
     """Print a success message with success icon."""
     console.print(f"{SUCCESS} {message}", soft_wrap=True)
+
+
+def new_progress(**kwargs) -> Progress:
+    """Rich Progress bar pre-configured with resume-builder's standard
+    spinner+description+bar+percentage columns, themed via `console` --
+    the same construction cli.py's batch tailor command uses. Any batch
+    operation processing a known number of items should build its
+    progress bar through this instead of re-declaring the column set, so
+    every progress bar in the program looks identical. Usage:
+
+        with cli_art.new_progress() as progress:
+            task = progress.add_task(f"[bold {theme.BRAND}]...", total=n)
+            for item in items:
+                progress.update(task, description="...")
+                ...
+                progress.advance(task)
+    """
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        **kwargs,
+    )

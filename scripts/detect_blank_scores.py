@@ -137,7 +137,7 @@ def scan_csv(csv_path: Path) -> dict:
 
 def print_report(report: dict) -> None:
     path_label = Path(report["path"]).name
-    cli_art.console.print(f"\n📄 {path_label}", markup=False, soft_wrap=True)
+    cli_art.console.print(f"\n{theme.colorize_icon('bullet_bank')} {path_label}", soft_wrap=True)
 
     if "error" in report:
         cli_art.console.print(f"   {theme.colorize_icon('error')} Error: {report['error']}", soft_wrap=True)
@@ -160,7 +160,7 @@ def print_report(report: dict) -> None:
     if report["fully_unscored_rows"] == 0:
         cli_art.console.print(f"   {theme.colorize_icon('success')} All rows scored — nothing to do.", soft_wrap=True)
     else:
-        cli_art.console.print(f"   🎯 Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.", markup=False, soft_wrap=True)
+        cli_art.console.print(f"   {theme.colorize_icon('evaluate')} Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.", soft_wrap=True)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ def main():
     else:
         csv_paths = DEFAULT_CSVS
 
-    cli_art.console.print("🔍 detect_blank_scores.py — scanning for unscored bullets...", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{theme.colorize_icon('discovery')} detect_blank_scores.py — scanning for unscored bullets...", soft_wrap=True)
 
     all_reports = []
     total_unscored = 0
@@ -199,13 +199,14 @@ def main():
         all_reports.append(report)
         total_unscored += report.get("fully_unscored_rows", 0)
 
-    cli_art.console.print(f"\n{'='*50}", markup=False, soft_wrap=True)
+    cli_art.console.print()
+    cli_art.console.rule(style="dim")
     cli_art.console.print(f"Total unscored rows across all files: {total_unscored}", markup=False, soft_wrap=True)
 
     if total_unscored == 0:
         cli_art.console.print(f"{theme.colorize_icon('success')} All bullet bank files are fully scored. Nothing to do.", soft_wrap=True)
     else:
-        cli_art.console.print("🎯 Run: python scripts/score_keeper_gems.py  to fill blank scores.", markup=False, soft_wrap=True)
+        cli_art.console.print(f"{theme.colorize_icon('evaluate')} Run: python scripts/score_keeper_gems.py  to fill blank scores.", soft_wrap=True)
 
     if args.fix:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -219,7 +220,7 @@ def main():
                 })
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(all_unscored, f, indent=2)
-        cli_art.console.print(f"\n📥 Unscored bullets written to: {out_path} ({len(all_unscored)} rows)", markup=False, soft_wrap=True)
+        cli_art.console.print(f"\n{theme.colorize_icon('save')} Unscored bullets written to: {out_path} ({len(all_unscored)} rows)", soft_wrap=True)
 
 
 if __name__ == "__main__":
