@@ -218,11 +218,10 @@ func (m ViewerModel) renderBody() string {
 // renderAll converts every raw markdown line into visual terminal lines,
 // walking m.lines and dispatching each block (table, fenced code, heading/
 // quote/list via isSpecialBlockLine, or plain paragraph) to the matching
-// styler below. This is deliberately not routed through Glamour
-// (theme.MarkdownStyle()): Glamour's word-wrap can't hard-wrap an
-// unbroken token (e.g. a long line inside a fenced code block) to fit
-// m.width the way ansi.Wrap here does, since there's no word boundary to
-// break at.
+// styler below. This is deliberately not routed through Glamour: Glamour's
+// word-wrap can't hard-wrap an unbroken token (e.g. a long line inside a
+// fenced code block) to fit m.width the way ansi.Wrap here does, since
+// there's no word boundary to break at.
 func (m ViewerModel) renderAll() []string {
 	var styled []string
 	i := 0
