@@ -36,10 +36,21 @@ func NewMenuModel(t theme.Theme) MenuModel {
 
     // Width/height are arbitrary – the list will be resized by the parent view.
     delegate := list.NewDefaultDelegate()
-    // Gradient background for the selected row – using two token colours.
+    // Selected row: Mauve background against the theme's own Base as text
+    // colour. GradientStart/GradientEnd (BrandColor/AccentColor from
+    // tokens.go) used to fill both slots -- those two hex values sit at
+    // almost the same perceptual lightness (~1.03:1 contrast, WCAG AA
+    // needs 4.5:1), making the currently-focused row the least readable
+    // one in the entire menu, in every theme, since GradientStart/End are
+    // hardcoded constants rather than per-theme tokens. Base is each
+    // theme's own background extreme (near-black for resume-builder/
+    // Mocha, near-white for Latte), which is exactly why pairing it
+    // against the mid-tone Mauve accent clears 4.5:1+ in all three
+    // palettes.
     selectedStyle := lipgloss.NewStyle().
-        Background(t.Token.GradientStart).
-        Foreground(t.Token.GradientEnd)
+        Bold(true).
+        Background(t.Token.Mauve).
+        Foreground(t.Base)
     // Apply selected styles to the delegate.
     delegate.Styles.SelectedTitle = selectedStyle
     delegate.Styles.SelectedDesc = selectedStyle

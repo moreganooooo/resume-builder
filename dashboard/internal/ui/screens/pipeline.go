@@ -744,9 +744,23 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 	if m.scrollOffset > 0 && m.scrollOffset < len(bodyLines) {
 		bodyLines = bodyLines[m.scrollOffset:]
 	}
-	
-	if len(bodyLines) > height-2 {
-		bodyLines = bodyLines[:height-2]
+
+	// Reserve room for the status picker's own lines (a "Change status:"
+	// header plus one row per option) before truncating -- otherwise the
+	// picker gets appended on top of content already filling the box to
+	// height-2, so the bordered box (a fixed Height(), which pads short
+	// content but never truncates long content) grows past its declared
+	// size and pushes the rest of the screen's layout down on short
+	// terminals.
+	maxLines := height - 2
+	if m.statusPicker {
+		maxLines -= len(statusOptions) + 1
+		if maxLines < 0 {
+			maxLines = 0
+		}
+	}
+	if len(bodyLines) > maxLines {
+		bodyLines = bodyLines[:maxLines]
 	}
 
 	content := strings.Join(bodyLines, "\n")
@@ -787,7 +801,7 @@ func (m PipelineModel) renderSidebarAppLine(app model.CareerApplication, width i
     block := line1 + "\n" + line2
     base := theme.PadHorizontal(lipgloss.NewStyle())
     if selected {
-        base = theme.HoverStyle(base)
+        base = theme.HoverStyle(base, m.theme)
     }
     return base.Render(block)
 }
@@ -920,7 +934,7 @@ func (m PipelineModel) renderHeader() string {
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
 	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(theme.NewIcons().Utility + " CAREER PIPELINE")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.theme.Icons.Pipeline + " CAREER PIPELINE")
 	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
 	if gap < 1 {
 		gap = 1
