@@ -90,14 +90,14 @@ def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: in
         choices.append(questionary.Separator())
         if page > 0:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "◀ Previous page")], value=_NAV_PREV,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['prev']} Previous page")], value=_NAV_PREV,
             ))
         if page < total_pages - 1:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "▶ Next page")], value=_NAV_NEXT,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['next']} Next page")], value=_NAV_NEXT,
             ))
         choices.append(questionary.Choice(
-            title=[(f"fg:{theme.SUCCESS} bold", f"✔ Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
+            title=[(f"fg:{theme.SUCCESS} bold", f"{theme.ICONS['success']} Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
         ))
 
         header = f"Select JD(s) (space to check, enter to confirm this page, {len(selected)} selected so far):"

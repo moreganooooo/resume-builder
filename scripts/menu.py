@@ -786,14 +786,19 @@ def _prompt_for_update() -> None:
         # done) -- a plain console.print() has no equivalent to
         # questionary's erase_when_done, so this is the same "readable,
         # then gone" treatment for a line that isn't an interactive prompt.
-        import time
-        from rich.live import Live
+        # Skips the timed hold entirely under RESUME_BUILDER_MOTION=reduced
+        # (same opt-out cli_art._reveal_banner() honors) since an
+        # uninterruptible wait is exactly the kind of blocking motion that
+        # flag exists to remove, not just visually simplify.
+        message = f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
+        if os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
+            cli_art.console.print(message)
+        else:
+            import time
+            from rich.live import Live
 
-        with Live(
-            f"{cli_art.WARNING} You have uncommitted changes -- skipping update check.",
-            console=cli_art.console, transient=True,
-        ):
-            time.sleep(1.2)
+            with Live(message, console=cli_art.console, transient=True):
+                time.sleep(1.2)
         return
 
     has_updates, message = git_update.check_for_updates()
