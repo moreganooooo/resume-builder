@@ -519,8 +519,19 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 
 	body := strings.Join(lines, "\n")
 	bodyLines := strings.Split(body, "\n")
-	if len(bodyLines) > height-2 {
-		bodyLines = bodyLines[:height-2]
+
+	// Reserve room for the status picker before truncating -- see the
+	// matching comment in pipeline.go's renderSidebarList, which has the
+	// same fixed-height overflow risk.
+	maxLines := height - 2
+	if m.statusPicker {
+		maxLines -= len(jobsApplicationStatuses) + 1
+		if maxLines < 0 {
+			maxLines = 0
+		}
+	}
+	if len(bodyLines) > maxLines {
+		bodyLines = bodyLines[:maxLines]
 	}
 	content := strings.Join(bodyLines, "\n")
 
@@ -583,7 +594,7 @@ func (m JobsModel) renderSidebarLine(job model.JobRow, width int, selected bool)
 	block := line1 + "\n" + line2
 	base := theme.PadHorizontal(lipgloss.NewStyle())
 	if selected {
-		base = theme.HoverStyle(base)
+		base = theme.HoverStyle(base, m.theme)
 	}
 	return base.Render(block)
 }

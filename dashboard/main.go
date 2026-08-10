@@ -63,6 +63,15 @@ func tickTransition() tea.Cmd {
 	})
 }
 
+// reducedMotion mirrors theme.NewIcons' RESUME_BUILDER_ICONS=unicode
+// precedent: a single env-var escape hatch, checked fresh (no persisted
+// profile state the dashboard binary can reach) for users who don't want
+// the harmonica-spring reveal -- vestibular sensitivity, or just a laggy
+// SSH session where 60fps redraws are their own kind of annoying.
+func reducedMotion() bool {
+	return os.Getenv("RESUME_BUILDER_MOTION") == "reduced"
+}
+
 // startTransition switches to newState and begins revealing it top-down.
 // damping of 1.0 is critically damped -- no bounce/overshoot, which would
 // make lines flicker in and out rather than settle once, cleanly.
@@ -76,6 +85,10 @@ func tickTransition() tea.Cmd {
 func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 	m.previousState = m.state
 	m.state = newState
+	if reducedMotion() {
+		m.transitioning = false
+		return m, nil
+	}
 	m.transitioning = true
 	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0)
 	m.transitionPos = 0
@@ -361,10 +374,11 @@ func main() {
 		// Set directly on the model passed to tea.NewProgram (not inside
 		// Init(), whose mutations bubbletea discards -- see Init's own doc
 		// comment): starts on the menu, already armed to reveal it via the
-		// same top-down wipe every later screen switch uses.
+		// same top-down wipe every later screen switch uses -- unless
+		// reducedMotion() opts out, matching startTransition's own check.
 		state:            viewMenu,
 		menu:             menu.NewMenuModel(t),
-		transitioning:    true,
+		transitioning:    !reducedMotion(),
 		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0),
 	}
 
