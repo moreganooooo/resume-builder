@@ -7,8 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/log"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
@@ -38,6 +41,56 @@ type appModel struct {
 	careerOpsPath   string
 	theme           theme.Theme
 	progressMetrics model.ProgressMetrics
+	width, height   int // real terminal size, tracked from tea.WindowSizeMsg
+
+	// Every screen switch (including the initial launch into the menu)
+	// plays a harmonica-eased top-down reveal of the incoming screen's
+	// already-rendered View() output, rather than a hard cut. Generic --
+	// works on any screen's output as-is, no per-screen rendering changes.
+	transitioning    bool
+	transitionSpring harmonica.Spring
+	transitionPos    float64
+	transitionVel    float64
+}
+
+// transitionTickMsg drives the reveal's ~60fps animation loop.
+type transitionTickMsg struct{}
+
+func tickTransition() tea.Cmd {
+	return tea.Tick(time.Second/60, func(time.Time) tea.Msg {
+		return transitionTickMsg{}
+	})
+}
+
+// startTransition switches to newState and begins revealing it top-down.
+// damping of 1.0 is critically damped -- no bounce/overshoot, which would
+// make lines flicker in and out rather than settle once, cleanly.
+func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
+	m.state = newState
+	m.transitioning = true
+	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0)
+	m.transitionPos = 0
+	m.transitionVel = 0
+	return m, tickTransition()
+}
+
+// renderScreen is the undecorated View() for the current state -- shared
+// by View() itself and by the transition tick handler (which needs the
+// incoming screen's line count as the reveal's target, without recursing
+// through View()'s own reveal-clamping logic).
+func (m appModel) renderScreen() string {
+	switch m.state {
+	case viewReport:
+		return m.viewer.View()
+	case viewProgress:
+		return m.progress.View()
+	case viewMenu:
+		return m.menu.View()
+	case viewJobs:
+		return m.jobs.View()
+	default:
+		return m.pipeline.View()
+	}
 }
 
 func (m *appModel) reloadPipelineData() {
@@ -47,11 +100,14 @@ func (m *appModel) reloadPipelineData() {
 	m.pipeline = m.pipeline.WithReloadedData(apps, metrics)
 }
 
+// Init only returns a tea.Cmd, not a model -- bubbletea's Program keeps
+// using the exact model instance passed to tea.NewProgram() for every
+// subsequent Update() call, so any field mutation made here (on Init's own
+// value-receiver copy) is silently discarded. main() sets state/menu/the
+// initial transition directly on the real model for that reason; this
+// just returns commands based on whatever main() already set.
 func (m appModel) Init() tea.Cmd {
-	// Start with the main menu
-	m.state = viewMenu
-	m.menu = menu.NewMenuModel(m.theme)
-	return m.menu.Init()
+	return tea.Batch(m.menu.Init(), tickTransition())
 }
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -63,6 +119,50 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	// Handled ahead of the viewMenu early-return below (and the main type
+	// switch) so it still fires during the launch-into-menu reveal, not
+	// just transitions between the other screens.
+	if _, ok := msg.(transitionTickMsg); ok {
+		if !m.transitioning {
+			return m, nil
+		}
+		target := len(strings.Split(m.renderScreen(), "\n"))
+		m.transitionPos, m.transitionVel = m.transitionSpring.Update(m.transitionPos, m.transitionVel, float64(target))
+		if m.transitionPos >= float64(target)-0.5 {
+			m.transitioning = false
+			return m, nil
+		}
+		return m, tickTransition()
+	}
+
+	// Also handled ahead of the viewMenu early-return -- menu/pipeline/jobs
+	// all exist from launch (unlike viewer/progress, only constructed once
+	// opened), so they all need every resize, not just while each happens
+	// to be the active screen. Previously this whole case lived below the
+	// early-return, so while state == viewMenu (i.e. always, at launch --
+	// see startTransition/Init's doc comments) the very first real
+	// tea.WindowSizeMsg never reached pipeline/jobs at all, leaving them
+	// stuck at NewPipelineModel/NewJobsModel's hardcoded 120x40 default
+	// instead of the real terminal size. menu's own list.Model had the
+	// same problem one level down: NewMenuModel calls list.New(items,
+	// delegate, 30, 15) as a fixed placeholder size that nothing ever
+	// resized (see MenuModel.Resize's own doc comment).
+	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = wsm.Width, wsm.Height
+		m.menu.Resize(wsm.Width, wsm.Height)
+		m.pipeline.Resize(wsm.Width, wsm.Height)
+		m.jobs.Resize(wsm.Width, wsm.Height)
+		if m.state == viewReport {
+			m.viewer.Resize(wsm.Width, wsm.Height)
+		}
+		if m.state == viewProgress {
+			m.progress.Resize(wsm.Width, wsm.Height)
+		}
+		pm, cmd := m.pipeline.Update(msg)
+		m.pipeline = pm
+		return m, cmd
+	}
+
 	// If we're in the menu view, delegate to the menu model first.
 	if m.state == viewMenu {
 		var cmd tea.Cmd
@@ -71,21 +171,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.pipeline.Resize(msg.Width, msg.Height)
-		if m.state == viewReport {
-			m.viewer.Resize(msg.Width, msg.Height)
-		}
-		if m.state == viewProgress {
-			m.progress.Resize(msg.Width, msg.Height)
-		}
-		if m.state == viewJobs {
-			m.jobs.Resize(msg.Width, msg.Height)
-		}
-		pm, cmd := m.pipeline.Update(msg)
-		m.pipeline = pm
-		return m, cmd
-
 	case screens.PipelineClosedMsg:
 		return m, tea.Quit
 
@@ -95,13 +180,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case menu.MenuSelectMsg:
 		switch msg.Command {
 		case "Pipeline":
-			m.state = viewPipeline
+			return m.startTransition(viewPipeline)
 		case "Progress":
-			m.state = viewProgress
+			return m.startTransition(viewProgress)
 		case "Reports":
-			m.state = viewReport
+			return m.startTransition(viewReport)
 		case "Jobs":
-			m.state = viewJobs
+			return m.startTransition(viewJobs)
 		case "Quit":
 			return m, tea.Quit
 		}
@@ -131,27 +216,23 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewer = screens.NewViewerModel(
 			m.theme,
 			msg.Path, msg.Title,
-			m.pipeline.Width(), m.pipeline.Height(),
+			m.width, m.height,
 		)
-		m.state = viewReport
-		return m, nil
+		return m.startTransition(viewReport)
 
 	case screens.ViewerClosedMsg:
-		m.state = viewPipeline
-		return m, nil
+		return m.startTransition(viewPipeline)
 
 	case screens.PipelineOpenProgressMsg:
 		m.progress = screens.NewProgressModel(
 			m.theme,
 			m.progressMetrics,
-			m.pipeline.Width(), m.pipeline.Height(),
+			m.width, m.height,
 		)
-		m.state = viewProgress
-		return m, nil
+		return m.startTransition(viewProgress)
 
 	case screens.ProgressClosedMsg:
-		m.state = viewPipeline
-		return m, nil
+		return m.startTransition(viewPipeline)
 
 	case screens.PipelineOpenURLMsg:
 		return m, func() tea.Msg {
@@ -195,18 +276,19 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m appModel) View() string {
-	switch m.state {
-	case viewReport:
-		return m.viewer.View()
-	case viewProgress:
-		return m.progress.View()
-	case viewMenu:
-		return m.menu.View()
-	case viewJobs:
-		return m.jobs.View()
-	default:
-		return m.pipeline.View()
+	target := m.renderScreen()
+	if !m.transitioning {
+		return target
 	}
+	lines := strings.Split(target, "\n")
+	revealed := int(m.transitionPos)
+	if revealed < 0 {
+		revealed = 0
+	}
+	if revealed >= len(lines) {
+		return target
+	}
+	return strings.Join(lines[:revealed], "\n")
 }
 
 func main() {
@@ -260,6 +342,15 @@ func main() {
 		careerOpsPath:   careerOpsPath,
 		theme:           t,
 		progressMetrics: progressMetrics,
+
+		// Set directly on the model passed to tea.NewProgram (not inside
+		// Init(), whose mutations bubbletea discards -- see Init's own doc
+		// comment): starts on the menu, already armed to reveal it via the
+		// same top-down wipe every later screen switch uses.
+		state:            viewMenu,
+		menu:             menu.NewMenuModel(t),
+		transitioning:    true,
+		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0),
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())

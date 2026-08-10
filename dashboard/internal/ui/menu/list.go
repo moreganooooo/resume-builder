@@ -61,6 +61,14 @@ func NewMenuModel(t theme.Theme) MenuModel {
     return MenuModel{list: l, theme: t}
 }
 
+// Resize fills the menu to the real terminal size -- NewMenuModel's list
+// is constructed at a fixed 30x15 (its own comment already says "will be
+// resized by the parent view"), which never actually happened, so the
+// menu rendered as a small fixed box regardless of terminal size.
+func (m *MenuModel) Resize(width, height int) {
+    m.list.SetSize(width, height)
+}
+
 type animationMsg struct{}
 
 // Init starts a short tick‑based animation similar to the pipeline screen.
