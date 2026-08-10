@@ -43,7 +43,8 @@ def trim_detective_findings(source_csv: str = SOURCE_CSV) -> list[dict]:
 
 def main():
     if not os.path.exists(SOURCE_CSV):
-        raise SystemExit(f"ERROR: {SOURCE_CSV} not found.")
+        cli_art.cli_error(f"{SOURCE_CSV} not found.")
+        raise SystemExit(1)
     trimmed_rows = trim_detective_findings()
     with atomic_write(OUTPUT_CSV, newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=KEEP_COLUMNS)

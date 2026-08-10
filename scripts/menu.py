@@ -291,12 +291,12 @@ def _handle_bootstrap() -> bool:
             text=True,
         )
         if result.returncode != 0:
-            cli_art.console.print("[red]Bootstrap wizard failed[/]")
+            cli_art.console.print(f"[{theme.ERROR}]Bootstrap wizard failed[/{theme.ERROR}]")
             return False
         try:
             data = json.loads(result.stdout.strip())
         except json.JSONDecodeError:
-            cli_art.console.print("[red]Failed to parse wizard output[/]")
+            cli_art.console.print(f"[{theme.ERROR}]Failed to parse wizard output[/{theme.ERROR}]")
             return False
         name = data.get("profile_name")
         if name:

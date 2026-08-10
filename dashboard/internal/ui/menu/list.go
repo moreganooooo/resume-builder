@@ -2,8 +2,6 @@
 package menu
 
 import (
-    "time"
-
     "github.com/charmbracelet/bubbles/list"
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/lipgloss"
@@ -22,9 +20,8 @@ func (i MenuItem) Description() string { return i.desc }
 func (i MenuItem) FilterValue() string { return i.title }
 
 type MenuModel struct {
-    list     list.Model
-    theme    theme.Theme
-    animDone bool
+    list  list.Model
+    theme theme.Theme
 }
 
 // NewMenuModel builds a list of top‑level commands using the token palette.
@@ -69,27 +66,35 @@ func (m *MenuModel) Resize(width, height int) {
     m.list.SetSize(width, height)
 }
 
-type animationMsg struct{}
-
-// Init starts a short tick‑based animation similar to the pipeline screen.
+// Init implements tea.Model. The Main Menu's launch reveal is handled one
+// level up, by appModel's harmonica-spring transition in main.go (which
+// covers every screen switch, including the initial launch into the menu)
+// -- there's nothing left for the menu's own Init to kick off.
 func (m MenuModel) Init() tea.Cmd {
-    return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg { return animationMsg{} })
+    return nil
 }
 
-// Update handles key presses and the animation tick.
+// Update handles key presses.
 func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.KeyMsg:
-        switch msg.String() {
-        case "q", "ctrl+c":
-            return m, func() tea.Msg { return MenuQuitMsg{} }
-        case "enter":
-            if sel, ok := m.list.SelectedItem().(MenuItem); ok {
-                return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
+        // While the user is typing a filter query (bubbles/list enables
+        // filtering by default, bound to "/"), global commands must not
+        // steal keystrokes meant for the query -- otherwise typing e.g.
+        // "quit" to jump to the Quit item exits the app on the first "q"
+        // instead of reaching the filter input. Same guard pipeline.go's
+        // handleKey/handleSearchInput and jobs.go's Update already apply
+        // for their own modal sub-states.
+        if m.list.FilterState() != list.Filtering {
+            switch msg.String() {
+            case "q", "ctrl+c":
+                return m, func() tea.Msg { return MenuQuitMsg{} }
+            case "enter":
+                if sel, ok := m.list.SelectedItem().(MenuItem); ok {
+                    return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
+                }
             }
         }
-    case animationMsg:
-        m.animDone = true
     }
 
     var cmd tea.Cmd

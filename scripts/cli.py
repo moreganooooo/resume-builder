@@ -6,7 +6,6 @@ import os
 import sys
 
 import click
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -120,13 +119,7 @@ def run_batch(master, pick, yes):
 
         completed = 0
         failed = 0
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=cli_art.console,
-        ) as progress:
+        with cli_art.new_progress() as progress:
             task = progress.add_task(f"[bold {theme.BRAND}]Processing JDs...", total=len(pending))
             for i, jd_path in enumerate(pending, 1):
                 jd = jd_manager.read_jd_json(jd_path)

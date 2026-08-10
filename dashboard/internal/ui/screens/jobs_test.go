@@ -88,8 +88,29 @@ func TestQPressEmitsJobsClosedMsg(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected a command from pressing q")
 	}
-	if _, ok := cmd().(JobsClosedMsg); !ok {
+	msg, ok := cmd().(JobsClosedMsg)
+	if !ok {
 		t.Fatalf("expected JobsClosedMsg, got %T", cmd())
+	}
+	if !msg.Quit {
+		t.Fatal("expected \"q\" to emit JobsClosedMsg{Quit: true}, got Quit: false")
+	}
+}
+
+// Esc backs out to the Main Menu rather than quitting the app -- distinct
+// from "q", which still exits the whole program.
+func TestEscPressEmitsJobsClosedMsgBack(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("expected a command from pressing esc")
+	}
+	msg, ok := cmd().(JobsClosedMsg)
+	if !ok {
+		t.Fatalf("expected JobsClosedMsg, got %T", cmd())
+	}
+	if msg.Quit {
+		t.Fatal("expected Esc to emit JobsClosedMsg{Quit: false} (back), got Quit: true")
 	}
 }
 

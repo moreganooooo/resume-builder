@@ -38,6 +38,7 @@ type appModel struct {
 	jobs            screens.JobsModel
 	menu            menu.MenuModel
 	state           viewState
+	previousState   viewState // screen to return to on "back" (esc); set by startTransition
 	careerOpsPath   string
 	theme           theme.Theme
 	progressMetrics model.ProgressMetrics
@@ -65,7 +66,15 @@ func tickTransition() tea.Cmd {
 // startTransition switches to newState and begins revealing it top-down.
 // damping of 1.0 is critically damped -- no bounce/overshoot, which would
 // make lines flicker in and out rather than settle once, cleanly.
+//
+// Recording m.state as previousState before overwriting it -- rather than
+// only setting previousState at each menu-selection/open-report/open-
+// progress call site -- gives every screen a "back" target for free:
+// Pipeline and Jobs are only ever entered from the Menu, Progress and
+// Reports from either the Menu or Pipeline, and whichever screen was
+// active when a transition starts is always the correct one to return to.
 func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
+	m.previousState = m.state
 	m.state = newState
 	m.transitioning = true
 	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0)
@@ -172,10 +181,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case screens.PipelineClosedMsg:
-		return m, tea.Quit
+		if msg.Quit {
+			return m, tea.Quit
+		}
+		return m.startTransition(m.previousState)
 
 	case screens.JobsClosedMsg:
-		return m, tea.Quit
+		if msg.Quit {
+			return m, tea.Quit
+		}
+		return m.startTransition(m.previousState)
 
 	case menu.MenuSelectMsg:
 		switch msg.Command {
@@ -221,7 +236,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startTransition(viewReport)
 
 	case screens.ViewerClosedMsg:
-		return m.startTransition(viewPipeline)
+		return m.startTransition(m.previousState)
 
 	case screens.PipelineOpenProgressMsg:
 		m.progress = screens.NewProgressModel(
@@ -232,7 +247,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startTransition(viewProgress)
 
 	case screens.ProgressClosedMsg:
-		return m.startTransition(viewPipeline)
+		return m.startTransition(m.previousState)
 
 	case screens.PipelineOpenURLMsg:
 		return m, func() tea.Msg {

@@ -159,7 +159,7 @@ def main():
     parser.add_argument("--limit",   type=int, default=0,          help="Only score N bullets (0 = all)")
     args = parser.parse_args()
 
-    cli_art.console.print(f"\n📥 Loading: {args.input}", markup=False, soft_wrap=True)
+    cli_art.console.print(f"\n{theme.colorize_icon('discovery')} Loading: {args.input}", soft_wrap=True)
     rows: list[dict] = []
     with open(args.input, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -182,10 +182,10 @@ def main():
     if args.limit > 0:
         to_score_idx = to_score_idx[:args.limit]
 
-    cli_art.console.print(f"  🎯 Rows needing scoring: {len(to_score_idx)}", markup=False, soft_wrap=True)
+    cli_art.console.print(f"  {theme.colorize_icon('evaluate')} Rows needing scoring: {len(to_score_idx)}", soft_wrap=True)
 
     if args.dry_run:
-        cli_art.console.print("\n🔍 Dry-run mode — first 5 bullets that would be scored:", markup=False, soft_wrap=True)
+        cli_art.console.print(f"\n{theme.colorize_icon('discovery')} Dry-run mode — first 5 bullets that would be scored:", soft_wrap=True)
         for i in to_score_idx[:5]:
             cli_art.console.print(f"  [{i}] {rows[i].get(bullet_col, '')[:100]}", markup=False, soft_wrap=True)
         return
@@ -236,7 +236,7 @@ def main():
                 strong_count += 1
                 cli_art.console.print(f"    {theme.colorize_icon('gem')} Strong [{score}]", soft_wrap=True)
             else:
-                cli_art.console.print(f"    📋 Score: {score}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"    {theme.colorize_icon('evaluate')} Score: {score}", soft_wrap=True)
         else:
             rows[i]["hidden_gem_score"]  = ""
             rows[i]["hidden_gem_flag"]   = ""

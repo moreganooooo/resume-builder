@@ -170,7 +170,7 @@ def main():
     bullets = df[bullet_col].fillna("").astype(str).tolist()
 
     total = len(bullets)
-    cli_art.console.print(f"📄 Loaded {total} bullets from {CSV_PATH}", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{theme.colorize_icon('bullet_bank')} Loaded {total} bullets from {CSV_PATH}", soft_wrap=True)
     current_sha = bullets_sha(bullets)
 
     vectors, start_index = load_checkpoint(current_sha)
@@ -178,7 +178,7 @@ def main():
     remaining = total - start_index
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
     est_secs  = n_batches * EMBED_SLEEP
-    cli_art.console.print(f"🔢 Embedding with {EMBED_MODEL} @ {EMBED_DIM}d", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{theme.colorize_icon('build')} Embedding with {EMBED_MODEL} @ {EMBED_DIM}d", soft_wrap=True)
     cli_art.console.print(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining", markup=False, soft_wrap=True)
     cli_art.console.print(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s\n", markup=False, soft_wrap=True)
 
@@ -216,7 +216,7 @@ def main():
     }
     with atomic_write(META_PATH) as f:
         json.dump(meta, f, indent=2)
-    cli_art.console.print(f"📋 Saved metadata sidecar → {META_PATH}", markup=False, soft_wrap=True)
+    cli_art.console.print(f"{theme.colorize_icon('save')} Saved metadata sidecar → {META_PATH}", soft_wrap=True)
 
     if os.path.exists(CHECKPOINT_PATH):
         os.remove(CHECKPOINT_PATH)
