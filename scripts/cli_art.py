@@ -2,10 +2,12 @@
 cli_art.py style (rich Console/Panel) but trimmed down -- no hand-drawn ASCII
 block art, just a clean styled banner."""
 
+import json
 import os
 import random
 import time
 
+import questionary
 from rich import box
 from rich.console import Console
 from rich.live import Live
@@ -311,19 +313,26 @@ _POSTING_AGE_VERY_STALE_DAYS = 21
 
 
 def _posting_age_cell(days: int | None) -> str:
-    """Colored "Nd" cell for how long a posting's been up -- green within
-    the not-yet-penalized window, amber into the scoring-penalty range,
-    red well past it. "-" when no post date or scan-discovery fallback
-    was available at all (see jd_manager.compute_posting_age_days())."""
+    """Icon+colored "Nd" cell for how long a posting's been up -- green
+    within the not-yet-penalized window, amber into the scoring-penalty
+    range, red well past it. "-" when no post date or scan-discovery
+    fallback was available at all (see
+    jd_manager.compute_posting_age_days()).
+
+    The icon is not decoration. This was the one cell in this module
+    signalling by color alone, which is invisible to a colorblind user
+    and to anyone piping output somewhere unstyled -- everywhere else
+    pairs color with a glyph via theme.colorize_icon(). Pairing it here
+    makes freshness readable from the glyph with the color removed."""
     if days is None:
         return "-"
     if days <= _POSTING_AGE_STALE_DAYS:
-        color = theme.SUCCESS
+        color, icon_name = theme.SUCCESS, "success"
     elif days <= _POSTING_AGE_VERY_STALE_DAYS:
-        color = theme.WARNING
+        color, icon_name = theme.WARNING, "warning"
     else:
-        color = theme.ERROR
-    return f"[{color}]{days}d[/{color}]"
+        color, icon_name = theme.ERROR, "error"
+    return f"[{color}]{theme.ICONS[icon_name]} {days}d[/{color}]"
 
 
 def render_fit_table(results: list, start_index: int = 1, title: str | None = None) -> None:
@@ -561,14 +570,28 @@ def render_comparison_table(rows: list) -> None:
 _STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
 
 
-def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status") -> None:
+def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status",
+                              show_numbers: bool = True) -> None:
     """stage_rows: (number, label, status, detail) tuples, in pipeline
     order. maintenance_rows: (label, detail) tuples for the non-sequential
     triage/retire scripts. title is overridable so bootstrap_menu.py can
     reuse this exact table shape for onboarding-phase status instead of
-    carrying its own near-identical render function."""
+    carrying its own near-identical render function.
+
+    show_numbers=False drops the "#" column, for callers whose rows are a
+    linear checklist rather than a numbered pipeline. bootstrap_menu.py's
+    onboarding table is the reason it exists: its first two steps are
+    numbered 0 and 0.5 internally (they were inserted ahead of an existing
+    1-6 pipeline), and "Stage 0.5" on a first-time user's very first screen
+    is dev-sequencing leaking into the product. Renumbering them 1-8 there
+    was the other option, but that would permanently disagree with the
+    Bullet Bank menu's own 1-6 for the same stages. Dropping the column
+    sidesteps both: row order already carries the sequence, and the Status
+    column already says where you are. Callers still pass the number in
+    each tuple -- it's simply not rendered."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
-    table.add_column("#", justify="right", style="dim")
+    if show_numbers:
+        table.add_column("#", justify="right", style="dim")
     table.add_column("Stage")
     table.add_column("Status")
 
@@ -577,10 +600,11 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
         status_text = f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
         if detail:
             status_text += f" ({detail})"
-        table.add_row(str(number), label, status_text)
+        row = (label, status_text) if not show_numbers else (str(number), label, status_text)
+        table.add_row(*row)
 
     for label, detail in maintenance_rows:
-        table.add_row("-", label, detail)
+        table.add_row(*((label, detail) if not show_numbers else ("-", label, detail)))
 
     console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED))
 
@@ -775,6 +799,361 @@ def cli_error(message: str) -> None:
 def cli_success(message: str) -> None:
     """Print a success message with success icon."""
     console.print(f"{SUCCESS} {message}", soft_wrap=True)
+
+
+# =====================================================================
+# House rule 1: output verbosity
+# ---------------------------------------------------------------------
+# A design audit found the core engine (orchestrator.py) printing cache
+# hit/miss, per-tier character counts, model identifiers and rule-file
+# names on every ordinary run -- engineer-facing telemetry shipped to a
+# self-described non-technical audience. Rather than delete it (it's
+# genuinely useful while iterating on prompts), output is now tiered.
+#
+# Three levels, because the middle one earns its place: cache hit/miss is
+# cheap to read and meaningful even to a non-engineer ("this was free"),
+# whereas char counts and model internals are not.
+#
+#   QUIET   -- errors, warnings and final results only.
+#   NORMAL  -- the above, plus step labels and cache hit/miss. (default)
+#   VERBOSE -- everything, including tier sizes, token math, model IDs
+#              and which rule files were applied.
+#
+# Precedence: an explicit set_verbosity() call (i.e. a --quiet/--verbose
+# CLI flag) beats the RESUME_BUILDER_VERBOSITY env var, which beats the
+# NORMAL default. The env var is what makes this usable day-to-day --
+# `RESUME_BUILDER_VERBOSITY=verbose resume run` needs no flag plumbing
+# through the menu layer, which never passes argv at all.
+# =====================================================================
+
+QUIET = 0
+NORMAL = 1
+VERBOSE = 2
+
+_VERBOSITY_ENV = "RESUME_BUILDER_VERBOSITY"
+_LEVEL_BY_NAME = {
+    "quiet": QUIET, "0": QUIET,
+    "normal": NORMAL, "1": NORMAL,
+    "verbose": VERBOSE, "2": VERBOSE, "debug": VERBOSE,
+}
+# None means "not yet resolved"; resolution is lazy so importing cli_art
+# never reads the environment at import time (tests set the env var after
+# import all the time).
+_verbosity: int | None = None
+
+
+def set_verbosity(level: int | str | None) -> None:
+    """Pin the output level explicitly, overriding the environment.
+
+    Accepts an int constant or a name ("quiet"/"normal"/"verbose").
+    Passing None resets to unresolved, so the env var wins again -- which
+    is what argparse should hand us when neither flag was given."""
+    global _verbosity
+    if level is None:
+        _verbosity = None
+        return
+    if isinstance(level, str):
+        level = _LEVEL_BY_NAME.get(level.strip().lower(), NORMAL)
+    _verbosity = max(QUIET, min(VERBOSE, int(level)))
+
+
+def verbosity() -> int:
+    """Current output level, resolving from the environment on first use."""
+    global _verbosity
+    if _verbosity is None:
+        raw = os.environ.get(_VERBOSITY_ENV, "").strip().lower()
+        _verbosity = _LEVEL_BY_NAME.get(raw, NORMAL)
+    return _verbosity
+
+
+def at_level(level: int) -> bool:
+    """True when output at `level` should be shown. Use this to guard an
+    expensive f-string or a multi-line block, rather than building the
+    string and throwing it away inside detail()."""
+    return verbosity() >= level
+
+
+def detail(message: str, level: int = VERBOSE, **print_kwargs) -> None:
+    """Print implementation detail, suppressed unless the output level is
+    high enough. Styled MUTED so that even when it IS shown it reads as
+    secondary to the step labels around it.
+
+    Default level is VERBOSE -- the stricter of the two -- so that an
+    un-annotated call site stays hidden from ordinary users. Pass
+    level=NORMAL only for the small set of internals a job seeker can
+    actually act on (cache hit/miss being the motivating case)."""
+    if not at_level(level):
+        return
+    print_kwargs.setdefault("style", theme.MUTED)
+    print_kwargs.setdefault("soft_wrap", True)
+    console.print(message, **print_kwargs)
+
+
+# =====================================================================
+# House rule 2: no raw exception text reaches the user
+# ---------------------------------------------------------------------
+# doctor.py's check/detail/fix convention is the best error UX in this
+# codebase -- every failure carries a concrete one-line remedy. This
+# generalizes that shape so any caller gets it for free.
+#
+# The classifier is deliberately ordered most-specific-first and falls
+# through to a generic message, so an unrecognized exception degrades to
+# "something went wrong, here's the technical detail" rather than
+# vanishing. Raw text is never dropped -- it moves to a dimmed second
+# line under a plain-English first line.
+# =====================================================================
+
+# (exception type, substring to look for in str(exc) or "" for any) ->
+# (plain-English explanation, concrete fix)
+# Substring matching is lowercased on both sides.
+_ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
+    (FileNotFoundError, "", "A file this step needed isn't there.",
+     "Run `resume doctor` -- it checks for every file the pipeline expects."),
+    (PermissionError, "", "This machine wouldn't let the app read or write that file.",
+     "Check the file isn't open in another program, then try again."),
+    (json.JSONDecodeError, "", "A saved data file is corrupted and couldn't be read.",
+     "Delete the file named below and let it rebuild, or restore it from a backup."),
+    (UnicodeDecodeError, "", "A file contains characters that couldn't be read as text.",
+     "Re-save the file as UTF-8 and try again."),
+    (TimeoutError, "", "The request took too long and gave up.",
+     "Check your internet connection and try again -- this is usually temporary."),
+    # --- Below: signatures taken from the real failure text, produced by
+    # --- actually triggering each one rather than guessing at wording.
+    # --- The substrings are the stable part of each message; the variable
+    # --- parts (paths, counts, row numbers) are deliberately not matched.
+    #
+    # Playwright, browsers never installed / installed somewhere else.
+    # Real text: "browserType.launch: Executable doesn't exist at
+    # /.../chrome-headless-shell" followed by an ASCII box telling you to
+    # run `npx playwright install`.
+    (Exception, "executable doesn't exist",
+     "The headless browser that turns your resume into a PDF isn't installed.",
+     "Run `npm install && npx playwright install chromium` in the project folder."),
+    # The macOS 12 trap this project is pinned around (see CLAUDE.md):
+    # Playwright >= 1.62 dropped macOS 12, so an unpinned upgrade makes
+    # every render die here. Worth its own message because the fix is the
+    # opposite of the obvious one -- downgrade, don't reinstall.
+    (Exception, "does not support chromium on mac",
+     "The installed Playwright version is too new for this machine's macOS.",
+     "Pin playwright to exactly 1.61.1 in package.json (not ^1.61.1), then re-run `npm install`."),
+    (Exception, "cannot find module",
+     "A required Node package isn't installed.",
+     "Run `npm install` in the project folder."),
+    (Exception, "command not found: node",
+     "Node.js isn't installed, or isn't on this shell's PATH.",
+     "Install Node, then run `resume doctor` to confirm it's visible."),
+    # The Go toolchain is the one dependency the rest of this project does
+    # NOT need -- only the dashboard and the new-user setup wizard shell out
+    # to it. So "go: command not found" is both likely on a fresh machine
+    # and completely opaque if shown raw.
+    (Exception, "command not found: go",
+     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
+    (Exception, "go: no such file or directory",
+     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
+    # pandas CSV failures. Real text, in order:
+    #   ParserError:    "Error tokenizing data. C error: Expected 2 fields
+    #                    in line 3, saw 5"
+    #   ParserError:    "Error tokenizing data. C error: EOF inside string
+    #                    starting at row 1"
+    #   EmptyDataError: "No columns to parse from file"
+    # Both ParserError and EmptyDataError subclass ValueError, so they're
+    # matched on message text rather than type.
+    (Exception, "eof inside string",
+     "A saved spreadsheet has a quote that's opened but never closed, so the rest of the file can't be read.",
+     "Open the file listed below in a spreadsheet app, fix the stray quote mark, and save it again as CSV."),
+    (Exception, "error tokenizing data",
+     "A saved spreadsheet has a row with the wrong number of columns.",
+     "Open the file listed below in a spreadsheet app -- the error names the bad row -- then save it again as CSV."),
+    (Exception, "no columns to parse",
+     "A saved spreadsheet is completely empty.",
+     "Restore it from a backup, or re-run the bullet-bank setup step to rebuild it."),
+    # gemini_client.SustainedFailureError's own message text.
+    (Exception, "sustained quota issue",
+     "Gemini refused several requests in a row, which usually means the API key is out of quota.",
+     "Swap GEMINI_API_KEY in your profile's .env for one with quota left, or wait for the window to reset."),
+
+    # --- GENERIC NETWORK / API SIGNATURES MUST STAY LAST ---------------
+    # First match wins, so broad needles have to sit below narrow ones.
+    # This is not theoretical: "sustained quota issue" above contains the
+    # word "quota", so while the generic "quota" entry sat higher in this
+    # list, SustainedFailureError matched it and told the user to "wait
+    # for the quota to reset" -- when the actual remedy is to swap the
+    # API key. Anything added below this line is a fallback, not a
+    # signature; add new specific cases ABOVE this comment.
+    # tests/test_cli_art_errors.py pins the two collisions that matter.
+    (Exception, "api key", "The Gemini API key is missing or wasn't accepted.",
+     "Add a valid GEMINI_API_KEY to your profile's .env file, then run `resume doctor`."),
+    (Exception, "quota", "You've hit the Gemini API's usage limit for now.",
+     "Wait for the quota to reset, or switch to a different model tier."),
+    (Exception, "rate limit", "Requests are going out faster than the API allows.",
+     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
+    (Exception, "429", "Requests are going out faster than the API allows.",
+     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
+    (Exception, "connection", "Couldn't reach the service over the network.",
+     "Check your internet connection, then try again."),
+    (Exception, "timed out", "The request took too long and gave up.",
+     "Check your internet connection and try again -- this is usually temporary."),
+    (Exception, "ssl", "A secure connection to the service couldn't be established.",
+     "Check whether a VPN or corporate proxy is intercepting traffic."),
+]
+
+_GENERIC_EXPLANATION = (
+    "Something went wrong that this app doesn't have a specific explanation for."
+)
+
+
+def _classify(text: str, exc: BaseException | None = None) -> tuple[str, str | None]:
+    """Shared matcher behind describe_error() and describe_stderr().
+
+    Two callers with different amounts of information:
+      - describe_error() has a real exception, so type-anchored signatures
+        (FileNotFoundError, PermissionError, ...) are eligible.
+      - describe_stderr() has only captured text from a subprocess, where
+        there is no Python exception to type-check. Type-anchored
+        signatures are skipped entirely there rather than being matched
+        loosely, so a bare `except`-style catch-all can't fire on a
+        substring it was never meant to own."""
+    lowered = (text or "").lower()
+    for exc_type, needle, explanation, fix in _ERROR_SIGNATURES:
+        if exc is not None:
+            if not isinstance(exc, exc_type):
+                continue
+        elif exc_type is not Exception or not needle:
+            continue
+        if needle and needle not in lowered:
+            continue
+        return explanation, fix
+    return _GENERIC_EXPLANATION, None
+
+
+def describe_error(exc: BaseException, context: str) -> tuple[str, str | None]:
+    """Classify an exception into (plain-English explanation, fix or None).
+
+    `context` is what the app was trying to do, phrased as a noun phrase
+    -- "saving your tailored resume", "checking whether the posting is
+    still live". It leads the message, so the user learns what broke
+    before they learn how."""
+    return _classify(str(exc), exc)
+
+
+def describe_stderr(text: str) -> tuple[str, str | None]:
+    """Classify captured subprocess stderr into (explanation, fix or None).
+
+    The exception-based path can't cover the failures that matter most
+    here: generate-pdf.mjs and check-liveness.mjs are Node subprocesses,
+    so a missing Chromium or a missing npm package arrives as a non-zero
+    return code plus stderr text, never as a Python exception. Those
+    call sites used to print that stderr verbatim -- which is how a
+    Playwright ASCII-art box ends up on a job seeker's screen."""
+    return _classify(text, None)
+
+
+def friendly_subprocess_error(stderr: str, context: str, fix: str | None = None) -> None:
+    """Report a failed subprocess in plain language, raw output demoted.
+
+    The `returncode != 0` counterpart to friendly_error()."""
+    explanation, suggested_fix = describe_stderr(stderr)
+    display_error(f"Couldn't finish {context}. {explanation}")
+    if fix or suggested_fix:
+        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+    raw = (stderr or "").strip()
+    if raw:
+        # markup=False and MUTED for the same reasons friendly_error()
+        # uses them: subprocess output routinely contains brackets Rich
+        # would try to parse, and box-drawing art that shouldn't compete
+        # with the plain sentence above it.
+        for line in raw.splitlines():
+            if line.strip():
+                console.print(f"   {line}", style=theme.MUTED, markup=False, soft_wrap=True)
+
+
+def friendly_error(exc: BaseException, context: str, fix: str | None = None) -> None:
+    """Report an exception in plain language, with the raw text demoted to
+    a dimmed detail line rather than deleted.
+
+    Follows doctor.py's what/why/fix shape. Pass `fix` to override the
+    classifier's suggestion when the call site knows better."""
+    explanation, suggested_fix = describe_error(exc, context)
+    display_error(f"Couldn't finish {context}. {explanation}")
+    if fix or suggested_fix:
+        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+    raw = str(exc).strip()
+    if raw:
+        # markup=False: exception text routinely contains square brackets
+        # (list reprs, log prefixes) that Rich would try to parse as tags.
+        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
+                      markup=False, soft_wrap=True)
+
+
+def friendly_warning(exc: BaseException, context: str, consequence: str) -> None:
+    """The non-fatal sibling of friendly_error, for the `except` blocks
+    that fall back to a default instead of aborting.
+
+    `consequence` states what the user is getting INSTEAD -- the thing
+    that was actually missing from the swallowed-exception sites this was
+    built for, where users saw "0 existing rows" with no way to know that
+    came from a parse failure rather than reality."""
+    cli_warning(f"Couldn't finish {context} -- {consequence}")
+    raw = str(exc).strip()
+    if raw and at_level(NORMAL):
+        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
+                      markup=False, soft_wrap=True)
+
+
+# =====================================================================
+# House rule 3: one confirm-gate policy
+# ---------------------------------------------------------------------
+# The audit found cost-gated Gemini calls confirming properly while
+# destructive-but-free actions (archive_jd, application-status changes)
+# committed instantly. The blind spot was "free == safe", which isn't
+# true when the cost is the user's own data. These wrappers also bake in
+# QUESTIONARY_STYLE, which was previously repeated at 18 call sites.
+# =====================================================================
+
+def select(message: str, choices, **kwargs):
+    """questionary.select() with this app's style applied. Use instead of
+    calling questionary directly so the style stays in one place."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.select(message, choices=choices, **kwargs).ask()
+
+
+def confirm(message: str, default: bool = False, **kwargs) -> bool:
+    """questionary.confirm() with this app's style applied.
+
+    Returns False (not None) when the user aborts with Ctrl-C, so callers
+    can treat the answer as a plain bool without re-introducing the
+    Ctrl-C-fallthrough bug class documented in menu.py:151-217."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    answer = questionary.confirm(message, default=default, **kwargs).ask()
+    return bool(answer)
+
+
+def text(message: str, **kwargs):
+    """questionary.text() with this app's style applied."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.text(message, **kwargs).ask()
+
+
+def checkbox(message: str, choices, **kwargs):
+    """questionary.checkbox() with this app's style applied."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.checkbox(message, choices=choices, **kwargs).ask()
+
+
+def confirm_destructive(action: str, target: str, default: bool = False) -> bool:
+    """The single gate for actions that change or discard the user's own
+    data without costing money -- archiving a posting, overwriting a
+    saved document, changing an application's status.
+
+    `action` is an imperative verb phrase ("Archive", "Overwrite",
+    "Mark as rejected"); `target` names the specific thing. Defaults to
+    No, because the whole point is that a stray Enter shouldn't be
+    destructive."""
+    console.print(
+        f"{WARNING} [bold]{action}[/bold] {target}?", soft_wrap=True)
+    return confirm("   Are you sure?", default=default)
 
 
 def print_subprocess_output(text: str) -> None:
