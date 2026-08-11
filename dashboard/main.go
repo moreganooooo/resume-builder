@@ -253,7 +253,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.startTransition(viewReport)
 		case "Jobs":
 			return m.startTransition(viewJobs)
-		case "Quit":
+		// Matches MenuItem.title in internal/ui/menu/list.go verbatim --
+		// this switch dispatches on the DISPLAY string, so renaming a menu
+		// item there silently breaks it here. Nothing catches that: it
+		// still compiles, still passes every test, and the row just
+		// becomes a dead end at runtime. "Quit" was renamed to "Exit" to
+		// match the CLI's word for the same action; reword either side
+		// and both must move together.
+		case "Exit":
 			return m, tea.Quit
 		}
 		return m, nil
