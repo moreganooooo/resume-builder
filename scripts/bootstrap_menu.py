@@ -134,14 +134,22 @@ def _run_phase05() -> bool:
 
 
 def _build_choices() -> list:
+    # Labels here are plain-language stage names, not the internal "Phase
+    # 0"/"Phase 0.5" dev-sequencing numbers this module's own docstring
+    # (and the rest of this codebase) uses to talk about these two steps
+    # -- a first-time user has no idea what a "phase" is or why it starts
+    # at 0. The resumable status table below (run_bootstrap_menu()) still
+    # numbers these 0/"0.5" alongside Stages 1-6 -- that ordering is
+    # genuinely useful there, so it stays; only the user-facing menu
+    # copy changes here.
     choices = [
         questionary.Choice(
-            title=[("class:text", "0. Ingest Source Documents  "),
+            title=[("class:text", "Upload Your Documents  "),
                    ("class:description", "(extract achievements from uploaded files)")],
             value="phase0",
         ),
         questionary.Choice(
-            title=[("class:text", "0.5 Set Up Profile  "),
+            title=[("class:text", "Draft Your Profile  "),
                    ("class:description", "(identity, profile.yml, cv.md draft)")],
             value="phase05",
         ),
@@ -162,19 +170,26 @@ def run_bootstrap_menu() -> bool:
     without doing anything."""
     did_something = False
     while True:
+        # Labels must match _build_choices()'s wording verbatim -- these two
+        # rows previously read "Ingest Source Documents"/"Set Up Profile"
+        # while the menu directly below called the same steps "Upload Your
+        # Documents"/"Draft Your Profile", so the progress table and the
+        # thing you click to act on it named the same step differently.
         stage_rows = [
-            (0, "Ingest Source Documents", *_phase0_status()),
-            ("0.5", "Set Up Profile", *_phase05_status()),
+            (0, "Upload Your Documents", *_phase0_status()),
+            ("0.5", "Draft Your Profile", *_phase05_status()),
         ]
         stage_rows += [
             (s["number"], s["label"], *bullet_bank_menu._stage_status(s))
             for s in bullet_bank_menu.STAGES
         ]
-        cli_art.render_bullet_bank_status(stage_rows, [], title="Onboarding Progress")
+        # show_numbers=False: these rows are numbered 0/0.5/1-6 internally,
+        # and "Stage 0.5" is dev-sequencing a first-time user shouldn't see.
+        # Row order carries the sequence here. See render_bullet_bank_status().
+        cli_art.render_bullet_bank_status(
+            stage_rows, [], title="Onboarding Progress", show_numbers=False)
 
-        choice = questionary.select(
-            "New User Setup:", choices=_build_choices(), style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        choice = cli_art.select("New User Setup:", choices=_build_choices())
         if not choice or choice == "__back__":
             return did_something
 
