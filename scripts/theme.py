@@ -142,7 +142,17 @@ def _resolve_icon_set_name() -> str:
     try:
         import ui_config
         persisted = ui_config.get_icon_set()
-    except Exception:
+    except (ImportError, AttributeError, OSError, ValueError):
+        # Deliberately silent, unlike every other swallowed-exception site
+        # in this codebase (which now warn -- see cli_art.friendly_error).
+        # Two reasons this one stays quiet: (1) it runs at module-import
+        # time on the *normal* first-run path, where ui_config simply has
+        # no persisted answer yet -- warning would fire on every launch
+        # for a non-problem; (2) theme.py is imported BY cli_art.py, so
+        # calling cli_warning() here would be a circular import.
+        # The exception list is narrowed rather than bare `Exception` so a
+        # genuine bug inside ui_config.get_icon_set() still surfaces
+        # instead of silently degrading to the Unicode icon set.
         persisted = None
     if persisted:
         return persisted
