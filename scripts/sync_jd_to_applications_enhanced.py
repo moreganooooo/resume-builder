@@ -40,7 +40,12 @@ import cli_art
 def load_json(path: Path) -> dict:
     """Read a JSON file and return its dict representation.
     Robustly handles empty files or files with extra data.
-    Returns an empty dict on any parsing failure so the sync can continue.
+    Returns an empty dict on a genuine parsing failure (after a warning) so
+    the sync can continue rather than abort on one bad file -- this
+    previously degraded silently, so a malformed JD JSON became an
+    all-placeholder row ("unknown", "—") in applications.md with zero
+    indication anything had failed. An empty file is not itself an error
+    (see docstring above) and stays silent.
     """
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -55,9 +60,11 @@ def load_json(path: Path) -> dict:
                 decoder = json.JSONDecoder()
                 obj, _ = decoder.raw_decode(text)
                 return obj
-        except Exception:
+        except Exception as e:
+            cli_art.cli_warning(f"Couldn't parse {path}, showing a placeholder row: {e}")
             return {}
-    except Exception:
+    except Exception as e:
+        cli_art.cli_warning(f"Couldn't read {path}, showing a placeholder row: {e}")
         return {}
 
 
@@ -134,7 +141,7 @@ def main(profile: str = "morgan"):
     # Gather JSON payloads, sorted for deterministic ordering
     json_files = sorted(jds_dir.glob("*.json"))
     if not json_files:
-        cli_art.cli_error(f"[sync] No JSON files found under {jds_dir}")
+        cli_art.cli_error(f"No JSON files found under {jds_dir}")
         sys.exit(1)
 
     rows = []
@@ -153,7 +160,7 @@ def main(profile: str = "morgan"):
 
     os.makedirs(data_dir, exist_ok=True)
     md_path.write_text(content, encoding="utf-8")
-    cli_art.console.print(f"[sync] Wrote {len(rows)} rows to {md_path}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Wrote {len(rows)} rows to {md_path}")
 
 if __name__ == "__main__":
     profile_arg = sys.argv[1] if len(sys.argv) > 1 else "morgan"

@@ -12,6 +12,54 @@ sys.path.insert(0, SCRIPTS_DIR)
 import audit_keepers  # noqa: E402
 
 
+class TestMalformedCsvReadersWarnInsteadOfSilentlyDegrading(unittest.TestCase):
+    """Regression: _read_cluster_ids_from_file/_read_bullets_from_file/
+    _read_cluster_id_map_from_file used to catch a real read/parse failure
+    with a bare `except Exception: pass`, degrading to "no data present"
+    with zero console output. A missing file (the ordinary case, e.g. a
+    fresh profile with no keepers yet) must stay silent -- only an actual
+    parse failure on a file that exists should warn."""
+
+    def _malformed_csv(self, dir_path: str) -> str:
+        path = os.path.join(dir_path, "malformed.csv")
+        with open(path, "w") as f:
+            f.write("not,a,valid\nheader,at,all\n")  # missing every expected column
+        return path
+
+    def test_missing_file_stays_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "does_not_exist.csv")
+            with patch("audit_keepers.cli_art.cli_warning") as mock_warn:
+                result = audit_keepers._read_cluster_ids_from_file(missing)
+            self.assertEqual(result, set())
+            mock_warn.assert_not_called()
+
+    def test_malformed_cluster_ids_file_warns_and_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._malformed_csv(tmp)
+            with patch("audit_keepers.cli_art.cli_warning") as mock_warn:
+                result = audit_keepers._read_cluster_ids_from_file(path)
+            self.assertEqual(result, set())
+            mock_warn.assert_called_once()
+            self.assertIn(path, mock_warn.call_args[0][0])
+
+    def test_malformed_bullets_file_warns_and_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._malformed_csv(tmp)
+            with patch("audit_keepers.cli_art.cli_warning") as mock_warn:
+                result = audit_keepers._read_bullets_from_file(path)
+            self.assertEqual(result, set())
+            mock_warn.assert_called_once()
+
+    def test_malformed_cluster_id_map_file_warns_and_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._malformed_csv(tmp)
+            with patch("audit_keepers.cli_art.cli_warning") as mock_warn:
+                result = audit_keepers._read_cluster_id_map_from_file(path)
+            self.assertEqual(result, {})
+            mock_warn.assert_called_once()
+
+
 class TestResolveSourceFile(unittest.TestCase):
     # Regression coverage for the bug this function exists to prevent: a
     # bare `audit_keepers.py` re-run silently discarding manual corrections

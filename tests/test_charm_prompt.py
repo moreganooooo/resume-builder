@@ -38,18 +38,30 @@ class TestConfirm(unittest.TestCase):
         result = charm_prompt.confirm("Ready?")
         self.assertIsNone(result)
 
+    @patch("charm_prompt.questionary.confirm")
     @patch("charm_prompt.subprocess.run")
-    def test_nonzero_exit_raises_with_stderr(self, mock_run):
+    def test_nonzero_exit_degrades_to_questionary_instead_of_raising(self, mock_run, mock_questionary_confirm):
+        # A real Go/huh crash (not "Go missing") used to propagate as an
+        # unhandled RuntimeError straight out of every menu.py call site --
+        # this now degrades to questionary instead of crashing the menu.
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
-        with self.assertRaises(RuntimeError) as ctx:
-            charm_prompt.confirm("Ready?")
-        self.assertIn("boom", str(ctx.exception))
+        mock_questionary_confirm.return_value.ask.return_value = True
 
+        result = charm_prompt.confirm("Ready?")
+
+        self.assertTrue(result)
+        mock_questionary_confirm.assert_called_once()
+
+    @patch("charm_prompt.questionary.confirm")
     @patch("charm_prompt.subprocess.run")
-    def test_malformed_json_raises(self, mock_run):
+    def test_malformed_json_degrades_to_questionary_instead_of_raising(self, mock_run, mock_questionary_confirm):
         mock_run.return_value = MagicMock(returncode=0, stdout="not json", stderr="")
-        with self.assertRaises(RuntimeError):
-            charm_prompt.confirm("Ready?")
+        mock_questionary_confirm.return_value.ask.return_value = False
+
+        result = charm_prompt.confirm("Ready?")
+
+        self.assertFalse(result)
+        mock_questionary_confirm.assert_called_once()
 
 
 class TestSelect(unittest.TestCase):

@@ -76,19 +76,23 @@ func newResumeBuilder() Theme {
 		Text:    lipgloss.Color("#cdd6f4"),
 		Subtext: lipgloss.Color("#a6adc8"),
 
-		// Accents -- resume-builder's scripts/theme.py tokens.
+		// Accents -- resume-builder's scripts/theme.py tokens. Sky
+		// (#8B75FF, BRAND) clears Base (#1e1e2e) at 4.75:1 -- AA text
+		// contrast, but with little margin -- and fails outright against
+		// Surface (#313244) at 3.64:1. It's currently only ever
+		// composited against Base (progress.go/viewer.go section
+		// titles), which is why this isn't visibly broken today; don't
+		// pair it with Background(Surface) without re-measuring, unlike
+		// catppuccin_latte.go's accents (see that file's own contrast
+		// comment), which were deliberately tuned against the tighter of
+		// the two backgrounds.
 '''
 
 _FOOTER = """	}
 
-	t.GradientStart = lipgloss.Color(BrandColor)
-	t.GradientEnd = lipgloss.Color(AccentColor)
-
 	// Populate Token shortcuts
 	t.Token.Text = t.Text
 	t.Token.Subtext = t.Subtext
-	t.Token.GradientStart = t.GradientStart
-	t.Token.GradientEnd = t.GradientEnd
 	t.Token.Mauve = t.Mauve
 
 	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-

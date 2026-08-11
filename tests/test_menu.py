@@ -9,6 +9,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 import questionary  # noqa: E402
 
 import menu  # noqa: E402
+import theme  # noqa: E402
 
 
 def _title_text(title) -> str:
@@ -28,7 +29,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
         # for a first-time user matters more than avoiding a second entry
         # point into the same picker. See menu.py's _handle_tailor_pick/
         # _handle_coverletter_pick docstrings.
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("tailor_pick", values)
         self.assertIn("coverletter_pick", values)
         self.assertIn("tailor_pick", menu._HANDLERS)
@@ -39,7 +40,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
     def test_specific_jd_pickers_and_view_applications_are_gone(self):
         # Retired 2026-07-21 in favor of "Browse & Manage Jobs" -- see
         # IDEAS_ARCHIVE.md's browse/multi-select/compare writeup.
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         for retired in ("evaluate_one", "tailor_one", "coverletter_one", "view_applications"):
             self.assertNotIn(retired, values)
             self.assertNotIn(retired, menu._HANDLERS)
@@ -47,8 +48,8 @@ class TestChoicesAndHandlers(unittest.TestCase):
     def test_choices_have_the_renamed_labels(self):
         # Labels as of the 2026-07-26 menu reorg (section separators, Knowledge
         # Base/Discovery/Evaluation/Build/Polish/Browse groupings) -- see
-        # menu.py's _CHOICES.
-        labels = {c.value: _title_text(c.title) for c in menu._CHOICES}
+        # menu.py's _build_choices().
+        labels = {c.value: _title_text(c.title) for c in menu._build_choices()}
         self.assertIn("Scan for New Jobs", labels["scan"])
         self.assertIn("Check Job Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate Pending Roles", labels["evaluate_all"])
@@ -56,36 +57,59 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
 
     def test_browse_jobs_entry_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("browse_jobs", values)
         self.assertIn("browse_jobs", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["browse_jobs"], menu._handle_browse_jobs)
 
     def test_career_dashboard_entry_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("career_dashboard", values)
         self.assertIn("career_dashboard", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["career_dashboard"], menu._handle_career_dashboard)
 
     def test_bullet_bank_entry_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("bullet_bank", values)
         self.assertIn("bullet_bank", menu._HANDLERS)
 
     def test_maintenance_entry_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("maintenance", values)
         self.assertIn("maintenance", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["maintenance"], menu._handle_maintenance)
 
     def test_help_entry_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("help", values)
         self.assertIn("help", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["help"], menu._handle_help)
 
+    def test_choices_reflect_icon_set_changes_without_reimport(self):
+        # Regression for a bug where the choice list was a module-level
+        # constant built once at import time: theme.set_icon_set() (called
+        # by _confirm_icon_set() right after the first-launch prompt) is
+        # documented to take effect for "the rest of the same session," but
+        # the Main Menu itself kept rendering whatever icon set was active
+        # at import time regardless. _build_choices() must be rebuilt per
+        # call so it reads theme.ICONS fresh every time.
+        original = theme.icon_set_name()
+        try:
+            theme.set_icon_set("nerd")
+            nerd_title = _title_text(
+                next(c for c in menu._build_choices() if c.value == "bullet_bank").title
+            )
+            theme.set_icon_set("unicode")
+            unicode_title = _title_text(
+                next(c for c in menu._build_choices() if c.value == "bullet_bank").title
+            )
+            self.assertIn("□", unicode_title)  # "□", theme.py's unicode bullet_bank glyph
+            self.assertNotEqual(nerd_title, unicode_title)
+        finally:
+            theme.set_icon_set(original)
+
     def test_choices_are_grouped_with_labeled_separators(self):
-        separator_lines = [c.line for c in menu._CHOICES if isinstance(c, questionary.Separator)]
+        separator_lines = [c.line for c in menu._build_choices() if isinstance(c, questionary.Separator)]
         self.assertTrue(any("Discovery" in line for line in separator_lines))
         self.assertTrue(any("Evaluation" in line for line in separator_lines))
         self.assertTrue(any("Build" in line for line in separator_lines))

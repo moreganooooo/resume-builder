@@ -338,19 +338,33 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     plain count for non-paginated callers. The "Why" column is a short
     excerpt, not the model's full reasoning -- lets a lower-scored-but-
     higher-priority role get spot-checked at a glance instead of needing
-    to open its JD JSON to see why it scored the way it did."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
-    table.add_column("#", justify="right", style="dim")
-    table.add_column("Score", justify="right")
-    table.add_column("Recommendation")
-    table.add_column("Company")
-    table.add_column("Title")
-    table.add_column("Posted", justify="right")
-    table.add_column("Why")
+    to open its JD JSON to see why it scored the way it did.
+
+    Columns are explicitly sized/bounded for the same reason
+    render_pipeline_table's are (see that function's own B22 comment):
+    seven columns with no sizing meant Rich divided any width deficit
+    evenly across all of them, squeezing/truncating header text itself on
+    an ordinary 80-100 column terminal. Title is the one `ratio` column so
+    it absorbs whatever's left; Why -- a short excerpt, least essential at
+    a glance -- drops entirely below _NARROW_TERMINAL_COLUMNS rather than
+    shrinking everything else past legibility."""
+    narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
+    table.add_column("#", justify="right", style="dim", width=4, no_wrap=True)
+    table.add_column("Score", justify="right", width=7, no_wrap=True)
+    table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
+    table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Posted", justify="right", width=8, no_wrap=True)
+    if not narrow:
+        table.add_column("Why", width=40, no_wrap=True, overflow="ellipsis")
 
     for i, r in enumerate(results, start_index):
         if r["error"]:
-            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-", "-")
+            row = [str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-"]
+            if not narrow:
+                row.append("-")
+            table.add_row(*row)
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], theme.MUTED)
         legitimacy = r.get("posting_legitimacy")
@@ -358,15 +372,17 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
         if legitimacy and legitimacy != "High Confidence":
             flag_color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
             recommendation_text += f" [{flag_color}]({theme.colorize_icon('warning')} {legitimacy})[/{flag_color}]"
-        table.add_row(
+        row = [
             str(i),
             f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
             recommendation_text,
             r["company_name"],
             r["job_title"],
             _posting_age_cell(r.get("posting_age_days")),
-            _short_why(r.get("why")),
-        )
+        ]
+        if not narrow:
+            row.append(_short_why(r.get("why")))
+        table.add_row(*row)
 
     legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
     console.print(Panel(

@@ -32,8 +32,9 @@ class TestCoverletterPickValidation(unittest.TestCase):
     def test_pick_declined_confirmation_aborts_without_evaluating(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
-             patch("cli.click.confirm", return_value=False), \
+             patch("picker.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = False
             result = runner.invoke(cli.cli, ["coverletter", "--pick"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Aborted", result.output)
