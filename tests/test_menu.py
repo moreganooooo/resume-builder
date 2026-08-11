@@ -22,14 +22,33 @@ def _title_text(title) -> str:
 
 
 class TestChoicesAndHandlers(unittest.TestCase):
+    # As of the 2026-08 menu collapse (design-audit-approved 7-item tree),
+    # every leaf action except "bullet_bank"/"settings_upkeep" (which open
+    # their own self-contained submenu, unchanged) moved out of
+    # menu._build_choices() into one of the category submenu builders
+    # below. See menu.py's _build_choices() docstring for the full tree.
+
+    def test_main_menu_has_the_approved_seven_item_tree(self):
+        # questionary.Separator is (surprisingly) a subclass of Choice, so
+        # this excludes it explicitly rather than filtering "isinstance
+        # Choice" (a no-op against Separator).
+        values = [
+            c.value for c in menu._build_choices()
+            if not isinstance(c, questionary.Separator)
+        ]
+        self.assertEqual(
+            values,
+            ["bootstrap", "find_jobs", "build_documents", "bullet_bank",
+             "track_followup", "settings_upkeep", "help", "exit"],
+        )
 
     def test_tailor_pick_and_coverletter_pick_are_registered(self):
-        # Reinstated 2026-07-23 as main-menu shortcuts straight into the
-        # Browse & Manage Jobs picker (scoped by status) -- discoverability
-        # for a first-time user matters more than avoiding a second entry
-        # point into the same picker. See menu.py's _handle_tailor_pick/
-        # _handle_coverletter_pick docstrings.
-        values = [c.value for c in menu._build_choices()]
+        # Reinstated 2026-07-23 as shortcuts straight into the Browse &
+        # Manage Jobs picker (scoped by status) -- discoverability for a
+        # first-time user matters more than avoiding a second entry point
+        # into the same picker. Now live under Build Documents. See
+        # menu.py's _handle_tailor_pick/_handle_coverletter_pick docstrings.
+        values = [c.value for c in menu._build_build_documents_choices()]
         self.assertIn("tailor_pick", values)
         self.assertIn("coverletter_pick", values)
         self.assertIn("tailor_pick", menu._HANDLERS)
@@ -40,30 +59,36 @@ class TestChoicesAndHandlers(unittest.TestCase):
     def test_specific_jd_pickers_and_view_applications_are_gone(self):
         # Retired 2026-07-21 in favor of "Browse & Manage Jobs" -- see
         # IDEAS_ARCHIVE.md's browse/multi-select/compare writeup.
-        values = [c.value for c in menu._build_choices()]
+        all_values = (
+            [c.value for c in menu._build_choices()]
+            + [c.value for c in menu._build_find_jobs_choices()]
+            + [c.value for c in menu._build_build_documents_choices()]
+            + [c.value for c in menu._build_track_followup_choices()]
+            + [c.value for c in menu._build_settings_upkeep_choices()]
+        )
         for retired in ("evaluate_one", "tailor_one", "coverletter_one", "view_applications"):
-            self.assertNotIn(retired, values)
+            self.assertNotIn(retired, all_values)
             self.assertNotIn(retired, menu._HANDLERS)
 
-    def test_choices_have_the_renamed_labels(self):
-        # Labels as of the 2026-07-26 menu reorg (section separators, Knowledge
-        # Base/Discovery/Evaluation/Build/Polish/Browse groupings) -- see
-        # menu.py's _build_choices().
-        labels = {c.value: _title_text(c.title) for c in menu._build_choices()}
+    def test_find_jobs_submenu_has_the_renamed_labels(self):
+        labels = {c.value: _title_text(c.title) for c in menu._build_find_jobs_choices()}
         self.assertIn("Scan for New Jobs", labels["scan"])
         self.assertIn("Check Job Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate Pending Roles", labels["evaluate_all"])
-        self.assertIn("Customize Resume for ALL Pending Roles (Batch Run)", labels["tailor_all"])
-        self.assertIn("Polish a Resume or Cover Letter with Gemini", labels["polish"])
+
+    def test_build_documents_submenu_has_the_renamed_labels(self):
+        labels = {c.value: _title_text(c.title) for c in menu._build_build_documents_choices()}
+        self.assertIn("Customize Resume for All Pending Roles (Batch Run)", labels["tailor_all"])
+        self.assertIn("Polish a Resume or Cover Letter With Gemini", labels["polish"])
 
     def test_browse_jobs_entry_is_registered(self):
-        values = [c.value for c in menu._build_choices()]
+        values = [c.value for c in menu._build_track_followup_choices()]
         self.assertIn("browse_jobs", values)
         self.assertIn("browse_jobs", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["browse_jobs"], menu._handle_browse_jobs)
 
     def test_career_dashboard_entry_is_registered(self):
-        values = [c.value for c in menu._build_choices()]
+        values = [c.value for c in menu._build_track_followup_choices()]
         self.assertIn("career_dashboard", values)
         self.assertIn("career_dashboard", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["career_dashboard"], menu._handle_career_dashboard)
@@ -73,11 +98,14 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("bullet_bank", values)
         self.assertIn("bullet_bank", menu._HANDLERS)
 
-    def test_maintenance_entry_is_registered(self):
+    def test_settings_upkeep_entry_is_registered(self):
         values = [c.value for c in menu._build_choices()]
-        self.assertIn("maintenance", values)
-        self.assertIn("maintenance", menu._HANDLERS)
-        self.assertIs(menu._HANDLERS["maintenance"], menu._handle_maintenance)
+        self.assertIn("settings_upkeep", values)
+        self.assertIn("settings_upkeep", menu._HANDLERS)
+        self.assertIs(menu._HANDLERS["settings_upkeep"], menu._handle_settings_upkeep)
+        # "maintenance" was this entry's value before the 2026-08 rename.
+        self.assertNotIn("maintenance", values)
+        self.assertNotIn("maintenance", menu._HANDLERS)
 
     def test_help_entry_is_registered(self):
         values = [c.value for c in menu._build_choices()]
@@ -108,12 +136,35 @@ class TestChoicesAndHandlers(unittest.TestCase):
         finally:
             theme.set_icon_set(original)
 
-    def test_choices_are_grouped_with_labeled_separators(self):
-        separator_lines = [c.line for c in menu._build_choices() if isinstance(c, questionary.Separator)]
-        self.assertTrue(any("Discovery" in line for line in separator_lines))
-        self.assertTrue(any("Evaluation" in line for line in separator_lines))
-        self.assertTrue(any("Build" in line for line in separator_lines))
-        self.assertTrue(any("Browse" in line for line in separator_lines))
+    def test_submenu_choices_are_also_rebuilt_fresh(self):
+        # Same regression as above, extended to every new category
+        # submenu builder -- each must read theme.ICONS fresh per call
+        # too, not just the main menu.
+        original = theme.icon_set_name()
+        try:
+            for builder in (
+                menu._build_find_jobs_choices,
+                menu._build_build_documents_choices,
+                menu._build_track_followup_choices,
+                menu._build_settings_upkeep_choices,
+            ):
+                theme.set_icon_set("nerd")
+                nerd_title = _title_text(builder()[0].title)
+                theme.set_icon_set("unicode")
+                unicode_title = _title_text(builder()[0].title)
+                self.assertNotEqual(nerd_title, unicode_title, builder.__name__)
+        finally:
+            theme.set_icon_set(original)
+
+    def test_every_submenu_ends_with_a_back_choice(self):
+        for builder in (
+            menu._build_find_jobs_choices,
+            menu._build_build_documents_choices,
+            menu._build_track_followup_choices,
+            menu._build_settings_upkeep_choices,
+        ):
+            choices = [c for c in builder() if isinstance(c, questionary.Choice)]
+            self.assertEqual(choices[-1].value, "back", builder.__name__)
 
 
 class TestHandleScan(unittest.TestCase):
@@ -367,13 +418,24 @@ class TestBrowseSingleAction(unittest.TestCase):
         self.assertTrue(menu._browse_single_action(row))
         mock_engine_cls.return_value.build_tailored_coverletter.assert_called_once_with("jds/a.json")
 
+    @patch("menu.cli_art.confirm_destructive", return_value=True)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_archive_action_moves_the_file_and_returns_true(self, mock_select, mock_archive):
+    def test_archive_action_moves_the_file_and_returns_true(self, mock_select, mock_archive, mock_confirm):
         mock_select.return_value.ask.return_value = "archive"
         row = _row(path="jds/a.json")
         self.assertTrue(menu._browse_single_action(row))
         mock_archive.assert_called_once_with("jds/a.json")
+        mock_confirm.assert_called_once_with("Archive", "Acme")
+
+    @patch("menu.cli_art.confirm_destructive", return_value=False)
+    @patch("menu.jd_manager.archive_jd")
+    @patch("menu.questionary.select")
+    def test_declining_archive_confirmation_does_not_archive(self, mock_select, mock_archive, mock_confirm):
+        mock_select.return_value.ask.side_effect = ["archive", "back"]
+        row = _row(path="jds/a.json")
+        self.assertFalse(menu._browse_single_action(row))
+        mock_archive.assert_not_called()
 
     @patch("menu.questionary.select")
     def test_update_status_only_offered_for_completed(self, mock_select):
@@ -740,13 +802,23 @@ class TestBrowseBulkAction(unittest.TestCase):
         choices = mock_select.call_args.kwargs["choices"]
         self.assertNotIn("coverletter", [c.value for c in choices])
 
+    @patch("menu.cli_art.confirm_destructive", return_value=True)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_archive_action_archives_every_selected_row(self, mock_select, mock_archive):
+    def test_archive_action_archives_every_selected_row(self, mock_select, mock_archive, mock_confirm):
         mock_select.return_value.ask.return_value = "archive"
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         self.assertTrue(menu._browse_bulk_action(rows))
         self.assertEqual(mock_archive.call_count, 2)
+
+    @patch("menu.cli_art.confirm_destructive", return_value=False)
+    @patch("menu.jd_manager.archive_jd")
+    @patch("menu.questionary.select")
+    def test_declining_archive_confirmation_archives_nothing(self, mock_select, mock_archive, mock_confirm):
+        mock_select.return_value.ask.return_value = "archive"
+        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
+        self.assertFalse(menu._browse_bulk_action(rows))
+        mock_archive.assert_not_called()
 
 
 class TestHandleCareerDashboard(unittest.TestCase):
@@ -804,42 +876,47 @@ class TestHandleRunDoctor(unittest.TestCase):
         mock_render.assert_called_once_with([], None)
 
 
-class TestHandleMaintenance(unittest.TestCase):
+class TestHandleSettingsUpkeep(unittest.TestCase):
+    # Renamed from TestHandleMaintenance/_handle_maintenance in the 2026-08
+    # menu collapse -- same function (_handle_settings_upkeep), same
+    # loop-until-Back shape. Choice titles are now icon-paired
+    # ([(style, text), ...] tuple-lists, see _icon_title()) rather than
+    # plain strings, so assertions flatten them via _title_text() first.
 
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
     def test_back_returns_false(self, mock_select, mock_last_run):
         mock_select.return_value.ask.return_value = "back"
-        self.assertFalse(menu._handle_maintenance())
+        self.assertFalse(menu._handle_settings_upkeep())
 
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
     def test_cancelled_prompt_returns_false(self, mock_select, mock_last_run):
         mock_select.return_value.ask.return_value = None
-        self.assertFalse(menu._handle_maintenance())
+        self.assertFalse(menu._handle_settings_upkeep())
 
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
     def test_never_run_label_when_no_prior_run(self, mock_select, mock_last_run):
         mock_select.return_value.ask.return_value = "back"
-        menu._handle_maintenance()
+        menu._handle_settings_upkeep()
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertIn("never run", choices[0].title)
+        self.assertIn("never run", _title_text(choices[0].title))
 
     @patch("menu.maintenance.get_last_run", return_value="2026-07-22T10:00:00")
     @patch("menu.questionary.select")
     def test_last_run_date_shown_when_recorded(self, mock_select, mock_last_run):
         mock_select.return_value.ask.return_value = "back"
-        menu._handle_maintenance()
+        menu._handle_settings_upkeep()
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertIn("2026-07-22", choices[0].title)
+        self.assertIn("2026-07-22", _title_text(choices[0].title))
 
     @patch("menu._handle_run_doctor")
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
     def test_doctor_choice_loops_back_to_the_submenu(self, mock_select, mock_last_run, mock_run_doctor):
         mock_select.return_value.ask.side_effect = ["doctor", "back"]
-        self.assertFalse(menu._handle_maintenance())
+        self.assertFalse(menu._handle_settings_upkeep())
         mock_run_doctor.assert_called_once()
         self.assertEqual(mock_select.call_count, 2)
 
@@ -848,7 +925,7 @@ class TestHandleMaintenance(unittest.TestCase):
     @patch("menu.questionary.select")
     def test_check_updates_choice_loops_back_to_the_submenu(self, mock_select, mock_last_run, mock_check_updates):
         mock_select.return_value.ask.side_effect = ["check_updates", "back"]
-        self.assertFalse(menu._handle_maintenance())
+        self.assertFalse(menu._handle_settings_upkeep())
         mock_check_updates.assert_called_once()
         self.assertEqual(mock_select.call_count, 2)
 
@@ -973,8 +1050,9 @@ class TestRunWithChain(unittest.TestCase):
             menu._run_with_chain("fake", {})
         mock_select.assert_not_called()
 
+    @patch("menu.cli_art.console")  # is_terminal must read truthy for the prompt to show at all
     @patch("menu.questionary.select")
-    def test_chain_prompt_appends_back_to_menu_choice(self, mock_select):
+    def test_chain_prompt_appends_back_to_menu_choice(self, mock_select, mock_console):
         mock_select.return_value.ask.return_value = "__back__"
         with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False), \
              patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
@@ -1003,8 +1081,9 @@ class TestRunWithChain(unittest.TestCase):
             menu._run_with_chain("fake", {})
         self.assertEqual(calls, ["fake"])
 
+    @patch("menu.cli_art.console")  # is_terminal must read truthy for the prompt to show at all
     @patch("menu.questionary.select")
-    def test_picking_a_next_step_recurses_into_it(self, mock_select):
+    def test_picking_a_next_step_recurses_into_it(self, mock_select, mock_console):
         calls = []
         mock_select.return_value.ask.return_value = "second"
         with patch.dict(

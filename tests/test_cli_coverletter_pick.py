@@ -51,7 +51,7 @@ class TestCoverletterPickValidation(unittest.TestCase):
                  {"source_file": "jds/b.json", "company_name": "B", "job_title": "Role B",
                   "composite_score": 3.0, "recommendation": "Selective pursue", "error": False},
              ]), \
-             patch("cli.questionary.checkbox", return_value=mock_question), \
+             patch("cli_art.questionary.checkbox", return_value=mock_question), \
              patch("cli.orchestrator.ResumeEngine") as mock_engine_cls:
             mock_engine = MagicMock()
             mock_engine.build_tailored_coverletter.return_value = {"ok": True}
