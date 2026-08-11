@@ -30,8 +30,17 @@ func NewMenuModel(t theme.Theme) MenuModel {
 		MenuItem{title: "Pipeline", desc: "Career pipeline view", icon: t.Icons.Pipeline},
 		MenuItem{title: "Progress", desc: "Analytics and funnel", icon: t.Icons.Progress},
 		MenuItem{title: "Reports", desc: "Open a markdown report", icon: t.Icons.Report},
-		MenuItem{title: "Jobs", desc: "Evaluated job postings", icon: t.Icons.Jobs},
-		MenuItem{title: "Quit", desc: "Exit the dashboard", icon: t.Icons.Quit},
+		// Wording deliberately mirrors the `resume` CLI menu for the two
+		// entries that genuinely overlap: "Browse & Manage Jobs" and
+		// "Exit". The rest of this menu intentionally does NOT mirror the
+		// CLI -- Progress and Reports have no CLI equivalent, and the CLI's
+		// Build Documents has no dashboard equivalent, because these are
+		// different tools for different moments (triage here, building
+		// there). An audit flagged the two menus as sharing no vocabulary;
+		// the fix is matching the words for the same actions, not forcing
+		// the same structure onto two different jobs.
+		MenuItem{title: "Jobs", desc: "Browse & Manage Jobs", icon: t.Icons.Jobs},
+		MenuItem{title: "Exit", desc: "Leave the dashboard", icon: t.Icons.Quit},
 	}
 
 	// Width/height are arbitrary – the list will be resized by the parent view.
