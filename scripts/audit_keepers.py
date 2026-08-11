@@ -486,7 +486,10 @@ def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
 
     try:
         df_prior = pd.read_csv(KEEPERS_AUDITED)
-    except Exception:
+    except Exception as e:
+        cli_art.friendly_warning(
+            e, "loading your earlier audit progress",
+            "starting this audit from the beginning instead")
         return df_keepers
 
     if "Bullet Point" not in df_prior.columns or "audit_status" not in df_prior.columns:
