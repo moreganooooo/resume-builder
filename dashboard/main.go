@@ -126,11 +126,28 @@ func (m appModel) renderScreen() string {
 	}
 }
 
-func (m *appModel) reloadPipelineData() {
-	apps := data.ParseApplications(m.careerOpsPath)
-	metrics := data.ComputeMetrics(apps)
-	m.progressMetrics = data.ComputeProgressMetrics(apps)
-	m.pipeline = m.pipeline.WithReloadedData(apps, metrics)
+// pipelineDataLoadedMsg carries the result of reloadPipelineDataCmd's
+// off-thread reload back into Update().
+type pipelineDataLoadedMsg struct {
+	apps            []model.CareerApplication
+	metrics         model.PipelineMetrics
+	progressMetrics model.ProgressMetrics
+}
+
+// reloadPipelineDataCmd re-reads and reparses applications.md as a tea.Cmd
+// (bubbletea runs every returned Cmd on its own goroutine) instead of doing
+// that file I/O + parsing synchronously inside Update() -- previously
+// PipelineUpdateStatusMsg/PipelineRefreshMsg ran this work inline on the UI
+// thread, unlike screens.JobsModel's own async runAction pattern for
+// subprocess work.
+func (m appModel) reloadPipelineDataCmd() tea.Cmd {
+	careerOpsPath := m.careerOpsPath
+	return func() tea.Msg {
+		apps := data.ParseApplications(careerOpsPath)
+		metrics := data.ComputeMetrics(apps)
+		progressMetrics := data.ComputeProgressMetrics(apps)
+		return pipelineDataLoadedMsg{apps: apps, metrics: metrics, progressMetrics: progressMetrics}
+	}
 }
 
 // Init only returns a tea.Cmd, not a model -- bubbletea's Program keeps
@@ -254,11 +271,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "WARN: status update failed: %v\n", err)
 		}
-		m.reloadPipelineData()
-		return m, nil
+		return m, m.reloadPipelineDataCmd()
 
 	case screens.PipelineRefreshMsg:
-		m.reloadPipelineData()
+		return m, m.reloadPipelineDataCmd()
+
+	case pipelineDataLoadedMsg:
+		m.progressMetrics = msg.progressMetrics
+		m.pipeline = m.pipeline.WithReloadedData(msg.apps, msg.metrics)
 		return m, nil
 
 	case screens.PipelineOpenReportMsg:
@@ -303,7 +323,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err = exec.Command("xdg-open", msg.URL).Run()
 			}
 			if err != nil {
-				// We could return an error message here if needed.
+				return screens.PipelineURLOpenFailedMsg{Err: err}
 			}
 			return nil
 		}

@@ -14,13 +14,12 @@ package theme
 // actual "#b39ddb" (Vibrant Mauve) for the same reason.
 //
 // DESIGN.md's own `colors:` block is the authoritative source; these are
-// its tui-base/tui-brand/tui-accent/print-text values, hardcoded the same
-// way every other palette in this package already is (see
-// resumebuilder.go, catppuccin.go, catppuccin_latte.go) rather than
-// re-derived from a file that was never able to carry them.
+// its tui-brand/tui-accent values, hardcoded the same way every other
+// palette in this package already is (see resumebuilder.go, catppuccin.go,
+// catppuccin_latte.go) rather than re-derived from a file that was never
+// able to carry them. BaseColor and PrintColor (tui-base/print-text) were
+// removed from this pair -- neither had any consumer left in the codebase.
 var (
-	BaseColor   = "#1e1e2e" // tui-base / Deep Midnight
 	BrandColor  = "#4dabf7" // tui-brand / Electric Sky
 	AccentColor = "#b39ddb" // tui-accent / Vibrant Mauve
-	PrintColor  = "#000000" // print-text / Print Black
 )

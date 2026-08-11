@@ -50,7 +50,12 @@ func (m *ProgressModel) Resize(width, height int) {
 	m.clampScrollOffset()
 }
 
-// Update handles input for the progress screen.
+// Update handles input for the progress screen. Resizing is not handled
+// here -- main.go's top-level WindowSizeMsg case calls Resize() directly
+// on the active screen before its own early-returns, so a
+// tea.WindowSizeMsg never actually reaches this Update() in the real app;
+// a case for it here was dead code (see viewer.go's Update for the same
+// pattern, already documented and cleaned up there).
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -75,10 +80,6 @@ func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 				m.scrollOffset = 0
 			}
 		}
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.clampScrollOffset()
 	}
 	return m, nil
 }
@@ -382,7 +383,7 @@ func (m ProgressModel) renderRates() string {
 		labelStyle.Render("Offer Rate: ") +
 		valueStyle.Foreground(offerColor).Render(fmt.Sprintf("%.1f%%", m.metrics.OfferRate))
 
-	lines = append(lines, padStyle.Render(rates))
+	lines = append(lines, padStyle.Render(m.truncateRow(rates)))
 
 	// Active summary
 	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
@@ -390,7 +391,7 @@ func (m ProgressModel) renderRates() string {
 		"%d active applications | %d total offers",
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
 	))
-	lines = append(lines, padStyle.Render(activeInfo))
+	lines = append(lines, padStyle.Render(m.truncateRow(activeInfo)))
 
 	return strings.Join(lines, "\n")
 }
@@ -467,7 +468,7 @@ func (m ProgressModel) renderHelp() string {
 	// to carry readable text.
 	brand := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface).Render("resume-builder dashboard")
 
-	keys := keyStyle.Render("\u2191\u2193") + descStyle.Render(" scroll  ") +
+	keys := keyStyle.Render("\u2191\u2193/jk") + descStyle.Render(" scroll  ") +
 		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")

@@ -14,6 +14,14 @@ import (
 // token.
 var literalPattern = regexp.MustCompile(`lipgloss\.Color\("?#?[0-9a-fA-F]{3,6}"?\)`)
 
+// adaptiveLiteralPattern catches a raw hex string inside a
+// lipgloss.AdaptiveColor{Light: "#...", Dark: "#..."} literal -- a second
+// way to hardcode a color that bypasses both literalPattern (no
+// lipgloss.Color(...) call wraps it) and identifierPattern (no identifier
+// argument at all). Matches on the field name + hex pair rather than the
+// whole struct literal, since Light/Dark commonly land on separate lines.
+var adaptiveLiteralPattern = regexp.MustCompile(`(?:Light|Dark):\s*"#[0-9a-fA-F]{3,6}"`)
+
 // identifierPattern catches lipgloss.Color(SomeIdentifier) -- the form
 // literalPattern can't see, since the value isn't a literal hex string at
 // the call site. This is exactly how the Main Menu's selection style and
@@ -35,12 +43,12 @@ var literalPattern = regexp.MustCompile(`lipgloss\.Color\("?#?[0-9a-fA-F]{3,6}"?
 var identifierPattern = regexp.MustCompile(`lipgloss\.Color\(([A-Za-z_][A-Za-z0-9_.]*)\)`)
 
 // themeConstructorFiles lists the files where literal hex (or the
-// BrandColor/AccentColor/BaseColor/PrintColor constants) are the
-// legitimate source of truth a token is built from -- the four theme
-// constructors defining what each palette's colors actually are, plus
-// tokens.go itself. Every other file should be consuming a theme.Theme
-// field (t.Blue, t.Token.Mauve, ...) instead of a literal or a
-// module-level color constant.
+// BrandColor/AccentColor module-level constants) are the legitimate
+// source of truth a token is built from -- the three theme constructors
+// defining what each palette's colors actually are, plus tokens.go
+// itself. Every other file should be consuming a theme.Theme field
+// (t.Blue, t.Token.Mauve, ...) instead of a literal or a module-level
+// color constant.
 var themeConstructorFiles = map[string]bool{
 	"internal/theme/tokens.go":           true,
 	"internal/theme/resumebuilder.go":    true,
@@ -48,11 +56,67 @@ var themeConstructorFiles = map[string]bool{
 	"internal/theme/catppuccin_latte.go": true,
 }
 
+// lintFile scans one .go file for the three hardcoded-color patterns above,
+// printing a warning per match. Shared between the directory walk and the
+// standalone top-level files below so both paths apply the exact same
+// checks -- a second, drifted copy of this logic was exactly how the
+// walked-roots gap itself went unnoticed for as long as it did.
+func lintFile(path string) (hasErrors bool, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	lineNum := 1
+	allowed := themeConstructorFiles[path]
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !allowed && literalPattern.MatchString(line) {
+			fmt.Printf("Warning: Hard-coded color found in %s:%d\n", path, lineNum)
+			fmt.Printf("  %s\n", line)
+			fmt.Printf("  Please use theme.Token.* instead.\n\n")
+			hasErrors = true
+		}
+		if !allowed {
+			if m := identifierPattern.FindStringSubmatch(line); m != nil {
+				fmt.Printf("Warning: Non-token color identifier found in %s:%d\n", path, lineNum)
+				fmt.Printf("  %s\n", line)
+				fmt.Printf("  lipgloss.Color(%s) bypasses the per-theme token system -- use a theme.Theme field (t.Blue, t.Token.Mauve, ...) instead.\n\n", m[1])
+				hasErrors = true
+			}
+		}
+		if !allowed && adaptiveLiteralPattern.MatchString(line) {
+			fmt.Printf("Warning: Hard-coded color found in %s:%d\n", path, lineNum)
+			fmt.Printf("  %s\n", line)
+			fmt.Printf("  lipgloss.AdaptiveColor{...} with a raw hex literal bypasses the per-theme token system -- use a theme.Theme field instead.\n\n")
+			hasErrors = true
+		}
+		lineNum++
+	}
+
+	return hasErrors, scanner.Err()
+}
+
 func main() {
 	// internal/theme was previously excluded entirely -- the exact
 	// package where hardcoded, non-token colors are most likely (and,
-	// historically, actually did) slip in unnoticed.
-	roots := []string{"internal/ui", "internal/theme"}
+	// historically, actually did) slip in unnoticed. internal/model and
+	// internal/data carry no lipgloss styling today, but were never
+	// walked at all -- a hardcoded color landing there in the future
+	// would pass this linter silently, structurally, regardless of what
+	// the regexes below can match. cmd/ (the bootstrap/prompt standalone
+	// binaries) was the same kind of silent gap -- both already render
+	// real huh/lipgloss forms, so a hardcoded color there is exactly as
+	// live a risk as one under internal/ui.
+	roots := []string{"internal/ui", "internal/theme", "internal/model", "internal/data", "cmd"}
+
+	// The module-root main.go (dashboard's own Bubble Tea entrypoint) isn't
+	// under any of the roots above -- listed explicitly rather than adding
+	// "." as a root, which would silently re-walk (and double-report)
+	// everything above plus non-Go directories like tools/ and scratch/.
+	standaloneFiles := []string{"main.go"}
 
 	hasErrors := false
 
@@ -61,46 +125,30 @@ func main() {
 			if err != nil {
 				return err
 			}
-
 			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-
-			file, err := os.Open(path)
+			fileHasErrors, err := lintFile(path)
 			if err != nil {
 				return err
 			}
-			defer file.Close()
-
-			scanner := bufio.NewScanner(file)
-			lineNum := 1
-			allowed := themeConstructorFiles[path]
-			for scanner.Scan() {
-				line := scanner.Text()
-				if !allowed && literalPattern.MatchString(line) {
-					fmt.Printf("Warning: Hard-coded color found in %s:%d\n", path, lineNum)
-					fmt.Printf("  %s\n", line)
-					fmt.Printf("  Please use theme.Token.* instead.\n\n")
-					hasErrors = true
-				}
-				if !allowed {
-					if m := identifierPattern.FindStringSubmatch(line); m != nil {
-						fmt.Printf("Warning: Non-token color identifier found in %s:%d\n", path, lineNum)
-						fmt.Printf("  %s\n", line)
-						fmt.Printf("  lipgloss.Color(%s) bypasses the per-theme token system -- use a theme.Theme field (t.Blue, t.Token.Mauve, ...) instead.\n\n", m[1])
-						hasErrors = true
-					}
-				}
-				lineNum++
-			}
-
-			return scanner.Err()
+			hasErrors = hasErrors || fileHasErrors
+			return nil
 		})
 
 		if err != nil {
 			fmt.Printf("Error walking through %s: %v\n", root, err)
 			os.Exit(1)
 		}
+	}
+
+	for _, path := range standaloneFiles {
+		fileHasErrors, err := lintFile(path)
+		if err != nil {
+			fmt.Printf("Error reading %s: %v\n", path, err)
+			os.Exit(1)
+		}
+		hasErrors = hasErrors || fileHasErrors
 	}
 
 	if hasErrors {

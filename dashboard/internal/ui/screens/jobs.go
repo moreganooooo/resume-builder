@@ -3,6 +3,7 @@ package screens
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -33,6 +34,7 @@ type JobsModel struct {
 	rows          []model.JobRow
 	filtered      []model.JobRow
 	cursor        int
+	scrollOffset  int
 	filter        string // "all", "pending", "completed"
 	width, height int
 	theme         theme.Theme
@@ -41,7 +43,13 @@ type JobsModel struct {
 	pythonPath       string
 	projectRoot      string
 	actionInProgress string // "", "liveness", "tailor", "status"
-	actionError      string
+	// actionCancel kills the in-flight dashboard_actions.py subprocess (via
+	// its exec.CommandContext) when the user presses esc mid-action, or
+	// when the action completes on its own (to release the context).
+	// Without this, quitting or backing out mid-action left the LLM/PDF
+	// -render child process running unseen in the background.
+	actionCancel context.CancelFunc
+	actionError  string
 	// notice explains why a keypress was a no-op (e.g. "t" on a non-Pending
 	// job) instead of silently doing nothing. Dismissed on the next
 	// keypress, same convention as actionError.
@@ -150,6 +158,56 @@ func (m *JobsModel) applyFilter() {
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
+	m.adjustScroll()
+}
+
+// hasExtraBar reports whether View() will render the action-status/error/
+// notice bar above the split pane -- adjustScroll needs this to compute the
+// same available height chromeAvailHeight(hasExtra) uses at render time, or
+// scrolling and rendering could disagree about how many rows are visible.
+func (m JobsModel) hasExtraBar() bool {
+	return m.actionInProgress != "" || m.actionError != "" || m.notice != ""
+}
+
+// sidebarViewportLines returns how many body lines actually fit inside the
+// bordered sidebar box for a given box height, mirroring the maxLines
+// arithmetic renderSidebarList applies when truncating -- shared so
+// scrolling (adjustScroll) and rendering never disagree about what's
+// visible, the same class of bug chromeAvailHeight's own comment (below)
+// already guards against for the extra-bar reservation.
+func (m JobsModel) sidebarViewportLines(boxHeight int) int {
+	maxLines := boxHeight - 2
+	if m.statusPicker {
+		maxLines -= len(jobsApplicationStatuses) + 1
+	}
+	if maxLines < 0 {
+		maxLines = 0
+	}
+	return maxLines
+}
+
+// adjustScroll keeps the cursor's row within the sidebar's visible window,
+// scrolling the list as needed. Each job renders as a fixed 2-line block
+// (score+company, then title -- see renderSidebarRow in bars.go) with no separator
+// line between jobs (see renderSidebarList), so a job's first line is
+// always exactly 2*cursor; unlike pipeline.go's grouped view, no status-
+// header lines can shift this, so no cursorLineEstimate walk is needed.
+func (m *JobsModel) adjustScroll() {
+	avail := m.sidebarViewportLines(m.chromeAvailHeight(m.hasExtraBar()))
+	if avail < 1 {
+		avail = 1
+	}
+	lineStart := m.cursor * 2
+	lineEnd := lineStart + 1
+	if lineEnd >= m.scrollOffset+avail {
+		m.scrollOffset = lineEnd - avail + 1
+	}
+	if lineStart < m.scrollOffset {
+		m.scrollOffset = lineStart
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 func nextJobsFilter(current string) string {
@@ -198,12 +256,15 @@ func waitForActionMsg(ch chan tea.Msg) tea.Cmd {
 // progress instead of a fake/animated percent. stderr is captured
 // separately for jobsActionCompleteMsg's error-display output, matching
 // the prior behavior's error text.
-func (m JobsModel) runAction(ch chan tea.Msg, action, jdPath string, extraArgs ...string) tea.Cmd {
+func (m JobsModel) runAction(ctx context.Context, ch chan tea.Msg, action, jdPath string, extraArgs ...string) tea.Cmd {
 	args := append([]string{
 		filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
 		action, jdPath, "--jobs-path", m.jobsPath,
 	}, extraArgs...)
-	cmd := exec.Command(m.pythonPath, args...)
+	// CommandContext (not Command) so cancelling ctx -- via actionCancel,
+	// wired to the esc key while an action is in progress -- kills this
+	// subprocess instead of leaving it orphaned in the background.
+	cmd := exec.CommandContext(ctx, m.pythonPath, args...)
 	cmd.Dir = m.projectRoot
 
 	go func() {
@@ -238,16 +299,28 @@ func (m JobsModel) runAction(ch chan tea.Msg, action, jdPath string, extraArgs .
 	return waitForActionMsg(ch)
 }
 
-// reloadAfterAction re-reads m.jobsPath (freshly written by a successful
-// dashboard_actions.py run) and re-selects the previously-current job by
-// Path, mirroring PipelineModel.WithReloadedData's selection-preserving
-// reload.
-func (m JobsModel) reloadAfterAction() JobsModel {
-	rows, err := data.LoadJobs(m.jobsPath)
-	if err != nil {
-		m.actionError = err.Error()
-		return m
+// jobsReloadedMsg carries the result of reloadJobsCmd's off-thread reload
+// back into Update().
+type jobsReloadedMsg struct {
+	rows []model.JobRow
+	err  error
+}
+
+// reloadJobsCmd re-reads m.jobsPath (freshly written by a successful
+// dashboard_actions.py run) as a tea.Cmd -- bubbletea runs it on its own
+// goroutine -- instead of synchronously inside Update(), mirroring
+// runAction's own async convention for subprocess work.
+func reloadJobsCmd(jobsPath string) tea.Cmd {
+	return func() tea.Msg {
+		rows, err := data.LoadJobs(jobsPath)
+		return jobsReloadedMsg{rows: rows, err: err}
 	}
+}
+
+// applyReloadedRows swaps in freshly reloaded rows and re-selects the
+// previously-current job by Path, mirroring PipelineModel.WithReloadedData's
+// selection-preserving reload.
+func (m JobsModel) applyReloadedRows(rows []model.JobRow) JobsModel {
 	var currentPath string
 	if job, ok := m.CurrentJob(); ok {
 		currentPath = job.Path
@@ -262,12 +335,18 @@ func (m JobsModel) reloadAfterAction() JobsModel {
 			}
 		}
 	}
+	// applyFilter's own adjustScroll ran against the pre-reselection cursor
+	// (0, or whatever it was clamped to) -- re-run now that m.cursor may
+	// have moved to the re-selected job's new index.
+	m.adjustScroll()
 	return m
 }
 
 func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 	switch msg.String() {
-	case "esc":
+	case "esc", "q":
+		// pipeline.go's handleStatusPicker accepts both -- this picker only
+		// accepted esc, an inconsistency between two near-identical pickers.
 		m.statusPicker = false
 		return m, nil
 	case "up", "k":
@@ -284,18 +363,28 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 			chosen := jobsApplicationStatuses[m.statusCursor]
 			m.actionInProgress = "status"
 			m.actionChan = make(chan tea.Msg)
-			return m, tea.Batch(m.runAction(m.actionChan, "status", job.Path, chosen), m.spinner.Tick)
+			ctx, cancel := context.WithCancel(context.Background())
+			m.actionCancel = cancel
+			return m, tea.Batch(m.runAction(ctx, m.actionChan, "status", job.Path, chosen), m.spinner.Tick)
 		}
 	}
 	return m, nil
 }
 
-// Update handles input for the jobs screen.
+// Update handles input for the jobs screen. Resizing is not handled here --
+// main.go's top-level WindowSizeMsg case calls Resize() directly on every
+// screen before its own early-returns, so a tea.WindowSizeMsg never
+// actually reaches this Update() in the real app; a case for it here was
+// dead code.
 func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case jobsActionCompleteMsg:
 		m.actionInProgress = ""
 		m.actionChan = nil
+		if m.actionCancel != nil {
+			m.actionCancel()
+			m.actionCancel = nil
+		}
 		if msg.err != nil {
 			m.actionError = strings.TrimSpace(msg.output)
 			if m.actionError == "" {
@@ -303,7 +392,14 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 			return m, nil
 		}
-		return m.reloadAfterAction(), nil
+		return m, reloadJobsCmd(m.jobsPath)
+
+	case jobsReloadedMsg:
+		if msg.err != nil {
+			m.actionError = msg.err.Error()
+			return m, nil
+		}
+		return m.applyReloadedRows(msg.rows), nil
 
 	case jobsActionProgressMsg:
 		if m.actionInProgress == "" || m.actionChan == nil {
@@ -322,6 +418,17 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.actionInProgress != "" {
+			// esc kills the in-flight subprocess instead of leaving it
+			// orphaned -- previously every key (including esc/Ctrl+C) was
+			// swallowed here with no way to cancel, and quitting the app
+			// left dashboard_actions.py running unseen in the background.
+			if msg.String() == "esc" && m.actionCancel != nil {
+				m.actionCancel()
+				m.actionCancel = nil
+				m.actionInProgress = ""
+				m.actionChan = nil
+				m.notice = "Cancelled"
+			}
 			return m, nil
 		}
 		if m.actionError != "" {
@@ -339,10 +446,46 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.adjustScroll()
 			}
 		case "down", "j":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
+				m.adjustScroll()
+			}
+		case "g":
+			if len(m.filtered) > 0 {
+				m.cursor = 0
+				m.adjustScroll()
+			}
+		case "G":
+			if len(m.filtered) > 0 {
+				m.cursor = len(m.filtered) - 1
+				m.adjustScroll()
+			}
+		case "pgdown", "ctrl+d":
+			if len(m.filtered) > 0 {
+				halfPage := m.height / 2
+				if halfPage < 1 {
+					halfPage = 1
+				}
+				m.cursor += halfPage
+				if m.cursor >= len(m.filtered) {
+					m.cursor = len(m.filtered) - 1
+				}
+				m.adjustScroll()
+			}
+		case "pgup", "ctrl+u":
+			if len(m.filtered) > 0 {
+				halfPage := m.height / 2
+				if halfPage < 1 {
+					halfPage = 1
+				}
+				m.cursor -= halfPage
+				if m.cursor < 0 {
+					m.cursor = 0
+				}
+				m.adjustScroll()
 			}
 		case "f":
 			m.filter = nextJobsFilter(m.filter)
@@ -351,7 +494,9 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
 				m.actionChan = make(chan tea.Msg)
-				return m, tea.Batch(m.runAction(m.actionChan, "liveness", job.Path), m.spinner.Tick)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, tea.Batch(m.runAction(ctx, m.actionChan, "liveness", job.Path), m.spinner.Tick)
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok {
@@ -360,7 +505,9 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 					m.actionChan = make(chan tea.Msg)
 					m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
 					m.actionStepLabel = ""
-					return m, m.runAction(m.actionChan, "tailor", job.Path)
+					ctx, cancel := context.WithCancel(context.Background())
+					m.actionCancel = cancel
+					return m, m.runAction(ctx, m.actionChan, "tailor", job.Path)
 				}
 				m.notice = fmt.Sprintf("Only Pending jobs can be tailored (this one is %s)", job.Status)
 			}
@@ -381,9 +528,6 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
 	}
 	return m, nil
 }
@@ -453,7 +597,7 @@ func (m JobsModel) View() string {
 	if job, ok := m.CurrentJob(); ok {
 		rightPane = m.renderJobDetailPane(job, rightWidth, availHeight)
 	} else {
-		rightPane = m.renderEmptyDetailPane(rightWidth, availHeight)
+		rightPane = renderEmptyDetailPane(m.theme, rightWidth, availHeight)
 	}
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
@@ -493,7 +637,7 @@ func (m JobsModel) renderActionStatus() string {
 		if label == "" {
 			label = actionLabel(m.actionInProgress)
 		}
-		return style.Render(label + "\n" + m.progress.View())
+		return style.Render(label + " (esc to cancel)" + "\n" + m.progress.View())
 	}
 
 	// The spinner carries its own pre-rendered style (see NewJobsModel's
@@ -509,7 +653,7 @@ func (m JobsModel) renderActionStatus() string {
 	bg := lipgloss.NewStyle().Background(m.theme.Surface)
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Yellow).Background(m.theme.Surface)
 	left := bg.Render("  ") + bg.Render(m.spinner.View()) +
-		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"...")
+		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"... (esc to cancel)")
 	if pad := m.width - lipgloss.Width(left); pad > 0 {
 		left += bg.Render(strings.Repeat(" ", pad))
 	}
@@ -569,29 +713,30 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	var lines []string
 	for i, job := range m.filtered {
 		selected := i == m.cursor
-		lines = append(lines, m.renderSidebarLine(job, width-4, selected))
+		lines = append(lines, renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, job.Title, width-4, selected))
 	}
 
 	body := strings.Join(lines, "\n")
 	bodyLines := strings.Split(body, "\n")
 
+	// Scroll before truncating to the viewport -- otherwise a cursor past
+	// the first screenful was simply invisible with no way to reach it (see
+	// adjustScroll). Mirrors pipeline.go's renderSidebarList ordering.
+	if m.scrollOffset > 0 && m.scrollOffset < len(bodyLines) {
+		bodyLines = bodyLines[m.scrollOffset:]
+	}
+
 	// Reserve room for the status picker before truncating -- see the
 	// matching comment in pipeline.go's renderSidebarList, which has the
 	// same fixed-height overflow risk.
-	maxLines := height - 2
-	if m.statusPicker {
-		maxLines -= len(jobsApplicationStatuses) + 1
-		if maxLines < 0 {
-			maxLines = 0
-		}
-	}
+	maxLines := m.sidebarViewportLines(height)
 	if len(bodyLines) > maxLines {
 		bodyLines = bodyLines[:maxLines]
 	}
 	content := strings.Join(bodyLines, "\n")
 
 	if m.statusPicker {
-		content = m.overlayStatusPicker(content, width-4)
+		content = renderStatusPickerOverlay(m.theme, content, width-4, "Set status:", jobsApplicationStatuses, m.statusCursor)
 	}
 
 	borderStyle := lipgloss.NewStyle().
@@ -604,101 +749,33 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	return borderStyle.Render(content)
 }
 
-// overlayStatusPicker renders the picker at up to 30 columns wide, but
-// never wider than availWidth allows -- see pipeline.go's own
-// overlayStatusPicker for the narrow-terminal overflow this fixes.
-func (m JobsModel) overlayStatusPicker(body string, availWidth int) string {
-	bodyLines := strings.Split(body, "\n")
-
-	pickerWidth := availWidth - 4 // PadHorizontal's own 2+2 columns
-	if pickerWidth > 30 {
-		pickerWidth = 30
-	}
-	if pickerWidth < 10 {
-		pickerWidth = 10
-	}
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	borderStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true)
-
-	var picker []string
-	picker = append(picker, padStyle.Render(borderStyle.Render("Set status:")))
-	for i, opt := range jobsApplicationStatuses {
-		style := lipgloss.NewStyle().Foreground(m.theme.Blue).Width(pickerWidth)
-		if i == m.statusCursor {
-			style = style.Background(m.theme.Overlay).Bold(true)
-		}
-		prefix := "  "
-		if i == m.statusCursor {
-			prefix = "> "
-		}
-		picker = append(picker, padStyle.Render(style.Render(prefix+opt)))
-	}
-
-	bodyLines = append(bodyLines, picker...)
-	return strings.Join(bodyLines, "\n")
-}
-
-func (m JobsModel) renderSidebarLine(job model.JobRow, width int, selected bool) string {
-	scoreStyle := m.scoreStyle(job.Evaluation.CompositeScore)
-	score := scoreStyle.Render(fmt.Sprintf("%.1f", job.Evaluation.CompositeScore))
-
-	compWidth := width - 6
-	company := truncateRunes(job.Company, compWidth)
-	companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	if selected {
-		companyStyle = companyStyle.Bold(true)
-	}
-	line1 := fmt.Sprintf("%s %s", score, companyStyle.Render(company))
-
-	titleWidth := width - 2
-	title := truncateRunes(job.Title, titleWidth)
-	titleStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-	line2 := titleStyle.Render(title)
-
-	block := line1 + "\n" + line2
-	base := theme.PadHorizontal(lipgloss.NewStyle())
-	if selected {
-		base = theme.HoverStyle(base, m.theme)
-	}
-	return base.Render(block)
-}
-
 func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.theme.Overlay).
-		Width(width-2).
-		Height(height-2).
-		Padding(1, 2)
-
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
-	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	styles := newDetailPaneStyles(m.theme, width, height)
 
 	var content []string
-	content = append(content, titleStyle.Render(job.Company))
-	content = append(content, valueStyle.Render(job.Title))
+	content = append(content, styles.Title.Render(job.Company))
+	content = append(content, styles.Value.Render(job.Title))
 	content = append(content, "")
 
 	eval := job.Evaluation
-	scoreStyle := m.scoreStyle(eval.CompositeScore)
-	content = append(content, subtextStyle.Render("Composite score: ")+scoreStyle.Render(fmt.Sprintf("%.1f/5", eval.CompositeScore)))
-	content = append(content, subtextStyle.Render("Recommendation: ")+valueStyle.Render(eval.Recommendation))
-	content = append(content, subtextStyle.Render("Status: ")+valueStyle.Render(job.Status))
+	score := scoreStyle(m.theme, eval.CompositeScore)
+	content = append(content, styles.Subtext.Render("Composite score: ")+score.Render(fmt.Sprintf("%.1f/5", eval.CompositeScore)))
+	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
+	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
 	content = append(content, "")
 
 	if eval.Why != "" {
-		content = append(content, titleStyle.Render("Why"))
-		content = append(content, valueStyle.Render(truncateRunes(eval.Why, width-6)))
+		content = append(content, styles.Title.Render("Why"))
+		content = append(content, styles.Value.Render(truncateRunes(eval.Why, width-6)))
 		content = append(content, "")
 	}
 	if eval.RecruiterRead != "" {
-		content = append(content, titleStyle.Render("Recruiter read"))
-		content = append(content, valueStyle.Render(truncateRunes(eval.RecruiterRead, width-6)))
+		content = append(content, styles.Title.Render("Recruiter read"))
+		content = append(content, styles.Value.Render(truncateRunes(eval.RecruiterRead, width-6)))
 		content = append(content, "")
 	}
 	if len(eval.HardBlockers) > 0 {
-		content = append(content, subtextStyle.Render("Hard blockers: ")+valueStyle.Render(strings.Join(eval.HardBlockers, ", ")))
+		content = append(content, styles.Subtext.Render("Hard blockers: ")+styles.Value.Render(strings.Join(eval.HardBlockers, ", ")))
 		content = append(content, "")
 	}
 
@@ -707,29 +784,40 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 		if len(scores) == 0 {
 			continue
 		}
-		content = append(content, subtextStyle.Render(group.label+": ")+valueStyle.Render(formatSubscores(scores)))
+		content = append(content, styles.Subtext.Render(group.label+": ")+styles.Value.Render(formatSubscores(scores)))
 	}
 	content = append(content, "")
 
+	// Only surfaced when there's an actual concern -- "High Confidence" (the
+	// common case) says nothing worth a line of its own, mirroring
+	// menu.py's _print_evaluation_summary()'s identical gate/ordering (right
+	// before Liveness) so the CLI and TUI agree on when this is worth
+	// showing. Previously decoded from the evaluation JSON but never
+	// rendered anywhere in this screen -- a fake/stale-posting warning had
+	// no way to reach the user here.
+	if eval.PostingLegitimacy != "" && eval.PostingLegitimacy != "High Confidence" {
+		color := m.theme.Yellow
+		if eval.PostingLegitimacy == "Suspicious" {
+			color = m.theme.Red
+		}
+		warningStyle := lipgloss.NewStyle().Bold(true).Foreground(color)
+		line := warningStyle.Render("Posting legitimacy: " + eval.PostingLegitimacy)
+		if eval.PostingLegitimacyNotes != "" {
+			line += styles.Value.Render(" -- " + truncateRunes(eval.PostingLegitimacyNotes, width-6))
+		}
+		content = append(content, line)
+		content = append(content, "")
+	}
+
 	if job.Liveness != nil {
-		content = append(content, subtextStyle.Render("Liveness: ")+valueStyle.Render(job.Liveness.Result))
+		content = append(content, styles.Subtext.Render("Liveness: ")+styles.Value.Render(job.Liveness.Result))
 	}
 	if job.Application != nil {
-		content = append(content, subtextStyle.Render("Application: ")+valueStyle.Render(job.Application.Status))
+		content = append(content, styles.Subtext.Render("Application: ")+styles.Value.Render(job.Application.Status))
 	}
 
 	joined := strings.Join(content, "\n")
-	return borderStyle.Render(joined)
-}
-
-func (m JobsModel) renderEmptyDetailPane(width, height int) string {
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.theme.Overlay).
-		Width(width-2).
-		Height(height-2).
-		Padding(1, 2)
-	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Select a job to view details"))
+	return styles.Border.Render(joined)
 }
 
 func (m JobsModel) renderHelp() string {
@@ -744,23 +832,12 @@ func (m JobsModel) renderHelp() string {
 
 	return style.Render(
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
+			keyStyle.Render("g/G") + descStyle.Render(" top/bot  ") +
+			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("f") + descStyle.Render(" filter  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
-}
-
-func (m JobsModel) scoreStyle(score float64) lipgloss.Style {
-	switch {
-	case score >= 4.2:
-		return lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true)
-	case score >= 3.8:
-		return lipgloss.NewStyle().Foreground(m.theme.Yellow)
-	case score >= 3.0:
-		return lipgloss.NewStyle().Foreground(m.theme.Text)
-	default:
-		return lipgloss.NewStyle().Foreground(m.theme.Red)
-	}
 }
