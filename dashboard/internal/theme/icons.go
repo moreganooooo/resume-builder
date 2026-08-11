@@ -36,6 +36,22 @@ type MenuIcons struct {
 	Source   string // nf-fa-folder_open
 	Path     string // nf-fa-file_o
 	Magic    string // nf-fa-magic
+
+	// Score* give a composite/interview-probability score's color tier
+	// (see screens/bars.go's scoreStyle) a redundant shape cue too, so a
+	// colorblind user isn't reading tier from color alone -- the one place
+	// in the dashboard that previously encoded meaning purely by hue, unlike
+	// scripts/theme.py's colorize_icon(), which pairs every semantic color
+	// with a distinct icon everywhere else in this codebase. These reuse
+	// that same module's success/gem/hint/skip glyphs (U+F00C/F219/F0EB/
+	// F05E, "✓"/"*"/"!"/"-" in the Unicode fallback) rather than inventing
+	// a new vocabulary -- gem ("quality/priority") and skip ("excluded/
+	// rejection") already carry almost exactly the right connotation for
+	// the "good" and "weak" tiers respectively.
+	ScoreStrong string // nf-fa-check (theme.py's "success")
+	ScoreGood   string // nf-fa-diamond (theme.py's "gem")
+	ScoreFair   string // nf-fa-lightbulb_o (theme.py's "hint")
+	ScoreWeak   string // nf-fa-ban (theme.py's "skip")
 }
 
 func NewMenuIcons() MenuIcons {
@@ -58,6 +74,15 @@ func NewMenuIcons() MenuIcons {
 			Source: "⊔",
 			Path:   "/",
 			Magic:  "*",
+
+			// Exact ASCII fallbacks scripts/theme.py's _UNICODE_ICONS uses
+			// for "success"/"gem"/"hint"/"skip" -- single-width, colorless-
+			// by-default in every terminal/font, same reasoning as that
+			// module's own B22/P1F7 fix.
+			ScoreStrong: "✓",
+			ScoreGood:   "*",
+			ScoreFair:   "!",
+			ScoreWeak:   "-",
 		}
 	}
 	return MenuIcons{
@@ -71,5 +96,12 @@ func NewMenuIcons() MenuIcons {
 		Source:   "", // nf-fa-folder_open
 		Path:     "", // nf-fa-file_o
 		Magic:    "", // nf-fa-magic
+
+		// Exact codepoints scripts/theme.py's _NERD_ICONS uses for
+		// "success"/"gem"/"hint"/"skip" (U+F00C/F219/F0EB/F05E).
+		ScoreStrong: "",
+		ScoreGood:   "",
+		ScoreFair:   "",
+		ScoreWeak:   "",
 	}
 }

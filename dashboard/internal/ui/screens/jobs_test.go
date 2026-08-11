@@ -133,11 +133,17 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 	for _, want := range []string{
 		"Acme", "Marketing Lead", "4.7/5", "Strong pursue",
 		"Great fit for the role.", "Recruiter will see a match.",
-		"functional_alignment: 5",
+		// Human label (theme.SubscoreLabels["functional_alignment"]), not
+		// the raw snake_case schema key -- guards the P1 fix for internal-
+		// jargon leakage in formatSubscores.
+		"Functional: 5",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected detail pane to contain %q, got %q", want, rendered)
 		}
+	}
+	if strings.Contains(rendered, "functional_alignment") {
+		t.Fatalf("expected raw schema key not to leak into the detail pane, got %q", rendered)
 	}
 }
 
@@ -353,21 +359,60 @@ func TestStatusPickerEscCancels(t *testing.T) {
 	}
 }
 
-func TestStatusPickerEnterDispatchesStatusAction(t *testing.T) {
+// TestStatusPickerEnterRequiresConfirmation guards the P2 fix: application-
+// status changes are destructive-but-free (see renderStatusPickerOverlay's
+// doc comment in bars.go, which points at cli_art.py's confirm_destructive
+// -- the CLI-side fix for the identical bug class), so a stray Enter must
+// not silently commit a status change on the first keypress.
+func TestStatusPickerEnterRequiresConfirmation(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
 
 	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.statusPicker || !m.statusConfirm {
+		t.Fatal("expected an inline confirm step before the status picker closes")
+	}
+	if m.actionInProgress != "" {
+		t.Fatalf("expected no action dispatched before confirmation, got %q", m.actionInProgress)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command before confirmation")
+	}
 
+	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.statusPicker {
-		t.Fatal("expected statusPicker closed after enter")
+		t.Fatal("expected statusPicker closed after confirmation")
 	}
 	if m.actionInProgress != "status" {
 		t.Fatalf("expected actionInProgress %q, got %q", "status", m.actionInProgress)
 	}
 	if cmd == nil {
-		t.Fatal("expected a command to be dispatched")
+		t.Fatal("expected a command to be dispatched after confirmation")
+	}
+}
+
+// TestStatusPickerConfirmEscCancelsBackToPicker guards that backing out of
+// the confirm step returns to the picker (so a misclick doesn't force
+// redoing the "u" keypress) rather than dispatching or fully closing.
+func TestStatusPickerConfirmEscCancelsBackToPicker(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.statusConfirm {
+		t.Fatal("expected confirm state after first enter")
+	}
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.statusConfirm {
+		t.Fatal("expected confirm state cancelled by esc")
+	}
+	if !m.statusPicker {
+		t.Fatal("expected the picker to remain open after cancelling a confirm")
+	}
+	if m.actionInProgress != "" {
+		t.Fatal("expected no action dispatched on cancel")
 	}
 }
 
@@ -461,5 +506,170 @@ func TestRenderSidebarListOverlaysStatusPickerWhenOpen(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected status option %q in overlay, got %q", want, rendered)
 		}
+	}
+}
+
+// -- Search (mirrors pipeline_test.go's TestSearch* suite) --
+
+func searchTestJobRows() []model.JobRow {
+	return []model.JobRow{
+		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer"},
+		{Path: "b.json", Status: "Completed", Company: "Anthropic", Title: "AI Safety Engineer"},
+		{Path: "c.json", Status: "Pending", Company: "Acme Corp", Title: "Senior PM, Voice AI"},
+		{Path: "d.json", Status: "Completed", Company: "Globex", Title: "Platform Engineer"},
+	}
+}
+
+func TestJobsSearchFiltersByCompanyAndTitle(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+
+	// Match by company substring (case-insensitive).
+	m.searchQuery = "stripe"
+	m.applyFilter()
+	if len(m.filtered) != 1 || m.filtered[0].Company != "Stripe" {
+		t.Fatalf("expected 1 match for 'stripe', got %+v", m.filtered)
+	}
+
+	// Match by title substring.
+	m.searchQuery = "voice ai"
+	m.applyFilter()
+	if len(m.filtered) != 1 || m.filtered[0].Company != "Acme Corp" {
+		t.Fatalf("expected 1 match for 'voice ai', got %+v", m.filtered)
+	}
+
+	// Empty query restores everything.
+	m.searchQuery = ""
+	m.applyFilter()
+	if len(m.filtered) != len(searchTestJobRows()) {
+		t.Fatalf("expected empty query to restore all rows, got %d/%d", len(m.filtered), len(searchTestJobRows()))
+	}
+}
+
+func TestJobsSearchIsCaseInsensitive(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+	for _, q := range []string{"anthropic", "ANTHROPIC", "AnThRoPiC"} {
+		m.searchQuery = q
+		m.applyFilter()
+		if len(m.filtered) != 1 {
+			t.Fatalf("expected case-insensitive match for %q, got %d rows", q, len(m.filtered))
+		}
+	}
+}
+
+// TestJobsSearchComposesWithActiveFilter guards the documented composition
+// rule in applyFilter's doc comment: search narrows *within* the active
+// 3-way status filter rather than resetting it, mirroring pipeline.go's
+// search-within-active-tab behavior.
+func TestJobsSearchComposesWithActiveFilter(t *testing.T) {
+	rows := []model.JobRow{
+		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer"},
+		{Path: "b.json", Status: "Completed", Company: "Stripe", Title: "Frontend Engineer"},
+		{Path: "c.json", Status: "Completed", Company: "Anthropic", Title: "AI Engineer"},
+	}
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), rows, 100, 30)
+
+	m.filter = "completed"
+	m.searchQuery = "stripe"
+	m.applyFilter()
+
+	if len(m.filtered) != 1 || m.filtered[0].Title != "Frontend Engineer" {
+		t.Fatalf("expected completed+stripe to leave only Frontend Engineer, got %+v", m.filtered)
+	}
+}
+
+// TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts is the explicit
+// regression guard for the most likely bug in adding search to a screen
+// that already has single-letter shortcuts (f/l/t/u): once `/` opens the
+// search input, every keystroke -- including letters that are normally
+// shortcuts -- must go into the query instead of firing an action.
+func TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !m.searchInput {
+		t.Fatal("expected `/` to open search input")
+	}
+
+	// "f" and "u" are Jobs shortcuts (cycle filter, open status picker) --
+	// typed while search is focused, they must become query characters
+	// instead of firing those actions.
+	for _, r := range "fu" {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if m.searchQuery != "fu" {
+		t.Fatalf("expected typed letters to become the search query, got %q", m.searchQuery)
+	}
+	if m.filter != "all" {
+		t.Fatalf("expected filter cycle NOT to fire while typing 'f', got filter=%q", m.filter)
+	}
+	if m.statusPicker {
+		t.Fatal("expected status picker NOT to open while typing 'u'")
+	}
+}
+
+func TestJobsSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	for _, r := range "stripe" {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if len(m.filtered) != 1 || m.filtered[0].Company != "Stripe" {
+		t.Fatalf("expected live filter to leave only Stripe, got %+v", m.filtered)
+	}
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.searchInput {
+		t.Fatal("expected Enter to close input")
+	}
+	if m.searchQuery != "stripe" {
+		t.Fatalf("expected Enter to keep committed query, got %q", m.searchQuery)
+	}
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m.searchQuery != "" {
+		t.Fatalf("expected Esc to clear committed query, got %q", m.searchQuery)
+	}
+	if len(m.filtered) != len(searchTestJobRows()) {
+		t.Fatalf("expected Esc to restore full list, got %d/%d", len(m.filtered), len(searchTestJobRows()))
+	}
+}
+
+// TestJobsSearchEmptyResultsShowsPlainLanguageEmptyState guards the empty
+// state a zero-match search must show instead of a blank pane.
+func TestJobsSearchEmptyResultsShowsPlainLanguageEmptyState(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+	m.searchQuery = "nonexistent-company-xyz"
+	m.applyFilter()
+
+	if len(m.filtered) != 0 {
+		t.Fatalf("setup expected zero matches, got %+v", m.filtered)
+	}
+	// Wide enough that the message doesn't word-wrap mid-query, which would
+	// otherwise break a naive Contains check on the query substring.
+	rendered := ansi.Strip(m.renderSidebarList(80, 20))
+	if !strings.Contains(rendered, "No jobs match") || !strings.Contains(rendered, "nonexistent-company-xyz") {
+		t.Fatalf("expected plain-language empty state naming the query, got %q", rendered)
+	}
+}
+
+func TestJobsSearchBarRendersMatchCountAndAppearsInHelpOverlay(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
+	m.searchQuery = "stripe"
+	m.applyFilter()
+
+	bar := ansi.Strip(m.renderSearchBar())
+	if !strings.Contains(bar, "1/4 matching") {
+		t.Fatalf("expected search bar to show match count '1/4 matching', got %q", bar)
+	}
+
+	rendered := ansi.Strip(m.View())
+	if !strings.Contains(rendered, "stripe") {
+		t.Fatalf("expected View() to render the active search bar, got %q", rendered)
+	}
+
+	overlay := ansi.Strip(renderHelpOverlay(theme.NewTheme("catppuccin-mocha"), "Jobs", jobsHelpCategories, 100, 30))
+	if !strings.Contains(overlay, "/") || !strings.Contains(overlay, "Search company/title") {
+		t.Fatalf("expected `/` search binding documented in the help overlay, got %q", overlay)
 	}
 }

@@ -30,13 +30,38 @@ type ViewerModel struct {
 	width         int
 	height        int
 	theme         theme.Theme
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
+}
+
+var viewerHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Scroll"},
+		{"PgUp / PgDn", "Page up / down"},
+		{"g / G (Home/End)", "Jump to top / bottom"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Back to the previous screen"},
+		{"q", "Quit dashboard"},
+	}},
 }
 
 // NewViewerModel creates a new file viewer for the given path.
 func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		content = []byte("Error reading file: " + err.Error())
+		// Previously embedded err.Error() verbatim ("Error reading file: open
+		// /Users/.../report.md: no such file or directory") -- Go/OS error
+		// text a non-developer has no way to act on. Leads with a plain-
+		// language sentence instead; the technical detail survives as a
+		// dimmed heading line (styleLine's "###### " case renders Subtext)
+		// rather than being discarded, in case it's useful when reporting a
+		// problem.
+		content = []byte(fmt.Sprintf(
+			"This file couldn't be opened. It may have been moved, deleted, or you may not have permission to read it.\n\n###### Technical detail: %s\n",
+			err.Error(),
+		))
 	}
 
 	var lines []string
@@ -113,7 +138,17 @@ func (m *ViewerModel) Resize(width, height int) {
 func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
+		case "?":
+			m.showHelp = true
+
 		case "q":
 			return m, func() tea.Msg { return ViewerClosedMsg{Quit: true} }
 
@@ -176,6 +211,10 @@ func (m ViewerModel) bodyHeight() int {
 }
 
 func (m ViewerModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, m.width, m.height)
+	}
+
 	header := m.renderHeader()
 	body := m.renderBody()
 	footer := m.renderFooter()
@@ -653,6 +692,7 @@ func (m ViewerModel) renderFooter() string {
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
+			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }

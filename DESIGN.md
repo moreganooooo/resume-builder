@@ -9,9 +9,9 @@ colors:
   tui-subtext: "#a6adc8"
   tui-brand: "#4dabf7"
   tui-accent: "#b39ddb"
-  tui-success: "#4caf50"
-  tui-warning: "#f5c542"
-  tui-error: "#c96a6a"
+  tui-success: "#12C78F"
+  tui-warning: "#F5EF34"
+  tui-error: "#FF7B99"
   print-text: "#000000"
   print-bg: "#ffffff"
   print-divider: "#9aa3af"
@@ -62,11 +62,23 @@ The system uses a split palette: vibrant, Charm-inspired neons for the TUI, and 
 - **TUI Accent** (#b39ddb): Vibrant Mauve for signature flourishes (Charm-like pop).
 
 ### Semantic TUI
-- **Success** (#4caf50): High-visibility green.
-- **Warning** (#f5c542): Sharp amber.
-- **Error** (#c96a6a): Muted crimson.
+- **Success** (#12C78F): High-visibility green.
+- **Warning** (#F5EF34): Sharp amber.
+- **Error** (#FF7B99): Lightened crimson.
 - **Text** (#cdd6f4): Crisp terminal primary text.
 - **Subtext** (#a6adc8): Dimmed contextual text.
+
+**Why these three don't match a first guess at "green/amber/red":** each is
+picked from Charmtone (the Charm ecosystem's own branded palette) and then
+adjusted until it clears 4.5:1 WCAG AA contrast against *both* of the
+dashboard's real backgrounds -- Base (#1e1e2e) and the lighter Surface
+(#313244) that header/status/error bars render on top of. Surface is the
+tighter constraint: an earlier Error value that measured fine against Base
+(5.40:1) still failed AA against Surface (4.14:1) on the dashboard's own
+error banner. Error above is that same Charmtone Coral, lightened until it
+clears both (5.12:1 on Surface). See `scripts/theme.py`'s own top-of-file
+comment for the full contrast math and the other three colors' (Brand/
+Brand Accent/Info) identical story.
 
 ### Print/PDF Output
 - **Print Text** (#000000): Absolute black for maximum contrast.
