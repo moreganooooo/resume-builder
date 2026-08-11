@@ -182,6 +182,13 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
     jobs = []
 
     def on_data(data: EventData):
+        # scraper.run() is one long blocking Selenium session with no
+        # per-query hook in the library's Events enum -- this per-result
+        # line (Events.DATA already fires once per job found) is the only
+        # real signal available during the run, so a multi-query/slow-page
+        # scan doesn't look hung for minutes with only on_error visible.
+        cli_art.cli_info(f"Found: {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+
         apply_link = getattr(data, "apply_link", None)
         linkedin_link = getattr(data, "link", None)
 
@@ -254,6 +261,10 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
     scraper.on(Events.ERROR, on_error)
     scraper.on(Events.END, on_end)
 
+    cli_art.cli_info(
+        f"Searching LinkedIn for {len(search_terms)} saved "
+        f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(search_terms)}"
+    )
     try:
         scraper.run(_build_queries(job_limit, search_terms))
     except Exception as e:
