@@ -35,6 +35,7 @@ import orchestrator
 import jd_manager
 import batch_evaluate
 import picker
+import stale_sweep
 import scan as scan_module
 import liveness as liveness_module
 import polish as polish_module
@@ -89,6 +90,7 @@ def _build_find_jobs_choices() -> list:
         questionary.Choice(title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"),
         questionary.Choice(title=_icon_title("discovery", "↳ Check Job Posting Liveness"), value="liveness"),
         questionary.Choice(title=_icon_title("evaluate", "↳ Evaluate Pending Roles"), value="evaluate_all"),
+        questionary.Choice(title=_icon_title("utility", "↳ Archive Stale Postings"), value="stale_sweep"),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -891,6 +893,74 @@ def _handle_settings_upkeep() -> bool:
             continue
 
 
+def _handle_stale_sweep() -> bool:
+    """Archives postings past an age threshold into jds/<profile>/expired/.
+
+    Scoring already devalues stale postings (orchestrator's
+    STALE_POSTING_* curve), but ranking only changes ORDER -- it cannot
+    shrink a queue that has grown past a thousand entries. This changes
+    membership. The two thresholds are deliberately different: scoring
+    starts penalizing at day 3, archiving defaults to day 30, because
+    getting the ordering wrong costs a scroll and getting the membership
+    wrong costs a real lead.
+
+    Always previews before it moves anything -- with a queue this size,
+    "trust me" is not an acceptable interaction."""
+    raw = cli_art.text(
+        "Archive postings older than how many days?",
+        default=str(stale_sweep.DEFAULT_STALE_ARCHIVE_DAYS),
+    )
+    if raw is None:
+        return False
+    try:
+        threshold = int(str(raw).strip())
+        if threshold < 1:
+            raise ValueError("threshold must be at least 1 day")
+    except ValueError:
+        cli_art.cli_warning(f"'{raw}' isn't a whole number of days -- nothing was archived.")
+        return False
+
+    preview = stale_sweep.preview_sweep(threshold)
+    to_archive = preview["to_archive"]
+
+    if not to_archive:
+        cli_art.cli_success(
+            f"Nothing to archive -- no pending postings are {threshold}+ days old.")
+        return False
+
+    cli_art.cli_info(
+        f"{len(to_archive)} posting(s) are {threshold}+ days old. "
+        f"{preview['to_keep_count']} would stay.")
+    if preview["oldest_kept_days"] is not None:
+        cli_art.detail(f"   Oldest kept: {preview['oldest_kept_days']}d  "
+                       f"Newest moved: {preview['newest_moved_days']}d", level=cli_art.NORMAL)
+    if preview["skipped_no_age_count"]:
+        # Deliberately surfaced rather than buried: these are postings the
+        # sweep is choosing NOT to touch because it can't tell how old they
+        # are, and a user wondering why their queue didn't shrink as much
+        # as expected deserves the reason.
+        cli_art.cli_info(
+            f"{preview['skipped_no_age_count']} posting(s) have no post date and were left alone.")
+
+    # A sample, not all 800 rows -- scan.py's documented anti-spam rule.
+    for row in to_archive[:5]:
+        cli_art.detail(f"   {row['company']} — {row['title']} ({row['age_days']}d)",
+                       level=cli_art.NORMAL)
+    if len(to_archive) > 5:
+        cli_art.detail(f"   ...and {len(to_archive) - 5} more", level=cli_art.NORMAL)
+
+    if not cli_art.confirm_destructive(
+            "Archive", f"{len(to_archive)} stale posting(s) to expired/ (reversible)"):
+        cli_art.cli_info("Nothing was archived.")
+        return False
+
+    result = stale_sweep.run_sweep(threshold)
+    cli_art.cli_success(f"Archived {result['archived_count']} posting(s) to expired/.")
+    for err in result["errors"]:
+        cli_art.cli_warning(f"Couldn't archive {os.path.basename(err['path'])}: {err['error']}")
+    return True
+
+
 def _handle_help() -> bool:
     cli_art.display_help()
     return False
@@ -992,6 +1062,7 @@ _HANDLERS = {
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
+    "stale_sweep": _handle_stale_sweep,
     "help": _handle_help,
     "check_updates": _handle_check_updates,
     "bullet_bank": _handle_bullet_bank,

@@ -824,12 +824,36 @@ class FitEvaluationSchema(BaseModel):
 
 # Applying early matters a lot, and the scanners now pull in enough
 # volume that a posting sitting open for weeks shouldn't rank the same
-# as one found today. Gentle ramp (not a cliff at day 8) and capped so a
-# genuinely strong match a few weeks old still outranks a mediocre fresh
-# one -- age is a tiebreaker/prioritization signal, not an override.
-STALE_POSTING_THRESHOLD_DAYS = 7
-STALE_POSTING_PENALTY_PER_DAY = 0.03
-STALE_POSTING_MAX_PENALTY = 0.75
+# as one found today.
+#
+# These were previously 7 / 0.03 / 0.75, deliberately gentle so age acted
+# as "a tiebreaker, not an override". In practice that was too weak to do
+# its job, for a structural reason rather than a tuning one: because the
+# cap was only 0.75 on a 1-5 scale, a strong-but-stale posting could
+# NEVER fall below a mediocre fresh one at any age -- a 4.20 role bottomed
+# out at 3.45 and stayed there forever, still outranking a fresh 3.40. And
+# the penalty fully saturated at day 32, so a 90-day-old posting scored
+# exactly the same as a month-old one. Nothing could ever age off the
+# list, which is how a queue reaches 1,000+ postings.
+#
+# The new curve makes age able to overturn quality, which is the whole
+# point when applying early is the single biggest lever a candidate has:
+#   day 0-3   no penalty        (a genuinely fresh find is untouched)
+#   day 7     -0.32
+#   day 14    -0.88             (a strong 4.20 now sits below a fresh 3.40)
+#   day 21    -1.44
+#   day 30    -2.16
+#   day 34+   -2.50 (capped)
+# The cap still exists so the score stays interpretable on a 1-5 scale
+# rather than collapsing everything old into an undifferentiated floor,
+# but it now sits well below "still competitive".
+#
+# Ranking alone can't shrink an existing backlog, so this pairs with
+# stale_sweep.py, which archives postings past its own (larger) age
+# threshold. Devaluing decides ordering; sweeping decides membership.
+STALE_POSTING_THRESHOLD_DAYS = 3
+STALE_POSTING_PENALTY_PER_DAY = 0.08
+STALE_POSTING_MAX_PENALTY = 2.5
 
 
 def _weighted_score(subscores: dict, weights: dict) -> float:
