@@ -191,9 +191,9 @@ func (m ViewerModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.title)
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.title)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	scroll := right.Render(func() string {
 		if len(m.renderedLines) == 0 {
 			return ""
@@ -212,7 +212,7 @@ func (m ViewerModel) renderHeader() string {
 		return fmt.Sprintf("%d%%", pct)
 	}())
 
-	title, scroll, gap := fitBar(title, scroll, m.width, 4)
+	title, scroll, gap := fitBar(title, scroll, m.width, 4, m.theme.Surface)
 
 	return style.Render(title + gap + scroll)
 }
@@ -569,13 +569,17 @@ func (m ViewerModel) styleLine(line string) string {
 		content := strings.TrimPrefix(trimmed, "#### ")
 		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Width(w).Render("    " + content)
 	}
+	// Subtext, not Overlay: Overlay is a border/divider token that measures
+	// as low as 1.4:1 against Surface (see statusColorMap in pipeline.go)
+	// -- far under WCAG AA's 4.5:1 for real text. Subtext is the token
+	// actually designed to be read as dimmed body text.
 	if strings.HasPrefix(trimmed, "##### ") && !strings.HasPrefix(trimmed, "###### ") {
 		content := strings.TrimPrefix(trimmed, "##### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Overlay).Width(w).Render("      " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("      " + content)
 	}
 	if strings.HasPrefix(trimmed, "###### ") {
 		content := strings.TrimPrefix(trimmed, "###### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Overlay).Width(w).Render("        " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("        " + content)
 	}
 	if trimmed == "---" || trimmed == "***" {
 		return lipgloss.NewStyle().Foreground(m.theme.Overlay).Width(w).Render(strings.Repeat("─", w))
@@ -642,8 +646,8 @@ func (m ViewerModel) renderFooter() string {
 		Width(m.width).
 		Padding(0, 1)
 
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
 	return style.Render(
 		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +

@@ -18,7 +18,21 @@ import (
 // ANSI-escape-aware, so it can safely shorten an already-styled/rendered
 // string -- so the composed line fits at any width down to 0, not just
 // down to whatever width right alone happens to need.
-func fitBar(left, right string, width, reserved int) (string, string, string) {
+//
+// bg is the bar's own panel background (every caller wraps the returned
+// three pieces in an outer style with this same Background). The caller's
+// left/right strings arrive already-rendered (each ending in its own SGR
+// reset), so the gap returned here is pre-rendered with bg too -- otherwise
+// that reset clears the outer style's background for every column after
+// the first rendered fragment, and the plain-string gap (and anything
+// concatenated after it) falls back to the terminal's default background
+// instead of bg. Confirmed by dumping the raw ANSI bytes of the composed
+// line: only the segment before the first embedded reset ever carried the
+// outer background. Callers still need their own left/right sub-styles
+// (title, keyStyle, descStyle, etc.) to set Background(bg) themselves --
+// fitBar only owns the gap, since it never sees those styles, only their
+// rendered output.
+func fitBar(left, right string, width, reserved int, bg lipgloss.Color) (string, string, string) {
 	avail := width - reserved
 	if avail < 0 {
 		avail = 0
@@ -37,5 +51,6 @@ func fitBar(left, right string, width, reserved int) (string, string, string) {
 	if gap < 1 {
 		gap = 1
 	}
-	return left, right, strings.Repeat(" ", gap)
+	gapStr := lipgloss.NewStyle().Background(bg).Render(strings.Repeat(" ", gap))
+	return left, right, gapStr
 }
