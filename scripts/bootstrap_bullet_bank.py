@@ -286,7 +286,11 @@ def _existing_clean_bank_row_count() -> int:
     try:
         with open(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
             return sum(1 for _ in csv.DictReader(f))
-    except Exception:
+    except Exception as e:
+        cli_art.friendly_warning(
+            e, "reading your existing bullet bank",
+            "showing 0 existing rows below, even though the file may not actually be empty",
+        )
         return 0
 
 
@@ -387,11 +391,11 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
             # only "done" is skipped on retry). "failed" is deliberately not
             # "done", so the next run_ingestion() call retries this file
             # instead of skipping it.
-            cli_art.console.print(f"  API error processing {filename}: {e}", markup=False, soft_wrap=True)
+            cli_art.friendly_error(e, f"processing {filename}")
             checkpoint[filename] = {"status": "failed", "doc_type": "other", "reason": str(e)}
             failures += 1
         except Exception as e:
-            cli_art.console.print(f"  Error processing {filename}: {e}", markup=False, soft_wrap=True)
+            cli_art.friendly_error(e, f"processing {filename}")
             checkpoint[filename] = {"status": "error", "doc_type": "other"}
         _save_checkpoint(checkpoint)
 

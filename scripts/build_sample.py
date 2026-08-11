@@ -46,16 +46,12 @@ def build_sample() -> dict:
 
     engine = orchestrator.ResumeEngine()
 
-    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-    cli_art.console.print("Building sample resume...", markup=False, soft_wrap=True)
-    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.rule("Building Sample Resume", style="dim")
     resume_result = engine.build_tailored_resume(
         jd_path=SAMPLE_JD_PATH, master_resume={}, job_key=job_key,
     )
 
-    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-    cli_art.console.print("Building sample cover letter...", markup=False, soft_wrap=True)
-    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.rule("Building Sample Cover Letter", style="dim")
     coverletter_result = engine.build_tailored_coverletter(SAMPLE_JD_PATH)
 
     return {"resume": resume_result, "coverletter": coverletter_result}
@@ -66,9 +62,7 @@ if __name__ == "__main__":
     resume_ok = bool(result["resume"])
     coverletter_ok = bool(result["coverletter"])
 
-    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-    cli_art.console.print("Sample build summary:", markup=False, soft_wrap=True)
-    cli_art.console.print(f"{'─'*60}", markup=False, soft_wrap=True)
+    cli_art.console.rule("Sample Build Summary", style="dim")
     if resume_ok:
         cli_art.console.print(f"  {theme.colorize_icon('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}", soft_wrap=True)
     else:

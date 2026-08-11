@@ -69,7 +69,7 @@ if os.path.exists(out_path):
         results = existing.to_dict("records")
         cli_art.cli_info(f"Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
     except Exception as e:
-        cli_art.cli_warning(f"Could not read existing checkpoint ({e}). Starting fresh.")
+        cli_art.friendly_warning(e, "reading the existing audit checkpoint", "starting this audit fresh instead")
 
 total = len(df)
 skipped = 0
@@ -108,17 +108,26 @@ for i, row in df.iterrows():
             "weaknesses":          data.get("weaknesses"),
         })
     except Exception as e:
-        cli_art.cli_warning(f"Error: {e}")
+        cli_art.friendly_warning(e, "scoring this bullet", "marking it ERROR so you can rerun the audit to retry it")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": f"[AUDIT_ERROR] {e}"})
 
     # --- CHECKPOINT SAVE after every bullet ---
+    # Saved every time (cheap, and what makes a restart resumable), but
+    # only reported at VERBOSE -- a line per bullet was pure spam at the
+    # default output level.
     pd.DataFrame(results).to_csv(out_path, index=False)
-    cli_art.cli_success(f"Checkpoint saved ({len(results)} bullets scored)")
+    cli_art.detail(f"Checkpoint saved ({len(results)} bullets scored)")
 
     if i < total - 1:
         time.sleep(SLEEP)
 
+error_count = sum(1 for r in results if r.get('manager_test') == 'ERROR')
 cli_art.cli_success(f"Done. Results saved to {out_path}")
 cli_art.cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
 cli_art.cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
-cli_art.cli_error(f"ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
+# A count of zero isn't an error -- only style it as one when something
+# actually failed to score.
+if error_count:
+    cli_art.cli_warning(f"ERROR: {error_count}")
+else:
+    cli_art.cli_info(f"ERROR: {error_count}")
