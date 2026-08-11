@@ -462,10 +462,26 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
         f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
     )
 
-    if cached_tokens and cached_tokens > 0:
-        cli_art.console.print(f"   {theme.colorize_icon('hint')} tokens — {token_part} | {theme.colorize_icon('hint')} cached: {cached_tokens:,}", soft_wrap=True)
-    else:
-        cli_art.console.print(f"   {theme.colorize_icon('hint')} tokens — {token_part}", soft_wrap=True)
+    # Cache hit/miss is the ONE piece of engine internals that stays
+    # visible at NORMAL. It survives the verbosity cut because it answers
+    # "did this call cost me full price?" -- a question a non-engineer can
+    # act on -- in a single line. The token breakdown sitting behind it is
+    # VERBOSE-only: prompt/output/total counts are meaningless to anyone
+    # not tuning prompts.
+    #
+    # Gated to the first attempt so a retried call doesn't repeat the same
+    # cache verdict two or three times for one bullet.
+    if attempt <= 1:
+        if cached_tokens and cached_tokens > 0:
+            cli_art.detail(
+                f"   {theme.colorize_icon('success')} cache hit — {cached_tokens:,} tokens reused",
+                level=cli_art.NORMAL, soft_wrap=True)
+        else:
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} cache miss — full prompt sent",
+                level=cli_art.NORMAL, soft_wrap=True)
+
+    cli_art.detail(f"   {theme.colorize_icon('hint')} tokens — {token_part}", soft_wrap=True)
 
 
 def _sanitize_none_for_prompt(value):
@@ -675,7 +691,9 @@ def _parse_pdf_result(stdout: str, pdf_path: str) -> tuple:
     cosmetic and comes from stdout."""
     try:
         page_count = len(PdfReader(pdf_path).pages)
-    except Exception:
+    except Exception as exc:
+        cli_art.friendly_warning(exc, "reading the rendered PDF's page count",
+                                  "the page count won't be shown for this build")
         page_count = None
     size_match = re.search(r"Size:\s*([\d.]+\s*\w+)", stdout)
     size_str = size_match.group(1) if size_match else "unknown size"
@@ -1343,10 +1361,10 @@ class ResumeEngine:
             try:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
-                cli_art.console.print(f"   {theme.colorize_icon('success')} Loaded profile.yml ({len(raw):,} chars)", soft_wrap=True)
+                cli_art.detail(f"   {theme.colorize_icon('success')} Loaded profile.yml ({len(raw):,} chars)")
                 trimmed = _trim_profile_yaml(raw)
                 if trimmed:
-                    cli_art.console.print(f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(trimmed):,} chars", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(trimmed):,} chars")
                     sections.append(
                         "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                         "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
@@ -1371,7 +1389,7 @@ class ResumeEngine:
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
                         data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
-                    cli_art.console.print(f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)")
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
                     cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load {fname}: {e}", soft_wrap=True)
@@ -1381,7 +1399,7 @@ class ResumeEngine:
             try:
                 with open(voice_anchors_path, "r", encoding="utf-8") as f:
                     data = f.read()
-                cli_art.console.print(f"   {theme.colorize_icon('success')} Loaded voice-anchors.md ({len(data):,} chars)", soft_wrap=True)
+                cli_art.detail(f"   {theme.colorize_icon('success')} Loaded voice-anchors.md ({len(data):,} chars)")
                 sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
             except Exception as e:
                 cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}", soft_wrap=True)
@@ -1392,7 +1410,7 @@ class ResumeEngine:
                 try:
                     with open(evidence_guide_path, "r", encoding="utf-8") as f:
                         data = f.read()
-                    cli_art.console.print(f"   {theme.colorize_icon('success')} Loaded evidence-guide.csv ({len(data):,} chars)", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('success')} Loaded evidence-guide.csv ({len(data):,} chars)")
                     sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
                 except Exception as e:
                     cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}", soft_wrap=True)
@@ -1675,7 +1693,7 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._segment_cache:
-            cli_art.console.print(f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand.", soft_wrap=True)
+            cli_art.detail(f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand.")
             self._segment_cache[key] = self._build_audit_segment_bundle(company, normalized_tags)
         return self._segment_cache[key]
 
@@ -1686,7 +1704,7 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._gemma_segment_cache:
-            cli_art.console.print(f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand.", soft_wrap=True)
+            cli_art.detail(f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand.")
             self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, normalized_tags)
         return self._gemma_segment_cache[key]
 
@@ -1707,16 +1725,16 @@ class ResumeEngine:
         self._segment_cache = {}
         self._gemma_segment_cache = {}
         pairs = sorted({(company, self._normalize_tags(tags)) for _, company, tags in bullet_tuples})
-        cli_art.console.print(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.detail(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        cli_art.detail("", markup=False)
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
             gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
             self._gemma_segment_cache[(company, tags)] = gemma_bundle
             deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(company, self.deep_evidence_keywords) else ""
-            cli_art.console.print(f"   {theme.colorize_icon('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)", soft_wrap=True)
-        cli_art.console.print(f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n", soft_wrap=True)
+            cli_art.detail(f"   {theme.colorize_icon('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
+        cli_art.detail(f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n")
 
     @staticmethod
     def critique_composite(scores: dict) -> float:
@@ -1741,8 +1759,8 @@ class ResumeEngine:
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
         cli_art.console.print(f"\n{theme.colorize_icon('hint')} Loading rules bundle...", soft_wrap=True)
-        cli_art.console.print(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
+        cli_art.detail("", markup=False)
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
             cli_art.console.print("  No bullets to audit -- empty or invalid input. Skipping audit loop.", markup=False, soft_wrap=True)
@@ -1755,15 +1773,15 @@ class ResumeEngine:
             return refined_bullets
 
         critique_system = self.build_bullet_critique_system()
-        cli_art.console.print(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.detail(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
+        cli_art.detail("", markup=False)
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
         # to build (2 small JSON files + voice-anchors.md), so it's built
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
         static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        cli_art.console.print(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier", soft_wrap=True)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
 
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
@@ -1885,13 +1903,13 @@ class ResumeEngine:
         rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
         rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
 
-        cli_art.console.print(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars", soft_wrap=True)
-        cli_art.console.print(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
-        cli_art.console.print(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)", soft_wrap=True)
-        cli_art.console.print(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
-        cli_art.console.print(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars", soft_wrap=True)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
+        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
+        cli_art.detail("", markup=False)
+        cli_art.detail(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
+        cli_art.detail(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
+        cli_art.detail("", markup=False)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars")
 
         self.warm_segment_cache(bullet_tuples)
 
@@ -1917,10 +1935,10 @@ class ResumeEngine:
                 continue
 
             bullet_preview = bullet[:60]
-            cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-            cli_art.console.print(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", markup=False, soft_wrap=True)
-            cli_art.console.print(f"   Tags: {tags}  |  Company: {company}", markup=False, soft_wrap=True)
-            cli_art.console.print(markup=False, soft_wrap=True)
+            cli_art.detail(f"\n{'─'*60}", markup=False)
+            cli_art.detail(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", markup=False)
+            cli_art.detail(f"   Tags: {tags}  |  Company: {company}", markup=False)
+            cli_art.detail("", markup=False)
 
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
@@ -1947,19 +1965,19 @@ class ResumeEngine:
                 gem_flag   = critique_data.get("hidden_gem_flag", False)
                 gem_reason = critique_data.get("hidden_gem_reason", "")
                 if gem_flag:
-                    cli_art.console.print(f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}")
                 elif gem_score >= 75:
-                    cli_art.console.print(f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}")
 
                 if (critique_data.get("manager_test") == "FAIL" or
                         critique_data.get("believability_score", 100) < 80):
-                    cli_art.console.print(f"   {theme.colorize_icon('hint')}  Rewriting with {REWRITE_MODEL}...", soft_wrap=True)
+                    cli_art.detail(f"   {theme.colorize_icon('hint')}  Rewriting with {REWRITE_MODEL}...")
                     time.sleep(REWRITE_SLEEP)
 
                     segment_bundle       = self.audit_segment_bundle_for(company, tags)
                     segment_bundle_gemma = self.audit_segment_bundle_for_gemma(company, tags)
                     if segment_bundle:
-                        cli_art.console.print(f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)", soft_wrap=True)
+                        cli_art.detail(f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
 
                     active_rewrite_model   = REWRITE_MODEL
                     rewrite_parse_failures = 0
@@ -2039,19 +2057,19 @@ class ResumeEngine:
 
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
-                                cli_art.console.print(f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})", soft_wrap=True)
+                                cli_art.detail(f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
                                 # Use the rescore data for the rewritten bullet
                                 critique_to_record = rescore_data
                                 try:
                                     if bullet_feedback.queue_accepted_rewrite(
                                         bullet, rewritten_bullet, company, tags, critique_to_record
                                     ):
-                                        cli_art.console.print(f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)", soft_wrap=True)
+                                        cli_art.detail(f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)")
                                 except Exception as feedback_err:
                                     cli_art.console.print(f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}", soft_wrap=True)
                             else:
                                 rewritten_bullet = bullet
-                                cli_art.console.print(f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})", soft_wrap=True)
+                                cli_art.detail(f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
                                 # Use the original critique data
                                 critique_to_record = critique_data
                             break
@@ -2559,7 +2577,8 @@ class ResumeEngine:
                   f"{PDF_GENERATION_TIMEOUT_SECONDS}s.", soft_wrap=True)
             return {}
         if pdf_result.returncode != 0:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')}  PDF generation failed:\n{pdf_result.stderr}", soft_wrap=True)
+            cli_art.friendly_subprocess_error(
+                pdf_result.stderr, "creating the PDF for this cover letter")
             return {}
         cli_art.print_subprocess_output(pdf_result.stdout)
 
@@ -2786,8 +2805,8 @@ class ResumeEngine:
                 f"=== REFINED BULLETS ===\n{bullets_block}"
             )
 
-            cli_art.console.print(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens", markup=False, soft_wrap=True)
-            cli_art.console.print(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens", markup=False, soft_wrap=True)
+            cli_art.detail(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens", markup=False)
+            cli_art.detail(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens", markup=False)
 
             # Step 3's audit loop just made up to 30 calls; give the free
             # tier's rolling per-minute token window a moment to recover
@@ -3256,7 +3275,8 @@ class ResumeEngine:
                       f"{PDF_GENERATION_TIMEOUT_SECONDS}s.", soft_wrap=True)
                 return {}
             if pdf_result.returncode != 0:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')}  PDF generation failed:\n{pdf_result.stderr}", soft_wrap=True)
+                cli_art.friendly_subprocess_error(
+                    pdf_result.stderr, "creating the PDF for this resume")
                 return {}
 
             page_count, size_str = _parse_pdf_result(pdf_result.stdout, pdf_out)
@@ -3526,7 +3546,27 @@ def main():
     )
     parser.add_argument("--master", default=None, help="Path to master resume JSON (optional)")
     parser.add_argument("--output", default=None, help="Output JSON filename (single-JD mode only)")
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument(
+        "--verbose", action="store_true",
+        help="Show implementation detail (cache/tier internals, token counts, model "
+             "IDs, rule filenames) alongside normal step output. Same effect as "
+             "RESUME_BUILDER_VERBOSITY=verbose, but overrides that env var.",
+    )
+    verbosity_group.add_argument(
+        "--quiet", action="store_true",
+        help="Show only errors, warnings and final results -- no step labels or "
+             "cache hit/miss. Same effect as RESUME_BUILDER_VERBOSITY=quiet, but "
+             "overrides that env var.",
+    )
     args = parser.parse_args()
+
+    if args.verbose:
+        cli_art.set_verbosity(cli_art.VERBOSE)
+    elif args.quiet:
+        cli_art.set_verbosity(cli_art.QUIET)
+    else:
+        cli_art.set_verbosity(None)  # let RESUME_BUILDER_VERBOSITY decide
 
     completed_count, failed_count = run_pipeline(
         jd_path=args.jd, master_resume_path=args.master, output_filename=args.output,
