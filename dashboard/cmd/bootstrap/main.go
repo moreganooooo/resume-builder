@@ -12,8 +12,12 @@ import (
 )
 
 func main() {
-    // Load the current theme (same logic as the rest of the dashboard).
-    t := theme.NewTheme("") // "" triggers auto detection.
+    // Match dashboard/main.go's own default (-theme resume-builder) rather
+    // than falling back to generic Catppuccin auto-detection -- this
+    // binary is launched standalone by scripts/menu.py with no --theme
+    // flag, so "" here would otherwise put a new user's first-ever screen
+    // off-brand while every screen after it is on-brand.
+    t := theme.NewTheme("resume-builder")
     data, err := bootstrap.Run(t)
     if err != nil {
         log.Fatalf("bootstrap wizard cancelled or errored: %v", err)
