@@ -47,6 +47,10 @@ type Theme struct {
 		Quit     string
 		Menu     string
 		Jobs     string
+		Profile  string
+		Source   string
+		Path     string
+		Magic    string
 	}
 }
 
