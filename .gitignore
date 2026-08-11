@@ -96,6 +96,7 @@ yarn-error.log*
 # manual `go build` leaving a compiled binary or local module cache.
 /dashboard/dashboard
 /dashboard/rb-dashboard
+/dashboard/prompt
 
 
 # === MULTI-COMPUTER SYNC (Syncthing) ===

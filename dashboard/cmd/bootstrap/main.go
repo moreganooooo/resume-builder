@@ -5,11 +5,21 @@
 package main
 
 import (
+    "errors"
     "fmt"
     "log"
+    "os"
+
+    "github.com/charmbracelet/huh"
     "github.com/moreganooooo/resume-builder/dashboard/internal/ui/bootstrap"
     "github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
+
+// cancelExitCode matches the shell SIGINT convention (128 + SIGINT's 2),
+// distinguishing "user backed out" from a real error -- same constant
+// dashboard/cmd/prompt/main.go uses, so callers on the Python side can
+// treat both binaries' cancellation the same way.
+const cancelExitCode = 130
 
 func main() {
     // Match dashboard/main.go's own default (-theme resume-builder) rather
@@ -20,7 +30,15 @@ func main() {
     t := theme.NewTheme("resume-builder")
     data, err := bootstrap.Run(t)
     if err != nil {
-        log.Fatalf("bootstrap wizard cancelled or errored: %v", err)
+        // Previously any cancellation (Esc/Ctrl-C) hit log.Fatalf just like
+        // a real error, exiting 1 -- indistinguishable to a caller from an
+        // actual failure. cmd/prompt/main.go already made this distinction
+        // for huh.ErrUserAborted; this wraps the same huh form library, so
+        // it gets the same treatment.
+        if errors.Is(err, huh.ErrUserAborted) {
+            os.Exit(cancelExitCode)
+        }
+        log.Fatalf("bootstrap wizard errored: %v", err)
     }
     // Emit JSON for the Python side to consume.
     fmt.Println(data.ToJSON())

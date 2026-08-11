@@ -141,6 +141,38 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 	}
 }
 
+// TestRenderJobDetailPaneSurfacesPostingLegitimacyWarning guards a bug
+// where Evaluation.PostingLegitimacy/.PostingLegitimacyNotes were decoded
+// from the persisted evaluation JSON but never rendered anywhere in this
+// screen -- a fake/stale-posting warning had no way to reach the user.
+func TestRenderJobDetailPaneSurfacesPostingLegitimacyWarning(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	suspicious := model.JobRow{
+		Company: "Acme", Title: "Marketing Lead", Status: "Pending",
+		Evaluation: model.Evaluation{
+			CompositeScore:         4.0,
+			PostingLegitimacy:      "Suspicious",
+			PostingLegitimacyNotes: "No company website, posted by a personal email address.",
+		},
+	}
+	rendered := ansi.Strip(m.renderJobDetailPane(suspicious, 60, 20))
+	for _, want := range []string{"Posting legitimacy: Suspicious", "No company website"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected detail pane to surface the legitimacy warning, want %q, got %q", want, rendered)
+		}
+	}
+
+	// "High Confidence" is the common case and shouldn't clutter every job's
+	// detail pane with a line that says nothing.
+	confident := suspicious
+	confident.Evaluation.PostingLegitimacy = "High Confidence"
+	rendered = ansi.Strip(m.renderJobDetailPane(confident, 60, 20))
+	if strings.Contains(rendered, "Posting legitimacy") {
+		t.Fatalf("expected no legitimacy line for High Confidence, got %q", rendered)
+	}
+}
+
 func TestRenderSidebarListShowsEmptyStateWhenNoRows(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), nil, 100, 30)
 	rendered := ansi.Strip(m.renderSidebarList(40, 20))
@@ -244,11 +276,20 @@ func TestActionCompleteMsgSuccessReloadsAndReselects(t *testing.T) {
 		t.Fatalf("failed to update jobs file: %v", err)
 	}
 
-	m, _ = m.Update(jobsActionCompleteMsg{action: "liveness"})
+	var cmd tea.Cmd
+	m, cmd = m.Update(jobsActionCompleteMsg{action: "liveness"})
 
 	if m.actionInProgress != "" {
 		t.Fatalf("expected actionInProgress cleared, got %q", m.actionInProgress)
 	}
+	if cmd == nil {
+		t.Fatal("expected a reloadJobsCmd to be returned")
+	}
+	// The reload now happens off-thread (see reloadJobsCmd) -- run the
+	// returned Cmd and feed its jobsReloadedMsg back in, mirroring what the
+	// real bubbletea runtime does.
+	m, _ = m.Update(cmd())
+
 	if len(m.rows) != 1 || m.rows[0].Company != "Acme Updated" {
 		t.Fatalf("expected reloaded rows to reflect the refreshed export, got %+v", m.rows)
 	}
@@ -345,6 +386,67 @@ func TestViewShowsActionError(t *testing.T) {
 	rendered := ansi.Strip(m.View())
 	if !strings.Contains(rendered, "network timeout") {
 		t.Fatalf("expected error message rendered, got %q", rendered)
+	}
+}
+
+// manyJobRows returns n jobs -- enough to exceed a small terminal's visible
+// sidebar rows, so scroll behavior actually gets exercised.
+func manyJobRows(n int) []model.JobRow {
+	rows := make([]model.JobRow, n)
+	for i := range rows {
+		rows[i] = model.JobRow{
+			Path:       fmt.Sprintf("job-%02d.json", i),
+			Status:     "Pending",
+			Company:    fmt.Sprintf("Company %02d", i),
+			Title:      fmt.Sprintf("Role %02d", i),
+			Evaluation: model.Evaluation{CompositeScore: 4.0},
+		}
+	}
+	return rows
+}
+
+// TestScrollFollowsCursorPastVisibleWindow guards the P0 bug where the
+// sidebar always rendered from the top of the filtered list regardless of
+// cursor position: on a short terminal, moving the cursor past what fits
+// on screen left the selection invisible with no way to scroll to it.
+func TestScrollFollowsCursorPastVisibleWindow(t *testing.T) {
+	// height=12 leaves a handful of visible sidebar rows after chrome (see
+	// chromeAvailHeight/sidebarViewportLines) -- comfortably fewer than the
+	// 30 rows below, so the cursor is guaranteed to outrun the first screen.
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), manyJobRows(30), 100, 12)
+
+	for range 25 {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if m.cursor != 25 {
+		t.Fatalf("expected cursor at 25, got %d", m.cursor)
+	}
+
+	rendered := ansi.Strip(m.View())
+	if !strings.Contains(rendered, "Company 25") {
+		t.Fatalf("expected the selected row (Company 25) to be visible after scrolling down, got:\n%s", rendered)
+	}
+}
+
+// TestScrollJumpsToTopAndBottom guards the g/G keybindings added alongside
+// the scroll fix, mirroring pipeline.go's existing g/G behavior.
+func TestScrollJumpsToTopAndBottom(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), manyJobRows(30), 100, 12)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	if m.cursor != 29 {
+		t.Fatalf("expected G to move cursor to the last row (29), got %d", m.cursor)
+	}
+	if rendered := ansi.Strip(m.View()); !strings.Contains(rendered, "Company 29") {
+		t.Fatalf("expected the last row (Company 29) to be visible after G, got:\n%s", rendered)
+	}
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	if m.cursor != 0 {
+		t.Fatalf("expected g to move cursor to the first row (0), got %d", m.cursor)
+	}
+	if rendered := ansi.Strip(m.View()); !strings.Contains(rendered, "Company 00") {
+		t.Fatalf("expected the first row (Company 00) to be visible after g, got:\n%s", rendered)
 	}
 }
 

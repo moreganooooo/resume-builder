@@ -105,6 +105,11 @@ func (m *ViewerModel) Resize(width, height int) {
 	m.rebuildRender()
 }
 
+// Update handles input for the viewer screen. Resizing is not handled
+// here -- main.go's top-level WindowSizeMsg case calls Resize() directly
+// on the active screen before its own early-returns, so a
+// tea.WindowSizeMsg never actually reaches this Update() in the real app;
+// a case for it here was dead code.
 func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -157,11 +162,6 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 			}
 			m.scrollOffset = maxScroll
 		}
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.rebuildRender()
 	}
 
 	return m, nil
@@ -650,7 +650,7 @@ func (m ViewerModel) renderFooter() string {
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
 	return style.Render(
-		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
+		keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +

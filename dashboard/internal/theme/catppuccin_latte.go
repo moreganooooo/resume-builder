@@ -40,14 +40,9 @@ func newCatppuccinLatte() Theme {
 		Pink:   lipgloss.Color("#a81a82"),
 	}
 
-	t.GradientStart = lipgloss.Color(BrandColor)
-	t.GradientEnd = lipgloss.Color(AccentColor)
-
 	// Populate Token shortcuts
 	t.Token.Text = t.Text
 	t.Token.Subtext = t.Subtext
-	t.Token.GradientStart = t.GradientStart
-	t.Token.GradientEnd = t.GradientEnd
 	t.Token.Mauve = t.Mauve
 
 	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-

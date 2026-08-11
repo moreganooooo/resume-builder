@@ -357,7 +357,6 @@ The dashboard includes a top-level menu system (`internal/ui/menu`) that routes 
 
 The menu uses a token-based design system that aligns with the wider project, including:
 - **Design Tokens**: Defined in `internal/theme/tokens.go`, mapping logical tokens to specific palettes (like Catppuccin).
-- **Gradients**: Background gradients using `theme.Token.GradientStart` and `GradientEnd` for a vibrant aesthetic.
 - **MenuModel**: Initialized via `menu.NewMenuModel(theme)`, the menu handles user selection and returns a `menu.MenuSelectMsg` which the main `appModel` router uses to switch active sub-models.
 
 To lint the dashboard code for hard-coded color literals, you can run:

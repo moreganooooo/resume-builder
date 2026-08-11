@@ -15,7 +15,7 @@ type MenuItem struct {
     icon  string
 }
 
-func (i MenuItem) Title() string       { return i.title }
+func (i MenuItem) Title() string       { return i.icon + "  " + i.title }
 func (i MenuItem) Description() string { return i.desc }
 func (i MenuItem) FilterValue() string { return i.title }
 
@@ -54,6 +54,13 @@ func NewMenuModel(t theme.Theme) MenuModel {
     // Apply selected styles to the delegate.
     delegate.Styles.SelectedTitle = selectedStyle
     delegate.Styles.SelectedDesc = selectedStyle
+    // Unselected rows otherwise fall through to bubbles' own hardcoded
+    // AdaptiveColor defaults (#1a1a1a/#dddddd for title, #A49FA5/#777777
+    // for description), which belong to no theme in this app and are
+    // picked by lipgloss's own terminal-background heuristic rather than
+    // the --theme flag the user actually chose.
+    delegate.Styles.NormalTitle = lipgloss.NewStyle().Foreground(t.Token.Text)
+    delegate.Styles.NormalDesc = lipgloss.NewStyle().Foreground(t.Token.Subtext)
     l := list.New(items, delegate, 30, 15)
 
     // list.Model defaults every one of these to true, which renders its own
@@ -68,15 +75,9 @@ func NewMenuModel(t theme.Theme) MenuModel {
     l.SetShowHelp(false)
     l.SetShowPagination(false)
 
-    // Header uses a bold, mauve‑styled title with an icon.
-    l.Title = lipgloss.NewStyle().
-        Bold(true).
-        Foreground(t.Token.Mauve).
-        Render(t.Icons.Menu + "  MAIN MENU")
-
-
-    // Normal rows use the regular text colour.
-    l.Styles.Title = lipgloss.NewStyle().Foreground(t.Token.Text)
+    // Header text (icon + title) -- styled and backgrounded at render time
+    // in View(), so it can track the list's live width across resizes.
+    l.Title = t.Icons.Menu + "  MAIN MENU"
 
     return MenuModel{list: l, theme: t}
 }
@@ -125,18 +126,33 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
     return m, cmd
 }
 
-// View renders the menu with a consistent header/footer layout.
+// View renders the menu with a consistent header/footer layout. Header and
+// footer are explicitly backgrounded with the theme's Surface colour --
+// every other screen (jobs.go, pipeline.go, viewer.go) does the same for
+// its own header/help bars; this screen previously didn't, so the Main
+// Menu (the very first screen the user sees) showed its chrome floating on
+// the terminal's ambient background instead of the app's surface colour.
 func (m MenuModel) View() string {
-    header := m.list.Title
-    body := m.list.View()
-    footer := lipgloss.NewStyle().
-        Foreground(m.theme.Token.Subtext).
-        Render("←↑↓→ navigate • ↩ select • q quit")
+    width := m.list.Width()
 
-    // Apply the shared padding helpers.
-    header = theme.PadHorizontal(lipgloss.NewStyle()).Render(header)
-    body = theme.PadHorizontal(lipgloss.NewStyle()).Render(body)
-    footer = theme.PadHorizontal(lipgloss.NewStyle()).Render(footer)
+    headerStyle := theme.PadHorizontal(
+        lipgloss.NewStyle().
+            Bold(true).
+            Foreground(m.theme.Token.Mauve).
+            Background(m.theme.Surface).
+            Width(width),
+    )
+    header := headerStyle.Render(m.list.Title)
+
+    body := m.list.View()
+
+    footerStyle := theme.PadHorizontal(
+        lipgloss.NewStyle().
+            Foreground(m.theme.Token.Subtext).
+            Background(m.theme.Surface).
+            Width(width),
+    )
+    footer := footerStyle.Render("←↑↓→ navigate • ↩ select • q quit")
 
     return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }

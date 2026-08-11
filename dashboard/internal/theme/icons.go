@@ -48,9 +48,16 @@ func NewMenuIcons() MenuIcons {
 			Menu:     "☰",
 			Jobs:     "▣",
 			Profile:  "@",
-			Source:   "#",
-			Path:     "/",
-			Magic:    "*",
+			// "#" previously here didn't evoke "folder"/"source" the way
+			// every other fallback in this set reads as a recognizable
+			// pictogram for its Nerd Font original -- ⊔ (open container/
+			// tray shape) is a closer visual match for nf-fa-folder_open,
+			// same narrow-width geometric-symbol style as Pipeline/Report/
+			// Jobs above (Neutral East Asian width, single terminal column,
+			// unlike an emoji folder glyph would be).
+			Source: "⊔",
+			Path:   "/",
+			Magic:  "*",
 		}
 	}
 	return MenuIcons{

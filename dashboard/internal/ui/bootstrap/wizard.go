@@ -8,6 +8,7 @@ import (
     "path/filepath"
     "strings"
     "github.com/charmbracelet/huh"
+    "github.com/charmbracelet/log"
     "github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
@@ -99,11 +100,19 @@ func Run(t theme.Theme) (WizardData, error) {
 
     err := form.Run()
     if err == nil {
-        // Persist wizard data for future runs
+        // Persist wizard data for future runs -- best-effort convenience,
+        // not required for this run to have succeeded, so a persistence
+        // failure logs (rather than fails the wizard) and only affects a
+        // future run's defaults.
         if cfgDir, e := os.UserConfigDir(); e == nil {
             cfgPath := filepath.Join(cfgDir, "resume-builder", "wizard.json")
-            _ = os.MkdirAll(filepath.Dir(cfgPath), 0o755)
-            _ = os.WriteFile(cfgPath, []byte(data.ToJSON()), 0o644)
+            if e := os.MkdirAll(filepath.Dir(cfgPath), 0o755); e != nil {
+                log.Warnf("could not create %s: %v", filepath.Dir(cfgPath), e)
+            } else if e := os.WriteFile(cfgPath, []byte(data.ToJSON()), 0o644); e != nil {
+                log.Warnf("could not write %s: %v", cfgPath, e)
+            }
+        } else {
+            log.Warnf("could not determine user config dir: %v", e)
         }
     }
     return data, err

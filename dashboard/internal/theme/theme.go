@@ -26,17 +26,11 @@ type Theme struct {
 	Red    lipgloss.Color
 	Pink   lipgloss.Color
 
-	// Gradients
-	GradientStart lipgloss.Color
-	GradientEnd   lipgloss.Color
-
 	// Token grouping for UI components
 	Token struct {
-		Text          lipgloss.Color
-		Subtext       lipgloss.Color
-		GradientStart lipgloss.Color
-		GradientEnd   lipgloss.Color
-		Mauve         lipgloss.Color
+		Text    lipgloss.Color
+		Subtext lipgloss.Color
+		Mauve   lipgloss.Color
 	}
 
 	// Icon set for UI elements
@@ -81,9 +75,10 @@ func NewTheme(name string) Theme {
 // what Form.WithTheme (the only real setter -- there is no Form.Theme
 // method) expects.
 //
-// Focused.Title/SelectSelector use Token.Mauve, not GradientStart --
-// GradientStart is always BrandColor (a hardcoded module constant, the
-// same hex in every theme, see tokens.go), which is exactly the
+// Focused.Title/SelectSelector use Token.Mauve, not the module-level
+// BrandColor constant (tokens.go, formerly wired into a now-removed
+// GradientStart theme field that had no real consumer) -- BrandColor is
+// the same hardcoded hex in every theme, which is exactly the
 // cross-theme-drift bug the Main Menu's own selected-row style was
 // already rewritten to avoid (see list.go's NewMenuModel comment).
 // BrandColor measures 6.63:1 against the dark themes' Base but only
