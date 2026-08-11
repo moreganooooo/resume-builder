@@ -893,6 +893,35 @@ def _handle_settings_upkeep() -> bool:
             continue
 
 
+def _offer_discovery_backfill() -> bool:
+    """Offers to date postings that carry no age signal at all, so they
+    become sweepable. Returns True if any were actually stamped.
+
+    Offered here rather than as its own menu entry because this is the
+    only moment a user is looking at the number that makes it matter --
+    "N postings were left alone" is the question, and this is the answer.
+    A standalone "Backfill Discovery Dates" item would be discoverable by
+    nobody and meaningful out of context to no one."""
+    preview = stale_sweep.backfill_discovery_dates(dry_run=True)
+    if not preview["candidate_count"]:
+        return False
+
+    cli_art.cli_info(
+        f"{preview['candidate_count']} of those can be dated from when this app "
+        "first saved them, which would let future sweeps see them.")
+    # Named plainly: this edits the JD files, and the date is inferred
+    # rather than published, so the user should know both before agreeing.
+    if not cli_art.confirm_destructive(
+            "Add an estimated first-seen date to",
+            f"{preview['candidate_count']} undated posting(s)"):
+        cli_art.cli_info("Left them undated.")
+        return False
+
+    result = stale_sweep.backfill_discovery_dates(dry_run=False)
+    cli_art.cli_success(f"Dated {result['stamped_count']} posting(s).")
+    return result["stamped_count"] > 0
+
+
 def _handle_stale_sweep() -> bool:
     """Archives postings past an age threshold into jds/<profile>/expired/.
 
@@ -938,9 +967,19 @@ def _handle_stale_sweep() -> bool:
         # Deliberately surfaced rather than buried: these are postings the
         # sweep is choosing NOT to touch because it can't tell how old they
         # are, and a user wondering why their queue didn't shrink as much
-        # as expected deserves the reason.
+        # as expected deserves the reason -- plus the fix, offered right
+        # here where the number that motivates it is on screen.
         cli_art.cli_info(
             f"{preview['skipped_no_age_count']} posting(s) have no post date and were left alone.")
+        if _offer_discovery_backfill():
+            preview = stale_sweep.preview_sweep(threshold)
+            to_archive = preview["to_archive"]
+            if not to_archive:
+                cli_art.cli_success(
+                    f"Nothing to archive -- no pending postings are {threshold}+ days old.")
+                return True
+            cli_art.cli_info(
+                f"Now {len(to_archive)} posting(s) are {threshold}+ days old.")
 
     # A sample, not all 800 rows -- scan.py's documented anti-spam rule.
     for row in to_archive[:5]:

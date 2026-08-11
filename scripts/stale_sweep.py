@@ -5,9 +5,9 @@ Scoring alone (orchestrator.STALE_POSTING_*) can only rank old postings
 lower; it can't shrink a backlog that's already 1,000+ files deep. This
 module is what actually removes stale postings from the active queue.
 
-LOGIC ONLY -- no prompts, no confirmations, no menu code. That's a
-separate agent's job; run_sweep() assumes the caller already confirmed
-with the user before calling it.
+LOGIC ONLY -- no prompts, no confirmations, no menu code. run_sweep()
+and backfill_discovery_dates() both assume the caller already confirmed
+with the user; menu._handle_stale_sweep() is that caller.
 """
 
 import os
@@ -99,31 +99,14 @@ def preview_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
 
 
 def _move_to_expired(jd_path: str) -> str:
-    """Moves jd_path into jd_manager.EXPIRED_DIR.
+    """Moves jd_path into jd_manager.EXPIRED_DIR, suffixing on collision.
 
-    Mirrors jd_manager.split_batch_jds()'s own collision-avoidance loop
-    (that function's prior art for "two files want the same destination
-    basename" within jd_manager.py) -- a numbered suffix rather than
-    letting shutil.move silently clobber whatever's already sitting at
-    that path, which matters here since EXPIRED_DIR is also liveness.py's
-    own expired-move destination and basenames can legitimately collide.
-    Uses shutil.move + makedirs(exist_ok=True), the same primitive every
-    other JD-directory move in this codebase already uses
-    (jd_manager.archive_jd(), liveness.py's expired-move,
-    orchestrator.py's completed-move) instead of a bare os.rename, which
-    would fail across filesystems/devices where shutil.move falls back
-    to copy+delete. Returns the destination path actually used.
-    """
-    os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
-    basename = os.path.basename(jd_path)
-    dest = os.path.join(jd_manager.EXPIRED_DIR, basename)
-    counter = 1
-    while os.path.exists(dest):
-        stem, ext = os.path.splitext(basename)
-        dest = os.path.join(jd_manager.EXPIRED_DIR, f"{stem}_{counter}{ext}")
-        counter += 1
-    shutil.move(jd_path, dest)
-    return dest
+    Delegates to jd_manager.move_jd_to(), which is where this function's
+    original collision-avoidance loop now lives -- liveness.py writes into
+    the same directory and had the clobbering bug this loop was written to
+    avoid, so the safe version belongs in one shared place rather than
+    being correct here and wrong there."""
+    return jd_manager.move_jd_to(jd_path, jd_manager.EXPIRED_DIR)
 
 
 def run_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
@@ -157,3 +140,70 @@ def run_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
     result["archived_count"] = archived_count
     result["errors"] = errors
     return result
+
+
+def backfill_discovery_dates(dry_run: bool = True) -> dict:
+    """Stamps _discovered_at on pending postings that have no age signal
+    at all, using the JD file's own modification time as the first-seen
+    date.
+
+    Why this is needed: a posting with neither a published posted date nor
+    a discovery stamp is permanently un-ageable -- the staleness curve
+    never devalues it and the sweep never touches it, so it sits in the
+    queue forever. On a real queue that was 297 of 872 postings, i.e. the
+    single biggest obstacle to the queue ever shrinking. scan.py now
+    stamps every new posting it writes, but that does nothing for the ones
+    already on disk; this is the one-time catch-up for those.
+
+    mtime is a genuine lower bound rather than a guess: the file cannot
+    have existed before it was written, so "first seen" is at worst
+    conservative -- it may under-state a posting's true age, never
+    over-state it. Under-stating is the safe direction, since the cost is
+    keeping something slightly too long rather than archiving a live lead.
+    The stamp records source="backfill-mtime" so an inferred date stays
+    distinguishable from one a scan actually observed.
+
+    dry_run=True (the default) reports what would be stamped and writes
+    nothing -- same preview-before-you-act shape as preview_sweep(), and
+    the default is the safe one because this rewrites JD files in place.
+    """
+    import datetime
+
+    candidates = []
+    errors = []
+    stamped = 0
+
+    for row in picker.list_all_evaluated_jds(statuses=["Pending"]):
+        path = row["path"]
+        # Only postings with NO age signal whatsoever. A posting that
+        # already resolves an age -- from a real posted date or an earlier
+        # stamp -- must never be re-dated, or it would be made younger than
+        # it is and quietly escape the sweep.
+        if jd_manager.compute_posting_age_days(path) is not None:
+            continue
+
+        candidates.append({
+            "path": path,
+            "company": row.get("company") or "?",
+            "title": row.get("title") or "?",
+        })
+        if dry_run:
+            continue
+
+        try:
+            mtime = os.path.getmtime(path)
+            when = datetime.datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
+            jd_manager.save_discovered_at(path, when=when, source="backfill-mtime")
+            stamped += 1
+        except OSError as e:
+            cli_art.friendly_warning(
+                e, f"dating {os.path.basename(path)}",
+                "leaving it undated, so it stays in the queue")
+            errors.append({"path": path, "error": str(e)})
+
+    return {
+        "candidates": candidates,
+        "candidate_count": len(candidates),
+        "stamped_count": stamped,
+        "errors": errors,
+    }

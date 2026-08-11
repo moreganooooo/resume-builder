@@ -157,6 +157,84 @@ def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
         json.dump(data, f, indent=2)
 
 
+def move_jd_to(jd_path: str, dest_dir: str) -> str:
+    """Moves a JD into dest_dir WITHOUT ever clobbering a file already
+    there, returning the destination path actually used.
+
+    The collision loop is the whole point. `shutil.move` overwrites its
+    destination silently, and several independent writers target the same
+    directories -- liveness.py and stale_sweep.py both move into
+    EXPIRED_DIR -- so two postings that happen to share a basename (same
+    company and title from two sources is entirely ordinary) meant one
+    JD, with its evaluation and application history, simply vanished. No
+    error, no log.
+
+    shutil.move rather than os.rename because these directories can sit
+    on a different filesystem from the source (a synced volume); rename
+    fails across devices where move falls back to copy+delete."""
+    os.makedirs(dest_dir, exist_ok=True)
+    basename = os.path.basename(jd_path)
+    dest = os.path.join(dest_dir, basename)
+    counter = 1
+    while os.path.exists(dest):
+        stem, ext = os.path.splitext(basename)
+        dest = os.path.join(dest_dir, f"{stem}_{counter}{ext}")
+        counter += 1
+    shutil.move(jd_path, dest)
+    return dest
+
+
+def save_discovered_at(jd_path: str, when: str | None = None, source: str = "scan") -> None:
+    """Stamps when this posting first entered the queue, under a
+    _discovered_at key (date, source) -- same underscore-prefixed
+    persisted-metadata convention as _evaluation/_liveness/_application.
+
+    Exists because roughly a third of a real queue carries no posted date
+    at all: plenty of sources simply don't publish one, and those
+    postings were consequently un-ageable -- never devalued by the
+    staleness curve, never sweepable, permanently resident. A discovery
+    date is a weaker signal than a real posted date (a posting may have
+    been open a while before a scan first saw it) which is exactly why it
+    is recorded separately and consulted only as a fallback, rather than
+    being written into posted_at where it would masquerade as source
+    truth.
+
+    `source` records how the date was arrived at -- "scan" when a scan
+    saw it live, "backfill-mtime" when inferred from the file's own
+    modification time for a posting that predates this mechanism. Keeping
+    that distinction visible matters: one is observed, the other inferred.
+
+    Never overwrites an existing stamp -- first sighting is the one that
+    counts, and re-stamping would make a posting perpetually young."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict) or data.get("_discovered_at"):
+        return
+
+    data["_discovered_at"] = {
+        "date": when or datetime.datetime.now().isoformat(timespec="seconds"),
+        "source": source,
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_discovered_at(jd_path: str) -> dict | None:
+    """Reads back a persisted _discovered_at (see save_discovered_at()),
+    or None if the JD isn't a JSON dict or was never stamped."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_discovered_at")
+
+
 def read_liveness(jd_path: str) -> dict | None:
     """Reads back a persisted _liveness (see save_liveness()), or None if
     the JD isn't a JSON dict or has never had a liveness check recorded."""
@@ -228,6 +306,17 @@ def compute_posting_age_days(jd_path: str) -> int | None:
             posted = _parse_flexible_date(raw)
             if posted:
                 break
+
+    if not posted:
+        # Explicit discovery stamp (see save_discovered_at()) -- checked
+        # ahead of the _liveness fallback below because it is written the
+        # moment a posting is first saved, whereas _liveness only carries
+        # a usable date when a scan happened to run a verify pass. Both
+        # are "first seen by this program", but this one is recorded for
+        # that purpose rather than inferred from a side effect.
+        discovered = data.get("_discovered_at") or {}
+        if discovered.get("date"):
+            posted = _parse_flexible_date(discovered["date"])
 
     if not posted:
         liveness = data.get("_liveness") or {}
