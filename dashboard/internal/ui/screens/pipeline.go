@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -156,6 +157,15 @@ func NewPipelineModel(t theme.Theme, apps []model.CareerApplication, metrics mod
 
 // Init implements tea.Model.
 func (m *PipelineModel) Init() tea.Cmd {
+	// RESUME_BUILDER_MOTION=reduced mirrors main.go's own opt-out for the
+	// screen-transition spring -- this fade-in is a separate animation
+	// main.go's reducedMotion() can't reach across the package boundary,
+	// so it re-checks the same env var directly (matching icons.go's own
+	// per-package RESUME_BUILDER_ICONS check).
+	if os.Getenv("RESUME_BUILDER_MOTION") == "reduced" {
+		m.animDone = true
+		return nil
+	}
 	// Kick off a short fade‑in animation.
 	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg { return animationMsg{} })
 }
@@ -969,12 +979,12 @@ func (m PipelineModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
 	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.theme.Icons.Pipeline + " CAREER PIPELINE")
-	title, info, gap := fitBar(title, info, m.width, 4)
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Pipeline + " CAREER PIPELINE")
+	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 
 	return style.Render(title + gap + info)
 }
@@ -1086,8 +1096,8 @@ func (m PipelineModel) renderHelp() string {
 		Width(m.width).
 		Padding(0, 1)
 
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
 	if m.statusPicker {
 		return style.Render(
@@ -1104,7 +1114,10 @@ func (m PipelineModel) renderHelp() string {
 				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
 	}
 
-	brand := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("resume-builder dashboard")
+	// Subtext, not Overlay -- see statusColorMap's own comment below for the
+	// same 1.4-2.3:1 measurement; Overlay is the border/divider token, not
+	// a readable-text one.
+	brand := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface).Render("resume-builder dashboard")
 
 	keys := keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
 		keyStyle.Render("←→/hl") + descStyle.Render(" tabs  ") +
@@ -1119,7 +1132,7 @@ func (m PipelineModel) renderHelp() string {
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
 
-	keys, brand, gap := fitBar(keys, brand, m.width, 2)
+	keys, brand, gap := fitBar(keys, brand, m.width, 2, m.theme.Surface)
 
 	return style.Render(keys + gap + brand)
 }
