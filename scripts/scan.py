@@ -118,6 +118,19 @@ def _write_jd_file(job: dict) -> str:
             "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
         }
 
+    # Stamp first-sighting BEFORE the write, in-dict, rather than calling
+    # jd_manager.save_discovered_at() afterward -- that would mean a
+    # read-modify-rewrite of a file written microseconds earlier, and would
+    # leave the stamp missing entirely if the process died in between.
+    # Only when the source published no real posted date: a real one is
+    # strictly better information, and _discovered_at is consulted purely
+    # as a fallback (see jd_manager.compute_posting_age_days()).
+    if not any(job.get(field) for field in jd_manager._POSTED_DATE_FIELDS):
+        job["_discovered_at"] = {
+            "date": datetime.datetime.now().isoformat(timespec="seconds"),
+            "source": "scan",
+        }
+
     with atomic_write(dest, encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)
     return dest

@@ -253,8 +253,13 @@ def _verify_candidates(candidates: list) -> dict:
     for r in results_by_status.get("expired", []):
         source_file = r.get("source_file")
         if source_file and os.path.exists(source_file):
-            dest = os.path.join(jd_manager.EXPIRED_DIR, os.path.basename(source_file))
-            shutil.move(source_file, dest)
+            # Was a bare shutil.move to a fixed destination path, which
+            # silently overwrote any JD already in expired/ under the same
+            # basename -- two postings sharing a company+title (ordinary
+            # when the same role is found via two sources) destroyed one of
+            # them, along with its evaluation and application history, with
+            # no error. move_jd_to() suffixes on collision instead.
+            jd_manager.move_jd_to(source_file, jd_manager.EXPIRED_DIR)
             moved += 1
             expired_source_paths.append(source_file)
 
