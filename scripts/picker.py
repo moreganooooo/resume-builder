@@ -7,7 +7,6 @@ tailor-pick/coverletter-pick items -- one implementation instead of four.
 
 import os
 
-import click
 import questionary
 
 import cli_art
@@ -29,10 +28,48 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
     back, to avoid a cycle. action customizes the confirmation's verb --
     "evaluate" (default) fits evaluate-then-pick flows; pass a different
     verb (e.g. "tailor") for a batch action that doesn't itself evaluate
-    anything, so the prompt doesn't imply a Gemini call that isn't real."""
+    anything, so the prompt doesn't imply a Gemini call that isn't real.
+
+    A change here to the confirmation wording/behavior should be checked
+    against cli._should_proceed() too -- these two copies aren't kept in
+    sync automatically, only by convention."""
     if skip_confirm:
         return True
-    return click.confirm(f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?")
+    return bool(questionary.confirm(
+        f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask())
+
+
+def _truncate(text: str, max_len: int) -> str:
+    """Ellipsize text to at most max_len characters, "..." included --
+    pagination already bounds how many checkbox rows show at once, but a
+    single row's company/title pair had no width bound of its own, so a
+    long company or title wrapped mid-row on a narrow terminal instead of
+    staying one row per selectable item."""
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return text[:max_len]
+    return text[: max_len - 3] + "..."
+
+
+# Rough allowance for a checkbox row's fixed parts (right-aligned index,
+# score/recommendation, " | " separators, the checkbox's own "[ ] " marker)
+# that aren't the company/title text being width-clamped below.
+_ROW_FIXED_OVERHEAD = 45
+
+
+def _company_title_budget(width: int) -> tuple:
+    """Splits what's left of width after _ROW_FIXED_OVERHEAD between company
+    and title -- 40/60, since job titles tend to run longer than company
+    names -- with a floor so both stay legible even on a narrow terminal."""
+    available = max(width - _ROW_FIXED_OVERHEAD, 30)
+    company_budget = max(int(available * 0.4), 12)
+    title_budget = max(available - company_budget, 12)
+    return company_budget, title_budget
 
 
 _PAGE_SIZE = 50
@@ -166,12 +203,15 @@ def pick_and_process(
         )
 
     def choices_for_page(start, end, selected):
+        company_budget, title_budget = _company_title_budget(cli_art.console.width)
         choices = []
         for i, r in enumerate(results[start:end], start=start + 1):
             if r["error"]:
                 continue
+            company = _truncate(r["company_name"] or "", company_budget)
+            job_title = _truncate(r["job_title"] or "", title_budget)
             choices.append(questionary.Choice(
-                title=f"{i:>4}  {r['composite_score']:.2f}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
+                title=f"{i:>4}  {r['composite_score']:.2f}/5 | {r['recommendation']} | {company} | {job_title}",
                 value=r["source_file"], checked=r["source_file"] in selected,
             ))
         return choices
@@ -268,14 +308,17 @@ def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_S
         )
 
     def choices_for_page(start, end, selected):
+        company_budget, title_budget = _company_title_budget(cli_art.console.width)
         choices = []
         for i, r in enumerate(rows[start:end], start=start + 1):
             evaluation = r["evaluation"]
             score_style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
+            company = _truncate(r["company"] or "?", company_budget)
+            title_text = _truncate(r["title"] or os.path.basename(r["path"]), title_budget)
             label = [
                 ("", f"{i:>4}  "),
                 (score_style, f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')}"),
-                ("", f" | {r['company'] or '?'} | {r['title'] or os.path.basename(r['path'])}"),
+                ("", f" | {company} | {title_text}"),
             ]
             choices.append(questionary.Choice(title=label, value=r["path"], checked=r["path"] in selected))
         return choices

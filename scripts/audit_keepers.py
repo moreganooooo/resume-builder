@@ -289,8 +289,14 @@ def _read_cluster_ids_from_file(path: str, col: str = "source_cluster_id") -> se
                     ids.add(int(float(sv)))
                 except (ValueError, TypeError):
                     pass
-    except Exception:
-        pass
+    except Exception as e:
+        # A malformed/corrupted file here previously degraded silently to
+        # "no data present," with zero console output, in a script that's
+        # otherwise extremely communicative via cli_art throughout every
+        # stage. os.path.exists() above already handles the ordinary "file
+        # doesn't exist yet" case without warning; this except is a real
+        # read/parse failure on a file that does exist.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return ids
 
 
@@ -301,8 +307,10 @@ def _read_bullets_from_file(path: str) -> set:
     try:
         df = pd.read_csv(path, usecols=["Bullet Point"])
         bullets.update(df["Bullet Point"].dropna().str.strip().tolist())
-    except Exception:
-        pass
+    except Exception as e:
+        # See _read_cluster_ids_from_file's matching comment -- a real
+        # read/parse failure here shouldn't degrade silently.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return bullets
 
 
@@ -326,8 +334,10 @@ def _read_cluster_id_map_from_file(path: str) -> dict:
                     mapping[bp] = str(int(float(sv)))
                 except (ValueError, TypeError):
                     mapping[bp] = sv
-    except Exception:
-        pass
+    except Exception as e:
+        # See _read_cluster_ids_from_file's matching comment -- a real
+        # read/parse failure here shouldn't degrade silently.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return mapping
 
 
@@ -969,7 +979,7 @@ def stage4_auto_rewrite(
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         original_bullet_text = str(row.get("Bullet Point", "")).strip()
         bullet_preview = original_bullet_text[:60]
-        cli_art.console.print(f"\n{chr(9472) * 60}", markup=False, soft_wrap=True)
+        cli_art.console.print(f"\n{'─' * 60}", markup=False, soft_wrap=True)
         cli_art.console.print(f"[{i}/{total}] {bullet_preview}...", markup=False, soft_wrap=True)
         cli_art.console.print(f"   Source: {row.get('queue_source', '')}  "
               f"Composite: {row.get('composite_score', '?')}", markup=False, soft_wrap=True)
@@ -1101,9 +1111,9 @@ def main():
     )
     args = parser.parse_args()
 
-    cli_art.console.print("\n" + "#" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
     cli_art.console.print("  audit_keepers.py  —  Keeper Audit Pipeline", markup=False, soft_wrap=True)
-    cli_art.console.print("#" * 60, markup=False, soft_wrap=True)
+    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
     cli_art.console.print(f"  dry_run:             {args.dry_run}", markup=False, soft_wrap=True)
     cli_art.console.print(f"  skip_rescore:        {args.skip_rescore}", markup=False, soft_wrap=True)
     cli_art.console.print(f"  auto_rewrite:        {args.auto_rewrite}", markup=False, soft_wrap=True)

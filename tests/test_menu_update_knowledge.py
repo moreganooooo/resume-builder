@@ -12,7 +12,7 @@ import menu  # noqa: E402
 class TestUpdateKnowledgeChoiceRegistered(unittest.TestCase):
 
     def test_choice_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("update_knowledge", values)
 
     def test_handler_registered(self):

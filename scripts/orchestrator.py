@@ -2355,14 +2355,14 @@ class ResumeEngine:
         if not company_website:
             company_website = company_research.find_company_website(jd_data.get("company_name"))
             if company_website:
-                cli_art.console.print(f"  ℹ️  No company website on file -- found one via search: {company_website}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website on file -- found one via search: {company_website}", soft_wrap=True)
         if not company_website:
-            cli_art.console.print("  ℹ️  Company research skipped: no company website known for this JD.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: no company website known for this JD.", soft_wrap=True)
             return None
 
         scraped_text = company_research.fetch_company_pages(company_website)
         if len(scraped_text) < company_research.MIN_USEFUL_CHARS:
-            cli_art.console.print(f"  ℹ️  Company research skipped: couldn't find enough usable content on {company_website}.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: couldn't find enough usable content on {company_website}.", soft_wrap=True)
             return None
 
         research_prompt = self.load_prompt("research_company.md")
@@ -2375,7 +2375,7 @@ class ResumeEngine:
         )
         research_data = GeminiClient.parse_json(research_text or "")
         if not research_data:
-            cli_art.console.print("  ℹ️  Company research skipped: model response couldn't be parsed.", markup=False, soft_wrap=True)
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: model response couldn't be parsed.", soft_wrap=True)
             return None
 
         cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_website}.", soft_wrap=True)
@@ -2626,13 +2626,14 @@ class ResumeEngine:
             cli_art.console.print("  Resuming: using JD keywords from checkpoint.", markup=False, soft_wrap=True)
         else:
             extract_prompt = self.load_prompt("extract_keywords.md")
-            keyword_text, _ = GeminiClient.generate(
-                model=BUILDER_MODEL,
-                system_instruction=extract_prompt,
-                contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
-                response_schema=JDKeywordSchema,
-                temperature=0.0,
-            )
+            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+                keyword_text, _ = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    system_instruction=extract_prompt,
+                    contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
+                    response_schema=JDKeywordSchema,
+                    temperature=0.0,
+                )
             jd_keywords = GeminiClient.parse_json(keyword_text or "")
             if not jd_keywords:
                 # Stop here, deliberately. Empty keyword extraction is a strong,
@@ -2794,15 +2795,16 @@ class ResumeEngine:
             cli_art.console.print(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...", markup=False, soft_wrap=True)
             time.sleep(PRE_BUILDER_SLEEP)
 
-            resume_text, usage = GeminiClient.generate(
-                model=BUILDER_MODEL,
-                system_instruction=builder_system,
-                contents=combined_contents,
-                response_schema=TemplateSchema,
-                extra_schema_properties=edu_schema_properties,
-                extra_required=edu_schema_required,
-                temperature=0.0,
-            )
+            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+                resume_text, usage = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    system_instruction=builder_system,
+                    contents=combined_contents,
+                    response_schema=TemplateSchema,
+                    extra_schema_properties=edu_schema_properties,
+                    extra_required=edu_schema_required,
+                    temperature=0.0,
+                )
             _log_cache_stats(usage, 0, 0)
 
             if not resume_text:
@@ -2975,13 +2977,14 @@ class ResumeEngine:
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
             )
-            critique_text, _ = GeminiClient.generate(
-                model=CRITIQUE_MODEL,
-                system_instruction=critique_system,
-                contents=critique_contents,
-                response_schema=ResumeCritiqueSchema,
-                temperature=0.0,
-            )
+            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+                critique_text, _ = GeminiClient.generate(
+                    model=CRITIQUE_MODEL,
+                    system_instruction=critique_system,
+                    contents=critique_contents,
+                    response_schema=ResumeCritiqueSchema,
+                    temperature=0.0,
+                )
             if critique_text:
                 critique_data = GeminiClient.parse_json(critique_text)
 

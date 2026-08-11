@@ -32,10 +32,18 @@ import bootstrap_menu
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
     """Confirmation gate for anything that scores every pending JD (real
     Gemini cost, one call per JD). skip_confirm=True (the --yes flag)
-    bypasses the prompt entirely."""
+    bypasses the prompt entirely.
+
+    picker.should_proceed() is a deliberate standalone copy of this exact
+    logic (see its own docstring for why it can't just import this
+    function) -- a change here to the confirmation wording/behavior should
+    be checked against that copy too, or the two prompts will drift."""
     if skip_confirm:
         return True
-    return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
+    return bool(questionary.confirm(
+        f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?",
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask())
 
 
 def _offer_next_steps(action: str, jd_file: str | None = None) -> None:
@@ -311,7 +319,10 @@ def doctor_cmd(skip_tests):
     """Checks dependencies, assets, and config, then runs the test suite -- a plain-English summary with a suggested fix per problem found."""
     cli_art.display_banner("Running doctor checks")
     checks = doctor.run_checks()
-    test_result = None if skip_tests else doctor.run_test_suite()
+    test_result = None
+    if not skip_tests:
+        with cli_art.console.status("Running test suite...", spinner="dots"):
+            test_result = doctor.run_test_suite()
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
 

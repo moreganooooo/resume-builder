@@ -13,7 +13,7 @@ import menu  # noqa: E402
 class TestBootstrapChoiceRegistered(unittest.TestCase):
 
     def test_bootstrap_is_first_choice(self):
-        first = menu._CHOICES[0]
+        first = menu._build_choices()[0]
         self.assertEqual(first.value, "bootstrap")
 
     def test_bootstrap_handler_registered(self):

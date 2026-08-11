@@ -51,6 +51,11 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
 
     for position in range(0, end_position + 1, JOBRIGHT_POSITION_INCREMENT):
         page_url = f"{JOBRIGHT_API_BASE_URL}?refresh=false&sortCondition=0&position={position}"
+        # Up to 11 paginated requests with a 2s backoff on a 500 -- without
+        # a visible line per page, `resume scan --source jobright` looks
+        # hung for 20+ seconds with logging.info's output invisible by
+        # default.
+        cli_art.cli_info(f"Fetching JobRight jobs (position {position}/{end_position})...")
         logging.info(f"Fetching JobRight data for position {position}...")
 
         try:

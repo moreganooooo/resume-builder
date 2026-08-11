@@ -46,39 +46,49 @@ def _icon_title(icon_name: str, label: str) -> list:
     return [theme.questionary_icon_tuple(icon_name), ("", f"  {label}")]
 
 
-_CHOICES = [
-    questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
-    questionary.Separator(" "),
-    questionary.Separator("── Knowledge Base ──"),
-    questionary.Choice(title=_icon_title("bullet_bank", "Curate Bullet Bank"), value="bullet_bank"),
-    questionary.Choice(title=_icon_title("bullet_bank", "Drop New Knowledge"), value="update_knowledge"),
-    questionary.Separator(" "),
-    questionary.Separator("── Discovery ──"),
-    questionary.Choice(title=_icon_title("discovery", "Scan for New Jobs"), value="scan"),
-    questionary.Choice(title=_icon_title("discovery", "Check Job Posting Liveness"), value="liveness"),
-    questionary.Separator(" "),
-    questionary.Separator("── Evaluation ──"),
-    questionary.Choice(title=_icon_title("evaluate", "Evaluate Pending Roles"), value="evaluate_all"),
-    questionary.Separator(" "),
-    questionary.Separator("── Build ──"),
-    questionary.Choice(title=_icon_title("build", "Customize Resume for Specific Role(s)"), value="tailor_pick"),
-    questionary.Choice(title=_icon_title("build", "Customize Resume for ALL Pending Roles (Batch Run)"), value="tailor_all"),
-    questionary.Choice(title=_icon_title("build", "Write Cover Letter for Specific Role(s)"), value="coverletter_pick"),
-    questionary.Separator(" "),
-    questionary.Separator("── Polish ──"),
-    questionary.Choice(title=_icon_title("build", "Polish a Resume or Cover Letter with Gemini"), value="polish"),
-    questionary.Separator(" "),
-    questionary.Separator("── Browse ──"),
-    questionary.Choice(title=_icon_title("utility", "Browse & Manage Jobs"), value="browse_jobs"),
-    questionary.Choice(title=_icon_title("evaluate", "Career Dashboard"), value="career_dashboard"),
-    questionary.Separator(" "),
-    questionary.Separator("── Maintenance ──"),
-    questionary.Choice(title=_icon_title("utility", "Maintenance"), value="maintenance"),
-    questionary.Separator(" "),
-    questionary.Separator("── Utility ──"),
-    questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
-    questionary.Choice(title=_icon_title("utility", "Exit"), value="exit"),
-]
+def _build_choices() -> list:
+    """Built fresh on every call, not a module-level constant -- _icon_title()
+    bakes the actual glyph character into each Choice.title at call time by
+    reading theme.ICONS, so a module-level list would freeze whatever icon
+    set was active at import time. That broke _confirm_icon_set()'s own
+    promise ("the rest of the same session reflects the choice immediately")
+    for exactly the Main Menu it's answered from: a user who picked Unicode
+    on their very first prompt still saw Nerd Font glyphs on every menu
+    render for the rest of the session, because _CHOICES had already been
+    built (at import time, before that prompt ever ran) and never rebuilt."""
+    return [
+        questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
+        questionary.Separator(" "),
+        questionary.Separator("── Knowledge Base ──"),
+        questionary.Choice(title=_icon_title("bullet_bank", "Curate Bullet Bank"), value="bullet_bank"),
+        questionary.Choice(title=_icon_title("bullet_bank", "Drop New Knowledge"), value="update_knowledge"),
+        questionary.Separator(" "),
+        questionary.Separator("── Discovery ──"),
+        questionary.Choice(title=_icon_title("discovery", "Scan for New Jobs"), value="scan"),
+        questionary.Choice(title=_icon_title("discovery", "Check Job Posting Liveness"), value="liveness"),
+        questionary.Separator(" "),
+        questionary.Separator("── Evaluation ──"),
+        questionary.Choice(title=_icon_title("evaluate", "Evaluate Pending Roles"), value="evaluate_all"),
+        questionary.Separator(" "),
+        questionary.Separator("── Build ──"),
+        questionary.Choice(title=_icon_title("build", "Customize Resume for Specific Role(s)"), value="tailor_pick"),
+        questionary.Choice(title=_icon_title("build", "Customize Resume for ALL Pending Roles (Batch Run)"), value="tailor_all"),
+        questionary.Choice(title=_icon_title("build", "Write Cover Letter for Specific Role(s)"), value="coverletter_pick"),
+        questionary.Separator(" "),
+        questionary.Separator("── Polish ──"),
+        questionary.Choice(title=_icon_title("build", "Polish a Resume or Cover Letter with Gemini"), value="polish"),
+        questionary.Separator(" "),
+        questionary.Separator("── Browse ──"),
+        questionary.Choice(title=_icon_title("utility", "Browse & Manage Jobs"), value="browse_jobs"),
+        questionary.Choice(title=_icon_title("evaluate", "Career Dashboard"), value="career_dashboard"),
+        questionary.Separator(" "),
+        questionary.Separator("── Maintenance ──"),
+        questionary.Choice(title=_icon_title("utility", "Maintenance"), value="maintenance"),
+        questionary.Separator(" "),
+        questionary.Separator("── Utility ──"),
+        questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
+        questionary.Choice(title=_icon_title("utility", "Exit"), value="exit"),
+    ]
 
 
 def _flourish_line() -> "questionary.Separator":
@@ -111,7 +121,7 @@ def _flourish_line() -> "questionary.Separator":
 
 
 def _menu_choices() -> list:
-    """_CHOICES (minus "New User? Start Here!" once a profile is actually
+    """_build_choices()'s result (minus "New User? Start Here!" once a profile is actually
     set up -- for a returning user it's dead weight at the top of every
     single menu render; guest mode, no real profile yet, see
     _confirm_active_profile(), always keeps it: it's the only choice that
@@ -119,28 +129,40 @@ def _menu_choices() -> list:
     own guest-mode guard blocks everything else) plus the flourish, with
     a blank line above and below it for breathing room -- otherwise it
     sits flush against the bottom of the terminal, hard to notice."""
+    all_choices = _build_choices()
     if os.environ.get("RESUME_GUEST_MODE") or not _profile_is_set_up():
-        choices = _CHOICES
+        choices = all_choices
     else:
-        choices = [c for c in _CHOICES if getattr(c, "value", None) != "bootstrap"]
+        choices = [c for c in all_choices if getattr(c, "value", None) != "bootstrap"]
     return choices + [questionary.Separator(" "), _flourish_line(), questionary.Separator(" ")]
 
 
-_SCAN_SOURCE_CHOICES = [
-    questionary.Choice(title=_icon_title("discovery", "All (default)"), value="all"),
-    questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
-    questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
-    questionary.Choice(title=_icon_title("discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"), value="boards"),
-    questionary.Choice(title=_icon_title("discovery", "Direct-to-ATS only (Greenhouse, Ashby, Lever, etc.)"), value="ats"),
-]
+def _build_scan_source_choices() -> list:
+    """Built fresh per call -- see _build_choices()'s docstring for why."""
+    return [
+        questionary.Choice(title=_icon_title("discovery", "All (default)"), value="all"),
+        questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
+        questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
+        questionary.Choice(title=_icon_title("discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"), value="boards"),
+        questionary.Choice(title=_icon_title("discovery", "Direct-to-ATS only (Greenhouse, Ashby, Lever, etc.)"), value="ats"),
+    ]
 
 
-def _confirm_active_profile() -> None:
+def _confirm_active_profile() -> bool:
     """Startup gate -- always runs, so nobody silently inherits whoever's
     shell last set RESUME_PROFILE on a shared computer. A self-identified
     new person chooses between jumping into real setup now or browsing
     the menu first as a guest (see run_interactive_menu()'s guest-mode
-    guard for what "browsing" actually allows)."""
+    guard for what "browsing" actually allows).
+
+    Returns False if the user cancelled (Ctrl-C/Esc) at either prompt here,
+    True otherwise -- run_interactive_menu() exits immediately on False,
+    the same as Ctrl-C on the main menu's own select() does. Previously
+    None from .ask() (Ctrl-C) fell through both `if`s uncaught: the first
+    prompt's cancel silently became "I'm new here", and the second
+    prompt's cancel silently became "Look around the main menu first"
+    (guest mode) -- the one moment a user would most expect Ctrl-C to just
+    quit instead routed them into onboarding/guest flows they never chose."""
     import profile_paths
 
     names = sorted(
@@ -158,7 +180,10 @@ def _confirm_active_profile() -> None:
 
     if choice in names:
         profile_paths.set_active_profile(choice)
-        return
+        return True
+
+    if choice is None:
+        return False
 
     # "I'm new here"
     path = questionary.select(
@@ -166,6 +191,9 @@ def _confirm_active_profile() -> None:
         choices=["Start new user setup now", "Look around the main menu first"],
         style=cli_art.QUESTIONARY_STYLE,
     ).ask()
+
+    if path is None:
+        return False
 
     if path == "Start new user setup now":
         # Signal to _handle_bootstrap() that this is genuinely a new
@@ -178,13 +206,14 @@ def _confirm_active_profile() -> None:
         _handle_bootstrap()
         if os.environ.get("RESUME_PROFILE"):
             os.environ.pop("RESUME_GUEST_MODE", None)
-        return
+        return True
 
     # "Look around the main menu first" -- guest mode. Deliberately does
     # NOT set RESUME_PROFILE (which would default-resolve to "morgan" and
     # silently act as her); run_interactive_menu()'s guard blocks every
     # choice except bootstrap/exit until real setup happens instead.
     os.environ["RESUME_GUEST_MODE"] = "1"
+    return True
 
 
 def _confirm_icon_set() -> None:
@@ -366,7 +395,7 @@ def _handle_update_knowledge() -> bool:
 
 def _handle_scan() -> bool:
     choice = questionary.select(
-        "Which source(s)?", choices=_SCAN_SOURCE_CHOICES, style=cli_art.QUESTIONARY_STYLE,
+        "Which source(s)?", choices=_build_scan_source_choices(), style=cli_art.QUESTIONARY_STYLE,
     ).ask()
     if not choice:
         return False
@@ -715,7 +744,10 @@ def _handle_run_doctor() -> None:
     run_tests = charm_prompt.confirm(
         "Also run the full test suite? (slower, ~20s)", default=True,
     )
-    test_result = doctor.run_test_suite() if run_tests else None
+    test_result = None
+    if run_tests:
+        with cli_art.console.status("Running test suite...", spinner="dots"):
+            test_result = doctor.run_test_suite()
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
 
@@ -801,7 +833,12 @@ def _prompt_for_update() -> None:
                 time.sleep(1.2)
         return
 
-    has_updates, message = git_update.check_for_updates()
+    # check_for_updates() does a real `git fetch origin main` with a 10s
+    # timeout -- without this, every launch on a slow network/VPN can sit
+    # idle after the banner for up to 10s with no indication anything is
+    # happening.
+    with cli_art.console.status("Checking for updates...", spinner="dots"):
+        has_updates, message = git_update.check_for_updates()
     if not has_updates:
         return
 
@@ -827,8 +864,8 @@ def _handle_check_updates() -> bool:
         )
         return False
 
-    cli_art.console.print("\nChecking for updates...")
-    has_updates, message = git_update.check_for_updates()
+    with cli_art.console.status("Checking for updates...", spinner="dots"):
+        has_updates, message = git_update.check_for_updates()
 
     if has_updates:
         cli_art.console.print(f"{cli_art.SUCCESS} Updates available: {message}")
@@ -884,7 +921,7 @@ _CHAIN = {
     "coverletter_pick": [("Polish with Gemini", "polish")],
 }
 
-# Same icon per destination value as _CHOICES above, so the "what's next"
+# Same icon per destination value as _build_choices() above, so the "what's next"
 # chain prompt stays visually consistent with the main menu instead of
 # falling back to plain text.
 _CHAIN_ICONS = {
@@ -953,7 +990,12 @@ def run_interactive_menu() -> None:
     # not a wrapper around sequential prints -- same scope as the full
     # immersive-CLI rewrite this was meant to be a small taste of.
     cli_art.display_main_banner()
-    _confirm_active_profile()
+    if not _confirm_active_profile():
+        # Ctrl-C/Esc at the profile gate -- exit now, same as Ctrl-C on the
+        # main menu's own select() below, rather than falling through into
+        # icon-set/update-check prompts and a menu the user never asked for.
+        cli_art.display_exit_footer()
+        return
     _confirm_icon_set()
     _prompt_for_update()
     cli_art.display_tip()
