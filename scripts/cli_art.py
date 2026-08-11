@@ -335,6 +335,36 @@ def _posting_age_cell(days: int | None) -> str:
     return f"[{color}]{theme.ICONS[icon_name]} {days}d[/{color}]"
 
 
+def _fit_odds_cell(score: float | None) -> str:
+    """Colored Fit/Odds cell, reusing the same four-tier vocabulary as
+    _RECOMMENDATION_COLORS (SUCCESS/BRAND/WARNING/ERROR) rather than
+    inventing a fresh scale -- so a 4.5 Fit score reads as the same kind
+    of "good" as a "Strong pursue" recommendation. "hint" is BRAND-colored
+    (see theme._ICON_COLORS), which is what makes it the right icon for
+    the vocabulary's second tier -- there's no dedicated "good but not
+    great" icon name in theme.py, so this reuses one that already
+    resolves to the right color.
+
+    Pairs color with an icon (not color alone) for the same reason
+    _posting_age_cell does: color-only signaling is invisible to a
+    colorblind user and to anything piping this output unstyled.
+
+    "-" for missing/None -- fit_score/interview_odds_score were added to
+    the evaluation dict after older evaluations were already persisted,
+    so a pre-existing JD's JSON may not have them yet."""
+    if score is None:
+        return "-"
+    if score >= 4.0:
+        color, icon_name = theme.SUCCESS, "success"
+    elif score >= 3.0:
+        color, icon_name = theme.BRAND, "hint"
+    elif score >= 2.0:
+        color, icon_name = theme.WARNING, "warning"
+    else:
+        color, icon_name = theme.ERROR, "error"
+    return f"[{color}]{theme.ICONS[icon_name]} {score:.1f}[/{color}]"
+
+
 def render_fit_table(results: list, start_index: int = 1, title: str | None = None) -> None:
     """Renders batch_evaluate.evaluate_all_pending()'s result list -- or a
     page-sized slice of it -- as a Rich Table, colored by recommendation
@@ -356,11 +386,24 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     an ordinary 80-100 column terminal. Title is the one `ratio` column so
     it absorbs whatever's left; Why -- a short excerpt, least essential at
     a glance -- drops entirely below _NARROW_TERMINAL_COLUMNS rather than
-    shrinking everything else past legibility."""
+    shrinking everything else past legibility.
+
+    Fit and Odds are the two layers that feed Score alongside Practical
+    Pursue (orchestrator.COMPOSITE_SCORE_WEIGHTS -- 40/40/20), broken out
+    as their own columns so a strong-fit/weak-odds role no longer looks
+    identical to the reverse just because their blended Score matches.
+    Score stays and stays the sort key -- these are additive context, not
+    a replacement. Practical Pursue is deliberately NOT broken out here
+    (keeps the table narrow); render_comparison_table already shows all
+    three layers in full for anyone who wants that."""
     narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    show_score_detail = console.width >= _FIT_SCORE_DETAIL_COLUMNS
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
     table.add_column("#", justify="right", style="dim", width=4, no_wrap=True)
     table.add_column("Score", justify="right", width=7, no_wrap=True)
+    if show_score_detail:
+        table.add_column("Fit", justify="right", width=6, no_wrap=True)
+        table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
     table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
     table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
@@ -370,7 +413,10 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
 
     for i, r in enumerate(results, start_index):
         if r["error"]:
-            row = [str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-"]
+            row = [str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]"]
+            if show_score_detail:
+                row += ["-", "-"]
+            row += ["-", r["company_name"], r["job_title"], "-"]
             if not narrow:
                 row.append("-")
             table.add_row(*row)
@@ -389,6 +435,9 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
             r["job_title"],
             _posting_age_cell(r.get("posting_age_days")),
         ]
+        if show_score_detail:
+            row.insert(2, _fit_odds_cell(r.get("fit_score")))
+            row.insert(3, _fit_odds_cell(r.get("interview_odds_score")))
         if not narrow:
             row.append(_short_why(r.get("why")))
         table.add_row(*row)
@@ -425,6 +474,17 @@ def _followup_cell(application: dict | None) -> str:
 
 _NARROW_TERMINAL_COLUMNS = 110
 
+# Fit/Odds break the composite Score into its two primary layers, which is
+# genuinely useful but costs ~13 columns. They are ADDITIVE detail, so they
+# are the first thing dropped when space is tight -- the pre-existing
+# columns (Recommendation, Status, Last Liveness, Follow-up) carry
+# information a user acts on directly and must not lose room to them.
+# Thresholds differ because the two tables carry different column sets:
+# the fit table's free-text "Why" needs room to stay readable, and the
+# pipeline table additionally carries Status/Liveness/Follow-up.
+_FIT_SCORE_DETAIL_COLUMNS = 130
+_PIPELINE_SCORE_DETAIL_COLUMNS = 150
+
 
 def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
     """Renders picker.list_all_evaluated_jds()'s row list -- or a
@@ -443,11 +503,21 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     gets the one `ratio` column so it absorbs whatever's left; Last
     Liveness/Follow-up -- the two least essential at a glance -- drop
     entirely below _NARROW_TERMINAL_COLUMNS rather than shrinking
-    everything else past legibility."""
+    everything else past legibility.
+
+    Fit and Odds break the blended Score out into its two primary layers
+    (see render_fit_table's docstring for the full rationale) -- kept
+    visible even on a narrow terminal since they're additive context for
+    Score itself, unlike Liveness/Follow-up which are their own separate
+    concern."""
     narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    show_score_detail = console.width >= _PIPELINE_SCORE_DETAIL_COLUMNS
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
     table.add_column("#", justify="right", style="dim", width=3, no_wrap=True)
     table.add_column("Score", justify="right", width=6, no_wrap=True)
+    if show_score_detail:
+        table.add_column("Fit", justify="right", width=6, no_wrap=True)
+        table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
     table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
     table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
@@ -472,6 +542,9 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
             _posting_age_cell(evaluation.get("posting_age_days")),
             r["status"],
         ]
+        if show_score_detail:
+            cells.insert(2, _fit_odds_cell(evaluation.get("fit_score")))
+            cells.insert(3, _fit_odds_cell(evaluation.get("interview_odds_score")))
         if not narrow:
             cells.append(_liveness_cell(r.get("liveness")))
             cells.append(_followup_cell(r.get("application")))

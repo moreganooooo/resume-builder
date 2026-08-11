@@ -11,6 +11,7 @@ PDF immediately, same as the main tailoring pipeline.
 import glob
 import json
 import os
+import shutil
 import subprocess
 
 import questionary
@@ -231,11 +232,40 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
     return candidate
 
 
+# A confirm-before-save was tried here first and reverted -- the user has
+# already deliberately chosen "accept" by that point, so a second gate is
+# just friction on the common case, not real protection. Undo is the
+# actual fix: the previous version is always one file away, so a bad
+# Gemini edit is recoverable without ever needing to answer a prompt.
+#
+# One backup per document (not a numbered history) is a deliberate
+# simplicity choice: it recovers the one accident that actually happens
+# in practice -- "that last edit was wrong" -- without turning
+# output/json/ into an ever-growing pile of *.bak.N files nobody prunes.
+BACKUP_SUFFIX = ".bak"
+
+
+def backup_path_for(json_path: str) -> str:
+    """Sibling backup path for a polish target -- one per document, so a
+    second accept overwrites the first backup rather than stacking up."""
+    return json_path + BACKUP_SUFFIX
+
+
 def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     """Saves `doc` to json_path, re-renders its HTML, and regenerates its
     PDF via generate-pdf.mjs. Returns {"json": ..., "html": ..., "pdf":
-    ...} -- "pdf" is None if PDF generation failed (JSON/HTML are still
-    saved in that case; the caller decides what to tell the user)."""
+    ..., "backup": ...} -- "pdf" is None if PDF generation failed
+    (JSON/HTML are still saved in that case; the caller decides what to
+    tell the user). "backup" is the path the PREVIOUS on-disk version was
+    copied to before being overwritten, or None on a document's first
+    save (nothing existed yet to back up). Only the JSON is backed up --
+    HTML/PDF are both fully derived from it, so restoring the JSON and
+    re-rendering recovers everything a bad edit could have broken."""
+    backup_path = None
+    if os.path.exists(json_path):
+        backup_path = backup_path_for(json_path)
+        shutil.copy2(json_path, backup_path)
+
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2, ensure_ascii=False)
 
@@ -263,16 +293,16 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
             f"{cli_art.WARNING} PDF generation timed out after {PDF_GENERATION_TIMEOUT_SECONDS}s "
             "(JSON/HTML were still saved)."
         )
-        return {"json": json_path, "html": html_path, "pdf": None}
+        return {"json": json_path, "html": html_path, "pdf": None, "backup": backup_path}
     if result.returncode != 0:
         cli_art.friendly_subprocess_error(result.stderr, "creating the polished PDF")
         # Stated after the error, not inside it: the failure is the headline,
         # but a user who just spent Gemini calls on this needs to know their
         # edits survived and only the render step is missing.
         cli_art.cli_info("Your polished JSON and HTML were still saved -- only the PDF is missing.")
-        return {"json": json_path, "html": html_path, "pdf": None}
+        return {"json": json_path, "html": html_path, "pdf": None, "backup": backup_path}
 
-    return {"json": json_path, "html": html_path, "pdf": pdf_path}
+    return {"json": json_path, "html": html_path, "pdf": pdf_path, "backup": backup_path}
 
 
 _POLISH_PAGE_SIZE = 50
@@ -414,6 +444,15 @@ def run_polish_session(json_path: str) -> None:
         cli_art.console.print(f"{cli_art.SUCCESS} Saved -> {paths['json']}")
         if paths["pdf"]:
             cli_art.console.print(f"{cli_art.SUCCESS} PDF -> {paths['pdf']}")
+        # No confirm-before-save here on purpose (see save_and_render's own
+        # comment) -- "accept" already IS the user's confirmation. This is
+        # the actual safety net: the version that was just overwritten is
+        # still sitting right next to it.
+        if paths.get("backup"):
+            cli_art.console.print(
+                f"{cli_art.HINT} Previous version backed up -> {paths['backup']} "
+                "(copy it back over the JSON above to undo this edit)"
+            )
 
     cli_art.console.print("\nDone polishing.\n")
 
