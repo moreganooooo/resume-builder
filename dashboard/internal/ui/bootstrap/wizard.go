@@ -30,11 +30,15 @@ func Run(t theme.Theme) (WizardData, error) {
     var data WizardData
 
     // Build the form using Huh. The theme conversion lives in theme.Theme.
+    // Titles route through t.Icons rather than hardcoded emoji so they honor
+    // RESUME_BUILDER_ICONS=unicode the same way every other dashboard glyph
+    // does, and render consistently across terminal fonts instead of
+    // whatever the local emoji font happens to draw.
     form := huh.NewForm(
         huh.NewGroup(
             // Profile name – required.
             huh.NewInput().
-                Title("👤 Profile name").
+                Title(t.Icons.Profile + " Profile name").
                 Value(&data.ProfileName).
                 Description("A short, memorable identifier (e.g. “morgan”).").
                 Validate(func(s string) error {
@@ -45,7 +49,7 @@ func Run(t theme.Theme) (WizardData, error) {
                 }),
             // Choose source type.
             huh.NewSelect[string]().
-                Title("📂 Source of your career data").
+                Title(t.Icons.Source + " Source of your career data").
                 Options(
                     huh.NewOption("Resume PDF", "pdf"),
                     huh.NewOption("LinkedIn export (JSON)", "linkedin"),
@@ -56,7 +60,7 @@ func Run(t theme.Theme) (WizardData, error) {
             // this stays visible even when SourceChoice is "manual" -- the
             // Validate func below already treats it as a no-op in that case.
             huh.NewInput().
-                Title("📁 Path to source file/folder").
+                Title(t.Icons.Path + " Path to source file/folder").
                 Value(&data.IngestPath).
                 CharLimit(256).
                 Description("Absolute path on your machine.").
@@ -87,7 +91,7 @@ func Run(t theme.Theme) (WizardData, error) {
                 }),
             // Whether to generate the bullet bank now.
             huh.NewConfirm().
-                Title("🪄 Build the bullet‑bank now?").
+                Title(t.Icons.Magic + " Build the bullet‑bank now?").
                 Description("You can always run it later with `resume bullet‑bank`. ").
                 Value(&data.CreateBullet),
         ),

@@ -32,6 +32,10 @@ type MenuIcons struct {
 	Quit     string // nf-fa-sign_out
 	Menu     string // nf-fa-bars
 	Jobs     string // nf-fa-briefcase
+	Profile  string // nf-fa-user
+	Source   string // nf-fa-folder_open
+	Path     string // nf-fa-file_o
+	Magic    string // nf-fa-magic
 }
 
 func NewMenuIcons() MenuIcons {
@@ -43,6 +47,10 @@ func NewMenuIcons() MenuIcons {
 			Quit:     "x",
 			Menu:     "☰",
 			Jobs:     "▣",
+			Profile:  "@",
+			Source:   "#",
+			Path:     "/",
+			Magic:    "*",
 		}
 	}
 	return MenuIcons{
@@ -52,5 +60,9 @@ func NewMenuIcons() MenuIcons {
 		Quit:     "", // nf-fa-sign_out
 		Menu:     "", // nf-fa-bars
 		Jobs:     "", // nf-fa-briefcase
+		Profile:  "", // nf-fa-user
+		Source:   "", // nf-fa-folder_open
+		Path:     "", // nf-fa-file_o
+		Magic:    "", // nf-fa-magic
 	}
 }

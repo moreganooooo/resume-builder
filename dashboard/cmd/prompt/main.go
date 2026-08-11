@@ -38,7 +38,10 @@ func main() {
 		log.Fatalf("invalid spec JSON: %v", err)
 	}
 
-	t := theme.NewTheme("")
+	// Match dashboard/main.go's own default (-theme resume-builder) rather
+	// than falling back to generic Catppuccin auto-detection -- see
+	// dashboard/cmd/bootstrap/main.go's identical fix for why.
+	t := theme.NewTheme("resume-builder")
 	result, err := prompt.Run(t, spec)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
