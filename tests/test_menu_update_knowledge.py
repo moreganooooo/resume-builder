@@ -6,13 +6,16 @@ from unittest.mock import patch, MagicMock
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import bullet_bank_menu  # noqa: E402
 import menu  # noqa: E402
 
 
 class TestUpdateKnowledgeChoiceRegistered(unittest.TestCase):
 
     def test_choice_is_registered(self):
-        values = [c.value for c in menu._build_choices()]
+        # Moved into the Bullet Bank submenu (bullet_bank_menu.py) as part
+        # of the 2026-08 menu collapse -- no longer a flat main-menu entry.
+        values = [c.value for c in bullet_bank_menu._build_choices()]
         self.assertIn("update_knowledge", values)
 
     def test_handler_registered(self):

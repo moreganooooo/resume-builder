@@ -337,10 +337,10 @@ def _maintenance_status(entry: dict) -> str:
 
 
 def _confirm(label: str) -> bool:
-    return bool(questionary.confirm(
+    return cli_art.confirm(
         f'Ready to run "{label}"? This calls the Gemini API and may take a while.',
-        default=True, style=cli_art.QUESTIONARY_STYLE,
-    ).ask())
+        default=True,
+    )
 
 
 def _handle_choice(choice: str) -> None:
@@ -354,7 +354,23 @@ def _handle_choice(choice: str) -> None:
 
 
 def _build_choices() -> list:
-    choices = []
+    choices = [
+        # "Drop New Knowledge" (was a separate main-menu entry before the
+        # 2026-08 menu collapse) -- moved in here since it's the step that
+        # feeds new source documents into this very rebuild pipeline.
+        # Deliberately not part of STAGES/MAINTENANCE/_ALL_ENTRIES -- it
+        # doesn't have a script/output pair for _stage_status() to track,
+        # it's a distinct action dispatched straight to menu.py's own
+        # handler (see run_bullet_bank_menu()'s "update_knowledge" branch).
+        questionary.Choice(
+            title=[
+                ("class:text", "Drop New Knowledge  "),
+                ("class:description", "(add new source documents, then choose what to rebuild)"),
+            ],
+            value="update_knowledge",
+        ),
+        questionary.Separator(" "),
+    ]
     for stage in STAGES:
         choices.append(questionary.Choice(
             title=[
@@ -397,10 +413,16 @@ def run_bullet_bank_menu() -> None:
         maintenance_rows = [(m["label"], _maintenance_status(m)) for m in MAINTENANCE]
         cli_art.render_bullet_bank_status(stage_rows, maintenance_rows)
 
-        choice = questionary.select(
-            "Bullet Bank Management:", choices=_build_choices(), style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        choice = cli_art.select("Bullet Bank Management:", choices=_build_choices())
 
         if not choice or choice == "__back__":
             return
+        if choice == "update_knowledge":
+            # Deferred import: menu.py imports this module, so importing
+            # menu at this module's top level would be circular -- safe
+            # here since it only runs once both modules are already fully
+            # loaded (mirrors bootstrap_menu.py's own _run_phase0()).
+            import menu
+            menu._handle_update_knowledge()
+            continue
         _handle_choice(choice)
