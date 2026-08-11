@@ -131,6 +131,11 @@ type PipelineModel struct {
 	// Status picker sub-state
 	statusPicker bool
 	statusCursor int
+	// statusConfirm/pendingStatus hold the inline confirm step between
+	// picking a status and actually committing it -- see
+	// renderStatusPickerOverlay's doc comment in bars.go for why.
+	statusConfirm bool
+	pendingStatus string
 	// Search sub-state — narrows the active tab by substring on company/role/notes.
 	searchInput bool   // true while the user is typing the query
 	searchQuery string // committed (or in-progress) lowercased query
@@ -139,6 +144,10 @@ type PipelineModel struct {
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
 	// same dismiss convention as jobs.go's actionError.
 	notice string
+
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
 
 	animDone bool
 }
@@ -276,6 +285,13 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)
 		return m, nil
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		if m.statusPicker {
 			return m.handleStatusPicker(msg)
 		}
@@ -298,6 +314,9 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "?":
+		m.showHelp = true
+
 	case "esc":
 		// While a search is committed, Esc clears the search first (matches vim's
 		// `:nohl` ergonomics) rather than leaving the screen -- a cleared filter is
@@ -499,7 +518,36 @@ func (m PipelineModel) handleSearchInput(msg tea.KeyMsg) (PipelineModel, tea.Cmd
 	return m, nil
 }
 
+// handleStatusPicker handles input while the status picker overlay is
+// open. When m.statusConfirm is set, the user has already picked a status
+// and this only accepts the inline confirm/cancel keys -- see
+// renderStatusPickerOverlay's doc comment in bars.go for why a status
+// change doesn't commit on the first Enter.
 func (m PipelineModel) handleStatusPicker(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
+	if m.statusConfirm {
+		switch msg.String() {
+		case "enter", "y", "Y":
+			m.statusPicker = false
+			m.statusConfirm = false
+			if app, ok := m.CurrentApp(); ok {
+				newStatus := m.pendingStatus
+				m.pendingStatus = ""
+				return m, func() tea.Msg {
+					return PipelineUpdateStatusMsg{
+						CareerOpsPath: m.careerOpsPath,
+						App:           app,
+						NewStatus:     newStatus,
+					}
+				}
+			}
+		case "esc", "n", "N":
+			// Back out to the picker itself, not all the way out of it.
+			m.statusConfirm = false
+			m.pendingStatus = ""
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "esc", "q":
 		m.statusPicker = false
@@ -518,16 +566,9 @@ func (m PipelineModel) handleStatusPicker(msg tea.KeyMsg) (PipelineModel, tea.Cm
 		}
 
 	case "enter":
-		m.statusPicker = false
-		if app, ok := m.CurrentApp(); ok {
-			newStatus := statusOptions[m.statusCursor]
-			return m, func() tea.Msg {
-				return PipelineUpdateStatusMsg{
-					CareerOpsPath: m.careerOpsPath,
-					App:           app,
-					NewStatus:     newStatus,
-				}
-			}
+		if _, ok := m.CurrentApp(); ok {
+			m.pendingStatus = statusOptions[m.statusCursor]
+			m.statusConfirm = true
 		}
 	}
 	return m, nil
@@ -709,7 +750,36 @@ func (m PipelineModel) cursorLineEstimate() int {
 }
 
 // View renders the pipeline screen.
+var pipelineHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Move selection"},
+		{"g / G", "Jump to top / bottom"},
+		{"PgUp / PgDn", "Page up / down"},
+		{"← → / h l", "Cycle tabs"},
+	}},
+	{"Actions", []helpBinding{
+		{"Enter", "Open report"},
+		{"o", "Open job URL in browser"},
+		{"c", "Change application status"},
+		{"r", "Refresh from disk"},
+	}},
+	{"View", []helpBinding{
+		{"/", "Search company/role/notes"},
+		{"s", "Cycle sort mode"},
+		{"v", "Toggle grouped/flat view"},
+		{"p", "Open Progress screen"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Clear search, or back to Main Menu"},
+		{"q", "Quit dashboard"},
+	}},
+}
+
 func (m PipelineModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, m.width, m.height)
+	}
+
 	header := m.renderHeader()
 	tabs := m.renderTabs()
 	metricsBar := m.renderMetrics()
@@ -812,7 +882,11 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 	content := strings.Join(bodyLines, "\n")
 
 	if m.statusPicker {
-		content = renderStatusPickerOverlay(m.theme, content, width-4, "Change status:", statusOptions, m.statusCursor)
+		confirmLabel := ""
+		if m.statusConfirm {
+			confirmLabel = fmt.Sprintf("Change status to %s?", m.pendingStatus)
+		}
+		content = renderStatusPickerOverlay(m.theme, content, width-4, "Change status:", statusOptions, m.statusCursor, confirmLabel)
 	}
 
 	borderStyle := lipgloss.NewStyle().
@@ -840,7 +914,7 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 	norm := data.NormalizeStatus(app.Status)
 	statusColor := m.statusColorMap()[norm]
 
-	content = append(content, styles.Subtext.Render("Interview Probability: ")+score.Render(fmt.Sprintf("%.1f", app.Score)))
+	content = append(content, styles.Subtext.Render("Interview Probability: ")+score.Render(scoreIcon(m.theme, app.Score)+" "+fmt.Sprintf("%.1f", app.Score)))
 	content = append(content, styles.Subtext.Render("Status: ")+lipgloss.NewStyle().Foreground(statusColor).Render(statusLabel(norm)))
 
 	dateStr := app.Date
@@ -996,8 +1070,27 @@ func (m PipelineModel) renderTabs() string {
 	// aware, same as fitBar's own use of it, so it can safely shorten the
 	// already-styled/rendered row and underline without corrupting color
 	// codes mid-escape-sequence.
+	//
+	// ansi.Truncate's own "…" tail already signals "a label got cut", but
+	// that reads the same whether one character or five whole tabs are
+	// hidden -- cycle keys (←→/hl, see renderHelp) still reach every one of
+	// the 8 tabs regardless of what's visible, so a narrow terminal needs
+	// an explicit "more tabs exist" affordance, not just an ambiguous
+	// ellipsis. moreMarker gets its own reserved room instead of being
+	// swallowed by ansi.Truncate's tail, and only appears when the tab bar
+	// actually overflows.
 	if lipgloss.Width(row) > m.width {
-		row = ansi.Truncate(row, m.width, "…")
+		moreMarker := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Render(" ›more")
+		markerWidth := lipgloss.Width(moreMarker)
+		budget := m.width - markerWidth
+		if budget < 0 {
+			budget = 0
+		}
+		row = ansi.Truncate(row, budget, "…") + moreMarker
+		if lipgloss.Width(underline) > budget {
+			underline = ansi.Truncate(underline, budget, "")
+		}
+		underline += strings.Repeat(" ", markerWidth)
 	}
 	if lipgloss.Width(underline) > m.width {
 		underline = ansi.Truncate(underline, m.width, "")
@@ -1072,9 +1165,14 @@ func (m PipelineModel) renderHelp() string {
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
 	if m.statusPicker {
+		if m.statusConfirm {
+			return style.Render(
+				keyStyle.Render("Enter/y") + descStyle.Render(" confirm  ") +
+					keyStyle.Render("Esc/n") + descStyle.Render(" cancel"))
+		}
 		return style.Render(
 			keyStyle.Render("↑↓/jk") + descStyle.Render(" navigate  ") +
-				keyStyle.Render("Enter") + descStyle.Render(" confirm  ") +
+				keyStyle.Render("Enter") + descStyle.Render(" select  ") +
 				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
 	}
 
@@ -1103,6 +1201,7 @@ func (m PipelineModel) renderHelp() string {
 		keyStyle.Render("c") + descStyle.Render(" change  ") +
 		keyStyle.Render("v") + descStyle.Render(" view  ") +
 		keyStyle.Render("p") + descStyle.Render(" progress  ") +
+		keyStyle.Render("?") + descStyle.Render(" help  ") +
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
 

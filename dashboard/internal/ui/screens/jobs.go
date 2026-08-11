@@ -50,13 +50,37 @@ type JobsModel struct {
 	// -render child process running unseen in the background.
 	actionCancel context.CancelFunc
 	actionError  string
+	// actionErrorDetail is the full raw stderr behind actionError -- kept
+	// separately so a USER_ERROR: marker line (see parseActionError) can
+	// promote a plain-language sentence to actionError while the raw text
+	// stays reachable behind the "d for details" affordance instead of
+	// being discarded.
+	actionErrorDetail   string
+	actionErrorExpanded bool
 	// notice explains why a keypress was a no-op (e.g. "t" on a non-Pending
 	// job) instead of silently doing nothing. Dismissed on the next
 	// keypress, same convention as actionError.
 	notice       string
 	statusPicker bool
 	statusCursor int
-	spinner      spinner.Model
+	// statusConfirm/pendingStatus hold the inline confirm step between
+	// picking a status and actually committing it -- application-status
+	// changes are destructive-but-free (see renderStatusPickerOverlay's own
+	// doc comment in bars.go), so the first Enter on a picker option is a
+	// proposal, not a commit.
+	statusConfirm bool
+	pendingStatus string
+	// Search sub-state -- narrows the active filter by substring on
+	// company/title. Mirrors pipeline.go's identical searchInput/
+	// searchQuery pair exactly (same key to enter, same cancel/commit keys,
+	// same live-filter-as-you-type behavior) so a user who learns search on
+	// Pipeline finds it identical here.
+	searchInput bool   // true while the user is typing the query
+	searchQuery string // committed (or in-progress) lowercased query
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
+	spinner  spinner.Model
 
 	// actionChan carries progress/completion messages from the goroutine
 	// runAction starts. Only "tailor" ever emits jobsActionProgressMsg (it's
@@ -140,18 +164,25 @@ func (m JobsModel) WithActionConfig(jobsPath, pythonPath, projectRoot string) Jo
 	return m
 }
 
+// applyFilter recomputes m.filtered from m.rows using both the active
+// 3-way status filter (m.filter) and any in-progress/committed search query
+// (m.searchQuery). Search narrows *within* the active filter rather than
+// resetting it -- mirrors pipeline.go's applyFilterAndSort, where search
+// narrows within the active tab rather than resetting it. A user who's
+// cycled the filter to "pending" and then types "acme" almost certainly
+// wants pending Acme postings, not to have completed ones silently reappear.
 func (m *JobsModel) applyFilter() {
-	if m.filter == "all" {
-		m.filtered = m.rows
-	} else {
-		var out []model.JobRow
-		for _, r := range m.rows {
-			if strings.EqualFold(r.Status, m.filter) {
-				out = append(out, r)
-			}
+	var out []model.JobRow
+	for _, r := range m.rows {
+		if m.filter != "all" && !strings.EqualFold(r.Status, m.filter) {
+			continue
 		}
-		m.filtered = out
+		if !matchesJobSearch(r, m.searchQuery) {
+			continue
+		}
+		out = append(out, r)
 	}
+	m.filtered = out
 	if m.cursor >= len(m.filtered) {
 		m.cursor = len(m.filtered) - 1
 	}
@@ -161,12 +192,65 @@ func (m *JobsModel) applyFilter() {
 	m.adjustScroll()
 }
 
+// matchesJobSearch reports whether job matches the lowercased search query
+// against company and title -- the fields a job seeker actually searches
+// by, and the only two free-text fields model.JobRow carries (unlike
+// pipeline.go's matchesSearch, which also checks CareerApplication.Notes --
+// JobRow has no equivalent notes field to include).
+func matchesJobSearch(job model.JobRow, query string) bool {
+	if query == "" {
+		return true
+	}
+	q := strings.ToLower(query)
+	if strings.Contains(strings.ToLower(job.Company), q) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(job.Title), q) {
+		return true
+	}
+	return false
+}
+
+// countForStatusFilter returns how many rows match the active status filter
+// alone, ignoring any search query -- the denominator for renderSearchBar's
+// "N/M matching" display, mirroring pipeline.go's countForFilter/tabFiltered.
+func (m JobsModel) countForStatusFilter() int {
+	if m.filter == "all" {
+		return len(m.rows)
+	}
+	count := 0
+	for _, r := range m.rows {
+		if strings.EqualFold(r.Status, m.filter) {
+			count++
+		}
+	}
+	return count
+}
+
 // hasExtraBar reports whether View() will render the action-status/error/
 // notice bar above the split pane -- adjustScroll needs this to compute the
-// same available height chromeAvailHeight(hasExtra) uses at render time, or
+// same available height chromeAvailHeight(extraRows) uses at render time, or
 // scrolling and rendering could disagree about how many rows are visible.
 func (m JobsModel) hasExtraBar() bool {
 	return m.actionInProgress != "" || m.actionError != "" || m.notice != ""
+}
+
+// extraRows returns how many extra chrome rows View() renders above the
+// split pane: the action-status/error/notice bar (0 or 1) plus the search
+// bar (0 or 1) when a search is active or has a committed query. The two
+// can be visible at once -- e.g. a "Cancelled" notice while a search query
+// is still active -- so this sums rather than picking one, unlike
+// hasExtraBar's plain bool. Mirrors pipeline.go's chromeRowsFixed, which
+// budgets an extra row for the same two conditions.
+func (m JobsModel) extraRows() int {
+	rows := 0
+	if m.hasExtraBar() {
+		rows++
+	}
+	if m.searchInput || m.searchQuery != "" {
+		rows++
+	}
+	return rows
 }
 
 // sidebarViewportLines returns how many body lines actually fit inside the
@@ -193,7 +277,7 @@ func (m JobsModel) sidebarViewportLines(boxHeight int) int {
 // always exactly 2*cursor; unlike pipeline.go's grouped view, no status-
 // header lines can shift this, so no cursorLineEstimate walk is needed.
 func (m *JobsModel) adjustScroll() {
-	avail := m.sidebarViewportLines(m.chromeAvailHeight(m.hasExtraBar()))
+	avail := m.sidebarViewportLines(m.chromeAvailHeight(m.extraRows()))
 	if avail < 1 {
 		avail = 1
 	}
@@ -342,7 +426,36 @@ func (m JobsModel) applyReloadedRows(rows []model.JobRow) JobsModel {
 	return m
 }
 
+// handleStatusPickerKey handles input while the status picker overlay is
+// open. When m.statusConfirm is set, the user has already picked a status
+// and this only accepts the inline confirm/cancel keys -- see
+// renderStatusPickerOverlay's doc comment in bars.go for why a status
+// change doesn't commit on the first Enter.
 func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
+	if m.statusConfirm {
+		switch msg.String() {
+		case "enter", "y", "Y":
+			m.statusPicker = false
+			m.statusConfirm = false
+			if job, ok := m.CurrentJob(); ok {
+				chosen := m.pendingStatus
+				m.pendingStatus = ""
+				m.actionInProgress = "status"
+				m.actionChan = make(chan tea.Msg)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, tea.Batch(m.runAction(ctx, m.actionChan, "status", job.Path, chosen), m.spinner.Tick)
+			}
+		case "esc", "n", "N":
+			// Back out to the picker itself, not all the way out of it --
+			// changing your mind about which status shouldn't mean redoing
+			// the "u" keypress too.
+			m.statusConfirm = false
+			m.pendingStatus = ""
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "esc", "q":
 		// pipeline.go's handleStatusPicker accepts both -- this picker only
@@ -358,17 +471,101 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 			m.statusCursor++
 		}
 	case "enter":
-		m.statusPicker = false
-		if job, ok := m.CurrentJob(); ok {
-			chosen := jobsApplicationStatuses[m.statusCursor]
-			m.actionInProgress = "status"
-			m.actionChan = make(chan tea.Msg)
-			ctx, cancel := context.WithCancel(context.Background())
-			m.actionCancel = cancel
-			return m, tea.Batch(m.runAction(ctx, m.actionChan, "status", job.Path, chosen), m.spinner.Tick)
+		if _, ok := m.CurrentJob(); ok {
+			m.pendingStatus = jobsApplicationStatuses[m.statusCursor]
+			m.statusConfirm = true
 		}
 	}
 	return m, nil
+}
+
+// handleSearchInput consumes keys while the search input bar is open.
+// Mirrors pipeline.go's handleSearchInput exactly: same cancel key (esc,
+// which also discards the in-progress query), same commit key (enter, which
+// just closes the input and keeps whatever's typed), same clear-all key
+// (ctrl+u), and the same live-filter-on-every-keystroke behavior via
+// applyFilter after backspace/typing. Being routed here at all (see the
+// `if m.searchInput` check in Update, checked before the main key switch)
+// is what stops a typed letter from also triggering a single-letter Jobs
+// shortcut like "f"/"l"/"t"/"u" -- this function is the only place keys are
+// interpreted while the input is focused.
+func (m JobsModel) handleSearchInput(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.searchInput = false
+		m.searchQuery = ""
+		m.applyFilter()
+		m.cursor = 0
+		m.scrollOffset = 0
+		return m, nil
+
+	case "enter":
+		m.searchInput = false
+		return m, nil
+
+	case "backspace":
+		if len(m.searchQuery) > 0 {
+			runes := []rune(m.searchQuery)
+			m.searchQuery = string(runes[:len(runes)-1])
+			m.applyFilter()
+			m.cursor = 0
+			m.scrollOffset = 0
+		}
+		return m, nil
+
+	case "ctrl+u":
+		m.searchQuery = ""
+		m.applyFilter()
+		m.cursor = 0
+		m.scrollOffset = 0
+		return m, nil
+	}
+
+	if r := msg.Runes; len(r) > 0 {
+		m.searchQuery += strings.ToLower(string(r))
+		m.applyFilter()
+		m.cursor = 0
+		m.scrollOffset = 0
+		return m, nil
+	}
+	return m, nil
+}
+
+// parseActionError splits a failed dashboard_actions.py run into a
+// display message and the full raw detail behind it. dashboard_actions.py
+// may emit a final "USER_ERROR: <plain-language sentence>" stderr line for
+// failures it recognizes (that module's own docstring documents the
+// contract); when present, its remainder becomes the plain-language
+// display text a non-developer can actually understand, while the raw
+// stderr always stays available as detail so nothing is silently lost --
+// only deprioritized behind the "d for details" affordance. Falls back to
+// showing the raw output/error directly when no marker line is present,
+// exactly matching the previous behavior.
+func parseActionError(output string, fallbackErr error) (display, detail string) {
+	detail = strings.TrimSpace(output)
+	if detail == "" && fallbackErr != nil {
+		detail = fallbackErr.Error()
+	}
+	if detail == "" {
+		detail = "Unknown error"
+	}
+
+	lines := strings.Split(detail, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(line, "USER_ERROR:"); ok {
+			display = strings.TrimSpace(rest)
+			if display == "" {
+				display = "Something went wrong."
+			}
+			return display, detail
+		}
+		break
+	}
+	return detail, detail
 }
 
 // Update handles input for the jobs screen. Resizing is not handled here --
@@ -386,17 +583,21 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.actionCancel = nil
 		}
 		if msg.err != nil {
-			m.actionError = strings.TrimSpace(msg.output)
-			if m.actionError == "" {
-				m.actionError = msg.err.Error()
-			}
+			m.actionError, m.actionErrorDetail = parseActionError(msg.output, msg.err)
+			m.actionErrorExpanded = false
 			return m, nil
 		}
 		return m, reloadJobsCmd(m.jobsPath)
 
 	case jobsReloadedMsg:
 		if msg.err != nil {
+			// Not a dashboard_actions.py failure (no USER_ERROR: contract
+			// here, just a local file-read error), so display and detail are
+			// the same text -- renderActionError only offers the "d for
+			// details" affordance when they actually differ.
 			m.actionError = msg.err.Error()
+			m.actionErrorDetail = m.actionError
+			m.actionErrorExpanded = false
 			return m, nil
 		}
 		return m.applyReloadedRows(msg.rows), nil
@@ -432,17 +633,51 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			return m, nil
 		}
 		if m.actionError != "" {
+			// "d" toggles the raw-detail view instead of dismissing, but
+			// only when there's actually a distinct detail to show (a plain
+			// USER_ERROR: message with the raw text behind it) -- otherwise
+			// "d" dismisses like any other key, matching the plain fallback
+			// case where display and detail are identical.
+			if msg.String() == "d" && m.actionErrorDetail != "" && m.actionErrorDetail != m.actionError {
+				m.actionErrorExpanded = !m.actionErrorExpanded
+				return m, nil
+			}
 			m.actionError = ""
+			m.actionErrorDetail = ""
+			m.actionErrorExpanded = false
 			return m, nil
 		}
 		if m.notice != "" {
 			m.notice = ""
 			return m, nil
 		}
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		if m.statusPicker {
 			return m.handleStatusPickerKey(msg)
 		}
+		// Checked before the main switch below, same placement pipeline.go
+		// uses for its own searchInput check -- while the search input is
+		// focused, every keystroke (including single letters that would
+		// otherwise be shortcuts like "f"/"l"/"t"/"u") must go into the query
+		// instead of triggering an action, or typing "letter" would silently
+		// fire "letter" as a keybinding too.
+		if m.searchInput {
+			return m.handleSearchInput(msg)
+		}
 		switch msg.String() {
+		case "?":
+			m.showHelp = true
+		case "/":
+			// Open search input. Pre-fill with the current query (if any) so
+			// refining a committed search is one keystroke away -- mirrors
+			// pipeline.go's identical "/" case.
+			m.searchInput = true
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -519,6 +754,16 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "q":
 			return m, func() tea.Msg { return JobsClosedMsg{Quit: true} }
 		case "esc":
+			// While a search is committed, Esc clears the search first (matches
+			// vim's `:nohl` ergonomics, and pipeline.go's identical esc case)
+			// rather than leaving the screen -- a cleared filter is itself the
+			// useful "undo" here. With no query, Esc backs out to the Main
+			// Menu as before.
+			if m.searchQuery != "" {
+				m.searchQuery = ""
+				m.applyFilter()
+				return m, nil
+			}
 			return m, func() tea.Msg { return JobsClosedMsg{Quit: false} }
 		}
 	case spinner.TickMsg:
@@ -541,6 +786,15 @@ var jobsFitGroups = []struct {
 	{"Practical pursue", func(e model.Evaluation) map[string]int { return e.PracticalPursueSubscores }},
 }
 
+// formatSubscores renders a fit/interview-odds/practical-pursue subscore
+// dict as a human-readable line. Previously rendered the raw snake_case
+// schema key verbatim (e.g. "functional_alignment: 4") -- internal-jargon
+// leakage a job-seeking user was never meant to see; theme.SubscoreLabels
+// (generated from scripts/cli_art.py's own _FIT_DIMENSION_GROUPS by
+// scripts/sync_dashboard_theme.py) is the label map every other surface in
+// this codebase already uses for these keys. Falls back to the raw key for
+// any schema key the generator doesn't know about yet, rather than
+// silently dropping it -- a missing label is a bug to notice, not hide.
 func formatSubscores(scores map[string]int) string {
 	if len(scores) == 0 {
 		return "-"
@@ -552,31 +806,58 @@ func formatSubscores(scores map[string]int) string {
 	sort.Strings(keys)
 	parts := make([]string, len(keys))
 	for i, k := range keys {
-		parts[i] = fmt.Sprintf("%s: %d", k, scores[k])
+		label, ok := theme.SubscoreLabels[k]
+		if !ok {
+			label = k
+		}
+		parts[i] = fmt.Sprintf("%s: %d", label, scores[k])
 	}
 	return strings.Join(parts, ", ")
 }
 
-// chromeAvailHeight budgets room for the header and help bars, plus the
-// action-status/error/notice bar when one is showing -- the split-pane's
-// declared Height() previously stayed at height-2 regardless, so whenever
-// extra rendered (any liveness/tailor/status action, or a dismissable
-// notice) the total output grew to height-1 lines, one past the terminal's
-// visible height. Mirrors the reservation status-picker overlays already
-// make for themselves in renderSidebarList below.
-func (m JobsModel) chromeAvailHeight(hasExtra bool) int {
-	h := m.height - 2 // header + help
-	if hasExtra {
-		h--
-	}
+// chromeAvailHeight budgets room for the header and help bars, plus
+// extraRows chrome rows (action-status/error/notice, and/or the search bar)
+// when they're showing -- the split-pane's declared Height() previously
+// stayed at height-2 regardless, so whenever extra rendered (any
+// liveness/tailor/status action, or a dismissable notice) the total output
+// grew to height-1 lines, one past the terminal's visible height. Mirrors
+// the reservation status-picker overlays already make for themselves in
+// renderSidebarList below.
+func (m JobsModel) chromeAvailHeight(extraRows int) int {
+	h := m.height - 2 - extraRows // header + help
 	if h < 5 {
 		h = 5
 	}
 	return h
 }
 
+var jobsHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Move selection"},
+		{"g / G", "Jump to top / bottom"},
+		{"PgUp / PgDn", "Page up / down"},
+	}},
+	{"Actions", []helpBinding{
+		{"l", "Check posting liveness"},
+		{"t", "Tailor resume for this job (Pending only)"},
+		{"u", "Change application status"},
+	}},
+	{"View", []helpBinding{
+		{"f", "Cycle filter: all / pending / completed"},
+		{"/", "Search company/title"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Clear search, or back to Main Menu"},
+		{"q", "Quit dashboard"},
+	}},
+}
+
 // View renders the jobs screen.
 func (m JobsModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Jobs", jobsHelpCategories, m.width, m.height)
+	}
+
 	header := m.renderHeader()
 	var extra string
 	if m.actionInProgress != "" {
@@ -586,11 +867,12 @@ func (m JobsModel) View() string {
 	} else if m.notice != "" {
 		extra = m.renderNotice()
 	}
+	searchBar := m.renderSearchBar()
 	help := m.renderHelp()
 
 	leftWidth := int(float64(m.width) * 0.35)
 	rightWidth := m.width - leftWidth
-	availHeight := m.chromeAvailHeight(extra != "")
+	availHeight := m.chromeAvailHeight(m.extraRows())
 
 	leftPane := m.renderSidebarList(leftWidth, availHeight)
 	var rightPane string
@@ -601,10 +883,17 @@ func (m JobsModel) View() string {
 	}
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
-	if extra != "" {
-		return lipgloss.JoinVertical(lipgloss.Left, header, extra, splitView, help)
+
+	// searchBar before extra (action-status/error/notice), matching
+	// pipeline.go's View() ordering of its own searchBar/notice rows.
+	content := header
+	if searchBar != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, searchBar)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, header, splitView, help)
+	if extra != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, extra)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, content, splitView, help)
 }
 
 func actionLabel(action string) string {
@@ -660,13 +949,28 @@ func (m JobsModel) renderActionStatus() string {
 	return left
 }
 
+// renderActionError shows m.actionError (the plain-language line, if
+// dashboard_actions.py's failure included a USER_ERROR: marker -- see
+// parseActionError) with the full raw stderr in m.actionErrorDetail
+// reachable behind "d" instead of always dumping raw subprocess output at
+// the user. dashboard_actions.py's own stderr forwarding is by design
+// (see that module's docstring) -- this only changes what's shown first.
 func (m JobsModel) renderActionError() string {
 	style := lipgloss.NewStyle().
 		Foreground(m.theme.Red).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 2)
-	return style.Render("Error: " + truncateRunes(m.actionError, m.width-12) + " (press any key to dismiss)")
+
+	hasDetail := m.actionErrorDetail != "" && m.actionErrorDetail != m.actionError
+	if m.actionErrorExpanded && hasDetail {
+		return style.Render("Error: " + truncateRunes(m.actionErrorDetail, m.width-12) + " (d to collapse, any other key to dismiss)")
+	}
+	hint := " (press any key to dismiss)"
+	if hasDetail {
+		hint = " (d for details, any other key to dismiss)"
+	}
+	return style.Render("Error: " + truncateRunes(m.actionError, m.width-12) + hint)
 }
 
 // renderNotice explains why the last keypress was a no-op (see the "t" case
@@ -698,6 +1002,43 @@ func (m JobsModel) renderHeader() string {
 	return style.Render(title + gap + info)
 }
 
+// renderSearchBar returns an empty string when there is no active or
+// in-progress search; otherwise it renders a vim-style status line showing
+// the query and the match count. While in input mode, a trailing cursor is
+// appended. Mirrors pipeline.go's renderSearchBar exactly -- same prompt
+// glyph, same "N/M matching" count, same hint text, same live-cursor
+// treatment -- so search looks and behaves identically on both screens.
+func (m JobsModel) renderSearchBar() string {
+	if !m.searchInput && m.searchQuery == "" {
+		return ""
+	}
+
+	style := lipgloss.NewStyle().
+		Foreground(m.theme.Text).
+		Width(m.width).
+		Padding(0, 2)
+
+	prompt := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
+	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
+	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+
+	display := queryStyle.Render(m.searchQuery)
+	if m.searchInput {
+		display += lipgloss.NewStyle().Foreground(m.theme.Blue).Render("█")
+	}
+
+	matchInfo := hintStyle.Render(fmt.Sprintf("  %d/%d matching", len(m.filtered), m.countForStatusFilter()))
+
+	hint := ""
+	if m.searchInput {
+		hint = hintStyle.Render("   Enter: keep   Esc: cancel   Ctrl+U: clear")
+	} else {
+		hint = hintStyle.Render("   Esc: clear   /: edit")
+	}
+
+	return style.Render(prompt + " " + display + matchInfo + hint)
+}
+
 func (m JobsModel) renderSidebarList(width, height int) string {
 	if len(m.filtered) == 0 {
 		emptyStyle := lipgloss.NewStyle().
@@ -707,7 +1048,15 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 			Padding(1, 1).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(m.theme.Overlay)
-		return emptyStyle.Render("No evaluated jobs match this filter")
+		// Plain-language empty state distinct from the plain filter-empty
+		// message below -- "no jobs match this filter" reads as a dead end,
+		// while naming the query tells the user exactly what to clear or
+		// retype next.
+		msg := "No evaluated jobs match this filter"
+		if m.searchQuery != "" {
+			msg = fmt.Sprintf("No jobs match %q -- press Esc to clear the search", m.searchQuery)
+		}
+		return emptyStyle.Render(msg)
 	}
 
 	var lines []string
@@ -736,7 +1085,11 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	content := strings.Join(bodyLines, "\n")
 
 	if m.statusPicker {
-		content = renderStatusPickerOverlay(m.theme, content, width-4, "Set status:", jobsApplicationStatuses, m.statusCursor)
+		confirmLabel := ""
+		if m.statusConfirm {
+			confirmLabel = fmt.Sprintf("Mark as %s?", m.pendingStatus)
+		}
+		content = renderStatusPickerOverlay(m.theme, content, width-4, "Set status:", jobsApplicationStatuses, m.statusCursor, confirmLabel)
 	}
 
 	borderStyle := lipgloss.NewStyle().
@@ -759,7 +1112,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 
 	eval := job.Evaluation
 	score := scoreStyle(m.theme, eval.CompositeScore)
-	content = append(content, styles.Subtext.Render("Composite score: ")+score.Render(fmt.Sprintf("%.1f/5", eval.CompositeScore)))
+	content = append(content, styles.Subtext.Render("Composite score: ")+score.Render(scoreIcon(m.theme, eval.CompositeScore)+" "+fmt.Sprintf("%.1f/5", eval.CompositeScore)))
 	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
 	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
 	content = append(content, "")
@@ -830,14 +1183,27 @@ func (m JobsModel) renderHelp() string {
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
+	if m.searchInput {
+		// Mirrors pipeline.go's own searchInput help-bar swap -- while typing,
+		// the normal shortcut list is misleading (those keys aren't live), so
+		// it's replaced with the keys that actually do something right now.
+		return style.Render(
+			keyStyle.Render("type") + descStyle.Render(" filter live  ") +
+				keyStyle.Render("Enter") + descStyle.Render(" keep  ") +
+				keyStyle.Render("Ctrl+U") + descStyle.Render(" clear  ") +
+				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
+	}
+
 	return style.Render(
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/bot  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
+			keyStyle.Render("/") + descStyle.Render(" search  ") +
 			keyStyle.Render("f") + descStyle.Render(" filter  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
+			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }

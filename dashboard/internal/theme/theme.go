@@ -45,6 +45,14 @@ type Theme struct {
 		Source   string
 		Path     string
 		Magic    string
+
+		// Score* -- see icons.go's MenuIcons for the doc comment; field
+		// order/names must mirror that struct exactly for
+		// `t.Icons = NewMenuIcons()` to type-check as a single assignment.
+		ScoreStrong string
+		ScoreGood   string
+		ScoreFair   string
+		ScoreWeak   string
 	}
 }
 

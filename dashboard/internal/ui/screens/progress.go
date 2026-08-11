@@ -26,6 +26,20 @@ type ProgressModel struct {
 	width        int
 	height       int
 	theme        theme.Theme
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
+}
+
+var progressHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Scroll"},
+		{"PgUp / PgDn", "Page up / down"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Back to Main Menu"},
+		{"q", "Quit dashboard"},
+	}},
 }
 
 // NewProgressModel creates a new progress screen.
@@ -59,7 +73,16 @@ func (m *ProgressModel) Resize(width, height int) {
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
+		case "?":
+			m.showHelp = true
 		case "q":
 			return m, func() tea.Msg { return ProgressClosedMsg{Quit: true} }
 		case "esc":
@@ -149,6 +172,10 @@ func (m *ProgressModel) clampScrollOffset() {
 
 // View renders the progress screen.
 func (m ProgressModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Progress", progressHelpCategories, m.width, m.height)
+	}
+
 	header := m.renderHeader()
 	help := m.renderHelp()
 	body := m.renderBody()
@@ -470,6 +497,7 @@ func (m ProgressModel) renderHelp() string {
 
 	keys := keyStyle.Render("\u2191\u2193/jk") + descStyle.Render(" scroll  ") +
 		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
+		keyStyle.Render("?") + descStyle.Render(" help  ") +
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
 
