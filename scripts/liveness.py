@@ -217,30 +217,6 @@ def _verify_candidates(candidates: list) -> dict:
         counts[outcome] = counts.get(outcome, 0) + 1
         results_by_status.setdefault(outcome, []).append(r)
 
-    cli_art.console.print(markup=False, soft_wrap=True)
-
-    # Process and display by status group
-    status_order = ["active", "likely_active", "expired", "uncertain"]
-    icon_map = {
-        "active": theme.colorize_icon('success'),
-        "likely_active": theme.colorize_icon('warning'),
-        "expired": theme.colorize_icon('error'),
-        "uncertain": theme.colorize_icon('warning'),
-    }
-
-    for status in status_order:
-        status_results = results_by_status.get(status, [])
-        if status_results:
-            status_label = status.replace("_", " ").title()
-            cli_art.console.print(f"{icon_map.get(status, '?')} {status_label}:", markup=False, soft_wrap=True)
-            for r in status_results:
-                cli_art.console.print(f"  • {_jd_label(r.get('source_file'))}", markup=False, soft_wrap=True)
-                if status not in ("active", "likely_active"):
-                    reason = r.get('reason', '')
-                    if reason:
-                        cli_art.console.print(f"    → {reason}", markup=False, soft_wrap=True)
-            cli_art.console.print(markup=False, soft_wrap=True)
-
     # Save liveness status for all results
     for r in results:
         source_file = r.get("source_file")
