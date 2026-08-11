@@ -12,6 +12,7 @@ import (
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"time"
 )
 
 func testJobRows() []model.JobRow {
@@ -671,5 +672,82 @@ func TestJobsSearchBarRendersMatchCountAndAppearsInHelpOverlay(t *testing.T) {
 	overlay := ansi.Strip(renderHelpOverlay(theme.NewTheme("catppuccin-mocha"), "Jobs", jobsHelpCategories, 100, 30))
 	if !strings.Contains(overlay, "/") || !strings.Contains(overlay, "Search company/title") {
 		t.Fatalf("expected `/` search binding documented in the help overlay, got %q", overlay)
+	}
+}
+
+// The Fit/Odds suffix is additive detail and must yield before the job
+// title does. The Python side shipped this wrong first -- adding the two
+// columns unconditionally pushed pre-existing content off the edge -- so
+// the drop path is pinned here rather than left to a visual check.
+func TestJobSubtitleScoresDropBeforeTitleOnNarrowSidebars(t *testing.T) {
+	th := theme.NewTheme("resume-builder")
+	job := model.JobRow{
+		Title: "Revenue Operations Lead",
+		Evaluation: model.Evaluation{
+			CompositeScore: 4.2, FitScore: 4.5, InterviewOddsScore: 3.9,
+		},
+	}
+
+	wide := jobSubtitleWithScores(th, job, 60)
+	if !strings.Contains(wide, "4.5") || !strings.Contains(wide, "3.9") {
+		t.Errorf("wide sidebar should carry both layer scores, got %q", wide)
+	}
+	if !strings.Contains(wide, "Revenue Operations Lead") {
+		t.Errorf("wide sidebar dropped the title, got %q", wide)
+	}
+
+	narrow := jobSubtitleWithScores(th, job, jobsScoreDetailMinWidth-1)
+	if strings.Contains(narrow, "4.5") || strings.Contains(narrow, "3.9") {
+		t.Errorf("narrow sidebar should drop the scores, got %q", narrow)
+	}
+	if narrow != job.Title {
+		t.Errorf("narrow sidebar must keep the title intact, got %q", narrow)
+	}
+}
+
+// A zero score means "not recorded" -- these fields postdate some saved
+// evaluations, and the scale starts at 1, so 0.0 would be a lie.
+func TestLayerScoreRendersMissingAsDash(t *testing.T) {
+	if got := layerScore(0); got != "-" {
+		t.Errorf("layerScore(0) = %q, want %q", got, "-")
+	}
+	if got := layerScore(4.5); got != "4.5" {
+		t.Errorf("layerScore(4.5) = %q, want %q", got, "4.5")
+	}
+
+	job := model.JobRow{Title: "Analyst", Evaluation: model.Evaluation{CompositeScore: 3.1}}
+	if got := jobSubtitleWithScores(theme.NewTheme("resume-builder"), job, 60); got != job.Title {
+		t.Errorf("a job with no layer scores should render just its title, got %q", got)
+	}
+}
+
+// A hung subprocess and a slow one look identical on an indeterminate
+// spinner. These thresholds are deliberately generous -- orchestrator.py
+// allows 180s for a PDF render alone -- so the hint means "something is
+// wrong", not "this is taking a while".
+func TestStalledHintOnlyFiresPastTheThreshold(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("resume-builder"), testJobRows(), 100, 30)
+
+	if got := m.stalledHint(); got != "" {
+		t.Errorf("no action in flight should give no hint, got %q", got)
+	}
+
+	m.actionInProgress = "tailor"
+	m.actionStartedAt = time.Now().Add(-2 * time.Minute)
+	if got := m.stalledHint(); got != "" {
+		t.Errorf("a 2-minute tailor is normal, want no hint, got %q", got)
+	}
+
+	m.actionStartedAt = time.Now().Add(-stalledTailorAfter - time.Minute)
+	if !strings.Contains(m.stalledHint(), "longer than usual") {
+		t.Errorf("an over-threshold tailor should warn, got %q", m.stalledHint())
+	}
+
+	// Liveness is a bounded network call and gets a much shorter leash,
+	// so the same elapsed time that's fine for a tailor is not fine here.
+	m.actionInProgress = "liveness"
+	m.actionStartedAt = time.Now().Add(-2 * time.Minute)
+	if !strings.Contains(m.stalledHint(), "longer than usual") {
+		t.Errorf("a 2-minute liveness check should warn, got %q", m.stalledHint())
 	}
 }

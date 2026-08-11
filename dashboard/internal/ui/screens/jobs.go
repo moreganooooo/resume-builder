@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -87,6 +88,11 @@ type JobsModel struct {
 	// the only action whose subprocess runs orchestrator.py's Step N: ...
 	// pipeline) -- liveness/status stream straight to their completion
 	// message and render the plain spinner instead of the progress bar.
+	// actionStartedAt marks when the in-flight action began, so a hung
+	// subprocess can be told apart from a slow one -- without it the
+	// spinner spins identically forever either way.
+	actionStartedAt time.Time
+
 	actionChan      chan tea.Msg
 	actionStepLabel string
 	progress        progress.Model
@@ -441,6 +447,7 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 				chosen := m.pendingStatus
 				m.pendingStatus = ""
 				m.actionInProgress = "status"
+				m.actionStartedAt = time.Now()
 				m.actionChan = make(chan tea.Msg)
 				ctx, cancel := context.WithCancel(context.Background())
 				m.actionCancel = cancel
@@ -728,6 +735,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "l":
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
+				m.actionStartedAt = time.Now()
 				m.actionChan = make(chan tea.Msg)
 				ctx, cancel := context.WithCancel(context.Background())
 				m.actionCancel = cancel
@@ -737,6 +745,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			if job, ok := m.CurrentJob(); ok {
 				if job.Status == "Pending" {
 					m.actionInProgress = "tailor"
+					m.actionStartedAt = time.Now()
 					m.actionChan = make(chan tea.Msg)
 					m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
 					m.actionStepLabel = ""
@@ -926,7 +935,7 @@ func (m JobsModel) renderActionStatus() string {
 		if label == "" {
 			label = actionLabel(m.actionInProgress)
 		}
-		return style.Render(label + " (esc to cancel)" + "\n" + m.progress.View())
+		return style.Render(label + " (esc to cancel)" + m.stalledHint() + "\n" + m.progress.View())
 	}
 
 	// The spinner carries its own pre-rendered style (see NewJobsModel's
@@ -942,7 +951,7 @@ func (m JobsModel) renderActionStatus() string {
 	bg := lipgloss.NewStyle().Background(m.theme.Surface)
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Yellow).Background(m.theme.Surface)
 	left := bg.Render("  ") + bg.Render(m.spinner.View()) +
-		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"... (esc to cancel)")
+		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"... (esc to cancel)"+m.stalledHint())
 	if pad := m.width - lipgloss.Width(left); pad > 0 {
 		left += bg.Render(strings.Repeat(" ", pad))
 	}
@@ -1062,7 +1071,13 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	var lines []string
 	for i, job := range m.filtered {
 		selected := i == m.cursor
-		lines = append(lines, renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, job.Title, width-4, selected))
+		// The subtitle carries the title plus, when there's room, the two
+		// layer scores behind the composite. Composed here rather than by
+		// changing renderSidebarRow's signature, which pipeline.go also
+		// calls -- Pipeline rows are about application progress, not fit,
+		// so they have no use for these.
+		subtitle := jobSubtitleWithScores(m.theme, job, width-4)
+		lines = append(lines, renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, subtitle, width-4, selected))
 	}
 
 	body := strings.Join(lines, "\n")
@@ -1113,6 +1128,17 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	eval := job.Evaluation
 	score := scoreStyle(m.theme, eval.CompositeScore)
 	content = append(content, styles.Subtext.Render("Composite score: ")+score.Render(scoreIcon(m.theme, eval.CompositeScore)+" "+fmt.Sprintf("%.1f/5", eval.CompositeScore)))
+	// Composite is a weighted blend -- Fit 40%, Interview Odds 40%,
+	// Practical Pursue 20% (scripts/orchestrator.py's
+	// COMPOSITE_SCORE_WEIGHTS). Showing only the blend made a strong-fit /
+	// weak-odds role indistinguishable from its opposite, which is exactly
+	// the distinction that decides where effort is worth spending. The
+	// detail pane has room, so both layers get the same icon+color tier
+	// treatment as the composite above. Practical Pursue is deliberately
+	// left folded in: it is the smallest weight and rarely the reason to
+	// pick one role over another.
+	content = append(content, styles.Subtext.Render("  Fit: ")+layerScoreText(m.theme, eval.FitScore))
+	content = append(content, styles.Subtext.Render("  Interview odds: ")+layerScoreText(m.theme, eval.InterviewOddsScore))
 	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
 	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
 	content = append(content, "")
@@ -1206,4 +1232,86 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
+}
+
+// jobsScoreDetailMinWidth is the narrowest sidebar that still has room for
+// the per-layer scores. Fit and Odds are ADDITIVE detail -- the composite
+// already leads every row -- so when space is tight they are the FIRST
+// thing dropped, never the job title, which is what a user actually scans
+// by. Adding them unconditionally is the mistake the Python side made
+// first (see _FIT_SCORE_DETAIL_COLUMNS in scripts/cli_art.py): it pushed
+// existing content off the edge instead of yielding.
+const jobsScoreDetailMinWidth = 34
+
+// layerScore formats one layer score, or "-" when it is absent. A zero
+// here means "not recorded" rather than "scored zero" -- these fields
+// postdate some evaluations, and the scale starts at 1.
+func layerScore(score float64) string {
+	if score <= 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%.1f", score)
+}
+
+// layerScoreText renders a layer score with the same icon+color tier
+// pairing scoreStyle/scoreIcon give the composite, so no number in the
+// detail pane signals by color alone.
+func layerScoreText(t theme.Theme, score float64) string {
+	if score <= 0 {
+		return lipgloss.NewStyle().Foreground(t.Token.Subtext).Render("-")
+	}
+	return scoreStyle(t, score).Render(scoreIcon(t, score) + " " + layerScore(score))
+}
+
+// jobSubtitleWithScores appends a compact "F 4.5 / O 3.9" to the row's
+// title when the sidebar is wide enough to carry it.
+//
+// Rendered in flat Subtext rather than tier colors on purpose: at this
+// size the two numbers sit inches from the composite's own colored tier
+// icon, and three competing color signals per row turns a scannable list
+// into noise. Carrying no color here also means there is no color-only
+// signal to make redundant -- the numbers are the whole message.
+func jobSubtitleWithScores(t theme.Theme, job model.JobRow, width int) string {
+	eval := job.Evaluation
+	if width < jobsScoreDetailMinWidth || (eval.FitScore <= 0 && eval.InterviewOddsScore <= 0) {
+		return job.Title
+	}
+	suffix := fmt.Sprintf("  F %s / O %s", layerScore(eval.FitScore), layerScore(eval.InterviewOddsScore))
+	// Reserve the suffix's room before the title is truncated, so the
+	// scores survive a long title instead of being cut off with it.
+	titleRoom := width - 2 - lipgloss.Width(suffix)
+	if titleRoom < 8 {
+		return job.Title
+	}
+	return truncateRunes(job.Title, titleRoom) + lipgloss.NewStyle().Foreground(t.Token.Subtext).Render(suffix)
+}
+
+// Stall thresholds. These are "something is wrong" signals, not progress
+// hints, so they sit well above how long the work legitimately takes:
+// orchestrator.py allows 180s for a single PDF render alone, and a tailor
+// action runs a whole multi-step Gemini pipeline around that, so anything
+// under a few minutes would cry wolf constantly. Liveness and status are
+// bounded network calls and get a much shorter leash.
+const (
+	stalledTailorAfter   = 6 * time.Minute
+	stalledLivenessAfter = 90 * time.Second
+)
+
+// stalledHint returns a plain-language warning once an action has run
+// long enough to look hung, or "" while it's still within normal time.
+// The user can always press esc -- this exists so they know they should.
+func (m JobsModel) stalledHint() string {
+	if m.actionInProgress == "" || m.actionStartedAt.IsZero() {
+		return ""
+	}
+	limit := stalledLivenessAfter
+	if m.actionInProgress == "tailor" {
+		limit = stalledTailorAfter
+	}
+	elapsed := time.Since(m.actionStartedAt)
+	if elapsed < limit {
+		return ""
+	}
+	return fmt.Sprintf(" -- still going after %dm, which is longer than usual; esc to cancel",
+		int(elapsed.Minutes()))
 }
