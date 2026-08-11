@@ -65,6 +65,25 @@ EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM   = 768   # gemini-embedding-2 native dimension
 
 
+# Gemini reports a refusal as a `finishReason` on an otherwise-successful
+# 200 response -- there is no exception to catch, so this never reaches
+# cli_art's exception classifier and needs its own plain-language map.
+# Codes are Google's; the wording is ours. An unmapped code falls through
+# to _FINISH_REASON_DEFAULT rather than being printed raw, so a value
+# Google adds later still reads as a sentence.
+_FINISH_REASON_EXPLANATIONS = {
+    "SAFETY": "Gemini's safety filter blocked its own answer to this request.",
+    "PROHIBITED_CONTENT": "Gemini's safety filter blocked its own answer to this request.",
+    "BLOCKLIST": "Gemini's safety filter blocked its own answer to this request.",
+    "SPII": "Gemini stopped because its answer looked like it contained personal identifying information.",
+    "RECITATION": "Gemini stopped because its answer was reproducing copyrighted text too closely.",
+    "MALFORMED_FUNCTION_CALL": "Gemini returned a malformed response that couldn't be read.",
+    "LANGUAGE": "Gemini stopped because the request was in a language it won't answer in.",
+    "OTHER": "Gemini stopped early without saying why.",
+}
+_FINISH_REASON_DEFAULT = "Gemini stopped before finishing its answer."
+
+
 class SustainedFailureError(RuntimeError):
     """Raised when GeminiClient.generate() has exhausted retries and the
     model fallback on SUSTAINED_FAILURE_THRESHOLD consecutive calls --
@@ -367,7 +386,10 @@ class GeminiClient:
 
             try:
                 data = resp.json()
-            except Exception:
+            except Exception as e:
+                cli_art.friendly_warning(
+                    e, "reading the AI's response",
+                    "treating this request as if it came back empty")
                 return None, {}
 
             candidates = data.get("candidates", [])
@@ -378,7 +400,14 @@ class GeminiClient:
 
             finish_reason = candidates[0].get("finishReason")
             if finish_reason not in (None, "STOP", "MAX_TOKENS"):
-                cli_art.console.print(f"    {cli_art.WARNING} Unexpected finishReason={finish_reason!r}. Not retrying this attempt.", soft_wrap=True)
+                cli_art.cli_warning(
+                    f"{_FINISH_REASON_EXPLANATIONS.get(finish_reason, _FINISH_REASON_DEFAULT)} "
+                    "Skipping this one and moving on."
+                )
+                # Raw API code kept as VERBOSE-only detail: it's the first
+                # thing worth knowing when debugging a prompt, and the last
+                # thing a job seeker needs on screen.
+                cli_art.detail(f"    finishReason={finish_reason!r}")
                 return None, usage
             if finish_reason == "MAX_TOKENS":
                 usage["truncated"] = True

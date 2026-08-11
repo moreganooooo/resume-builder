@@ -253,7 +253,10 @@ def _load_yaml_safe(path: str, label: str) -> dict:
 def _yaml_to_str(data: dict) -> str:
     try:
         return yaml.dump(data, default_flow_style=False, allow_unicode=True).strip()
-    except Exception:
+    except Exception as e:
+        cli_art.friendly_warning(
+            e, "formatting the rules for the AI",
+            "falling back to a simpler format, which may lower rewrite quality")
         return str(data)
 
 

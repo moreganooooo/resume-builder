@@ -101,6 +101,19 @@ def _gather_candidates(pending_paths: list) -> list:
     return candidates
 
 
+def _jd_label(source_file: str | None) -> str:
+    """Company — Title for a JD's results listing, matching every other
+    list view in this app (none of which identify a JD by raw file path).
+    Falls back to the filename when metadata can't be read, rather than
+    showing nothing."""
+    if not source_file:
+        return "(unknown)"
+    title, company = jd_manager.extract_job_meta(source_file)
+    if title or company:
+        return f"{company or '?'} — {title or '?'}"
+    return os.path.basename(source_file)
+
+
 def _verify_candidates(candidates: list) -> dict:
     """Given exactly these {job_key, source_file, url} candidates, runs
     check-liveness.mjs, persists each result via jd_manager.save_liveness(),
@@ -221,7 +234,7 @@ def _verify_candidates(candidates: list) -> dict:
             status_label = status.replace("_", " ").title()
             cli_art.console.print(f"{icon_map.get(status, '?')} {status_label}:", markup=False, soft_wrap=True)
             for r in status_results:
-                cli_art.console.print(f"  • {r.get('source_file')}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"  • {_jd_label(r.get('source_file'))}", markup=False, soft_wrap=True)
                 if status not in ("active", "likely_active"):
                     reason = r.get('reason', '')
                     if reason:

@@ -45,14 +45,24 @@ class TestDiffDocuments(unittest.TestCase):
         doc = {"TAGLINE": "SAME", "SKILLS": ["Python"]}
         self.assertEqual(polish.diff_documents(doc, dict(doc), ["TAGLINE", "SKILLS"]), [])
 
+    # Each changed field now renders as a three-line block -- a label
+    # heading, then the removed and added values on their own icon-marked
+    # lines -- replacing the old single-line raw-repr format. These tests
+    # assert the substance (which fields are reported, with what values)
+    # plus a regression guard that the raw schema key never reaches the
+    # user, which is the specific bug the renderer was rewritten to fix.
+    LINES_PER_CHANGE = 3
+
     def test_scalar_field_change_is_reported(self):
         old = {"TAGLINE": "OLD"}
         new = {"TAGLINE": "NEW"}
         lines = polish.diff_documents(old, new, ["TAGLINE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("TAGLINE", lines[0])
-        self.assertIn("OLD", lines[0])
-        self.assertIn("NEW", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Tagline", block)
+        self.assertIn("OLD", block)
+        self.assertIn("NEW", block)
+        self.assertNotIn("TAGLINE", block)
 
     def test_field_outside_keys_is_never_reported(self):
         old = {"TAGLINE": "OLD", "NAME": "Morgan Escott"}
@@ -64,24 +74,39 @@ class TestDiffDocuments(unittest.TestCase):
         old = {"SKILLS": ["Python", "SQL", "Excel"]}
         new = {"SKILLS": ["Python", "Postgres", "Excel"]}
         lines = polish.diff_documents(old, new, ["SKILLS"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("SKILLS[1]", lines[0])
-        self.assertIn("SQL", lines[0])
-        self.assertIn("Postgres", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        # 1-based and human-labelled ("Skills #2"), not "SKILLS[1]".
+        self.assertIn("Skills #2", block)
+        self.assertIn("SQL", block)
+        self.assertIn("Postgres", block)
+        self.assertNotIn("SKILLS[1]", block)
+        # Unchanged entries stay out of the diff entirely.
+        self.assertNotIn("Python", block)
 
     def test_experience_reports_changed_scalar_field_by_index(self):
         old = {"EXPERIENCE": [{"title": "Old Title", "achievements": ["A"]}]}
         new = {"EXPERIENCE": [{"title": "New Title", "achievements": ["A"]}]}
         lines = polish.diff_documents(old, new, ["EXPERIENCE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("EXPERIENCE[0].title", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Experience #1", block)
+        self.assertIn("Title", block)
+        self.assertIn("Old Title", block)
+        self.assertIn("New Title", block)
+        self.assertNotIn("EXPERIENCE[0]", block)
 
     def test_experience_reports_changed_achievement_by_index(self):
         old = {"EXPERIENCE": [{"title": "Same", "achievements": ["A", "B"]}]}
         new = {"EXPERIENCE": [{"title": "Same", "achievements": ["A", "B changed"]}]}
         lines = polish.diff_documents(old, new, ["EXPERIENCE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("EXPERIENCE[0].achievements[1]", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Experience #1", block)
+        self.assertIn("Achievement #2", block)
+        self.assertIn("B changed", block)
+        self.assertNotIn("EXPERIENCE[0]", block)
+        self.assertNotIn("achievements[1]", block)
 
     def test_unchanged_experience_job_produces_no_lines(self):
         old = {"EXPERIENCE": [{"title": "Same", "achievements": ["A"]}]}

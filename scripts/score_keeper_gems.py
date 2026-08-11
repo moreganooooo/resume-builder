@@ -95,8 +95,10 @@ def build_system_prompt() -> str:
     if rules_path.exists():
         try:
             rules_blob = rules_path.read_text(encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as e:
+            cli_art.friendly_warning(
+                e, "reading your scoring rules file",
+                "scoring without your custom rules, so results may not match your preferences")
 
     return f"""You are a senior resume coach and hiring manager who has reviewed thousands of resumes.
 

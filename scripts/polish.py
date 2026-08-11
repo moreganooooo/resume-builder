@@ -60,31 +60,81 @@ def stem_from_json_path(path: str, doc_type: str) -> str:
     return name[: -len(suffix)]
 
 
+# Flattened from cli_art's existing schema-key -> human-label map (shared
+# with the fit-dimension comparison table) rather than hand-rolling a
+# second one here -- see _label_for_key()'s fallback for keys this map
+# doesn't cover (which is most of TemplateSchema/CoverLetterSchema's
+# fields today, since that map was built for evaluation subscores, not
+# the builder schema; the fallback is what actually carries this file).
+_SCHEMA_KEY_LABELS: dict[str, str] = {}
+for _group_label, _subscores_key, _dim_labels in cli_art._FIT_DIMENSION_GROUPS:
+    _SCHEMA_KEY_LABELS.update(_dim_labels)
+
+_EXPERIENCE_FIELD_LABELS = {
+    "title": "Title", "company": "Company", "period": "Period",
+    "location": "Location", "career_note": "Career Note",
+}
+
+
+def _label_for_key(key: str) -> str:
+    """Human-readable label for a schema field -- never the raw
+    ALL-CAPS/snake_case key a job seeker has no reason to recognize."""
+    if key in _SCHEMA_KEY_LABELS:
+        return _SCHEMA_KEY_LABELS[key]
+    return key.replace("_", " ").strip().title()
+
+
+def _format_value(value) -> str:
+    """Readable text for a diff value -- never repr(), which would show
+    Python's quote/list syntax (e.g. "['foo', 'bar']") to a job seeker
+    reviewing edits to their own resume."""
+    if value is None:
+        return "(empty)"
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value) if value else "(empty)"
+    text = str(value).strip()
+    return text or "(empty)"
+
+
+def _render_field_diff(label: str, old_val, new_val) -> list[str]:
+    """One changed field as Rich-markup lines: a bold label heading, then
+    the old value under the error icon/color and the new value under the
+    success icon/color -- color is never the only signal, per house
+    style (theme.colorize_icon() bakes color and glyph together)."""
+    removed_icon = theme.colorize_icon("error")
+    added_icon = theme.colorize_icon("success")
+    return [
+        f"[bold]{label}[/bold]",
+        f"  {removed_icon} [{theme.ERROR}]{_format_value(old_val)}[/{theme.ERROR}]",
+        f"  {added_icon} [{theme.SUCCESS}]{_format_value(new_val)}[/{theme.SUCCESS}]",
+    ]
+
+
 def _diff_list(label: str, old_list: list, new_list: list) -> list[str]:
     lines = []
     for i in range(max(len(old_list), len(new_list))):
         old_item = old_list[i] if i < len(old_list) else None
         new_item = new_list[i] if i < len(new_list) else None
         if old_item != new_item:
-            lines.append(f"{label}[{i}]:\n  - {old_item!r}\n  + {new_item!r}")
+            lines.extend(_render_field_diff(f"{label} #{i + 1}", old_item, new_item))
     return lines
 
 
 def _diff_experience(old_jobs: list, new_jobs: list) -> list[str]:
     lines = []
-    scalar_fields = ("title", "company", "period", "location", "career_note")
     for i in range(max(len(old_jobs), len(new_jobs))):
         old_job = old_jobs[i] if i < len(old_jobs) else {}
         new_job = new_jobs[i] if i < len(new_jobs) else {}
         if old_job == new_job:
             continue
-        for field in scalar_fields:
+        role_label = f"Experience #{i + 1}"
+        for field, field_label in _EXPERIENCE_FIELD_LABELS.items():
             if old_job.get(field) != new_job.get(field):
-                lines.append(
-                    f"EXPERIENCE[{i}].{field}:\n  - {old_job.get(field)!r}\n  + {new_job.get(field)!r}"
-                )
+                lines.extend(_render_field_diff(
+                    f"{role_label} — {field_label}", old_job.get(field), new_job.get(field),
+                ))
         lines.extend(_diff_list(
-            f"EXPERIENCE[{i}].achievements",
+            f"{role_label} — Achievement",
             old_job.get("achievements", []),
             new_job.get("achievements", []),
         ))
@@ -98,19 +148,21 @@ def diff_documents(old: dict, new: dict, keys: list[str]) -> list[str]:
     can't touch them anyway). EXPERIENCE gets element-and-field-level
     treatment via _diff_experience; other list fields (e.g.
     body_paragraphs) via _diff_list; everything else is a plain scalar
-    comparison."""
+    comparison. Every line is Rich markup (icon + theme color), meant to
+    be printed through cli_art.console, not plain print()."""
     lines = []
     for key in keys:
         old_val = old.get(key)
         new_val = new.get(key)
         if old_val == new_val:
             continue
+        label = _label_for_key(key)
         if key == "EXPERIENCE" and isinstance(old_val, list) and isinstance(new_val, list):
             lines.extend(_diff_experience(old_val, new_val))
         elif isinstance(old_val, list) and isinstance(new_val, list):
-            lines.extend(_diff_list(key, old_val, new_val))
+            lines.extend(_diff_list(label, old_val, new_val))
         else:
-            lines.append(f"{key}:\n  - {old_val!r}\n  + {new_val!r}")
+            lines.extend(_render_field_diff(label, old_val, new_val))
     return lines
 
 
@@ -213,9 +265,11 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         )
         return {"json": json_path, "html": html_path, "pdf": None}
     if result.returncode != 0:
-        cli_art.console.print(
-            f"{cli_art.WARNING} PDF generation failed (JSON/HTML were still saved):\n{result.stderr}"
-        )
+        cli_art.friendly_subprocess_error(result.stderr, "creating the polished PDF")
+        # Stated after the error, not inside it: the failure is the headline,
+        # but a user who just spent Gemini calls on this needs to know their
+        # edits survived and only the render step is missing.
+        cli_art.cli_info("Your polished JSON and HTML were still saved -- only the PDF is missing.")
         return {"json": json_path, "html": html_path, "pdf": None}
 
     return {"json": json_path, "html": html_path, "pdf": pdf_path}
