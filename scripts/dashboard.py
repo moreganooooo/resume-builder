@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 
+import cli_art
 import picker
 import profile_paths
 
@@ -78,6 +79,20 @@ def run(profile: str = None) -> tuple[bool, str]:
             "to show."
         )
 
+    # Two genuinely slow steps run back to back here with no output of
+    # their own: _write_jobs_export() walks the entire JD corpus (hundreds
+    # of files on a real queue), then `go run` COMPILES the dashboard
+    # before it draws anything. That was several seconds of a completely
+    # silent terminal, which reads as a hang.
+    #
+    # Deliberately a static line rather than a spinner: the subprocess
+    # below inherits this process's stdio and takes over the terminal with
+    # a full-screen alt-screen TUI. A live-updating Rich renderable would
+    # still be mid-teardown as Bubble Tea starts drawing, which corrupts
+    # the display -- and a spinner cannot cover the compile anyway, since
+    # that happens inside subprocess.run. One honest line, printed before
+    # the handoff and swallowed by the alt-screen, is the whole job.
+    cli_art.cli_info("Starting the dashboard... (the first launch compiles it, so it takes a few seconds)")
     jobs_path = _write_jobs_export(profile)
     try:
         result = subprocess.run(
