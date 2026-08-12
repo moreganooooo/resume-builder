@@ -61,6 +61,33 @@ class TestFormatCompanyResearchBlock(unittest.TestCase):
         self.assertIn("warm and neighborly", block)
         self.assertIn("Runs 400 neighborhood stores.", block)
 
+    def test_includes_notable_highlights_when_present(self):
+        block = orchestrator.format_company_research_block(dict(
+            self.BASE, notable_highlights=["Named to Forbes Cloud 100 five years running."]))
+        self.assertIn("Notable highlights", block)
+        self.assertIn("Forbes Cloud 100", block)
+
+    def test_omits_notable_highlights_line_when_absent(self):
+        block = orchestrator.format_company_research_block(dict(self.BASE))
+        self.assertNotIn("Notable highlights", block)
+
+    def test_omits_notable_highlights_line_when_empty_list(self):
+        block = orchestrator.format_company_research_block(dict(self.BASE, notable_highlights=[]))
+        self.assertNotIn("Notable highlights", block)
+
+
+class TestCompanyResearchSchemaNewFields(unittest.TestCase):
+
+    def test_new_fields_default_to_empty(self):
+        model = orchestrator.CompanyResearchSchema(
+            overall_tone_adjective="warm", tone_register="conversational",
+            pronoun_framing="we-centric", sentence_style="short and punchy",
+            jargon_density="low", recurring_keywords=[], company_facts=[],
+            vocabulary_substitutions=[],
+        )
+        self.assertEqual(model.company_hq_location, "")
+        self.assertEqual(model.notable_highlights, [])
+
 
 if __name__ == "__main__":
     unittest.main()
