@@ -2803,7 +2803,11 @@ class ResumeEngine:
                 for v in violations:
                     cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
 
+        _resolve_contact_fallback(letter_data, jd_data)
+        letter_data["company_location"] = _resolve_company_location(research, jd_data)
+
         stem     = _build_output_stem(jd_path)
+        letter_data["tagline"] = _read_matching_resume_tagline(stem)
         json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
         html_out = os.path.join(self.output_html_dir, f"{stem}_CoverLetter.html")
         pdf_out  = os.path.join(self.output_pdf_dir,  f"{stem}_CoverLetter.pdf")
