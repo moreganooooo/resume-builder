@@ -948,6 +948,8 @@ class CompanyResearchSchema(BaseModel):
     jargon_density:         Literal["high", "moderate", "low"]
     recurring_keywords:     List[str] = Field(description="1-3 brand words/phrases that genuinely repeat in the source text.")
     company_facts:          List[str] = Field(description="2-3 short, factual statements traceable directly to the source text.")
+    company_hq_location:    str       = Field(default="", description="The company's headquarters city/state (e.g. 'New York, NY'), only if stated in the source text -- empty string otherwise.")
+    notable_highlights:     List[str] = Field(default_factory=list, description="0-3 short, factual, impressive statements -- awards, funding, recognition, charitable/community work, notable stats, or recent/upcoming launches -- each traceable directly to the source text. Empty list if none genuinely qualify.")
     vocabulary_substitutions: List[VocabularySubstitution] = Field(
         description="0-3 generic-term/company-term pairs where the source text clearly and repeatedly prefers its own word over the common one. Empty list if none genuinely qualify."
     )
@@ -1038,6 +1040,13 @@ def format_company_research_block(research: dict) -> str:
         "Company facts (use at most 1-2, never fabricate beyond these):\n"
         + "\n".join(f"- {fact}" for fact in research.get('company_facts', []))
     )
+
+    highlights = research.get("notable_highlights") or []
+    if highlights:
+        block += (
+            "\n\nNotable highlights (use at most 1-2, ideal for an opening hook, never fabricate beyond these):\n"
+            + "\n".join(f"- {h}" for h in highlights)
+        )
 
     pairs = [
         f"{p.get('generic_term')} -> {p.get('company_term')}"
