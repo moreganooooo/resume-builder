@@ -932,7 +932,9 @@ def fit_composite_score(fit_score: float, interview_odds_score: float, practical
 
 class CoverLetterSchema(BaseModel):
     company_name:    str       = Field(description="The hiring company's name, exactly as it appears in the job description.")
-    greeting:        str       = Field(description="e.g. 'Dear Hiring Team,' or a named hiring manager if the JD provides one.")
+    greeting:        str       = Field(description="e.g. 'Dear {Company} Hiring Team,' or a named hiring manager if the JD provides one.")
+    contact_name:    str       = Field(default="", description="The specific hiring contact's name, only if the job description names one -- empty string otherwise.")
+    contact_title:   str       = Field(default="", description="That contact's job title, only if the job description states one -- empty string otherwise.")
     body_paragraphs: List[str] = Field(description="2-3 first-person paragraphs, each grounded in a real JD requirement and a real fact from the background context.")
     sign_off:        str       = Field(description="e.g. 'Sincerely,'")
 
