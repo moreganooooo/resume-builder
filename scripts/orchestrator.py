@@ -1011,6 +1011,56 @@ def find_jd_contacts(jd_data: dict) -> list:
     return contacts
 
 
+_CONTACT_TITLE_KEYWORDS = ("hr", "recruit", "talent", "people")
+
+
+def _resolve_contact_fallback(letter_data: dict, jd_data: dict) -> None:
+    """Fills contact_name/contact_title from already-scraped, real JD
+    contacts (find_jd_contacts()) when the model found no named contact
+    in the JD text itself. Mutates letter_data in place. Never invents a
+    person -- prefers a contact whose title reads as HR/recruiting/talent,
+    else the first scraped contact; no-op if none exist."""
+    if letter_data.get("contact_name"):
+        return
+    contacts = find_jd_contacts(jd_data)
+    if not contacts:
+        return
+    chosen = next(
+        (c for c in contacts if any(k in (c.get("title") or "").lower() for k in _CONTACT_TITLE_KEYWORDS)),
+        contacts[0],
+    )
+    letter_data["contact_name"] = chosen.get("name", "")
+    letter_data["contact_title"] = chosen.get("title", "")
+
+
+def _resolve_company_location(research: dict | None, jd_data: dict) -> str:
+    """Prefers company_hq_location from company research (traceable to
+    real source text); falls back to the JD's own posted location.
+    Shown regardless of remote/on-site status -- the candidate wants the
+    address line for professionalism even on remote roles."""
+    if research and research.get("company_hq_location"):
+        return research["company_hq_location"]
+    return jd_data.get("location") or ""
+
+
+def _read_matching_resume_tagline(stem: str) -> str:
+    """Best-effort read of a resume TAGLINE already built for the same
+    JD -- '{stem}_Resume.json' in this profile's output/json dir, the
+    exact filename build_tailored_resume() writes (see _build_output_stem,
+    the shared stem builder). Returns "" if no resume has been built yet
+    for this JD, or if its JSON can't be parsed -- a cover letter can
+    always be generated standalone."""
+    resume_path = os.path.join(profile_paths.output_dir(), "json", f"{stem}_Resume.json")
+    if not os.path.exists(resume_path):
+        return ""
+    try:
+        with open(resume_path, "r", encoding="utf-8") as f:
+            resume_data = json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        return ""
+    return resume_data.get("TAGLINE", "") if isinstance(resume_data, dict) else ""
+
+
 def _build_output_stem(jd_path: str) -> str:
     """Returns '<CandidateName>[_Title][_Company]' for resume/cover-letter
     output filenames, with the candidate name prefix derived from the
