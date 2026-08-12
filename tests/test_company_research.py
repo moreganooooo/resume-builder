@@ -128,3 +128,174 @@ class TestFindCompanyWebsite(unittest.TestCase):
     def test_returns_none_on_api_exception_instead_of_raising(self, mock_generate):
         mock_generate.side_effect = RuntimeError("network error")
         self.assertIsNone(company_research.find_company_website("Acme Corp"))
+
+
+class TestApplyVocabularySubstitutions(unittest.TestCase):
+
+    SUBS = [{"generic_term": "customers", "company_term": "guests"}]
+
+    def test_replaces_lowercase_occurrence(self):
+        result = company_research.apply_vocabulary_substitutions(
+            "Grew customers by 30%", self.SUBS)
+        self.assertEqual(result, "Grew guests by 30%")
+
+    def test_preserves_leading_capital(self):
+        result = company_research.apply_vocabulary_substitutions(
+            "Customers drove the renewal", self.SUBS)
+        self.assertEqual(result, "Guests drove the renewal")
+
+    def test_preserves_all_caps(self):
+        result = company_research.apply_vocabulary_substitutions(
+            "CUSTOMERS FIRST", self.SUBS)
+        self.assertEqual(result, "GUESTS FIRST")
+
+    def test_respects_word_boundaries(self):
+        # "customers" must not match inside "customersuccess"
+        result = company_research.apply_vocabulary_substitutions(
+            "Owned customersuccess tooling", self.SUBS)
+        self.assertEqual(result, "Owned customersuccess tooling")
+
+    def test_singular_is_not_matched_by_plural_pair(self):
+        # \b means "customers" cannot match the shorter "customer".
+        result = company_research.apply_vocabulary_substitutions(
+            "Each customer mattered", self.SUBS)
+        self.assertEqual(result, "Each customer mattered")
+
+    def test_applies_multiple_pairs_in_one_string(self):
+        subs = [
+            {"generic_term": "customers", "company_term": "guests"},
+            {"generic_term": "employees", "company_term": "team members"},
+        ]
+        result = company_research.apply_vocabulary_substitutions(
+            "Trained employees to serve customers", subs)
+        self.assertEqual(result, "Trained team members to serve guests")
+
+    def test_empty_substitutions_is_a_no_op(self):
+        self.assertEqual(
+            company_research.apply_vocabulary_substitutions("Grew customers", []),
+            "Grew customers")
+
+    def test_skips_malformed_pair_without_raising(self):
+        subs = [
+            {"generic_term": "", "company_term": "guests"},
+            {"company_term": "guests"},
+            {"generic_term": "customers", "company_term": ""},
+            {"generic_term": "customers", "company_term": "guests"},
+        ]
+        result = company_research.apply_vocabulary_substitutions("Grew customers", subs)
+        self.assertEqual(result, "Grew guests")
+
+    def test_regex_metacharacters_in_term_are_treated_literally(self):
+        subs = [{"generic_term": "C++", "company_term": "Cpp"}]
+        result = company_research.apply_vocabulary_substitutions("Shipped C++ tooling", subs)
+        self.assertEqual(result, "Shipped Cpp tooling")
+
+
+class TestApplyVocabularySubstitutionsToResume(unittest.TestCase):
+
+    SUBS = [{"generic_term": "customers", "company_term": "guests"}]
+
+    def _resume(self):
+        return {
+            "SUMMARY": "Strategist who grows customers",
+            "EXPERIENCE": [
+                {"company": "Acme", "achievements": [
+                    "Grew customers by 30%",
+                    "Launched a loyalty program",
+                ]},
+                {"company": "Globex", "achievements": ["Retained customers at 94%"]},
+            ],
+        }
+
+    def test_substitutes_in_every_role_s_achievements(self):
+        result = company_research.apply_vocabulary_substitutions_to_resume(
+            self._resume(), self.SUBS)
+        self.assertEqual(result["EXPERIENCE"][0]["achievements"][0], "Grew guests by 30%")
+        self.assertEqual(result["EXPERIENCE"][1]["achievements"][0], "Retained guests at 94%")
+
+    def test_leaves_untargeted_bullets_byte_identical(self):
+        result = company_research.apply_vocabulary_substitutions_to_resume(
+            self._resume(), self.SUBS)
+        self.assertEqual(result["EXPERIENCE"][0]["achievements"][1], "Launched a loyalty program")
+
+    def test_does_not_touch_the_summary(self):
+        # The Summary is model-written with the vocabulary already in context;
+        # this deterministic pass is bullets-only by design.
+        result = company_research.apply_vocabulary_substitutions_to_resume(
+            self._resume(), self.SUBS)
+        self.assertEqual(result["SUMMARY"], "Strategist who grows customers")
+
+    def test_empty_substitutions_returns_resume_unchanged(self):
+        original = self._resume()
+        result = company_research.apply_vocabulary_substitutions_to_resume(original, [])
+        self.assertEqual(result, self._resume())
+
+    def test_tolerates_missing_or_malformed_experience(self):
+        for resume in ({}, {"EXPERIENCE": None}, {"EXPERIENCE": ["not a dict"]},
+                       {"EXPERIENCE": [{"company": "Acme"}]},
+                       {"EXPERIENCE": [{"achievements": "not a list"}]},
+                       {"EXPERIENCE": [{"achievements": [None, 42]}]}):
+            with self.subTest(resume=resume):
+                company_research.apply_vocabulary_substitutions_to_resume(resume, self.SUBS)
+
+
+class TestResearchCompanyViaSearch(unittest.TestCase):
+
+    HIGH = "CONFIDENCE: high\nAcme calls its customers guests and leads with neighborly warmth."
+
+    def test_returns_none_when_company_name_missing(self):
+        self.assertIsNone(company_research.research_company_via_search(""))
+        self.assertIsNone(company_research.research_company_via_search(None))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_text_on_high_confidence(self, mock_generate):
+        mock_generate.return_value = (self.HIGH, {})
+        result = company_research.research_company_via_search("Acme Corp")
+        self.assertIn("neighborly warmth", result)
+
+    @patch("company_research.GeminiClient.generate")
+    def test_strips_the_confidence_line_from_the_returned_text(self, mock_generate):
+        mock_generate.return_value = (self.HIGH, {})
+        result = company_research.research_company_via_search("Acme Corp")
+        self.assertNotIn("CONFIDENCE:", result)
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_on_medium_confidence(self, mock_generate):
+        mock_generate.return_value = ("CONFIDENCE: medium\nProbably a retailer.", {})
+        self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_on_low_confidence(self, mock_generate):
+        mock_generate.return_value = ("CONFIDENCE: low\nNot sure which Acme this is.", {})
+        self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_when_confidence_line_missing(self, mock_generate):
+        # Fail closed: unlabeled output is never trusted.
+        mock_generate.return_value = ("Acme is a warm, neighborly retailer.", {})
+        self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_when_high_confidence_has_no_body_text(self, mock_generate):
+        mock_generate.return_value = ("CONFIDENCE: high", {})
+        self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_passes_google_search_tool_not_response_schema(self, mock_generate):
+        mock_generate.return_value = (self.HIGH, {})
+        company_research.research_company_via_search("Acme Corp")
+        _, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs.get("tools"), [{"google_search": {}}])
+        self.assertNotIn("response_schema", kwargs)
+
+    @patch("company_research.GeminiClient.generate")
+    def test_includes_context_hint_in_the_prompt(self, mock_generate):
+        mock_generate.return_value = (self.HIGH, {})
+        company_research.research_company_via_search("Acme Corp", "Senior CRM Manager, retail")
+        _, kwargs = mock_generate.call_args
+        self.assertIn("Senior CRM Manager, retail", kwargs.get("contents", ""))
+
+    @patch("company_research.GeminiClient.generate")
+    def test_returns_none_on_api_exception_instead_of_raising(self, mock_generate):
+        mock_generate.side_effect = RuntimeError("network error")
+        self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
