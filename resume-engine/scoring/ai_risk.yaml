@@ -1,6 +1,14 @@
-version: 2.0
+version: 2.1
 # Full AI risk indicator list — sourced from style_rules.yaml and Morgan Escott Design System
 # Any bullet triggering 2+ indicators should be flagged for rewrite.
+# This is the single source of truth for banned/buzzword language across the
+# repo -- tailor_resume.md's Summary rules and this file's own attachment to
+# the builder call (orchestrator.py build_tailored_resume()) both defer to
+# the lists below rather than hardcoding a duplicate. v2.1 added
+# accomplished professional/seasoned professional/strategic thinker/
+# visionary leader to banned_phrases -- found live in tailor_resume.md and
+# summary_score.yaml's buzzword_openers but missing here, despite this file
+# being the one actually meant to be authoritative.
 
 thresholds:
   warn_at: 1       # flag for review
@@ -78,6 +86,10 @@ banned_phrases:
   - seeking opportunities
   - dynamic professional
   - passionate professional
+  - accomplished professional
+  - seasoned professional
+  - strategic thinker
+  - visionary leader
   - strong communicator
   - excellent communicator
   - highly motivated

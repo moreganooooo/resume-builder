@@ -54,3 +54,69 @@ archetype_overrides:
     exact_match: 0.9
     semantic_match: 0.75
     partial_match: 0.45
+
+# Per-platform overrides of match_weights above, keyed to the ATS platforms
+# scan_ats.py already tracks live job postings from (board-scanners/providers/,
+# see that file's own docstring). Same disclaimer as archetype_overrides: not
+# derived from this candidate's own outcome data, a first-pass guess grounded
+# in each platform's known reputation among ATS-optimization practitioners --
+# legacy enterprise ATS (Workday, Taleo, iCIMS) lean on strict exact-phrase
+# matching with weak synonym/semantic credit; modern ATS built for tech/
+# startup hiring (Greenhouse, Lever) do noticeably better semantic matching.
+# Used by critique_resume.md Step 6 to identify the resume's single weakest
+# platform and any concrete parsing risks, not to compute five separate
+# numeric scores -- a platform's real behavior (section-header sensitivity,
+# acronym handling) isn't fully captured by three multipliers, so
+# parsing_notes carries the part a raw weight can't.
+platform_overrides:
+  "Workday":
+    exact_match: 1.0
+    semantic_match: 0.4
+    partial_match: 0.3
+    parsing_notes: >
+      Strict exact-phrase keyword matching, weak synonym credit. Rewards
+      standard section headers (this template's "Work Experience"/"Skills"/
+      "Education" already match Workday's expectations) and spelling out an
+      acronym alongside its expansion at least once (e.g. "customer
+      relationship management (CRM)") rather than relying on the acronym
+      alone.
+
+  "Taleo":
+    exact_match: 1.0
+    semantic_match: 0.3
+    partial_match: 0.25
+    parsing_notes: >
+      One of the weakest semantic engines still in wide enterprise use --
+      near-pure keyword density scoring. A JD requirement paraphrased
+      instead of quoted near-verbatim gets little to no credit here, more
+      than on any other platform in this list.
+
+  "iCIMS":
+    exact_match: 1.0
+    semantic_match: 0.5
+    partial_match: 0.35
+    parsing_notes: >
+      Mid-tier: better than Taleo's synonym handling but still keyword-
+      driven. Multi-word tool/platform names split awkwardly across a line
+      break are a known real risk here specifically (see
+      validate_pdf_text.py's line-break tolerance -- that check protects
+      the PDF's own text layer, not what iCIMS's own re-parsing of it does).
+
+  "Greenhouse":
+    exact_match: 0.9
+    semantic_match: 0.75
+    partial_match: 0.5
+    parsing_notes: >
+      Modern parsing with real semantic credit for closely related tools/
+      skills, not just literal phrase hits. The most forgiving platform in
+      this list for a resume that demonstrates a skill without naming the
+      JD's exact keyword for it.
+
+  "Lever":
+    exact_match: 0.9
+    semantic_match: 0.75
+    partial_match: 0.5
+    parsing_notes: >
+      Comparable to Greenhouse -- modern parsing, reasonable semantic
+      credit. No platform-specific quirk beyond the shared match_weights
+      above.
