@@ -3534,11 +3534,6 @@ class ResumeEngine:
         render_html(resume_data, html_out)
 
         trim_instructions = [
-            lambda rd: (
-                "Remove the Why section entirely (set SECTION_WHY and WHY_TEXT to empty strings). "
-                "It only belongs on the resume if it fits without pushing the page count past 2 -- "
-                "when space is tight, it is the first thing to go."
-            ),
             lambda rd: "Trim the Summary to its 5-line limit.",
             lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
             lambda rd: _bullet_removal_trim_instruction(self.load_yaml(self.kb_dir, "profile.yml")),
@@ -3547,6 +3542,7 @@ class ResumeEngine:
         trim_attempt = 0
         page_count = None
         dropped_optional_clients = False
+        dropped_why = False
 
         while True:
             try:
@@ -3589,6 +3585,26 @@ class ResumeEngine:
                     # trim_instructions attempt.
                     cli_art.console.print(f"  PDF is {page_count} pages ({size_str}), dropping optional client rosters...", markup=False, soft_wrap=True)
                     resume_data = normalize_resume.normalize(resume_data, include_optional_clients=False)
+                    render_html(resume_data, html_out)
+                    continue
+
+            if not dropped_why:
+                dropped_why = True
+                if resume_data.get("SECTION_WHY") or resume_data.get("WHY_TEXT"):
+                    # Free, non-LLM trim step, same reasoning as the client-
+                    # roster drop above: Why only belongs on the resume if it
+                    # fits without pushing the page count past 2, and dropping
+                    # it is just blanking two fields -- routing it through the
+                    # LLM used to let the model bundle unrelated edits into
+                    # the same response, so a validator violation *anywhere*
+                    # in that response discarded the one edit that actually
+                    # freed a page, and Why silently stuck around for every
+                    # remaining trim attempt.
+                    cli_art.console.print(f"  PDF is {page_count} pages ({size_str}), dropping the Why section "
+                          f"(first thing to go when space is tight)...", markup=False, soft_wrap=True)
+                    resume_data = dict(resume_data)
+                    resume_data["SECTION_WHY"] = ""
+                    resume_data["WHY_TEXT"] = ""
                     render_html(resume_data, html_out)
                     continue
 

@@ -956,6 +956,65 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_why_drop_is_deterministic_and_cannot_be_discarded_by_a_violation(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        """Regression test: the Why-drop trim step used to go through the
+        LLM, so a violation anywhere in that response (even one unrelated to
+        Why) discarded the whole attempt and Why stuck around forever (see
+        the resume-builder memory note on the trim loop never converging).
+        Blanking SECTION_WHY/WHY_TEXT is now a deterministic pre-step, so it
+        never needs a Gemini call and can't be discarded by the validator."""
+        seeded_resume_data = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "SECTION_WHY": "Why Acme?", "WHY_TEXT": "Because reasons.",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+        }
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+            "resume_data": seeded_resume_data,
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema} -- the Why-drop "
+                                  "step must never call the builder LLM")
+
+        mock_generate.side_effect = generate_side_effect
+        pdf_call_count = {"n": 0}
+
+        def subprocess_side_effect(*args, **kwargs):
+            pdf_call_count["n"] += 1
+            pages = 3 if pdf_call_count["n"] == 1 else 2
+            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+
+        mock_subprocess_run.side_effect = subprocess_side_effect
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(result["SECTION_WHY"], "")
+        self.assertEqual(result["WHY_TEXT"], "")
+        self.assertEqual(pdf_call_count["n"], 2)  # 1 over-length render + 1 Why-dropped re-render
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_page_count_trim_loop_exhausts_and_returns_empty(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):
@@ -1001,8 +1060,11 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertEqual(result, {})
-        # 1 initial render + 4 trim attempts (max_trim_attempts == len(trim_instructions) == 4).
-        self.assertEqual(mock_subprocess_run.call_count, 5)
+        # 1 initial render + 3 LLM trim attempts (max_trim_attempts == len(trim_instructions) == 3).
+        # The free Why-drop pre-step doesn't cost a render here since WHY_TEXT
+        # is already blank in always_long_resume, so it's skipped without a
+        # PDF re-check.
+        self.assertEqual(mock_subprocess_run.call_count, 4)
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")
@@ -1061,7 +1123,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         # Trim attempts exhausted (page count never drops below 3), so the
         # contract is to return {} gracefully -- not raise, not return partial data.
         self.assertEqual(result, {})
-        self.assertEqual(mock_subprocess_run.call_count, 5)  # 1 initial + 4 trim attempts
+        self.assertEqual(mock_subprocess_run.call_count, 4)  # 1 initial + 3 LLM trim attempts
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")
