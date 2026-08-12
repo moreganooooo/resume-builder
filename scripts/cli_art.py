@@ -405,7 +405,11 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
         table.add_column("Fit", justify="right", width=6, no_wrap=True)
         table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
-    table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
+    # max_width caps Company at a real company name's length -- without
+    # one, a column with only min_width auto-grows on its longest cell,
+    # and it was winning that fight against Score/Recommendation's own
+    # fixed widths on ordinary terminals, cutting the score value itself.
+    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
     table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     if not narrow:
@@ -519,7 +523,8 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
         table.add_column("Fit", justify="right", width=6, no_wrap=True)
         table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
-    table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
+    # See render_fit_table's own comment on why Company needs a max_width.
+    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
     table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     table.add_column("Status", width=10, no_wrap=True, overflow="ellipsis")
@@ -558,6 +563,46 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
         table, title=title or f"{len(rows)} evaluated JD(s)", subtitle=subtitle,
         border_style=theme.BRAND, box=box.ROUNDED,
     ))
+
+
+def render_picker_header(title: str, columns: list, legend: str | None = None) -> None:
+    """The purple bounding-box header for picker.py's merged table/
+    checkbox pickers -- title, column labels, and the recommendation-tier
+    legend, but deliberately NO data rows. Before this, picker.py drew
+    every JD twice: once as an inert Rich table row here, a second time
+    immediately below as the actual selectable questionary checkbox row
+    -- visually two stacked lists showing the same data, only the second
+    one interactive. The real rows now render only once, as the checkbox
+    choices themselves, formatted to line up under this header by using
+    the exact same `columns` widths (see picker.py's row formatters) --
+    Rich's own dynamic Table layout can't be reused for that half since
+    the row data renders through questionary/prompt_toolkit, a separate
+    engine with no shared column model.
+
+    columns is a list of (label, width, justify) tuples, justify being
+    "left" or "right"."""
+    header = Text()
+    for label, width, justify in columns:
+        cell = label.rjust(width) if justify == "right" else label.ljust(width)
+        header.append(cell + "  ", style=TABLE_HEADER_STYLE)
+    console.print(Panel(header, title=title, subtitle=legend, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+
+
+def render_picker_instructions() -> None:
+    """A compact, high-contrast callout for the two keys that actually
+    drive every checkbox picker in this program -- SPACE to toggle a
+    row, ENTER to confirm. Previously this lived only as a few words
+    inside the checkbox's own plain-text prompt header, easy to miss
+    entirely (this bit even the program's own author, who forgot the
+    picker needed a space-bar toggle rather than acting on Enter alone).
+    Styled like a Charm/Crush-style popup: a small bordered box in the
+    brand accent color, printed once above the first page of any picker."""
+    body = (
+        f"[bold {theme.BRAND_ACCENT}]SPACE[/bold {theme.BRAND_ACCENT}] toggle a row    "
+        f"[bold {theme.BRAND_ACCENT}]ENTER[/bold {theme.BRAND_ACCENT}] confirm & continue    "
+        f"[dim]↑↓ move  •  / filter[/dim]"
+    )
+    console.print(Panel(body, border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2)))
 
 
 def render_polish_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
