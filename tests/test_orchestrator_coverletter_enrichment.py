@@ -74,5 +74,84 @@ class TestReadMatchingResumeTagline(unittest.TestCase):
         self.assertEqual(orchestrator._read_matching_resume_tagline("_tmp_enrichment_stem"), "")
 
 
+class TestCoverLetterEnrichmentWiring(unittest.TestCase):
+    """Confirms build_tailored_coverletter() merges tagline, resolved
+    company_location, and contact fallback into the saved letter_data."""
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_enrichment.json")
+        self.jd_json = {
+            "job_title": "Content Strategist",
+            "company_name": "Acme Corp",
+            "location": "Remote",
+            "description": "We are hiring a Content Strategist.",
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(self.jd_json, f)
+
+        self.stem = orchestrator._build_output_stem(self.jd_path)
+        self.resume_json_path = os.path.join(self.engine.output_json_dir, f"{self.stem}_Resume.json")
+        os.makedirs(self.engine.output_json_dir, exist_ok=True)
+        with open(self.resume_json_path, "w", encoding="utf-8") as f:
+            json.dump({"TAGLINE": "CONTENT STRATEGIST | SEO | LIFECYCLE MARKETING"}, f)
+
+        self.json_out = os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
+        self.html_out = os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
+
+    def tearDown(self):
+        for path in (self.jd_path, self.resume_json_path, self.json_out, self.html_out):
+            if os.path.exists(path):
+                os.remove(path)
+
+    def _clean_letter_json(self):
+        return json.dumps({
+            "company_name": "Acme Corp",
+            "greeting": "Dear Acme Corp Hiring Team,",
+            "contact_name": "",
+            "contact_title": "",
+            "body_paragraphs": [
+                "I'm excited to apply for this role at Acme Corp.",
+                "My background lines up well with what you need.",
+            ],
+            "sign_off": "Sincerely,",
+        })
+
+    def _run_build(self):
+        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
+             patch("orchestrator.render_coverletter"), \
+             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+            return self.engine.build_tailored_coverletter(self.jd_path)
+
+    @patch.object(orchestrator.ResumeEngine, "research_company",
+                   return_value={"company_hq_location": "Austin, TX", "company_facts": [], "notable_highlights": []})
+    @patch("orchestrator.GeminiClient.generate")
+    def test_tagline_and_research_location_land_in_saved_letter(self, mock_generate, mock_research):
+        mock_generate.return_value = (self._clean_letter_json(), {})
+        result = self._run_build()
+        self.assertEqual(result["tagline"], "CONTENT STRATEGIST | SEO | LIFECYCLE MARKETING")
+        self.assertEqual(result["company_location"], "Austin, TX")
+
+    @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
+    @patch("orchestrator.GeminiClient.generate")
+    def test_falls_back_to_jd_location_when_research_has_none(self, mock_generate, mock_research):
+        mock_generate.return_value = (self._clean_letter_json(), {})
+        result = self._run_build()
+        self.assertEqual(result["company_location"], "Remote")
+
+    @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
+    @patch("orchestrator.GeminiClient.generate")
+    def test_contact_fallback_fills_from_scraped_jd_contacts(self, mock_generate, mock_research):
+        self.jd_json["social_connections"] = [
+            {"fullName": "Maggie Smith", "jobTitle": "HR Manager", "companyName": "Acme Corp"},
+        ]
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(self.jd_json, f)
+        mock_generate.return_value = (self._clean_letter_json(), {})
+        result = self._run_build()
+        self.assertEqual(result["contact_name"], "Maggie Smith")
+        self.assertEqual(result["contact_title"], "HR Manager")
+
+
 if __name__ == "__main__":
     unittest.main()
