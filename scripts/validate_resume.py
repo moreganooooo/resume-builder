@@ -443,8 +443,37 @@ def _extract_metric_signatures(text: str) -> list[tuple[str, str]]:
         number = match.group(0) + suffix
         context_match = _METRIC_CONTEXT_WORD.match(tail)
         context = context_match.group(1).lower() if context_match else ""
-        results.append((number, f"{number.lower()}|{context}"))
+        results.append((number, _metric_signature(number, context)))
     return results
+
+
+def _metric_signature(number: str, context: str) -> str:
+    """
+    The key two metric mentions must share to count as the same figure.
+
+    The context word (see _METRIC_CONTEXT_WORD) stops a bare "12" in two
+    unrelated places from reading as a repeat. But for a big, specific
+    figure it causes the opposite error: "$20M, 2,932-account portfolio"
+    and "$20M+ portfolio" take different context words and stop colliding,
+    though a reader plainly sees the same $20M twice. A figure that is
+    distinctive on its own -- currency, a magnitude suffix, or 4+ digits --
+    therefore keys on the number alone. Small bare integers keep the
+    context word, because 3/10/12 genuinely do coincide across unrelated
+    facts.
+    """
+    # "+" is an approximation marker, not part of the figure: "$20M" and
+    # "$20M+" are one fact stated twice.
+    core = number.lower().rstrip("+")
+    digits = re.sub(r"\D", "", core)
+    # A 4-digit year clears the digit-count bar but is a date, not a
+    # metric -- two bullets naming the same year aren't citing one figure.
+    is_year = len(digits) == 4 and 1900 <= int(digits) <= 2099
+    distinctive = not is_year and (
+        core.startswith("$") or core.endswith(("m", "k")) or len(digits) >= 4
+    )
+    # "$20M" and "20M" are the same figure written two ways.
+    core = core.replace("$", "").replace(",", "")
+    return core if distinctive else f"{core}|{context}"
 
 
 def _check_metric_uniqueness(resume_data: dict) -> list[str]:
