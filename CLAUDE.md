@@ -2,6 +2,14 @@
 
 Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 
+## Tool priorities
+- Prefer `codebase-memory-mcp` graph tools over grep/glob for mapping this
+  repo's structure (Python core + vendored `dashboard/` Go module) —
+  fall back to grep if the graph doesn't have Go coverage.
+- Prefer Lumen `semantic_search` to locate the right file before reading
+  it whole, especially in `scripts/` where filenames don't always match
+  behavior 1:1.
+
 ## Setup
 - Requires Python 3.10+ (code uses `str | None` syntax). A venv already
   exists at `.venv/` — `source .venv/bin/activate` (or `resume activate`
