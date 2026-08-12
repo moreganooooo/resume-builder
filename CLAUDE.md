@@ -139,3 +139,40 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   forward; `career-ops/dashboard/` is not where future dashboard changes
   should land, and may drift stale over time. See `IDEAS_ARCHIVE.md` for
   the full writeup.
+- **Company research always produces something.**
+  `ResumeEngine.research_company()` tries three sources in order: the
+  company's own site (scraped), a Google-Search-grounded Gemini writeup
+  (trusted only when the model self-reports "high" confidence — many
+  companies share a name), then the JD's own text. Which tier won is
+  recorded on the result under `_research_source` and never reaches a
+  prompt. All three tiers feed the same `research_company.md` extraction
+  call, so there's exactly one place producing a `CompanyResearchSchema`
+  — add new tiers by producing source text, not by adding a schema.
+  Its `vocabulary_substitutions` field (e.g. `customers -> guests`)
+  reaches the Summary and Why sections through prompt instructions, but
+  reaches bullets **only** through
+  `company_research.apply_vocabulary_substitutions_to_resume()`, a
+  deterministic regex pass run just before Step 6 — bullets are
+  pre-audited verified text, so the model is explicitly forbidden from
+  rewording them for tone. See
+  `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
+- **Bullet uniqueness is enforced at selection time, not repair time.**
+  "No repeated metric" and "no repeated opening verb" are whole-CV
+  constraints, but the validator retry loop can only ask the model for a
+  local edit — so fixing one collision routinely creates another
+  somewhere it can't see, and a build can burn all four attempts without
+  converging. `mine_bullet_bank()` therefore avoids *picking* a
+  colliding set in the first place, keying on
+  `validate_resume.uniqueness_keys()` — deliberately the same function
+  the checks report on, so the two can't drift. Selection is two-pass:
+  pass 1 refuses collisions, pass 2 ignores them, so per-company
+  minimums and pool size are never starved by uniqueness (it is a
+  preference, not a hard filter). Sorting `combined_minimums` by
+  scarcity first means roles with the fewest spare bullets claim their
+  metrics before roles with slack. The retry loop also **hill-climbs**:
+  each attempt restarts from the best-scoring resume so far rather than
+  the previous attempt's output, because Step 5 regenerates the whole
+  resume and a bad attempt would otherwise poison every attempt after
+  it. Widening the retry-time metric inventory to fire on widow
+  violations was tried and reverted on 2026-08-12 — the model started
+  deleting bullets to dodge collisions, breaking per-role minimums.

@@ -2,6 +2,7 @@ import os
 import time
 import yaml
 import json
+import inspect
 import re
 import random
 import requests
@@ -69,9 +70,11 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 #   bullet. Reliable JSON compliance as a safety net.
 #
 # BUILDER_MODEL: handles JD keyword extraction and the final resume assembly.
-#   gemini-3.1-flash-lite for quota reasons. TemplateSchema is now flattened
-#   (List[dict] instead of List[NestedModel]) to avoid the deeply-nested
-#   $defs in responseSchema that caused the builder 400.
+#   gemini-3.1-flash-lite for quota reasons. Nested response models are fine
+#   here -- TemplateSchema was briefly flattened to List[dict] on the theory
+#   that nested $defs caused a builder 400, but that was disproven and
+#   reverted (see ExperienceEntry's docstring: the real cause was
+#   sanitize_schema() dropping $defs, fixed by GeminiClient.resolve_refs()).
 #
 # EMBED_MODEL: gemini-embedding-2 (GA April 2026) -- multimodal, 8k token input.
 #   Used ONLY for the one-time offline bullet bank pre-embedding (embed_bullet_bank.py)
@@ -553,6 +556,39 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
     )
 
 
+def _is_skills_line_violation(violation: str) -> bool:
+    """Matches validate_resume._check_skills_line_lengths() output (both the
+    widow and the 3rd-line variants). Named rather than inlined at the call
+    site because it couples to that function's message text through nothing
+    but a prose prefix -- tests/test_orchestrator_retry_hints.py pins it to
+    real validator output so a reworded message can't silently switch the
+    retry hint off."""
+    return violation.startswith("Skills line")
+
+
+def _is_bullet_widow_violation(violation: str) -> bool:
+    """Matches validate_resume._check_bullet_widows() output. See
+    _is_skills_line_violation() for why this isn't inlined."""
+    return violation.startswith("Bullet is") and "widow" in violation
+
+
+def _needs_metric_inventory(violations: list[str]) -> bool:
+    """True when the retry prompt should carry the full list of metrics
+    already used in the CV.
+
+    Deliberately fires ONLY on an existing duplicate-Metric violation.
+    Widening this to widow violations was tried on 2026-08-12 (the theory
+    being that lengthening a line is when the model reaches for a filler
+    number) and was reverted: injecting the whole-CV metric list on nearly
+    every retry reads as "don't use any number in this list", and the run
+    after it showed the model deleting bullets to dodge collisions,
+    tripping the per-role minimums instead. Duplicate metrics are now
+    prevented at selection time in mine_bullet_bank() rather than repaired
+    here.
+    """
+    return any(v.startswith("Metric") for v in violations)
+
+
 def _required_role_roster(profile_data: dict) -> list[str]:
     """profile.yml's roles: names, minus any situational role.
 
@@ -900,6 +936,10 @@ class CoverLetterSchema(BaseModel):
     body_paragraphs: List[str] = Field(description="2-3 first-person paragraphs, each grounded in a real JD requirement and a real fact from the background context.")
     sign_off:        str       = Field(description="e.g. 'Sincerely,'")
 
+class VocabularySubstitution(BaseModel):
+    generic_term:  str = Field(description="The common/generic word the candidate's resume would normally use, e.g. 'customers'.")
+    company_term:  str = Field(description="The company's own preferred word for that same thing, e.g. 'guests'.")
+
 class CompanyResearchSchema(BaseModel):
     overall_tone_adjective: str       = Field(description="One short phrase describing the company's overall voice.")
     tone_register:          Literal["formal", "conversational", "mixed"]
@@ -908,6 +948,9 @@ class CompanyResearchSchema(BaseModel):
     jargon_density:         Literal["high", "moderate", "low"]
     recurring_keywords:     List[str] = Field(description="1-3 brand words/phrases that genuinely repeat in the source text.")
     company_facts:          List[str] = Field(description="2-3 short, factual statements traceable directly to the source text.")
+    vocabulary_substitutions: List[VocabularySubstitution] = Field(
+        description="0-3 generic-term/company-term pairs where the source text clearly and repeatedly prefers its own word over the common one. Empty list if none genuinely qualify."
+    )
 
 
 def _parse_jd_data(jd_text: str) -> dict:
@@ -986,7 +1029,7 @@ def format_company_research_block(research: dict) -> str:
     """Formats a CompanyResearchSchema-shaped dict into the
     '=== COMPANY RESEARCH ===' context block both build_tailored_coverletter
     and build_tailored_resume fold into their system-instruction context."""
-    return (
+    block = (
         "\n\n=== COMPANY RESEARCH ===\n"
         f"Overall tone: {research.get('overall_tone_adjective', '')}\n"
         f"Register: {research.get('tone_register', '')} | Framing: {research.get('pronoun_framing', '')} | "
@@ -995,6 +1038,19 @@ def format_company_research_block(research: dict) -> str:
         "Company facts (use at most 1-2, never fabricate beyond these):\n"
         + "\n".join(f"- {fact}" for fact in research.get('company_facts', []))
     )
+
+    pairs = [
+        f"{p.get('generic_term')} -> {p.get('company_term')}"
+        for p in (research.get("vocabulary_substitutions") or [])
+        if isinstance(p, dict) and p.get("generic_term") and p.get("company_term")
+    ]
+    if pairs:
+        block += (
+            "\nPreferred vocabulary (use the company's term in place of the generic one "
+            f"wherever it reads naturally): {', '.join(pairs)}"
+        )
+
+    return block
 
 
 class CritiqueSchema(BaseModel):
@@ -1051,6 +1107,13 @@ class ResumeCritiqueSchema(BaseModel):
     ungrouped_skills:        List[str] = Field(description="Step 5: skills present but not cleanly grouped under a category. Empty if none.")
     unsupported_skills:      List[str] = Field(description="Step 5: skills listed with no evidence elsewhere in the resume. Empty if none.")
     archetype_mismatch:      bool      = Field(description="Step 5: True if the skills grouping/ordering doesn't match the style_rules_archetype from Step 1.")
+    # Step 6 (ats_match.yaml platform_overrides) -- named platforms instead of
+    # a per-platform numeric score for every one of them: a legacy ATS's real
+    # behavior (section-header sensitivity, acronym handling) isn't fully
+    # captured by three match-weight multipliers, so the actionable output is
+    # "which platform is weakest and why," not five more scores to interpret.
+    weakest_ats_platform:    str       = Field(description="Step 6: the single weakest-scoring platform from ats_match.yaml's platform_overrides, plus a one-sentence reason.")
+    platform_parsing_risks:  List[str] = Field(description="Step 6: concrete platform-specific parsing risks found (missing standard section header, unexplained acronym, a paraphrased-not-quoted JD requirement a strict platform wouldn't credit). Empty if none.")
     # B51: every reject_if.score_below / pass_threshold / hard_failures trip
     # across every attached rubric, so a resume that fails a rubric's own
     # stated bar has a channel to say so instead of shipping silently.
@@ -2235,11 +2298,36 @@ class ResumeEngine:
         selected_idx: list = []
         selected_set: set = set()
         guaranteed_count = 0
+        bullet_values = df["Bullet Point"].fillna("").values
+
+        # Whole-CV uniqueness (duplicate metrics, duplicate opening verbs) is
+        # enforced HERE, at selection, rather than left to the builder's
+        # validator-retry loop. Those rules are global but the retry loop can
+        # only fix one violation at a time, blind: a pool mined down to
+        # exactly each role's minimum has zero slack, so the model's only
+        # remaining move is rewording pre-audited bullets, which sets off
+        # whack-a-mole and burns all 4 attempts. Filtering at selection is
+        # free (deterministic, pre-audit) and the bank is big enough to have
+        # the slack -- 84 Element 8 keepers to fill 3 slots.
+        claimed_signatures: set = set()
+        claimed_verbs: set = set()
 
         def _is_near_duplicate(idx: int) -> bool:
             if not selected_idx:
                 return False
             return bool((embs_norm[selected_idx] @ embs_norm[idx]).max() >= DEDUP_SIMILARITY_THRESHOLD)
+
+        def _collides(idx: int) -> bool:
+            sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
+            return bool(sigs & claimed_signatures) or (verb is not None and verb in claimed_verbs)
+
+        def _take(idx: int) -> None:
+            sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
+            selected_idx.append(idx)
+            selected_set.add(idx)
+            claimed_signatures.update(sigs)
+            if verb is not None:
+                claimed_verbs.add(verb)
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
@@ -2248,16 +2336,38 @@ class ResumeEngine:
                 r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r
             }
             combined_minimums = {**company_min_bullets, **(extra_company_minimums or {})}
-            for company, min_count in combined_minimums.items():
+
+            def _scarcity(item):
+                # Scarcest role first: whoever has the least room to be picky
+                # claims its metrics and verbs before an abundant role does.
+                # Kansas Colloquies (3 keepers, minimum 2) has to win against
+                # Treering (561 keepers, minimum 6), not lose the coin toss.
+                company, min_count = item
+                available = int((company_values == company).sum())
+                return (available - min_count, available)
+
+            for company, min_count in sorted(combined_minimums.items(), key=_scarcity):
                 company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
                 taken = 0
                 for i in company_ranked:
                     if taken >= min_count:
                         break
+                    if i in selected_set or _is_near_duplicate(i) or _collides(i):
+                        continue
+                    _take(i)
+                    guaranteed_count += 1
+                    taken += 1
+                # The per-role minimum is a hard floor and uniqueness is only
+                # best-effort: a starved role fails validation outright
+                # ("below its required minimum"), which is strictly worse than
+                # a duplicate metric the retry loop still gets a shot at. So
+                # top up ignoring collisions rather than come up short.
+                for i in company_ranked:
+                    if taken >= min_count:
+                        break
                     if i in selected_set or _is_near_duplicate(i):
                         continue
-                    selected_idx.append(i)
-                    selected_set.add(i)
+                    _take(i)
                     guaranteed_count += 1
                     taken += 1
 
@@ -2265,10 +2375,19 @@ class ResumeEngine:
             if len(selected_idx) >= TOP_K_BULLETS:
                 break
             i = int(i)
+            if i in selected_set or _is_near_duplicate(i) or _collides(i):
+                continue
+            _take(i)
+
+        # Same fallback for the general fill: a short pool starves the builder
+        # of material, so prefer a collision over an undersized pool.
+        for i in ranked_idx:
+            if len(selected_idx) >= TOP_K_BULLETS:
+                break
+            i = int(i)
             if i in selected_set or _is_near_duplicate(i):
                 continue
-            selected_idx.append(i)
-            selected_set.add(i)
+            _take(i)
 
         top_df      = df.iloc[selected_idx]
         bullets_out = top_df["Bullet Point"].fillna("").tolist()
@@ -2381,37 +2500,23 @@ class ResumeEngine:
         )
         return evaluation
 
-    def research_company(self, jd_data: dict) -> dict | None:
+    def _extract_company_research(self, source_text: str, source_label: str) -> dict | None:
         """
-        Fetches a company's About/Mission/Careers pages (if a
-        company_website is known in jd_data, or found via a Google Search
-        grounding fallback lookup keyed on company_name) and extracts tone
-        signals + traceable facts via one Gemini call. Returns None (with a
-        printed, non-alarming notice) if no website is known or findable,
-        pages are unreachable/too thin, or the model response can't be
-        parsed -- callers must treat None as "proceed exactly as if this
-        feature didn't exist." See
-        docs/superpowers/specs/2026-07-04-company-research-design.md.
+        The single structured-extraction call behind all three of
+        research_company()'s tiers -- each tier's job is only to produce
+        source text, so there's exactly one place that produces a
+        CompanyResearchSchema-shaped dict.
+
+        source_label is internal bookkeeping (which tier won) and is
+        returned under the underscore-prefixed _research_source key so it
+        can never be mistaken for prompt content; format_company_research_block
+        ignores it. Returns None if the model response can't be parsed.
         """
-        company_website = jd_data.get("company_website")
-        if not company_website:
-            company_website = company_research.find_company_website(jd_data.get("company_name"))
-            if company_website:
-                cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website on file -- found one via search: {company_website}", soft_wrap=True)
-        if not company_website:
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: no company website known for this JD.", soft_wrap=True)
-            return None
-
-        scraped_text = company_research.fetch_company_pages(company_website)
-        if len(scraped_text) < company_research.MIN_USEFUL_CHARS:
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: couldn't find enough usable content on {company_website}.", soft_wrap=True)
-            return None
-
         research_prompt = self.load_prompt("research_company.md")
         research_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=research_prompt,
-            contents=f"=== SCRAPED COMPANY PAGE TEXT ===\n{scraped_text}",
+            contents=f"=== COMPANY SOURCE TEXT ===\n{source_text}",
             response_schema=CompanyResearchSchema,
             temperature=0.0,
         )
@@ -2420,7 +2525,67 @@ class ResumeEngine:
             cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: model response couldn't be parsed.", soft_wrap=True)
             return None
 
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_website}.", soft_wrap=True)
+        research_data["_research_source"] = source_label
+        return research_data
+
+    def research_company(self, jd_data: dict, jd_text: str = "") -> dict | None:
+        """
+        Extracts a company's tone signals, traceable facts, and preferred
+        vocabulary, trying three sources in descending order of quality:
+
+          1. The company's own About/Mission/Careers pages, if a
+             company_website is known in jd_data or findable via a Google
+             Search grounding lookup keyed on company_name.
+          2. A grounded search writeup of the company, used only when the
+             model self-reports "high" confidence that it found the right
+             company (many companies share a name -- see
+             company_research.research_company_via_search).
+          3. The JD's own text, which always exists.
+
+        Tier 3 means this effectively never returns None any more, which is
+        the point: every role should have something real to tailor against.
+        The remaining None paths are an empty jd_text (operationally a
+        non-occurrence) and an unparseable model response. Callers must
+        still treat None as "proceed exactly as if this feature didn't
+        exist." See
+        docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md.
+        """
+        # --- Tier 1: the company's own site ---
+        company_website = jd_data.get("company_website")
+        if not company_website:
+            company_website = company_research.find_company_website(jd_data.get("company_name"))
+            if company_website:
+                cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website on file -- found one via search: {company_website}", soft_wrap=True)
+
+        if company_website:
+            scraped_text = company_research.fetch_company_pages(company_website)
+            if len(scraped_text) >= company_research.MIN_USEFUL_CHARS:
+                research_data = self._extract_company_research(scraped_text, "website")
+                if research_data:
+                    cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_website}.", soft_wrap=True)
+                return research_data
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} Couldn't find enough usable content on {company_website} -- trying a web search instead.", soft_wrap=True)
+        else:
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website known for this JD -- trying a web search instead.", soft_wrap=True)
+
+        # --- Tier 2: grounded search, trusted only at high confidence ---
+        company_name = jd_data.get("company_name")
+        context_hint = ", ".join(str(v) for v in (jd_data.get("job_title"), jd_data.get("industry")) if v)
+        search_text = company_research.research_company_via_search(company_name, context_hint)
+        if search_text:
+            research_data = self._extract_company_research(search_text, "search")
+            if research_data:
+                cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from a web search).", soft_wrap=True)
+            return research_data
+
+        # --- Tier 3: the JD's own text ---
+        if not jd_text.strip():
+            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: nothing usable found for this JD.", soft_wrap=True)
+            return None
+
+        research_data = self._extract_company_research(jd_text, "jd_text")
+        if research_data:
+            cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from the job posting's own text).", soft_wrap=True)
         return research_data
 
     def draft_outreach_message(self, jd_path: str, contact: dict) -> str | None:
@@ -2527,7 +2692,7 @@ class ResumeEngine:
             return {}
 
         jd_data = _parse_jd_data(jd_text)
-        research = self.research_company(jd_data)
+        research = self.research_company(jd_data, jd_text)
         research_block = format_company_research_block(research) if research else ""
 
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
@@ -2785,7 +2950,7 @@ class ResumeEngine:
             kb_context = self.load_knowledge_base()
 
             jd_data = _parse_jd_data(jd_text)
-            research = self.research_company(jd_data)
+            research = self.research_company(jd_data, jd_text)
             research_block = format_company_research_block(research) if research else ""
 
             situational_block = ""
@@ -2803,6 +2968,25 @@ class ResumeEngine:
 
             role_rules_block = self.build_role_rules_block(self.load_yaml(self.kb_dir, "profile.yml"))
 
+            # style_rules.yaml/ai_risk.yaml used to be attached only to the
+            # post-build critique call (Step 5) and polish.py's cover-letter
+            # edit call -- the builder itself relied on tailor_resume.md's own
+            # hard-coded banned-word list, which had already drifted out of
+            # sync with the real ones (see that file's own note). Attaching
+            # the real rubrics here lets the builder avoid these terms at
+            # generation time instead of only getting flagged for them after
+            # the fact. style_rules_for_validation is already loaded above
+            # (unconditionally, for the post-trim gate) -- reused here rather
+            # than loading style_rules.yaml a second time.
+            banned_language_block = (
+                "\n\n=== STYLE RULES (avoid every term in forbidden_phrases below "
+                "-- this is the tested master banned-phrase list) ===\n"
+                f"{json.dumps(style_rules_for_validation)}"
+                "\n\n=== AI RISK SCORING RUBRIC (avoid every term in buzzwords, "
+                "adjective_padding, banned_openers, and banned_phrases below) ===\n"
+                f"{json.dumps(self.load_yaml(self.scoring_dir, 'ai_risk.yaml'))}"
+            )
+
             # Gap 1: KB goes into system_instruction, not contents, so the
             # ~105k-token kb_context forms a stable, cacheable prefix if
             # Gemini's automatic caching kicks in across nearby calls (e.g.
@@ -2816,7 +3000,7 @@ class ResumeEngine:
             # per-JD variable content, but small enough that keeping them
             # out of the cacheable prefix costs little and keeps the
             # prefix identical across JDs targeting different companies.
-            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}{role_rules_block}"
+            builder_system = f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}{role_rules_block}{banned_language_block}"
 
             bullets_block = "\n".join(
                 f"- [{company or 'unknown company'}] {b}"
@@ -2865,8 +3049,20 @@ class ResumeEngine:
             violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
             max_fix_attempts = 4
             fix_attempt = 0
+            # Hill-climb rather than random-walk. Each retry re-generates the
+            # WHOLE resume (response_schema=TemplateSchema below), so despite
+            # "change nothing else" an attempt is free to regress anything:
+            # observed live 2026-08-12, attempt 2 got within 2 violations of
+            # clean and attempt 3 came back with 5 new bullet widows and 4
+            # roles pushed below their bullet minimums, because it had
+            # silently deleted bullets. Anchoring each attempt (and the final
+            # result) on the best state reached so far makes a bad attempt
+            # cost one turn instead of destroying all prior progress.
+            best_resume_data = resume_data
+            best_violations = violations
             while violations and fix_attempt < max_fix_attempts:
                 fix_attempt += 1
+                resume_data, violations = best_resume_data, best_violations
                 cli_art.console.print(f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:", markup=False, soft_wrap=True)
                 for v in violations:
                     cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
@@ -2920,7 +3116,7 @@ class ResumeEngine:
                         "entry that is already present.\n"
                         + "\n".join(roster_lines) + "\n\n"
                     )
-                if any(v.startswith("Skills line wraps") for v in violations):
+                if any(_is_skills_line_violation(v) for v in violations):
                     # Repeated Skills-widow violations across retry attempts
                     # suggest the model needs the fix options spelled out
                     # again here, not just relying on tailor_resume.md's
@@ -2933,6 +3129,44 @@ class ResumeEngine:
                         f"Operations'); (3) pull in 1-2 more genuinely-held skills from "
                         f"summaries-and-skills-clean.csv or verified_tools.json, even if the JD "
                         f"didn't ask for them, as long as they fit the category and archetype.\n\n"
+                    )
+                if any(_is_bullet_widow_violation(v) for v in violations):
+                    # Mirrors the Skills-widow block above: repeated bullet-widow
+                    # violations across retry attempts mean the model can't
+                    # reliably count characters from prose alone, so restate the
+                    # exact arithmetic here instead of a vague "tighten it".
+                    limits = style_rules_for_validation.get("bullet_structure", {})
+                    one_liner_max = limits.get("one_liner_max_chars", 108)
+                    widow_min_words = limits.get("widow_min_words", 5)
+                    exp_bullets = [
+                        b for job in resume_data.get("EXPERIENCE", []) for b in job.get("achievements", [])
+                    ]
+                    widow_details = [
+                        f"- {len(b)} chars, {wc}-word widow: {b!r}"
+                        for b, wc in validate_resume.bullets_with_short_widow(exp_bullets, style_rules_for_validation)
+                    ]
+                    fix_contents += (
+                        f"=== FIXING A BULLET WIDOW ===\n"
+                        f"Each bullet below wraps to a 2nd line at the {one_liner_max}-char mark but "
+                        f"leaves fewer than {widow_min_words} words there. Either (1) trim it to "
+                        f"{one_liner_max} chars or fewer so it fits on one line, or (2) lengthen it "
+                        f"well past {one_liner_max} chars so the 2nd line carries at least "
+                        f"{widow_min_words} words -- don't leave it in the narrow band between those "
+                        f"two targets.\n" + "\n".join(widow_details) + "\n\n"
+                    )
+                if _needs_metric_inventory(violations):
+                    # Same whack-a-mole risk as the Opening Verb block above,
+                    # and the reason it's needed here too: observed live --
+                    # lengthening a bullet to fix the widow violation above
+                    # pulled in "100+" as filler, colliding with a "100+"
+                    # already used in an unrelated bullet.
+                    current_metrics = validate_resume.get_all_metrics(resume_data)
+                    fix_contents += (
+                        f"=== ALL METRICS CURRENTLY USED ACROSS THE CV ===\n"
+                        f"{', '.join(current_metrics)}\n"
+                        f"When fixing a duplicate-metric issue, or adding filler content to "
+                        f"lengthen a bullet for the widow fix above, the number used must not "
+                        f"already appear anywhere in this list.\n\n"
                     )
                 fix_contents += (
                     f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
@@ -2959,6 +3193,10 @@ class ResumeEngine:
                     continue
                 resume_data = normalize_resume.normalize(fixed)
                 violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
+                if len(violations) < len(best_violations):
+                    best_resume_data, best_violations = resume_data, violations
+
+            resume_data, violations = best_resume_data, best_violations
 
             if violations:
                 cli_art.console.print(f"  {theme.colorize_icon('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:", soft_wrap=True)
@@ -2967,6 +3205,12 @@ class ResumeEngine:
                 return {}
 
             checkpoint["resume_data"] = resume_data
+            # Persisted (rather than read off `research` at the Step 6 call
+            # site) because `research` only exists in this fresh-build
+            # branch -- a resumed run enters at the `resume_data is not
+            # None` branch above and would otherwise both NameError and
+            # silently lose the substitution.
+            checkpoint["vocabulary_substitutions"] = (research or {}).get("vocabulary_substitutions", [])
             jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 5: Post-build holistic critique ---
@@ -3053,6 +3297,7 @@ class ResumeEngine:
                 if critique_data.get('secondary_identity'):
                     identity_line += f" / {critique_data['secondary_identity']}"
                 cli_art.console.print(f"    identity          : {identity_line}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"    weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}", markup=False, soft_wrap=True)
                 cli_art.console.print(markup=False, soft_wrap=True)
                 if hard_failures:
                     cli_art.console.print(f"  {theme.colorize_icon('error')} Hard rubric failures (added to recommendations):", soft_wrap=True)
@@ -3082,6 +3327,12 @@ class ResumeEngine:
                     cli_art.console.print("  Flat sections:", markup=False, soft_wrap=True)
                     for f in flat:
                         cli_art.console.print(f"    - {f}", markup=False, soft_wrap=True)
+                    cli_art.console.print(markup=False, soft_wrap=True)
+                platform_risks = critique_data.get("platform_parsing_risks", [])
+                if platform_risks:
+                    cli_art.console.print("  Platform parsing risks:", markup=False, soft_wrap=True)
+                    for risk in platform_risks:
+                        cli_art.console.print(f"    - {risk}", markup=False, soft_wrap=True)
                     cli_art.console.print(markup=False, soft_wrap=True)
                 resume_data["_critique"] = critique_data
                 checkpoint["critique_data"] = critique_data
@@ -3249,6 +3500,16 @@ class ResumeEngine:
                 cli_art.console.print("  Needs your input -- good candidates for `resume polish`:", markup=False, soft_wrap=True)
                 for n in needs_polish:
                     cli_art.console.print(f"    - {n}", markup=False, soft_wrap=True)
+
+        # Mirror the company's own vocabulary into bullet text (e.g.
+        # "customers" -> "guests"). Deliberately last, after Step 5.5's
+        # recommendation pass: running it here means no later step can
+        # reword a bullet back out of the company's language, and it's a
+        # deterministic regex swap rather than an LLM edit, so it cannot
+        # touch a metric, verb, or claim.
+        resume_data = company_research.apply_vocabulary_substitutions_to_resume(
+            resume_data, checkpoint.get("vocabulary_substitutions", [])
+        )
 
         # --- Step 6: Save output ---
         output_path = os.path.join(self.output_json_dir, output_filename)
