@@ -749,5 +749,44 @@ class TestCheckSummarySpecificity(unittest.TestCase):
         self.assertFalse(any("no concrete metric" in v.lower() for v in violations))
 
 
+class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
+    """The context word exists so a bare "12" in two unrelated places isn't
+    a false duplicate. But it cuts the other way for a big, specific figure:
+    "$20M, 2,932-account portfolio" and "$20M+ portfolio" pick up different
+    context words and stopped colliding, even though a reader plainly sees
+    the same $20M twice. Distinctive figures therefore key on the number
+    alone; small bare integers keep the context word."""
+
+    def _sigs(self, text):
+        return {sig for _n, sig in validate_resume._extract_metric_signatures(text)}
+
+    def test_the_same_large_figure_collides_across_different_context_words(self):
+        self.assertTrue(
+            self._sigs("Managed a $20M, 2,932-account portfolio")
+            & self._sigs("Grew the $20M+ portfolio by double digits")
+        )
+
+    def test_a_trailing_plus_is_not_a_different_figure(self):
+        self.assertTrue(self._sigs("Drove $4M in pipeline") & self._sigs("Drove $4M+ in pipeline"))
+
+    def test_small_bare_integers_still_need_a_matching_context_word(self):
+        self.assertFalse(
+            self._sigs("Led a 10-person team") & self._sigs("Ranked Top 10 Performer company-wide")
+        )
+
+    def test_a_four_digit_year_is_not_treated_as_a_distinctive_figure(self):
+        # 2024 clears the 4-digit bar but is a date, not a metric -- two
+        # bullets mentioning the same year aren't citing the same figure.
+        self.assertFalse(
+            self._sigs("Launched in 2024 across Europe")
+            & self._sigs("Retired in 2024 after the merger")
+        )
+
+    def test_percentages_still_need_a_matching_context_word(self):
+        self.assertFalse(
+            self._sigs("Hit 22% reply rates") & self._sigs("Beat the 22% industry average")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
