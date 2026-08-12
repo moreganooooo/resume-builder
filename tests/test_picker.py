@@ -217,9 +217,9 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         printed = mock_print.call_args[0][0]
         self.assertIn("Hint", printed)
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
-    def test_renders_the_bordered_table_for_the_current_page_only(self, mock_list, mock_render):
+    def test_renders_the_header_for_the_current_page_only(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
         mock_list.return_value = rows
         mock_question = MagicMock()
@@ -227,12 +227,12 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         with patch("picker.questionary.checkbox", return_value=mock_question):
             picker.browse_and_select_jds(page_size=3)
         mock_render.assert_called_once()
-        page_rows_arg, kwargs = mock_render.call_args[0][0], mock_render.call_args[1]
-        self.assertEqual(len(page_rows_arg), 3)  # first page of a 5-row, page_size=3 list
-        self.assertEqual(kwargs["start_index"], 1)
+        kwargs = mock_render.call_args.kwargs
         self.assertIn("Page 1/2", kwargs["title"])
+        # #, Score, Recommendation, Company, Title, Posted, Status
+        self.assertEqual(len(kwargs["columns"]), 7)
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_nothing_checked_returns_empty(self, mock_list, mock_render):
         mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
@@ -242,7 +242,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual(result, [])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_ctrl_c_aborts_and_returns_empty(self, mock_list, mock_render):
         mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
@@ -252,7 +252,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual(result, [])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_returns_the_selected_rows_not_just_paths(self, mock_list, mock_render):
         rows = [
@@ -268,7 +268,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         self.assertEqual(result[0]["path"], "jds/b.json")
         self.assertEqual(result[0]["status"], "Completed")
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_result_order_matches_best_score_first_regardless_of_selection_order(self, mock_list, mock_render):
         rows = [
@@ -283,7 +283,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual([r["path"] for r in result], ["jds/high.json", "jds/low.json"])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_paginates_at_page_size_and_persists_selection_across_pages(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
@@ -302,7 +302,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         self.assertEqual(len(first_call_choices), 6)
         self.assertEqual([r["path"] for r in result], ["jds/0.json"])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_unchecking_a_row_on_a_revisited_page_drops_it(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(2)]
