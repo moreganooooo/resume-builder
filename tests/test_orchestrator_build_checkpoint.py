@@ -86,6 +86,20 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self._pdf_exists_patch.start()
         self.addCleanup(self._pdf_exists_patch.stop)
 
+        # research_company() gained a third tier (2026-08-11) that falls back
+        # to the JD's own text, so it now always makes a CompanyResearchSchema
+        # extraction call -- where before, a fixture with no company_website
+        # bailed out before any call. Every generate_side_effect below
+        # dispatches on response_schema and raises on an unexpected one, and
+        # none of these tests are about company research (it has its own
+        # coverage in test_orchestrator_research_company.py). Stub it to the
+        # None these fixtures effectively produced already.
+        self._research_patch = patch.object(
+            orchestrator.ResumeEngine, "research_company", return_value=None
+        )
+        self._research_patch.start()
+        self.addCleanup(self._research_patch.stop)
+
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
         with open(self.jd_path, "w", encoding="utf-8") as f:
@@ -712,6 +726,70 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertTrue(result)
         self.assertNotIn("results-driven", result["SUMMARY_TEXT"])
         self.assertEqual(builder_call_count["n"], 2)  # 1 initial + 1 targeted fix
+
+    @patch("orchestrator.validate_resume.validate")
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_a_regressing_attempt_does_not_discard_the_best_resume_so_far(
+        self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
+    ):
+        # Each retry re-generates the WHOLE resume, so an attempt can regress
+        # anything despite "change nothing else" -- observed live, an attempt
+        # 2 violations from clean was replaced by one with 11. The loop must
+        # anchor on the best state reached, not the most recent one.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        builder_calls = {"n": 0}
+
+        def _resume(marker):
+            return json.dumps({
+                "SUMMARY_TEXT": f"<strong>{marker}</strong>",
+                "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+                "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+            }), {}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                builder_calls["n"] += 1
+                return _resume(["initial", "NEARLY CLEAN", "regressed"][min(builder_calls["n"] - 1, 2)])
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        # 3 violations initially, 1 after the good attempt, 9 after the bad one.
+        counts = iter([3, 1, 9, 9, 9, 9])
+
+        def validate_side_effect(resume_data, rules, role_roster=None, role_bullet_minimums=None):
+            return [f"v{i}" for i in range(next(counts))]
+
+        mock_generate.side_effect = generate_side_effect
+        mock_validate.side_effect = validate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        # Builder calls: 1 initial, then one per retry. Call 3 produces the
+        # regression, so call 4 is the first prompt that can differ: it must
+        # be handed the 1-violation resume to fix, not the 9-violation one.
+        builder_prompts = [c.kwargs["contents"] for c in mock_generate.call_args_list
+                           if c.kwargs.get("response_schema") is orchestrator.TemplateSchema]
+        self.assertGreaterEqual(len(builder_prompts), 4)
+        self.assertIn("NEARLY CLEAN", builder_prompts[3])
+        self.assertNotIn("regressed", builder_prompts[3])
 
     @patch("orchestrator.validate_resume.validate")
     @patch("orchestrator.subprocess.run")

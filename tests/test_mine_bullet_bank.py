@@ -13,6 +13,7 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
+import validate_resume  # noqa: E402
 from bullet_bank_hash import bullets_sha  # noqa: E402
 
 
@@ -59,7 +60,12 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         vectors = []
         for i in range(5):
             rows.append({
-                "Bullet Point": f"High relevance bullet {i}",
+                # Distinct opening verbs on purpose. These 5 all began with
+                # "High", which mine_bullet_bank's uniqueness-aware selection
+                # now reads as an opening-verb collision -- it would defer 4 of
+                # them and surface Mercor for a reason that has nothing to do
+                # with the per-company floor these tests are isolating.
+                "Bullet Point": f"{['Achieved', 'Built', 'Created', 'Drove', 'Executed'][i]} relevance bullet {i}",
                 "Role / Company": "Treering Yearbooks",
                 "Tags": "content",
                 "hidden_gem_score": 0,
@@ -107,6 +113,68 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         companies = [company for (_, company, _) in results]
         self.assertEqual(len(results), 5)
         self.assertNotIn("Mercor", companies)
+
+
+class TestMineBulletBankUniqueness(unittest.TestCase):
+    """Whole-CV uniqueness (duplicate metrics, duplicate opening verbs) is
+    enforced at selection rather than left to the builder's validator-retry
+    loop: a pool mined to exactly each role's minimum has no slack, so the
+    model can only reword pre-audited bullets, which burns all 4 attempts.
+    Measured on the real 844-bullet bank, this took a 30-bullet pool from
+    21 excess collisions to 0."""
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_bullet_bank_uniq")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._real_kb_dir = self.engine.kb_dir
+        self.engine.kb_dir = self.tmp_dir
+
+        # Two colliding pairs plus clean alternates, all for one company and
+        # all mutually distinct in embedding space (so the near-duplicate
+        # filter stays out of it and only uniqueness decides).
+        rows = [
+            {"Bullet Point": "Drove 41% reply rates across the PTA sequence rebuild"},
+            {"Bullet Point": "Sustained 41% reply rates on the PTA sequence program"},
+            {"Bullet Point": "Drove pipeline hygiene across the district CRM records"},
+            {"Bullet Point": "Rebuilt onboarding docs for the regional support team"},
+        ]
+        vectors = []
+        for i, r in enumerate(rows):
+            r.update({"Role / Company": "Treering Yearbooks", "Tags": "ops",
+                      "hidden_gem_score": 0, "strength_category": "Solid"})
+            vec = [0.0] * 6
+            vec[0], vec[i + 1] = 0.6, 0.8
+            vectors.append(vec)
+
+        pd.DataFrame(rows).to_csv(os.path.join(self.tmp_dir, "bullet-bank-keepers-audited.csv"), index=False)
+        np.save(os.path.join(self.tmp_dir, "bullet_vectors_ge2_d768.npy"), np.array(vectors, dtype=np.float32))
+        _write_matching_meta(self.tmp_dir, rows)
+        _write_profile_roles(self.tmp_dir, [])
+
+    def tearDown(self):
+        self.engine.kb_dir = self._real_kb_dir
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    @patch("orchestrator.TOP_K_BULLETS", 2)
+    def test_prefers_a_collision_free_pair(self, mock_embed):
+        picked = [b for (b, _c, _t) in self.engine.mine_bullet_bank("jd", {})]
+        sigs, verbs = [], []
+        for b in picked:
+            s, v = validate_resume.uniqueness_keys(b)
+            sigs.extend(s)
+            verbs.append(v)
+        self.assertEqual(len(sigs), len(set(sigs)), f"duplicate metric across {picked}")
+        self.assertEqual(len(verbs), len(set(verbs)), f"duplicate opening verb across {picked}")
+
+    @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    @patch("orchestrator.TOP_K_BULLETS", 4)
+    def test_still_fills_the_pool_when_collisions_are_unavoidable(self, mock_embed):
+        # Uniqueness is best-effort: starving the builder of material is worse
+        # than a duplicate the retry loop still gets a shot at.
+        self.assertEqual(len(self.engine.mine_bullet_bank("jd", {})), 4)
+
 
 
 class TestMineBulletBankDeduplication(unittest.TestCase):
