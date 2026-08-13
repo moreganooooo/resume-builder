@@ -785,7 +785,7 @@ print text, so they should keep passing unmodified.
   instead, `cli_art.render_triage_summary_table(counts: dict) -> None`,
   where `counts` has keys `keep`/`rewrite`/`retire`/`duplicate`/`leftover`.
 
-- [ ] **Step 1: Write a failing test for the new table renderer**
+- [x] **Step 1: Write a failing test for the new table renderer**
 
   Append to `tests/test_cli_art.py` (this renderer belongs there, same as
   `render_rewrite_queue_table`, even though its only caller is
@@ -806,10 +806,10 @@ print text, so they should keep passing unmodified.
           self.assertIn("Leftover", output)
   ```
 
-- [ ] **Step 2:** Run `python -m unittest tests.test_cli_art.TestRenderTriageSummaryTable -v`
+- [x] **Step 2:** Run `python -m unittest tests.test_cli_art.TestRenderTriageSummaryTable -v`
   Expected: FAIL (`AttributeError`)
 
-- [ ] **Step 3:** Add `render_triage_summary_table()` to `scripts/cli_art.py`,
+- [x] **Step 3:** Add `render_triage_summary_table()` to `scripts/cli_art.py`,
   after `render_rewrite_queue_table()`:
 
   ```python
@@ -828,10 +828,10 @@ print text, so they should keep passing unmodified.
       console.print(Panel(table, title="Triage Results", border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
   ```
 
-- [ ] **Step 4:** Run `python -m unittest tests.test_cli_art.TestRenderTriageSummaryTable -v`
+- [x] **Step 4:** Run `python -m unittest tests.test_cli_art.TestRenderTriageSummaryTable -v`
   Expected: PASS
 
-- [ ] **Step 5:** In `scripts/triage_needs_review.py`, replace the five
+- [x] **Step 5:** In `scripts/triage_needs_review.py`, replace the five
   count-summary lines (current lines 205-209):
 
   ```python
@@ -940,16 +940,16 @@ print text, so they should keep passing unmodified.
       cli_art.cli_success("Done.")
   ```
 
-- [ ] **Step 6:** Run `python -m unittest tests.test_triage_needs_review -v`
+- [x] **Step 6:** Run `python -m unittest tests.test_triage_needs_review -v`
   Expected: PASS. If any existing test does assert on exact print text
   (verify by reading the file if a failure occurs here), update that
   assertion to match the new themed output rather than reverting the
   themed line.
 
-- [ ] **Step 7:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
+- [x] **Step 7:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
   Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
   ```bash
   git add scripts/cli_art.py scripts/triage_needs_review.py tests/test_cli_art.py
