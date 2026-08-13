@@ -167,52 +167,56 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
     root_logger = logging.getLogger()
     root_logger.addHandler(collector)
     try:
-        for source in sources:
-            fetch = SOURCE_FETCHERS.get(source)
-            if fetch is None:
-                source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
-                continue
-
-            warnings_before = len(collector.records)
-            jobs = fetch()
-            source_warnings = collector.records[warnings_before:]
-            result = {
-                "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
-                "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
-            }
-
-            for job in jobs:
-                company = job.get("company_name", "unknown")
-                title = job.get("job_title", "unknown")
-                job_id = job.get("source_job_id")
-                source_url = job.get("source_url")
-                # Board-provider jobs have no numeric source_job_id, only a
-                # URL -- fall back to it so job_key_known() actually runs for
-                # them instead of silently skipping dedup (job_key used to be
-                # None whenever source_job_id was absent, and the caller only
-                # dedups when job_key is truthy).
-                job_key = str(job_id) if job_id else (source_url or "")
-                if job_key and jd_manager.job_key_known(
-                    job_key, tracker=tracker,
-                    source_url=source_url, company_name=job.get("company_name"),
-                    job_title=job.get("job_title"), index=known_jobs_index,
-                ):
-                    result["skipped"] += 1
+        with cli_art.new_scan_activity() as activity:
+            for source in sources:
+                fetch = SOURCE_FETCHERS.get(source)
+                if fetch is None:
+                    source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
                     continue
 
-                dest = _write_jd_file(job)
-                jd_manager.add_to_known_jobs_index(
-                    known_jobs_index, job_key,
-                    source_url=source_url, company_name=job.get("company_name"),
-                    job_title=job.get("job_title"),
-                )
-                written += 1
-                result["written"] += 1
-                new_job_entry = {"company": company, "title": title}
-                result["new_jobs"].append(new_job_entry)
-                written_paths[dest] = (result, new_job_entry)
+                warnings_before = len(collector.records)
+                jobs = fetch(activity=activity)
+                source_warnings = collector.records[warnings_before:]
+                result = {
+                    "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
+                    "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
+                }
 
-            source_results.append(result)
+                for job in jobs:
+                    company = job.get("company_name", "unknown")
+                    title = job.get("job_title", "unknown")
+                    job_id = job.get("source_job_id")
+                    source_url = job.get("source_url")
+                    # Board-provider jobs have no numeric source_job_id, only a
+                    # URL -- fall back to it so job_key_known() actually runs for
+                    # them instead of silently skipping dedup (job_key used to be
+                    # None whenever source_job_id was absent, and the caller only
+                    # dedups when job_key is truthy).
+                    job_key = str(job_id) if job_id else (source_url or "")
+                    if job_key and jd_manager.job_key_known(
+                        job_key, tracker=tracker,
+                        source_url=source_url, company_name=job.get("company_name"),
+                        job_title=job.get("job_title"), index=known_jobs_index,
+                    ):
+                        result["skipped"] += 1
+                        continue
+
+                    dest = _write_jd_file(job)
+                    jd_manager.add_to_known_jobs_index(
+                        known_jobs_index, job_key,
+                        source_url=source_url, company_name=job.get("company_name"),
+                        job_title=job.get("job_title"),
+                    )
+                    written += 1
+                    result["written"] += 1
+                    new_job_entry = {"company": company, "title": title}
+                    result["new_jobs"].append(new_job_entry)
+                    written_paths[dest] = (result, new_job_entry)
+
+                source_results.append(result)
+                activity.tally(fetched=sum(r.get("fetched", 0) for r in source_results),
+                                written=sum(r.get("written", 0) for r in source_results),
+                                skipped=sum(r.get("skipped", 0) for r in source_results))
     finally:
         root_logger.removeHandler(collector)
 
