@@ -373,9 +373,9 @@ class GeminiClient:
             if resp.status_code in (400, 404):
                 cli_art.console.print(f"    {cli_art.WARNING} Gemini API permanent error {resp.status_code}: {resp.reason}. Not retrying.", soft_wrap=True)
                 try:
-                    cli_art.console.print(json.dumps(resp.json(), indent=2)[:800], markup=False, soft_wrap=True)
+                    cli_art.print_literal(json.dumps(resp.json(), indent=2)[:800])
                 except Exception:
-                    cli_art.console.print(resp.text[:800], markup=False, soft_wrap=True)
+                    cli_art.print_literal(resp.text[:800])
                 return None, {}
 
             try:

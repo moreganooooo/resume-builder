@@ -164,9 +164,9 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
-    cli_art.console.print(markup=False, soft_wrap=True)
+    cli_art.print_literal()
     cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
-    cli_art.console.print(markup=False, soft_wrap=True)
+    cli_art.print_literal()
 
     script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
     timeout_s = max(NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S)
@@ -319,10 +319,10 @@ def run_liveness_check(refresh: bool = False) -> dict:
     skipped = len(to_check) - len(candidates)
 
     if recently_checked:
-        cli_art.console.print(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
 
     if not candidates:
-        cli_art.console.print(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
         return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0}
 
     result = _verify_candidates(candidates)
@@ -337,6 +337,6 @@ def run_liveness_check(refresh: bool = False) -> dict:
         cli_art.console.print(f"  {theme.colorize_icon('warning')} Uncertain (left):       {result['uncertain']}", soft_wrap=True)
         cli_art.console.print(f"  {theme.colorize_icon('skip')} Skipped (no URL):       {skipped}", soft_wrap=True)
         cli_art.console.print(f"  {theme.colorize_icon('skip')} Recently checked:       {len(recently_checked)}", soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.print_literal()
 
     return result
