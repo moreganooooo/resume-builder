@@ -1905,30 +1905,29 @@ class ResumeEngine:
         Critiques on slim static_prefix (Tier 1+2 cache architecture).
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
-        cli_art.console.print(f"\n{theme.colorize_icon('hint')} Loading rules bundle...", soft_wrap=True)
-        cli_art.detail(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets")
-        cli_art.detail("", markup=False)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Loading rules bundle...", level=cli_art.NORMAL)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets", level=cli_art.NORMAL)
+        cli_art.detail("", level=cli_art.NORMAL)
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
-            cli_art.console.print("  No bullets to audit -- empty or invalid input. Skipping audit loop.", markup=False, soft_wrap=True)
+            cli_art.detail("  No bullets to audit -- empty or invalid input. Skipping audit loop.", level=cli_art.NORMAL)
             return []
 
         refined_bullets = list(resume_from) if resume_from else []
         if len(refined_bullets) >= len(bullet_tuples):
-            cli_art.console.print(f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. "
-                  f"Skipping audit loop.", markup=False, soft_wrap=True)
+            cli_art.detail(f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. Skipping audit loop.", level=cli_art.NORMAL)
             return refined_bullets
 
         critique_system = self.build_bullet_critique_system()
-        cli_art.detail(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules")
-        cli_art.detail("", markup=False)
+        cli_art.detail(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules", level=cli_art.NORMAL)
+        cli_art.detail("", level=cli_art.NORMAL)
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
         # to build (2 small JSON files + voice-anchors.md), so it's built
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
         static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier")
+        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier", level=cli_art.NORMAL)
 
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
@@ -2050,13 +2049,13 @@ class ResumeEngine:
         rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
         rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
 
-        cli_art.detail(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars")
-        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars")
-        cli_art.detail("", markup=False)
-        cli_art.detail(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)")
-        cli_art.detail(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars")
-        cli_art.detail("", markup=False)
-        cli_art.detail(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars")
+        cli_art.detail(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars", level=cli_art.NORMAL)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars", level=cli_art.NORMAL)
+        cli_art.detail("", level=cli_art.NORMAL)
+        cli_art.detail(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)", level=cli_art.NORMAL)
+        cli_art.detail(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars", level=cli_art.NORMAL)
+        cli_art.detail("", level=cli_art.NORMAL)
+        cli_art.detail(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars", level=cli_art.NORMAL)
 
         self.warm_segment_cache(bullet_tuples)
 
@@ -2068,8 +2067,7 @@ class ResumeEngine:
 
         start_index = len(refined_bullets)
         if start_index:
-            cli_art.console.print(f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} "
-                  f"(already refined: {start_index}).", markup=False, soft_wrap=True)
+            cli_art.detail(f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} (already refined: {start_index}).", level=cli_art.NORMAL)
 
         def _record(refined_bullet: str, critique_data: dict = None) -> None:
             refined_bullets.append(refined_bullet)
@@ -2083,7 +2081,7 @@ class ResumeEngine:
 
             bullet_preview = bullet[:60]
             cli_art.console.rule(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", style="dim", align="left")
-            cli_art.detail(f"   Tags: {tags}  |  Company: {company}")
+            cli_art.detail(f"   Tags: {cli_art._escape_markup(tags)}  |  Company: {cli_art._escape_markup(company)}", level=cli_art.NORMAL)
 
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
