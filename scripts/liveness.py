@@ -8,6 +8,7 @@ ported from career-ops's already-proven liveness-core.mjs/liveness-browser.mjs.
 See docs/superpowers/specs/2026-07-05-liveness-checker-design.md.
 """
 
+import contextlib
 import datetime
 import json
 import os
@@ -33,6 +34,29 @@ def _child_env() -> dict:
     return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Maps check-liveness.mjs's structured progress-event `result` field to
+# this codebase's existing theme.py icon keys (success/warning/error --
+# there's no "likely_active"-specific icon, so it shares "warning" with
+# "uncertain").
+_LIVENESS_ICON_BY_RESULT = {
+    "active": "success", "likely_active": "warning",
+    "expired": "error", "uncertain": "warning",
+}
+
+
+@contextlib.contextmanager
+def _resolve_activity(activity):
+    """Reuses a shared activity when the caller (scan.py's run_scan())
+    already has one open; otherwise opens a fresh, self-contained one so
+    the standalone `resume liveness` entry point (run_liveness_check(),
+    with no scan preceding it) also gets the themed step-log rather than
+    only benefiting when chained after a scan."""
+    if activity is not None:
+        yield activity
+    else:
+        with cli_art.new_scan_activity() as local_activity:
+            yield local_activity
 # Profile-scoped: this used to land at the repo root's output/, outside
 # profile_paths.sync_roots(). It's cleaned up in a finally block, so it only
 # persisted when the process was killed mid-check -- but a stray temp file
@@ -114,7 +138,7 @@ def _jd_label(source_file: str | None) -> str:
     return os.path.basename(source_file)
 
 
-def _verify_candidates(candidates: list) -> dict:
+def _verify_candidates(candidates: list, activity=None) -> dict:
     """Given exactly these {job_key, source_file, url} candidates, runs
     check-liveness.mjs, persists each result via jd_manager.save_liveness(),
     moves any 'expired' result's file to jds/expired/, prints the same
@@ -172,8 +196,20 @@ def _verify_candidates(candidates: list) -> dict:
                 # has already exited -- the progress "indicator" was
                 # replaying a finished transcript, not showing live
                 # progress (B21).
-                for line in proc.stderr:
-                    cli_art.print_subprocess_output(f"  {line.rstrip()}")
+                with _resolve_activity(activity) as resolved_activity:
+                    resolved_activity.start_source(len(candidates), label="Checking")
+                    for line in proc.stderr:
+                        stripped = line.rstrip()
+                        event = None
+                        try:
+                            event = json.loads(stripped)
+                        except json.JSONDecodeError:
+                            pass
+                        if isinstance(event, dict) and event.get("type") == "progress":
+                            icon_name = _LIVENESS_ICON_BY_RESULT.get(event.get("result"), "warning")
+                            resolved_activity.step(icon_name, "Verify", _jd_label(event.get("source_file")))
+                        else:
+                            cli_art.print_subprocess_output(f"  {stripped}")
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
                 cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.", soft_wrap=True)
@@ -249,7 +285,7 @@ def _verify_candidates(candidates: list) -> dict:
     }
 
 
-def verify_jd_paths(paths: list) -> dict:
+def verify_jd_paths(paths: list, activity=None) -> dict:
     """Runs a real Playwright liveness check on exactly `paths` -- no
     recency skip, since these are freshly-written JDs from a scan and
     always worth checking once for real rather than trusting the API/RSS
@@ -258,8 +294,10 @@ def verify_jd_paths(paths: list) -> dict:
     gone by the time we look, same as the TheMuse 404 seen on a live
     scan run 2026-07-26). Ported from career-ops's default-on
     `scan.mjs --verify` pass, which runs immediately after the API
-    scan, before a posting is presented as a hit."""
-    return _verify_candidates(_gather_candidates(paths))
+    scan, before a posting is presented as a hit. `activity` (a
+    cli_art.ScanActivity) is optional -- when given (scan.py's run_scan()
+    passes its own), reuses it instead of opening a second one."""
+    return _verify_candidates(_gather_candidates(paths), activity=activity)
 
 
 def run_liveness_check(refresh: bool = False) -> dict:
