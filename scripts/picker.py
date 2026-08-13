@@ -278,7 +278,16 @@ def pick_and_process(
             completed += 1
         else:
             failed += 1
-    cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
+    # Use a Rich Text object so the numeric counts are plain (unstyled)
+    # — tests assert against the raw substring "1 completed, 0 failed".
+    from rich.text import Text
+
+    msg = Text("\nPicked batch summary: ")
+    msg.append(str(completed))
+    msg.append(" completed, ")
+    msg.append(str(failed))
+    msg.append(" failed.")
+    cli_art.console.print(msg)
     return (completed, failed)
 
 

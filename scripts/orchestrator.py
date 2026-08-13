@@ -3726,16 +3726,26 @@ class ResumeEngine:
 
         pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data)
         if pdf_fatal:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} PDF text-layer check could not verify the rendered file "
-                  f"-- treating this as a failed build, not a warning:", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} PDF text-layer check could not verify the rendered file "
+                f"-- treating this as a failed build, not a warning:",
+                soft_wrap=True,
+            )
+            from rich.text import Text
             for f in pdf_fatal:
-                cli_art.console.print(f"    - {f}", markup=False, soft_wrap=True)
+                # Print raw to stdout so the exact exception text appears
+                # unwrapped and unstyled for tests that assert on the
+                # literal substring.
+                print(f"    - {f}")
             return {}
         if pdf_text_warnings:
             cli_art.console.print(f"  {theme.colorize_icon('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
                   f"(what an ATS would actually parse from the file, not just the pre-render JSON):", soft_wrap=True)
+            from rich.text import Text
             for w in pdf_text_warnings:
-                cli_art.console.print(f"    - {w}", markup=False, soft_wrap=True)
+                msg = Text("    - ")
+                msg.append(str(w))
+                cli_art.console.print(msg)
         else:
             cli_art.console.print(f"  {theme.colorize_icon('success')} PDF text-layer check: 0 issues.", soft_wrap=True)
 
@@ -3896,10 +3906,15 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             failed_count += 1
             cli_art.console.print(f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.", soft_wrap=True)
 
-    summary = f"\nBatch summary: {completed_count} completed, {failed_count} failed."
+    from rich.text import Text
+    summary = Text("\nBatch summary: ")
+    summary.append(str(completed_count))
+    summary.append(" completed, ")
+    summary.append(str(failed_count))
+    summary.append(" failed.")
     if aborted_remaining:
-        summary += f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted."
-    cli_art.console.print(summary, markup=False, soft_wrap=True)
+        summary.append(f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted.")
+    cli_art.console.print(summary, soft_wrap=True)
     return completed_count, failed_count
 
 
