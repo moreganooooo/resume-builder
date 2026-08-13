@@ -12,6 +12,7 @@ from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape as _escape_markup
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
@@ -43,15 +44,20 @@ TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
 
 def display_error(message: str) -> None:
     """A failure reads with real visual weight -- a bordered panel, not a
-    bare icon-prefixed line."""
-    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {message}"
+    bare icon-prefixed line. message is escaped before interpolation --
+    Rich's markup parser silently drops bracketed content that happens
+    to look like a style tag (e.g. a company name in brackets), rather
+    than raising or rendering it literally, so caller-supplied text must
+    never reach console.print unescaped."""
+    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {_escape_markup(message)}"
     console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
 
 
 def display_success(message: str) -> None:
     """Stays lightweight (no border) -- this is the common case and a
-    bordered panel for every success would get old fast."""
-    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {message}")
+    bordered panel for every success would get old fast. message is
+    escaped -- see display_error()'s docstring."""
+    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}")
 
 # Raw block-letter lines, no markup -- color now comes from the diagonal
 # gradient applied per-character in display_main_banner(), not a blanket
@@ -903,20 +909,23 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
         console.print(f"\n{SUCCESS} All checks passed.")
 
 def cli_info(message: str) -> None:
-    """Print an informational message with hint icon."""
-    console.print(f"{HINT} {message}", soft_wrap=True)
+    """Print an informational message with hint icon. message is
+    escaped -- see display_error()'s docstring."""
+    console.print(f"{HINT} {_escape_markup(message)}", soft_wrap=True)
 
 def cli_warning(message: str) -> None:
-    """Print a warning message with warning icon."""
-    console.print(f"{WARNING} {message}", soft_wrap=True)
+    """Print a warning message with warning icon. message is escaped --
+    see display_error()'s docstring."""
+    console.print(f"{WARNING} {_escape_markup(message)}", soft_wrap=True)
 
 def cli_error(message: str) -> None:
     """Print an error message using display_error for consistency."""
     display_error(message)
 
 def cli_success(message: str) -> None:
-    """Print a success message with success icon."""
-    console.print(f"{SUCCESS} {message}", soft_wrap=True)
+    """Print a success message with success icon. message is escaped --
+    see display_error()'s docstring."""
+    console.print(f"{SUCCESS} {_escape_markup(message)}", soft_wrap=True)
 
 
 # =====================================================================
@@ -1372,7 +1381,7 @@ class ScanActivity:
                 eta = f" (~{_format_scan_eta(remaining)} remaining)"
         icon = theme.colorize_icon(icon_name)
         self._progress.console.print(
-            f"  {icon} [bold]{source}[/bold] {message}{eta}", soft_wrap=True,
+            f"  {icon} [bold]{_escape_markup(source)}[/bold] {_escape_markup(message)}{eta}", soft_wrap=True,
         )
 
     def tally(self, **counts: int) -> None:
@@ -1416,3 +1425,43 @@ def new_scan_activity(**kwargs) -> ScanActivity:
             activity.tally(fetched=len(jobs))
     """
     return ScanActivity(**kwargs)
+
+
+def render_rewrite_queue_table(rows: list, title: str) -> None:
+    """Themed table for a ranked list of queued-for-rewrite bullets --
+    audit_keepers.py's Top-10-worst preview. Each row:
+    {"rank", "source", "composite", "manager_test", "bullet"}. Bullet
+    text and source are escaped (see display_error()'s docstring) since
+    Table cells parse markup exactly like console.print does -- a
+    bullet or provider-id containing a stray "[" would otherwise be
+    silently dropped the same way a plain console.print call would."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table.add_column("#", justify="right")
+    table.add_column("Source")
+    table.add_column("Composite", justify="right")
+    table.add_column("Manager Test")
+    table.add_column("Bullet")
+    for row in rows:
+        table.add_row(
+            str(row["rank"]),
+            _escape_markup(str(row["source"])),
+            f"{row['composite']:.0f}",
+            str(row["manager_test"]),
+            f"{_escape_markup(row['bullet'])}...",
+        )
+    console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+
+
+def render_triage_summary_table(counts: dict) -> None:
+    """Themed summary for triage_needs_review.py's routing pass --
+    replaces five flat 'KEEP -> N' lines with one small table matching
+    render_bullet_bank_status()'s visual language."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=False)
+    table.add_column("Outcome")
+    table.add_column("Count", justify="right")
+    table.add_row(f"[{theme.SUCCESS}]KEEP[/{theme.SUCCESS}]", str(counts.get("keep", 0)))
+    table.add_row(f"[{theme.WARNING}]REWRITE[/{theme.WARNING}]", str(counts.get("rewrite", 0)))
+    table.add_row(f"[{theme.ERROR}]RETIRE[/{theme.ERROR}]", str(counts.get("retire", 0)))
+    table.add_row("DUPLICATE (already in keeper bank, skipped)", str(counts.get("duplicate", 0)))
+    table.add_row("Leftover (needs human)", str(counts.get("leftover", 0)))
+    console.print(Panel(table, title="Triage Results", border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
