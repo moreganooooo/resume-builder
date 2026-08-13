@@ -2083,10 +2083,8 @@ class ResumeEngine:
                 continue
 
             bullet_preview = bullet[:60]
-            cli_art.detail(f"\n{'─'*60}", markup=False)
-            cli_art.detail(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", markup=False)
-            cli_art.detail(f"   Tags: {tags}  |  Company: {company}", markup=False)
-            cli_art.detail("", markup=False)
+            cli_art.console.rule(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", style="dim", align="left")
+            cli_art.detail(f"   Tags: {tags}  |  Company: {company}")
 
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
@@ -2892,8 +2890,7 @@ class ResumeEngine:
             output_filename = f"{_build_output_stem(jd_path)}_Resume.json"
 
         # --- Step 1: Extract JD keywords ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 1: Extracting JD keywords...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 1: Extracting JD keywords...", style="dim", align="left")
         jd_keywords = checkpoint.get("jd_keywords")
         if jd_keywords is not None:
             cli_art.console.print("  Resuming: using JD keywords from checkpoint.", markup=False, soft_wrap=True)
@@ -2930,8 +2927,7 @@ class ResumeEngine:
         cli_art.console.print(markup=False, soft_wrap=True)
 
         # --- Step 2: Mine bullet bank ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 2: Mining bullet bank...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 2: Mining bullet bank...", style="dim", align="left")
         bullet_tuples = checkpoint.get("bullet_tuples")
         if bullet_tuples is not None:
             cli_art.console.print(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.", markup=False, soft_wrap=True)
@@ -2946,8 +2942,7 @@ class ResumeEngine:
         cli_art.console.print(markup=False, soft_wrap=True)
 
         # --- Step 3: Audit and refine bullets ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 3: Auditing bullets...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 3: Auditing bullets...", style="dim", align="left")
         static_prefix = self.build_audit_static_prefix()
 
         def _save_bullets_checkpoint(partial_bullets):
@@ -2976,8 +2971,7 @@ class ResumeEngine:
         bullet_companies = [company for (_, company, _) in bullet_tuples[:len(refined_bullets)]]
 
         # --- Step 4: Build resume ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 4: Building resume...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 4: Building resume...", style="dim", align="left")
         # BUG: this was loading "build_resume.md", which does not exist in
         # resume-engine/prompts/ -- load_prompt() was silently falling back
         # to the placeholder string "Process the text." on every run, so the
@@ -3084,7 +3078,7 @@ class ResumeEngine:
             # Step 3's audit loop just made up to 30 calls; give the free
             # tier's rolling per-minute token window a moment to recover
             # before this ~105k-token call (see PRE_BUILDER_SLEEP above).
-            cli_art.console.print(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...", markup=False, soft_wrap=True)
+            cli_art.detail(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...", level=cli_art.NORMAL)
             time.sleep(PRE_BUILDER_SLEEP)
 
             with cli_art.console.status("Calling Gemini...", spinner="dots"):
@@ -3106,7 +3100,9 @@ class ResumeEngine:
             resume_data = GeminiClient.parse_json(resume_text)
             if not resume_data:
                 cli_art.console.print(f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True)
-                cli_art.console.print(f"  Raw response (first 500 chars):\n{resume_text[:500]}", markup=False, soft_wrap=True)
+                cli_art.console.rule("Raw builder response (truncated)", style="dim", align="left")
+                # Preserve exact text for debugging assertions/tests.
+                cli_art.console.print(resume_text[:500], markup=False, soft_wrap=True)
                 return {}
 
             resume_data = normalize_resume.normalize(resume_data)
@@ -3279,8 +3275,7 @@ class ResumeEngine:
             jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 5: Post-build holistic critique ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 5: Running holistic resume critique...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 5: Running holistic resume critique...", style="dim", align="left")
         critique_data = checkpoint.get("critique_data")
         if critique_data is not None:
             cli_art.console.print("  Resuming: using holistic critique from checkpoint.", markup=False, soft_wrap=True)
@@ -3353,52 +3348,52 @@ class ResumeEngine:
                         f"Fix rubric hard failure -- {hf}" for hf in hard_failures
                     ]
 
-                cli_art.console.print(f"  Holistic critique scores:", markup=False, soft_wrap=True)
-                cli_art.console.print(f"    summary_alignment : {critique_data.get('summary_alignment_score', '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"    skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"    top_third         : {critique_data.get('top_third_score',         '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"    overall_fit       : {critique_data.get('overall_fit_score',        '?')}", markup=False, soft_wrap=True)
+                cli_art.console.rule("Holistic critique scores", style="dim", align="left")
+                cli_art.console.print(f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"top_third         : {critique_data.get('top_third_score',         '?')}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}", markup=False, soft_wrap=True)
                 identity_line = critique_data.get('primary_identity', '?')
                 if critique_data.get('secondary_identity'):
                     identity_line += f" / {critique_data['secondary_identity']}"
-                cli_art.console.print(f"    identity          : {identity_line}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"    weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(markup=False, soft_wrap=True)
+                cli_art.console.print(f"identity          : {identity_line}", markup=False, soft_wrap=True)
+                cli_art.console.print(f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}", markup=False, soft_wrap=True)
+                cli_art.console.print()
                 if hard_failures:
-                    cli_art.console.print(f"  {theme.colorize_icon('error')} Hard rubric failures (added to recommendations):", soft_wrap=True)
+                    cli_art.console.print(f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):", soft_wrap=True)
                     for hf in hard_failures:
-                        cli_art.console.print(f"    - {hf}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {hf}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 flags = critique_data.get("flags", [])
                 if flags:
-                    cli_art.console.print("  Flags:", markup=False, soft_wrap=True)
+                    cli_art.console.print("Flags:", markup=False, soft_wrap=True)
                     for flag in flags:
-                        cli_art.console.print(f"    - {flag}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {flag}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 recs = critique_data.get("recommendations", [])
                 if recs:
-                    cli_art.console.print("  Recommendations:", markup=False, soft_wrap=True)
+                    cli_art.console.print("Recommendations:", markup=False, soft_wrap=True)
                     for rec in recs:
-                        cli_art.console.print(f"    - {rec}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {rec}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 moments = critique_data.get("distinctive_moments", [])
                 if moments:
-                    cli_art.console.print("  Distinctive moments (protected):", markup=False, soft_wrap=True)
+                    cli_art.console.print("Distinctive moments (protected):", markup=False, soft_wrap=True)
                     for m in moments:
-                        cli_art.console.print(f"    - {m}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {m}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 flat = critique_data.get("flat_sections", [])
                 if flat:
-                    cli_art.console.print("  Flat sections:", markup=False, soft_wrap=True)
+                    cli_art.console.print("Flat sections:", markup=False, soft_wrap=True)
                     for f in flat:
-                        cli_art.console.print(f"    - {f}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {f}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 platform_risks = critique_data.get("platform_parsing_risks", [])
                 if platform_risks:
-                    cli_art.console.print("  Platform parsing risks:", markup=False, soft_wrap=True)
+                    cli_art.console.print("Platform parsing risks:", markup=False, soft_wrap=True)
                     for risk in platform_risks:
-                        cli_art.console.print(f"    - {risk}", markup=False, soft_wrap=True)
-                    cli_art.console.print(markup=False, soft_wrap=True)
+                        cli_art.console.print(f"- {risk}", markup=False, soft_wrap=True)
+                    cli_art.console.print()
                 resume_data["_critique"] = critique_data
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
@@ -3453,12 +3448,9 @@ class ResumeEngine:
             if not recs:
                 pass
             elif start_index >= len(recs):
-                cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-                cli_art.console.print("Step 5.5: Resuming: recommendation pass already complete from checkpoint.", markup=False, soft_wrap=True)
+                cli_art.console.rule("Step 5.5: Resuming: recommendation pass already complete from checkpoint.", style="dim", align="left")
             else:
-                cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"Step 5.5: Applying actionable recommendations one at a time "
-                      f"({start_index}/{len(recs)} already done)...", markup=False, soft_wrap=True)
+                cli_art.console.rule(f"Step 5.5: Applying actionable recommendations one at a time ({start_index}/{len(recs)} already done)...", style="dim", align="left")
             resume_data = state["resume_data"]
             applied, skipped = state["applied"], state["skipped"]
             needs_polish = state.get("needs_polish", [])
@@ -3586,8 +3578,7 @@ class ResumeEngine:
             cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}", soft_wrap=True)
 
         # --- Step 7: Render HTML + Generate PDF ---
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print("Step 7: Rendering HTML and generating PDF...", markup=False, soft_wrap=True)
+        cli_art.console.rule("Step 7: Rendering HTML and generating PDF...", style="dim", align="left")
         stem       = _build_output_stem(jd_path)
         html_out   = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
         pdf_out    = os.path.join(self.output_pdf_dir,  f"{stem}_Resume.pdf")

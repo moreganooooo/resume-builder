@@ -1341,7 +1341,8 @@ def process_bullet(
         )
 
         if dry_run:
-            cli_art.console.print(f"\n{'='*60}\nDRY RUN PROMPT (attempt {attempt}):\n{prompt}\n{'='*60}\n", markup=False, soft_wrap=True)
+            cli_art.console.rule(f"DRY RUN PROMPT (attempt {attempt})", style="dim", align="left")
+            cli_art.console.print(prompt, markup=False, soft_wrap=True)
             rewritten = f"[DRY RUN] {original_bullet}"
             reasoning = "dry-run"
             gaps = ""
@@ -1524,8 +1525,7 @@ def main():
 
     for i, (idx, row) in enumerate(df_todo.iterrows(), 1):
         bullet_preview = str(row["Bullet Point"])[:60]
-        cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-        cli_art.console.print(f"[{i}/{total}] {bullet_preview}...", markup=False, soft_wrap=True)
+        cli_art.console.rule(f"[{i}/{total}] {bullet_preview}...", style="dim", align="left")
         cli_art.console.print(f"   Tags: {row.get('Tags', '')}  |  Action: {row.get('next_action', '')}", markup=False, soft_wrap=True)
 
         result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run=args.dry_run)
@@ -1572,7 +1572,7 @@ def main():
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
-    cli_art.console.print(f"\n{'='*60}", markup=False, soft_wrap=True)
+    cli_art.console.rule("Run complete", style="dim", align="left")
     cli_art.console.print(f"{theme.colorize_icon('success')} Run complete: {total} bullets processed", soft_wrap=True)
     cli_art.console.print(f"   KEEP:   {n_keep}", markup=False, soft_wrap=True)
     cli_art.console.print(f"   MANUAL: {n_manual}", markup=False, soft_wrap=True)
