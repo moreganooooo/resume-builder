@@ -345,7 +345,7 @@ existing tests continue to exercise the surrounding logic unchanged.
           cli_art.cli_info(f"[{n}/{len(to_score_idx)}] Scoring: {bullet[:80]}...")
   ```
 
-- [ ] **Step 2:** No dedicated test file exists for this script. Verify
+- [x] **Step 2:** No dedicated test file exists for this script. Verify
   with a syntax/import check:
 
   Run: `python -c "import ast; ast.parse(open('scripts/score_keeper_gems.py').read())" && python -c "import sys; sys.path.insert(0, 'scripts'); import score_keeper_gems"`
@@ -428,7 +428,7 @@ existing tests continue to exercise the surrounding logic unchanged.
       cli_art.cli_info(f"Total unscored rows across all files: {total_unscored}")
   ```
 
-- [ ] **Step 2:** No dedicated test file exists for this script. Verify
+- [x] **Step 2:** No dedicated test file exists for this script. Verify
   with a syntax/import check:
 
   Run: `python -c "import ast; ast.parse(open('scripts/detect_blank_scores.py').read())" && python -c "import sys; sys.path.insert(0, 'scripts'); import detect_blank_scores"`
@@ -499,7 +499,7 @@ existing tests continue to exercise the surrounding logic unchanged.
       cli_art.cli_success(f"Rewrote {REWRITE_QUEUE} with {len(keep_rows)} active rows.")
   ```
 
-- [ ] **Step 2:** No dedicated test file exists for this script. Verify
+- [x] **Step 2:** No dedicated test file exists for this script. Verify
   with a syntax/import check:
 
   Run: `python -c "import ast; ast.parse(open('scripts/retire_rewrite_queue.py').read())" && python -c "import sys; sys.path.insert(0, 'scripts'); import retire_rewrite_queue"`
@@ -654,7 +654,7 @@ with markup enabled — leave those untouched, they're already correct.)
 
 **Files:** Modify `scripts/detect_hidden_gems.py:66,70,96-98,108-109,119,124,126,128`.
 
-- [ ] **Step 1:** Replace each:
+- [x] **Step 1:** Replace each:
 
   Line 66 (real problem — pipeline prerequisite missing):
 
@@ -757,7 +757,7 @@ with markup enabled — leave those untouched, they're already correct.)
       cli_art.cli_success("Done.")
   ```
 
-- [ ] **Step 2:** No dedicated test file exists for this script. Verify
+- [x] **Step 2:** No dedicated test file exists for this script. Verify
   with a syntax/import check:
 
   Run: `python -c "import ast; ast.parse(open('scripts/detect_hidden_gems.py').read())" && python -c "import sys; sys.path.insert(0, 'scripts'); import detect_hidden_gems"`
