@@ -189,7 +189,11 @@ def evaluate(jd_file, yes, refresh):
             cli_art.console.print("Aborted.")
             return
         if already_evaluated:
-            cli_art.console.print(f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)")
+            # Print plain text so tests that assert on the raw substring
+            # (e.g. "1 already-evaluated JD(s) will be skipped") match.
+            from rich.text import Text
+            msg = Text(f"{len(already_evaluated)} already-evaluated JD(s) will be skipped")
+            cli_art.console.print(msg)
 
         cli_art.display_banner(f"Evaluating {len(to_evaluate)} pending JD(s)")
         results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)

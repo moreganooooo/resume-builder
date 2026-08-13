@@ -135,3 +135,4 @@ resume-builder-conversations-perplexity/
 # needed/not relevant on machines where WebKit runs natively.
 /scripts/local-webkit-test.sh
 /scripts/local-webkit-test.Containerfile
+.aider*

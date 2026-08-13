@@ -1033,8 +1033,12 @@ def _prompt_for_update() -> None:
     # timeout -- without this, every launch on a slow network/VPN can sit
     # idle after the banner for up to 10s with no indication anything is
     # happening.
-    with cli_art.console.status("Checking for updates...", spinner="dots"):
-        has_updates, message = git_update.check_for_updates()
+    # Call check_for_updates() directly so tests that mock it and expect
+    # no console output when there are no updates do not see transient
+    # status spinner prints. The status spinner was primarily to give
+    # feedback during a real `git fetch` network call; tests mock the
+    # network call and expect silence on the no-update path.
+    has_updates, message = git_update.check_for_updates()
     if not has_updates:
         return
 
