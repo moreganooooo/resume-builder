@@ -142,7 +142,7 @@ def _build_queries(job_limit: int, search_terms: list) -> list:
     return [_query(text) for text in search_terms]
 
 
-def fetch_linkedin_jobs(limit: int = None) -> list:
+def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     """Runs this profile's saved LinkedIn searches and returns a list of
     job dicts (same shape as job_automater's/JobRight's).
 
@@ -187,7 +187,10 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
         # line (Events.DATA already fires once per job found) is the only
         # real signal available during the run, so a multi-query/slow-page
         # scan doesn't look hung for minutes with only on_error visible.
-        cli_art.cli_info(f"Found: {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+        if activity is not None:
+            activity.step("success", "LinkedIn", f"Found {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+        else:
+            cli_art.cli_info(f"Found: {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
 
         apply_link = getattr(data, "apply_link", None)
         linkedin_link = getattr(data, "link", None)
