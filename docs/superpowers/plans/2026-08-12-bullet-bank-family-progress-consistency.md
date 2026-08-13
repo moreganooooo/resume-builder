@@ -1188,7 +1188,7 @@ This is the largest and last file. Apply the Global Constraints line-choice
 rule to every remaining `console.print(..., markup=False)` call site in the
 file. The verified call sites and their exact treatment:
 
-- [ ] **Step 1:** Replace the confirmed call sites, in file order:
+- [x] **Step 1:** Replace the confirmed call sites, in file order:
 
   ```python
   # ~L811-812
@@ -1364,7 +1364,7 @@ file. The verified call sites and their exact treatment:
   cli_art.cli_success(f"Rewrite queue    -> {os.path.basename(REWRITE_QUEUE_OUT)}")
   ```
 
-- [ ] **Step 2: Sweep for anything not covered above**
+- [x] **Step 2: Sweep for anything not covered above**
 
   Run: `grep -n "markup=False" scripts/audit_keepers.py`
 
@@ -1376,7 +1376,7 @@ file. The verified call sites and their exact treatment:
   specific line communicates), following the pattern of the examples
   above.
 
-- [ ] **Step 3: Convert the Top-10 columnar block to the table renderer**
+- [x] **Step 3: Convert the Top-10 columnar block to the table renderer**
 
   Replace (current, inside `stage3_build_rewrite_queue()`):
 
@@ -1405,20 +1405,20 @@ file. The verified call sites and their exact treatment:
       cli_art.render_rewrite_queue_table(rows, "Top 10 Worst (will be rewritten first if --auto-rewrite)")
   ```
 
-- [ ] **Step 4: Run**
+- [x] **Step 4: Run**
 
   Run: `grep -n "markup=False" scripts/audit_keepers.py`
   Expected: no matches remain.
 
-- [ ] **Step 5:** Run `python -m unittest tests.test_audit_keepers -v`
+- [x] **Step 5:** Run `python -m unittest tests.test_audit_keepers -v`
   Expected: PASS. If any existing test asserts on exact print text
   (verify by reading the file if a failure occurs here), update that
   assertion to match the new themed output.
 
-- [ ] **Step 6:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
+- [x] **Step 6:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
   Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
   ```bash
   git add scripts/audit_keepers.py
