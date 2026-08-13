@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+from rich.markup import escape
 import profile_paths
 import cli_art
 import theme
@@ -143,17 +144,17 @@ def print_report(report: dict) -> None:
         cli_art.console.print(f"   {theme.colorize_icon('error')} Error: {report['error']}", soft_wrap=True)
         return
 
-    cli_art.console.print(f"   Total rows:           {report['total_rows']}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"   Fully unscored rows:  {report['fully_unscored_rows']}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Total rows: {report['total_rows']}")
+    cli_art.cli_info(f"Fully unscored rows: {report['fully_unscored_rows']}")
 
     if report.get("note"):
         cli_art.console.print(f"   {theme.colorize_icon('warning')}  {report['note']}", soft_wrap=True)
 
     if report["missing_by_col"]:
-        cli_art.console.print("   Blank counts per score column:", markup=False, soft_wrap=True)
+        cli_art.cli_info("Blank counts per score column:")
         for col, count in report["missing_by_col"].items():
             status = theme.colorize_icon('success') if count == 0 else theme.colorize_icon('warning')
-            cli_art.console.print(f"     {status} {col}: {count} blank", markup=False, soft_wrap=True)
+            cli_art.console.print(f"   {status} {escape(str(col))}: {count} blank", soft_wrap=True)
     else:
         cli_art.console.print(f"   {theme.colorize_icon('warning')}  No score columns present in this file.", soft_wrap=True)
 
@@ -201,7 +202,7 @@ def main():
 
     cli_art.console.print()
     cli_art.console.rule(style="dim")
-    cli_art.console.print(f"Total unscored rows across all files: {total_unscored}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Total unscored rows across all files: {total_unscored}")
 
     if total_unscored == 0:
         cli_art.console.print(f"{theme.colorize_icon('success')} All bullet bank files are fully scored. Nothing to do.", soft_wrap=True)
