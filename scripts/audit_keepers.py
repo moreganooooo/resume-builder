@@ -807,12 +807,11 @@ def stage3_build_rewrite_queue(
             ].copy()
             excluded_a = before_a - len(df_keeper_bad)
             if excluded_a:
-                cli_art.console.print(f"   Excluded {excluded_a} already-attempted MANUAL bullet(s) from keeper audit "
-                      f"(pass --retry-manual to include them again)", markup=False, soft_wrap=True)
+                cli_art.cli_info(f"Excluded {excluded_a} already-attempted MANUAL bullet(s) from keeper audit (pass --retry-manual to include them again)")
 
     df_keeper_bad["queue_source"] = "keeper_audit"
     queue_rows.append(df_keeper_bad)
-    cli_art.console.print(f"   From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
 
     # Source B: MANUAL bullets in cluster map not already processed.
     # SKIPPED when using_audited_source is True — the audited file is the
@@ -820,8 +819,8 @@ def stage3_build_rewrite_queue(
     # the queue back to the full original size (exactly the problem
     # we're fixing).
     if using_audited_source:
-        cli_art.console.print("   Source B (cluster-map MANUAL): SKIPPED — loading from keepers-audited.csv.", markup=False, soft_wrap=True)
-        cli_art.console.print("   Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.", markup=False, soft_wrap=True)
+        cli_art.cli_info("Source B (cluster-map MANUAL): SKIPPED -- loading from keepers-audited.csv.")
+        cli_art.detail("Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.", level=cli_art.NORMAL)
     else:
         map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
         if os.path.exists(map_path):
@@ -864,7 +863,7 @@ def stage3_build_rewrite_queue(
             excluded = before - len(df_map_manual)
             if excluded:
                 suffix = "" if retry_manual else " (pass --retry-manual to include previously-failed clusters again)"
-                cli_art.console.print(f"   Excluded {excluded} already-processed bullets (kept, or previously MANUAL){suffix}", markup=False, soft_wrap=True)
+                cli_art.cli_info(f"Excluded {excluded} already-processed bullets (kept, or previously MANUAL){suffix}")
 
             # Carry over scores if present in the cluster map
             for col in SCORE_COLS:
@@ -873,7 +872,7 @@ def stage3_build_rewrite_queue(
 
             df_map_manual["queue_source"] = "cluster_map_manual"
             queue_rows.append(df_map_manual)
-            cli_art.console.print(f"   From cluster map MANUAL (not in keepers): {len(df_map_manual)}", markup=False, soft_wrap=True)
+            cli_art.cli_info(f"From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
         else:
             cli_art.console.print(f"   {theme.colorize_icon('warning')}  Cluster map not found — skipping cluster-map MANUAL source.", soft_wrap=True)
 
@@ -897,7 +896,7 @@ def stage3_build_rewrite_queue(
     # Deduplicate on bullet text
     before_dedup = len(df_queue)
     df_queue = df_queue.drop_duplicates(subset=["Bullet Point"], keep="first").copy()
-    cli_art.console.print(f"   Deduplicated: {before_dedup} → {len(df_queue)} unique bullets", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Deduplicated: {before_dedup} -> {len(df_queue)} unique bullets")
 
     if df_queue.empty:
         cli_art.console.print(f"   {theme.colorize_icon('success')} Queue is empty — nothing to rewrite!", soft_wrap=True)
@@ -911,17 +910,19 @@ def stage3_build_rewrite_queue(
 
     df_queue.to_csv(REWRITE_QUEUE_OUT, index=False)
     cli_art.console.print(f"   {theme.colorize_icon('save')} Rewrite queue written ({len(df_queue)} bullets) → {os.path.basename(REWRITE_QUEUE_OUT)}", soft_wrap=True)
-    cli_art.console.print(f"   Lowest composite: {df_queue['composite_score'].min():.0f}  "
-          f"Highest: {df_queue['composite_score'].max():.0f}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Lowest composite: {df_queue['composite_score'].min():.0f}  Highest: {df_queue['composite_score'].max():.0f}")
 
     # Print top 10 worst for easy triage
-    cli_art.console.print("\n   Top 10 worst (will be rewritten first if --auto-rewrite):", markup=False, soft_wrap=True)
+    rows = []
     for _, row in df_queue.head(10).iterrows():
-        bp  = str(row.get("Bullet Point", ""))[:65]
-        src = row.get("queue_source", "")
-        cmp = row.get("composite_score", 0)
-        mgr = str(row.get("manager_test", "")).upper()
-        cli_art.console.print(f"      #{int(row['queue_rank']):>3}  [{src:<20}]  cmp={cmp:>5.0f}  mgr={mgr:<4}  {bp}...", markup=False, soft_wrap=True)
+        rows.append({
+            "rank": int(row["queue_rank"]),
+            "source": row.get("queue_source", ""),
+            "composite": row.get("composite_score", 0),
+            "manager_test": str(row.get("manager_test", "")).upper(),
+            "bullet": str(row.get("Bullet Point", ""))[:65],
+        })
+    cli_art.render_rewrite_queue_table(rows, "Top 10 Worst (will be rewritten first if --auto-rewrite)")
 
     return df_queue
 
@@ -973,7 +974,7 @@ def stage4_auto_rewrite(
     df_run = df_queue.copy()
     if limit:
         df_run = df_run.head(limit)
-        cli_art.console.print(f"   --limit set: processing {limit} of {len(df_queue)} queued bullets.", markup=False, soft_wrap=True)
+        cli_art.cli_info(f"--limit set: processing {limit} of {len(df_queue)} queued bullets.")
 
     total  = len(df_run)
     n_keep = 0
@@ -982,10 +983,9 @@ def stage4_auto_rewrite(
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         original_bullet_text = str(row.get("Bullet Point", "")).strip()
         bullet_preview = original_bullet_text[:60]
-        cli_art.console.print(f"\n{'─' * 60}", markup=False, soft_wrap=True)
-        cli_art.console.print(f"[{i}/{total}] {bullet_preview}...", markup=False, soft_wrap=True)
-        cli_art.console.print(f"   Source: {row.get('queue_source', '')}  "
-              f"Composite: {row.get('composite_score', '?')}", markup=False, soft_wrap=True)
+        cli_art.console.rule(style="dim")
+        cli_art.cli_info(f"[{i}/{total}] {bullet_preview}...")
+        cli_art.detail(f"Source: {row.get('queue_source', '')}  Composite: {row.get('composite_score', '?')}", level=cli_art.NORMAL)
 
         result = process_bullet(
             row=row,
@@ -1076,7 +1076,7 @@ def stage4_auto_rewrite(
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
-    cli_art.console.print(f"\n   Stage 4 complete → KEEP: {n_keep} | MANUAL: {n_manual}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Stage 4 complete -> KEEP: {n_keep} | MANUAL: {n_manual}")
     return df_keepers
 
 
@@ -1114,21 +1114,16 @@ def main():
     )
     args = parser.parse_args()
 
-    cli_art.console.print("\n" + "─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print("  audit_keepers.py  —  Keeper Audit Pipeline", markup=False, soft_wrap=True)
-    cli_art.console.print("─" * 60, markup=False, soft_wrap=True)
-    cli_art.console.print(f"  dry_run:             {args.dry_run}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  skip_rescore:        {args.skip_rescore}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  auto_rewrite:        {args.auto_rewrite}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  rebuild_from_keepers: {args.rebuild_from_keepers}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  retry_manual:        {args.retry_manual}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  limit:               {args.limit}", markup=False, soft_wrap=True)
+    cli_art.console.rule(f"[bold {theme.BRAND}]audit_keepers.py -- Keeper Audit Pipeline[/bold {theme.BRAND}]", style="dim")
+    cli_art.detail(f"dry_run: {args.dry_run}  skip_rescore: {args.skip_rescore}  auto_rewrite: {args.auto_rewrite}  "
+                   f"rebuild_from_keepers: {args.rebuild_from_keepers}  retry_manual: {args.retry_manual}  limit: {args.limit}",
+                   level=cli_art.VERBOSE)
 
     # --- Resolve source file ---
     source_file = resolve_source_file(args.rebuild_from_keepers, KEEPERS_IN, KEEPERS_AUDITED)
     if source_file == KEEPERS_AUDITED:
         cli_art.console.print(f"\n   {theme.colorize_icon('discovery')} Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).", soft_wrap=True)
-        cli_art.console.print(   "      CLEAN rows will be skipped; cluster-map Source B skipped entirely.", markup=False, soft_wrap=True)
+        cli_art.detail("CLEAN rows will be skipped; cluster-map Source B skipped entirely.", level=cli_art.NORMAL)
     elif args.rebuild_from_keepers:
         cli_art.console.print(f"\n   {theme.colorize_icon('warning')}  --rebuild-from-keepers: loading fresh from "
               f"{os.path.basename(KEEPERS_IN)}, discarding any correction only present in "
@@ -1206,7 +1201,7 @@ def main():
     # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:
         if df_queue.empty:
-            cli_art.console.print("\n   STAGE 4 skipped — queue is empty.", markup=False, soft_wrap=True)
+            cli_art.cli_info("STAGE 4 skipped -- queue is empty.")
         else:
             # Warm cache again over the queue-specific bullets for best prefix hits
             if kb is not None:
@@ -1226,17 +1221,14 @@ def main():
             cli_art.console.print(f"\n   {theme.colorize_icon('save')} Final audited keepers saved → {os.path.basename(KEEPERS_AUDITED)}", soft_wrap=True)
     else:
         if not df_queue.empty:
-            cli_art.console.print(
-                f"\n   {len(df_queue)} bullets queued. "
-                f"Run with --auto-rewrite to process them."
-            , markup=False, soft_wrap=True)
+            cli_art.cli_info(f"{len(df_queue)} bullets queued. Run with --auto-rewrite to process them.")
 
     cli_art.console.print()
     cli_art.console.rule(style="dim")
     cli_art.console.print(f"  {theme.colorize_icon('success')}  audit_keepers.py complete", soft_wrap=True)
-    cli_art.console.print(f"     Audited keepers  → {os.path.basename(KEEPERS_AUDITED)}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"     Discrepancies    → {os.path.basename(DISCREPANCIES_OUT)}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"     Rewrite queue    → {os.path.basename(REWRITE_QUEUE_OUT)}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Audited keepers  -> {os.path.basename(KEEPERS_AUDITED)}")
+    cli_art.cli_success(f"Discrepancies    -> {os.path.basename(DISCREPANCIES_OUT)}")
+    cli_art.cli_success(f"Rewrite queue    -> {os.path.basename(REWRITE_QUEUE_OUT)}")
     cli_art.console.rule(style="dim")
     cli_art.console.print()
 
