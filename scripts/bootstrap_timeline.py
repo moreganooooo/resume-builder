@@ -178,7 +178,7 @@ def match_to_timeline(
             return matches[0].company, "medium"
 
     if dry_run:
-        cli_art.console.print(f"[DRY RUN] would ask the LLM to match: {achievement.raw_text[:60]!r}", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"[DRY RUN] would ask the LLM to match: {cli_art._escape_markup(achievement.raw_text[:60])!r}")
         return "Misc. / Unassigned", "low"
 
     if timeline:

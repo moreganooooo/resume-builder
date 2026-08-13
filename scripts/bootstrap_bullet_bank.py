@@ -195,16 +195,15 @@ def _save_checkpoint(state: dict) -> None:
 def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
     kind = bootstrap_extractors.detect_file_kind(path)
     if kind == "unsupported":
-        cli_art.console.print(f"  Skipping {filename}: unsupported file type.", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"  Skipping {cli_art._escape_markup(filename)}: unsupported file type.")
         return {"status": "error", "doc_type": "other"}
 
     if kind == "doc":
         converted = bootstrap_extractors.convert_legacy_doc_to_pdf(path)
         if converted is None:
-            cli_art.console.print(
-                f"  Skipping {filename}: legacy .doc format and LibreOffice isn't "
-                f"available. Please re-save it as .docx or .pdf."
-            , markup=False, soft_wrap=True)
+            cli_art.print_literal(
+                f"  Skipping {cli_art._escape_markup(filename)}: legacy .doc format and LibreOffice isn't available. Please re-save it as .docx or .pdf."
+            )
             return {"status": "error", "doc_type": "other"}
         path, kind = converted, "pdf"
 
@@ -361,12 +360,12 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     if force:
         existing_rows = _existing_clean_bank_row_count()
         if existing_rows:
-            cli_art.console.print(
+            cli_art.print_literal(
                 f"\n{theme.colorize_icon('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
-                f"existing row(s) in {os.path.basename(BULLET_BANK_CLEAN_PATH)} with a full "
+                f"existing row(s) in {cli_art._escape_markup(os.path.basename(BULLET_BANK_CLEAN_PATH))} with a full "
                 "reconstruction from the checkpoint. This discards anything not reachable from "
                 "checkpoint.json and cannot be undone."
-            , soft_wrap=True)
+            )
 
     os.makedirs(SOURCE_DOCS_DIR, exist_ok=True)
     checkpoint = _load_checkpoint()
@@ -464,12 +463,12 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
 
 
 def print_ingestion_summary(summary: dict) -> None:
-    cli_art.console.print(
+    cli_art.print_literal(
         f"\nExtracted {summary['extracted']} achievement(s), "
         f"{summary['attributed']} confidently attributed, "
         f"{summary['flagged']} flagged for review, "
         f"{summary['certificates']} certificate(s) found."
-    , markup=False, soft_wrap=True)
+    )
     if summary.get("failed"):
         cli_art.console.print(
             f"{theme.colorize_icon('warning')}  {summary['failed']} document(s) failed to process "
@@ -536,16 +535,16 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
         if i in _CONFIRMATION_GATES and not skip_confirm:
             proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE).ask()
             if not proceed:
-                cli_art.console.print("Stopped. Re-run this same command later to continue from here.", markup=False, soft_wrap=True)
+                cli_art.print_literal("Stopped. Re-run this same command later to continue from here.")
                 return False
 
-        cli_art.console.print(f"\n{_STAGE_HINTS[i]}", markup=False, soft_wrap=True)
-        cli_art.console.print(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {script_name}...", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"\n{_STAGE_HINTS[i]}")
+        cli_art.print_literal(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {cli_art._escape_markup(script_name)}...")
         if not run_stage(script_name):
-            cli_art.console.print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"\nStage {i + 1} ({cli_art._escape_markup(script_name)}) failed. Re-run this same command to resume from here.")
             return False
 
-    cli_art.console.print(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.", soft_wrap=True)
+    cli_art.print_literal(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.")
     return True
 
 
@@ -582,7 +581,7 @@ def main():
         bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
 
     if args.dry_run:
-        cli_art.console.print("\n--dry-run set: skipping the six-stage pipeline.", markup=False, soft_wrap=True)
+        cli_art.print_literal("\n--dry-run set: skipping the six-stage pipeline.")
         return
 
     if args.scope in ("bullets", "both"):
