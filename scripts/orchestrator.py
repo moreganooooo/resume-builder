@@ -696,9 +696,8 @@ def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job
     if approved_recs is not None:
         return approved_recs
 
-    cli_art.console.print(f"\n{'─'*60}", markup=False, soft_wrap=True)
-    cli_art.console.print("Step 5.5 review: approve which recommendations to attempt "
-          "(nothing below is applied until you say yes).", markup=False, soft_wrap=True)
+    cli_art.console.rule("Step 5.5 review", style=theme.BRAND)
+    cli_art.detail("approve which recommendations to attempt (nothing below is applied until you say yes).", level=cli_art.NORMAL)
     approved_recs = []
     for idx, rec in enumerate(recs, start=1):
         answer = questionary.confirm(
@@ -714,7 +713,7 @@ def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job
     checkpoint["approved_recommendations"] = approved_recs
     jd_manager.save_checkpoint(job_key, checkpoint)
     if not approved_recs:
-        cli_art.console.print("  None approved -- skipping Step 5.5.", markup=False, soft_wrap=True)
+        cli_art.detail("None approved -- skipping Step 5.5.", level=cli_art.NORMAL)
     return approved_recs
 
 
