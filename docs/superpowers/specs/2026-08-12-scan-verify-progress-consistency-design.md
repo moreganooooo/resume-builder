@@ -161,10 +161,14 @@ summary still feeds `render_scan_report()` exactly as it does today.
   structured-JSON-first with raw-line fallback.
 - `scripts/check-liveness.mjs` — emits structured progress lines to
   stderr, gated behind `--json-file`.
-- `tests/test_cli_art.py` — new file; covers `ScanActivity.step()`/
-  `.tally()` formatting.
+- `tests/test_cli_art.py` — already exists; add coverage for
+  `ScanActivity.step()`/`.tally()` formatting.
 - `tests/test_liveness.py` — new test for the JSON-line-vs-raw-line
-  fallback parsing.
+  fallback parsing, built on the file's existing `_mock_popen()` helper.
+- `scripts/check-liveness.test.mjs` — new file, following the
+  `node --test` / `node:test` + `node:assert/strict` convention
+  `board-scanners/run_provider.test.mjs` already established; covers the
+  new structured-progress-event builder.
 
 No changes to any fetcher's return value or to `run_scan()`'s return
 contract — `activity` is optional and additive, so
