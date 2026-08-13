@@ -716,7 +716,7 @@ class KnowledgeBase:
 
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
-        cli_art.console.print("   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n", markup=False, soft_wrap=True)
+        cli_art.console.print("   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n", soft_wrap=True)
 
     def _build_static_prefix(self) -> str:
         sections = []
@@ -1342,7 +1342,7 @@ def process_bullet(
 
         if dry_run:
             cli_art.console.rule(f"DRY RUN PROMPT (attempt {attempt})", style="dim", align="left")
-            cli_art.console.print(prompt, markup=False, soft_wrap=True)
+            cli_art.console.print(cli_art._escape_markup(prompt), soft_wrap=True)
             rewritten = f"[DRY RUN] {original_bullet}"
             reasoning = "dry-run"
             gaps = ""
@@ -1413,7 +1413,7 @@ def process_bullet(
             f"ats={new_scores.get('ats_value')} "
             f"mgr={new_scores.get('manager_test')} → {action}"
         , soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.console.print()
 
         if action == "KEEP" and new_scores.get("manager_test", "").upper() == "PASS":
             return {
@@ -1526,7 +1526,7 @@ def main():
     for i, (idx, row) in enumerate(df_todo.iterrows(), 1):
         bullet_preview = str(row["Bullet Point"])[:60]
         cli_art.console.rule(f"[{i}/{total}] {bullet_preview}...", style="dim", align="left")
-        cli_art.console.print(f"   Tags: {row.get('Tags', '')}  |  Action: {row.get('next_action', '')}", markup=False, soft_wrap=True)
+        cli_art.console.print(cli_art._escape_markup(f"   Tags: {row.get('Tags', '')}  |  Action: {row.get('next_action', '')}"), soft_wrap=True)
 
         result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run=args.dry_run)
 
@@ -1574,10 +1574,10 @@ def main():
 
     cli_art.console.rule("Run complete", style="dim", align="left")
     cli_art.console.print(f"{theme.colorize_icon('success')} Run complete: {total} bullets processed", soft_wrap=True)
-    cli_art.console.print(f"   KEEP:   {n_keep}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"   MANUAL: {n_manual}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"   Cluster map → {CLUSTER_MAP_OUT}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"   Keepers     → {KEEPERS_OUT}", markup=False, soft_wrap=True)
+    cli_art.console.print(cli_art._escape_markup(f"   KEEP:   {n_keep}"), soft_wrap=True)
+    cli_art.console.print(cli_art._escape_markup(f"   MANUAL: {n_manual}"), soft_wrap=True)
+    cli_art.console.print(cli_art._escape_markup(f"   Cluster map → {CLUSTER_MAP_OUT}"), soft_wrap=True)
+    cli_art.console.print(cli_art._escape_markup(f"   Keepers     → {KEEPERS_OUT}"), soft_wrap=True)
 
 
 if __name__ == "__main__":
