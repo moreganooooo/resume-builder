@@ -136,7 +136,7 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     return job
 
 
-def fetch_ats_jobs(sources: list = None) -> list:
+def fetch_ats_jobs(sources: list = None, activity=None) -> list:
     """Runs every enabled tracked_companies.yml entry through its
     resolved provider, plus every enabled search_queries.yml sweep query
     through websearch.mjs. `sources` is accepted for SOURCE_FETCHERS
@@ -158,17 +158,20 @@ def fetch_ats_jobs(sources: list = None) -> list:
     "Jobspresso — Marketing" vs. "boards"'s "jobspresso"), which defeats
     job_key_known()'s source_url+company_name dedup match and produces
     real duplicate JD files (confirmed live: 31 duplicate-URL groups,
-    62 files, before this fix). Prints a "[i/N] ... (~ETA)" progress
-    line per item (scan_boards.ProgressReporter) -- ~400 sequential
+    62 files, before this fix). `activity` (a cli_art.ScanActivity) is
+    optional -- when given, announces each company/sweep as it's
+    checked through the shared themed step-log; ~400 sequential
     subprocess calls with zero feedback otherwise reads as a hang on a
     real run."""
     jobs = []
     companies = [c for c in _load_tracked_companies() if c.get("enabled") is not False]
     queries = [q for q in _load_search_queries() if q.get("enabled") is not False]
-    progress = scan_boards.ProgressReporter(len(companies) + len(queries), label="Checking")
+    if activity is not None:
+        activity.start_source(len(companies) + len(queries), label="Checking")
 
     for company in companies:
-        progress.step(company.get("name") or "?")
+        if activity is not None:
+            activity.step("discovery", "ATS", f"Checking {company.get('name') or '?'}")
         provider_id = _resolve_provider_id(company)
         if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
             continue
@@ -196,7 +199,8 @@ def fetch_ats_jobs(sources: list = None) -> list:
                 time.sleep(remaining)
         last_websearch_call_at = time.monotonic()
 
-        progress.step(query.get("name") or "websearch sweep")
+        if activity is not None:
+            activity.step("discovery", "ATS", f"Checking {query.get('name') or 'websearch sweep'}")
         # _isSweep tells websearch.mjs to prefer the company it extracts
         # from the result URL over `entry.name` (the sweep query's own
         # descriptive name, e.g. "Greenhouse — Marketing & Enablement
