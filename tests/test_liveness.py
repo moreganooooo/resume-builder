@@ -366,3 +366,58 @@ class TestRecencySkip(unittest.TestCase):
         persisted = jd_manager.read_liveness(path)
         self.assertEqual(persisted["result"], "active")
         self.assertEqual(persisted["reason"], "apply button found")
+
+
+class TestVerifyCandidatesActivity(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_liveness_activity")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+        self._real_expired_dir = jd_manager.EXPIRED_DIR
+        jd_manager.EXPIRED_DIR = os.path.join(self.tmp_dir, "expired")
+        self.jd_path = os.path.join(self.tmp_dir, "acme.json")
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump({"source_url": "https://acme.com/job/1", "job_title": "Test"}, f)
+
+    def tearDown(self):
+        jd_manager.EXPIRED_DIR = self._real_expired_dir
+        for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        if os.path.exists(self.tmp_dir):
+            os.rmdir(self.tmp_dir)
+
+    @patch("liveness.subprocess.Popen")
+    def test_structured_progress_line_routes_through_activity_step(self, mock_popen):
+        progress_line = json.dumps({
+            "type": "progress", "index": 1, "total": 1, "result": "active",
+            "code": "apply_control_visible", "reason": None, "source_file": self.jd_path,
+        }) + "\n"
+        mock_popen.side_effect = _mock_popen(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": self.jd_path, "url": "https://acme.com/job/1",
+             "result": "active", "code": "apply_control_visible", "reason": None},
+        ]), stderr_lines=[progress_line])
+
+        activity = MagicMock()
+        liveness.verify_jd_paths([self.jd_path], activity=activity)
+
+        activity.step.assert_called_once()
+        args = activity.step.call_args.args
+        self.assertEqual(args[0], "success")
+        self.assertEqual(args[1], "Verify")
+
+    @patch("liveness.subprocess.Popen")
+    @patch("liveness.cli_art.print_subprocess_output")
+    def test_non_json_stderr_line_falls_back_to_raw_passthrough(self, mock_print_raw, mock_popen):
+        mock_popen.side_effect = _mock_popen(returncode=0, stdout=json.dumps([
+            {"job_key": "abc", "source_file": self.jd_path, "url": "https://acme.com/job/1",
+             "result": "active", "code": "apply_control_visible", "reason": None},
+        ]), stderr_lines=["Fatal: something unexpected\n"])
+
+        activity = MagicMock()
+        liveness.verify_jd_paths([self.jd_path], activity=activity)
+
+        activity.step.assert_not_called()
+        mock_print_raw.assert_called_once()
