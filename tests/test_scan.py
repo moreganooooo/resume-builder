@@ -106,7 +106,7 @@ class TestRunScanVerify(unittest.TestCase):
              patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
              patch("scan.liveness.verify_jd_paths", return_value={"expired_source_paths": []}) as mock_verify:
             scan.run_scan(["boards"])
-        mock_verify.assert_called_once_with(["/tmp/fake.json"])
+        mock_verify.assert_called_once_with(["/tmp/fake.json"], activity=ANY)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")

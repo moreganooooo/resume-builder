@@ -233,7 +233,8 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                 ).ask()
             if not proceed:
                 paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
-        verify_result = liveness.verify_jd_paths(paths_to_verify)
+        with cli_art.new_scan_activity() as verify_activity:
+            verify_result = liveness.verify_jd_paths(paths_to_verify, activity=verify_activity)
         for path in verify_result.get("expired_source_paths", []):
             entry = written_paths.get(path)
             if not entry:
