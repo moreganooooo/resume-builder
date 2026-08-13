@@ -50,7 +50,7 @@ def main():
         w = csv.DictWriter(f, fieldnames=KEEP_COLUMNS)
         w.writeheader()
         w.writerows(trimmed_rows)
-    cli_art.console.print(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)")
 
 
 if __name__ == "__main__":
