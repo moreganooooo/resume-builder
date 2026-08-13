@@ -36,6 +36,18 @@ const RESULT_ICONS = PLAIN_ICONS
   : { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' };
 const UNKNOWN_ICON = PLAIN_ICONS ? '?' : '❓';
 
+export function buildProgressEvent(index, total, candidate, result, code, reason) {
+  return {
+    type: 'progress',
+    index: index + 1,
+    total,
+    result,
+    code,
+    reason: reason || null,
+    source_file: candidate.source_file,
+  };
+}
+
 async function runJsonMode(candidatesPath) {
   const text = await readFile(candidatesPath, 'utf-8');
   const candidates = JSON.parse(text);
@@ -50,13 +62,7 @@ async function runJsonMode(candidatesPath) {
       const candidate = candidates[i];
       const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
 
-      // Progress indicator: [i/total] + status + reason if applicable
-      const icon = RESULT_ICONS[result] || UNKNOWN_ICON;
-      const progress = `[${i + 1}/${candidates.length}]`;
-      console.error(`${progress} ${icon} ${result.padEnd(14)} ${candidate.source_file}`);
-      if (reason && result !== 'active' && result !== 'likely_active') {
-        console.error(`         → ${reason}`);
-      }
+      console.error(JSON.stringify(buildProgressEvent(i, candidates.length, candidate, result, code, reason)));
 
       results.push({ ...candidate, result, code, reason });
     }
@@ -121,7 +127,15 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('Fatal:', err.message);
-  process.exit(1);
-});
+// Only auto-run when this file is the direct entry point (`node
+// check-liveness.mjs ...`) -- ESM's equivalent of CommonJS's
+// `require.main === module`. Without this, importing buildProgressEvent
+// for a unit test (check-liveness.test.mjs) also runs main() as a side
+// effect of the import, which sees no argv and exits the whole test
+// process via the "no args" usage-and-exit(1) path above.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(err => {
+    console.error('Fatal:', err.message);
+    process.exit(1);
+  });
+}
