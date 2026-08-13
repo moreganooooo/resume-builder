@@ -61,7 +61,7 @@ def main():
     content = build_voice_anchors()
     with atomic_write(OUTPUT_MD, encoding="utf-8") as f:
         f.write(content)
-    cli_art.console.print(f"Wrote {OUTPUT_MD}", markup=False, soft_wrap=True)
+    cli_art.print_literal(f"Wrote {cli_art._escape_markup(OUTPUT_MD)}")
 
 
 if __name__ == "__main__":

@@ -194,5 +194,5 @@ def sync() -> bool:
 if __name__ == "__main__":
     theme_changed = _write_if_changed(DASHBOARD_THEME_PATH, build_go_theme_source())
     labels_changed = _write_if_changed(SUBSCORE_LABELS_PATH, build_subscore_labels_source())
-    cli_art.console.print(f"{DASHBOARD_THEME_PATH}: {'updated' if theme_changed else 'already in sync'}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"{SUBSCORE_LABELS_PATH}: {'updated' if labels_changed else 'already in sync'}", markup=False, soft_wrap=True)
+    cli_art.print_literal(f"{cli_art._escape_markup(DASHBOARD_THEME_PATH)}: {'updated' if theme_changed else 'already in sync'}")
+    cli_art.print_literal(f"{cli_art._escape_markup(SUBSCORE_LABELS_PATH)}: {'updated' if labels_changed else 'already in sync'}")

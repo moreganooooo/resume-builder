@@ -1873,7 +1873,7 @@ class ResumeEngine:
         self._gemma_segment_cache = {}
         pairs = sorted({(company, self._normalize_tags(tags)) for _, company, tags in bullet_tuples})
         cli_art.detail(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
-        cli_art.detail("", markup=False)
+        cli_art.detail("")
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
@@ -2234,7 +2234,7 @@ class ResumeEngine:
                 cli_art.console.print(f"   {theme.colorize_icon('warning')}  Critique error on bullet {i+1}: {e}", soft_wrap=True)
                 _record(bullet, None)
 
-        cli_art.console.print(f"\n{'='*60}", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"\n{'='*60}")
         cli_art.console.print(f"{theme.colorize_icon('success')} Audit complete: {len(refined_bullets)} bullets refined", soft_wrap=True)
 
         # Sort bullets deterministically by manager_test and believability_score.
@@ -2275,7 +2275,7 @@ class ResumeEngine:
         this a company's guaranteed minimum could fill entirely with
         near-identical bullets about the same underlying achievement.
         """
-        cli_art.console.print("\nMining bullet bank...", markup=False, soft_wrap=True)
+        cli_art.detail("\nMining bullet bank...", level=cli_art.NORMAL)
         bank_csv  = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         emb_npy   = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
         emb_meta  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
@@ -2450,8 +2450,7 @@ class ResumeEngine:
         company_out = top_df["Role / Company"].fillna("").tolist() if "Role / Company" in top_df.columns else ["" ] * len(top_df)
         tags_out    = top_df["Tags"].fillna("").tolist()            if "Tags"           in top_df.columns else ["" ] * len(top_df)
 
-        cli_art.console.print(f"  Mined {len(bullets_out)} bullets from bank "
-              f"({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).", markup=False, soft_wrap=True)
+        cli_art.detail(f"  Mined {len(bullets_out)} bullets from bank ({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).", level=cli_art.NORMAL)
         return list(zip(bullets_out, company_out, tags_out))
 
     def build_fit_evaluation_context(self, jd_text: str) -> str:
@@ -2775,9 +2774,9 @@ class ResumeEngine:
         violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
 
         if violations:
-            cli_art.console.print(f"  Validator found {len(violations)} issue(s), retrying once:", markup=False, soft_wrap=True)
+            cli_art.detail(f"  Validator found {len(violations)} issue(s), retrying once:", level=cli_art.NORMAL)
             for v in violations:
-                cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
+                cli_art.detail(f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL)
             fix_contents = (
                 f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
                 f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
@@ -2794,9 +2793,9 @@ class ResumeEngine:
                 letter_data = fixed_data
                 violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
             if violations:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:", soft_wrap=True)
+                cli_art.detail(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:", level=cli_art.NORMAL)
                 for v in violations:
-                    cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
+                    cli_art.detail(f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL)
 
         _resolve_contact_fallback(letter_data, jd_data)
         letter_data["company_location"] = _resolve_company_location(research, jd_data)
@@ -2810,7 +2809,7 @@ class ResumeEngine:
         os.makedirs(os.path.dirname(json_out), exist_ok=True)
         with open(json_out, "w", encoding="utf-8") as f:
             json.dump(letter_data, f, indent=2, ensure_ascii=False)
-        cli_art.console.print(f"  Cover letter saved to: {json_out}", markup=False, soft_wrap=True)
+        cli_art.detail(f"  Cover letter saved to: {cli_art._escape_markup(json_out)}", level=cli_art.NORMAL)
 
         render_coverletter(letter_data, html_out)
 
@@ -2833,14 +2832,12 @@ class ResumeEngine:
 
         cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data)
         if cl_text_warnings:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found "
-                  f"{len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse "
-                  f"from the file, not just the pre-render JSON):", soft_wrap=True)
+            cli_art.detail(f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found {len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse from the file, not just the pre-render JSON):", level=cli_art.NORMAL)
             for w in cl_text_warnings:
-                cli_art.console.print(f"    - {w}", markup=False, soft_wrap=True)
+                cli_art.detail(f"    - {cli_art._escape_markup(str(w))}", level=cli_art.NORMAL)
 
         letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {pdf_out}", soft_wrap=True)
+        cli_art.detail(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {cli_art._escape_markup(pdf_out)}", level=cli_art.NORMAL)
         return letter_data
 
     def build_tailored_resume(
@@ -2867,7 +2864,7 @@ class ResumeEngine:
         so Google can cache-hit the KB prefix on every builder call regardless
         of JD changes.
         """
-        cli_art.console.print(f"\nBuilding tailored resume for: {jd_path}", markup=False, soft_wrap=True)
+        cli_art.print_literal(f"\nBuilding tailored resume for: {cli_art._escape_markup(jd_path)}")
 
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
@@ -2877,7 +2874,7 @@ class ResumeEngine:
 
         situational_candidates = situational_roles.detect_situational_candidates(jd_text)
         if situational_candidates:
-            cli_art.console.print(f"  Situational role candidate(s) cleared the keyword gate: {', '.join(situational_candidates)}", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"  Situational role candidate(s) cleared the keyword gate: {cli_art._escape_markup(', '.join(situational_candidates))}")
 
         if job_key is None:
             job_key = jd_manager.compute_job_key(jd_path)
@@ -2890,7 +2887,7 @@ class ResumeEngine:
         cli_art.console.rule("Step 1: Extracting JD keywords...", style="dim", align="left")
         jd_keywords = checkpoint.get("jd_keywords")
         if jd_keywords is not None:
-            cli_art.console.print("  Resuming: using JD keywords from checkpoint.", markup=False, soft_wrap=True)
+            cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
         else:
             extract_prompt = self.load_prompt("extract_keywords.md")
             with cli_art.console.status("Calling Gemini...", spinner="dots"):
@@ -2912,22 +2909,22 @@ class ResumeEngine:
                 # cost that. Interactive callers may override; batch marks the
                 # JD failed and moves to the next one.
                 cli_art.console.print(f"  {theme.colorize_icon('error')} JD keyword extraction returned nothing.", soft_wrap=True)
-                cli_art.console.print("    This usually means the file isn't a job description "
-                      "(wrong path, an empty export, or a login/error page saved as text).", markup=False, soft_wrap=True)
+                cli_art.print_literal("    This usually means the file isn't a job description "
+                      "(wrong path, an empty export, or a login/error page saved as text).")
                 if not (interactive and _confirm_continue_without_keywords()):
-                    cli_art.console.print("    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1.", markup=False, soft_wrap=True)
+                    cli_art.print_literal("    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1.")
                     return None
-                cli_art.console.print("    Continuing at your request, with empty keywords.", markup=False, soft_wrap=True)
+                cli_art.print_literal("    Continuing at your request, with empty keywords.")
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
-        cli_art.console.print(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}", markup=False, soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.print_literal(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
+        cli_art.print_literal()
 
         # --- Step 2: Mine bullet bank ---
         cli_art.console.rule("Step 2: Mining bullet bank...", style="dim", align="left")
         bullet_tuples = checkpoint.get("bullet_tuples")
         if bullet_tuples is not None:
-            cli_art.console.print(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.", markup=False, soft_wrap=True)
+                cli_art.print_literal(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
         else:
             bullet_tuples = self.mine_bullet_bank(
                 jd_text, master_resume,
@@ -2935,8 +2932,8 @@ class ResumeEngine:
             )
             checkpoint["bullet_tuples"] = bullet_tuples
             jd_manager.save_checkpoint(job_key, checkpoint)
-        cli_art.console.print(f"  {len(bullet_tuples)} bullet tuples retrieved.", markup=False, soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.print_literal(f"  {len(bullet_tuples)} bullet tuples retrieved.")
+        cli_art.print_literal()
 
         # --- Step 3: Audit and refine bullets ---
         cli_art.console.rule("Step 3: Auditing bullets...", style="dim", align="left")
@@ -2955,8 +2952,8 @@ class ResumeEngine:
         refined_bullets = [b for b in refined_tuples if b]  # plain strings for builder
         checkpoint["refined_bullets"] = refined_tuples
         jd_manager.save_checkpoint(job_key, checkpoint)
-        cli_art.console.print(f"  {len(refined_bullets)} bullets after audit.", markup=False, soft_wrap=True)
-        cli_art.console.print(markup=False, soft_wrap=True)
+        cli_art.print_literal(f"  {len(refined_bullets)} bullets after audit.")
+        cli_art.print_literal()
 
         # audit_and_refine_bullets emits exactly one output bullet per input
         # tuple, in order, so re-pairing by index recovers each bullet's
@@ -3001,7 +2998,7 @@ class ResumeEngine:
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
-            cli_art.console.print("  Resuming: using resume JSON from checkpoint.", markup=False, soft_wrap=True)
+            cli_art.print_literal("  Resuming: using resume JSON from checkpoint.")
         else:
             kb_context = self.load_knowledge_base()
 
@@ -3069,8 +3066,8 @@ class ResumeEngine:
                 f"=== REFINED BULLETS ===\n{bullets_block}"
             )
 
-            cli_art.detail(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens", markup=False)
-            cli_art.detail(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens", markup=False)
+            cli_art.detail(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
+            cli_art.detail(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
 
             # Step 3's audit loop just made up to 30 calls; give the free
             # tier's rolling per-minute token window a moment to recover
@@ -3099,7 +3096,7 @@ class ResumeEngine:
                 cli_art.console.print(f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True)
                 cli_art.console.rule("Raw builder response (truncated)", style="dim", align="left")
                 # Preserve exact text for debugging assertions/tests.
-                cli_art.console.print(resume_text[:500], markup=False, soft_wrap=True)
+                cli_art.print_literal(resume_text[:500])
                 return {}
 
             resume_data = normalize_resume.normalize(resume_data)
@@ -3121,9 +3118,9 @@ class ResumeEngine:
             while violations and fix_attempt < max_fix_attempts:
                 fix_attempt += 1
                 resume_data, violations = best_resume_data, best_violations
-                cli_art.console.print(f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:", markup=False, soft_wrap=True)
+                cli_art.print_literal(f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:")
                 for v in violations:
-                    cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {v}")
                 fix_contents = (
                     f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                     f"=== REFINED BULLETS (source material if an issue requires populating "
@@ -3259,7 +3256,7 @@ class ResumeEngine:
             if violations:
                 cli_art.console.print(f"  {theme.colorize_icon('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:", soft_wrap=True)
                 for v in violations:
-                    cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {v}")
                 return {}
 
             checkpoint["resume_data"] = resume_data
@@ -3275,7 +3272,7 @@ class ResumeEngine:
         cli_art.console.rule("Step 5: Running holistic resume critique...", style="dim", align="left")
         critique_data = checkpoint.get("critique_data")
         if critique_data is not None:
-            cli_art.console.print("  Resuming: using holistic critique from checkpoint.", markup=False, soft_wrap=True)
+            cli_art.print_literal("  Resuming: using holistic critique from checkpoint.")
             resume_data["_critique"] = critique_data
         else:
             critique_prompt = self.load_prompt("critique_resume.md")
@@ -3346,51 +3343,51 @@ class ResumeEngine:
                     ]
 
                 cli_art.console.rule("Holistic critique scores", style="dim", align="left")
-                cli_art.console.print(f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"top_third         : {critique_data.get('top_third_score',         '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}", markup=False, soft_wrap=True)
+                cli_art.print_literal(f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
+                cli_art.print_literal(f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
+                cli_art.print_literal(f"top_third         : {critique_data.get('top_third_score',         '?')}")
+                cli_art.print_literal(f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
                 identity_line = critique_data.get('primary_identity', '?')
                 if critique_data.get('secondary_identity'):
                     identity_line += f" / {critique_data['secondary_identity']}"
-                cli_art.console.print(f"identity          : {identity_line}", markup=False, soft_wrap=True)
-                cli_art.console.print(f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}", markup=False, soft_wrap=True)
-                cli_art.console.print()
+                cli_art.print_literal(f"identity          : {identity_line}")
+                cli_art.print_literal(f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}")
+                cli_art.print_literal()
                 if hard_failures:
                     cli_art.console.print(f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):", soft_wrap=True)
                     for hf in hard_failures:
-                        cli_art.console.print(f"- {hf}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {hf}")
+                    cli_art.print_literal()
                 flags = critique_data.get("flags", [])
                 if flags:
-                    cli_art.console.print("Flags:", markup=False, soft_wrap=True)
+                    cli_art.print_literal("Flags:")
                     for flag in flags:
-                        cli_art.console.print(f"- {flag}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {flag}")
+                    cli_art.print_literal()
                 recs = critique_data.get("recommendations", [])
                 if recs:
-                    cli_art.console.print("Recommendations:", markup=False, soft_wrap=True)
+                    cli_art.print_literal("Recommendations:")
                     for rec in recs:
-                        cli_art.console.print(f"- {rec}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {rec}")
+                    cli_art.print_literal()
                 moments = critique_data.get("distinctive_moments", [])
                 if moments:
-                    cli_art.console.print("Distinctive moments (protected):", markup=False, soft_wrap=True)
+                    cli_art.print_literal("Distinctive moments (protected):")
                     for m in moments:
-                        cli_art.console.print(f"- {m}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {m}")
+                    cli_art.print_literal()
                 flat = critique_data.get("flat_sections", [])
                 if flat:
-                    cli_art.console.print("Flat sections:", markup=False, soft_wrap=True)
+                    cli_art.print_literal("Flat sections:")
                     for f in flat:
-                        cli_art.console.print(f"- {f}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {f}")
+                    cli_art.print_literal()
                 platform_risks = critique_data.get("platform_parsing_risks", [])
                 if platform_risks:
-                    cli_art.console.print("Platform parsing risks:", markup=False, soft_wrap=True)
+                    cli_art.print_literal("Platform parsing risks:")
                     for risk in platform_risks:
-                        cli_art.console.print(f"- {risk}", markup=False, soft_wrap=True)
-                    cli_art.console.print()
+                        cli_art.print_literal(f"- {risk}")
+                    cli_art.print_literal()
                 resume_data["_critique"] = critique_data
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
@@ -3456,7 +3453,7 @@ class ResumeEngine:
                 rec = recs[i]
                 if i > 0:
                     time.sleep(RECOMMENDATION_SLEEP)
-                cli_art.console.print(f"\n  [{i + 1}/{len(recs)}] {rec[:70]}...", markup=False, soft_wrap=True)
+                cli_art.print_literal(f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}...")
                 rec_contents = (
                     f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                     f"{protected_block}"
@@ -3516,18 +3513,18 @@ class ResumeEngine:
                         cli_art.console.print(f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
                               f"discarding just this recommendation:", soft_wrap=True)
                         for v in rec_violations:
-                            cli_art.console.print(f"      - {v}", markup=False, soft_wrap=True)
+                                cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
                         skipped.append(f"{rec} (attempted, discarded: introduced a validator violation)")
                     elif this_applied:
                         resume_data = candidate_resume_data
                         applied.append(rec)
-                        cli_art.console.print(f"    Applied.", markup=False, soft_wrap=True)
+                        cli_art.print_literal("    Applied.")
                     elif this_needs_input:
                         needs_polish.append(rec)
-                        cli_art.console.print(f"    Needs your input -- left unchanged (try `resume polish`).", markup=False, soft_wrap=True)
+                        cli_art.print_literal("    Needs your input -- left unchanged (try `resume polish`).")
                     else:
                         skipped.append(rec)
-                        cli_art.console.print(f"    Skipped (not a resume-content edit).", markup=False, soft_wrap=True)
+                        cli_art.print_literal("    Skipped (not a resume-content edit).")
 
                 checkpoint["recommendation_actions"] = {
                     "resume_data": resume_data, "applied": applied, "skipped": skipped,
@@ -3543,17 +3540,17 @@ class ResumeEngine:
 
             resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped, "needs_polish": needs_polish}
             if applied:
-                cli_art.console.print("\n  Applied:", markup=False, soft_wrap=True)
+                cli_art.print_literal("\n  Applied:")
                 for a in applied:
-                    cli_art.console.print(f"    - {a}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {cli_art._escape_markup(a)}")
             if skipped:
-                cli_art.console.print("  Skipped:", markup=False, soft_wrap=True)
+                cli_art.print_literal("  Skipped:")
                 for s in skipped:
-                    cli_art.console.print(f"    - {s}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {cli_art._escape_markup(s)}")
             if needs_polish:
-                cli_art.console.print("  Needs your input -- good candidates for `resume polish`:", markup=False, soft_wrap=True)
+                cli_art.print_literal("  Needs your input -- good candidates for `resume polish`:")
                 for n in needs_polish:
-                    cli_art.console.print(f"    - {n}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {cli_art._escape_markup(n)}")
 
         # Mirror the company's own vocabulary into bullet text (e.g.
         # "customers" -> "guests"). Deliberately last, after Step 5.5's
@@ -3570,7 +3567,7 @@ class ResumeEngine:
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(resume_data, f, indent=2, ensure_ascii=False)
-            cli_art.console.print(f"\n  Resume saved to: {output_path}", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"\n  Resume saved to: {cli_art._escape_markup(output_path)}")
         except Exception as e:
             cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}", soft_wrap=True)
 
@@ -3636,7 +3633,7 @@ class ResumeEngine:
                     # client roster (fixed_content.CLIENTS marks it
                     # non-essential) before spending an LLM-driven
                     # trim_instructions attempt.
-                    cli_art.console.print(f"  PDF is {page_count} pages ({size_str}), dropping optional client rosters...", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping optional client rosters...")
                     resume_data = normalize_resume.normalize(resume_data, include_optional_clients=False)
                     render_html(resume_data, html_out)
                     continue
@@ -3653,15 +3650,14 @@ class ResumeEngine:
                     # in that response discarded the one edit that actually
                     # freed a page, and Why silently stuck around for every
                     # remaining trim attempt.
-                    cli_art.console.print(f"  PDF is {page_count} pages ({size_str}), dropping the Why section "
-                          f"(first thing to go when space is tight)...", markup=False, soft_wrap=True)
-                    resume_data = dict(resume_data)
-                    resume_data["SECTION_WHY"] = ""
-                    resume_data["WHY_TEXT"] = ""
-                    render_html(resume_data, html_out)
-                    continue
+                                        cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)...")
+                                        resume_data = dict(resume_data)
+                                        resume_data["SECTION_WHY"] = ""
+                                        resume_data["WHY_TEXT"] = ""
+                                        render_html(resume_data, html_out)
+                                        continue
 
-            cli_art.console.print(f"  PDF is {page_count} pages ({size_str}), applying trim step {trim_attempt + 1}/{max_trim_attempts}...", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (
                 f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                 f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
@@ -3695,7 +3691,7 @@ class ResumeEngine:
                 cli_art.console.print(f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
                       f"validator violation(s); discarding this trim and keeping the prior resume_data:", soft_wrap=True)
                 for v in trim_violations:
-                    cli_art.console.print(f"    - {v}", markup=False, soft_wrap=True)
+                    cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
                 trim_attempt += 1
                 continue
 
@@ -3747,7 +3743,7 @@ class ResumeEngine:
         cli_art.console.print(f"  {theme.colorize_icon(coverage_icon)} JD-keyword coverage: {coverage['score']}% "
               f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})", soft_wrap=True)
         if coverage["missing"]:
-            cli_art.console.print(f"    Missing: {', '.join(coverage['missing'])}", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"    Missing: {cli_art._escape_markup(', '.join(coverage['missing']))}")
 
         # B29 (phase-9-backlog.md): same non-blocking, report-not-gate
         # treatment as the coverage check above, and for the same class of
@@ -3791,7 +3787,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         try:
             with open(master_resume_path, "r", encoding="utf-8") as f:
                 master_resume = json.load(f)
-            cli_art.console.print(f"Loaded master resume from: {master_resume_path}", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}")
         except Exception as e:
             cli_art.console.print(f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.", soft_wrap=True)
 
@@ -3803,7 +3799,8 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     else:
         jd_paths = jd_manager.get_pending_jds()
         if not jd_paths:
-            cli_art.console.print("\nNo pending JDs found in jds/. Nothing to do.", markup=False, soft_wrap=True)
+            cli_art.print_literal("\nNo pending JDs found in jds/. Nothing to do.")
+            return 0, 0
             return 0, 0
 
     completed_count = 0
@@ -3853,9 +3850,9 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             failed_count += 1
             aborted_remaining = len(jd_paths) - (index + 1)
             cli_art.console.print(f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping the batch.", soft_wrap=True)
-            cli_art.console.print(f"    {e}", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"    {cli_art._escape_markup(str(e))}")
             if aborted_remaining:
-                cli_art.console.print(f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped.", markup=False, soft_wrap=True)
+                cli_art.print_literal(f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped.")
             break
         except Exception as e:
             result = None
@@ -3882,7 +3879,7 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 evaluation=evaluation,
             )
             completed_count += 1
-            cli_art.console.print(f"\nDone! Resume built successfully for {path}.", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}")
         else:
             tracker.mark_failed(
                 job_key=job_key,

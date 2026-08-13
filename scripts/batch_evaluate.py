@@ -57,7 +57,7 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
     if skip_evaluated:
         already_evaluated, pending_paths = split_evaluated(pending_paths)
         if already_evaluated:
-            cli_art.console.print(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).", markup=False, soft_wrap=True)
+            cli_art.print_literal(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
 
     engine = orchestrator.ResumeEngine()
     results = []

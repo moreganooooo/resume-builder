@@ -59,6 +59,13 @@ def display_success(message: str) -> None:
     escaped -- see display_error()'s docstring."""
     console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}")
 
+
+def print_literal(message: str = "") -> None:
+    """Print a literal string without Rich markup parsing (shortcut used by
+    callers that previously relied on `console.print(..., markup=False)`.
+    Keeps `soft_wrap=True` to match previous call sites."""
+    console.print(message, markup=False, soft_wrap=True)
+
 # Raw block-letter lines, no markup -- color now comes from the diagonal
 # gradient applied per-character in display_main_banner(), not a blanket
 # style wrapper.
