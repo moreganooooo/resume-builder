@@ -24,40 +24,6 @@ class TestChildEnv(unittest.TestCase):
         self.assertIn("PATH", child_env)
 
 
-class TestFormatDuration(unittest.TestCase):
-
-    def test_seconds_only(self):
-        self.assertEqual(scan_boards._format_duration(45), "45s")
-
-    def test_minutes_and_seconds(self):
-        self.assertEqual(scan_boards._format_duration(125), "2m05s")
-
-    def test_hours_and_minutes(self):
-        self.assertEqual(scan_boards._format_duration(3725), "1h02m")
-
-    def test_negative_clamps_to_zero(self):
-        self.assertEqual(scan_boards._format_duration(-5), "0s")
-
-
-class TestProgressReporter(unittest.TestCase):
-
-    def test_no_eta_on_first_step(self):
-        reporter = scan_boards.ProgressReporter(3, label="Checking")
-        with patch("cli_art.console.print") as mock_print:
-            reporter.step("Acme")
-        mock_print.assert_called_once_with("  [1/3] Checking Acme...", markup=False, soft_wrap=True)
-
-    def test_eta_appears_from_second_step_on(self):
-        reporter = scan_boards.ProgressReporter(3, label="Checking")
-        with patch("cli_art.console.print"):
-            reporter.step("Acme")
-        with patch("cli_art.console.print") as mock_print:
-            reporter.step("Widgets Inc")
-        printed = mock_print.call_args[0][0]
-        self.assertIn("[2/3] Checking Widgets Inc...", printed)
-        self.assertIn("remaining)", printed)
-
-
 class TestTitleFilter(unittest.TestCase):
 
     def test_positive_keyword_passes(self):

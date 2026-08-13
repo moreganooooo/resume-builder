@@ -46,7 +46,6 @@ import logging
 import os
 import re
 import subprocess
-import time
 
 import requests
 import yaml
@@ -92,41 +91,6 @@ _SUBPROCESS_ENV_STRIP = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "JOBRIGHT_COOKIE_ST
 
 def _child_env() -> dict:
     return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
-
-def _format_duration(seconds: float) -> str:
-    seconds = max(int(seconds), 0)
-    if seconds < 60:
-        return f"{seconds}s"
-    minutes, seconds = divmod(seconds, 60)
-    if minutes < 60:
-        return f"{minutes}m{seconds:02d}s"
-    hours, minutes = divmod(minutes, 60)
-    return f"{hours}h{minutes:02d}m"
-
-
-class ProgressReporter:
-    """Prints "[i/N] <label> <name>... (~Xm Ys remaining)" per item and
-    tracks a running average time-per-item for the ETA. A scan against
-    scan_ats.py's tracked_companies.yml is ~400 sequential subprocess
-    calls with no feedback otherwise -- reads as "did it hang?" on a
-    real run. ETA only appears from the 2nd item on (nothing to average
-    yet on the 1st)."""
-
-    def __init__(self, total: int, label: str = "Checking"):
-        self.total = total
-        self.label = label
-        self.start = time.time()
-        self.done = 0
-
-    def step(self, name: str) -> None:
-        self.done += 1
-        eta = ""
-        if self.done > 1:
-            avg = (time.time() - self.start) / self.done
-            remaining = avg * (self.total - self.done)
-            eta = f" (~{_format_duration(remaining)} remaining)"
-        cli_art.console.print(f"  [{self.done}/{self.total}] {self.label} {name}...{eta}", markup=False, soft_wrap=True)
-
 
 # Keyed by profile name (not a single cached value) -- this gets called
 # once per raw listing inside fetch_board_jobs()'s loop, so it's worth
@@ -317,17 +281,22 @@ def _fetch_posting_text(url: str, provider_id: str = "") -> str:
     return _html_to_text(response.text)
 
 
-def fetch_board_jobs(sources: list = None, search_term: str = None) -> list:
+def fetch_board_jobs(sources: list = None, search_term: str = None, activity=None) -> list:
     """Runs each requested board provider (default: all of BOARD_PROVIDERS),
     applies the title/location prefilter, fetches each surviving posting's
     full text, and returns a list of job dicts in the same shape
-    scan_jobright.py/scan_linkedin.py already produce."""
+    scan_jobright.py/scan_linkedin.py already produce. `activity` (a
+    cli_art.ScanActivity) is optional -- when given, announces each
+    provider as it's checked through the shared themed step-log instead
+    of nothing at all."""
     sources = sources or BOARD_PROVIDERS
 
     jobs = []
-    progress = ProgressReporter(len(sources), label="Fetching")
+    if activity is not None:
+        activity.start_source(len(sources), label="Fetching")
     for provider_id in sources:
-        progress.step(provider_id)
+        if activity is not None:
+            activity.step("discovery", "Boards", f"Checking {provider_id}")
         # `entry.name` is what a provider falls back to for `company` when
         # its own raw listing has none (e.g. remoteok.mjs: `j.company ||
         # entry.name`) -- use the provider id, not a placeholder, so a
