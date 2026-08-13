@@ -418,5 +418,58 @@ class TestDisplayHelp(unittest.TestCase):
         self.assertIn("launch the interactive menu", output)
 
 
+class TestScanActivity(unittest.TestCase):
+
+    def test_step_prints_themed_line_with_icon_and_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "JobRight", "Found Senior Data Engineer @ Acme")
+        mock_print.assert_called_once_with(
+            f"  {cli_art.theme.colorize_icon('success')} [bold]JobRight[/bold] "
+            "Found Senior Data Engineer @ Acme",
+            soft_wrap=True,
+        )
+
+    def test_step_has_no_eta_before_start_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "Boards", "checked remoteok")
+        printed = mock_print.call_args[0][0]
+        self.assertNotIn("remaining)", printed)
+
+    def test_step_shows_eta_from_second_call_after_start_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.start_source(3, label="Checking")
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "ATS", "first item")
+                activity.step("success", "ATS", "second item")
+        first_printed = mock_print.call_args_list[0].args[0]
+        second_printed = mock_print.call_args_list[1].args[0]
+        self.assertNotIn("remaining)", first_printed)
+        self.assertIn("remaining)", second_printed)
+
+    def test_tally_updates_pinned_task_description(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.tally(fetched=12, written=9, skipped=3, errors=0)
+            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+        self.assertIn("Fetched 12", task.description)
+        self.assertIn("Written 9", task.description)
+        self.assertIn("Skipped 3", task.description)
+        self.assertIn("Errors 0", task.description)
+
+    def test_tally_is_cumulative_across_calls(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.tally(fetched=5)
+            activity.tally(written=2)
+            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+        self.assertIn("Fetched 5", task.description)
+        self.assertIn("Written 2", task.description)
+
+
 if __name__ == "__main__":
     unittest.main()

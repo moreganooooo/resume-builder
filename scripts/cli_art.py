@@ -1313,3 +1313,106 @@ def new_progress(**kwargs) -> Progress:
         console=console,
         **kwargs,
     )
+
+
+class ScanActivity:
+    """Context-managed live activity display for a multi-source scan or
+    verify pass: one pinned, live-updating tally line (a themed
+    rich.Progress spinner task) plus a permanent, themed step-log of
+    completed items printed above it. Progress is built on Live and
+    supports printing permanent lines through its own .console while a
+    task stays live -- that's what gives this its two-part shape,
+    matching Crush's step-log-plus-status-line pattern rather than an
+    animated percentage bar (most of these sources never know a grand
+    total up front). See new_scan_activity()."""
+
+    def __init__(self, **progress_kwargs):
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            **progress_kwargs,
+        )
+        self._task_id = None
+        self._counts: dict = {}
+        self._eta_total = None
+        self._eta_done = 0
+        self._eta_start = None
+
+    def __enter__(self) -> "ScanActivity":
+        self._progress.__enter__()
+        self._task_id = self._progress.add_task(
+            f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]", total=None,
+        )
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self._progress.__exit__(*exc_info)
+
+    def start_source(self, total: int, label: str = "Checking") -> None:
+        """Resets the running ETA tracker for the next source's items --
+        same averaging math scan_boards.ProgressReporter used to own.
+        A source with no known total up front (e.g. JobRight's
+        open-ended pagination) simply never calls this, and step()
+        prints with no ETA suffix."""
+        self._eta_total = total
+        self._eta_done = 0
+        self._eta_start = time.time()
+
+    def step(self, icon_name: str, source: str, message: str) -> None:
+        """Print one permanent themed line: icon, source label,
+        message, plus a running ETA suffix once start_source() has
+        been called and at least one prior step() has run."""
+        eta = ""
+        if self._eta_total is not None:
+            self._eta_done += 1
+            if self._eta_done > 1:
+                avg = (time.time() - self._eta_start) / self._eta_done
+                remaining = avg * (self._eta_total - self._eta_done)
+                eta = f" (~{_format_scan_eta(remaining)} remaining)"
+        icon = theme.colorize_icon(icon_name)
+        self._progress.console.print(
+            f"  {icon} [bold]{source}[/bold] {message}{eta}", soft_wrap=True,
+        )
+
+    def tally(self, **counts: int) -> None:
+        """Update the pinned line's description from named counts,
+        cumulative across calls, e.g. tally(fetched=12) then
+        tally(written=9) -> 'Scanning · Fetched 12 · Written 9'. Count
+        names deliberately match scan.py's existing per-source result
+        dict keys (fetched/written/skipped) rather than inventing
+        synonyms."""
+        self._counts.update(counts)
+        description = f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]"
+        if self._counts:
+            parts = " · ".join(f"{key.capitalize()} {value}" for key, value in self._counts.items())
+            description += f" · {parts}"
+        self._progress.update(self._task_id, description=description)
+
+
+def _format_scan_eta(seconds: float) -> str:
+    """Same duration formatting scan_boards._format_duration used to
+    own (Ns / NmNNs / NhNNm) -- moved here since ETA math now lives on
+    ScanActivity instead of the retired ProgressReporter."""
+    seconds = max(int(seconds), 0)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m{seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m"
+
+
+def new_scan_activity(**kwargs) -> ScanActivity:
+    """Themed live activity display for a multi-source scan or verify
+    pass: a pinned, live-updating tally line plus a permanent step-log
+    of completed items underneath it. Usage:
+
+        with cli_art.new_scan_activity() as activity:
+            activity.start_source(len(jobs), label="Checking")
+            for job in jobs:
+                activity.step("success", "ATS", f"{job['title']} @ {job['company']}")
+            activity.tally(fetched=len(jobs))
+    """
+    return ScanActivity(**kwargs)
