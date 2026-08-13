@@ -962,7 +962,7 @@ print text, so they should keep passing unmodified.
 
 **Files:** Modify `scripts/cluster_bullet_bank.py:131,167-168,173,206,209,211,215,220,231,431-432,436,445,447,471,489,490,497,512,535,537,540,542`.
 
-- [ ] **Step 1:** Replace each, in file order:
+- [x] **Step 1:** Replace each, in file order:
 
   ```python
   # L131 (recoverable problem, retrying)
@@ -1157,18 +1157,18 @@ print text, so they should keep passing unmodified.
   cli_art.cli_success("Done.")
   ```
 
-- [ ] **Step 2:** Run `grep -n "markup=False" scripts/cluster_bullet_bank.py`
+- [x] **Step 2:** Run `grep -n "markup=False" scripts/cluster_bullet_bank.py`
   Expected: no matches remain.
 
-- [ ] **Step 3:** Run `python -m unittest tests.test_cluster_bullet_bank -v`
+- [x] **Step 3:** Run `python -m unittest tests.test_cluster_bullet_bank -v`
   Expected: PASS. If any existing test asserts on exact print text
   (verify by reading the file if a failure occurs here), update that
   assertion to match the new themed output.
 
-- [ ] **Step 4:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
+- [x] **Step 4:** Run the full test suite: `python -m unittest discover -s tests 2>&1 | tail -15`
   Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add scripts/cluster_bullet_bank.py

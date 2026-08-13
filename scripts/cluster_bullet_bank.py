@@ -128,7 +128,7 @@ def embed_batch(texts: list) -> list:
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2 ** attempt)
-            cli_art.console.print(f"    Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...", markup=False, soft_wrap=True)
+            cli_art.cli_warning(f"Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...")
             time.sleep(wait)
             continue
         resp.raise_for_status()
@@ -164,13 +164,12 @@ def load_checkpoint(expected_sha: str, expected_total: int) -> tuple:
         saved_sha = str(data["bullets_sha"]) if "bullets_sha" in data else None
         saved_total = int(data["total"]) if "total" in data else None
         if saved_sha != expected_sha or saved_total != expected_total:
-            cli_art.console.print("  Bullet bank changed since this checkpoint was saved -- "
-                  "discarding stale progress and starting over.", markup=False, soft_wrap=True)
+            cli_art.cli_warning("Bullet bank changed since this checkpoint was saved -- discarding stale progress and starting over.")
             os.remove(CLUSTER_CHECKPOINT_PATH)
             return [], 0
         vectors = list(data["vectors"])
         next_index = int(data["next_index"])
-        cli_art.console.print(f"  Resuming from checkpoint: {next_index} bullets already embedded.", markup=False, soft_wrap=True)
+        cli_art.cli_info(f"Resuming from checkpoint: {next_index} bullets already embedded.")
         return vectors, next_index
     return [], 0
 
@@ -203,21 +202,21 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
             with open(VECTOR_CACHE_META, "r", encoding="utf-8") as f:
                 cache_meta = json.load(f)
         if cached.shape == (len(bullets), EMBED_DIM) and cache_meta.get("bullets_sha") == current_sha:
-            cli_art.console.print(f"  Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}", markup=False, soft_wrap=True)
+            cli_art.cli_info(f"Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}")
             return cached
         elif cached.shape != (len(bullets), EMBED_DIM):
-            cli_art.console.print(f"  Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding...", markup=False, soft_wrap=True)
+            cli_art.cli_warning(f"Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding...")
         else:
-            cli_art.console.print("  Cache is stale (bullet bank content changed since it was built). Re-embedding...", markup=False, soft_wrap=True)
+            cli_art.cli_warning("Cache is stale (bullet bank content changed since it was built). Re-embedding...")
 
     total = len(bullets)
     vectors, start_index = load_checkpoint(current_sha, total)
-    cli_art.console.print(f"  Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})...", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})...")
 
     for batch_start in range(start_index, total, BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE, total)
         batch = bullets[batch_start:batch_end]
-        cli_art.console.print(f"    {batch_end}/{total}...", markup=False, soft_wrap=True)
+        cli_art.detail(f"{batch_end}/{total}...", level=cli_art.NORMAL)
         vecs = embed_batch(batch)
         vectors.extend(vecs)
         save_checkpoint(vectors, batch_end, total, current_sha)
@@ -228,7 +227,7 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
     np.save(VECTOR_CACHE, matrix)
     with atomic_write(VECTOR_CACHE_META) as f:
         json.dump({"rows": total, "dim": EMBED_DIM, "bullets_sha": current_sha}, f, indent=2)
-    cli_art.console.print(f"  Saved {total} vectors to {VECTOR_CACHE}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Saved {total} vectors to {VECTOR_CACHE}")
     if os.path.exists(CLUSTER_CHECKPOINT_PATH):
         os.remove(CLUSTER_CHECKPOINT_PATH)
     return matrix
@@ -428,12 +427,11 @@ def main():
 
     if not os.path.exists(AUDITED_CSV):
         cli_art.console.print(f"  {cli_art.ERROR} {AUDITED_CSV} not found.", soft_wrap=True)
-        cli_art.console.print("  Run audit_bullet_bank.py first to score every bullet — this", markup=False, soft_wrap=True)
-        cli_art.console.print("  script needs those scores to assign next_action.", markup=False, soft_wrap=True)
+        cli_art.cli_warning("Run audit_bullet_bank.py first to score every bullet -- this script needs those scores to assign next_action.")
         return
 
     df = pd.read_csv(RAW_CSV)
-    cli_art.console.print(f"  Loaded {len(df)} bullets from {RAW_CSV}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Loaded {len(df)} bullets from {RAW_CSV}")
 
     bullet_col = detect_bullet_col(df.columns)
     bullets = df[bullet_col].fillna("").tolist()
@@ -442,9 +440,9 @@ def main():
     matrix = load_or_build_vectors(bullets)
 
     # --- CLUSTER ---
-    cli_art.console.print(f"  Computing cosine similarity matrix ({len(bullets)}x{len(bullets)})...", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Computing cosine similarity matrix ({len(bullets)}x{len(bullets)})...")
     sim_matrix = cosine_similarity_matrix(matrix)
-    cli_art.console.print(f"  Clustering at threshold={SIMILARITY_THRESHOLD}...", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Clustering at threshold={SIMILARITY_THRESHOLD}...")
     raw_cluster_ids = single_linkage_cluster(sim_matrix, SIMILARITY_THRESHOLD)
     cluster_ids = stable_cluster_ids(raw_cluster_ids, bullets)
 
@@ -468,7 +466,7 @@ def main():
         if "manager_test" in df.columns else ""
     n_pass = (df["manager_test_normalized"] == "PASS").sum()
     n_fail = (df["manager_test_normalized"] == "FAIL").sum()
-    cli_art.console.print(f"  Audit join: manager_test normalized: {n_pass} PASS / {n_fail} FAIL", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Audit join: manager_test normalized: {n_pass} PASS / {n_fail} FAIL")
 
     # --- ELECT REPRESENTATIVES ---
     rep_indices = set()
@@ -486,15 +484,15 @@ def main():
     n_clusters   = df["cluster_id"].nunique()
     n_singletons = (df["cluster_size"] == 1).sum()
     n_dupes      = len(df) - df["is_representative"].sum()
-    cli_art.console.print(f"  Clusters: {n_clusters}  |  Singletons: {n_singletons}  |  Non-representative: {n_dupes}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  next_action breakdown:\n{df['next_action'].value_counts().to_string()}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Clusters: {n_clusters}  |  Singletons: {n_singletons}  |  Non-representative: {n_dupes}")
+    cli_art.detail(f"next_action breakdown:\n{df['next_action'].value_counts().to_string()}", level=cli_art.NORMAL)
 
     # --- WRITE CLUSTER MAP CSV (rewrite_bullets.py's CLUSTER_MAP_IN) ---
     front_cols = ["cluster_id", "cluster_size", "is_representative", "next_action", bullet_col]
     other_cols = [c for c in df.columns if c not in front_cols]
     df = df[front_cols + other_cols]
     df.to_csv(CLUSTER_MAP_CSV, index=False)
-    cli_art.console.print(f"  Wrote {len(df)} rows to {CLUSTER_MAP_CSV}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Wrote {len(df)} rows to {CLUSTER_MAP_CSV}")
 
     # --- WRITE CLUSTER MAP JSON (human-readable summary) ---
     cluster_map = {}
@@ -509,7 +507,7 @@ def main():
         }
     with atomic_write(CLUSTER_MAP, encoding="utf-8") as f:
         json.dump(cluster_map, f, indent=2, ensure_ascii=False)
-    cli_art.console.print(f"  Wrote cluster map to {CLUSTER_MAP}", markup=False, soft_wrap=True)
+    cli_art.cli_success(f"Wrote cluster map to {CLUSTER_MAP}")
 
     # --- WRITE REWRITE QUEUE ---
     non_rep = df[~df["is_representative"]].copy()
@@ -532,14 +530,14 @@ def main():
         if len(new_rows) > 0:
             combined = pd.concat([existing, new_rows], ignore_index=True)
             combined.to_csv(REWRITE_QUEUE, index=False)
-            cli_art.console.print(f"  Appended {len(new_rows)} new rows to existing {REWRITE_QUEUE} ({len(combined)} total)", markup=False, soft_wrap=True)
+            cli_art.cli_success(f"Appended {len(new_rows)} new rows to existing {REWRITE_QUEUE} ({len(combined)} total)")
         else:
-            cli_art.console.print(f"  No new rows to append — {REWRITE_QUEUE} already up to date.", markup=False, soft_wrap=True)
+            cli_art.cli_info(f"No new rows to append -- {REWRITE_QUEUE} already up to date.")
     else:
         non_rep.to_csv(REWRITE_QUEUE, index=False)
-        cli_art.console.print(f"  Wrote {len(non_rep)} rows to {REWRITE_QUEUE}", markup=False, soft_wrap=True)
+        cli_art.cli_success(f"Wrote {len(non_rep)} rows to {REWRITE_QUEUE}")
 
-    cli_art.console.print("\n  Done.", markup=False, soft_wrap=True)
+    cli_art.cli_success("Done.")
 
 
 if __name__ == "__main__":
