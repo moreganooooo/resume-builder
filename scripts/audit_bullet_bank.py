@@ -84,7 +84,7 @@ for i, row in df.iterrows():
         continue
 
     processed = len(results) - skipped + 1
-    cli_art.console.print(f"  [{i+1}/{total}] {bullet[:60]}...", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"[{i+1}/{total}] {bullet[:60]}...")
 
     try:
         critique_text, usage = GeminiClient.generate(
