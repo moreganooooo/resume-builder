@@ -174,13 +174,14 @@ def main():
             w.writeheader()
             w.writerows(review_rows)
 
-    cli_art.console.print(f"{args.input_csv}: {len(rows)} rows", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  Already tagged (left alone): {skipped_existing}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  Weak match, no unique keyword hit (flagged for review): {len(review_rows)}", markup=False, soft_wrap=True)
-    cli_art.console.print(f"  Wrote: {out_path}", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"{args.input_csv}: {len(rows)} rows")
+    cli_art.cli_info(f"Already tagged (left alone): {skipped_existing}")
+    cli_art.cli_success(f"Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})")
     if review_rows:
-        cli_art.console.print(f"  Wrote: {review_path}", markup=False, soft_wrap=True)
+        cli_art.cli_warning(f"Weak match, no unique keyword hit (flagged for review): {len(review_rows)}")
+    cli_art.cli_success(f"Wrote: {out_path}")
+    if review_rows:
+        cli_art.cli_success(f"Wrote: {review_path}")
 
 
 if __name__ == "__main__":
