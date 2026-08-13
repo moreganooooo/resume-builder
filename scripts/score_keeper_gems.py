@@ -189,7 +189,7 @@ def main():
     if args.dry_run:
         cli_art.console.print(f"\n{theme.colorize_icon('discovery')} Dry-run mode — first 5 bullets that would be scored:", soft_wrap=True)
         for i in to_score_idx[:5]:
-            cli_art.console.print(f"  [{i}] {rows[i].get(bullet_col, '')[:100]}", markup=False, soft_wrap=True)
+            cli_art.cli_info(f"[{i}] {rows[i].get(bullet_col, '')[:100]}")
         return
 
     if not to_score_idx:
@@ -216,7 +216,7 @@ def main():
             rows[i]["hidden_gem_reason"] = ""
             continue
 
-        cli_art.console.print(f"  [{n}/{len(to_score_idx)}] Scoring: {bullet[:80]}...", markup=False, soft_wrap=True)
+        cli_art.cli_info(f"[{n}/{len(to_score_idx)}] Scoring: {bullet[:80]}...")
 
         if n > 1:
             time.sleep(SLEEP_SECONDS)
