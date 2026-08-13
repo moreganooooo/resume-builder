@@ -93,7 +93,7 @@ def embed_batch(texts: list) -> list:
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2 ** attempt)
-            cli_art.console.print(f"    ⏳ Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...", markup=False, soft_wrap=True)
+            cli_art.cli_warning(f"Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
             time.sleep(wait)
             continue
         resp.raise_for_status()
@@ -149,7 +149,7 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
-    cli_art.console.print("   Using API key from environment (value redacted).", markup=False, soft_wrap=True)
+    cli_art.detail("Using API key from environment (value redacted).", level=cli_art.VERBOSE)
 
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
@@ -179,8 +179,8 @@ def main():
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
     est_secs  = n_batches * EMBED_SLEEP
     cli_art.console.print(f"{theme.colorize_icon('build')} Embedding with {EMBED_MODEL} @ {EMBED_DIM}d", soft_wrap=True)
-    cli_art.console.print(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining", markup=False, soft_wrap=True)
-    cli_art.console.print(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s\n", markup=False, soft_wrap=True)
+    cli_art.cli_info(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining")
+    cli_art.cli_info(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s")
 
     batch_num = 0
     for batch_start in range(start_index, total, BATCH_SIZE):
@@ -188,9 +188,10 @@ def main():
         batch       = bullets[batch_start:batch_end]
         batch_num  += 1
 
-        cli_art.console.print(f"   Batch {batch_num}/{n_batches}  "
-              f"[bullets {batch_start+1}–{batch_end}/{total}]  "
-              f"{batch[0][:60]}{'...' if len(batch[0]) > 60 else ''}", markup=False, soft_wrap=True)
+        cli_art.cli_info(
+            f"Batch {batch_num}/{n_batches}  [bullets {batch_start+1}–{batch_end}/{total}]  "
+            f"{batch[0][:60]}{'...' if len(batch[0]) > 60 else ''}"
+        )
 
         vecs = embed_batch(batch)
         vectors.extend(vecs)
@@ -220,7 +221,7 @@ def main():
 
     if os.path.exists(CHECKPOINT_PATH):
         os.remove(CHECKPOINT_PATH)
-        cli_art.console.print(f"Checkpoint file removed.", markup=False, soft_wrap=True)
+        cli_art.cli_info("Checkpoint file removed.")
 
     cli_art.console.print(f"\n{theme.colorize_icon('complete')} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.", soft_wrap=True)
 
