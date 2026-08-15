@@ -26,7 +26,7 @@ dependencies = [
     "python-docx",
     "python-pptx",
     "pdfminer.six",
-    "pypdf",
+    "pypdf==6.15.0",
     "odfpy",
     "openpyxl",
 ]
