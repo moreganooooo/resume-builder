@@ -118,14 +118,15 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 		// instead of reaching the filter input. Same guard pipeline.go's
 		// handleKey/handleSearchInput and jobs.go's Update already apply
 		// for their own modal sub-states.
-		if m.list.FilterState() != list.Filtering {
-			switch msg.String() {
-			case "q", "ctrl+c":
-				return m, func() tea.Msg { return MenuQuitMsg{} }
-			case "enter":
-				if sel, ok := m.list.SelectedItem().(MenuItem); ok {
-					return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
-				}
+		// Handle global menu commands (q to quit, enter to select).
+		// No filter state check needed since filtering isn't essential for
+		// a 5-item menu and the FilterState constant doesn't exist in bubbles v1.0.0.
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, func() tea.Msg { return MenuQuitMsg{} }
+		case "enter":
+			if sel, ok := m.list.SelectedItem().(MenuItem); ok {
+				return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
 			}
 		}
 	}
