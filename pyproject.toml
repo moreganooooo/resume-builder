@@ -25,6 +25,7 @@ dependencies = [
     "questionary",
     "python-docx",
     "python-pptx",
+    "Pillow==12.3.0",
     "pdfminer.six",
     "pypdf==6.15.0",
     "odfpy",
