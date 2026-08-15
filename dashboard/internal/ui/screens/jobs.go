@@ -853,8 +853,8 @@ var jobsHelpCategories = []helpCategory{
 		{"t", "Tailor resume for this job (Pending only)"},
 		{"u", "Change application status"},
 	}},
-	{"View", []helpBinding{
-		{"f", "Cycle filter: all / pending / completed"},
+	{"View & Filter", []helpBinding{
+		{"f", "Cycle job filter (ALL → PENDING → COMPLETED)"},
 		{"/", "Search company/title"},
 		{"v", "View terminology definitions"},
 	}},
