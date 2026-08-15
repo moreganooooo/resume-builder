@@ -3,13 +3,35 @@ package model
 // JobRow is one JD with a persisted evaluation, as exported by
 // scripts/dashboard.py's JSON bridge (picker.list_all_evaluated_jds()).
 type JobRow struct {
-	Path        string       `json:"path"`
-	Status      string       `json:"status"` // "Pending" or "Completed"
-	Title       string       `json:"title"`
-	Company     string       `json:"company"`
-	Evaluation  Evaluation   `json:"evaluation"`
-	Liveness    *Liveness    `json:"liveness"`
-	Application *Application `json:"application"`
+	Path           string       `json:"path"`
+	Status         string       `json:"status"` // "Pending" or "Completed"
+	Title          string       `json:"title"`
+	Company        string       `json:"company"`
+	Description    string       `json:"description"`
+	SourcePlatform string       `json:"source_platform"`
+	SourceURL      string       `json:"source_url"`
+	CompanyWebsite string       `json:"company_website"`
+	Skills         []string     `json:"skills"`
+	Research       *Research    `json:"research"`
+	Evaluation     Evaluation   `json:"evaluation"`
+	Liveness       *Liveness    `json:"liveness"`
+	Application    *Application `json:"application"`
+}
+
+// Research mirrors the _research key persisted by
+// scripts/jd_manager.py's save_research().
+type Research struct {
+	OverallToneAdjective    string   `json:"overall_tone_adjective"`
+	ToneRegister            string   `json:"tone_register"`
+	PronounFraming          string   `json:"pronoun_framing"`
+	SentenceStyle           string   `json:"sentence_style"`
+	JargonDensity           string   `json:"jargon_density"`
+	RecurringKeywords       []string `json:"recurring_keywords"`
+	CompanyFacts            []string `json:"company_facts"`
+	CompanyHQLocation       string   `json:"company_hq_location"`
+	NotableHighlights       []string `json:"notable_highlights"`
+	VocabularySubstitutions []string `json:"vocabulary_substitutions"`
+	ResearchedAt            string   `json:"researched_at"`
 }
 
 // Evaluation mirrors the _evaluation key persisted by

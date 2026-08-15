@@ -6,6 +6,7 @@ tailor-pick/coverletter-pick items -- one implementation instead of four.
 """
 
 import os
+import json
 
 import questionary
 
@@ -312,11 +313,22 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
             if not evaluation:
                 continue
             title, company = jd_manager.extract_job_meta(path)
+            try:
+                with open(path, "r", encoding="utf-8") as _f:
+                    jd_data = json.load(_f)
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                jd_data = {}
             rows.append({
                 "path": path, "status": "Pending", "evaluation": evaluation,
                 "liveness": jd_manager.read_liveness(path),
                 "application": jd_manager.read_application_status(path),
                 "title": title, "company": company,
+                "description": jd_data.get("description", "") or "",
+                "source_platform": jd_data.get("source_platform", "") or "",
+                "source_url": jd_data.get("source_url") or jd_data.get("application_url", "") or "",
+                "company_website": jd_data.get("company_website", "") or "",
+                "skills": jd_data.get("skills") or [],
+                "research": jd_manager.read_research(path),
             })
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
@@ -324,11 +336,22 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
             if not evaluation:
                 continue
             title, company = jd_manager.extract_job_meta(path)
+            try:
+                with open(path, "r", encoding="utf-8") as _f:
+                    jd_data = json.load(_f)
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                jd_data = {}
             rows.append({
                 "path": path, "status": "Completed", "evaluation": evaluation,
                 "liveness": jd_manager.read_liveness(path),
                 "application": jd_manager.read_application_status(path),
                 "title": title, "company": company,
+                "description": jd_data.get("description", "") or "",
+                "source_platform": jd_data.get("source_platform", "") or "",
+                "source_url": jd_data.get("source_url") or jd_data.get("application_url", "") or "",
+                "company_website": jd_data.get("company_website", "") or "",
+                "skills": jd_data.get("skills") or [],
+                "research": jd_manager.read_research(path),
             })
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows

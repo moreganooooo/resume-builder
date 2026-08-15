@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -123,7 +124,13 @@ func scoreIcon(t theme.Theme, score float64) string {
 func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, width int, selected bool) string {
 	scoreText := scoreStyle(t, score).Render(scoreIcon(t, score) + " " + fmt.Sprintf("%.1f", score))
 
-	compWidth := width - 6
+	// compWidth: total minus score glyph+space+number (≈ 6) minus 1 guard
+	// for the PadHorizontal outer padding, so company text doesn't wrap or
+	// ellipsize a char too early on narrow sidebars.
+	compWidth := width - 7
+	if compWidth < 8 {
+		compWidth = 8
+	}
 	companyText := truncateRunes(company, compWidth)
 	companyStyle := lipgloss.NewStyle().Foreground(t.Text)
 	if selected {
@@ -131,7 +138,11 @@ func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, wi
 	}
 	line1 := fmt.Sprintf("%s %s", scoreText, companyStyle.Render(companyText))
 
-	subtitleWidth := width - 2
+	// subtitleWidth: full available width minus 1 for the outer PadHorizontal
+	subtitleWidth := width - 3
+	if subtitleWidth < 8 {
+		subtitleWidth = 8
+	}
 	subtitleText := truncateRunes(subtitle, subtitleWidth)
 	subtitleStyle := lipgloss.NewStyle().Foreground(t.Blue)
 	line2 := subtitleStyle.Render(subtitleText)
@@ -374,47 +385,64 @@ func renderModalOverlay(t theme.Theme, background string, content string, width,
 
 	// Build output: overlay modal on background with dimming
 	var result []string
+	dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
+
 	for i := 0; i < height; i++ {
-		// Get background line (or empty if past end)
 		bgLine := ""
 		if i < len(bgLines) {
 			bgLine = bgLines[i]
 		}
 
-		// Check if this row is within modal bounds
+		// Strip existing ANSI colors and format to exact width
+		stripped := ansi.Strip(bgLine)
+		runes := []rune(stripped)
+		if len(runes) > width {
+			runes = runes[:width]
+		} else {
+			for len(runes) < width {
+				runes = append(runes, ' ')
+			}
+		}
+
+		// Check if this row intersects the modal
 		if i >= startRow && i < startRow+len(modalLines) && i < startRow+modalHeight {
-			// Render modal line with padding on left
 			modalIdx := i - startRow
 			modalLine := ""
 			if modalIdx < len(modalLines) {
 				modalLine = modalLines[modalIdx]
 			}
+			modalW := ansi.StringWidth(modalLine)
 
-			// Pad left side of modal
-			leftPad := strings.Repeat(" ", startCol)
-			line := leftPad + modalLine
-
-			// Truncate/pad to width
-			if ansi.StringWidth(line) > width {
-				line = ansi.Truncate(line, width, "")
-			} else if ansi.StringWidth(line) < width {
-				line = line + strings.Repeat(" ", width-ansi.StringWidth(line))
+			leftPart := dimStyle.Render(string(runes[:startCol]))
+			
+			rightCol := startCol + modalW
+			rightPart := ""
+			if rightCol < width {
+				rightPart = dimStyle.Render(string(runes[rightCol:]))
 			}
-			result = append(result, line)
+
+			result = append(result, leftPart+modalLine+rightPart)
 		} else {
-			// Dim the background
-			dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
-			dimmedLine := dimStyle.Render(bgLine)
-
-			// Pad/truncate to width
-			if ansi.StringWidth(dimmedLine) > width {
-				dimmedLine = ansi.Truncate(dimmedLine, width, "")
-			} else if ansi.StringWidth(dimmedLine) < width {
-				dimmedLine = dimmedLine + strings.Repeat(" ", width-ansi.StringWidth(dimmedLine))
-			}
-			result = append(result, dimmedLine)
+			// Dim the entire background line
+			result = append(result, dimStyle.Render(string(runes)))
 		}
 	}
 
 	return strings.Join(result, "\n")
+}
+
+// renderThickProgress renders a progress bar with multiple lines for a
+// thicker/bolder appearance. The standard bubbles progress bar is a single
+// line; this stacks 3 rendered lines with the same percent to create a
+// visually heavier bar that matches the reference design.
+func renderThickProgress(p progress.Model, theme theme.Theme, thickness int) string {
+	if thickness <= 1 {
+		return p.View()
+	}
+	var lines []string
+	single := p.View()
+	for i := 0; i < thickness; i++ {
+		lines = append(lines, single)
+	}
+	return strings.Join(lines, "\n")
 }

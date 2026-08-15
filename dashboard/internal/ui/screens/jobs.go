@@ -36,6 +36,7 @@ type JobsModel struct {
 	filtered      []model.JobRow
 	cursor        int
 	scrollOffset  int
+	detailScrollOffset int // scroll position in the detail pane (J/K keys)
 	filter        string // "all", "pending", "completed"
 	width, height int
 	theme         theme.Theme
@@ -220,10 +221,10 @@ func (m *JobsModel) applyFilter() {
 }
 
 // matchesJobSearch reports whether job matches the lowercased search query
-// against company and title -- the fields a job seeker actually searches
-// by, and the only two free-text fields model.JobRow carries (unlike
-// pipeline.go's matchesSearch, which also checks CareerApplication.Notes --
-// JobRow has no equivalent notes field to include).
+// against company, title, and description -- the free-text fields a job
+// seeker actually searches by. Description is included so a skill keyword
+// or requirement buried in the body surfaces without needing to know which
+// company posted it.
 func matchesJobSearch(job model.JobRow, query string) bool {
 	if query == "" {
 		return true
@@ -233,6 +234,9 @@ func matchesJobSearch(job model.JobRow, query string) bool {
 		return true
 	}
 	if strings.Contains(strings.ToLower(job.Title), q) {
+		return true
+	}
+	if job.Description != "" && strings.Contains(strings.ToLower(job.Description), q) {
 		return true
 	}
 	return false
@@ -716,21 +720,25 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "down", "j":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "g":
 			if len(m.filtered) > 0 {
 				m.cursor = 0
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "G":
 			if len(m.filtered) > 0 {
 				m.cursor = len(m.filtered) - 1
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "pgdown", "ctrl+d":
@@ -743,6 +751,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				if m.cursor >= len(m.filtered) {
 					m.cursor = len(m.filtered) - 1
 				}
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "pgup", "ctrl+u":
@@ -755,6 +764,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				if m.cursor < 0 {
 					m.cursor = 0
 				}
+				m.detailScrollOffset = 0
 				m.adjustScroll()
 			}
 		case "f":
@@ -787,6 +797,23 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			if _, ok := m.CurrentJob(); ok {
 				m.statusPicker = true
 				m.statusCursor = 0
+			}
+		case "a":
+			if job, ok := m.CurrentJob(); ok {
+				m.actionInProgress = "archive"
+				m.actionStartedAt = time.Now()
+				m.actionChan = make(chan tea.Msg)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, tea.Batch(m.runAction(ctx, m.actionChan, "archive", job.Path), m.spinner.Tick)
+			}
+		case "J":
+			if _, ok := m.CurrentJob(); ok {
+				m.detailScrollOffset++
+			}
+		case "K":
+			if m.detailScrollOffset > 0 {
+				m.detailScrollOffset--
 			}
 		case "v":
 			m.showHelp = true
@@ -873,6 +900,7 @@ func (m JobsModel) chromeAvailHeight(extraRows int) int {
 var jobsHelpCategories = []helpCategory{
 	{"Navigation", []helpBinding{
 		{"↑ ↓ / j k", "Move selection"},
+		{"J / K", "Scroll detail pane down / up"},
 		{"g / G", "Jump to top / bottom"},
 		{"PgUp / PgDn", "Page up / down"},
 	}},
@@ -880,6 +908,7 @@ var jobsHelpCategories = []helpCategory{
 		{"l", "Check posting liveness"},
 		{"t", "Tailor resume for this job (Pending only)"},
 		{"u", "Change application status"},
+		{"a", "Archive this job (removes from all filters)"},
 	}},
 	{"Filters", []helpBinding{
 		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit → Recent"},
@@ -961,6 +990,8 @@ func actionLabel(action string) string {
 		return "Tailoring resume"
 	case "status":
 		return "Updating status"
+	case "archive":
+		return "Archiving job"
 	default:
 		return "Working"
 	}
@@ -983,7 +1014,9 @@ func (m JobsModel) renderActionStatus() string {
 		if label == "" {
 			label = actionLabel(m.actionInProgress)
 		}
-		return style.Render(label + " (esc to cancel)" + m.stalledHint() + "\n" + m.progress.View())
+		// Render progress bar 3 lines thick for a bolder appearance
+		progressView := renderThickProgress(m.progress, m.theme, 3)
+		return style.Render(label + " (esc to cancel)" + m.stalledHint() + "\n" + progressView)
 	}
 
 	// The spinner carries its own pre-rendered style (see NewJobsModel's
@@ -1192,84 +1225,241 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 
 func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {
 	styles := newDetailPaneStyles(m.theme, width, height)
+	// Remove the fixed Height() from the border so the pane is not clipped
+	// before we scroll -- we impose our own line-budget via detailScrollOffset.
+	scrollBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.Overlay).
+		Width(width - 2).
+		Padding(1, 2)
+
+	wrapWidth := width - 10 // inner content width for wrapped text
+	if wrapWidth < 20 {
+		wrapWidth = 20
+	}
+	wrapStyle := lipgloss.NewStyle().Width(wrapWidth).Foreground(m.theme.Text)
+	accent := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve)
+	score := scoreStyle(m.theme, job.Evaluation.CompositeScore)
 
 	var content []string
+	eval := job.Evaluation
+
+	// -- Header --
 	content = append(content, styles.Title.Render(job.Company))
 	content = append(content, styles.Value.Render(job.Title))
+	if job.SourcePlatform != "" {
+		content = append(content, styles.Subtext.Render("via "+job.SourcePlatform))
+	}
 	content = append(content, "")
 
-	eval := job.Evaluation
-	score := scoreStyle(m.theme, eval.CompositeScore)
-	content = append(content, styles.Subtext.Render("Composite score: ")+score.Render(scoreIcon(m.theme, eval.CompositeScore)+" "+fmt.Sprintf("%.1f/5", eval.CompositeScore)))
-	// Composite is a weighted blend -- Fit 40%, Interview Odds 40%,
-	// Practical Pursue 20% (scripts/orchestrator.py's
-	// COMPOSITE_SCORE_WEIGHTS). Showing only the blend made a strong-fit /
-	// weak-odds role indistinguishable from its opposite, which is exactly
-	// the distinction that decides where effort is worth spending. The
-	// detail pane has room, so both layers get the same icon+color tier
-	// treatment as the composite above. Practical Pursue is deliberately
-	// left folded in: it is the smallest weight and rarely the reason to
-	// pick one role over another.
-	content = append(content, styles.Subtext.Render("  Fit: ")+layerScoreText(m.theme, eval.FitScore))
-	content = append(content, styles.Subtext.Render("  Interview odds: ")+layerScoreText(m.theme, eval.InterviewOddsScore))
-	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
-	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
-	content = append(content, "")
+	// -- Scores --
+	content = append(content, accent.Render("Scores"))
+	content = append(content,
+		styles.Subtext.Render("Composite: ")+
+			score.Render(scoreIcon(m.theme, eval.CompositeScore)+" "+fmt.Sprintf("%.1f/5", eval.CompositeScore)))
+	content = append(content,
+		styles.Subtext.Render("  Fit: ")+layerScoreText(m.theme, eval.FitScore))
+	content = append(content,
+		styles.Subtext.Render("  Interview odds: ")+layerScoreText(m.theme, eval.InterviewOddsScore))
 
-	if eval.Why != "" {
-		content = append(content, styles.Title.Render("Why"))
-		content = append(content, styles.Value.Render(truncateRunes(eval.Why, width-6)))
-		content = append(content, "")
-	}
-	if eval.RecruiterRead != "" {
-		content = append(content, styles.Title.Render("Recruiter read"))
-		content = append(content, styles.Value.Render(truncateRunes(eval.RecruiterRead, width-6)))
-		content = append(content, "")
-	}
-	if len(eval.HardBlockers) > 0 {
-		content = append(content, styles.Subtext.Render("Hard blockers: ")+styles.Value.Render(strings.Join(eval.HardBlockers, ", ")))
-		content = append(content, "")
-	}
-
+	// Subscores: each subcategory on its own line
 	for _, group := range jobsFitGroups {
 		scores := group.get(eval)
 		if len(scores) == 0 {
 			continue
 		}
-		content = append(content, styles.Subtext.Render(group.label+": ")+styles.Value.Render(formatSubscores(scores)))
+		content = append(content, "")
+		content = append(content, accent.Render(group.label+" subscores"))
+		keys := make([]string, 0, len(scores))
+		for k := range scores {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			label, ok := theme.SubscoreLabels[k]
+			if !ok {
+				label = k
+			}
+			content = append(content, fmt.Sprintf("  %s: %d", label, scores[k]))
+		}
 	}
-	content = append(content, "")
 
-	// Only surfaced when there's an actual concern -- "High Confidence" (the
-	// common case) says nothing worth a line of its own, mirroring
-	// menu.py's _print_evaluation_summary()'s identical gate/ordering (right
-	// before Liveness) so the CLI and TUI agree on when this is worth
-	// showing. Previously decoded from the evaluation JSON but never
-	// rendered anywhere in this screen -- a fake/stale-posting warning had
-	// no way to reach the user here.
+	content = append(content, "")
+	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
+	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
+
+	// -- Why / Recruiter Read --
+	if eval.Why != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Why"))
+		content = append(content, wrapStyle.Render(eval.Why))
+	}
+	if eval.RecruiterRead != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Recruiter read"))
+		content = append(content, wrapStyle.Render(eval.RecruiterRead))
+	}
+	if len(eval.HardBlockers) > 0 {
+		content = append(content, "")
+		content = append(content, accent.Render("Hard blockers"))
+		for _, b := range eval.HardBlockers {
+			content = append(content, "  • "+b)
+		}
+	}
+
+	// -- Posting legitimacy warning --
 	if eval.PostingLegitimacy != "" && eval.PostingLegitimacy != "High Confidence" {
 		color := m.theme.Yellow
 		if eval.PostingLegitimacy == "Suspicious" {
 			color = m.theme.Red
 		}
 		warningStyle := lipgloss.NewStyle().Bold(true).Foreground(color)
-		line := warningStyle.Render("Posting legitimacy: " + eval.PostingLegitimacy)
-		if eval.PostingLegitimacyNotes != "" {
-			line += styles.Value.Render(" -- " + truncateRunes(eval.PostingLegitimacyNotes, width-6))
-		}
-		content = append(content, line)
 		content = append(content, "")
+		content = append(content, warningStyle.Render("⚠ Posting legitimacy: "+eval.PostingLegitimacy))
+		if eval.PostingLegitimacyNotes != "" {
+			content = append(content, wrapStyle.Render(eval.PostingLegitimacyNotes))
+		}
 	}
 
+	// -- Skills graph --
+	if len(job.Skills) > 0 {
+		content = append(content, "")
+		content = append(content, accent.Render("Skills"))
+		// Render skills as a wrapped list of badges
+		line := ""
+		for i, s := range job.Skills {
+			badge := "[" + s + "]"
+			if i == 0 {
+				line = badge
+			} else if len(line)+1+len(badge) <= wrapWidth {
+				line += " " + badge
+			} else {
+				content = append(content, "  "+line)
+				line = badge
+			}
+		}
+		if line != "" {
+			content = append(content, "  "+line)
+		}
+	}
+
+	// -- Liveness --
 	if job.Liveness != nil {
-		content = append(content, styles.Subtext.Render("Liveness: ")+styles.Value.Render(job.Liveness.Result))
-	}
-	if job.Application != nil {
-		content = append(content, styles.Subtext.Render("Application: ")+styles.Value.Render(job.Application.Status))
+		content = append(content, "")
+		content = append(content, accent.Render("Liveness"))
+		content = append(content, styles.Subtext.Render("Result: ")+styles.Value.Render(job.Liveness.Result))
+		if job.Liveness.CheckedAt != "" {
+			content = append(content, styles.Subtext.Render("Checked: ")+
+				lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(job.Liveness.CheckedAt))
+		}
+		if job.Liveness.Reason != "" {
+			content = append(content, wrapStyle.Render(job.Liveness.Reason))
+		}
 	}
 
+	// -- Application status / progress pipeline --
+	if job.Application != nil {
+		content = append(content, "")
+		content = append(content, accent.Render("Application"))
+		content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Application.Status))
+		if job.Application.AppliedAt != nil {
+			content = append(content, styles.Subtext.Render("Applied: ")+styles.Value.Render(*job.Application.AppliedAt))
+		}
+		// Progress pipeline: Resume → Cover Letter → Ready → Applied → Interview → Offer
+		pipeline := []string{"Resume", "Cover Letter", "Ready", "Applied", "Interview", "Offer"}
+		statusOrder := map[string]int{
+			"Pending": 0, "Completed": 2, "Applied": 3,
+			"Interview": 4, "Offer": 5, "Responded": 4,
+		}
+		currentStep := statusOrder[job.Status]
+		var pipelineStr string
+		for i, stage := range pipeline {
+			if i > 0 {
+				pipelineStr += " → "
+			}
+			if i <= currentStep {
+				pipelineStr += lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true).Render(stage)
+			} else {
+				pipelineStr += lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(stage)
+			}
+		}
+		content = append(content, pipelineStr)
+	}
+
+	// -- Apply link --
+	if job.SourceURL != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Apply"))
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).Render(job.SourceURL))
+	}
+
+	// -- Research highlights --
+	if job.Research != nil {
+		content = append(content, "")
+		content = append(content, accent.Render("Company Research"))
+		if job.Research.CompanyHQLocation != "" {
+			content = append(content, styles.Subtext.Render("HQ: ")+styles.Value.Render(job.Research.CompanyHQLocation))
+		}
+		for _, fact := range job.Research.CompanyFacts {
+			content = append(content, "  • "+fact)
+		}
+		for _, h := range job.Research.NotableHighlights {
+			content = append(content, "  ★ "+h)
+		}
+		if job.Research.ResearchedAt != "" {
+			content = append(content,
+				lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Researched: "+job.Research.ResearchedAt))
+		}
+	}
+
+	// -- Full JD description (at the bottom since it's long) --
+	if job.Description != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Job Description"))
+		content = append(content, wrapStyle.Render(job.Description))
+	}
+
+	// Apply detailScrollOffset: skip the first N lines
 	joined := strings.Join(content, "\n")
-	return styles.Border.Render(joined)
+	lines := strings.Split(joined, "\n")
+	visibleBudget := height - 6 // border + padding
+	if visibleBudget < 5 {
+		visibleBudget = 5
+	}
+	// Clamp scroll so we can't scroll past all content
+	maxScroll := len(lines) - visibleBudget
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	offset := m.detailScrollOffset
+	if offset > maxScroll {
+		offset = maxScroll
+	}
+	if offset > 0 && offset < len(lines) {
+		lines = lines[offset:]
+	}
+	// Truncate to visible budget to prevent overflow
+	if len(lines) > visibleBudget {
+		lines = lines[:visibleBudget]
+	}
+
+	// Scroll hint at the bottom if there's more
+	hasMore := offset < maxScroll
+	hasAbove := offset > 0
+	var scrollHint string
+	if hasAbove && hasMore {
+		scrollHint = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("↑ K / J ↓")
+	} else if hasAbove {
+		scrollHint = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("↑ K  (top)")
+	} else if hasMore {
+		scrollHint = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("  J ↓ more")
+	}
+	if scrollHint != "" {
+		lines = append(lines, scrollHint)
+	}
+
+	joined = strings.Join(lines, "\n")
+	return scrollBorder.Render(joined)
 }
 
 func (m JobsModel) renderHelp() string {
@@ -1295,6 +1485,7 @@ func (m JobsModel) renderHelp() string {
 
 	return style.Render(
 		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
+			keyStyle.Render("J/K") + descStyle.Render(" scroll detail  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/bot  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("/") + descStyle.Render(" search  ") +
@@ -1302,6 +1493,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
+			keyStyle.Render("a") + descStyle.Render(" archive  ") +
 			keyStyle.Render("v") + descStyle.Render(" vocabulary  ") +
 			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
@@ -1350,14 +1542,18 @@ func jobSubtitleWithScores(t theme.Theme, job model.JobRow, width int) string {
 	if width < jobsScoreDetailMinWidth || (eval.FitScore <= 0 && eval.InterviewOddsScore <= 0) {
 		return job.Title
 	}
-	suffix := fmt.Sprintf("  F %s / O %s", layerScore(eval.FitScore), layerScore(eval.InterviewOddsScore))
+	// Spell out "Fit"/"Odds" in full -- single-letter abbreviations saved 4
+	// columns at the cost of being completely opaque to a first-time user;
+	// the detail pane already carries the full labels, and the extra chars
+	// are worth the clarity.
+	suffix := fmt.Sprintf("  Fit %s / Odds %s", layerScore(eval.FitScore), layerScore(eval.InterviewOddsScore))
 	// Reserve the suffix's room before the title is truncated, so the
 	// scores survive a long title instead of being cut off with it.
 	titleRoom := width - 2 - lipgloss.Width(suffix)
 	if titleRoom < 8 {
 		return job.Title
 	}
-	return truncateRunes(job.Title, titleRoom) + lipgloss.NewStyle().Foreground(t.Token.Subtext).Render(suffix)
+	return truncateRunes(job.Title, titleRoom) + lipgloss.NewStyle().Foreground(t.Subtext).Render(suffix)
 }
 
 // Stall thresholds. These are "something is wrong" signals, not progress
