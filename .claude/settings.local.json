@@ -94,7 +94,18 @@
       "Bash(resume doctor *)",
       "Bash(npm ls *)",
       "Bash(npm install *)",
-      "mcp__plugin_lumen_lumen__semantic_search"
+      "mcp__plugin_lumen_lumen__semantic_search",
+      "Bash(rtk git *)",
+      "Bash(rtk read *)",
+      "Bash(rtk ls *)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(rtk go *)",
+      "Bash(go test *)",
+      "Bash(rtk find *)",
+      "Bash(rtk grep *)",
+      "Bash(sed -i '102,105d' internal/theme/icons.go)",
+      "Bash(sed -i '101r /tmp/fix_icons.txt' internal/theme/icons.go)",
+      "Bash(rtk wc *)"
     ]
   },
   "hooks": {
