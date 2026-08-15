@@ -16,7 +16,7 @@
   },
   "homepage": "https://github.com/moreganooooo/resume-builder#readme",
   "dependencies": {
-    "playwright": "1.61.1"
+    "playwright": "1.62.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.1"
