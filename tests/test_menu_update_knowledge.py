@@ -6,13 +6,16 @@ from unittest.mock import patch, MagicMock
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import bullet_bank_menu  # noqa: E402
 import menu  # noqa: E402
 
 
 class TestUpdateKnowledgeChoiceRegistered(unittest.TestCase):
 
     def test_choice_is_registered(self):
-        values = [c.value for c in menu._CHOICES]
+        # Moved into the Bullet Bank submenu (bullet_bank_menu.py) as part
+        # of the 2026-08 menu collapse -- no longer a flat main-menu entry.
+        values = [c.value for c in bullet_bank_menu._build_choices()]
         self.assertIn("update_knowledge", values)
 
     def test_handler_registered(self):
@@ -94,7 +97,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
 
     @patch("menu.subprocess.run")
     @patch("menu.cli_art.display_bootstrap_intro")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
     @patch("menu.os.listdir", return_value=["new_cert.pdf"])
@@ -105,7 +108,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_checkbox, mock_confirm, mock_intro, mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         mock_run.return_value = MagicMock(returncode=0)
 
         result = menu._handle_update_knowledge()
@@ -117,7 +120,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
 
     @patch("menu.subprocess.run")
     @patch("menu.cli_art.display_bootstrap_intro")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
     @patch("menu.os.listdir", return_value=["new_cert.pdf"])
@@ -128,7 +131,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_checkbox, mock_confirm, mock_intro, mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets"]
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         mock_run.return_value = MagicMock(returncode=0)
 
         menu._handle_update_knowledge()
@@ -138,7 +141,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
 
     @patch("menu.subprocess.run")
     @patch("menu.cli_art.display_bootstrap_intro")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
     @patch("menu.os.listdir", return_value=["new_cert.pdf"])
@@ -149,7 +152,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_checkbox, mock_confirm, mock_intro, mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["profile"]
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.return_value = True
         mock_run.return_value = MagicMock(returncode=0)
 
         menu._handle_update_knowledge()
@@ -172,7 +175,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_run.assert_not_called()
 
     @patch("menu.subprocess.run")
-    @patch("menu.questionary.confirm")
+    @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
     @patch("menu.os.listdir", return_value=["new_cert.pdf"])
@@ -182,7 +185,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         self, mock_exists, mock_makedirs, mock_listdir, mock_isfile, mock_checkbox, mock_confirm, mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
-        mock_confirm.return_value.ask.return_value = False
+        mock_confirm.return_value = False
         result = menu._handle_update_knowledge()
         self.assertFalse(result)
         mock_run.assert_not_called()

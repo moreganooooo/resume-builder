@@ -45,6 +45,32 @@ class TestValidatePdfText(unittest.TestCase):
             self.assertEqual(len(advisories), 1)
             self.assertIn("Recovered 3M", advisories[0])
 
+    def test_flags_a_dropped_summary_and_tagline(self):
+        resume = {
+            **_resume(),
+            "TAGLINE": "Lifecycle Marketing Strategist",
+            "SUMMARY_TEXT": "<strong>Drives</strong> retention through data-led campaigns.",
+        }
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Recovered 3M in dormant pipeline through CRM audits and reactivation workflows\n"
+            "Lifecycle & Retention Marketing: Email Automation, Segmentation"
+        )):
+            fatal, advisories = validate_pdf_text.validate_pdf_text("fake.pdf", resume)
+            self.assertEqual(fatal, [])
+            self.assertEqual(len(advisories), 2)
+            self.assertTrue(any("Tagline" in a for a in advisories))
+            self.assertTrue(any("Summary" in a for a in advisories))
+
+    def test_blank_why_text_is_not_flagged(self):
+        # WHY_TEXT is intentionally '' on most builds (section omitted to save
+        # space) -- that must never be reported as dropped content.
+        resume = {**_resume(), "WHY_TEXT": ""}
+        with patch("validate_pdf_text.extract_text", return_value=(
+            "Recovered 3M in dormant pipeline through CRM audits and reactivation workflows\n"
+            "Lifecycle & Retention Marketing: Email Automation, Segmentation"
+        )):
+            self.assertEqual(validate_pdf_text.validate_pdf_text("fake.pdf", resume), ([], []))
+
     def test_tolerates_a_line_break_splitting_a_bullet_mid_sentence(self):
         # Real rendering can wrap a bullet across lines; that alone shouldn't
         # look like dropped content once whitespace is collapsed.

@@ -11,22 +11,23 @@ import "github.com/charmbracelet/lipgloss"
 // terminal theme is active) and Mocha's neutrals are already tuned for
 // exactly this kind of dark-terminal TUI.
 //
-// resume-builder only has six semantic tokens against this struct's eight
-// accent slots, so two get reused rather than invented:
-//   - Peach reuses WARNING (no distinct 5th "orange" tone exists upstream;
-//     the funnel/score-bucket gradients lose one visually distinct step,
-//     which is an honest trade against inventing an unbranded color).
-//   - Pink reuses BRAND_ACCENT (the field is currently unread by every
-//     screen -- see internal/ui/screens -- so any value is a placeholder
-//     until something actually renders it).
+// Colors are Charmtone (github.com/charmbracelet/x/exp/charmtone), the
+// Charm ecosystem's own branded palette -- six carry semantic meaning on
+// the CLI side too (INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/ERROR); Peach
+// and Pink are dashboard-only decorative accents (theme.py's PEACH/PINK)
+// with no CLI role of their own, added so this struct's 8 Catppuccin-
+// shaped accent slots are 8 actually-distinct colors instead of 6 real
+// ones plus 2 reused placeholders.
 //
 // GENERATED from scripts/theme.py by scripts/sync_dashboard_theme.py --
 // do not hand-edit the accent block below. Re-run that script after
 // changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
-// ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
-// this file ever falls out of sync.
+// ERROR/PEACH/PINK constants; doctor.py's check_dashboard_theme_sync()
+// flags it if this file ever falls out of sync.
+// newCatppuccinMocha moved to catppuccin.go
+
 func newResumeBuilder() Theme {
-	return Theme{
+	t := Theme{
 		// Structural neutrals -- Catppuccin Mocha, untouched.
 		Base:    lipgloss.Color("#1e1e2e"),
 		Surface: lipgloss.Color("#313244"),
@@ -34,14 +35,36 @@ func newResumeBuilder() Theme {
 		Text:    lipgloss.Color("#cdd6f4"),
 		Subtext: lipgloss.Color("#a6adc8"),
 
-		// Accents -- resume-builder's scripts/theme.py tokens.
-		Blue:   lipgloss.Color("#2196f3"), // INFO
-		Mauve:  lipgloss.Color("#b39ddb"), // BRAND_ACCENT
-		Green:  lipgloss.Color("#4caf50"), // SUCCESS
-		Yellow: lipgloss.Color("#f5c542"), // WARNING
-		Sky:    lipgloss.Color("#4dabf7"), // BRAND
-		Peach:  lipgloss.Color("#f5c542"), // WARNING (reused, see above)
-		Red:    lipgloss.Color("#c96a6a"), // ERROR
-		Pink:   lipgloss.Color("#b39ddb"), // BRAND_ACCENT (reused, unused field)
+		// Accents -- resume-builder's scripts/theme.py tokens. Sky
+		// (#8B75FF, BRAND) clears Base (#1e1e2e) at 4.75:1 -- AA text
+		// contrast, but with little margin -- and fails outright against
+		// Surface (#313244) at 3.64:1. It's currently only ever
+		// composited against Base (progress.go/viewer.go section
+		// titles), which is why this isn't visibly broken today; don't
+		// pair it with Background(Surface) without re-measuring, unlike
+		// catppuccin_latte.go's accents (see that file's own contrast
+		// comment), which were deliberately tuned against the tighter of
+		// the two backgrounds.
+		Blue:   lipgloss.Color("#00A4FF"), // INFO
+		Mauve:  lipgloss.Color("#FF60FF"), // BRAND_ACCENT
+		Green:  lipgloss.Color("#12C78F"), // SUCCESS
+		Yellow: lipgloss.Color("#F5EF34"), // WARNING
+		Sky:    lipgloss.Color("#8B75FF"), // BRAND
+		Peach:  lipgloss.Color("#FF985A"), // PEACH
+		Red:    lipgloss.Color("#FF7B99"), // ERROR
+		Pink:   lipgloss.Color("#FF84FF"), // PINK
 	}
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-
+	// by-default, RESUME_BUILDER_ICONS=unicode-fallback logic this
+	// replaced (was previously hardcoded emoji, identical in all 3
+	// theme constructors, that ignored the env var entirely).
+	t.Icons = NewMenuIcons()
+
+	return t
 }

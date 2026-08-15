@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -22,8 +22,9 @@ class TestEvaluateBatchMode(unittest.TestCase):
     def test_declined_confirmation_aborts_without_evaluating(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
-             patch("cli.click.confirm", return_value=False), \
+             patch("cli_art.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = False
             result = runner.invoke(cli.cli, ["evaluate"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Aborted", result.output)
@@ -33,8 +34,9 @@ class TestEvaluateBatchMode(unittest.TestCase):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
              patch("cli.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], ["jds/b.json"])), \
-             patch("cli.click.confirm", return_value=True) as mock_confirm, \
+             patch("cli_art.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = True
             result = runner.invoke(cli.cli, ["evaluate"])
         # Confirms against the real, post-filter count (1), not the raw pending count (2).
         self.assertIn("About to evaluate 1 pending", mock_confirm.call_args[0][0])
@@ -45,7 +47,7 @@ class TestEvaluateBatchMode(unittest.TestCase):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
              patch("cli.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], [])), \
-             patch("cli.click.confirm") as mock_confirm, \
+             patch("cli_art.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
             result = runner.invoke(cli.cli, ["evaluate"])
         self.assertEqual(result.exit_code, 0)
@@ -57,8 +59,9 @@ class TestEvaluateBatchMode(unittest.TestCase):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
              patch("cli.batch_evaluate.split_evaluated") as mock_split, \
-             patch("cli.click.confirm", return_value=True), \
+             patch("cli_art.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = True
             runner.invoke(cli.cli, ["evaluate", "--refresh"])
         mock_split.assert_not_called()
         mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=False)
@@ -66,7 +69,7 @@ class TestEvaluateBatchMode(unittest.TestCase):
     def test_yes_flag_skips_confirmation(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]), \
-             patch("cli.click.confirm") as mock_confirm, \
+             patch("cli_art.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending", return_value=[]):
             runner.invoke(cli.cli, ["evaluate", "--yes"])
         mock_confirm.assert_not_called()

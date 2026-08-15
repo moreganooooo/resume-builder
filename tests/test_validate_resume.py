@@ -146,6 +146,58 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("widow" in v.lower() for v in violations))
 
+    def test_skills_widow_message_names_both_legal_targets(self):
+        # Regression guard for a build that burned all 4 validator retries:
+        # the old message named only the 110-char limit, so the model kept
+        # landing in the 111-134 dead band where no legal length exists.
+        # Both edges of the legal zone have to be in the message text.
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**Cat:** " + "X" * 110]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        message = next(v for v in violations if "widow" in v.lower())
+        self.assertIn("110", message)   # upper edge of the short-and-legal zone
+        self.assertIn("135", message)   # lower edge of the wrapped-and-legal zone
+        self.assertIn("111-134", message)  # the dead band, named explicitly
+
+    def test_skills_widow_message_computes_targets_from_the_rules(self):
+        # The two targets must be derived, not hardcoded, or they silently
+        # go stale the moment either rule is retuned.
+        rules = {"skills_section": {"line_max_chars": 60, "widow_min_chars": 10}}
+        resume = {"SKILLS": ["X" * 65]}
+        message = validate_resume._check_skills_line_lengths(resume, rules)[0]
+        self.assertIn("60", message)
+        self.assertIn("70", message)
+        self.assertIn("61-69", message)
+
+    def test_single_bullet_is_never_reported_against_itself(self):
+        # One bullet legitimately citing 22% twice (own result vs industry
+        # benchmark) used to self-collide, producing "in both X and X" --
+        # which shows the model the same string twice and is unactionable.
+        bullet = ("Generated 62 niche sequences across 4 audience segments, achieving 74% open "
+                  "and 22% reply rates on PTA campaigns, exceeding the 22% nonprofit industry average")
+        violations = validate_resume._check_metric_uniqueness(
+            {"EXPERIENCE": [{"achievements": [bullet]}]})
+        self.assertEqual(violations, [])
+
+    def test_percentages_are_disambiguated_by_their_context_word(self):
+        # '%' is not a word char, so the old pattern backtracked off it and
+        # the context lookup then failed -- every percentage collapsed to a
+        # context-free signature and same-digit percentages cross-reported.
+        resume = {"EXPERIENCE": [{"achievements": [
+            "Maintained 100% on-time delivery across all print cycles for the student newspaper",
+            "Authored 100+ multi-touch email campaigns for niche K-12 district segments",
+            "Standardized templates across a sequence library of 100+ assets for the team",
+        ]}]}
+        self.assertEqual(validate_resume._check_metric_uniqueness(resume), [])
+
+    def test_still_flags_a_genuinely_repeated_metric(self):
+        resume = {"EXPERIENCE": [{"achievements": [
+            "Drove 41% reply rates across the PTA sequence rebuild program",
+            "Sustained 41% reply rates on the same PTA sequence rebuild program",
+        ]}]}
+        violations = validate_resume._check_metric_uniqueness(resume)
+        self.assertTrue(any("41" in v for v in violations))
+
     def test_flags_pronoun_outside_why_section(self):
         resume = _valid_resume()
         resume["SUMMARY_TEXT"] = "<strong>I am a lifecycle marketer.</strong>"
@@ -695,6 +747,45 @@ class TestCheckSummarySpecificity(unittest.TestCase):
         )
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertFalse(any("no concrete metric" in v.lower() for v in violations))
+
+
+class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
+    """The context word exists so a bare "12" in two unrelated places isn't
+    a false duplicate. But it cuts the other way for a big, specific figure:
+    "$20M, 2,932-account portfolio" and "$20M+ portfolio" pick up different
+    context words and stopped colliding, even though a reader plainly sees
+    the same $20M twice. Distinctive figures therefore key on the number
+    alone; small bare integers keep the context word."""
+
+    def _sigs(self, text):
+        return {sig for _n, sig in validate_resume._extract_metric_signatures(text)}
+
+    def test_the_same_large_figure_collides_across_different_context_words(self):
+        self.assertTrue(
+            self._sigs("Managed a $20M, 2,932-account portfolio")
+            & self._sigs("Grew the $20M+ portfolio by double digits")
+        )
+
+    def test_a_trailing_plus_is_not_a_different_figure(self):
+        self.assertTrue(self._sigs("Drove $4M in pipeline") & self._sigs("Drove $4M+ in pipeline"))
+
+    def test_small_bare_integers_still_need_a_matching_context_word(self):
+        self.assertFalse(
+            self._sigs("Led a 10-person team") & self._sigs("Ranked Top 10 Performer company-wide")
+        )
+
+    def test_a_four_digit_year_is_not_treated_as_a_distinctive_figure(self):
+        # 2024 clears the 4-digit bar but is a date, not a metric -- two
+        # bullets mentioning the same year aren't citing the same figure.
+        self.assertFalse(
+            self._sigs("Launched in 2024 across Europe")
+            & self._sigs("Retired in 2024 after the merger")
+        )
+
+    def test_percentages_still_need_a_matching_context_word(self):
+        self.assertFalse(
+            self._sigs("Hit 22% reply rates") & self._sigs("Beat the 22% industry average")
+        )
 
 
 if __name__ == "__main__":

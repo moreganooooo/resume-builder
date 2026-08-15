@@ -18,12 +18,23 @@ _TITLE_CASE_MINOR_WORDS = {
 # A number directly preceded by "<letter>-" or "<letter>–" (e.g. the "12"
 # in "K-12" or "K–12") is part of a compound label, not a metric.
 _COMPOUND_LABEL_PREFIX = re.compile(r"[A-Za-z][-–—]$")
+# The unit symbols that can trail a number. These have to be consumed
+# before looking for the context word, and folded into the signature:
+# _METRIC_PATTERN ends in `[%MK]?\b`, and since "%" is not a word char
+# there is no boundary between it and the following space, so the optional
+# group backtracks to empty and "%"/"+" are never part of the match. That
+# left every percentage and every "N+" with an EMPTY context word, so
+# "100% on-time", "100+ campaigns" and "100+ assets" all collapsed to the
+# same signature and cross-reported as duplicates -- defeating the whole
+# point of the context word below. ("M"/"K" are word chars and so were
+# always captured fine.)
+_METRIC_UNIT_SUFFIX = re.compile(r"^[%+]+")
 # The word (if any) immediately adjacent to a number, e.g. "member" in
 # "12-member" or "Performer" in "Top 10 Performer" -- used so two bullets
 # that happen to share a bare number in unrelated contexts ("K-12" aside,
 # also plain coincidences like a "10-person team" vs "Top 10 Performer")
 # aren't treated as the same metric repeated.
-_METRIC_CONTEXT_WORD = re.compile(r"^[-–—]?\s?(\w+)")
+_METRIC_CONTEXT_WORD = re.compile(r"^[%+]*[-–—]?\s?(\w+)")
 # tailor_resume.md wraps the Summary's first sentence (identity + years of
 # experience) in <strong> tags -- used to isolate "the remaining sentences"
 # so the specificity check below doesn't credit the years-of-experience
@@ -125,6 +136,23 @@ def _check_forbidden_openers(resume_data: dict, style_rules: dict) -> list[str]:
     return violations
 
 
+def get_all_metrics(resume_data: dict) -> list[str]:
+    """
+    Every numeric metric currently used across the CV (Summary + all
+    bullets), in document order. Exposed for retry-prompt construction:
+    same whack-a-mole risk get_opening_verbs() below already solves for
+    opening verbs -- a fix for one duplicate-metric pair, or filler content
+    added to lengthen a bullet for an unrelated widow fix, can introduce a
+    number that collides with some other, unflagged bullet, since
+    uniqueness is a whole-CV constraint, not a pairwise one.
+    """
+    summary = _strip_html(resume_data.get("SUMMARY_TEXT", ""))
+    metrics = [number for number, _sig in _extract_metric_signatures(summary)]
+    for bullet in _all_bullets(resume_data):
+        metrics.extend(number for number, _sig in _extract_metric_signatures(bullet))
+    return metrics
+
+
 def get_opening_verbs(resume_data: dict) -> list[str]:
     """
     Every bullet's opening verb (lowercased, numeral-led bullets excluded),
@@ -145,15 +173,37 @@ def get_opening_verbs(resume_data: dict) -> list[str]:
     return verbs
 
 
+def opening_verb(bullet: str) -> str | None:
+    """The word the whole-CV uniqueness rule keys on, or None if this
+    bullet doesn't have one (numbers don't count as verbs)."""
+    match = _FIRST_WORD_PATTERN.match(bullet)
+    if not match:
+        return None
+    first_word = match.group(1).lower()
+    if first_word[0].isdigit():
+        return None
+    return first_word
+
+
+def uniqueness_keys(bullet: str) -> tuple[set[str], str | None]:
+    """One bullet's whole-CV uniqueness fingerprint: (metric signatures,
+    opening verb).
+
+    Exposed for orchestrator.mine_bullet_bank(), which uses it to avoid
+    *selecting* a colliding set in the first place. Deliberately the same
+    function the checks below report on -- a second, separately-derived
+    notion of "collision" would drift from this one and the miner would
+    quietly stop preventing the violations this module raises.
+    """
+    return {sig for _n, sig in _extract_metric_signatures(bullet)}, opening_verb(bullet)
+
+
 def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
     violations = []
     seen = {}
     for bullet in _all_bullets(resume_data):
-        match = _FIRST_WORD_PATTERN.match(bullet)
-        if not match:
-            continue
-        first_word = match.group(1).lower()
-        if first_word[0].isdigit():
+        first_word = opening_verb(bullet)
+        if first_word is None:
             continue
         if first_word in seen:
             violations.append(
@@ -246,16 +296,20 @@ def _check_bullet_widows(resume_data: dict, style_rules: dict) -> list[str]:
     orchestrator.py's _short_widow_bullets(), which is EXPERIENCE-only for
     the same reason.
     """
-    widow_min_words = style_rules.get("bullet_structure", {}).get("widow_min_words", 5)
+    limits = style_rules.get("bullet_structure", {})
+    one_liner_max = limits.get("one_liner_max_chars", 108)
+    widow_min_words = limits.get("widow_min_words", 5)
     bullets = [
         bullet
         for job in resume_data.get("EXPERIENCE", [])
         for bullet in job.get("achievements", [])
     ]
     return [
-        f"Bullet wraps to a 2nd line but leaves only a {word_count}-word widow "
-        f"(fewer than the required {widow_min_words}) -- tighten it to fit one line, "
-        f"or lengthen it so the 2nd line isn't a stray scrap: {bullet!r}"
+        f"Bullet is {len(bullet)} chars and wraps to a 2nd line at the {one_liner_max}-char "
+        f"mark but leaves only a {word_count}-word widow there (fewer than the required "
+        f"{widow_min_words}) -- either trim it to {one_liner_max} chars or fewer to fit one "
+        f"line, or lengthen it past {one_liner_max} chars so the 2nd line carries at least "
+        f"{widow_min_words} words: {bullet!r}"
         for bullet, word_count in bullets_with_short_widow(bullets, style_rules)
     ]
 
@@ -278,10 +332,20 @@ def _check_skills_line_lengths(resume_data: dict, style_rules: dict) -> list[str
             continue
         remainder = length - max_chars
         if remainder < widow_min_chars:
+            # Spell out BOTH edges of the legal zone and name the dead band.
+            # Stating only the max_chars limit (as this message used to) is
+            # unactionable: it reads as "get shorter", but every length from
+            # max_chars+1 to max_chars+widow_min_chars-1 is illegal, so a model
+            # nudging the line down a few chars at a time never escapes and
+            # burns every validator retry. Real 2026-08-12 build failure.
+            wrap_min = max_chars + widow_min_chars
             violations.append(
-                f"Skills line wraps to a 2nd line but leaves a short widow "
-                f"({remainder} chars past the {max_chars}-char limit) -- add or remove a skill so "
-                f"the line either fits on one line or wraps to a fuller 2nd line ({length} chars total): {line!r}"
+                f"Skills line is {length} chars, which lands in the {max_chars + 1}-{wrap_min - 1} "
+                f"dead band -- it wraps to a 2nd line but leaves only a {remainder}-char widow there "
+                f"(fewer than the {widow_min_chars} required). NO length in {max_chars + 1}-{wrap_min - 1} "
+                f"is valid, so shortening it slightly will fail again. Go to one of the two legal "
+                f"targets: cut it to {max_chars} chars or fewer to fit on one line, or add skills to "
+                f"reach {wrap_min}-{2 * max_chars} chars so the 2nd line carries real content: {line!r}"
             )
         elif length > 2 * max_chars:
             violations.append(
@@ -370,11 +434,46 @@ def _extract_metric_signatures(text: str) -> list[tuple[str, str]]:
         start = match.start()
         if _COMPOUND_LABEL_PREFIX.search(text[max(0, start - 2):start]):
             continue
-        number = match.group(0)
-        context_match = _METRIC_CONTEXT_WORD.match(text[match.end():match.end() + 20])
+        tail = text[match.end():match.end() + 20]
+        suffix_match = _METRIC_UNIT_SUFFIX.match(tail)
+        suffix = suffix_match.group(0) if suffix_match else ""
+        # Suffix is part of the display number too, so a retry prompt's
+        # metric inventory distinguishes "100+" from "100%" instead of
+        # listing two identical-looking "100"s.
+        number = match.group(0) + suffix
+        context_match = _METRIC_CONTEXT_WORD.match(tail)
         context = context_match.group(1).lower() if context_match else ""
-        results.append((number, f"{number.lower()}|{context}"))
+        results.append((number, _metric_signature(number, context)))
     return results
+
+
+def _metric_signature(number: str, context: str) -> str:
+    """
+    The key two metric mentions must share to count as the same figure.
+
+    The context word (see _METRIC_CONTEXT_WORD) stops a bare "12" in two
+    unrelated places from reading as a repeat. But for a big, specific
+    figure it causes the opposite error: "$20M, 2,932-account portfolio"
+    and "$20M+ portfolio" take different context words and stop colliding,
+    though a reader plainly sees the same $20M twice. A figure that is
+    distinctive on its own -- currency, a magnitude suffix, or 4+ digits --
+    therefore keys on the number alone. Small bare integers keep the
+    context word, because 3/10/12 genuinely do coincide across unrelated
+    facts.
+    """
+    # "+" is an approximation marker, not part of the figure: "$20M" and
+    # "$20M+" are one fact stated twice.
+    core = number.lower().rstrip("+")
+    digits = re.sub(r"\D", "", core)
+    # A 4-digit year clears the digit-count bar but is a date, not a
+    # metric -- two bullets naming the same year aren't citing one figure.
+    is_year = len(digits) == 4 and 1900 <= int(digits) <= 2099
+    distinctive = not is_year and (
+        core.startswith("$") or core.endswith(("m", "k")) or len(digits) >= 4
+    )
+    # "$20M" and "20M" are the same figure written two ways.
+    core = core.replace("$", "").replace(",", "")
+    return core if distinctive else f"{core}|{context}"
 
 
 def _check_metric_uniqueness(resume_data: dict) -> list[str]:
@@ -384,7 +483,16 @@ def _check_metric_uniqueness(resume_data: dict) -> list[str]:
     summary_signatures = {sig for _, sig in _extract_metric_signatures(summary)}
     seen_in_bullets: dict = {}
     for bullet in bullets:
+        # Per-bullet, so a single bullet citing the same figure twice for a
+        # legitimate reason ("22% reply rates ... exceeding the 22% industry
+        # average") isn't reported against ITSELF -- that produced an
+        # "in both X and X" message showing the model one identical string
+        # twice, which it cannot act on.
+        seen_in_this_bullet = set()
         for number, signature in _extract_metric_signatures(bullet):
+            if signature in seen_in_this_bullet:
+                continue
+            seen_in_this_bullet.add(signature)
             if signature in summary_signatures:
                 violations.append(f"Metric '{number}' should appear only once across the resume, but appears in both the Summary and a bullet: {bullet!r}")
             elif signature in seen_in_bullets:

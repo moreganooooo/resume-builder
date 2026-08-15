@@ -11,6 +11,7 @@ import time
 import cli_art
 import jd_manager
 import orchestrator
+import theme
 
 # Keeps evaluate_fit() calls under this account's Gemini API tier (15 RPM
 # for gemini-3.1-flash-lite): 60s / 15 = 4.0s minimum spacing, plus a
@@ -56,66 +57,69 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
     if skip_evaluated:
         already_evaluated, pending_paths = split_evaluated(pending_paths)
         if already_evaluated:
-            print(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
+            cli_art.print_literal(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
 
     engine = orchestrator.ResumeEngine()
     results = []
 
-    for i, path in enumerate(pending_paths):
-        if i > 0:
-            time.sleep(SECONDS_BETWEEN_CALLS)
-        job_title, company_name = jd_manager.extract_job_meta(path)
-        print(f"\n{'─'*60}")
-        print(f"  [{i + 1}/{len(pending_paths)}] Evaluating {company_name or os.path.basename(path)}...")
-        with cli_art.console.status(f"Weighing the fit for {company_name or os.path.basename(path)}...", spinner="dots"):
+    with cli_art.new_progress() as progress:
+        task = progress.add_task(f"[bold {theme.BRAND}]Evaluating JDs...", total=len(pending_paths))
+        for i, path in enumerate(pending_paths):
+            if i > 0:
+                time.sleep(SECONDS_BETWEEN_CALLS)
+            job_title, company_name = jd_manager.extract_job_meta(path)
+            label = company_name or os.path.basename(path)
+            progress.update(task, description=f"[{i + 1}/{len(pending_paths)}] Weighing the fit for {label}...")
             evaluation = engine.evaluate_fit(path)
 
-        if not evaluation:
+            if not evaluation:
+                results.append({
+                    "job_key": jd_manager.compute_job_key(path),
+                    "source_file": path,
+                    "company_name": company_name or "unknown",
+                    "job_title": job_title or "unknown",
+                    "composite_score": None,
+                    "fit_score": None,
+                    "interview_odds_score": None,
+                    "practical_pursue_score": None,
+                    "recommendation": None,
+                    "why": "",
+                    "hard_blockers": [],
+                    "posting_legitimacy": "",
+                    "posting_age_days": None,
+                    "error": True,
+                })
+                progress.advance(task)
+                continue
+
+            job_key = jd_manager.compute_job_key(path)
+            jd_manager.save_evaluation(path, evaluation)
+
+            # A JD Morgan's already said no to (Skip) shouldn't sit in the
+            # pending list forever -- archive it immediately rather than
+            # waiting for a manual pass. archive_jd() moves the file, so this
+            # has to happen after compute_job_key()/save_evaluation() above,
+            # both of which need it still at its original path.
+            if evaluation.get("recommendation") == "Skip":
+                path = jd_manager.archive_jd(path)
+
             results.append({
-                "job_key": jd_manager.compute_job_key(path),
+                "job_key": job_key,
                 "source_file": path,
                 "company_name": company_name or "unknown",
                 "job_title": job_title or "unknown",
-                "composite_score": None,
-                "fit_score": None,
-                "interview_odds_score": None,
-                "practical_pursue_score": None,
-                "recommendation": None,
-                "why": "",
-                "hard_blockers": [],
-                "posting_legitimacy": "",
-                "posting_age_days": None,
-                "error": True,
+                "composite_score": evaluation.get("composite_score"),
+                "fit_score": evaluation.get("fit_score"),
+                "interview_odds_score": evaluation.get("interview_odds_score"),
+                "practical_pursue_score": evaluation.get("practical_pursue_score"),
+                "recommendation": evaluation.get("recommendation"),
+                "why": evaluation.get("why") or "",
+                "hard_blockers": evaluation.get("hard_blockers") or [],
+                "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
+                "posting_age_days": evaluation.get("posting_age_days"),
+                "error": False,
             })
-            continue
-
-        job_key = jd_manager.compute_job_key(path)
-        jd_manager.save_evaluation(path, evaluation)
-
-        # A JD Morgan's already said no to (Skip) shouldn't sit in the
-        # pending list forever -- archive it immediately rather than
-        # waiting for a manual pass. archive_jd() moves the file, so this
-        # has to happen after compute_job_key()/save_evaluation() above,
-        # both of which need it still at its original path.
-        if evaluation.get("recommendation") == "Skip":
-            path = jd_manager.archive_jd(path)
-
-        results.append({
-            "job_key": job_key,
-            "source_file": path,
-            "company_name": company_name or "unknown",
-            "job_title": job_title or "unknown",
-            "composite_score": evaluation.get("composite_score"),
-            "fit_score": evaluation.get("fit_score"),
-            "interview_odds_score": evaluation.get("interview_odds_score"),
-            "practical_pursue_score": evaluation.get("practical_pursue_score"),
-            "recommendation": evaluation.get("recommendation"),
-            "why": evaluation.get("why") or "",
-            "hard_blockers": evaluation.get("hard_blockers") or [],
-            "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
-            "posting_age_days": evaluation.get("posting_age_days"),
-            "error": False,
-        })
+            progress.advance(task)
 
     results.sort(key=_sort_key)
     return results

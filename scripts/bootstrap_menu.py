@@ -90,11 +90,11 @@ def _run_phase0() -> bool:
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
             "Every document ingestion processes needs it. Add it to your profile's .env, then come back "
             "to this step."
-        )
+        , soft_wrap=True)
         return False
 
     summary = bootstrap_bullet_bank.run_ingestion()
@@ -113,20 +113,20 @@ def _run_phase05() -> bool:
     _run_phase0() stops before run_ingestion() when the key was deferred
     (B16)."""
     if _phase0_status()[0] != "Up to date":
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
             "first -- profile setup drafts your identity, tags, and cv.md from what ingestion extracted, "
             "and running it first would produce a blank, still-paid-for draft. Finish Step 0, then come "
             "back."
-        )
+        , soft_wrap=True)
         return False
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
-        print(
-            f"\n{theme.colorize_icon_ansi('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
             "yet. Add it to your profile's .env, then come back to this step."
-        )
+        , soft_wrap=True)
         return False
 
     bootstrap_profile.run_profile_setup()
@@ -134,14 +134,22 @@ def _run_phase05() -> bool:
 
 
 def _build_choices() -> list:
+    # Labels here are plain-language stage names, not the internal "Phase
+    # 0"/"Phase 0.5" dev-sequencing numbers this module's own docstring
+    # (and the rest of this codebase) uses to talk about these two steps
+    # -- a first-time user has no idea what a "phase" is or why it starts
+    # at 0. The resumable status table below (run_bootstrap_menu()) still
+    # numbers these 0/"0.5" alongside Stages 1-6 -- that ordering is
+    # genuinely useful there, so it stays; only the user-facing menu
+    # copy changes here.
     choices = [
         questionary.Choice(
-            title=[("class:text", "0. Ingest Source Documents  "),
+            title=[("class:text", "Upload Your Documents  "),
                    ("class:description", "(extract achievements from uploaded files)")],
             value="phase0",
         ),
         questionary.Choice(
-            title=[("class:text", "0.5 Set Up Profile  "),
+            title=[("class:text", "Draft Your Profile  "),
                    ("class:description", "(identity, profile.yml, cv.md draft)")],
             value="phase05",
         ),
@@ -162,19 +170,26 @@ def run_bootstrap_menu() -> bool:
     without doing anything."""
     did_something = False
     while True:
+        # Labels must match _build_choices()'s wording verbatim -- these two
+        # rows previously read "Ingest Source Documents"/"Set Up Profile"
+        # while the menu directly below called the same steps "Upload Your
+        # Documents"/"Draft Your Profile", so the progress table and the
+        # thing you click to act on it named the same step differently.
         stage_rows = [
-            (0, "Ingest Source Documents", *_phase0_status()),
-            ("0.5", "Set Up Profile", *_phase05_status()),
+            (0, "Upload Your Documents", *_phase0_status()),
+            ("0.5", "Draft Your Profile", *_phase05_status()),
         ]
         stage_rows += [
             (s["number"], s["label"], *bullet_bank_menu._stage_status(s))
             for s in bullet_bank_menu.STAGES
         ]
-        cli_art.render_bullet_bank_status(stage_rows, [], title="Onboarding Progress")
+        # show_numbers=False: these rows are numbered 0/0.5/1-6 internally,
+        # and "Stage 0.5" is dev-sequencing a first-time user shouldn't see.
+        # Row order carries the sequence here. See render_bullet_bank_status().
+        cli_art.render_bullet_bank_status(
+            stage_rows, [], title="Onboarding Progress", show_numbers=False)
 
-        choice = questionary.select(
-            "New User Setup:", choices=_build_choices(), style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        choice = cli_art.select("New User Setup:", choices=_build_choices())
         if not choice or choice == "__back__":
             return did_something
 

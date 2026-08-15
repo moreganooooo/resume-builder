@@ -26,6 +26,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_DIR        = profile_paths.kb_dir()
 REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
@@ -45,7 +46,7 @@ TODAY = str(date.today())
 
 def main():
     if not os.path.exists(REWRITE_QUEUE):
-        print("rewrite-queue.csv not found. Exiting.")
+        cli_art.cli_warning("rewrite-queue.csv not found. Exiting.")
         return
 
     with open(REWRITE_QUEUE, newline="", encoding="utf-8") as f:
@@ -66,8 +67,8 @@ def main():
         else:
             keep_rows.append(row)
 
-    print(f"Retiring {len(retire_rows)} non-representative rows.")
-    print(f"Keeping  {len(keep_rows)} rows in rewrite-queue.")
+    cli_art.cli_info(f"Retiring {len(retire_rows)} non-representative rows.")
+    cli_art.cli_info(f"Keeping {len(keep_rows)} rows in rewrite-queue.")
 
     retired_exists = os.path.exists(RETIRED_PATH)
     with open(RETIRED_PATH, "a", newline="", encoding="utf-8") as f:
@@ -75,13 +76,13 @@ def main():
         if not retired_exists:
             writer.writeheader()
         writer.writerows(retire_rows)
-    print(f"  Appended {len(retire_rows)} rows to {RETIRED_PATH}.")
+    cli_art.cli_success(f"Appended {len(retire_rows)} rows to {RETIRED_PATH}.")
 
     with atomic_write(REWRITE_QUEUE, newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=REWRITE_HEADER, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(keep_rows)
-    print(f"  Rewrote {REWRITE_QUEUE} with {len(keep_rows)} active rows.")
+    cli_art.cli_success(f"Rewrote {REWRITE_QUEUE} with {len(keep_rows)} active rows.")
 
 
 if __name__ == "__main__":

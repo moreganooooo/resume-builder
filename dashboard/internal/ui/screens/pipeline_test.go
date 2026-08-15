@@ -87,30 +87,30 @@ func TestWithReloadedDataPreservesStateAndSelection(t *testing.T) {
 	}
 }
 
-func TestRenderAppLineIncludesDateColumn(t *testing.T) {
+func TestJobDetailPaneIncludesDate(t *testing.T) {
+	apps := []model.CareerApplication{{
+		Date:    "2026-04-13",
+		Company: "Anthropic",
+		Role:    "Forward Deployed Engineer",
+		Status:  "Applied",
+		Score:   4.5,
+	}}
 	pm := NewPipelineModel(
 		theme.NewTheme("catppuccin-mocha"),
-		nil,
+		apps,
 		model.PipelineMetrics{},
 		"..",
 		120,
 		40,
 	)
 
-	line := pm.renderAppLine(model.CareerApplication{
-		Number:  42,
-		Date:    "2026-04-13",
-		Company: "Anthropic",
-		Role:    "Forward Deployed Engineer",
-		Status:  "Applied",
-		Score:   4.5,
-	}, false)
+	view := pm.View()
 
-	if !strings.Contains(line, "2026-04-13") {
-		t.Fatalf("expected rendered line to include date column, got %q", line)
+	if !strings.Contains(view, "2026-04-13") {
+		t.Fatalf("expected rendered view to include the app's date, got %q", view)
 	}
-	if !strings.Contains(line, "#42") {
-		t.Fatalf("expected rendered line to include tracker number marker, got %q", line)
+	if !strings.Contains(view, "Anthropic") {
+		t.Fatalf("expected rendered view to include the app's company, got %q", view)
 	}
 }
 
@@ -349,10 +349,13 @@ func TestRejectedAndDiscardedTabsFilterCorrectly(t *testing.T) {
 	}
 }
 
-// Regression: with no committed search query, Esc must NOT close the screen.
-// The help bar advertises only `q quit`, so Esc quitting silently was a bug
-// that surfaced as accidental exits when users hit Esc to "back out" of the UI.
-func TestEscWithoutQueryIsNoOp(t *testing.T) {
+// With no committed search query, Esc backs out to the Main Menu rather
+// than quitting the app -- PipelineClosedMsg{Quit: false}, distinct from
+// "q"'s PipelineClosedMsg{Quit: true}. This used to be a no-op (see git
+// history) specifically to avoid Esc silently exiting the whole app; now
+// that "back" and "quit" are different outcomes, Esc can safely mean
+// "leave this screen" without reopening that accidental-exit risk.
+func TestEscWithoutQueryGoesBack(t *testing.T) {
 	apps := []model.CareerApplication{
 		{Company: "Stripe", Role: "Backend Engineer", Status: "Evaluated", Score: 4.6},
 	}
@@ -363,17 +366,38 @@ func TestEscWithoutQueryIsNoOp(t *testing.T) {
 	}
 
 	pm, cmd := pm.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if cmd != nil {
-		// PipelineClosedMsg used to fire here; ensure it doesn't anymore.
-		if msg := cmd(); msg != nil {
-			if _, ok := msg.(PipelineClosedMsg); ok {
-				t.Fatalf("expected Esc with no query to be a no-op, got PipelineClosedMsg")
-			}
-			t.Fatalf("expected Esc with no query to return nil cmd, got %T", msg)
-		}
+	if cmd == nil {
+		t.Fatal("expected Esc with no query to emit PipelineClosedMsg, got nil cmd")
+	}
+	msg, ok := cmd().(PipelineClosedMsg)
+	if !ok {
+		t.Fatalf("expected PipelineClosedMsg, got %T", cmd())
+	}
+	if msg.Quit {
+		t.Fatal("expected Esc to emit PipelineClosedMsg{Quit: false} (back), got Quit: true")
 	}
 	if pm.searchInput {
 		t.Fatal("Esc with no query should not toggle searchInput")
+	}
+}
+
+// "q" always quits the whole app, distinct from Esc's "back to menu".
+func TestQAlwaysQuits(t *testing.T) {
+	apps := []model.CareerApplication{
+		{Company: "Stripe", Role: "Backend Engineer", Status: "Evaluated", Score: 4.6},
+	}
+	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
+
+	_, cmd := pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatal("expected \"q\" to emit PipelineClosedMsg, got nil cmd")
+	}
+	msg, ok := cmd().(PipelineClosedMsg)
+	if !ok {
+		t.Fatalf("expected PipelineClosedMsg, got %T", cmd())
+	}
+	if !msg.Quit {
+		t.Fatal("expected \"q\" to emit PipelineClosedMsg{Quit: true}, got Quit: false")
 	}
 }
 

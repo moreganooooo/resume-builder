@@ -35,6 +35,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
+import cli_art
 import theme
 
 KB_DIR       = profile_paths.kb_dir()
@@ -57,17 +58,16 @@ BELIEVABILITY_MIN   = 90   # believability_score >= this (combined with accuracy
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\n" + "─" * 60)
-    print("  DETECT HIDDEN GEMS")
-    print("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("DETECT HIDDEN GEMS", style="dim")
 
     if not os.path.exists(KEEPERS_CSV):
-        print(f"  ERROR: {KEEPERS_CSV} not found.")
-        print("  Run the audit + rewrite pipeline first to produce keepers.")
+        cli_art.console.print(f"  {cli_art.ERROR} {KEEPERS_CSV} not found.", soft_wrap=True)
+        cli_art.cli_warning("Run the audit + rewrite pipeline first to produce keepers.")
         return
 
     df = pd.read_csv(KEEPERS_CSV)
-    print(f"  Loaded {len(df)} bullets from {KEEPERS_CSV}")
+    cli_art.cli_info(f"Loaded {len(df)} bullets from {KEEPERS_CSV}")
 
     # Coerce score columns to numeric
     for col in ("hidden_gem_score", "accuracy_score", "believability_score"):
@@ -93,9 +93,12 @@ def main():
     gems = df[mask].copy()
 
     if len(gems) == 0:
-        print("  No Hidden Gems found with current thresholds.")
-        print(f"  Thresholds: hidden_gem_score>={GEM_SCORE_MIN}, "
-              f"accuracy>={ACCURACY_MIN} + believability>={BELIEVABILITY_MIN}")
+        cli_art.cli_info("No Hidden Gems found with current thresholds.")
+        cli_art.detail(
+            f"Thresholds: hidden_gem_score>={GEM_SCORE_MIN}, "
+            f"accuracy>={ACCURACY_MIN} + believability>={BELIEVABILITY_MIN}",
+            level=cli_art.NORMAL,
+        )
         return
 
     # Sort: hidden_gem_score desc, then believability desc
@@ -104,9 +107,11 @@ def main():
         gems = gems.sort_values(sort_cols, ascending=False)
 
     gems.to_csv(GEMS_CSV, index=False)
-    print(f"  Found {len(gems)} Hidden Gems out of {len(df)} keeper bullets "
-          f"({len(gems)/len(df)*100:.1f}%).")
-    print(f"  Wrote {GEMS_CSV}")
+    cli_art.cli_success(
+        f"Found {len(gems)} Hidden Gems out of {len(df)} keeper bullets "
+        f"({len(gems)/len(df)*100:.1f}%)."
+    )
+    cli_art.cli_success(f"Wrote {GEMS_CSV}")
 
     # Preview top 5
     bullet_col = None
@@ -116,16 +121,16 @@ def main():
             break
     if bullet_col is None:
         bullet_col = gems.columns[0]
-    print("\n  Top Hidden Gems:")
+    cli_art.cli_info("Top Hidden Gems:")
     for i, (_, row) in enumerate(gems.head(5).iterrows(), 1):
         gem_score = row.get("hidden_gem_score", "?")
         gem_reason = row.get("hidden_gem_reason", "")
         text = str(row[bullet_col])[:100]
-        print(f"  {i}. [score={gem_score}] {text}")
+        cli_art.cli_info(f"{i}. [score={gem_score}] {text}")
         if gem_reason:
-            print(f"     Reason: {gem_reason}")
+            cli_art.detail(f"Reason: {gem_reason}", level=cli_art.NORMAL)
 
-    print("\n  Done.")
+    cli_art.cli_success("Done.")
 
 
 if __name__ == "__main__":

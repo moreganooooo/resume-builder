@@ -2,15 +2,19 @@
 cli_art.py style (rich Console/Panel) but trimmed down -- no hand-drawn ASCII
 block art, just a clean styled banner."""
 
+import json
 import os
 import random
 import time
 
+import questionary
 from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape as _escape_markup
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
@@ -40,15 +44,27 @@ TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
 
 def display_error(message: str) -> None:
     """A failure reads with real visual weight -- a bordered panel, not a
-    bare icon-prefixed line."""
-    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {message}"
+    bare icon-prefixed line. message is escaped before interpolation --
+    Rich's markup parser silently drops bracketed content that happens
+    to look like a style tag (e.g. a company name in brackets), rather
+    than raising or rendering it literally, so caller-supplied text must
+    never reach console.print unescaped."""
+    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {_escape_markup(message)}"
     console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
 
 
 def display_success(message: str) -> None:
     """Stays lightweight (no border) -- this is the common case and a
-    bordered panel for every success would get old fast."""
-    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {message}")
+    bordered panel for every success would get old fast. message is
+    escaped -- see display_error()'s docstring."""
+    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}")
+
+
+def print_literal(message: str = "") -> None:
+    """Print a literal string without Rich markup parsing (shortcut used by
+    callers that previously relied on `console.print(..., markup=False)`.
+    Keeps `soft_wrap=True` to match previous call sites."""
+    console.print(message, markup=False, soft_wrap=True)
 
 # Raw block-letter lines, no markup -- color now comes from the diagonal
 # gradient applied per-character in display_main_banner(), not a blanket
@@ -69,6 +85,29 @@ MAIN_BANNER_LINES = [
     "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",]
 
 SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
+
+# Glyphs for the banner's decorative sparkle field -- weighted toward the
+# plain small dot so stars stay an accent, not the majority. Plain symbol
+# glyphs only (not emoji-presentation ones like an outlined star with
+# VS16) -- those commonly render double-width and would throw off a row's
+# alignment relative to the others.
+_SPARKLE_GLYPHS = ["·", "·", "·", "⋆", "⋆", "✦", "✧"]
+_SPARKLE_DENSITY = 0.08
+
+
+def _sparkle_field(rows: int, width: int) -> list:
+    """A fresh random scatter (not a fixed pattern) every call -- fills
+    the banner's right side out to the panel's actual inner width (see
+    display_main_banner's caller), so it always reaches the border
+    regardless of terminal size, and looks like a different night sky
+    each launch rather than a static decal."""
+    if width <= 0:
+        return [""] * rows
+    lines = []
+    for _ in range(rows):
+        row = [random.choice(_SPARKLE_GLYPHS) if random.random() < _SPARKLE_DENSITY else " " for _ in range(width)]
+        lines.append("".join(row))
+    return lines
 
 
 def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
@@ -113,8 +152,11 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
     returns the Rich renderable for a given frame (threshold=None means
     fully revealed). Falls back to a single fully-revealed print when
     stdout isn't a real terminal (piped output, non-interactive contexts,
-    tests) -- Live's redraws don't compose safely with non-TTY output."""
-    if not console.is_terminal:
+    tests) -- Live's redraws don't compose safely with non-TTY output --
+    or when RESUME_BUILDER_MOTION=reduced, the same opt-out (and env var
+    name) dashboard/main.go's reducedMotion() already offers for the Go
+    side's screen-transition animation."""
+    if not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
         console.print(render_frame(None))
         return
 
@@ -145,7 +187,24 @@ def _stats_line_text() -> str:
 
 
 def display_main_banner() -> None:
-    grid = _gradient_grid(MAIN_BANNER_LINES, theme.BRAND, theme.BRAND_ACCENT)
+    # Sparkles ride the same diagonal gradient/reveal as the letters
+    # themselves (composed onto each line before the grid is built, not
+    # rendered separately) so they wipe in together as one coherent piece
+    # instead of the letters finishing and sparkles popping in after.
+    #
+    # Fills all the way to the panel's inner right edge: the panel has no
+    # explicit width (so it stretches to console.width), box.DOUBLE costs
+    # 1 column of border on each side, and padding=(1, 2) costs 2 more on
+    # each side -- 6 columns of overhead total.
+    gap = "   "
+    banner_width = max((len(line) for line in MAIN_BANNER_LINES), default=0)
+    sparkle_width = console.width - 6 - banner_width - len(gap)
+    sparkle_lines = _sparkle_field(len(MAIN_BANNER_LINES), sparkle_width)
+    decorated_lines = [
+        line + gap + sparkles
+        for line, sparkles in zip(MAIN_BANNER_LINES, sparkle_lines)
+    ]
+    grid = _gradient_grid(decorated_lines, theme.BRAND, theme.BRAND_ACCENT)
     # Hoisted out of render_frame deliberately: the stats are constant for the
     # length of the animation, but calling this per-frame walked the entire JD
     # corpus 31 times and turned a 1.6s reveal into ~27s -- the first thing
@@ -153,12 +212,12 @@ def display_main_banner() -> None:
     stats_line = _stats_line_text()
 
     def render_frame(threshold):
-        body = _render_grid(MAIN_BANNER_LINES, grid, threshold=threshold)
+        body = _render_grid(decorated_lines, grid, threshold=threshold)
         body.append(SUBTITLE, style="bold")
         body.append(stats_line, style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
-    _reveal_banner(MAIN_BANNER_LINES, grid, render_frame)
+    _reveal_banner(decorated_lines, grid, render_frame)
 
 
 def display_stats_line() -> None:
@@ -183,6 +242,20 @@ def display_tip() -> None:
         f"{theme.colorize_icon('hint')}  Did you know? {tip}",
         border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2),
     ))
+
+
+def display_exit_footer() -> None:
+    """Closing flourish shown once, at session exit -- bookends
+    display_main_banner()'s launch treatment (same BRAND/BRAND_ACCENT
+    gradient pairing and sparkle motif from the banner's own decoration,
+    just condensed to one line instead of a 13-row block)."""
+    console.print()
+    console.rule(
+        f"[{theme.BRAND_ACCENT}]✦[/{theme.BRAND_ACCENT}]  "
+        f"[dim]resume-builder[/dim]  "
+        f"[{theme.BRAND_ACCENT}]✦[/{theme.BRAND_ACCENT}]",
+        style=theme.BRAND,
+    )
 
 
 def display_breadcrumb() -> None:
@@ -253,19 +326,56 @@ _POSTING_AGE_VERY_STALE_DAYS = 21
 
 
 def _posting_age_cell(days: int | None) -> str:
-    """Colored "Nd" cell for how long a posting's been up -- green within
-    the not-yet-penalized window, amber into the scoring-penalty range,
-    red well past it. "-" when no post date or scan-discovery fallback
-    was available at all (see jd_manager.compute_posting_age_days())."""
+    """Icon+colored "Nd" cell for how long a posting's been up -- green
+    within the not-yet-penalized window, amber into the scoring-penalty
+    range, red well past it. "-" when no post date or scan-discovery
+    fallback was available at all (see
+    jd_manager.compute_posting_age_days()).
+
+    The icon is not decoration. This was the one cell in this module
+    signalling by color alone, which is invisible to a colorblind user
+    and to anyone piping output somewhere unstyled -- everywhere else
+    pairs color with a glyph via theme.colorize_icon(). Pairing it here
+    makes freshness readable from the glyph with the color removed."""
     if days is None:
         return "-"
     if days <= _POSTING_AGE_STALE_DAYS:
-        color = theme.SUCCESS
+        color, icon_name = theme.SUCCESS, "success"
     elif days <= _POSTING_AGE_VERY_STALE_DAYS:
-        color = theme.WARNING
+        color, icon_name = theme.WARNING, "warning"
     else:
-        color = theme.ERROR
-    return f"[{color}]{days}d[/{color}]"
+        color, icon_name = theme.ERROR, "error"
+    return f"[{color}]{theme.ICONS[icon_name]} {days}d[/{color}]"
+
+
+def _fit_odds_cell(score: float | None) -> str:
+    """Colored Fit/Odds cell, reusing the same four-tier vocabulary as
+    _RECOMMENDATION_COLORS (SUCCESS/BRAND/WARNING/ERROR) rather than
+    inventing a fresh scale -- so a 4.5 Fit score reads as the same kind
+    of "good" as a "Strong pursue" recommendation. "hint" is BRAND-colored
+    (see theme._ICON_COLORS), which is what makes it the right icon for
+    the vocabulary's second tier -- there's no dedicated "good but not
+    great" icon name in theme.py, so this reuses one that already
+    resolves to the right color.
+
+    Pairs color with an icon (not color alone) for the same reason
+    _posting_age_cell does: color-only signaling is invisible to a
+    colorblind user and to anything piping this output unstyled.
+
+    "-" for missing/None -- fit_score/interview_odds_score were added to
+    the evaluation dict after older evaluations were already persisted,
+    so a pre-existing JD's JSON may not have them yet."""
+    if score is None:
+        return "-"
+    if score >= 4.0:
+        color, icon_name = theme.SUCCESS, "success"
+    elif score >= 3.0:
+        color, icon_name = theme.BRAND, "hint"
+    elif score >= 2.0:
+        color, icon_name = theme.WARNING, "warning"
+    else:
+        color, icon_name = theme.ERROR, "error"
+    return f"[{color}]{theme.ICONS[icon_name]} {score:.1f}[/{color}]"
 
 
 def render_fit_table(results: list, start_index: int = 1, title: str | None = None) -> None:
@@ -280,19 +390,53 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     plain count for non-paginated callers. The "Why" column is a short
     excerpt, not the model's full reasoning -- lets a lower-scored-but-
     higher-priority role get spot-checked at a glance instead of needing
-    to open its JD JSON to see why it scored the way it did."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
-    table.add_column("#", justify="right", style="dim")
-    table.add_column("Score", justify="right")
-    table.add_column("Recommendation")
-    table.add_column("Company")
-    table.add_column("Title")
-    table.add_column("Posted", justify="right")
-    table.add_column("Why")
+    to open its JD JSON to see why it scored the way it did.
+
+    Columns are explicitly sized/bounded for the same reason
+    render_pipeline_table's are (see that function's own B22 comment):
+    seven columns with no sizing meant Rich divided any width deficit
+    evenly across all of them, squeezing/truncating header text itself on
+    an ordinary 80-100 column terminal. Title is the one `ratio` column so
+    it absorbs whatever's left; Why -- a short excerpt, least essential at
+    a glance -- drops entirely below _NARROW_TERMINAL_COLUMNS rather than
+    shrinking everything else past legibility.
+
+    Fit and Odds are the two layers that feed Score alongside Practical
+    Pursue (orchestrator.COMPOSITE_SCORE_WEIGHTS -- 40/40/20), broken out
+    as their own columns so a strong-fit/weak-odds role no longer looks
+    identical to the reverse just because their blended Score matches.
+    Score stays and stays the sort key -- these are additive context, not
+    a replacement. Practical Pursue is deliberately NOT broken out here
+    (keeps the table narrow); render_comparison_table already shows all
+    three layers in full for anyone who wants that."""
+    narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    show_score_detail = console.width >= _FIT_SCORE_DETAIL_COLUMNS
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
+    table.add_column("#", justify="right", style="dim", width=4, no_wrap=True)
+    table.add_column("Score", justify="right", width=7, no_wrap=True)
+    if show_score_detail:
+        table.add_column("Fit", justify="right", width=6, no_wrap=True)
+        table.add_column("Odds", justify="right", width=6, no_wrap=True)
+    table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
+    # max_width caps Company at a real company name's length -- without
+    # one, a column with only min_width auto-grows on its longest cell,
+    # and it was winning that fight against Score/Recommendation's own
+    # fixed widths on ordinary terminals, cutting the score value itself.
+    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
+    table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Posted", justify="right", width=8, no_wrap=True)
+    if not narrow:
+        table.add_column("Why", width=40, no_wrap=True, overflow="ellipsis")
 
     for i, r in enumerate(results, start_index):
         if r["error"]:
-            table.add_row(str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]", "-", r["company_name"], r["job_title"], "-", "-")
+            row = [str(i), f"[{theme.ERROR}]ERROR[/{theme.ERROR}]"]
+            if show_score_detail:
+                row += ["-", "-"]
+            row += ["-", r["company_name"], r["job_title"], "-"]
+            if not narrow:
+                row.append("-")
+            table.add_row(*row)
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], theme.MUTED)
         legitimacy = r.get("posting_legitimacy")
@@ -300,15 +444,20 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
         if legitimacy and legitimacy != "High Confidence":
             flag_color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
             recommendation_text += f" [{flag_color}]({theme.colorize_icon('warning')} {legitimacy})[/{flag_color}]"
-        table.add_row(
+        row = [
             str(i),
             f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
             recommendation_text,
             r["company_name"],
             r["job_title"],
             _posting_age_cell(r.get("posting_age_days")),
-            _short_why(r.get("why")),
-        )
+        ]
+        if show_score_detail:
+            row.insert(2, _fit_odds_cell(r.get("fit_score")))
+            row.insert(3, _fit_odds_cell(r.get("interview_odds_score")))
+        if not narrow:
+            row.append(_short_why(r.get("why")))
+        table.add_row(*row)
 
     legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
     console.print(Panel(
@@ -342,6 +491,17 @@ def _followup_cell(application: dict | None) -> str:
 
 _NARROW_TERMINAL_COLUMNS = 110
 
+# Fit/Odds break the composite Score into its two primary layers, which is
+# genuinely useful but costs ~13 columns. They are ADDITIVE detail, so they
+# are the first thing dropped when space is tight -- the pre-existing
+# columns (Recommendation, Status, Last Liveness, Follow-up) carry
+# information a user acts on directly and must not lose room to them.
+# Thresholds differ because the two tables carry different column sets:
+# the fit table's free-text "Why" needs room to stay readable, and the
+# pipeline table additionally carries Status/Liveness/Follow-up.
+_FIT_SCORE_DETAIL_COLUMNS = 130
+_PIPELINE_SCORE_DETAIL_COLUMNS = 150
+
 
 def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
     """Renders picker.list_all_evaluated_jds()'s row list -- or a
@@ -360,13 +520,24 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     gets the one `ratio` column so it absorbs whatever's left; Last
     Liveness/Follow-up -- the two least essential at a glance -- drop
     entirely below _NARROW_TERMINAL_COLUMNS rather than shrinking
-    everything else past legibility."""
+    everything else past legibility.
+
+    Fit and Odds break the blended Score out into its two primary layers
+    (see render_fit_table's docstring for the full rationale) -- kept
+    visible even on a narrow terminal since they're additive context for
+    Score itself, unlike Liveness/Follow-up which are their own separate
+    concern."""
     narrow = console.width < _NARROW_TERMINAL_COLUMNS
+    show_score_detail = console.width >= _PIPELINE_SCORE_DETAIL_COLUMNS
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
     table.add_column("#", justify="right", style="dim", width=3, no_wrap=True)
     table.add_column("Score", justify="right", width=6, no_wrap=True)
+    if show_score_detail:
+        table.add_column("Fit", justify="right", width=6, no_wrap=True)
+        table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
-    table.add_column("Company", min_width=10, no_wrap=True, overflow="ellipsis")
+    # See render_fit_table's own comment on why Company needs a max_width.
+    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
     table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     table.add_column("Status", width=10, no_wrap=True, overflow="ellipsis")
@@ -389,6 +560,9 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
             _posting_age_cell(evaluation.get("posting_age_days")),
             r["status"],
         ]
+        if show_score_detail:
+            cells.insert(2, _fit_odds_cell(evaluation.get("fit_score")))
+            cells.insert(3, _fit_odds_cell(evaluation.get("interview_odds_score")))
         if not narrow:
             cells.append(_liveness_cell(r.get("liveness")))
             cells.append(_followup_cell(r.get("application")))
@@ -402,6 +576,46 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
         table, title=title or f"{len(rows)} evaluated JD(s)", subtitle=subtitle,
         border_style=theme.BRAND, box=box.ROUNDED,
     ))
+
+
+def render_picker_header(title: str, columns: list, legend: str | None = None) -> None:
+    """The purple bounding-box header for picker.py's merged table/
+    checkbox pickers -- title, column labels, and the recommendation-tier
+    legend, but deliberately NO data rows. Before this, picker.py drew
+    every JD twice: once as an inert Rich table row here, a second time
+    immediately below as the actual selectable questionary checkbox row
+    -- visually two stacked lists showing the same data, only the second
+    one interactive. The real rows now render only once, as the checkbox
+    choices themselves, formatted to line up under this header by using
+    the exact same `columns` widths (see picker.py's row formatters) --
+    Rich's own dynamic Table layout can't be reused for that half since
+    the row data renders through questionary/prompt_toolkit, a separate
+    engine with no shared column model.
+
+    columns is a list of (label, width, justify) tuples, justify being
+    "left" or "right"."""
+    header = Text()
+    for label, width, justify in columns:
+        cell = label.rjust(width) if justify == "right" else label.ljust(width)
+        header.append(cell + "  ", style=TABLE_HEADER_STYLE)
+    console.print(Panel(header, title=title, subtitle=legend, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+
+
+def render_picker_instructions() -> None:
+    """A compact, high-contrast callout for the two keys that actually
+    drive every checkbox picker in this program -- SPACE to toggle a
+    row, ENTER to confirm. Previously this lived only as a few words
+    inside the checkbox's own plain-text prompt header, easy to miss
+    entirely (this bit even the program's own author, who forgot the
+    picker needed a space-bar toggle rather than acting on Enter alone).
+    Styled like a Charm/Crush-style popup: a small bordered box in the
+    brand accent color, printed once above the first page of any picker."""
+    body = (
+        f"[bold {theme.BRAND_ACCENT}]SPACE[/bold {theme.BRAND_ACCENT}] toggle a row    "
+        f"[bold {theme.BRAND_ACCENT}]ENTER[/bold {theme.BRAND_ACCENT}] confirm & continue    "
+        f"[dim]↑↓ move  •  / filter[/dim]"
+    )
+    console.print(Panel(body, border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2)))
 
 
 def render_polish_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
@@ -487,14 +701,28 @@ def render_comparison_table(rows: list) -> None:
 _STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
 
 
-def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status") -> None:
+def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status",
+                              show_numbers: bool = True) -> None:
     """stage_rows: (number, label, status, detail) tuples, in pipeline
     order. maintenance_rows: (label, detail) tuples for the non-sequential
     triage/retire scripts. title is overridable so bootstrap_menu.py can
     reuse this exact table shape for onboarding-phase status instead of
-    carrying its own near-identical render function."""
+    carrying its own near-identical render function.
+
+    show_numbers=False drops the "#" column, for callers whose rows are a
+    linear checklist rather than a numbered pipeline. bootstrap_menu.py's
+    onboarding table is the reason it exists: its first two steps are
+    numbered 0 and 0.5 internally (they were inserted ahead of an existing
+    1-6 pipeline), and "Stage 0.5" on a first-time user's very first screen
+    is dev-sequencing leaking into the product. Renumbering them 1-8 there
+    was the other option, but that would permanently disagree with the
+    Bullet Bank menu's own 1-6 for the same stages. Dropping the column
+    sidesteps both: row order already carries the sequence, and the Status
+    column already says where you are. Callers still pass the number in
+    each tuple -- it's simply not rendered."""
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
-    table.add_column("#", justify="right", style="dim")
+    if show_numbers:
+        table.add_column("#", justify="right", style="dim")
     table.add_column("Stage")
     table.add_column("Status")
 
@@ -503,10 +731,11 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
         status_text = f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
         if detail:
             status_text += f" ({detail})"
-        table.add_row(str(number), label, status_text)
+        row = (label, status_text) if not show_numbers else (str(number), label, status_text)
+        table.add_row(*row)
 
     for label, detail in maintenance_rows:
-        table.add_row("-", label, detail)
+        table.add_row(*((label, detail) if not show_numbers else ("-", label, detail)))
 
     console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED))
 
@@ -685,3 +914,561 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
             console.print(f"  {theme.colorize_icon('warning')} {c['name']}: {c['fix']}")
     else:
         console.print(f"\n{SUCCESS} All checks passed.")
+
+def cli_info(message: str) -> None:
+    """Print an informational message with hint icon. message is
+    escaped -- see display_error()'s docstring."""
+    console.print(f"{HINT} {_escape_markup(message)}", soft_wrap=True)
+
+def cli_warning(message: str) -> None:
+    """Print a warning message with warning icon. message is escaped --
+    see display_error()'s docstring."""
+    console.print(f"{WARNING} {_escape_markup(message)}", soft_wrap=True)
+
+def cli_error(message: str) -> None:
+    """Print an error message using display_error for consistency."""
+    display_error(message)
+
+def cli_success(message: str) -> None:
+    """Print a success message with success icon. message is escaped --
+    see display_error()'s docstring."""
+    console.print(f"{SUCCESS} {_escape_markup(message)}", soft_wrap=True)
+
+
+# =====================================================================
+# House rule 1: output verbosity
+# ---------------------------------------------------------------------
+# A design audit found the core engine (orchestrator.py) printing cache
+# hit/miss, per-tier character counts, model identifiers and rule-file
+# names on every ordinary run -- engineer-facing telemetry shipped to a
+# self-described non-technical audience. Rather than delete it (it's
+# genuinely useful while iterating on prompts), output is now tiered.
+#
+# Three levels, because the middle one earns its place: cache hit/miss is
+# cheap to read and meaningful even to a non-engineer ("this was free"),
+# whereas char counts and model internals are not.
+#
+#   QUIET   -- errors, warnings and final results only.
+#   NORMAL  -- the above, plus step labels and cache hit/miss. (default)
+#   VERBOSE -- everything, including tier sizes, token math, model IDs
+#              and which rule files were applied.
+#
+# Precedence: an explicit set_verbosity() call (i.e. a --quiet/--verbose
+# CLI flag) beats the RESUME_BUILDER_VERBOSITY env var, which beats the
+# NORMAL default. The env var is what makes this usable day-to-day --
+# `RESUME_BUILDER_VERBOSITY=verbose resume run` needs no flag plumbing
+# through the menu layer, which never passes argv at all.
+# =====================================================================
+
+QUIET = 0
+NORMAL = 1
+VERBOSE = 2
+
+_VERBOSITY_ENV = "RESUME_BUILDER_VERBOSITY"
+_LEVEL_BY_NAME = {
+    "quiet": QUIET, "0": QUIET,
+    "normal": NORMAL, "1": NORMAL,
+    "verbose": VERBOSE, "2": VERBOSE, "debug": VERBOSE,
+}
+# None means "not yet resolved"; resolution is lazy so importing cli_art
+# never reads the environment at import time (tests set the env var after
+# import all the time).
+_verbosity: int | None = None
+
+
+def set_verbosity(level: int | str | None) -> None:
+    """Pin the output level explicitly, overriding the environment.
+
+    Accepts an int constant or a name ("quiet"/"normal"/"verbose").
+    Passing None resets to unresolved, so the env var wins again -- which
+    is what argparse should hand us when neither flag was given."""
+    global _verbosity
+    if level is None:
+        _verbosity = None
+        return
+    if isinstance(level, str):
+        level = _LEVEL_BY_NAME.get(level.strip().lower(), NORMAL)
+    _verbosity = max(QUIET, min(VERBOSE, int(level)))
+
+
+def verbosity() -> int:
+    """Current output level, resolving from the environment on first use."""
+    global _verbosity
+    if _verbosity is None:
+        raw = os.environ.get(_VERBOSITY_ENV, "").strip().lower()
+        _verbosity = _LEVEL_BY_NAME.get(raw, NORMAL)
+    return _verbosity
+
+
+def at_level(level: int) -> bool:
+    """True when output at `level` should be shown. Use this to guard an
+    expensive f-string or a multi-line block, rather than building the
+    string and throwing it away inside detail()."""
+    return verbosity() >= level
+
+
+def detail(message: str, level: int = VERBOSE, **print_kwargs) -> None:
+    """Print implementation detail, suppressed unless the output level is
+    high enough. Styled MUTED so that even when it IS shown it reads as
+    secondary to the step labels around it.
+
+    Default level is VERBOSE -- the stricter of the two -- so that an
+    un-annotated call site stays hidden from ordinary users. Pass
+    level=NORMAL only for the small set of internals a job seeker can
+    actually act on (cache hit/miss being the motivating case)."""
+    if not at_level(level):
+        return
+    print_kwargs.setdefault("style", theme.MUTED)
+    print_kwargs.setdefault("soft_wrap", True)
+    console.print(message, **print_kwargs)
+
+
+# =====================================================================
+# House rule 2: no raw exception text reaches the user
+# ---------------------------------------------------------------------
+# doctor.py's check/detail/fix convention is the best error UX in this
+# codebase -- every failure carries a concrete one-line remedy. This
+# generalizes that shape so any caller gets it for free.
+#
+# The classifier is deliberately ordered most-specific-first and falls
+# through to a generic message, so an unrecognized exception degrades to
+# "something went wrong, here's the technical detail" rather than
+# vanishing. Raw text is never dropped -- it moves to a dimmed second
+# line under a plain-English first line.
+# =====================================================================
+
+# (exception type, substring to look for in str(exc) or "" for any) ->
+# (plain-English explanation, concrete fix)
+# Substring matching is lowercased on both sides.
+_ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
+    (FileNotFoundError, "", "A file this step needed isn't there.",
+     "Run `resume doctor` -- it checks for every file the pipeline expects."),
+    (PermissionError, "", "This machine wouldn't let the app read or write that file.",
+     "Check the file isn't open in another program, then try again."),
+    (json.JSONDecodeError, "", "A saved data file is corrupted and couldn't be read.",
+     "Delete the file named below and let it rebuild, or restore it from a backup."),
+    (UnicodeDecodeError, "", "A file contains characters that couldn't be read as text.",
+     "Re-save the file as UTF-8 and try again."),
+    (TimeoutError, "", "The request took too long and gave up.",
+     "Check your internet connection and try again -- this is usually temporary."),
+    # --- Below: signatures taken from the real failure text, produced by
+    # --- actually triggering each one rather than guessing at wording.
+    # --- The substrings are the stable part of each message; the variable
+    # --- parts (paths, counts, row numbers) are deliberately not matched.
+    #
+    # Playwright, browsers never installed / installed somewhere else.
+    # Real text: "browserType.launch: Executable doesn't exist at
+    # /.../chrome-headless-shell" followed by an ASCII box telling you to
+    # run `npx playwright install`.
+    (Exception, "executable doesn't exist",
+     "The headless browser that turns your resume into a PDF isn't installed.",
+     "Run `npm install && npx playwright install chromium` in the project folder."),
+    # The macOS 12 trap this project is pinned around (see CLAUDE.md):
+    # Playwright >= 1.62 dropped macOS 12, so an unpinned upgrade makes
+    # every render die here. Worth its own message because the fix is the
+    # opposite of the obvious one -- downgrade, don't reinstall.
+    (Exception, "does not support chromium on mac",
+     "The installed Playwright version is too new for this machine's macOS.",
+     "Pin playwright to exactly 1.61.1 in package.json (not ^1.61.1), then re-run `npm install`."),
+    (Exception, "cannot find module",
+     "A required Node package isn't installed.",
+     "Run `npm install` in the project folder."),
+    (Exception, "command not found: node",
+     "Node.js isn't installed, or isn't on this shell's PATH.",
+     "Install Node, then run `resume doctor` to confirm it's visible."),
+    # The Go toolchain is the one dependency the rest of this project does
+    # NOT need -- only the dashboard and the new-user setup wizard shell out
+    # to it. So "go: command not found" is both likely on a fresh machine
+    # and completely opaque if shown raw.
+    (Exception, "command not found: go",
+     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
+    (Exception, "go: no such file or directory",
+     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
+    # pandas CSV failures. Real text, in order:
+    #   ParserError:    "Error tokenizing data. C error: Expected 2 fields
+    #                    in line 3, saw 5"
+    #   ParserError:    "Error tokenizing data. C error: EOF inside string
+    #                    starting at row 1"
+    #   EmptyDataError: "No columns to parse from file"
+    # Both ParserError and EmptyDataError subclass ValueError, so they're
+    # matched on message text rather than type.
+    (Exception, "eof inside string",
+     "A saved spreadsheet has a quote that's opened but never closed, so the rest of the file can't be read.",
+     "Open the file listed below in a spreadsheet app, fix the stray quote mark, and save it again as CSV."),
+    (Exception, "error tokenizing data",
+     "A saved spreadsheet has a row with the wrong number of columns.",
+     "Open the file listed below in a spreadsheet app -- the error names the bad row -- then save it again as CSV."),
+    (Exception, "no columns to parse",
+     "A saved spreadsheet is completely empty.",
+     "Restore it from a backup, or re-run the bullet-bank setup step to rebuild it."),
+    # gemini_client.SustainedFailureError's own message text.
+    (Exception, "sustained quota issue",
+     "Gemini refused several requests in a row, which usually means the API key is out of quota.",
+     "Swap GEMINI_API_KEY in your profile's .env for one with quota left, or wait for the window to reset."),
+
+    # --- GENERIC NETWORK / API SIGNATURES MUST STAY LAST ---------------
+    # First match wins, so broad needles have to sit below narrow ones.
+    # This is not theoretical: "sustained quota issue" above contains the
+    # word "quota", so while the generic "quota" entry sat higher in this
+    # list, SustainedFailureError matched it and told the user to "wait
+    # for the quota to reset" -- when the actual remedy is to swap the
+    # API key. Anything added below this line is a fallback, not a
+    # signature; add new specific cases ABOVE this comment.
+    # tests/test_cli_art_errors.py pins the two collisions that matter.
+    (Exception, "api key", "The Gemini API key is missing or wasn't accepted.",
+     "Add a valid GEMINI_API_KEY to your profile's .env file, then run `resume doctor`."),
+    (Exception, "quota", "You've hit the Gemini API's usage limit for now.",
+     "Wait for the quota to reset, or switch to a different model tier."),
+    (Exception, "rate limit", "Requests are going out faster than the API allows.",
+     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
+    (Exception, "429", "Requests are going out faster than the API allows.",
+     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
+    (Exception, "connection", "Couldn't reach the service over the network.",
+     "Check your internet connection, then try again."),
+    (Exception, "timed out", "The request took too long and gave up.",
+     "Check your internet connection and try again -- this is usually temporary."),
+    (Exception, "ssl", "A secure connection to the service couldn't be established.",
+     "Check whether a VPN or corporate proxy is intercepting traffic."),
+]
+
+_GENERIC_EXPLANATION = (
+    "Something went wrong that this app doesn't have a specific explanation for."
+)
+
+
+def _classify(text: str, exc: BaseException | None = None) -> tuple[str, str | None]:
+    """Shared matcher behind describe_error() and describe_stderr().
+
+    Two callers with different amounts of information:
+      - describe_error() has a real exception, so type-anchored signatures
+        (FileNotFoundError, PermissionError, ...) are eligible.
+      - describe_stderr() has only captured text from a subprocess, where
+        there is no Python exception to type-check. Type-anchored
+        signatures are skipped entirely there rather than being matched
+        loosely, so a bare `except`-style catch-all can't fire on a
+        substring it was never meant to own."""
+    lowered = (text or "").lower()
+    for exc_type, needle, explanation, fix in _ERROR_SIGNATURES:
+        if exc is not None:
+            if not isinstance(exc, exc_type):
+                continue
+        elif exc_type is not Exception or not needle:
+            continue
+        if needle and needle not in lowered:
+            continue
+        return explanation, fix
+    return _GENERIC_EXPLANATION, None
+
+
+def describe_error(exc: BaseException, context: str) -> tuple[str, str | None]:
+    """Classify an exception into (plain-English explanation, fix or None).
+
+    `context` is what the app was trying to do, phrased as a noun phrase
+    -- "saving your tailored resume", "checking whether the posting is
+    still live". It leads the message, so the user learns what broke
+    before they learn how."""
+    return _classify(str(exc), exc)
+
+
+def describe_stderr(text: str) -> tuple[str, str | None]:
+    """Classify captured subprocess stderr into (explanation, fix or None).
+
+    The exception-based path can't cover the failures that matter most
+    here: generate-pdf.mjs and check-liveness.mjs are Node subprocesses,
+    so a missing Chromium or a missing npm package arrives as a non-zero
+    return code plus stderr text, never as a Python exception. Those
+    call sites used to print that stderr verbatim -- which is how a
+    Playwright ASCII-art box ends up on a job seeker's screen."""
+    return _classify(text, None)
+
+
+def friendly_subprocess_error(stderr: str, context: str, fix: str | None = None) -> None:
+    """Report a failed subprocess in plain language, raw output demoted.
+
+    The `returncode != 0` counterpart to friendly_error()."""
+    explanation, suggested_fix = describe_stderr(stderr)
+    display_error(f"Couldn't finish {context}. {explanation}")
+    if fix or suggested_fix:
+        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+    raw = (stderr or "").strip()
+    if raw:
+        # markup=False and MUTED for the same reasons friendly_error()
+        # uses them: subprocess output routinely contains brackets Rich
+        # would try to parse, and box-drawing art that shouldn't compete
+        # with the plain sentence above it.
+        for line in raw.splitlines():
+            if line.strip():
+                console.print(f"   {line}", style=theme.MUTED, markup=False, soft_wrap=True)
+
+
+def friendly_error(exc: BaseException, context: str, fix: str | None = None) -> None:
+    """Report an exception in plain language, with the raw text demoted to
+    a dimmed detail line rather than deleted.
+
+    Follows doctor.py's what/why/fix shape. Pass `fix` to override the
+    classifier's suggestion when the call site knows better."""
+    explanation, suggested_fix = describe_error(exc, context)
+    display_error(f"Couldn't finish {context}. {explanation}")
+    if fix or suggested_fix:
+        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+    raw = str(exc).strip()
+    if raw:
+        # markup=False: exception text routinely contains square brackets
+        # (list reprs, log prefixes) that Rich would try to parse as tags.
+        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
+                      markup=False, soft_wrap=True)
+
+
+def friendly_warning(exc: BaseException, context: str, consequence: str) -> None:
+    """The non-fatal sibling of friendly_error, for the `except` blocks
+    that fall back to a default instead of aborting.
+
+    `consequence` states what the user is getting INSTEAD -- the thing
+    that was actually missing from the swallowed-exception sites this was
+    built for, where users saw "0 existing rows" with no way to know that
+    came from a parse failure rather than reality."""
+    cli_warning(f"Couldn't finish {context} -- {consequence}")
+    raw = str(exc).strip()
+    if raw and at_level(NORMAL):
+        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
+                      markup=False, soft_wrap=True)
+
+
+# =====================================================================
+# House rule 3: one confirm-gate policy
+# ---------------------------------------------------------------------
+# The audit found cost-gated Gemini calls confirming properly while
+# destructive-but-free actions (archive_jd, application-status changes)
+# committed instantly. The blind spot was "free == safe", which isn't
+# true when the cost is the user's own data. These wrappers also bake in
+# QUESTIONARY_STYLE, which was previously repeated at 18 call sites.
+# =====================================================================
+
+def select(message: str, choices, **kwargs):
+    """questionary.select() with this app's style applied. Use instead of
+    calling questionary directly so the style stays in one place."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.select(message, choices=choices, **kwargs).ask()
+
+
+def confirm(message: str, default: bool = False, **kwargs) -> bool:
+    """questionary.confirm() with this app's style applied.
+
+    Returns False (not None) when the user aborts with Ctrl-C, so callers
+    can treat the answer as a plain bool without re-introducing the
+    Ctrl-C-fallthrough bug class documented in menu.py:151-217."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    answer = questionary.confirm(message, default=default, **kwargs).ask()
+    return bool(answer)
+
+
+def text(message: str, **kwargs):
+    """questionary.text() with this app's style applied."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.text(message, **kwargs).ask()
+
+
+def checkbox(message: str, choices, **kwargs):
+    """questionary.checkbox() with this app's style applied."""
+    kwargs.setdefault("style", QUESTIONARY_STYLE)
+    return questionary.checkbox(message, choices=choices, **kwargs).ask()
+
+
+def confirm_destructive(action: str, target: str, default: bool = False) -> bool:
+    """The single gate for actions that change or discard the user's own
+    data without costing money -- archiving a posting, overwriting a
+    saved document, changing an application's status.
+
+    `action` is an imperative verb phrase ("Archive", "Overwrite",
+    "Mark as rejected"); `target` names the specific thing. Defaults to
+    No, because the whole point is that a stray Enter shouldn't be
+    destructive."""
+    console.print(
+        f"{WARNING} [bold]{action}[/bold] {target}?", soft_wrap=True)
+    return confirm("   Are you sure?", default=default)
+
+
+def print_subprocess_output(text: str) -> None:
+    """Renders output captured from a Node-side subprocess
+    (generate-pdf.mjs, check-liveness.mjs) that has no color output of
+    its own -- both already resolve RESUME_BUILDER_ICONS for their own
+    icons (see generate-pdf.mjs's B45 comment), but printing their text
+    raw and unstyled drops the CLI out of its Charmtone palette for
+    exactly those lines, sandwiched between fully-colored status lines
+    just before and after. Dims each non-blank line to theme.MUTED
+    instead -- distinct from, but still part of, the same palette as its
+    neighbors. style= (not markup) applies the color, so this stays safe
+    against literal '[' / ']' in the subprocess's own text."""
+    for line in text.splitlines():
+        if line.strip():
+            console.print(line, style=theme.MUTED, markup=False, soft_wrap=True)
+
+
+def new_progress(**kwargs) -> Progress:
+    """Rich Progress bar pre-configured with resume-builder's standard
+    spinner+description+bar+percentage columns, themed via `console` --
+    the same construction cli.py's batch tailor command uses. Any batch
+    operation processing a known number of items should build its
+    progress bar through this instead of re-declaring the column set, so
+    every progress bar in the program looks identical. Usage:
+
+        with cli_art.new_progress() as progress:
+            task = progress.add_task(f"[bold {theme.BRAND}]...", total=n)
+            for item in items:
+                progress.update(task, description="...")
+                ...
+                progress.advance(task)
+    """
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+        **kwargs,
+    )
+
+
+class ScanActivity:
+    """Context-managed live activity display for a multi-source scan or
+    verify pass: one pinned, live-updating tally line (a themed
+    rich.Progress spinner task) plus a permanent, themed step-log of
+    completed items printed above it. Progress is built on Live and
+    supports printing permanent lines through its own .console while a
+    task stays live -- that's what gives this its two-part shape,
+    matching Crush's step-log-plus-status-line pattern rather than an
+    animated percentage bar (most of these sources never know a grand
+    total up front). See new_scan_activity()."""
+
+    def __init__(self, **progress_kwargs):
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            **progress_kwargs,
+        )
+        self._task_id = None
+        self._counts: dict = {}
+        self._eta_total = None
+        self._eta_done = 0
+        self._eta_start = None
+
+    def __enter__(self) -> "ScanActivity":
+        self._progress.__enter__()
+        self._task_id = self._progress.add_task(
+            f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]", total=None,
+        )
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self._progress.__exit__(*exc_info)
+
+    def start_source(self, total: int, label: str = "Checking") -> None:
+        """Resets the running ETA tracker for the next source's items --
+        same averaging math scan_boards.ProgressReporter used to own.
+        A source with no known total up front (e.g. JobRight's
+        open-ended pagination) simply never calls this, and step()
+        prints with no ETA suffix."""
+        self._eta_total = total
+        self._eta_done = 0
+        self._eta_start = time.time()
+
+    def step(self, icon_name: str, source: str, message: str) -> None:
+        """Print one permanent themed line: icon, source label,
+        message, plus a running ETA suffix once start_source() has
+        been called and at least one prior step() has run."""
+        eta = ""
+        if self._eta_total is not None:
+            self._eta_done += 1
+            if self._eta_done > 1:
+                avg = (time.time() - self._eta_start) / self._eta_done
+                remaining = avg * (self._eta_total - self._eta_done)
+                eta = f" (~{_format_scan_eta(remaining)} remaining)"
+        icon = theme.colorize_icon(icon_name)
+        self._progress.console.print(
+            f"  {icon} [bold]{_escape_markup(source)}[/bold] {_escape_markup(message)}{eta}", soft_wrap=True,
+        )
+
+    def tally(self, **counts: int) -> None:
+        """Update the pinned line's description from named counts,
+        cumulative across calls, e.g. tally(fetched=12) then
+        tally(written=9) -> 'Scanning · Fetched 12 · Written 9'. Count
+        names deliberately match scan.py's existing per-source result
+        dict keys (fetched/written/skipped) rather than inventing
+        synonyms."""
+        self._counts.update(counts)
+        description = f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]"
+        if self._counts:
+            parts = " · ".join(f"{key.capitalize()} {value}" for key, value in self._counts.items())
+            description += f" · {parts}"
+        self._progress.update(self._task_id, description=description)
+
+
+def _format_scan_eta(seconds: float) -> str:
+    """Same duration formatting scan_boards._format_duration used to
+    own (Ns / NmNNs / NhNNm) -- moved here since ETA math now lives on
+    ScanActivity instead of the retired ProgressReporter."""
+    seconds = max(int(seconds), 0)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m{seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m"
+
+
+def new_scan_activity(**kwargs) -> ScanActivity:
+    """Themed live activity display for a multi-source scan or verify
+    pass: a pinned, live-updating tally line plus a permanent step-log
+    of completed items underneath it. Usage:
+
+        with cli_art.new_scan_activity() as activity:
+            activity.start_source(len(jobs), label="Checking")
+            for job in jobs:
+                activity.step("success", "ATS", f"{job['title']} @ {job['company']}")
+            activity.tally(fetched=len(jobs))
+    """
+    return ScanActivity(**kwargs)
+
+
+def render_rewrite_queue_table(rows: list, title: str) -> None:
+    """Themed table for a ranked list of queued-for-rewrite bullets --
+    audit_keepers.py's Top-10-worst preview. Each row:
+    {"rank", "source", "composite", "manager_test", "bullet"}. Bullet
+    text and source are escaped (see display_error()'s docstring) since
+    Table cells parse markup exactly like console.print does -- a
+    bullet or provider-id containing a stray "[" would otherwise be
+    silently dropped the same way a plain console.print call would."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table.add_column("#", justify="right")
+    table.add_column("Source")
+    table.add_column("Composite", justify="right")
+    table.add_column("Manager Test")
+    table.add_column("Bullet")
+    for row in rows:
+        table.add_row(
+            str(row["rank"]),
+            _escape_markup(str(row["source"])),
+            f"{row['composite']:.0f}",
+            str(row["manager_test"]),
+            f"{_escape_markup(row['bullet'])}...",
+        )
+    console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+
+
+def render_triage_summary_table(counts: dict) -> None:
+    """Themed summary for triage_needs_review.py's routing pass --
+    replaces five flat 'KEEP -> N' lines with one small table matching
+    render_bullet_bank_status()'s visual language."""
+    table = Table(box=box.SIMPLE_HEAD, show_header=False)
+    table.add_column("Outcome")
+    table.add_column("Count", justify="right")
+    table.add_row(f"[{theme.SUCCESS}]KEEP[/{theme.SUCCESS}]", str(counts.get("keep", 0)))
+    table.add_row(f"[{theme.WARNING}]REWRITE[/{theme.WARNING}]", str(counts.get("rewrite", 0)))
+    table.add_row(f"[{theme.ERROR}]RETIRE[/{theme.ERROR}]", str(counts.get("retire", 0)))
+    table.add_row("DUPLICATE (already in keeper bank, skipped)", str(counts.get("duplicate", 0)))
+    table.add_row("Leftover (needs human)", str(counts.get("leftover", 0)))
+    console.print(Panel(table, title="Triage Results", border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))

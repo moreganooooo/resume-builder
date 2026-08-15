@@ -32,8 +32,9 @@ class TestCoverletterPickValidation(unittest.TestCase):
     def test_pick_declined_confirmation_aborts_without_evaluating(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
-             patch("cli.click.confirm", return_value=False), \
+             patch("picker.questionary.confirm") as mock_confirm, \
              patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = False
             result = runner.invoke(cli.cli, ["coverletter", "--pick"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Aborted", result.output)
@@ -50,7 +51,7 @@ class TestCoverletterPickValidation(unittest.TestCase):
                  {"source_file": "jds/b.json", "company_name": "B", "job_title": "Role B",
                   "composite_score": 3.0, "recommendation": "Selective pursue", "error": False},
              ]), \
-             patch("cli.questionary.checkbox", return_value=mock_question), \
+             patch("cli_art.questionary.checkbox", return_value=mock_question), \
              patch("cli.orchestrator.ResumeEngine") as mock_engine_cls:
             mock_engine = MagicMock()
             mock_engine.build_tailored_coverletter.return_value = {"ok": True}

@@ -10,23 +10,47 @@ import sys
 
 from questionary import Style
 from rich.console import Console
-from rich.style import Style as RichStyle
 
 # Semantic color tokens -- hex, not named ANSI colors. Named colors get
 # remapped by whatever terminal theme is active; this project has already
 # hit that in practice (see README's "Colors" section: `cyan` washed out
 # to near-invisible gray on a dark-teal theme).
-# BRAND_ACCENT was #673ab7 (2.27:1 against a dark terminal background --
-# the lowest-contrast color in the whole palette, and the one driving the
-# questionary selection pointer/highlighted row plus every table header).
-# Lightened to clear 4.5:1 AA on dark (8.77:1 against black) -- see B23.
-BRAND = "#4dabf7"
-BRAND_ACCENT = "#b39ddb"
-SUCCESS = "#4caf50"
-ERROR = "#c96a6a"
-WARNING = "#f5c542"
-INFO = "#2196f3"
-MUTED = "#888888"
+#
+# Sourced from Charmtone (github.com/charmbracelet/x/exp/charmtone), the
+# Charm ecosystem's own branded palette (as used by crush) -- picked for
+# CharmtonePantera's semantic roles: primary/accent/success/error/
+# warning/info. Every value must clear 4.5:1 WCAG AA contrast against the
+# dashboard's two actual backgrounds -- Base (#1e1e2e) *and* Surface
+# (#313244, the lighter "elevated panel" tone header/status/error bars
+# render on top of) -- this bit us twice now: BRAND_ACCENT was #673ab7 at
+# 2.27:1 before B23 lightened it to #b39ddb, and ERROR was only ever
+# checked against Base (5.40:1 there) -- Surface, being lighter, is the
+# tighter constraint for light-on-dark text and ERROR measured just
+# 4.14:1 against it, failing AA on the dashboard's own error banner
+# (internal/ui/screens/jobs.go's renderActionError) under this exact
+# theme. Two of Charmtone's own picks failed the original Base-only check
+# -- Charple (BRAND's "primary", 3.29:1) and Sriracha (ERROR, 4.30:1) --
+# so BRAND uses Charmtone's Hazy and ERROR uses a lightened Charmtone
+# Coral instead, both from the same purple/red family but lighter. All six
+# below clear >=4.5:1 (most with a real ~5:1+ margin, not sitting right on
+# the line) against both Base and Surface.
+BRAND = "#8B75FF"  # Charmtone Hazy (Charple substitute, contrast fix)
+BRAND_ACCENT = "#FF60FF"  # Charmtone Dolly
+SUCCESS = "#12C78F"  # Charmtone Guac
+ERROR = "#FF7B99"  # Charmtone Coral, lightened (Sriracha substitute, contrast fix: 4.14:1 -> 5.12:1 on Surface)
+WARNING = "#F5EF34"  # Charmtone Mustard
+INFO = "#00A4FF"  # Charmtone Malibu
+MUTED = "#A3A3A3"  # lightened neutral gray -- #888888 only cleared 4.63:1 on Base
+# but just 3.55:1 on Surface (fails AA's 4.5:1 floor, same bug class BRAND_ACCENT and
+# ERROR hit above); #A3A3A3 clears ~6.5:1 on Base and ~5.0:1 on Surface.
+
+# Dashboard-only decorative accents -- no CLI semantic role of their own
+# (Rich/questionary never render these), they exist purely so the
+# dashboard's 8-slot Catppuccin-shaped accent struct (Blue/Mauve/Green/
+# Yellow/Sky/Peach/Red/Pink) has 8 actually-distinct colors instead of
+# reusing two of the six above. See sync_dashboard_theme.py.
+PEACH = "#FF985A"  # Charmtone Tang
+PINK = "#FF84FF"  # Charmtone Blush
 
 # Values match orchestrator.FitEvaluationSchema's `recommendation` Literal
 # exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".
@@ -63,6 +87,9 @@ _NERD_ICONS = {
     "resume": "",  # nf-fa-play
     "complete": "",  # nf-fa-check_circle
     "gem": "",  # nf-fa-diamond
+    "prev": "",  # nf-fa-chevron_left
+    "next": "",  # nf-fa-chevron_right
+    "back": "",  # nf-fa-chevron_left
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -94,6 +121,9 @@ _UNICODE_ICONS = {
     "resume": ">",  # play/continue (was ▶, ambiguous-width)
     "complete": "✓",  # checkmark (done, consistent with success)
     "gem": "*",  # quality/priority (was ◆, ambiguous-width)
+    "prev": "<",  # pagination/back (was ◀, ambiguous-width)
+    "next": ">",  # pagination forward, same glyph as "resume"
+    "back": "<",  # navigate back, same glyph as "prev" (was ←, ambiguous-width)
 }
 
 # Icon-set resolution, in priority order (B33):
@@ -112,7 +142,17 @@ def _resolve_icon_set_name() -> str:
     try:
         import ui_config
         persisted = ui_config.get_icon_set()
-    except Exception:
+    except (ImportError, AttributeError, OSError, ValueError):
+        # Deliberately silent, unlike every other swallowed-exception site
+        # in this codebase (which now warn -- see cli_art.friendly_error).
+        # Two reasons this one stays quiet: (1) it runs at module-import
+        # time on the *normal* first-run path, where ui_config simply has
+        # no persisted answer yet -- warning would fire on every launch
+        # for a non-problem; (2) theme.py is imported BY cli_art.py, so
+        # calling cli_warning() here would be a circular import.
+        # The exception list is narrowed rather than bare `Exception` so a
+        # genuine bug inside ui_config.get_icon_set() still surfaces
+        # instead of silently degrading to the Unicode icon set.
         persisted = None
     if persisted:
         return persisted
@@ -168,6 +208,9 @@ _ICON_COLORS = {
     "resume": BRAND_ACCENT,  # purple
     "complete": SUCCESS,     # green
     "gem": WARNING,          # gold
+    "prev": BRAND_ACCENT,    # purple, matches existing pagination style
+    "next": BRAND_ACCENT,    # purple, matches existing pagination style
+    "back": BRAND_ACCENT,    # purple, matches existing pagination style
 }
 
 def colorize_icon(name: str) -> str:
@@ -175,39 +218,16 @@ def colorize_icon(name: str) -> str:
 
     Only renders correctly when passed to a rich.console.Console.print()
     call -- plain print() does not interpret Rich markup and will show the
-    brackets as literal text. cli_art.py is the only module with an actual
-    Console instance; every other script's print() statements should use
-    colorize_icon_ansi() instead (see that function's docstring)."""
+    brackets as literal text. Every script in this codebase routes its
+    icon-bearing output through cli_art.console (the one shared Console
+    instance) rather than the plain print() builtin, so this is always
+    the right call."""
     if name not in ICONS:
         return name
     icon = ICONS[name]
     color = _ICON_COLORS.get(name)
     if color:
         return f"[{color}]{icon}[/{color}]"
-    return icon
-
-def colorize_icon_ansi(name: str) -> str:
-    """Return icon wrapped in raw ANSI 24-bit color escape codes.
-
-    Use this (not colorize_icon()) in any script that calls the plain
-    print() builtin directly to a terminal -- a real terminal interprets
-    raw ANSI escapes on its own, unlike Rich markup (which needs a Rich
-    Console to parse it, and -- confirmed empirically, B46/P5#4 -- would
-    silently swallow any single-word bracketed text elsewhere in the same
-    message, e.g. a `[STALE]` status tag, since it looks like a valid but
-    unstyled markup tag) or prompt_toolkit's renderer (which needs its own
-    (style, text) tuple format -- see questionary_icon_tuple()).
-
-    Renders via rich.style.Style rather than hand-rolled hex parsing, so
-    there's exactly one place (Rich's own Style class) that turns a hex
-    color into terminal escape codes, not two -- the RGB math and the
-    reset sequence both come from Rich itself."""
-    if name not in ICONS:
-        return name
-    icon = ICONS[name]
-    color = _ICON_COLORS.get(name)
-    if color:
-        return RichStyle(color=color).render(icon, color_system="truecolor")
     return icon
 
 def questionary_icon_tuple(name: str) -> tuple:
@@ -233,6 +253,7 @@ QUESTIONARY_STYLE = Style([
     ("selected", f"fg:{SUCCESS}"),
     ("separator", f"fg:{INFO} bold"),
     ("new_user", f"fg:{SUCCESS} bold"),
+    ("exit_flourish", f"fg:{BRAND_ACCENT} bold"),
     ("instruction", ""),
     ("text", ""),
     ("description", f"fg:{MUTED} italic"),

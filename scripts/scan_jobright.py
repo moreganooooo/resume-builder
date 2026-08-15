@@ -15,6 +15,8 @@ import time
 
 import requests
 
+import cli_art
+
 JOBRIGHT_API_BASE_URL = "https://jobright.ai/swan/recommend/list/jobs"
 JOBRIGHT_HEADERS = {
     "accept": "application/json, text/plain, */*", "accept-language": "en-US,en;q=0.9",
@@ -31,14 +33,14 @@ JOBRIGHT_REQUEST_DELAY_SECONDS = 2.0
 MIN_MATCH_SCORE = 70  # jobs scoring below this are discarded, same as job_automater
 
 
-def fetch_jobright_jobs(max_position: int = None) -> list:
+def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
     """Fetches jobs from the JobRight API with pagination, filters out
     anything scoring below MIN_MATCH_SCORE, and returns a list of job dicts
     (same shape as job_automater's, which is already what jd_manager.py
     expects from a JD file)."""
     cookie_string = os.environ.get("JOBRIGHT_COOKIE_STRING")
     if not cookie_string:
-        logging.error("JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan.")
+        cli_art.cli_error("JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan.")
         return []
 
     headers = JOBRIGHT_HEADERS.copy()
@@ -49,12 +51,20 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
 
     for position in range(0, end_position + 1, JOBRIGHT_POSITION_INCREMENT):
         page_url = f"{JOBRIGHT_API_BASE_URL}?refresh=false&sortCondition=0&position={position}"
+        # Up to 11 paginated requests with a 2s backoff on a 500 -- without
+        # a visible line per page, `resume scan --source jobright` looks
+        # hung for 20+ seconds with logging.info's output invisible by
+        # default.
+        if activity is not None:
+            activity.step("discovery", "JobRight", f"Fetching page (position {position}/{end_position})")
+        else:
+            cli_art.cli_info(f"Fetching JobRight jobs (position {position}/{end_position})...")
         logging.info(f"Fetching JobRight data for position {position}...")
 
         try:
             response = requests.get(page_url, headers=headers, timeout=30)
             if response.status_code == 500:
-                logging.error(f"HTTP 500 fetching position {position}, skipping.")
+                cli_art.cli_error(f"HTTP 500 fetching position {position}, skipping.")
                 time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
                 continue
 
@@ -119,18 +129,20 @@ def fetch_jobright_jobs(max_position: int = None) -> list:
                     "social_connections": job_result.get("socialConnections"),
                     "personal_social_connections": job_result.get("personalSocialConnections"),
                 })
+                if activity is not None:
+                    activity.step("success", "JobRight", f'Found "{job_title}" @ {company_name}')
 
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
 
         except requests.exceptions.HTTPError as e:
-            logging.error(f"HTTP error fetching position {position}: {e}")
+            cli_art.cli_error(f"HTTP error fetching position {position}: {e}")
             if e.response is not None and e.response.status_code in (401, 403):
-                logging.error("Auth error -- JobRight cookie may be expired. Stopping.")
+                cli_art.cli_error("Auth error -- JobRight cookie may be expired. Stopping.")
                 break
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
             continue
         except requests.exceptions.RequestException as e:
-            logging.error(f"Request error fetching position {position}: {e}")
+            cli_art.cli_error(f"Request error fetching position {position}: {e}")
             break
 
     logging.info(f"JobRight scan finished: {len(jobs)} jobs above match-score {MIN_MATCH_SCORE}.")

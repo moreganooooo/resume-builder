@@ -13,6 +13,7 @@ load_dotenv(profile_paths.env_path())
 
 # Import shared objects from orchestrator
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
+import cli_art
 import theme
 
 SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
@@ -66,9 +67,9 @@ if os.path.exists(out_path):
             raise ValueError(f"No known bullet column found in checkpoint. Columns: {list(existing.columns)}")
         already_scored_bullets = set(existing[bullet_col].dropna().astype(str).tolist())
         results = existing.to_dict("records")
-        print(f"{theme.colorize_icon_ansi('resume')}  Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
+        cli_art.cli_info(f"Resuming from checkpoint: {len(results)} bullets already scored, skipping them.")
     except Exception as e:
-        print(f"{theme.colorize_icon_ansi('warning')}  Could not read existing checkpoint ({e}). Starting fresh.")
+        cli_art.friendly_warning(e, "reading the existing audit checkpoint", "starting this audit fresh instead")
 
 total = len(df)
 skipped = 0
@@ -83,7 +84,7 @@ for i, row in df.iterrows():
         continue
 
     processed = len(results) - skipped + 1
-    print(f"  [{i+1}/{total}] {bullet[:60]}...")
+    cli_art.cli_info(f"[{i+1}/{total}] {bullet[:60]}...")
 
     try:
         critique_text, usage = GeminiClient.generate(
@@ -107,17 +108,26 @@ for i, row in df.iterrows():
             "weaknesses":          data.get("weaknesses"),
         })
     except Exception as e:
-        print(f"  {theme.colorize_icon_ansi('warning')} Error: {e}")
+        cli_art.friendly_warning(e, "scoring this bullet", "marking it ERROR so you can rerun the audit to retry it")
         results.append({**row.to_dict(), "manager_test": "ERROR", "weaknesses": f"[AUDIT_ERROR] {e}"})
 
     # --- CHECKPOINT SAVE after every bullet ---
+    # Saved every time (cheap, and what makes a restart resumable), but
+    # only reported at VERBOSE -- a line per bullet was pure spam at the
+    # default output level.
     pd.DataFrame(results).to_csv(out_path, index=False)
-    print(f"   {theme.colorize_icon_ansi('save')} Checkpoint saved ({len(results)} bullets scored)")
+    cli_art.detail(f"Checkpoint saved ({len(results)} bullets scored)")
 
     if i < total - 1:
         time.sleep(SLEEP)
 
-print(f"\n{theme.colorize_icon_ansi('success')} Done. Results saved to {out_path}")
-print(f"   PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
-print(f"   FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
-print(f"   ERROR: {sum(1 for r in results if r.get('manager_test') == 'ERROR')}")
+error_count = sum(1 for r in results if r.get('manager_test') == 'ERROR')
+cli_art.cli_success(f"Done. Results saved to {out_path}")
+cli_art.cli_info(f"PASS:  {sum(1 for r in results if r.get('manager_test') == 'PASS')}")
+cli_art.cli_info(f"FAIL:  {sum(1 for r in results if r.get('manager_test') == 'FAIL')}")
+# A count of zero isn't an error -- only style it as one when something
+# actually failed to score.
+if error_count:
+    cli_art.cli_warning(f"ERROR: {error_count}")
+else:
+    cli_art.cli_info(f"ERROR: {error_count}")

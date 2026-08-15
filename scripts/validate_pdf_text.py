@@ -105,8 +105,9 @@ def _all_bullets(resume_data: dict) -> list[str]:
 
 def validate_pdf_text(pdf_path: str, resume_data: dict) -> tuple[list[str], list[str]]:
     """
-    Extracts text from the rendered PDF and checks that every bullet and skills
-    line from the source resume JSON survived intact in the PDF's text layer.
+    Extracts text from the rendered PDF and checks that the tagline, summary,
+    why-section text, every bullet, and every skills line from the source
+    resume JSON survived intact in the PDF's text layer.
 
     Returns (fatal, advisories) -- two categorically different findings down
     one channel used to collapse into a single warnings list, which let a
@@ -127,6 +128,26 @@ def validate_pdf_text(pdf_path: str, resume_data: dict) -> tuple[list[str], list
     # and burying them under advisory "not found intact" lines is what made
     # them unreadable in the first place.
     advisories = _check_ligatures(extracted_raw)
+
+    # TAGLINE/SUMMARY_TEXT/WHY_TEXT used to be unchecked -- only EXPERIENCE
+    # bullets and SKILLS lines were compared against the PDF's text layer,
+    # even though SUMMARY_TEXT carries the single heaviest JD-keyword weight
+    # of any section (summary_score.yaml's relevance_to_jd is 30/100) and is
+    # exactly the kind of content a font-substitution or line-break bug would
+    # silently corrupt without this catching it. WHY_TEXT is intentionally
+    # blank on many builds (omitted to save space), so only check it when set.
+    tagline = resume_data.get("TAGLINE") or ""
+    if tagline and _normalize(tagline) not in extracted:
+        advisories.append(f"Tagline not found intact in PDF text layer: {tagline[:80]}")
+
+    summary_text = resume_data.get("SUMMARY_TEXT") or ""
+    if summary_text and _normalize(summary_text) not in extracted:
+        advisories.append(f"Summary not found intact in PDF text layer: {summary_text[:80]}")
+
+    why_text = resume_data.get("WHY_TEXT") or ""
+    if why_text and _normalize(why_text) not in extracted:
+        advisories.append(f"Why-section text not found intact in PDF text layer: {why_text[:80]}")
+
     for bullet in _all_bullets(resume_data):
         if _normalize(bullet) not in extracted:
             advisories.append(f"Bullet not found intact in PDF text layer: {bullet[:80]}")

@@ -6,12 +6,14 @@ import os
 import sys
 
 import click
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import questionary
-
+# No `import questionary` here: this module's own prompts now go through
+# cli_art.select()/confirm()/checkbox(), which own the shared style. Tests
+# that need to intercept a prompt patch cli_art.questionary.* -- the module
+# where the call actually happens -- rather than reaching it through a
+# re-export here, which worked only because module objects are singletons.
 import cli_art
 import orchestrator
 import jd_manager
@@ -33,42 +35,26 @@ import bootstrap_menu
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
     """Confirmation gate for anything that scores every pending JD (real
     Gemini cost, one call per JD). skip_confirm=True (the --yes flag)
-    bypasses the prompt entirely."""
+    bypasses the prompt entirely.
+
+    picker.should_proceed() is a deliberate standalone copy of this exact
+    logic (see its own docstring for why it can't just import this
+    function) -- a change here to the confirmation wording/behavior should
+    be checked against that copy too, or the two prompts will drift."""
     if skip_confirm:
         return True
-    return click.confirm(f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?")
+    return cli_art.confirm(
+        f"About to evaluate {count} pending JD(s) -- one real Gemini call each. Continue?",
+    )
 
 
-def _offer_next_steps(action: str, jd_file: str | None = None) -> None:
-    """After a CLI command completes successfully, offer next-steps options
-    rather than dropping back to the shell. Skipped entirely outside a real
-    terminal (piped output, CI, tests) -- there's no one there to answer a
-    prompt, and questionary would otherwise hang or error."""
-    if not cli_art.console.is_terminal:
-        return
-
-    choices = [
-        questionary.Choice(title="Show Help", value="help"),
-        questionary.Choice(title="Return to Main Menu", value="menu"),
-        questionary.Choice(title="Exit", value="exit"),
-    ]
-
-    if action in ("tailor", "coverletter") and jd_file:
-        doc_type = "Resume" if action == "tailor" else "Cover Letter"
-        choices.insert(0, questionary.Choice(
-            title=f"Polish this {doc_type}", value="polish"
-        ))
-
-    choice = questionary.select(
-        "What's next?", choices=choices, style=cli_art.QUESTIONARY_STYLE
-    ).ask()
-
-    if choice == "menu":
-        menu.run_interactive_menu()
-    elif choice == "help":
-        cli_art.display_help()
-    elif choice == "polish" and jd_file:
-        polish_module.run(jd_file)
+# "What's next?" after a CLI command completes now lives in menu.py as
+# offer_next_steps(..., from_cli=True) -- this used to be a separate
+# implementation with its own vocabulary (Show Help/Return to Main Menu/
+# Exit, no _CHAIN suggestions at all); see menu.py's offer_next_steps()
+# docstring for the unification. Call sites below pass from_cli=True to
+# get that flat extra-choices behavior instead of menu.py's own
+# loop-back-into-the-menu shape.
 
 
 @click.group(invoke_without_command=True)
@@ -102,7 +88,7 @@ def tailor(jd_file, master, output):
     )
     if failed and not completed:
         raise SystemExit(1)
-    _offer_next_steps("tailor", jd_file)
+    menu.offer_next_steps("tailor", jd_file=jd_file, from_cli=True)
 
 
 @cli.command(name="run")
@@ -120,13 +106,7 @@ def run_batch(master, pick, yes):
 
         completed = 0
         failed = 0
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=cli_art.console,
-        ) as progress:
+        with cli_art.new_progress() as progress:
             task = progress.add_task(f"[bold {theme.BRAND}]Processing JDs...", total=len(pending))
             for i, jd_path in enumerate(pending, 1):
                 jd = jd_manager.read_jd_json(jd_path)
@@ -177,7 +157,7 @@ def coverletter(jd_file, pick, yes):
     result = engine.build_tailored_coverletter(jd_file)
     if not result:
         raise SystemExit(1)
-    _offer_next_steps("coverletter", jd_file)
+    menu.offer_next_steps("coverletter", jd_file=jd_file, from_cli=True)
 
 
 @cli.command()
@@ -209,12 +189,16 @@ def evaluate(jd_file, yes, refresh):
             cli_art.console.print("Aborted.")
             return
         if already_evaluated:
-            cli_art.console.print(f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)")
+            # Print plain text so tests that assert on the raw substring
+            # (e.g. "1 already-evaluated JD(s) will be skipped") match.
+            from rich.text import Text
+            msg = Text(f"{len(already_evaluated)} already-evaluated JD(s) will be skipped")
+            cli_art.console.print(msg)
 
         cli_art.display_banner(f"Evaluating {len(to_evaluate)} pending JD(s)")
         results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
         cli_art.render_fit_table(results)
-        _offer_next_steps("evaluate")
+        menu.offer_next_steps("evaluate", from_cli=True)
         return
 
     cli_art.display_banner(f"Evaluating: {jd_file}")
@@ -253,7 +237,7 @@ def evaluate(jd_file, yes, refresh):
             cli_art.console.print(f"  - {b}")
 
     cli_art.console.print(f"\n[bold]Why:[/bold] {result.get('why', '')}\n")
-    _offer_next_steps("evaluate")
+    menu.offer_next_steps("evaluate", from_cli=True)
 
 
 @cli.command(name="scan")
@@ -267,7 +251,7 @@ def scan_cmd(sources, no_verify):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")
     scan_module.run_scan(list(sources) if sources else None, verify=not no_verify)
-    _offer_next_steps("scan")
+    menu.offer_next_steps("scan", from_cli=True)
 
 
 @cli.command(name="liveness")
@@ -277,7 +261,7 @@ def liveness_cmd(refresh):
     """Check every pending JD's source_url, moving expired ones to jds/expired/."""
     cli_art.display_banner("Checking posting liveness")
     liveness_module.run_liveness_check(refresh=refresh)
-    _offer_next_steps("liveness")
+    menu.offer_next_steps("liveness", from_cli=True)
 
 
 @cli.command()
@@ -318,7 +302,10 @@ def doctor_cmd(skip_tests):
     """Checks dependencies, assets, and config, then runs the test suite -- a plain-English summary with a suggested fix per problem found."""
     cli_art.display_banner("Running doctor checks")
     checks = doctor.run_checks()
-    test_result = None if skip_tests else doctor.run_test_suite()
+    test_result = None
+    if not skip_tests:
+        with cli_art.console.status("Running test suite...", spinner="dots"):
+            test_result = doctor.run_test_suite()
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
 

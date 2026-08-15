@@ -118,6 +118,19 @@ def _write_jd_file(job: dict) -> str:
             "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
         }
 
+    # Stamp first-sighting BEFORE the write, in-dict, rather than calling
+    # jd_manager.save_discovered_at() afterward -- that would mean a
+    # read-modify-rewrite of a file written microseconds earlier, and would
+    # leave the stamp missing entirely if the process died in between.
+    # Only when the source published no real posted date: a real one is
+    # strictly better information, and _discovered_at is consulted purely
+    # as a fallback (see jd_manager.compute_posting_age_days()).
+    if not any(job.get(field) for field in jd_manager._POSTED_DATE_FIELDS):
+        job["_discovered_at"] = {
+            "date": datetime.datetime.now().isoformat(timespec="seconds"),
+            "source": "scan",
+        }
+
     with atomic_write(dest, encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)
     return dest
@@ -154,52 +167,56 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
     root_logger = logging.getLogger()
     root_logger.addHandler(collector)
     try:
-        for source in sources:
-            fetch = SOURCE_FETCHERS.get(source)
-            if fetch is None:
-                source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
-                continue
-
-            warnings_before = len(collector.records)
-            jobs = fetch()
-            source_warnings = collector.records[warnings_before:]
-            result = {
-                "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
-                "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
-            }
-
-            for job in jobs:
-                company = job.get("company_name", "unknown")
-                title = job.get("job_title", "unknown")
-                job_id = job.get("source_job_id")
-                source_url = job.get("source_url")
-                # Board-provider jobs have no numeric source_job_id, only a
-                # URL -- fall back to it so job_key_known() actually runs for
-                # them instead of silently skipping dedup (job_key used to be
-                # None whenever source_job_id was absent, and the caller only
-                # dedups when job_key is truthy).
-                job_key = str(job_id) if job_id else (source_url or "")
-                if job_key and jd_manager.job_key_known(
-                    job_key, tracker=tracker,
-                    source_url=source_url, company_name=job.get("company_name"),
-                    job_title=job.get("job_title"), index=known_jobs_index,
-                ):
-                    result["skipped"] += 1
+        with cli_art.new_scan_activity() as activity:
+            for source in sources:
+                fetch = SOURCE_FETCHERS.get(source)
+                if fetch is None:
+                    source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
                     continue
 
-                dest = _write_jd_file(job)
-                jd_manager.add_to_known_jobs_index(
-                    known_jobs_index, job_key,
-                    source_url=source_url, company_name=job.get("company_name"),
-                    job_title=job.get("job_title"),
-                )
-                written += 1
-                result["written"] += 1
-                new_job_entry = {"company": company, "title": title}
-                result["new_jobs"].append(new_job_entry)
-                written_paths[dest] = (result, new_job_entry)
+                warnings_before = len(collector.records)
+                jobs = fetch(activity=activity)
+                source_warnings = collector.records[warnings_before:]
+                result = {
+                    "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
+                    "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
+                }
 
-            source_results.append(result)
+                for job in jobs:
+                    company = job.get("company_name", "unknown")
+                    title = job.get("job_title", "unknown")
+                    job_id = job.get("source_job_id")
+                    source_url = job.get("source_url")
+                    # Board-provider jobs have no numeric source_job_id, only a
+                    # URL -- fall back to it so job_key_known() actually runs for
+                    # them instead of silently skipping dedup (job_key used to be
+                    # None whenever source_job_id was absent, and the caller only
+                    # dedups when job_key is truthy).
+                    job_key = str(job_id) if job_id else (source_url or "")
+                    if job_key and jd_manager.job_key_known(
+                        job_key, tracker=tracker,
+                        source_url=source_url, company_name=job.get("company_name"),
+                        job_title=job.get("job_title"), index=known_jobs_index,
+                    ):
+                        result["skipped"] += 1
+                        continue
+
+                    dest = _write_jd_file(job)
+                    jd_manager.add_to_known_jobs_index(
+                        known_jobs_index, job_key,
+                        source_url=source_url, company_name=job.get("company_name"),
+                        job_title=job.get("job_title"),
+                    )
+                    written += 1
+                    result["written"] += 1
+                    new_job_entry = {"company": company, "title": title}
+                    result["new_jobs"].append(new_job_entry)
+                    written_paths[dest] = (result, new_job_entry)
+
+                source_results.append(result)
+                activity.tally(fetched=sum(r.get("fetched", 0) for r in source_results),
+                                written=sum(r.get("written", 0) for r in source_results),
+                                skipped=sum(r.get("skipped", 0) for r in source_results))
     finally:
         root_logger.removeHandler(collector)
 
@@ -216,7 +233,8 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                 ).ask()
             if not proceed:
                 paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
-        verify_result = liveness.verify_jd_paths(paths_to_verify)
+        with cli_art.new_scan_activity() as verify_activity:
+            verify_result = liveness.verify_jd_paths(paths_to_verify, activity=verify_activity)
         for path in verify_result.get("expired_source_paths", []):
             entry = written_paths.get(path)
             if not entry:

@@ -37,6 +37,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_BASE        = profile_paths.kb_dir()
 NEEDS_REVIEW   = os.path.join(KB_BASE, "needs-review.csv")
@@ -124,7 +125,7 @@ def append_rows(path, rows, fieldnames):
         # doesn't have yet (hidden_gem_*, final_bullet, rewrite_status are
         # added by later stages). Say so out loud rather than dropping them
         # silently -- silence is what let the column shift go unnoticed.
-        print(f"  Note: {os.path.basename(path)} has no column for {dropped} -- not written.")
+        cli_art.cli_warning(f"{os.path.basename(path)} has no column for {dropped} -- not written.")
 
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=disk_header, extrasaction="ignore")
@@ -149,13 +150,13 @@ def existing_keeper_bullets(path) -> set:
 
 def main():
     if not os.path.exists(NEEDS_REVIEW):
-        print("needs-review.csv not found. Nothing to triage.")
+        cli_art.cli_info("needs-review.csv not found. Nothing to triage.")
         return
 
     with open(NEEDS_REVIEW, newline="", encoding="utf-8") as f:
         all_rows = list(csv.DictReader(f))
 
-    print(f"Triaging {len(all_rows)} rows from needs-review.csv...")
+    cli_art.cli_info(f"Triaging {len(all_rows)} rows from needs-review.csv...")
 
     keep_rows   = []
     rewrite_rows= []
@@ -201,23 +202,22 @@ def main():
         else:
             leftover.append(row)
 
-    print(f"  KEEP    → {len(keep_rows)}")
-    print(f"  REWRITE → {len(rewrite_rows)}")
-    print(f"  RETIRE  → {len(retire_rows)}")
-    print(f"  DUPLICATE (already in keeper bank, skipped): {n_duplicate}")
-    print(f"  Leftover (needs human): {len(leftover)}")
+    cli_art.render_triage_summary_table({
+        "keep": len(keep_rows), "rewrite": len(rewrite_rows), "retire": len(retire_rows),
+        "duplicate": n_duplicate, "leftover": len(leftover),
+    })
 
     if keep_rows:
         append_rows(KEEPERS_CSV, keep_rows, KEEP_FIELDS)
-        print(f"  Appended {len(keep_rows)} rows to {KEEPERS_CSV}")
+        cli_art.cli_success(f"Appended {len(keep_rows)} rows to {KEEPERS_CSV}")
 
     if rewrite_rows:
         append_rows(REWRITE_QUEUE, rewrite_rows, QUEUE_FIELDS)
-        print(f"  Appended {len(rewrite_rows)} rows to {REWRITE_QUEUE}")
+        cli_art.cli_success(f"Appended {len(rewrite_rows)} rows to {REWRITE_QUEUE}")
 
     if retire_rows:
         append_rows(RETIRED_PATH, retire_rows, QUEUE_FIELDS)
-        print(f"  Appended {len(retire_rows)} rows to {RETIRED_PATH}")
+        cli_art.cli_success(f"Appended {len(retire_rows)} rows to {RETIRED_PATH}")
 
     # Rewrite needs-review.csv with only unrouted rows
     if leftover:
@@ -226,12 +226,12 @@ def main():
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(leftover)
-        print(f"  {len(leftover)} rows remain in {NEEDS_REVIEW} for manual review.")
+        cli_art.cli_info(f"{len(leftover)} rows remain in {NEEDS_REVIEW} for manual review.")
     else:
         os.remove(NEEDS_REVIEW)
-        print(f"  All rows routed. Deleted {NEEDS_REVIEW}.")
+        cli_art.cli_success(f"All rows routed. Deleted {NEEDS_REVIEW}.")
 
-    print("\n  Done.")
+    cli_art.cli_success("Done.")
 
 
 if __name__ == "__main__":

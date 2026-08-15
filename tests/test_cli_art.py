@@ -418,5 +418,115 @@ class TestDisplayHelp(unittest.TestCase):
         self.assertIn("launch the interactive menu", output)
 
 
+class TestScanActivity(unittest.TestCase):
+
+    def test_step_prints_themed_line_with_icon_and_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "JobRight", "Found Senior Data Engineer @ Acme")
+        mock_print.assert_called_once_with(
+            f"  {cli_art.theme.colorize_icon('success')} [bold]JobRight[/bold] "
+            "Found Senior Data Engineer @ Acme",
+            soft_wrap=True,
+        )
+
+    def test_step_has_no_eta_before_start_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "Boards", "checked remoteok")
+        printed = mock_print.call_args[0][0]
+        self.assertNotIn("remaining)", printed)
+
+    def test_step_shows_eta_from_second_call_after_start_source(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.start_source(3, label="Checking")
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "ATS", "first item")
+                activity.step("success", "ATS", "second item")
+        first_printed = mock_print.call_args_list[0].args[0]
+        second_printed = mock_print.call_args_list[1].args[0]
+        self.assertNotIn("remaining)", first_printed)
+        self.assertIn("remaining)", second_printed)
+
+    def test_tally_updates_pinned_task_description(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.tally(fetched=12, written=9, skipped=3, errors=0)
+            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+        self.assertIn("Fetched 12", task.description)
+        self.assertIn("Written 9", task.description)
+        self.assertIn("Skipped 3", task.description)
+        self.assertIn("Errors 0", task.description)
+
+    def test_tally_is_cumulative_across_calls(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            activity.tally(fetched=5)
+            activity.tally(written=2)
+            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+        self.assertIn("Fetched 5", task.description)
+        self.assertIn("Written 2", task.description)
+
+
+class TestMarkupEscaping(unittest.TestCase):
+
+    def test_cli_warning_does_not_swallow_bracketed_dynamic_text(self):
+        output = _rendered(cli_art.cli_warning, "[NEEDS_REWRITE] Led team to grow revenue")
+        self.assertIn("[NEEDS_REWRITE]", output)
+
+    def test_cli_error_does_not_swallow_bracketed_dynamic_text(self):
+        output = _rendered(cli_art.cli_error, "[LinkedIn ON_ERROR] timeout")
+        self.assertIn("[LinkedIn ON_ERROR]", output)
+
+    def test_cli_info_does_not_swallow_bracketed_dynamic_text(self):
+        output = _rendered(cli_art.cli_info, "Loaded [workday] 42 bullets")
+        self.assertIn("[workday]", output)
+
+    def test_cli_success_does_not_swallow_bracketed_dynamic_text(self):
+        output = _rendered(cli_art.cli_success, "Wrote [42] rows")
+        self.assertIn("[42]", output)
+
+
+class TestScanActivityMarkupEscaping(unittest.TestCase):
+
+    def test_step_message_with_brackets_is_not_swallowed(self):
+        activity = cli_art.new_scan_activity()
+        with activity:
+            with patch("cli_art.console.print") as mock_print:
+                activity.step("success", "ATS", "Found [Series B startup] listing")
+        printed = mock_print.call_args[0][0]
+        self.assertIn("[Series B startup]", printed)
+
+
+class TestRenderRewriteQueueTable(unittest.TestCase):
+
+    def test_renders_rank_source_composite_manager_test_and_bullet(self):
+        rows = [
+            {"rank": 1, "source": "keeper_audit", "composite": 42.0, "manager_test": "FAIL", "bullet": "Led [Series B] growth"},
+        ]
+        output = _rendered(cli_art.render_rewrite_queue_table, rows, "Top 10 Worst")
+        self.assertIn("keeper_audit", output)
+        self.assertIn("FAIL", output)
+        self.assertIn("Led [Series B] growth", output)
+        self.assertIn("Top 10 Worst", output)
+
+
+class TestRenderTriageSummaryTable(unittest.TestCase):
+
+    def test_renders_all_five_counts(self):
+        output = _rendered(cli_art.render_triage_summary_table, {
+            "keep": 3, "rewrite": 1, "retire": 0, "duplicate": 2, "leftover": 5,
+        })
+        self.assertIn("3", output)
+        self.assertIn("KEEP", output)
+        self.assertIn("REWRITE", output)
+        self.assertIn("RETIRE", output)
+        self.assertIn("DUPLICATE", output)
+        self.assertIn("Leftover", output)
+
+
 if __name__ == "__main__":
     unittest.main()

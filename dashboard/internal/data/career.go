@@ -557,9 +557,30 @@ func NormalizeStatus(raw string) string {
 	}
 }
 
+// reportSummaryCache caches LoadReportSummary's result per resolved file
+// path, keyed against the file's mtime so an edited report still gets
+// re-read. Only ever touched from bubbletea's single Update() goroutine
+// (or the one-time startup loop in main() that runs before it) -- no
+// locking needed. Not persisted across process launches; it only avoids
+// redundant reads within one dashboard session -- e.g. main()'s startup
+// batch enrichment loop and a later PipelineLoadReportMsg lazy-load
+// landing on the same report path.
+var reportSummaryCache = map[string]struct {
+	modTime                       time.Time
+	archetype, tldr, remote, comp string
+}{}
+
 // LoadReportSummary extracts key fields from a report file.
 func LoadReportSummary(careerOpsPath, reportPath string) (archetype, tldr, remote, comp string) {
 	fullPath := filepath.Join(careerOpsPath, reportPath)
+
+	info, statErr := os.Stat(fullPath)
+	if statErr == nil {
+		if cached, ok := reportSummaryCache[fullPath]; ok && cached.modTime.Equal(info.ModTime()) {
+			return cached.archetype, cached.tldr, cached.remote, cached.comp
+		}
+	}
+
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		return
@@ -590,6 +611,13 @@ func LoadReportSummary(careerOpsPath, reportPath string) (archetype, tldr, remot
 	// Truncate long fields
 	if len(tldr) > 120 {
 		tldr = tldr[:117] + "..."
+	}
+
+	if statErr == nil {
+		reportSummaryCache[fullPath] = struct {
+			modTime                       time.Time
+			archetype, tldr, remote, comp string
+		}{info.ModTime(), archetype, tldr, remote, comp}
 	}
 
 	return
@@ -630,10 +658,41 @@ func UpdateApplicationStatus(careerOpsPath string, app model.CareerApplication, 
 	return os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0644)
 }
 
-// replaceStatusInLine replaces the old status with new status in a table line.
+// replaceStatusInLine replaces the Status column (0-based index 5: #, Date,
+// Company, Role, Score, Status, ...) in a markdown table line. A line-wide
+// substring replace of oldStatus is not safe here -- it can rewrite the
+// wrong field (e.g. a company name like "Applied Intuition") whenever
+// oldStatus's text also happens to appear earlier in the line, so this
+// locates and replaces the actual Status cell instead.
 func replaceStatusInLine(line, oldStatus, newStatus string) string {
-	// Case-insensitive replacement of the status field
-	return strings.Replace(line, oldStatus, newStatus, 1)
+	const statusColumn = 5
+
+	// parts[0] is the text before the line's leading "|" (normally empty),
+	// so table column N lands at parts[N+1].
+	parts := strings.Split(line, "|")
+	idx := statusColumn + 1
+	if idx >= len(parts) {
+		// Malformed/unexpected line shape -- fall back to the old
+		// best-effort behavior rather than silently doing nothing.
+		return strings.Replace(line, oldStatus, newStatus, 1)
+	}
+
+	cell := parts[idx]
+	if strings.TrimSpace(cell) != oldStatus {
+		// The cell doesn't hold what we expected to find; don't guess at
+		// which other field might match instead.
+		return strings.Replace(line, oldStatus, newStatus, 1)
+	}
+
+	// Preserve the cell's original surrounding whitespace so column
+	// alignment in the source file doesn't shift.
+	afterLeading := strings.TrimLeft(cell, " \t")
+	leading := cell[:len(cell)-len(afterLeading)]
+	trimmed := strings.TrimRight(afterLeading, " \t")
+	trailing := afterLeading[len(trimmed):]
+	parts[idx] = leading + newStatus + trailing
+
+	return strings.Join(parts, "|")
 }
 
 // cleanTableCell removes trailing pipes and whitespace from a table cell value.

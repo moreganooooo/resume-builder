@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -13,25 +14,54 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// ViewerClosedMsg is emitted when the viewer is dismissed.
-type ViewerClosedMsg struct{}
+// ViewerClosedMsg is emitted when the viewer is dismissed. Quit
+// distinguishes "q" (exit the whole app) from "esc" (back to the screen
+// that opened the viewer), matching Pipeline/Jobs's own PipelineClosedMsg/
+// JobsClosedMsg -- see ProgressClosedMsg's identical doc comment.
+type ViewerClosedMsg struct{ Quit bool }
 
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
 	lines         []string
+	rawContent    string
 	renderedLines []string
 	title         string
 	scrollOffset  int
 	width         int
 	height        int
 	theme         theme.Theme
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
+}
+
+var viewerHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Scroll"},
+		{"PgUp / PgDn", "Page up / down"},
+		{"g / G (Home/End)", "Jump to top / bottom"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Back to the previous screen"},
+		{"q", "Quit dashboard"},
+	}},
 }
 
 // NewViewerModel creates a new file viewer for the given path.
 func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		content = []byte("Error reading file: " + err.Error())
+		// Previously embedded err.Error() verbatim ("Error reading file: open
+		// /Users/.../report.md: no such file or directory") -- Go/OS error
+		// text a non-developer has no way to act on. Leads with a plain-
+		// language sentence instead; the technical detail survives as a
+		// dimmed heading line (styleLine's "###### " case renders Subtext)
+		// rather than being discarded, in case it's useful when reporting a
+		// problem.
+		content = []byte(fmt.Sprintf(
+			"This file couldn't be opened. It may have been moved, deleted, or you may not have permission to read it.\n\n###### Technical detail: %s\n",
+			err.Error(),
+		))
 	}
 
 	var lines []string
@@ -40,11 +70,32 @@ func NewViewerModel(t theme.Theme, path, title string, width, height int) Viewer
 	}
 
 	m := ViewerModel{
-		lines:  lines,
-		title:  title,
-		width:  width,
-		height: height,
-		theme:  t,
+		lines:      lines,
+		rawContent: string(content),
+		title:      title,
+		width:      width,
+		height:     height,
+		theme:      t,
+	}
+	m.rebuildRender()
+	return m
+}
+
+// NewEmptyViewerModel creates a viewer with a placeholder message for when
+// no specific report exists to open yet -- the Main Menu's own "Reports"
+// row has no file path of its own (a real one only exists once a Pipeline
+// application is picked, see PipelineOpenReportMsg in main.go), so this
+// gives that row a real, themed, correctly-sized screen instead of leaving
+// the viewer at its Go zero-value.
+func NewEmptyViewerModel(t theme.Theme, width, height int) ViewerModel {
+	content := "No report selected yet.\n\nOpen Pipeline and press Enter on an application to view its report."
+	m := ViewerModel{
+		lines:      strings.Split(content, "\n"),
+		rawContent: content,
+		title:      "Reports",
+		width:      width,
+		height:     height,
+		theme:      t,
 	}
 	m.rebuildRender()
 	return m
@@ -79,11 +130,29 @@ func (m *ViewerModel) Resize(width, height int) {
 	m.rebuildRender()
 }
 
+// Update handles input for the viewer screen. Resizing is not handled
+// here -- main.go's top-level WindowSizeMsg case calls Resize() directly
+// on the active screen before its own early-returns, so a
+// tea.WindowSizeMsg never actually reaches this Update() in the real app;
+// a case for it here was dead code.
 func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
-		case "q", "esc":
+		case "?":
+			m.showHelp = true
+
+		case "q":
+			return m, func() tea.Msg { return ViewerClosedMsg{Quit: true} }
+
+		case "esc":
 			return m, func() tea.Msg { return ViewerClosedMsg{} }
 
 		case "down", "j":
@@ -128,11 +197,6 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 			}
 			m.scrollOffset = maxScroll
 		}
-
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.rebuildRender()
 	}
 
 	return m, nil
@@ -147,6 +211,10 @@ func (m ViewerModel) bodyHeight() int {
 }
 
 func (m ViewerModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, m.width, m.height)
+	}
+
 	header := m.renderHeader()
 	body := m.renderBody()
 	footer := m.renderFooter()
@@ -162,9 +230,9 @@ func (m ViewerModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render(m.title)
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.title)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	scroll := right.Render(func() string {
 		if len(m.renderedLines) == 0 {
 			return ""
@@ -180,26 +248,20 @@ func (m ViewerModel) renderHeader() string {
 		if m.scrollOffset >= maxScroll {
 			return "End"
 		}
-		return func() string {
-			s := pct
-			return string(rune('0'+s/10%10)) + string(rune('0'+s%10)) + "%"
-		}()
+		return fmt.Sprintf("%d%%", pct)
 	}())
 
-	gap := m.width - lipgloss.Width(m.title) - lipgloss.Width(scroll) - 4
-	if gap < 1 {
-		gap = 1
-	}
+	title, scroll, gap := fitBar(title, scroll, m.width, 4, m.theme.Surface)
 
-	return style.Render(title + strings.Repeat(" ", gap) + scroll)
+	return style.Render(title + gap + scroll)
 }
 
 func (m ViewerModel) renderBody() string {
 	bh := m.bodyHeight()
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 
 	if len(m.renderedLines) == 0 {
-		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 		return padStyle.Render(emptyStyle.Render("(empty file)"))
 	}
 
@@ -215,7 +277,13 @@ func (m ViewerModel) renderBody() string {
 	return padStyle.Render(strings.Join(flat, "\n"))
 }
 
-// renderAll converts every raw markdown line into visual terminal lines.
+// renderAll converts every raw markdown line into visual terminal lines,
+// walking m.lines and dispatching each block (table, fenced code, heading/
+// quote/list via isSpecialBlockLine, or plain paragraph) to the matching
+// styler below. This is deliberately not routed through Glamour: Glamour's
+// word-wrap can't hard-wrap an unbroken token (e.g. a long line inside a
+// fenced code block) to fit m.width the way ansi.Wrap here does, since
+// there's no word boundary to break at.
 func (m ViewerModel) renderAll() []string {
 	var styled []string
 	i := 0
@@ -284,9 +352,7 @@ func (m ViewerModel) renderAll() []string {
 				w = 10
 			}
 			wrapped := m.wrapParagraph(m.renderInlineElements(para), w)
-			for _, wl := range wrapped {
-				styled = append(styled, wl)
-			}
+			styled = append(styled, wrapped...)
 		}
 	}
 
@@ -403,7 +469,7 @@ func (m ViewerModel) renderTableBlock(lines []string) []string {
 	}
 
 	t.StyleFunc(func(row, col int) lipgloss.Style {
-		st := lipgloss.NewStyle().Padding(0, 1)
+		st := theme.PadHorizontal(lipgloss.NewStyle())
 		if row == table.HeaderRow {
 			return st.Bold(true).Foreground(m.theme.Sky)
 		}
@@ -455,7 +521,7 @@ func (m ViewerModel) wrapParagraph(text string, width int) []string {
 }
 
 func (m ViewerModel) renderInlineElements(line string) string {
-	return m.renderInlineElementsAs(line, m.theme.Subtext)
+	return m.renderInlineElementsAs(line, m.theme.Text)
 }
 
 // renderInlineElementsAs walks the raw line once and reapplies baseColor around
@@ -465,7 +531,7 @@ func (m ViewerModel) renderInlineElementsAs(line string, baseColor lipgloss.Colo
 	baseStyle := lipgloss.NewStyle().Foreground(baseColor)
 	codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Yellow)
-	linkStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	linkStyle := lipgloss.NewStyle().Foreground(m.theme.Token.Mauve)
 
 	var b strings.Builder
 	rest := line
@@ -540,15 +606,19 @@ func (m ViewerModel) styleLine(line string) string {
 	}
 	if strings.HasPrefix(trimmed, "#### ") && !strings.HasPrefix(trimmed, "##### ") {
 		content := strings.TrimPrefix(trimmed, "#### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("    " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Width(w).Render("    " + content)
 	}
+	// Subtext, not Overlay: Overlay is a border/divider token that measures
+	// as low as 1.4:1 against Surface (see statusColorMap in pipeline.go)
+	// -- far under WCAG AA's 4.5:1 for real text. Subtext is the token
+	// actually designed to be read as dimmed body text.
 	if strings.HasPrefix(trimmed, "##### ") && !strings.HasPrefix(trimmed, "###### ") {
 		content := strings.TrimPrefix(trimmed, "##### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Overlay).Width(w).Render("      " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("      " + content)
 	}
 	if strings.HasPrefix(trimmed, "###### ") {
 		content := strings.TrimPrefix(trimmed, "###### ")
-		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Overlay).Width(w).Render("        " + content)
+		return lipgloss.NewStyle().Bold(true).Foreground(m.theme.Subtext).Width(w).Render("        " + content)
 	}
 	if trimmed == "---" || trimmed == "***" {
 		return lipgloss.NewStyle().Foreground(m.theme.Overlay).Width(w).Render(strings.Repeat("─", w))
@@ -556,7 +626,7 @@ func (m ViewerModel) styleLine(line string) string {
 	if strings.HasPrefix(trimmed, "> ") {
 		content := strings.TrimPrefix(trimmed, "> ")
 		border := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("▎ ")
-		textStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Italic(true)
+		textStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Italic(true)
 		wrapped := strings.Split(ansi.Wrap(textStyle.Render(content), w-2, ""), "\n")
 		result := make([]string, 0, len(wrapped))
 		for i, line := range wrapped {
@@ -585,7 +655,7 @@ func (m ViewerModel) styleLine(line string) string {
 		}
 	}
 
-	styled := m.renderInlineElementsAs(trimmed, m.theme.Subtext)
+	styled := m.renderInlineElementsAs(trimmed, m.theme.Text)
 	return ansi.Wrap(styled, w, "")
 }
 
@@ -610,17 +680,19 @@ func (m ViewerModel) renderListItem(marker, content string, width int) string {
 
 func (m ViewerModel) renderFooter() string {
 	style := lipgloss.NewStyle().
-		Foreground(m.theme.Subtext).
+		Foreground(m.theme.Blue).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 1)
 
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
 	return style.Render(
-		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
+		keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
-			keyStyle.Render("Esc") + descStyle.Render(" back"))
+			keyStyle.Render("?") + descStyle.Render(" help  ") +
+			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
+			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
