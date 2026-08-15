@@ -782,12 +782,14 @@ def _browse_bulk_action(rows: list) -> bool:
 
 
 def _handle_browse_jobs() -> bool:
-    selected = picker.browse_and_select_jds()
-    if not selected:
+    """Launch the interactive dashboard to browse, evaluate, and manage jobs.
+    The dashboard provides a superior interactive experience with real-time
+    actions (liveness, tailor, status updates) compared to the old CLI picker."""
+    success, msg = dashboard_module.run()
+    if not success:
+        cli_art.error(msg)
         return False
-    if len(selected) == 1:
-        return _browse_single_action(selected[0])
-    return _browse_bulk_action(selected)
+    return True
 
 
 def _handle_tailor_pick() -> bool:
