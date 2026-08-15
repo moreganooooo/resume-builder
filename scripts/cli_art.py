@@ -417,13 +417,13 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     if show_score_detail:
         table.add_column("Fit", justify="right", width=6, no_wrap=True)
         table.add_column("Odds", justify="right", width=6, no_wrap=True)
-    table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Recommendation", min_width=9, no_wrap=True, overflow="ellipsis")
     # max_width caps Company at a real company name's length -- without
     # one, a column with only min_width auto-grows on its longest cell,
     # and it was winning that fight against Score/Recommendation's own
     # fixed widths on ordinary terminals, cutting the score value itself.
     table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
-    table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Title", ratio=1, min_width=25, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     if not narrow:
         table.add_column("Why", width=40, no_wrap=True, overflow="ellipsis")
@@ -439,15 +439,10 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
             table.add_row(*row)
             continue
         color = _RECOMMENDATION_COLORS.get(r["recommendation"], theme.MUTED)
-        legitimacy = r.get("posting_legitimacy")
-        recommendation_text = f"[{color}]{r['recommendation']}[/{color}]"
-        if legitimacy and legitimacy != "High Confidence":
-            flag_color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
-            recommendation_text += f" [{flag_color}]({theme.colorize_icon('warning')} {legitimacy})[/{flag_color}]"
         row = [
             str(i),
             f"[{color}]{r['composite_score']:.2f}/5[/{color}]",
-            recommendation_text,
+            f"[{color}]{r['recommendation']}[/{color}]",
             r["company_name"],
             r["job_title"],
             _posting_age_cell(r.get("posting_age_days")),
@@ -535,10 +530,10 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     if show_score_detail:
         table.add_column("Fit", justify="right", width=6, no_wrap=True)
         table.add_column("Odds", justify="right", width=6, no_wrap=True)
-    table.add_column("Recommendation", min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Recommendation", min_width=9, no_wrap=True, overflow="ellipsis")
     # See render_fit_table's own comment on why Company needs a max_width.
     table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
-    table.add_column("Title", ratio=1, min_width=15, no_wrap=True, overflow="ellipsis")
+    table.add_column("Title", ratio=1, min_width=25, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     table.add_column("Status", width=10, no_wrap=True, overflow="ellipsis")
     if not narrow:
@@ -1324,7 +1319,11 @@ def new_progress(**kwargs) -> Progress:
     return Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
+        BarColumn(
+            bar_width=40,  # Chunky, wide bar
+            complete_style=f"bold {theme.SUCCESS}",  # Mint green for completed portion
+            finished_style=f"bold {theme.BRAND}",  # Purple when fully complete
+        ),
         TaskProgressColumn(),
         console=console,
         **kwargs,
@@ -1375,10 +1374,13 @@ class ScanActivity:
         self._eta_done = 0
         self._eta_start = time.time()
 
-    def step(self, icon_name: str, source: str, message: str) -> None:
+    def step(self, icon_name: str, source: str, message: str, preserve_markup: bool = False) -> None:
         """Print one permanent themed line: icon, source label,
         message, plus a running ETA suffix once start_source() has
-        been called and at least one prior step() has run."""
+        been called and at least one prior step() has run.
+
+        preserve_markup=True allows Rich markup in the message without
+        escaping (use for pre-formatted styled messages)."""
         eta = ""
         if self._eta_total is not None:
             self._eta_done += 1
@@ -1387,8 +1389,9 @@ class ScanActivity:
                 remaining = avg * (self._eta_total - self._eta_done)
                 eta = f" (~{_format_scan_eta(remaining)} remaining)"
         icon = theme.colorize_icon(icon_name)
+        message_part = message if preserve_markup else _escape_markup(message)
         self._progress.console.print(
-            f"  {icon} [bold]{_escape_markup(source)}[/bold] {_escape_markup(message)}{eta}", soft_wrap=True,
+            f"  {icon} [bold]{_escape_markup(source)}[/bold] {message_part}{eta}", soft_wrap=True,
         )
 
     def tally(self, **counts: int) -> None:
@@ -1432,6 +1435,26 @@ def new_scan_activity(**kwargs) -> ScanActivity:
             activity.tally(fetched=len(jobs))
     """
     return ScanActivity(**kwargs)
+
+
+def format_job_found_message(job_title: str, company_name: str, separator: str = "@") -> str:
+    """Format a styled job discovery message with Rich markup:
+    - Role title: colored in SUCCESS (mint-green)
+    - Separator and company: gray/muted
+    - Format: Found "Job Title" @ Company"""
+    return f"[dim]Found[/dim] \"[{theme.SUCCESS}]{_escape_markup(job_title)}[/{theme.SUCCESS}]\" {separator} [dim]{_escape_markup(company_name)}[/dim]"
+
+
+def format_board_name(board_name: str) -> str:
+    """Format a board/source name with styling: info color.
+    Used for: ATS providers, public job boards."""
+    return f"[{theme.INFO}]{_escape_markup(board_name)}[/{theme.INFO}]"
+
+
+def format_jd_label(company_name: str, job_title: str) -> str:
+    """Format a JD label with styled title and company.
+    Format: Company — Title (with title in SUCCESS color, separator/company muted)."""
+    return f"[dim]{_escape_markup(company_name)} —[/dim] [{theme.SUCCESS}]{_escape_markup(job_title)}[/{theme.SUCCESS}]"
 
 
 def render_rewrite_queue_table(rows: list, title: str) -> None:

@@ -87,6 +87,15 @@ resume() {
     dashboard)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py dashboard "$@" )
       ;;
+    bootstrap)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py bootstrap "$@" )
+      ;;
+    sample)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py sample "$@" )
+      ;;
+    doctor)
+      ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate && python scripts/cli.py doctor "$@" )
+      ;;
     test)
       # unittest's own pass/fail reporting goes to stderr; the app code under
       # test prints a lot of its own operational logging (Step 1/2/3..., batch

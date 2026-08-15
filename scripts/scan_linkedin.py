@@ -187,10 +187,13 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
         # line (Events.DATA already fires once per job found) is the only
         # real signal available during the run, so a multi-query/slow-page
         # scan doesn't look hung for minutes with only on_error visible.
+        title = getattr(data, 'title', '?')
+        company = getattr(data, 'company', '?')
         if activity is not None:
-            activity.step("success", "LinkedIn", f"Found {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+            message = cli_art.format_job_found_message(title, company)
+            activity.step("success", "LinkedIn", message, preserve_markup=True)
         else:
-            cli_art.cli_info(f"Found: {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+            cli_art.cli_info(f"Found: {title} at {company}")
 
         apply_link = getattr(data, "apply_link", None)
         linkedin_link = getattr(data, "link", None)
