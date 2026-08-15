@@ -211,15 +211,16 @@ func (m ViewerModel) bodyHeight() int {
 }
 
 func (m ViewerModel) View() string {
-	if m.showHelp {
-		return renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, m.width, m.height)
-	}
-
 	header := m.renderHeader()
 	body := m.renderBody()
 	footer := m.renderFooter()
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	full := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	if m.showHelp {
+		helpContent := renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
+	}
+	return full
 }
 
 func (m ViewerModel) renderHeader() string {

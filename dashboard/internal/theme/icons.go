@@ -31,11 +31,17 @@ type MenuIcons struct {
 	Report   string // nf-fa-file_text_o
 	Quit     string // nf-fa-sign_out
 	Menu     string // nf-fa-bars
-	Jobs     string // nf-fa-briefcase
+	Jobs     string // briefcase / job board icon
 	Profile  string // nf-fa-user
+	Search   string // nf-fa-search
 	Source   string // nf-fa-folder_open
 	Path     string // nf-fa-file_o
 	Magic    string // nf-fa-magic
+	Trash    string // nf-fa-trash
+	Edit     string // nf-fa-pencil
+	External string // nf-fa-external_link
+	Clock    string // nf-fa-clock_o
+	Graph    string // nf-fa-line_chart
 
 	// Score* give a composite/interview-probability score's color tier
 	// (see screens/bars.go's scoreStyle) a redundant shape cue too, so a
@@ -64,6 +70,7 @@ func NewMenuIcons() MenuIcons {
 			Menu:     "☰",
 			Jobs:     "▣",
 			Profile:  "@",
+			Search:   "s",
 			// "#" previously here didn't evoke "folder"/"source" the way
 			// every other fallback in this set reads as a recognizable
 			// pictogram for its Nerd Font original -- ⊔ (open container/
@@ -71,18 +78,23 @@ func NewMenuIcons() MenuIcons {
 			// same narrow-width geometric-symbol style as Pipeline/Report/
 			// Jobs above (Neutral East Asian width, single terminal column,
 			// unlike an emoji folder glyph would be).
-			Source: "⊔",
-			Path:   "/",
-			Magic:  "*",
+			Source:   "⊔",
+			Path:     "/",
+			Magic:    "*",
+			Trash:    "d",
+			Edit:     "e",
+			External: "o",
+			Clock:    "t",
+			Graph:    "g",
 
 			// Exact ASCII fallbacks scripts/theme.py's _UNICODE_ICONS uses
 			// for "success"/"gem"/"hint"/"skip" -- single-width, colorless-
 			// by-default in every terminal/font, same reasoning as that
 			// module's own B22/P1F7 fix.
 			ScoreStrong: "✓",
-			ScoreGood:   "*",
-			ScoreFair:   "!",
-			ScoreWeak:   "-",
+			ScoreGood:   "◆",
+			ScoreFair:   "★",
+			ScoreWeak:   "○",
 		}
 	}
 	return MenuIcons{
@@ -91,17 +103,23 @@ func NewMenuIcons() MenuIcons {
 		Report:   "", // nf-fa-file_text_o
 		Quit:     "", // nf-fa-sign_out
 		Menu:     "", // nf-fa-bars
-		Jobs:     "", // nf-fa-briefcase
+		Jobs:     "▣", // briefcase / job board icon replacement (U+25A3, renders reliably without NerdFont)
 		Profile:  "", // nf-fa-user
+		Search:   "", // nf-fa-search
 		Source:   "", // nf-fa-folder_open
 		Path:     "", // nf-fa-file_o
 		Magic:    "", // nf-fa-magic
+		Trash:    "", // nf-fa-trash
+		Edit:     "", // nf-fa-pencil
+		External: "", // nf-fa-external_link
+		Clock:    "", // nf-fa-clock_o
+		Graph:    "", // nf-fa-line_chart
 
 		// Use Unicode fallbacks instead of Nerd Font glyphs (U+F00C/F219/F0EB/F05E)
 		// which don't render reliably across all terminal configurations
 		ScoreStrong: "✓",
-		ScoreGood:   "",
-		ScoreFair:   "",
-		ScoreWeak:   "",
+		ScoreGood:   "◆",
+		ScoreFair:   "★",
+		ScoreWeak:   "○",
 	}
 }

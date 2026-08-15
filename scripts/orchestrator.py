@@ -2748,6 +2748,8 @@ class ResumeEngine:
 
         jd_data = _parse_jd_data(jd_text)
         research = self.research_company(jd_data, jd_text)
+        if research:
+            jd_manager.save_research(jd_path, research)
         research_block = format_company_research_block(research) if research else ""
 
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
@@ -3004,6 +3006,8 @@ class ResumeEngine:
 
             jd_data = _parse_jd_data(jd_text)
             research = self.research_company(jd_data, jd_text)
+            if research:
+                jd_manager.save_research(jd_path, research)
             research_block = format_company_research_block(research) if research else ""
 
             situational_block = ""

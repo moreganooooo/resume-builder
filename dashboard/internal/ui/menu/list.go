@@ -46,30 +46,23 @@ func NewMenuModel(t theme.Theme) MenuModel {
 	// Width/height are arbitrary – the list will be resized by the parent view.
 	delegate := list.NewDefaultDelegate()
 	// Selected row: Mauve background against the theme's own Base as text
-	// colour. GradientStart/GradientEnd (BrandColor/AccentColor from
-	// tokens.go) used to fill both slots -- those two hex values sit at
-	// almost the same perceptual lightness (~1.03:1 contrast, WCAG AA
-	// needs 4.5:1), making the currently-focused row the least readable
-	// one in the entire menu, in every theme, since GradientStart/End are
-	// hardcoded constants rather than per-theme tokens. Base is each
-	// theme's own background extreme (near-black for resume-builder/
-	// Mocha, near-white for Latte), which is exactly why pairing it
-	// against the mid-tone Mauve accent clears 4.5:1+ in all three
-	// palettes.
+	// colour. Base is each theme's own background extreme (near-black for
+	// resume-builder/Mocha, near-white for Latte), which clears 4.5:1+
+	// against the mid-tone Mauve accent in all three palettes.
 	selectedStyle := lipgloss.NewStyle().
 		Bold(true).
 		Background(t.Token.Mauve).
 		Foreground(t.Base)
 	// Apply selected styles to the delegate.
 	delegate.Styles.SelectedTitle = selectedStyle
-	delegate.Styles.SelectedDesc = selectedStyle
-	// Unselected rows otherwise fall through to bubbles' own hardcoded
-	// AdaptiveColor defaults (#1a1a1a/#dddddd for title, #A49FA5/#777777
-	// for description), which belong to no theme in this app and are
-	// picked by lipgloss's own terminal-background heuristic rather than
-	// the --theme flag the user actually chose.
-	delegate.Styles.NormalTitle = lipgloss.NewStyle().Foreground(t.Token.Text)
-	delegate.Styles.NormalDesc = lipgloss.NewStyle().Foreground(t.Token.Subtext)
+	// Show description ONLY when selected (highlighted) - gray text
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().
+		Foreground(t.Token.Subtext).
+		Background(t.Base)
+	// Unselected rows: bold white titles for primary actions, normal for others.
+	// Description hidden (same color as background) when not selected.
+	delegate.Styles.NormalTitle = lipgloss.NewStyle().Foreground(t.Token.Text).Bold(true)
+	delegate.Styles.NormalDesc = lipgloss.NewStyle().Foreground(t.Surface).Background(t.Surface)
 	l := list.New(items, delegate, 30, 15)
 
 	// list.Model defaults every one of these to true, which renders its own
@@ -157,11 +150,12 @@ func (m MenuModel) View() string {
 	// This screen only ever exposes 5 items (Pipeline/Progress/Reports/
 	// Jobs/Quit) against the `resume` CLI's own 15 -- nothing signaled that
 	// gap was intentional rather than a smaller, less-finished menu. One
-	// subdued caption line states the dashboard's actual scope: review and
+	// caption line states the dashboard's actual scope: review and
 	// triage what the CLI already produced, not build it from here.
+	// White to match the bold white primary labels.
 	captionStyle := theme.PadHorizontal(
 		lipgloss.NewStyle().
-			Foreground(m.theme.Token.Subtext).
+			Foreground(m.theme.Token.Text).
 			Background(m.theme.Surface).
 			Width(width),
 	)

@@ -142,7 +142,7 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 		},
 	}
 
-	rendered := ansi.Strip(m.renderJobDetailPane(job, 60, 20))
+	rendered := ansi.Strip(m.renderJobDetailPane(job, 60, 100))
 
 	for _, want := range []string{
 		"Acme", "Marketing Lead", "4.7/5", "Strong pursue",
@@ -176,7 +176,7 @@ func TestRenderJobDetailPaneSurfacesPostingLegitimacyWarning(t *testing.T) {
 			PostingLegitimacyNotes: "No company website, posted by a personal email address.",
 		},
 	}
-	rendered := ansi.Strip(m.renderJobDetailPane(suspicious, 60, 20))
+	rendered := ansi.Strip(m.renderJobDetailPane(suspicious, 60, 100))
 	for _, want := range []string{"Posting legitimacy: Suspicious", "No company website"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected detail pane to surface the legitimacy warning, want %q, got %q", want, rendered)
@@ -187,7 +187,7 @@ func TestRenderJobDetailPaneSurfacesPostingLegitimacyWarning(t *testing.T) {
 	// detail pane with a line that says nothing.
 	confident := suspicious
 	confident.Evaluation.PostingLegitimacy = "High Confidence"
-	rendered = ansi.Strip(m.renderJobDetailPane(confident, 60, 20))
+	rendered = ansi.Strip(m.renderJobDetailPane(confident, 60, 100))
 	if strings.Contains(rendered, "Posting legitimacy") {
 		t.Fatalf("expected no legitimacy line for High Confidence, got %q", rendered)
 	}
@@ -764,3 +764,49 @@ func TestStalledHintOnlyFiresPastTheThreshold(t *testing.T) {
 		t.Errorf("a 2-minute liveness check should warn, got %q", m.stalledHint())
 	}
 }
+
+func TestMatchesJobSearchIncludesDescription(t *testing.T) {
+	job := model.JobRow{
+		Company: "Acme", Title: "Marketing Lead", Description: "Requires expert knowledge of Cobol and Fortran",
+	}
+
+	if !matchesJobSearch(job, "Cobol") {
+		t.Errorf("expected search query 'Cobol' to match against the description")
+	}
+
+	if !matchesJobSearch(job, "FORTRAN") {
+		t.Errorf("expected search query to be case-insensitive, but 'FORTRAN' did not match description")
+	}
+
+	if matchesJobSearch(job, "Python") {
+		t.Errorf("expected query 'Python' not to match job with unrelated description")
+	}
+}
+
+func TestDetailScrollOffsetResetAndClamping(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	// Scroll down detail scroll offset
+	m.detailScrollOffset = 5
+
+	// Cursor movement down should reset detailScrollOffset to 0
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if m.detailScrollOffset != 0 {
+		t.Errorf("expected detailScrollOffset to reset to 0 on cursor down, got %d", m.detailScrollOffset)
+	}
+
+	m.detailScrollOffset = 10
+	// Cursor movement up should reset detailScrollOffset to 0
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	if m.detailScrollOffset != 0 {
+		t.Errorf("expected detailScrollOffset to reset to 0 on cursor up, got %d", m.detailScrollOffset)
+	}
+
+	m.detailScrollOffset = 8
+	// Movement with pgdown should reset detailScrollOffset to 0
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.detailScrollOffset != 0 {
+		t.Errorf("expected detailScrollOffset to reset on page down, got %d", m.detailScrollOffset)
+	}
+}
+

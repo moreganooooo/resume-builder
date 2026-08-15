@@ -42,9 +42,15 @@ type Theme struct {
 		Menu     string
 		Jobs     string
 		Profile  string
+		Search   string
 		Source   string
 		Path     string
 		Magic    string
+		Trash    string
+		Edit     string
+		External string
+		Clock    string
+		Graph    string
 
 		// Score* -- see icons.go's MenuIcons for the doc comment; field
 		// order/names must mirror that struct exactly for

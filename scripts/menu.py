@@ -126,6 +126,7 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"), value="doctor"),
         questionary.Choice(title=_icon_title("utility", "↳ Generate Sample Resume + Cover Letter (QA)"), value="build_sample"),
         questionary.Choice(title=_icon_title("utility", "↳ Check for GitHub Updates"), value="check_updates"),
+        questionary.Choice(title=_icon_title("utility", "↳ Manage Profiles (Rename / Delete)"), value="manage_profiles"),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -263,10 +264,14 @@ def _confirm_active_profile() -> bool:
     # see this function's docstring) keeps working unchanged.
     choice = cli_art.select(
         f"Who's using resume-builder? (currently: {current})",
-        choices=names + ["I'm new here"],
+        choices=names + ["I'm new here", "Manage profiles..."],
         default=current if current in names else names[0],
         erase_when_done=True,
     )
+
+    if choice == "Manage profiles...":
+        _handle_manage_profiles()
+        return run_profile_selector()
 
     if choice in names:
         profile_paths.set_active_profile(choice)
@@ -893,6 +898,68 @@ def _handle_settings_upkeep() -> bool:
         if choice == "check_updates":
             _handle_check_updates()
             continue
+        if choice == "manage_profiles":
+            _handle_manage_profiles()
+            continue
+
+def _handle_manage_profiles():
+    import shutil
+    import profile_paths
+    while True:
+        names = sorted(
+            n for n in os.listdir(profile_paths.PROFILES_DIR)
+            if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
+        )
+        if not names:
+            cli_art.display_warning("No profiles exist.")
+            return
+
+        choice = cli_art.select(
+            "Manage Profiles:",
+            choices=[
+                questionary.Choice(title="Rename profile", value="rename"),
+                questionary.Choice(title="Delete profile", value="delete"),
+                questionary.Choice(title="Back", value="back"),
+            ]
+        )
+        if not choice or choice == "back":
+            return
+
+        target = cli_art.select(
+            f"Select profile to {choice}:",
+            choices=names + ["Cancel"]
+        )
+        if not target or target == "Cancel":
+            continue
+
+        if choice == "delete":
+            confirm = questionary.confirm(f"Are you sure you want to completely delete the profile '{target}' and all its data? This cannot be undone.").ask()
+            if not confirm:
+                continue
+            for _label, path in profile_paths.sync_roots(target):
+                if os.path.exists(path):
+                    shutil.rmtree(path)
+            cli_art.display_success(f"Profile '{target}' deleted.")
+
+            if target == profile_paths.active_profile():
+                if os.environ.get("RESUME_PROFILE"):
+                    del os.environ["RESUME_PROFILE"]
+
+        elif choice == "rename":
+            new_name = questionary.text(f"New name for '{target}':").ask()
+            if not new_name or new_name in names:
+                cli_art.display_error("Invalid or duplicate name.")
+                continue
+
+            for _label, path in profile_paths.sync_roots(target):
+                if os.path.exists(path):
+                    parent = os.path.dirname(path)
+                    new_path = os.path.join(parent, new_name)
+                    os.rename(path, new_path)
+
+            cli_art.display_success(f"Profile '{target}' renamed to '{new_name}'.")
+            if target == profile_paths.active_profile():
+                profile_paths.set_active_profile(new_name)
 
 
 def _offer_discovery_backfill() -> bool:

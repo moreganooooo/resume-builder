@@ -776,10 +776,6 @@ var pipelineHelpCategories = []helpCategory{
 }
 
 func (m PipelineModel) View() string {
-	if m.showHelp {
-		return renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, m.width, m.height)
-	}
-
 	header := m.renderHeader()
 	tabs := m.renderTabs()
 	metricsBar := m.renderMetrics()
@@ -818,6 +814,12 @@ func (m PipelineModel) View() string {
 	if !m.animDone {
 		full = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(full)
 	}
+
+	if m.showHelp {
+		helpContent := renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
+	}
+
 	return full
 }
 
