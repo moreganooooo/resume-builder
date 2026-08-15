@@ -873,10 +873,6 @@ var jobsHelpCategories = []helpCategory{
 
 // View renders the jobs screen.
 func (m JobsModel) View() string {
-	if m.showHelp {
-		return renderHelpOverlay(m.theme, "Jobs", jobsHelpCategories, m.width, m.height)
-	}
-
 	header := m.renderHeader()
 	var extra string
 	if m.actionInProgress != "" {
@@ -915,7 +911,15 @@ func (m JobsModel) View() string {
 	if extra != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, extra)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, content, splitView, help)
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, content, splitView, help)
+
+	// Render help as a centered modal overlay if showing
+	if m.showHelp {
+		helpContent := renderHelpOverlay(m.theme, "Jobs", jobsHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		return renderModalOverlay(m.theme, fullContent, helpContent, m.width, m.height)
+	}
+
+	return fullContent
 }
 
 func actionLabel(action string) string {
