@@ -352,6 +352,17 @@ if it's missing. It reads straight from `data/<profile>/applications.md`,
 so there's nothing to configure — press `q` to quit back to the menu when
 you're done.
 
+### Main Menu
+The dashboard includes a top-level menu system (`internal/ui/menu`) that routes to the pipeline, progress, and report screens.
+
+The menu uses a token-based design system that aligns with the wider project, including:
+- **Design Tokens**: Defined in `internal/theme/tokens.go`, mapping logical tokens to specific palettes (like Catppuccin).
+- **MenuModel**: Initialized via `menu.NewMenuModel(theme)`, the menu handles user selection and returns a `menu.MenuSelectMsg` which the main `appModel` router uses to switch active sub-models.
+
+To lint the dashboard code for hard-coded color literals, you can run:
+```bash
+go run ./tools/lint_colors.go
+```
 ## Checking posting liveness
 
 `resume liveness` runs a headless, deterministic check (no LLM calls) on

@@ -9,60 +9,110 @@ sys.path.insert(0, SCRIPTS_DIR)
 import picker  # noqa: E402
 
 
+class TestTruncate(unittest.TestCase):
+
+    def test_short_text_is_unchanged(self):
+        self.assertEqual(picker._truncate("Acme", 20), "Acme")
+
+    def test_long_text_is_ellipsized_to_max_len(self):
+        result = picker._truncate("A Very Long Company Name Indeed", 10)
+        self.assertEqual(len(result), 10)
+        self.assertTrue(result.endswith("..."))
+
+    def test_max_len_at_or_below_three_hard_cuts_without_ellipsis(self):
+        self.assertEqual(picker._truncate("Acme", 3), "Acm")
+        self.assertEqual(picker._truncate("Acme", 0), "")
+
+
+class TestPickAndProcessRowWidthClamp(unittest.TestCase):
+
+    def test_long_company_and_title_are_truncated_to_fit_console_width(self):
+        long_company = "A" * 80
+        long_title = "B" * 80
+        mock_question = MagicMock()
+        mock_question.ask.return_value = None  # abort after inspecting choices
+        with patch("picker.questionary.confirm") as mock_confirm, \
+             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
+                 {"source_file": "jds/a.json", "company_name": long_company, "job_title": long_title,
+                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
+             ]), \
+             patch("picker.questionary.checkbox", return_value=mock_question) as mock_checkbox, \
+             patch("picker.cli_art.console") as mock_console:
+            mock_console.width = 80
+            mock_confirm.return_value.ask.return_value = True
+            picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
+        rendered_title = mock_checkbox.call_args.kwargs["choices"][0].title
+        self.assertNotIn(long_company, rendered_title)
+        self.assertNotIn(long_title, rendered_title)
+        self.assertLess(len(rendered_title), len(long_company) + len(long_title))
+
+
 class TestShouldProceed(unittest.TestCase):
 
     def test_defaults_to_evaluate_wording(self):
-        with patch("picker.click.confirm", return_value=True) as mock_confirm:
+        with patch("picker.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = True
             picker.should_proceed(5, skip_confirm=False)
-        mock_confirm.assert_called_once_with("About to evaluate 5 pending JD(s) -- one real Gemini call each. Continue?")
+        mock_confirm.assert_called_once_with(
+            "About to evaluate 5 pending JD(s) -- one real Gemini call each. Continue?",
+            style=picker.cli_art.QUESTIONARY_STYLE,
+        )
 
     def test_custom_action_wording(self):
-        with patch("picker.click.confirm", return_value=True) as mock_confirm:
+        with patch("picker.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = True
             picker.should_proceed(5, skip_confirm=False, action="tailor")
-        mock_confirm.assert_called_once_with("About to tailor 5 pending JD(s) -- one real Gemini call each. Continue?")
+        mock_confirm.assert_called_once_with(
+            "About to tailor 5 pending JD(s) -- one real Gemini call each. Continue?",
+            style=picker.cli_art.QUESTIONARY_STYLE,
+        )
 
 
 class TestPickAndProcess(unittest.TestCase):
 
     def test_empty_pending_returns_zero_zero_without_confirming(self):
-        with patch("picker.click.confirm") as mock_confirm:
+        with patch("picker.questionary.confirm") as mock_confirm:
             result = picker.pick_and_process([], lambda path: True, "tailor")
         self.assertEqual(result, (0, 0))
         mock_confirm.assert_not_called()
 
     def test_declined_confirmation_returns_zero_zero_without_evaluating(self):
-        with patch("picker.click.confirm", return_value=False), \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = False
             result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
         self.assertEqual(result, (0, 0))
         mock_evaluate.assert_not_called()
 
     def test_all_errored_results_returns_zero_zero_without_showing_picker(self):
-        with patch("picker.click.confirm", return_value=True), \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
                  {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
                   "composite_score": None, "recommendation": None, "error": True},
              ]), \
              patch("picker.questionary.checkbox") as mock_checkbox:
+            mock_confirm.return_value.ask.return_value = True
             result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
         self.assertEqual(result, (0, 0))
         mock_checkbox.assert_not_called()
 
     def test_always_evaluates_fresh_not_skip_by_default(self):
-        with patch("picker.click.confirm", return_value=True), \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+            mock_confirm.return_value.ask.return_value = True
             picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
         mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=False)
 
     def test_nothing_selected_returns_zero_zero(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = None
-        with patch("picker.click.confirm", return_value=True), \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
                  {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
                   "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
              ]), \
              patch("picker.questionary.checkbox", return_value=mock_question):
+            mock_confirm.return_value.ask.return_value = True
             result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
         self.assertEqual(result, (0, 0))
 
@@ -73,7 +123,7 @@ class TestPickAndProcess(unittest.TestCase):
         def fake_process(path):
             return path == "jds/a.json"  # a succeeds, b fails
 
-        with patch("picker.click.confirm", return_value=True), \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
                  {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
                   "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
@@ -81,13 +131,14 @@ class TestPickAndProcess(unittest.TestCase):
                   "composite_score": 3.0, "recommendation": "Selective pursue", "error": False},
              ]), \
              patch("picker.questionary.checkbox", return_value=mock_question):
+            mock_confirm.return_value.ask.return_value = True
             result = picker.pick_and_process(["jds/a.json", "jds/b.json"], fake_process, "tailor")
         self.assertEqual(result, (1, 1))
 
-    def test_skip_confirm_true_never_calls_click_confirm(self):
+    def test_skip_confirm_true_never_calls_questionary_confirm(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = ["jds/a.json"]
-        with patch("picker.click.confirm") as mock_confirm, \
+        with patch("picker.questionary.confirm") as mock_confirm, \
              patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
                  {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
                   "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
@@ -166,9 +217,9 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         printed = mock_print.call_args[0][0]
         self.assertIn("Hint", printed)
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
-    def test_renders_the_bordered_table_for_the_current_page_only(self, mock_list, mock_render):
+    def test_renders_the_header_for_the_current_page_only(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
         mock_list.return_value = rows
         mock_question = MagicMock()
@@ -176,12 +227,12 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         with patch("picker.questionary.checkbox", return_value=mock_question):
             picker.browse_and_select_jds(page_size=3)
         mock_render.assert_called_once()
-        page_rows_arg, kwargs = mock_render.call_args[0][0], mock_render.call_args[1]
-        self.assertEqual(len(page_rows_arg), 3)  # first page of a 5-row, page_size=3 list
-        self.assertEqual(kwargs["start_index"], 1)
+        kwargs = mock_render.call_args.kwargs
         self.assertIn("Page 1/2", kwargs["title"])
+        # #, Score, Recommendation, Company, Title, Posted, Status
+        self.assertEqual(len(kwargs["columns"]), 7)
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_nothing_checked_returns_empty(self, mock_list, mock_render):
         mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
@@ -191,7 +242,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual(result, [])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_ctrl_c_aborts_and_returns_empty(self, mock_list, mock_render):
         mock_list.return_value = [_row("jds/a.json", 4.0, "Strong pursue")]
@@ -201,7 +252,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual(result, [])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_returns_the_selected_rows_not_just_paths(self, mock_list, mock_render):
         rows = [
@@ -217,7 +268,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         self.assertEqual(result[0]["path"], "jds/b.json")
         self.assertEqual(result[0]["status"], "Completed")
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_result_order_matches_best_score_first_regardless_of_selection_order(self, mock_list, mock_render):
         rows = [
@@ -232,7 +283,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             result = picker.browse_and_select_jds()
         self.assertEqual([r["path"] for r in result], ["jds/high.json", "jds/low.json"])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_paginates_at_page_size_and_persists_selection_across_pages(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
@@ -251,7 +302,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         self.assertEqual(len(first_call_choices), 6)
         self.assertEqual([r["path"] for r in result], ["jds/0.json"])
 
-    @patch("picker.cli_art.render_pipeline_table")
+    @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_unchecking_a_row_on_a_revisited_page_drops_it(self, mock_list, mock_render):
         rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(2)]

@@ -6,13 +6,18 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// ProgressClosedMsg is emitted when the progress screen is dismissed.
-type ProgressClosedMsg struct{}
+// ProgressClosedMsg is emitted when the progress screen is dismissed. Quit
+// distinguishes "q" (exit the whole app) from "esc" (back to the screen
+// that opened Progress), matching Pipeline/Jobs's own PipelineClosedMsg/
+// JobsClosedMsg -- previously both keys did the same thing here (always
+// "back"), so "q" quit the app everywhere except this screen and Reports.
+type ProgressClosedMsg struct{ Quit bool }
 
 // ProgressModel implements the progress analytics screen.
 type ProgressModel struct {
@@ -21,6 +26,20 @@ type ProgressModel struct {
 	width        int
 	height       int
 	theme        theme.Theme
+	// showHelp toggles the `?` categorized keybinding overlay (see
+	// bars.go's renderHelpOverlay) over this screen's normal body.
+	showHelp bool
+}
+
+var progressHelpCategories = []helpCategory{
+	{"Navigation", []helpBinding{
+		{"↑ ↓ / j k", "Scroll"},
+		{"PgUp / PgDn", "Page up / down"},
+	}},
+	{"Exit", []helpBinding{
+		{"Esc", "Back to Main Menu"},
+		{"q", "Quit dashboard"},
+	}},
 }
 
 // NewProgressModel creates a new progress screen.
@@ -42,47 +61,63 @@ func (m ProgressModel) Init() tea.Cmd {
 func (m *ProgressModel) Resize(width, height int) {
 	m.width = width
 	m.height = height
+	m.clampScrollOffset()
 }
 
-// Update handles input for the progress screen.
+// Update handles input for the progress screen. Resizing is not handled
+// here -- main.go's top-level WindowSizeMsg case calls Resize() directly
+// on the active screen before its own early-returns, so a
+// tea.WindowSizeMsg never actually reaches this Update() in the real app;
+// a case for it here was dead code (see viewer.go's Update for the same
+// pattern, already documented and cleaned up there).
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.showHelp {
+			switch msg.String() {
+			case "?", "esc", "q":
+				m.showHelp = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
-		case "q", "esc":
+		case "?":
+			m.showHelp = true
+		case "q":
+			return m, func() tea.Msg { return ProgressClosedMsg{Quit: true} }
+		case "esc":
 			return m, func() tea.Msg { return ProgressClosedMsg{} }
 		case "down", "j":
 			m.scrollOffset++
+			m.clampScrollOffset()
 		case "up", "k":
 			if m.scrollOffset > 0 {
 				m.scrollOffset--
 			}
 		case "pgdown", "ctrl+d":
 			m.scrollOffset += m.height / 2
+			m.clampScrollOffset()
 		case "pgup", "ctrl+u":
 			m.scrollOffset -= m.height / 2
 			if m.scrollOffset < 0 {
 				m.scrollOffset = 0
 			}
 		}
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
 	}
 	return m, nil
 }
 
-// View renders the progress screen.
-func (m ProgressModel) View() string {
-	header := m.renderHeader()
+// renderBody assembles the scrollable panels (funnel/scores/rates/weekly)
+// before scroll-offset slicing is applied. Shared by View() and
+// maxScrollOffset() so the scroll ceiling always matches what actually
+// gets rendered, instead of two separate computations that could drift.
+func (m ProgressModel) renderBody() string {
 	funnel := m.renderFunnel()
 	scores := m.renderScoreDistribution()
 	rates := m.renderRates()
 	weekly := m.renderWeeklyActivity()
-	help := m.renderHelp()
 
-	// Combine panels
-	body := lipgloss.JoinVertical(lipgloss.Left,
+	return lipgloss.JoinVertical(lipgloss.Left,
 		funnel,
 		"",
 		scores,
@@ -91,6 +126,59 @@ func (m ProgressModel) View() string {
 		"",
 		weekly,
 	)
+}
+
+// bodyAvailHeight is the number of body rows visible between the header
+// and help bar. Shared by View()'s render and the scroll clamp below so
+// they always agree on where the bottom of the screen actually is.
+func (m ProgressModel) bodyAvailHeight() int {
+	availHeight := m.height - 4 // header + help + padding
+	if availHeight < 3 {
+		availHeight = 3
+	}
+	return availHeight
+}
+
+// maxScrollOffset is the highest scrollOffset that still reveals new
+// content -- mirrors ViewerModel.clampScrollOffset's own maxScroll
+// computation (see viewer.go).
+func (m ProgressModel) maxScrollOffset() int {
+	lines := strings.Split(m.renderBody(), "\n")
+	max := len(lines) - m.bodyAvailHeight()
+	if max < 0 {
+		max = 0
+	}
+	return max
+}
+
+// clampScrollOffset bounds m.scrollOffset to [0, maxScrollOffset()].
+// Previously only View() clamped scroll position, and only in a local
+// copy used for rendering -- m.scrollOffset itself had no ceiling, so
+// holding "down"/pgdown past the bottom of the content let it climb
+// arbitrarily far past what the content needed. A single "up" press after
+// that read as a dead key: decrementing an overshot value by one still
+// clamped to the same bottom-of-content line in the next render, so
+// nothing visibly moved until enough presses brought it back under the
+// real ceiling. Matches ViewerModel's own clampScrollOffset (viewer.go),
+// called after every scroll key and on resize there too.
+func (m *ProgressModel) clampScrollOffset() {
+	if max := m.maxScrollOffset(); m.scrollOffset > max {
+		m.scrollOffset = max
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
+
+// View renders the progress screen.
+func (m ProgressModel) View() string {
+	if m.showHelp {
+		return renderHelpOverlay(m.theme, "Progress", progressHelpCategories, m.width, m.height)
+	}
+
+	header := m.renderHeader()
+	help := m.renderHelp()
+	body := m.renderBody()
 
 	// Apply scroll
 	bodyLines := strings.Split(body, "\n")
@@ -106,10 +194,7 @@ func (m ProgressModel) View() string {
 	}
 
 	// Clamp to available height
-	availHeight := m.height - 4 // header + help + padding
-	if availHeight < 3 {
-		availHeight = 3
-	}
+	availHeight := m.bodyAvailHeight()
 	if len(bodyLines) > availHeight {
 		bodyLines = bodyLines[:availHeight]
 	}
@@ -124,12 +209,12 @@ func (m ProgressModel) renderHeader() string {
 		Bold(true).
 		Foreground(m.theme.Text).
 		Background(m.theme.Surface).
-		Width(m.width).
-		Padding(0, 2)
+		Width(m.width)
+	style = theme.PadHorizontal(style)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Render(theme.NewIcons().Evaluate + " SEARCH PROGRESS")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Background(m.theme.Surface).Render(m.theme.Icons.Progress + " SEARCH PROGRESS")
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	total := len(m.metrics.FunnelStages)
 	totalCount := 0
 	if total > 0 {
@@ -137,16 +222,35 @@ func (m ProgressModel) renderHeader() string {
 	}
 	info := right.Render(fmt.Sprintf("%d evaluated | %.1f avg score", totalCount, m.metrics.AvgScore))
 
-	gap := m.width - lipgloss.Width(title) - lipgloss.Width(info) - 4
-	if gap < 1 {
-		gap = 1
-	}
+	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 
-	return style.Render(title + strings.Repeat(" ", gap) + info)
+	return style.Render(title + gap + info)
+}
+
+// truncateRow bounds a rendered label+bar+count row to the width actually
+// available inside PadHorizontal's 2+2 padding. renderFunnel/
+// renderScoreDistribution/renderWeeklyActivity each floor their bar width
+// at a minimum of 10 columns so a bar is never invisible, but that floor
+// can still push label+bar+count past m.width on a narrow terminal --
+// unlike bars.go's fitBar (used by the header/help bars), these rows had
+// no truncation fallback, so an over-width row wrapped onto a second
+// terminal line instead of degrading. That silently breaks the scroll
+// math in View(), which assumes each row is exactly one line. ansi.Truncate
+// mirrors renderTabs's own guard in pipeline.go for the identical problem
+// -- ANSI-escape-aware, so it can safely shorten an already-styled row.
+func (m ProgressModel) truncateRow(row string) string {
+	avail := m.width - 4 // PadHorizontal's own 2+2 columns
+	if avail < 0 {
+		avail = 0
+	}
+	if lipgloss.Width(row) > avail {
+		row = ansi.Truncate(row, avail, "…")
+	}
+	return row
 }
 
 func (m ProgressModel) renderFunnel() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
@@ -195,7 +299,7 @@ func (m ProgressModel) renderFunnel() string {
 			color = stageColors[i]
 		}
 
-		barStyle := lipgloss.NewStyle().Foreground(color)
+		barStyle := lipgloss.NewStyle().Foreground(color) // no padding needed
 		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
 		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
@@ -208,14 +312,14 @@ func (m ProgressModel) renderFunnel() string {
 		}
 		count := countStyle.Render(fmt.Sprintf("  %d%s", stage.Count, pctStr))
 
-		lines = append(lines, padStyle.Render(label+bar+count))
+		lines = append(lines, padStyle.Render(m.truncateRow(label+bar+count)))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
 func (m ProgressModel) renderScoreDistribution() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
@@ -272,14 +376,14 @@ func (m ProgressModel) renderScoreDistribution() string {
 		label := labelStyle.Render(bucket.Label)
 		count := countStyle.Render(fmt.Sprintf("  %d", bucket.Count))
 
-		lines = append(lines, padStyle.Render(label+bar+count))
+		lines = append(lines, padStyle.Render(m.truncateRow(label+bar+count)))
 	}
 
 	return strings.Join(lines, "\n")
 }
 
 func (m ProgressModel) renderRates() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
@@ -287,7 +391,9 @@ func (m ProgressModel) renderRates() string {
 
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 	valueStyle := lipgloss.NewStyle().Bold(true)
-	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Overlay)
+	// Subtext, not Overlay -- see renderHelp's brand comment: Overlay is the
+	// border/divider token and fails text contrast (1.4-2.3:1) here.
+	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 	responseColor := m.rateColor(m.metrics.ResponseRate)
 	interviewColor := m.rateColor(m.metrics.InterviewRate)
@@ -304,7 +410,7 @@ func (m ProgressModel) renderRates() string {
 		labelStyle.Render("Offer Rate: ") +
 		valueStyle.Foreground(offerColor).Render(fmt.Sprintf("%.1f%%", m.metrics.OfferRate))
 
-	lines = append(lines, padStyle.Render(rates))
+	lines = append(lines, padStyle.Render(m.truncateRow(rates)))
 
 	// Active summary
 	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
@@ -312,13 +418,13 @@ func (m ProgressModel) renderRates() string {
 		"%d active applications | %d total offers",
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
 	))
-	lines = append(lines, padStyle.Render(activeInfo))
+	lines = append(lines, padStyle.Render(m.truncateRow(activeInfo)))
 
 	return strings.Join(lines, "\n")
 }
 
 func (m ProgressModel) renderWeeklyActivity() string {
-	padStyle := lipgloss.NewStyle().Padding(0, 2)
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
 
 	var lines []string
@@ -354,7 +460,7 @@ func (m ProgressModel) renderWeeklyActivity() string {
 		}
 
 		barStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
-		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(labelW)
+		labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
 		countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
 		// Show short week label (e.g., "W14" from "2026-W14")
@@ -367,7 +473,7 @@ func (m ProgressModel) renderWeeklyActivity() string {
 		label := labelStyle.Render(shortWeek)
 		count := countStyle.Render(fmt.Sprintf("  %d", week.Count))
 
-		lines = append(lines, padStyle.Render(label+bar+count))
+		lines = append(lines, padStyle.Render(m.truncateRow(label+bar+count)))
 	}
 
 	return strings.Join(lines, "\n")
@@ -375,26 +481,29 @@ func (m ProgressModel) renderWeeklyActivity() string {
 
 func (m ProgressModel) renderHelp() string {
 	style := lipgloss.NewStyle().
-		Foreground(m.theme.Subtext).
+		Foreground(m.theme.Blue).
 		Background(m.theme.Surface).
 		Width(m.width).
 		Padding(0, 1)
 
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
-	brand := lipgloss.NewStyle().Foreground(m.theme.Overlay).Render("resume-builder dashboard")
+	// Subtext, not Overlay -- Overlay is the border/divider token (1.4-2.3:1
+	// against Surface/Base across all three themes, see statusColorMap's own
+	// comment in pipeline.go for the same measurement) and was never meant
+	// to carry readable text.
+	brand := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface).Render("resume-builder dashboard")
 
-	keys := keyStyle.Render("\u2191\u2193") + descStyle.Render(" scroll  ") +
+	keys := keyStyle.Render("\u2191\u2193/jk") + descStyle.Render(" scroll  ") +
 		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-		keyStyle.Render("Esc") + descStyle.Render(" back")
+		keyStyle.Render("?") + descStyle.Render(" help  ") +
+		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
+		keyStyle.Render("q") + descStyle.Render(" quit")
 
-	gap := m.width - lipgloss.Width(keys) - lipgloss.Width(brand) - 2
-	if gap < 1 {
-		gap = 1
-	}
+	keys, brand, gap := fitBar(keys, brand, m.width, 2, m.theme.Surface)
 
-	return style.Render(keys + strings.Repeat(" ", gap) + brand)
+	return style.Render(keys + gap + brand)
 }
 
 // rateColor returns a color based on the rate value.

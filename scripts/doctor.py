@@ -226,6 +226,30 @@ def check_dashboard_theme_sync() -> dict:
     )
 
 
+def check_dashboard_color_lint() -> dict:
+    """dashboard/tools/lint_colors.go catches hardcoded/off-token colors in
+    the Go TUI, but it was previously a manual-only `go run
+    ./tools/lint_colors.go` with nothing gating it -- unlike
+    check_dashboard_theme_sync() above, which has exactly this kind of
+    automated check for a sibling drift risk. Optional/never a hard
+    failure when Go isn't installed, matching check_go()'s own reasoning:
+    this binary is only needed for `resume dashboard`."""
+    if not shutil.which("go"):
+        return _check(
+            "Dashboard color lint (Go)", True,
+            "skipped -- Go not installed (only needed for `resume dashboard`)",
+        )
+    result = subprocess.run(
+        ["go", "run", "./tools/lint_colors.go"],
+        cwd=os.path.join(PROJECT_ROOT, "dashboard"),
+        capture_output=True, text=True,
+    )
+    ok = result.returncode == 0
+    detail = "no hard-coded colors found" if ok else "hard-coded/non-token colors found -- see below"
+    fix = result.stdout.strip() or result.stderr.strip()
+    return _check("Dashboard color lint (Go)", ok, detail, fix)
+
+
 def check_icon_set() -> dict:
     # Always passes -- purely informational (B33). Doctor previously had
     # nothing to say about RESUME_BUILDER_ICONS at all; this at least
@@ -328,6 +352,7 @@ CHECKS = [
     check_signature_image,
     check_icon_set,
     check_dashboard_theme_sync,
+    check_dashboard_color_lint,
     check_kb_allowlist,
 ]
 

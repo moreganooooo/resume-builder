@@ -103,6 +103,15 @@ Using `role_dna.yaml`, `ats_match.yaml`, and `manager_test.yaml`:
 - Score keyword coverage against JD
 - Run manager-readiness checks
 - Flag gaps between resume positioning and JD requirements
+- Separately, evaluate the resume against each platform in `ats_match.yaml`'s
+  `platform_overrides` (Workday, Taleo, iCIMS, Greenhouse, Lever) using that
+  platform's own `match_weights` and `parsing_notes`. Report the single
+  weakest-scoring platform as `weakest_ats_platform` (name + one-sentence
+  why), and any concrete parsing risks found (a missing standard section
+  header, an acronym used with no spelled-out form anywhere, a JD
+  requirement paraphrased instead of quoted where a strict platform's
+  `parsing_notes` says that matters) as `platform_parsing_risks`. Empty list
+  if none found -- don't invent a risk to fill the field.
 
 ### Step 7 — Evaluate Supporting Sections
 

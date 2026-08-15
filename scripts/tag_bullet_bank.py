@@ -41,6 +41,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 
 def tag_keywords() -> dict:
@@ -173,13 +174,14 @@ def main():
             w.writeheader()
             w.writerows(review_rows)
 
-    print(f"{args.input_csv}: {len(rows)} rows")
-    print(f"  Already tagged (left alone): {skipped_existing}")
-    print(f"  Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})")
-    print(f"  Weak match, no unique keyword hit (flagged for review): {len(review_rows)}")
-    print(f"  Wrote: {out_path}")
+    cli_art.cli_info(f"{args.input_csv}: {len(rows)} rows")
+    cli_art.cli_info(f"Already tagged (left alone): {skipped_existing}")
+    cli_art.cli_success(f"Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})")
     if review_rows:
-        print(f"  Wrote: {review_path}")
+        cli_art.cli_warning(f"Weak match, no unique keyword hit (flagged for review): {len(review_rows)}")
+    cli_art.cli_success(f"Wrote: {out_path}")
+    if review_rows:
+        cli_art.cli_success(f"Wrote: {review_path}")
 
 
 if __name__ == "__main__":

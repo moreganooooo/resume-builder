@@ -294,7 +294,7 @@ class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
         mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError("simulated 403")
         summary = bootstrap_bullet_bank.run_ingestion()
 
-        with patch("builtins.print") as mock_print:
+        with patch("cli_art.console.print") as mock_print:
             bootstrap_bullet_bank.print_ingestion_summary(summary)
         printed = " ".join(str(call.args[0]) for call in mock_print.call_args_list)
         self.assertIn("1 document(s) failed", printed)

@@ -91,7 +91,24 @@
       "Bash(pandoc \"/home/morganescott/Documents/Morgammm/job_projects/resume-builder/ImprovementConcepts/primaryenhancementplan.rtf\" -f rtf -t plain -o primaryenhancementplan.txt)",
       "Bash(pandoc \"/home/morganescott/Documents/Morgammm/job_projects/resume-builder/ImprovementConcepts/resourceideas.rtf\" -f rtf -t plain -o resourceideas.txt)",
       "Skill(claude-api)",
-      "Bash(resume doctor *)"
+      "Bash(resume doctor *)",
+      "Bash(npm ls *)",
+      "Bash(npm install *)",
+      "mcp__plugin_lumen_lumen__semantic_search"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/morganescott/.local/bin/headroom wrap selfheal --marker headroom-wrap-selfheal",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

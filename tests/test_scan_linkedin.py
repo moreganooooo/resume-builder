@@ -66,5 +66,36 @@ class TestFetchPersonalizedExtrasPacing(unittest.TestCase):
         mock_sleep.assert_called_once_with(scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS)
 
 
+class TestFetchLinkedinJobsActivity(unittest.TestCase):
+
+    @patch("scan_linkedin._fetch_personalized_extras", return_value={"is_top_applicant": False, "backup_description": None})
+    @patch("scan_linkedin.get_li_at_cookie", return_value="fake-li-at")
+    @patch("scan_linkedin.profile_paths.profile_yaml", return_value={"target_roles": {"primary": ["Data Engineer"]}})
+    @patch("scan_linkedin.LinkedinScraper")
+    def test_steps_through_activity_on_each_result(self, mock_scraper_cls, mock_profile, mock_cookie, mock_extras):
+        mock_scraper = mock_scraper_cls.return_value
+        registered = {}
+
+        def fake_on(event, handler):
+            registered[event] = handler
+
+        mock_scraper.on.side_effect = fake_on
+
+        def fake_run(queries):
+            data = MagicMock(title="Data Engineer", company="Acme", link="https://linkedin.com/jobs/view/1",
+                              apply_link=None, place="Remote", date=None, date_text=None,
+                              employment_type=None, seniority_level=None, description="desc",
+                              description_html=None, skills=None, job_id="1", company_link=None)
+            registered[scan_linkedin.Events.DATA](data)
+
+        mock_scraper.run.side_effect = fake_run
+
+        activity = MagicMock()
+        jobs = scan_linkedin.fetch_linkedin_jobs(activity=activity)
+
+        self.assertEqual(len(jobs), 1)
+        activity.step.assert_called_with("success", "LinkedIn", "Found Data Engineer at Acme")
+
+
 if __name__ == "__main__":
     unittest.main()

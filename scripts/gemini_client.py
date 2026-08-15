@@ -16,6 +16,7 @@ import requests
 from dotenv import load_dotenv
 
 import profile_paths
+import cli_art
 import theme
 
 # Resolved via profile_paths.env_path() -- each profile carries its own
@@ -62,6 +63,25 @@ MODEL_FALLBACKS = {
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM   = 768   # gemini-embedding-2 native dimension
+
+
+# Gemini reports a refusal as a `finishReason` on an otherwise-successful
+# 200 response -- there is no exception to catch, so this never reaches
+# cli_art's exception classifier and needs its own plain-language map.
+# Codes are Google's; the wording is ours. An unmapped code falls through
+# to _FINISH_REASON_DEFAULT rather than being printed raw, so a value
+# Google adds later still reads as a sentence.
+_FINISH_REASON_EXPLANATIONS = {
+    "SAFETY": "Gemini's safety filter blocked its own answer to this request.",
+    "PROHIBITED_CONTENT": "Gemini's safety filter blocked its own answer to this request.",
+    "BLOCKLIST": "Gemini's safety filter blocked its own answer to this request.",
+    "SPII": "Gemini stopped because its answer looked like it contained personal identifying information.",
+    "RECITATION": "Gemini stopped because its answer was reproducing copyrighted text too closely.",
+    "MALFORMED_FUNCTION_CALL": "Gemini returned a malformed response that couldn't be read.",
+    "LANGUAGE": "Gemini stopped because the request was in a language it won't answer in.",
+    "OTHER": "Gemini stopped early without saying why.",
+}
+_FINISH_REASON_DEFAULT = "Gemini stopped before finishing its answer."
 
 
 class SustainedFailureError(RuntimeError):
@@ -195,8 +215,8 @@ class GeminiClient:
         except json.JSONDecodeError:
             salvaged = GeminiClient._salvage_fields(cleaned)
             if salvaged:
-                print(f"    WARNING: parse_json() salvaged {len(salvaged)} field(s) from unterminated "
-                      "JSON -- the response was truncated or malformed; treat this result as partial.")
+                cli_art.console.print(f"    {cli_art.WARNING} parse_json() salvaged {len(salvaged)} field(s) from unterminated "
+                      "JSON -- the response was truncated or malformed; treat this result as partial.", soft_wrap=True)
             return salvaged
 
     @staticmethod
@@ -236,7 +256,7 @@ class GeminiClient:
                 elapsed = time.time() - GeminiClient._last_gemma_call_ts
                 if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
                     wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
-                    print(f"    ⏳ Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...")
+                    cli_art.console.print(f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...", soft_wrap=True)
                     time.sleep(wait)
                 GeminiClient._last_gemma_call_ts = time.time()
 
@@ -279,7 +299,7 @@ class GeminiClient:
                     try:
                         raw_schema = json.loads(response_schema)
                     except json.JSONDecodeError:
-                        print("ERROR: response_schema string is not valid JSON.")
+                        cli_art.console.print(f"{cli_art.ERROR} response_schema string is not valid JSON.", soft_wrap=True)
                 if raw_schema and (extra_schema_properties or extra_required):
                     # Callers that need profile-specific enum fields not knowable
                     # at Pydantic class-definition time (e.g. orchestrator.py's
@@ -320,13 +340,13 @@ class GeminiClient:
                 failure_streak += 1
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
-                    print(f"    WARNING: Transport failures — falling back to {fallback_model}...")
+                    cli_art.console.print(f"    {cli_art.WARNING} Transport failures — falling back to {fallback_model}...", soft_wrap=True)
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
-                print(f"    WARNING: Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
-                      f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...")
+                cli_art.console.print(f"    {cli_art.WARNING} Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
+                      f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...", soft_wrap=True)
                 time.sleep(sleep_dur)
                 continue
 
@@ -336,37 +356,40 @@ class GeminiClient:
                 failure_streak += 1
 
             if resp.status_code == HIGH_DEMAND_STATUS:
-                print("    WARNING: Model high demand (503). Treating as transient.")
+                cli_art.console.print(f"    {cli_art.WARNING} Model high demand (503). Treating as transient.", soft_wrap=True)
 
             if resp.status_code in RETRYABLE:
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
-                    print(f"    WARNING: Server failures — falling back to {fallback_model}...")
+                    cli_art.console.print(f"    {cli_art.WARNING} Server failures — falling back to {fallback_model}...", soft_wrap=True)
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
-                print(f"    WARNING: HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...")
+                cli_art.console.print(f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...", soft_wrap=True)
                 time.sleep(sleep_dur)
                 continue
 
             if resp.status_code in (400, 404):
-                print(f"    WARNING: Gemini API permanent error {resp.status_code}: {resp.reason}. Not retrying.")
+                cli_art.console.print(f"    {cli_art.WARNING} Gemini API permanent error {resp.status_code}: {resp.reason}. Not retrying.", soft_wrap=True)
                 try:
-                    print(json.dumps(resp.json(), indent=2)[:800])
+                    cli_art.print_literal(json.dumps(resp.json(), indent=2)[:800])
                 except Exception:
-                    print(resp.text[:800])
+                    cli_art.print_literal(resp.text[:800])
                 return None, {}
 
             try:
                 resp.raise_for_status()
             except requests.exceptions.HTTPError as e:
-                print(f"    WARNING: HTTP error {resp.status_code}: {e}. Not retrying.")
+                cli_art.console.print(f"    {cli_art.WARNING} HTTP error {resp.status_code}: {e}. Not retrying.", soft_wrap=True)
                 return None, {}
 
             try:
                 data = resp.json()
-            except Exception:
+            except Exception as e:
+                cli_art.friendly_warning(
+                    e, "reading the AI's response",
+                    "treating this request as if it came back empty")
                 return None, {}
 
             candidates = data.get("candidates", [])
@@ -377,7 +400,14 @@ class GeminiClient:
 
             finish_reason = candidates[0].get("finishReason")
             if finish_reason not in (None, "STOP", "MAX_TOKENS"):
-                print(f"    WARNING: Unexpected finishReason={finish_reason!r}. Not retrying this attempt.")
+                cli_art.cli_warning(
+                    f"{_FINISH_REASON_EXPLANATIONS.get(finish_reason, _FINISH_REASON_DEFAULT)} "
+                    "Skipping this one and moving on."
+                )
+                # Raw API code kept as VERBOSE-only detail: it's the first
+                # thing worth knowing when debugging a prompt, and the last
+                # thing a job seeker needs on screen.
+                cli_art.detail(f"    finishReason={finish_reason!r}")
                 return None, usage
             if finish_reason == "MAX_TOKENS":
                 usage["truncated"] = True
@@ -421,5 +451,5 @@ class GeminiClient:
             resp.raise_for_status()
             return resp.json().get("embedding", {}).get("values")
         except Exception as e:
-            print(f"    WARNING: Embed error: {e}")
+            cli_art.console.print(f"    {cli_art.WARNING} Embed error: {e}", soft_wrap=True)
             return None

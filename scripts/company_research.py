@@ -8,13 +8,14 @@ approach) -- matches the plain-scraper pattern already proven in
 scan_linkedin.py, keeping Claude's role bounded to build-time work, not
 runtime operation.
 
-find_company_website() is the one exception to "no search API" above --
-it's a real, separate Gemini call using Google Search grounding, used
-only as a fallback when no company_website is already known from the JD
-source (see ResumeEngine.research_company()). Kept as a distinct
-plain-text call (no response_schema) rather than folded into the
-scraped-page extraction call, since grounding tools and structured JSON
-output can't be combined in a single Gemini call.
+find_company_website() and research_company_via_search() are the exceptions
+to "no search API" above -- both are real, separate Gemini calls using
+Google Search grounding, used as fallbacks when no company_website is
+already known from the JD source, or when the site that is known turns out
+to be unscrapeable/too thin (see ResumeEngine.research_company()). Both are
+kept as distinct plain-text calls (no response_schema) rather than folded
+into the extraction call, since grounding tools and structured JSON output
+can't be combined in a single Gemini call.
 """
 
 import re
@@ -39,6 +40,12 @@ _REJECTED_DOMAINS = (
     "wikipedia.org", "crunchbase.com", "ziprecruiter.com",
 )
 FIND_WEBSITE_MODEL = "gemini-3.1-flash-lite"
+SEARCH_RESEARCH_MODEL = "gemini-3.1-flash-lite"
+
+# Tier 2's self-reported confidence. Anything but "high" falls through to
+# Tier 3 -- many companies share a name, and a confidently-wrong writeup
+# about the wrong Acme is worse than falling back to the JD's own text.
+_CONFIDENCE_PATTERN = re.compile(r"^\s*CONFIDENCE:\s*(high|medium|low)\b", re.IGNORECASE)
 
 
 def _candidate_urls(company_website: str) -> list:
@@ -129,3 +136,149 @@ def find_company_website(company_name: str) -> str | None:
     if any(domain in url.lower() for domain in _REJECTED_DOMAINS):
         return None
     return url
+
+
+def research_company_via_search(company_name: str, context_hint: str = "") -> str | None:
+    """
+    Tier 2 of ResumeEngine.research_company()'s fallback chain: when no
+    company website is known or scrapeable, ask Gemini (with Google Search
+    grounding) to describe the company's tone, values, and language
+    directly.
+
+    Like find_company_website(), this is a plain-text call with no
+    response_schema -- grounding and structured output can't be combined
+    in one request. Its output is fed to the same research_company.md
+    extraction call the scraped-page path uses, so there's exactly one
+    place that produces CompanyResearchSchema.
+
+    The model self-reports confidence on a leading `CONFIDENCE:` line, and
+    only "high" is trusted; anything else (including a missing or
+    unparseable line) returns None so the caller falls through to Tier 3.
+    Returns None on any failure and never raises.
+    """
+    if not company_name:
+        return None
+
+    hint = f"\n\nContext from the job posting (use this to disambiguate same-named companies): {context_hint}" if context_hint else ""
+
+    try:
+        text, _ = GeminiClient.generate(
+            model=SEARCH_RESEARCH_MODEL,
+            system_instruction=(
+                "You research companies' public voice and values. Your first "
+                "line must be exactly 'CONFIDENCE: high', 'CONFIDENCE: medium', "
+                "or 'CONFIDENCE: low' -- reporting how certain you are that "
+                "you found the specific company asked about, not how much you "
+                "found. Say 'high' only when the identifying details you found "
+                "clearly match the company described. Many companies share a "
+                "name; if you cannot tell which one this is, say 'low'. After "
+                "that line, describe in plain prose: what the company does, "
+                "their stated mission and values, the tone of their public "
+                "writing, and any distinctive words they use for everyday "
+                "things (for example calling customers 'guests'). Use only "
+                "what you actually found -- never fill gaps with plausible "
+                "guesses."
+            ),
+            contents=f"Research the company \"{company_name}\".{hint}",
+            tools=[{"google_search": {}}],
+            temperature=0.0,
+        )
+    except Exception:
+        return None
+
+    if not text:
+        return None
+
+    match = _CONFIDENCE_PATTERN.match(text)
+    if not match or match.group(1).lower() != "high":
+        return None
+
+    body = text[match.end():].strip()
+    return body or None
+
+
+def _is_word_char(char: str) -> bool:
+    """Matches regex \\w: alphanumerics plus underscore."""
+    return char.isalnum() or char == "_"
+
+
+def _match_case(source: str, replacement: str) -> str:
+    """Makes `replacement` echo `source`'s capitalization, so substituting
+    mid-sentence vs. sentence-initial vs. all-caps text all read naturally.
+
+    The >1-letter guard on the all-caps branch is load-bearing: str.isupper()
+    is True for "C++" (one cased char, no lowercase), which would turn a
+    "C++ -> Cpp" pair into "CPP".
+    """
+    if source.isupper() and sum(c.isalpha() for c in source) > 1:
+        return replacement.upper()
+    if source[:1].isupper():
+        return replacement[:1].upper() + replacement[1:]
+    return replacement
+
+
+def apply_vocabulary_substitutions(text: str, substitutions: list) -> str:
+    """
+    Swaps a generic noun for a company's own preferred term (e.g.
+    "customers" -> "guests") in already-written text.
+
+    Deliberately deterministic rather than an LLM rewrite: this runs over
+    resume bullets, which are pre-audited verified text ("bullet bank is
+    LEGO not prose inspiration", style_rules.yaml:19). A regex substitution
+    can only change the target noun -- it structurally cannot alter a
+    metric, a verb, or a claim, which an LLM asked to "mirror company
+    vocabulary" absolutely could. See
+    docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md.
+
+    Word-boundary matched and case-preserving. Malformed pairs are skipped
+    rather than raised on -- these terms come from a model, not a human.
+    """
+    if not text or not substitutions:
+        return text
+
+    for pair in substitutions:
+        if not isinstance(pair, dict):
+            continue
+        generic = (pair.get("generic_term") or "").strip()
+        preferred = (pair.get("company_term") or "").strip()
+        if not generic or not preferred:
+            continue
+        # re.escape keeps a term like "C++" literal rather than a broken
+        # pattern. \b only asserts a word/non-word transition, so it can't be
+        # used on an edge that isn't a word char -- \bC\+\+\b never matches
+        # "C++ tooling" (both '+' and ' ' are non-word). Each end therefore
+        # picks \b or a lookaround depending on the term's own edge character.
+        left = r"\b" if _is_word_char(generic[0]) else r"(?<!\w)"
+        right = r"\b" if _is_word_char(generic[-1]) else r"(?!\w)"
+        pattern = re.compile(rf"{left}{re.escape(generic)}{right}", re.IGNORECASE)
+        text = pattern.sub(lambda m: _match_case(m.group(0), preferred), text)
+
+    return text
+
+
+def apply_vocabulary_substitutions_to_resume(resume_data: dict, substitutions: list) -> dict:
+    """
+    Applies apply_vocabulary_substitutions() to every Work Experience
+    bullet in a built resume dict, in place, returning the same dict.
+
+    Bullets only -- not SUMMARY or the Why section (both are model-written
+    with the vocabulary already in their prompt context) and not Skills
+    (category and tool names are precise technical terms, not
+    customer-facing prose). Defensive about shape because it runs on
+    model-generated JSON.
+    """
+    if not substitutions or not isinstance(resume_data, dict):
+        return resume_data
+
+    for role in resume_data.get("EXPERIENCE") or []:
+        if not isinstance(role, dict):
+            continue
+        achievements = role.get("achievements")
+        if not isinstance(achievements, list):
+            continue
+        role["achievements"] = [
+            apply_vocabulary_substitutions(bullet, substitutions) if isinstance(bullet, str) else bullet
+            for bullet in achievements
+        ]
+
+    return resume_data

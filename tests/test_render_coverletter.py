@@ -47,6 +47,30 @@ class TestRenderCoverLetter(unittest.TestCase):
         self.assertIn("Widget Co", html)
         self.assertIn('class="letter-address"', html)
 
+    def test_recipient_block_shows_attn_line_when_contact_known(self):
+        render_coverletter(_minimal_letter_data(contact_name="Maggie Smith", contact_title="HR Manager"), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("Attn: Maggie Smith, HR Manager", html)
+
+    def test_recipient_block_falls_back_to_hiring_team_line_without_contact(self):
+        render_coverletter(_minimal_letter_data(company_name="Widget Co"), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("Widget Co Hiring Team", html)
+
+    def test_recipient_block_includes_location_when_present(self):
+        render_coverletter(_minimal_letter_data(company_location="Austin, TX"), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("Austin, TX", html)
+
+    def test_tagline_rendered_in_header_when_present(self):
+        render_coverletter(_minimal_letter_data(tagline="CONTENT STRATEGIST | SEO"), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("CONTENT STRATEGIST | SEO", html)
+
     def test_body_paragraphs_each_wrapped_in_p_tag(self):
         render_coverletter(_minimal_letter_data(), self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
@@ -89,3 +113,30 @@ class TestBuildSignatureBlockHtml(unittest.TestCase):
     def test_returns_img_tag_with_absolute_file_url(self, mock_sig):
         result = render_coverletter_module.build_signature_block_html()
         self.assertEqual(result, '<img class="signature-img" src="file:///some/path/signature.jpg" alt="">')
+
+
+class TestBuildRecipientBlockHtml(unittest.TestCase):
+
+    def test_no_contact_no_location(self):
+        html = render_coverletter_module.build_recipient_block_html("Acme Corp")
+        self.assertEqual(html, '<div class="letter-address">Acme Corp Hiring Team<br>Acme Corp</div>')
+
+    def test_with_contact_and_location(self):
+        html = render_coverletter_module.build_recipient_block_html(
+            "Acme Corp", contact_name="Maggie Smith", contact_title="HR Manager", location="Austin, TX")
+        self.assertEqual(
+            html,
+            '<div class="letter-address">Attn: Maggie Smith, HR Manager<br>Acme Corp<br>Austin, TX</div>',
+        )
+
+    def test_contact_without_title(self):
+        html = render_coverletter_module.build_recipient_block_html("Acme Corp", contact_name="Maggie Smith")
+        self.assertIn("Attn: Maggie Smith<br>", html)
+        self.assertNotIn("Attn: Maggie Smith,", html)
+
+    def test_escapes_html_in_all_lines(self):
+        html = render_coverletter_module.build_recipient_block_html(
+            "A&B Corp", contact_name="Pat <b>Lee</b>", location="NY & NJ")
+        self.assertIn("A&amp;B Corp", html)
+        self.assertIn("Pat &lt;b&gt;Lee&lt;/b&gt;", html)
+        self.assertIn("NY &amp; NJ", html)

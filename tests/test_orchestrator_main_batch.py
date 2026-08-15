@@ -127,7 +127,7 @@ class TestMainBatchMode(unittest.TestCase):
 
         with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
             data_row = [line for line in f if line.startswith("| 1 |")][0]
-        self.assertIn("| ❌ |", data_row)
+        self.assertIn("| — |", data_row)
 
     @patch("orchestrator.jd_manager.JDTracker")
     @patch("orchestrator.jd_manager.get_pending_jds")
@@ -151,7 +151,7 @@ class TestMainBatchMode(unittest.TestCase):
 
         with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
             data_row = [line for line in f if line.startswith("| 1 |")][0]
-        self.assertIn("| ✅ |", data_row)
+        self.assertIn("| ✓ |", data_row)
 
     @patch("orchestrator.jd_manager.JDTracker")
     @patch("orchestrator.jd_manager.get_pending_jds")

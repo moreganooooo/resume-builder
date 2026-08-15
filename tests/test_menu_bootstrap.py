@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import unittest
@@ -12,7 +13,7 @@ import menu  # noqa: E402
 class TestBootstrapChoiceRegistered(unittest.TestCase):
 
     def test_bootstrap_is_first_choice(self):
-        first = menu._CHOICES[0]
+        first = menu._build_choices()[0]
         self.assertEqual(first.value, "bootstrap")
 
     def test_bootstrap_handler_registered(self):
@@ -21,20 +22,28 @@ class TestBootstrapChoiceRegistered(unittest.TestCase):
 
 
 class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
-    """_handle_bootstrap() no longer runs the whole onboarding flow as one
-    opaque subprocess -- for an already-existing, non-guest profile, its
-    entire remaining job is the resumable submenu (bootstrap_menu.py)."""
+    """_handle_bootstrap() skips straight to the resumable submenu
+    (bootstrap_menu.py) for an already-existing, non-guest profile -- it
+    does not re-run the onboarding wizard every time."""
 
+    @patch("menu.subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=True)
-    def test_delegates_to_bootstrap_menu_and_returns_its_result(self, mock_run_menu):
+    @patch("menu._profile_is_set_up", return_value=True)
+    def test_delegates_to_bootstrap_menu_and_returns_its_result(self, mock_is_set_up, mock_run_menu, mock_subprocess):
+        os.environ.pop("RESUME_GUEST_MODE", None)
         result = menu._handle_bootstrap()
         mock_run_menu.assert_called_once()
+        mock_subprocess.assert_not_called()
         self.assertTrue(result)
 
+    @patch("menu.subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
-    def test_returns_false_when_submenu_reports_nothing_happened(self, mock_run_menu):
+    @patch("menu._profile_is_set_up", return_value=True)
+    def test_returns_false_when_submenu_reports_nothing_happened(self, mock_is_set_up, mock_run_menu, mock_subprocess):
+        os.environ.pop("RESUME_GUEST_MODE", None)
         result = menu._handle_bootstrap()
         self.assertFalse(result)
+        mock_subprocess.assert_not_called()
 
 
 class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
@@ -71,22 +80,21 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         pp.set_active_profile(self._orig_profile or "morgan")
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
-    @patch("menu.questionary.text")
-    def test_guest_mode_triggers_name_prompt_even_though_morgan_profile_exists(self, mock_text, mock_run_menu):
-        # Deliberately does NOT mock os.makedirs -- patching it via
-        # "menu.os.makedirs" mutates the single shared os module object,
-        # which would also silently disable create_new_profile()'s own
-        # directory creation in bootstrap_bullet_bank.py. Letting this run
-        # for real is also a more honest test of the actual bug (does a
-        # real profile directory get created, not just a mocked call).
-        # run_bootstrap_menu() itself is mocked -- its own behavior once a
-        # profile is active is covered by test_bootstrap_menu.py.
+    @patch("menu.subprocess.run")
+    def test_guest_mode_triggers_wizard_even_though_morgan_profile_exists(self, mock_subprocess_run, mock_run_menu):
+        # Deliberately does NOT mock bootstrap_bullet_bank.create_new_profile
+        # -- letting this run for real is a more honest test of the actual
+        # bug (does a real profile directory get created, not just a mocked
+        # call). run_bootstrap_menu() itself is mocked -- its own behavior
+        # once a profile is active is covered by test_bootstrap_menu.py.
         os.environ["RESUME_GUEST_MODE"] = "1"
-        mock_text.return_value.ask.return_value = self.test_profile_name
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0, stdout=json.dumps({"profile_name": self.test_profile_name}), stderr="",
+        )
 
         menu._handle_bootstrap()
 
-        mock_text.assert_called_once()
+        mock_subprocess_run.assert_called_once()
         self.assertEqual(os.environ.get("RESUME_PROFILE"), self.test_profile_name)
         import profile_paths
         self.assertTrue(os.path.isdir(profile_paths.kb_dir(self.test_profile_name)))
@@ -99,16 +107,19 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.bootstrap_bullet_bank.create_new_profile")
-    @patch("menu.questionary.text")
-    def test_no_guest_mode_and_existing_profile_skips_name_prompt(
-        self, mock_text, mock_create_profile, mock_run_menu,
+    @patch("menu.subprocess.run")
+    @patch("menu._profile_is_set_up", return_value=True)
+    def test_no_guest_mode_and_existing_profile_skips_the_wizard(
+        self, mock_is_set_up, mock_subprocess_run, mock_create_profile, mock_run_menu,
     ):
-        # RESUME_GUEST_MODE unset, RESUME_PROFILE unset -> resolves to
-        # morgan's real, already-set-up profile -> should NOT prompt for
-        # a name (this is the normal, unchanged Morgan-daily-use path).
+        # RESUME_GUEST_MODE unset, profile already set up -> should NOT
+        # shell out to the Go wizard (this is the normal, unchanged
+        # Morgan-daily-use path, and the exact regression this test guards).
+        os.environ.pop("RESUME_GUEST_MODE", None)
+
         menu._handle_bootstrap()
 
-        mock_text.assert_not_called()
+        mock_subprocess_run.assert_not_called()
         mock_create_profile.assert_not_called()
 
 
