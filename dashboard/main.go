@@ -214,8 +214,32 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// If we're in the menu view, delegate to the menu model first.
+	// If we're in the menu view, handle menu-generated messages at app level
+	// (MenuSelectMsg, MenuQuitMsg) instead of re-delegating them to menu.Update,
+	// which would silently swallow them. Other messages go to menu.Update.
 	if m.state == viewMenu {
+		// Check for menu messages first
+		if _, ok := msg.(menu.MenuQuitMsg); ok {
+			return m, tea.Quit
+		}
+		if menuMsg, ok := msg.(menu.MenuSelectMsg); ok {
+			switch menuMsg.Command {
+			case "Pipeline":
+				return m.startTransition(viewPipeline)
+			case "Progress":
+				m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
+				return m.startTransition(viewProgress)
+			case "Reports":
+				m.viewer = screens.NewEmptyViewerModel(m.theme, m.width, m.height)
+				return m.startTransition(viewReport)
+			case "Jobs":
+				return m.startTransition(viewJobs)
+			case "Exit":
+				return m, tea.Quit
+			}
+			return m, nil
+		}
+		// Delegate other messages (KeyMsg, etc.) to menu model
 		var cmd tea.Cmd
 		m.menu, cmd = m.menu.Update(msg)
 		return m, cmd
@@ -233,40 +257,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m.startTransition(m.previousState)
-
-	case menu.MenuSelectMsg:
-		switch msg.Command {
-		case "Pipeline":
-			return m.startTransition(viewPipeline)
-		case "Progress":
-			m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
-			return m.startTransition(viewProgress)
-		case "Reports":
-			// No specific report exists yet at this point -- that only
-			// happens once a Pipeline row is picked (see
-			// PipelineOpenReportMsg below) -- so this can't jump straight
-			// to a real file the way Pipeline's own "Enter" does. Without
-			// this, m.viewer stayed at its Go zero-value (empty theme, 0x0,
-			// no content) because NewViewerModel was never called on this
-			// path, leaving the Main Menu's "Reports" row a blank dead end.
-			m.viewer = screens.NewEmptyViewerModel(m.theme, m.width, m.height)
-			return m.startTransition(viewReport)
-		case "Jobs":
-			return m.startTransition(viewJobs)
-		// Matches MenuItem.title in internal/ui/menu/list.go verbatim --
-		// this switch dispatches on the DISPLAY string, so renaming a menu
-		// item there silently breaks it here. Nothing catches that: it
-		// still compiles, still passes every test, and the row just
-		// becomes a dead end at runtime. "Quit" was renamed to "Exit" to
-		// match the CLI's word for the same action; reword either side
-		// and both must move together.
-		case "Exit":
-			return m, tea.Quit
-		}
-		return m, nil
-
-	case menu.MenuQuitMsg:
-		return m, tea.Quit
 
 	case screens.PipelineLoadReportMsg:
 		archetype, tldr, remote, comp := data.LoadReportSummary(msg.CareerOpsPath, msg.ReportPath)
