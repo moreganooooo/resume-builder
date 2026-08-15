@@ -134,6 +134,50 @@ def read_evaluation(jd_path: str) -> dict | None:
     return data.get("_evaluation")
 
 
+def save_research(jd_path: str, research: dict) -> None:
+    """Persists a company research result into the JD's own JSON file under
+    an _research key, so the dashboard or picker can display it without
+    re-running the Gemini research call."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_research"] = {
+        "_research_source": research.get("_research_source") or "",
+        "overall_tone_adjective": research.get("overall_tone_adjective") or "",
+        "tone_register": research.get("tone_register") or "",
+        "pronoun_framing": research.get("pronoun_framing") or "",
+        "sentence_style": research.get("sentence_style") or "",
+        "jargon_density": research.get("jargon_density") or "",
+        "recurring_keywords": research.get("recurring_keywords") or [],
+        "company_facts": research.get("company_facts") or [],
+        "company_hq_location": research.get("company_hq_location") or "",
+        "notable_highlights": research.get("notable_highlights") or [],
+        "vocabulary_substitutions": research.get("vocabulary_substitutions") or [],
+        "researched_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_research(jd_path: str) -> dict | None:
+    """Reads back a persisted _research (see save_research()), or None
+    if the JD isn't a JSON dict or has never been researched."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_research")
+
+
+
 def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     """Persists a liveness result into the JD's own JSON file under a
     _liveness key (result, reason, checked_at), matching _evaluation's

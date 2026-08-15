@@ -70,6 +70,26 @@ class TestStatus(unittest.TestCase):
         mock_export.assert_not_called()
 
 
+class TestArchive(unittest.TestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("dashboard_actions.jd_manager.archive_jd")
+    def test_success_refreshes_export_and_returns_zero(self, mock_archive, mock_export):
+        mock_archive.return_value = "archived/a.json"
+        code = dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
+        mock_archive.assert_called_once_with("jds/morgan/a.json")
+        mock_export.assert_called_once_with("/tmp/jobs.json")
+        self.assertEqual(code, 0)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("dashboard_actions.jd_manager.archive_jd")
+    def test_failure_returns_nonzero_without_refreshing(self, mock_archive, mock_export):
+        mock_archive.side_effect = Exception("OS Error")
+        code = dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
+        self.assertEqual(code, 1)
+        mock_export.assert_not_called()
+
+
 class TestUserErrorContract(unittest.TestCase):
     """dashboard_actions.py promises jobs.go that on failure its LAST
     non-empty stderr line is "USER_ERROR: <plain sentence>" -- Go's
@@ -101,6 +121,14 @@ class TestUserErrorContract(unittest.TestCase):
         # The raw developer-facing detail is still emitted, just earlier --
         # jobs.go keeps it behind "d for details".
         self.assertIn("NotARealStatus", err)
+
+    @patch("dashboard_actions.jd_manager.archive_jd")
+    def test_archive_failure_puts_marker_on_the_last_line(self, mock_archive):
+        mock_archive.side_effect = Exception("OS Error")
+        err = self._capture_stderr(
+            lambda: dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
+        )
+        self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 
     @patch("dashboard_actions.liveness.verify_jd_paths")
     def test_liveness_failure_puts_marker_on_the_last_line(self, mock_verify):

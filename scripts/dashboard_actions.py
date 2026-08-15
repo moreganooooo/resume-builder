@@ -114,6 +114,21 @@ def _status(jd_path: str, new_status: str, jobs_path: str) -> int:
     return 0
 
 
+def _archive(jd_path: str, jobs_path: str) -> int:
+    try:
+        archived_path = jd_manager.archive_jd(jd_path)
+        print(f"Archived to: {archived_path}")
+    except Exception as exc:
+        print(f"archive failed for {jd_path}: {exc}", file=sys.stderr)
+        _user_error(
+            "Couldn't archive this job posting. "
+            "Check that the file still exists and try again."
+        )
+        return 1
+    dashboard._export_jobs_to(jobs_path)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -131,6 +146,10 @@ def main() -> int:
     status_parser.add_argument("new_status")
     status_parser.add_argument("--jobs-path", required=True)
 
+    archive_parser = subparsers.add_parser("archive")
+    archive_parser.add_argument("jd_path")
+    archive_parser.add_argument("--jobs-path", required=True)
+
     args = parser.parse_args()
 
     if args.command == "liveness":
@@ -139,6 +158,8 @@ def main() -> int:
         return _tailor(args.jd_path, args.jobs_path)
     if args.command == "status":
         return _status(args.jd_path, args.new_status, args.jobs_path)
+    if args.command == "archive":
+        return _archive(args.jd_path, args.jobs_path)
     return 1
 
 
@@ -148,6 +169,7 @@ _ACTION_CONTEXTS = {
     "liveness": "checking whether this posting is still live",
     "tailor": "building a tailored resume for this job",
     "status": "updating this job's application status",
+    "archive": "archiving this job posting",
 }
 
 

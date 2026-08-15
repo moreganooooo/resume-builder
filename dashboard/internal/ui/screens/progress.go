@@ -172,10 +172,6 @@ func (m *ProgressModel) clampScrollOffset() {
 
 // View renders the progress screen.
 func (m ProgressModel) View() string {
-	if m.showHelp {
-		return renderHelpOverlay(m.theme, "Progress", progressHelpCategories, m.width, m.height)
-	}
-
 	header := m.renderHeader()
 	help := m.renderHelp()
 	body := m.renderBody()
@@ -201,7 +197,12 @@ func (m ProgressModel) View() string {
 
 	body = strings.Join(bodyLines, "\n")
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, help)
+	full := lipgloss.JoinVertical(lipgloss.Left, header, body, help)
+	if m.showHelp {
+		helpContent := renderHelpOverlay(m.theme, "Progress", progressHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
+	}
+	return full
 }
 
 func (m ProgressModel) renderHeader() string {
