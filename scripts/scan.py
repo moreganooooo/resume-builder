@@ -227,7 +227,7 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
             if cli_art.console.is_terminal:
                 proceed = questionary.confirm(
                     f"{len(paths_to_verify)} new postings found -- verify all of them with a "
-                    f"real browser check (~{len(paths_to_verify) * 16 // 60} min)? "
+                    f"real browser check (~{len(paths_to_verify) * 5 // 60} min)? "
                     f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
                     default=False, style=cli_art.QUESTIONARY_STYLE,
                 ).ask()

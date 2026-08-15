@@ -171,7 +171,9 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
 
     for company in companies:
         if activity is not None:
-            activity.step("discovery", "ATS", f"Checking {company.get('name') or '?'}")
+            company_name = company.get('name') or '?'
+            message = f"Checking {cli_art.format_board_name(company_name)}"
+            activity.step("discovery", "ATS", message, preserve_markup=True)
         provider_id = _resolve_provider_id(company)
         if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
             continue
@@ -200,7 +202,9 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
         last_websearch_call_at = time.monotonic()
 
         if activity is not None:
-            activity.step("discovery", "ATS", f"Checking {query.get('name') or 'websearch sweep'}")
+            query_name = query.get('name') or 'websearch sweep'
+            message = f"Checking {cli_art.format_board_name(query_name)}"
+            activity.step("discovery", "ATS", message, preserve_markup=True)
         # _isSweep tells websearch.mjs to prefer the company it extracts
         # from the result URL over `entry.name` (the sweep query's own
         # descriptive name, e.g. "Greenhouse — Marketing & Enablement
