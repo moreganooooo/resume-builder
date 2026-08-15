@@ -787,7 +787,7 @@ def _handle_browse_jobs() -> bool:
     actions (liveness, tailor, status updates) compared to the old CLI picker."""
     success, msg = dashboard_module.run()
     if not success:
-        cli_art.error(msg)
+        cli_art.cli_error(msg)
         return False
     return True
 
