@@ -19,6 +19,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -55,11 +56,12 @@ def build_voice_anchors(index_csv: str = INDEX_CSV) -> str:
 
 def main():
     if not os.path.exists(INDEX_CSV):
-        raise SystemExit(f"ERROR: {INDEX_CSV} not found.")
+        cli_art.cli_error(f"{INDEX_CSV} not found.")
+        raise SystemExit(1)
     content = build_voice_anchors()
     with atomic_write(OUTPUT_MD, encoding="utf-8") as f:
         f.write(content)
-    print(f"Wrote {OUTPUT_MD}")
+    cli_art.print_literal(f"Wrote {cli_art._escape_markup(OUTPUT_MD)}")
 
 
 if __name__ == "__main__":

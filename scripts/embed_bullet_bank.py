@@ -53,6 +53,7 @@ if SCRIPT_DIR not in sys.path:
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
 from bullet_bank_hash import bullets_sha  # noqa: E402
+import cli_art
 import theme
 
 load_dotenv(profile_paths.env_path(), override=True)
@@ -92,7 +93,7 @@ def embed_batch(texts: list) -> list:
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2 ** attempt)
-            print(f"    ⏳ Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
+            cli_art.cli_warning(f"Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})...")
             time.sleep(wait)
             continue
         resp.raise_for_status()
@@ -123,13 +124,13 @@ def load_checkpoint(expected_sha: str):
         data = np.load(CHECKPOINT_PATH, allow_pickle=False)
         saved_sha = str(data["bullets_sha"]) if "bullets_sha" in data else None
         if saved_sha != expected_sha:
-            print(f"   {theme.colorize_icon_ansi('warning')}  Bullet bank changed since this checkpoint was saved "
-                  "-- discarding stale progress and starting over.")
+            cli_art.console.print(f"   {theme.colorize_icon('warning')}  Bullet bank changed since this checkpoint was saved "
+                  "-- discarding stale progress and starting over.", soft_wrap=True)
             os.remove(CHECKPOINT_PATH)
             return [], 0
         vectors = list(data["vectors"])
         start_index = int(data["next_index"])
-        print(f"   {theme.colorize_icon_ansi('resume')}  Resuming from checkpoint: {start_index} bullets already embedded.")
+        cli_art.console.print(f"   {theme.colorize_icon('resume')}  Resuming from checkpoint: {start_index} bullets already embedded.", soft_wrap=True)
         return vectors, start_index
     return [], 0
 
@@ -148,7 +149,7 @@ def main():
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
-    print("   Using API key from environment (value redacted).")
+    cli_art.detail("Using API key from environment (value redacted).", level=cli_art.VERBOSE)
 
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
@@ -169,7 +170,7 @@ def main():
     bullets = df[bullet_col].fillna("").astype(str).tolist()
 
     total = len(bullets)
-    print(f"📄 Loaded {total} bullets from {CSV_PATH}")
+    cli_art.console.print(f"{theme.colorize_icon('bullet_bank')} Loaded {total} bullets from {CSV_PATH}", soft_wrap=True)
     current_sha = bullets_sha(bullets)
 
     vectors, start_index = load_checkpoint(current_sha)
@@ -177,9 +178,9 @@ def main():
     remaining = total - start_index
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
     est_secs  = n_batches * EMBED_SLEEP
-    print(f"🔢 Embedding with {EMBED_MODEL} @ {EMBED_DIM}d")
-    print(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining")
-    print(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s\n")
+    cli_art.console.print(f"{theme.colorize_icon('build')} Embedding with {EMBED_MODEL} @ {EMBED_DIM}d", soft_wrap=True)
+    cli_art.cli_info(f"Batch size: {BATCH_SIZE} bullets/call → {n_batches} API calls remaining")
+    cli_art.cli_info(f"Estimated time: ~{est_secs // 60}m {est_secs % 60}s")
 
     batch_num = 0
     for batch_start in range(start_index, total, BATCH_SIZE):
@@ -187,9 +188,10 @@ def main():
         batch       = bullets[batch_start:batch_end]
         batch_num  += 1
 
-        print(f"   Batch {batch_num}/{n_batches}  "
-              f"[bullets {batch_start+1}–{batch_end}/{total}]  "
-              f"{batch[0][:60]}{'...' if len(batch[0]) > 60 else ''}")
+        cli_art.cli_info(
+            f"Batch {batch_num}/{n_batches}  [bullets {batch_start+1}–{batch_end}/{total}]  "
+            f"{batch[0][:60]}{'...' if len(batch[0]) > 60 else ''}"
+        )
 
         vecs = embed_batch(batch)
         vectors.extend(vecs)
@@ -203,7 +205,7 @@ def main():
     # All done — write final outputs
     matrix = np.array(vectors, dtype=np.float32)  # shape: (N, EMBED_DIM)
     np.save(NPY_PATH, matrix)
-    print(f"\n{theme.colorize_icon_ansi('success')} Saved {matrix.shape} vector matrix → {NPY_PATH}")
+    cli_art.console.print(f"\n{theme.colorize_icon('success')} Saved {matrix.shape} vector matrix → {NPY_PATH}", soft_wrap=True)
 
     meta = {
         "model": EMBED_MODEL,
@@ -215,13 +217,13 @@ def main():
     }
     with atomic_write(META_PATH) as f:
         json.dump(meta, f, indent=2)
-    print(f"📋 Saved metadata sidecar → {META_PATH}")
+    cli_art.console.print(f"{theme.colorize_icon('save')} Saved metadata sidecar → {META_PATH}", soft_wrap=True)
 
     if os.path.exists(CHECKPOINT_PATH):
         os.remove(CHECKPOINT_PATH)
-        print(f"Checkpoint file removed.")
+        cli_art.cli_info("Checkpoint file removed.")
 
-    print(f"\n{theme.colorize_icon_ansi('complete')} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.")
+    cli_art.console.print(f"\n{theme.colorize_icon('complete')} Done. Run this script again whenever bullet-bank-keepers-audited.csv changes.", soft_wrap=True)
 
 
 if __name__ == "__main__":

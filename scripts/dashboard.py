@@ -11,10 +11,15 @@ copy is no longer where changes land -- see IDEAS_ARCHIVE.md for the full
 writeup.
 """
 
+import json
 import os
 import shutil
 import subprocess
+import sys
+import tempfile
 
+import cli_art
+import picker
 import profile_paths
 
 DASHBOARD_DIR = os.path.join(profile_paths.PROJECT_ROOT, "dashboard")
@@ -22,6 +27,34 @@ DASHBOARD_DIR = os.path.join(profile_paths.PROJECT_ROOT, "dashboard")
 
 def go_available() -> bool:
     return shutil.which("go") is not None
+
+
+def _export_jobs_to(path: str) -> None:
+    """Writes picker.list_all_evaluated_jds() to path, overwriting
+    whatever's there. Shared by _write_jobs_export() (a fresh temp file
+    per dashboard launch) and dashboard_actions.py (which refreshes the
+    same file an already-running dashboard session is reading from,
+    after a real action changes the underlying JD data)."""
+    rows = picker.list_all_evaluated_jds()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f)
+
+
+def _write_jobs_export(profile: str = None) -> str:
+    """Writes picker.list_all_evaluated_jds() to a fresh temp JSON file
+    and returns its path, for the Go dashboard's -jobs-path flag. Always
+    a fresh snapshot, never cached -- evaluation/liveness/application
+    data changes between dashboard launches via the Python menu, so a
+    stale export would be actively misleading. Only touches the active
+    profile when an explicit one is given (mirrors _handle_bootstrap()'s
+    own pattern in menu.py) -- the real call site (run(), with
+    profile=None) never needs the reload."""
+    if profile:
+        profile_paths.set_active_profile(profile)
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="dashboard_jobs_")
+    os.close(fd)
+    _export_jobs_to(path)
+    return path
 
 
 def run(profile: str = None) -> tuple[bool, str]:
@@ -46,7 +79,35 @@ def run(profile: str = None) -> tuple[bool, str]:
             "to show."
         )
 
-    result = subprocess.run(["go", "run", ".", "-path", data_dir], cwd=DASHBOARD_DIR)
+    # Two genuinely slow steps run back to back here with no output of
+    # their own: _write_jobs_export() walks the entire JD corpus (hundreds
+    # of files on a real queue), then `go run` COMPILES the dashboard
+    # before it draws anything. That was several seconds of a completely
+    # silent terminal, which reads as a hang.
+    #
+    # Deliberately a static line rather than a spinner: the subprocess
+    # below inherits this process's stdio and takes over the terminal with
+    # a full-screen alt-screen TUI. A live-updating Rich renderable would
+    # still be mid-teardown as Bubble Tea starts drawing, which corrupts
+    # the display -- and a spinner cannot cover the compile anyway, since
+    # that happens inside subprocess.run. One honest line, printed before
+    # the handoff and swallowed by the alt-screen, is the whole job.
+    cli_art.cli_info("Starting the dashboard... (the first launch compiles it, so it takes a few seconds)")
+    jobs_path = _write_jobs_export(profile)
+    try:
+        result = subprocess.run(
+            [
+                "go", "run", ".",
+                "-path", data_dir,
+                "-jobs-path", jobs_path,
+                "-python-path", sys.executable,
+                "-project-root", profile_paths.PROJECT_ROOT,
+            ],
+            cwd=DASHBOARD_DIR,
+        )
+    finally:
+        os.remove(jobs_path)
+
     if result.returncode != 0:
         return False, f"Dashboard exited with an error (code {result.returncode})."
     return True, ""

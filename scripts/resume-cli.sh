@@ -30,14 +30,19 @@ _resume_ensure_profile() {
   count="$(printf '%s\n' "$names" | grep -c .)"
   [ "$count" -gt 1 ] || return
 
-  echo "Multiple resume-builder profiles found:"
-  while IFS= read -r name; do
-    printf '  %s\n' "$name"
-  done <<< "$names"
   local default
   default="$(printf '%s\n' "$names" | head -1)"
-  printf "Which profile for this terminal session? [%s]: " "$default"
-  read -r choice
+  local choice
+  if command -v gum >/dev/null 2>&1; then
+    choice="$(printf '%s\n' "$names" | gum choose --header "Which profile for this terminal session?")"
+  else
+    echo "Multiple resume-builder profiles found:"
+    while IFS= read -r name; do
+      printf '  %s\n' "$name"
+    done <<< "$names"
+    printf "Which profile for this terminal session? [%s]: " "$default"
+    read -r choice
+  fi
   choice="${choice:-$default}"
   export RESUME_PROFILE="$choice"
   echo "Using profile: $RESUME_PROFILE (set for this terminal session only)"

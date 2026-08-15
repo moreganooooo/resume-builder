@@ -21,6 +21,7 @@ if SCRIPT_DIR not in sys.path:
 
 from bootstrap_extractors import EXTRACTION_MODEL, RawAchievement, WorkExperienceEntry  # noqa: E402
 from gemini_client import GeminiClient  # noqa: E402
+import cli_art
 
 
 class TimelineEntry(BaseModel):
@@ -177,7 +178,7 @@ def match_to_timeline(
             return matches[0].company, "medium"
 
     if dry_run:
-        print(f"[DRY RUN] would ask the LLM to match: {achievement.raw_text[:60]!r}")
+        cli_art.print_literal(f"[DRY RUN] would ask the LLM to match: {cli_art._escape_markup(achievement.raw_text[:60])!r}")
         return "Misc. / Unassigned", "low"
 
     if timeline:

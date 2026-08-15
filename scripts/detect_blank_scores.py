@@ -23,7 +23,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
+from rich.markup import escape
 import profile_paths
+import cli_art
 import theme
 
 # ---------------------------------------------------------------------------
@@ -136,30 +138,30 @@ def scan_csv(csv_path: Path) -> dict:
 
 def print_report(report: dict) -> None:
     path_label = Path(report["path"]).name
-    print(f"\n📄 {path_label}")
+    cli_art.console.print(f"\n{theme.colorize_icon('bullet_bank')} {path_label}", soft_wrap=True)
 
     if "error" in report:
-        print(f"   {theme.colorize_icon_ansi('error')} Error: {report['error']}")
+        cli_art.console.print(f"   {theme.colorize_icon('error')} Error: {report['error']}", soft_wrap=True)
         return
 
-    print(f"   Total rows:           {report['total_rows']}")
-    print(f"   Fully unscored rows:  {report['fully_unscored_rows']}")
+    cli_art.cli_info(f"Total rows: {report['total_rows']}")
+    cli_art.cli_info(f"Fully unscored rows: {report['fully_unscored_rows']}")
 
     if report.get("note"):
-        print(f"   {theme.colorize_icon_ansi('warning')}  {report['note']}")
+        cli_art.console.print(f"   {theme.colorize_icon('warning')}  {report['note']}", soft_wrap=True)
 
     if report["missing_by_col"]:
-        print("   Blank counts per score column:")
+        cli_art.cli_info("Blank counts per score column:")
         for col, count in report["missing_by_col"].items():
-            status = theme.colorize_icon_ansi('success') if count == 0 else theme.colorize_icon_ansi('warning')
-            print(f"     {status} {col}: {count} blank")
+            status = theme.colorize_icon('success') if count == 0 else theme.colorize_icon('warning')
+            cli_art.console.print(f"   {status} {escape(str(col))}: {count} blank", soft_wrap=True)
     else:
-        print(f"   {theme.colorize_icon_ansi('warning')}  No score columns present in this file.")
+        cli_art.console.print(f"   {theme.colorize_icon('warning')}  No score columns present in this file.", soft_wrap=True)
 
     if report["fully_unscored_rows"] == 0:
-        print(f"   {theme.colorize_icon_ansi('success')} All rows scored — nothing to do.")
+        cli_art.console.print(f"   {theme.colorize_icon('success')} All rows scored — nothing to do.", soft_wrap=True)
     else:
-        print(f"   🎯 Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.")
+        cli_art.console.print(f"   {theme.colorize_icon('evaluate')} Action needed: run score_keeper_gems.py to fill {report['fully_unscored_rows']} blank rows.", soft_wrap=True)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +189,7 @@ def main():
     else:
         csv_paths = DEFAULT_CSVS
 
-    print("🔍 detect_blank_scores.py — scanning for unscored bullets...")
+    cli_art.console.print(f"{theme.colorize_icon('discovery')} detect_blank_scores.py — scanning for unscored bullets...", soft_wrap=True)
 
     all_reports = []
     total_unscored = 0
@@ -198,13 +200,14 @@ def main():
         all_reports.append(report)
         total_unscored += report.get("fully_unscored_rows", 0)
 
-    print(f"\n{'='*50}")
-    print(f"Total unscored rows across all files: {total_unscored}")
+    cli_art.console.print()
+    cli_art.console.rule(style="dim")
+    cli_art.cli_info(f"Total unscored rows across all files: {total_unscored}")
 
     if total_unscored == 0:
-        print(f"{theme.colorize_icon_ansi('success')} All bullet bank files are fully scored. Nothing to do.")
+        cli_art.console.print(f"{theme.colorize_icon('success')} All bullet bank files are fully scored. Nothing to do.", soft_wrap=True)
     else:
-        print("🎯 Run: python scripts/score_keeper_gems.py  to fill blank scores.")
+        cli_art.console.print(f"{theme.colorize_icon('evaluate')} Run: python scripts/score_keeper_gems.py  to fill blank scores.", soft_wrap=True)
 
     if args.fix:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -218,7 +221,7 @@ def main():
                 })
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(all_unscored, f, indent=2)
-        print(f"\n📥 Unscored bullets written to: {out_path} ({len(all_unscored)} rows)")
+        cli_art.console.print(f"\n{theme.colorize_icon('save')} Unscored bullets written to: {out_path} ({len(all_unscored)} rows)", soft_wrap=True)
 
 
 if __name__ == "__main__":

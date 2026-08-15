@@ -20,8 +20,14 @@ hard_failures:
   - unsupported_seniority
   - unsupported_role_claim
 
+# Must stay a subset of resume-engine/rules/style_rules.yaml's
+# forbidden_phrases (the actual tested master list -- see
+# tests/test_banned_phrase_consistency.py, which fails the build if this
+# list names a phrase style_rules.yaml doesn't). Kept as its own list here
+# rather than just deferring to style_rules.yaml because this one specifically
+# means "bad Summary opener," a narrower framing than the full forbidden-
+# phrases set.
 buzzword_openers:
-
   - results-driven
   - dynamic professional
   - accomplished professional

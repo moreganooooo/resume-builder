@@ -24,6 +24,7 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
+import cli_art
 
 KB_DIR = profile_paths.kb_dir()
 
@@ -42,13 +43,14 @@ def trim_detective_findings(source_csv: str = SOURCE_CSV) -> list[dict]:
 
 def main():
     if not os.path.exists(SOURCE_CSV):
-        raise SystemExit(f"ERROR: {SOURCE_CSV} not found.")
+        cli_art.cli_error(f"{SOURCE_CSV} not found.")
+        raise SystemExit(1)
     trimmed_rows = trim_detective_findings()
     with atomic_write(OUTPUT_CSV, newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=KEEP_COLUMNS)
         w.writeheader()
         w.writerows(trimmed_rows)
-    print(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)")
+    cli_art.cli_success(f"Wrote {OUTPUT_CSV} ({len(trimmed_rows)} rows)")
 
 
 if __name__ == "__main__":

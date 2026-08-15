@@ -56,6 +56,38 @@ class TestFindJdContacts(unittest.TestCase):
         self.assertEqual({c["name"] for c in contacts}, {"Jen Dudik", "Alex Chen"})
 
 
+class TestResolveContactFallback(unittest.TestCase):
+
+    def test_no_op_when_model_already_found_a_contact(self):
+        letter_data = {"contact_name": "Maggie Smith", "contact_title": "HR Manager"}
+        orchestrator._resolve_contact_fallback(letter_data, {"social_connections": [
+            {"fullName": "Someone Else", "jobTitle": "Recruiter"},
+        ]})
+        self.assertEqual(letter_data["contact_name"], "Maggie Smith")
+
+    def test_fills_from_scraped_contact_with_hr_title(self):
+        letter_data = {"contact_name": "", "contact_title": ""}
+        jd_data = {"social_connections": [
+            {"fullName": "Jen Dudik", "jobTitle": "Director of Engineering"},
+            {"fullName": "Maggie Smith", "jobTitle": "HR Manager"},
+        ]}
+        orchestrator._resolve_contact_fallback(letter_data, jd_data)
+        self.assertEqual(letter_data["contact_name"], "Maggie Smith")
+        self.assertEqual(letter_data["contact_title"], "HR Manager")
+
+    def test_falls_back_to_first_contact_when_no_hr_title_matches(self):
+        letter_data = {"contact_name": "", "contact_title": ""}
+        jd_data = {"social_connections": [{"fullName": "Jen Dudik", "jobTitle": "Director of Engineering"}]}
+        orchestrator._resolve_contact_fallback(letter_data, jd_data)
+        self.assertEqual(letter_data["contact_name"], "Jen Dudik")
+
+    def test_leaves_fields_empty_when_no_contacts_exist(self):
+        letter_data = {"contact_name": "", "contact_title": ""}
+        orchestrator._resolve_contact_fallback(letter_data, {})
+        self.assertEqual(letter_data["contact_name"], "")
+        self.assertEqual(letter_data["contact_title"], "")
+
+
 class TestDraftOutreachMessage(unittest.TestCase):
 
     def setUp(self):

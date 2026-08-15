@@ -23,6 +23,7 @@ import browser_cookie3
 import requests
 from bs4 import BeautifulSoup
 
+import cli_art
 import profile_paths
 from linkedin_jobs_scraper import LinkedinScraper
 from linkedin_jobs_scraper.events import Events, EventData
@@ -49,7 +50,7 @@ def get_li_at_cookie() -> str:
     try:
         cookie_jar = browser_cookie3.chrome(domain_name="linkedin.com")
     except Exception as e:
-        logging.error(f"Could not read Chrome's cookie store: {e}")
+        cli_art.cli_error(f"Could not read Chrome's cookie store: {e}")
         return ""
 
     for cookie in cookie_jar:
@@ -141,7 +142,7 @@ def _build_queries(job_limit: int, search_terms: list) -> list:
     return [_query(text) for text in search_terms]
 
 
-def fetch_linkedin_jobs(limit: int = None) -> list:
+def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     """Runs this profile's saved LinkedIn searches and returns a list of
     job dicts (same shape as job_automater's/JobRight's).
 
@@ -157,7 +158,7 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
         or []
     )
     if not search_terms:
-        logging.error(
+        cli_art.cli_error(
             "No linkedin_search_queries or target_roles.primary configured "
             "in profile.yml -- nothing to search for."
         )
@@ -165,7 +166,7 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
 
     li_at_cookie = get_li_at_cookie()
     if not li_at_cookie:
-        logging.error(
+        cli_art.cli_error(
             "No live li_at cookie found. Log into LinkedIn in Chrome and "
             "keep it open, then retry."
         )
@@ -181,6 +182,16 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
     jobs = []
 
     def on_data(data: EventData):
+        # scraper.run() is one long blocking Selenium session with no
+        # per-query hook in the library's Events enum -- this per-result
+        # line (Events.DATA already fires once per job found) is the only
+        # real signal available during the run, so a multi-query/slow-page
+        # scan doesn't look hung for minutes with only on_error visible.
+        if activity is not None:
+            activity.step("success", "LinkedIn", f"Found {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+        else:
+            cli_art.cli_info(f"Found: {getattr(data, 'title', '?')} at {getattr(data, 'company', '?')}")
+
         apply_link = getattr(data, "apply_link", None)
         linkedin_link = getattr(data, "link", None)
 
@@ -237,7 +248,7 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
         })
 
     def on_error(error):
-        logging.error(f"[LinkedIn ON_ERROR] {error}")
+        cli_art.cli_error(f"[LinkedIn ON_ERROR] {error}")
 
     def on_end():
         logging.info(f"LinkedIn scan finished: {len(jobs)} jobs.")
@@ -253,10 +264,14 @@ def fetch_linkedin_jobs(limit: int = None) -> list:
     scraper.on(Events.ERROR, on_error)
     scraper.on(Events.END, on_end)
 
+    cli_art.cli_info(
+        f"Searching LinkedIn for {len(search_terms)} saved "
+        f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(search_terms)}"
+    )
     try:
         scraper.run(_build_queries(job_limit, search_terms))
     except Exception as e:
-        logging.error(f"LinkedIn scraper run failed: {e}")
+        cli_art.cli_error(f"LinkedIn scraper run failed: {e}")
         on_end()
 
     return jobs

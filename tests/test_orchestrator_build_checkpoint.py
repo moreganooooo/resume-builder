@@ -86,6 +86,20 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self._pdf_exists_patch.start()
         self.addCleanup(self._pdf_exists_patch.stop)
 
+        # research_company() gained a third tier (2026-08-11) that falls back
+        # to the JD's own text, so it now always makes a CompanyResearchSchema
+        # extraction call -- where before, a fixture with no company_website
+        # bailed out before any call. Every generate_side_effect below
+        # dispatches on response_schema and raises on an unexpected one, and
+        # none of these tests are about company research (it has its own
+        # coverage in test_orchestrator_research_company.py). Stub it to the
+        # None these fixtures effectively produced already.
+        self._research_patch = patch.object(
+            orchestrator.ResumeEngine, "research_company", return_value=None
+        )
+        self._research_patch.start()
+        self.addCleanup(self._research_patch.stop)
+
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_for_build.txt")
         with open(self.jd_path, "w", encoding="utf-8") as f:
@@ -718,6 +732,70 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_a_regressing_attempt_does_not_discard_the_best_resume_so_far(
+        self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
+    ):
+        # Each retry re-generates the WHOLE resume, so an attempt can regress
+        # anything despite "change nothing else" -- observed live, an attempt
+        # 2 violations from clean was replaced by one with 11. The loop must
+        # anchor on the best state reached, not the most recent one.
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+        })
+        builder_calls = {"n": 0}
+
+        def _resume(marker):
+            return json.dumps({
+                "SUMMARY_TEXT": f"<strong>{marker}</strong>",
+                "SKILLS": [], "EXPERIENCE": [], "WHY_TEXT": "",
+                "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+            }), {}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            if schema is orchestrator.TemplateSchema:
+                builder_calls["n"] += 1
+                return _resume(["initial", "NEARLY CLEAN", "regressed"][min(builder_calls["n"] - 1, 2)])
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        # 3 violations initially, 1 after the good attempt, 9 after the bad one.
+        counts = iter([3, 1, 9, 9, 9, 9])
+
+        def validate_side_effect(resume_data, rules, role_roster=None, role_bullet_minimums=None):
+            return [f"v{i}" for i in range(next(counts))]
+
+        mock_generate.side_effect = generate_side_effect
+        mock_validate.side_effect = validate_side_effect
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr="")
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            self.engine.build_tailored_resume(
+                jd_path=self.jd_path, master_resume={},
+                output_filename=self.output_filename, job_key=self.job_key,
+            )
+
+        # Builder calls: 1 initial, then one per retry. Call 3 produces the
+        # regression, so call 4 is the first prompt that can differ: it must
+        # be handed the 1-violation resume to fix, not the 9-violation one.
+        builder_prompts = [c.kwargs["contents"] for c in mock_generate.call_args_list
+                           if c.kwargs.get("response_schema") is orchestrator.TemplateSchema]
+        self.assertGreaterEqual(len(builder_prompts), 4)
+        self.assertIn("NEARLY CLEAN", builder_prompts[3])
+        self.assertNotIn("regressed", builder_prompts[3])
+
+    @patch("orchestrator.validate_resume.validate")
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_validator_retry_exhaustion_returns_falsy(
         self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
     ):
@@ -878,6 +956,65 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_why_drop_is_deterministic_and_cannot_be_discarded_by_a_violation(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        """Regression test: the Why-drop trim step used to go through the
+        LLM, so a violation anywhere in that response (even one unrelated to
+        Why) discarded the whole attempt and Why stuck around forever (see
+        the resume-builder memory note on the trim loop never converging).
+        Blanking SECTION_WHY/WHY_TEXT is now a deterministic pre-step, so it
+        never needs a Gemini call and can't be discarded by the validator."""
+        seeded_resume_data = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer with 8 years in CRM.</strong>",
+            "SKILLS": [], "EXPERIENCE": [], "SECTION_WHY": "Why Acme?", "WHY_TEXT": "Because reasons.",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist", "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+        }
+        jd_manager.save_checkpoint(self.job_key, {
+            "jd_keywords": {"hard_skills": ["python"]},
+            "bullet_tuples": [["Shipped a widget platform used by 10k users.", "Acme", "eng"]],
+            "resume_data": seeded_resume_data,
+        })
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (json.dumps({
+                    "summary_alignment_score": 90, "skills_relevance_score": 90,
+                    "overall_fit_score": 90, "top_third_score": 90, "flags": [], "recommendations": [],
+                }), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema} -- the Why-drop "
+                                  "step must never call the builder LLM")
+
+        mock_generate.side_effect = generate_side_effect
+        pdf_call_count = {"n": 0}
+
+        def subprocess_side_effect(*args, **kwargs):
+            pdf_call_count["n"] += 1
+            pages = 3 if pdf_call_count["n"] == 1 else 2
+            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+
+        mock_subprocess_run.side_effect = subprocess_side_effect
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(result["SECTION_WHY"], "")
+        self.assertEqual(result["WHY_TEXT"], "")
+        self.assertEqual(pdf_call_count["n"], 2)  # 1 over-length render + 1 Why-dropped re-render
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_page_count_trim_loop_exhausts_and_returns_empty(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):
@@ -923,8 +1060,11 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertEqual(result, {})
-        # 1 initial render + 4 trim attempts (max_trim_attempts == len(trim_instructions) == 4).
-        self.assertEqual(mock_subprocess_run.call_count, 5)
+        # 1 initial render + 3 LLM trim attempts (max_trim_attempts == len(trim_instructions) == 3).
+        # The free Why-drop pre-step doesn't cost a render here since WHY_TEXT
+        # is already blank in always_long_resume, so it's skipped without a
+        # PDF re-check.
+        self.assertEqual(mock_subprocess_run.call_count, 4)
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")
@@ -983,7 +1123,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         # Trim attempts exhausted (page count never drops below 3), so the
         # contract is to return {} gracefully -- not raise, not return partial data.
         self.assertEqual(result, {})
-        self.assertEqual(mock_subprocess_run.call_count, 5)  # 1 initial + 4 trim attempts
+        self.assertEqual(mock_subprocess_run.call_count, 4)  # 1 initial + 3 LLM trim attempts
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")

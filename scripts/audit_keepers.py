@@ -113,6 +113,7 @@ from datetime import datetime
 
 import pandas as pd
 
+import cli_art
 import theme
 
 # ---------------------------------------------------------------------------
@@ -288,8 +289,14 @@ def _read_cluster_ids_from_file(path: str, col: str = "source_cluster_id") -> se
                     ids.add(int(float(sv)))
                 except (ValueError, TypeError):
                     pass
-    except Exception:
-        pass
+    except Exception as e:
+        # A malformed/corrupted file here previously degraded silently to
+        # "no data present," with zero console output, in a script that's
+        # otherwise extremely communicative via cli_art throughout every
+        # stage. os.path.exists() above already handles the ordinary "file
+        # doesn't exist yet" case without warning; this except is a real
+        # read/parse failure on a file that does exist.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return ids
 
 
@@ -300,8 +307,10 @@ def _read_bullets_from_file(path: str) -> set:
     try:
         df = pd.read_csv(path, usecols=["Bullet Point"])
         bullets.update(df["Bullet Point"].dropna().str.strip().tolist())
-    except Exception:
-        pass
+    except Exception as e:
+        # See _read_cluster_ids_from_file's matching comment -- a real
+        # read/parse failure here shouldn't degrade silently.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return bullets
 
 
@@ -325,8 +334,10 @@ def _read_cluster_id_map_from_file(path: str) -> dict:
                     mapping[bp] = str(int(float(sv)))
                 except (ValueError, TypeError):
                     mapping[bp] = sv
-    except Exception:
-        pass
+    except Exception as e:
+        # See _read_cluster_ids_from_file's matching comment -- a real
+        # read/parse failure here shouldn't degrade silently.
+        cli_art.cli_warning(f"Couldn't read {path}, treating as empty: {e}")
     return mapping
 
 
@@ -475,7 +486,10 @@ def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
 
     try:
         df_prior = pd.read_csv(KEEPERS_AUDITED)
-    except Exception:
+    except Exception as e:
+        cli_art.friendly_warning(
+            e, "loading your earlier audit progress",
+            "starting this audit from the beginning instead")
         return df_keepers
 
     if "Bullet Point" not in df_prior.columns or "audit_status" not in df_prior.columns:
@@ -500,7 +514,7 @@ def _merge_prior_audited_progress(df_keepers: pd.DataFrame) -> pd.DataFrame:
             restored += 1
 
     if restored:
-        print(f"   {theme.colorize_icon_ansi('resume')}  Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
+        cli_art.cli_info(f"Restored {restored} already-scored row(s) from a prior keepers-audited.csv run.")
 
     return df_keepers
 
@@ -528,9 +542,8 @@ def stage1_audit_keepers(
     backfill_cluster_ids.py are never lost when this function is called
     from a fresh keepers.csv that lacks the column.
     """
-    print("\n" + "─" * 60)
-    print("STAGE 1 — Audit Keepers")
-    print("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 1 — Audit Keepers", style="dim")
 
     if "audit_status" not in df_keepers.columns:
         df_keepers["audit_status"] = ""
@@ -548,7 +561,7 @@ def stage1_audit_keepers(
     if using_audited_source:
         already_clean_mask = df_keepers["audit_status"].str.strip().str.upper() == "CLEAN"
         needs_score_mask = ~already_clean_mask
-        print(f"   ⚡ Loading from keepers-audited.csv: trusting existing CLEAN rows.")
+        cli_art.cli_info(f"{theme.colorize_icon('discovery')} Loading from keepers-audited.csv: trusting existing CLEAN rows.")
     else:
         needs_score_mask = df_keepers.apply(
             lambda r: not _has_scores(r) or str(r.get("manager_test", "")).strip().upper() != "PASS",
@@ -559,17 +572,17 @@ def stage1_audit_keepers(
     to_score = df_keepers[needs_score_mask]
     already_clean = df_keepers[already_clean_mask]
 
-    print(f"   Total keepers:         {len(df_keepers)}")
-    print(f"   Already CLEAN (PASS):  {len(already_clean)}")
-    print(f"   Need scoring/review:   {len(to_score)}")
+    cli_art.cli_info(f"   Total keepers:         {len(df_keepers)}")
+    cli_art.cli_info(f"   Already CLEAN (PASS):  {len(already_clean)}")
+    cli_art.cli_info(f"   Need scoring/review:   {len(to_score)}")
 
     # Mark already-clean rows immediately
     df_keepers.loc[already_clean_mask, "audit_status"] = "CLEAN"
 
     if to_score.empty:
-        print(f"   {theme.colorize_icon_ansi('success')} All keepers already clean — no scoring needed.")
+        cli_art.cli_success("All keepers already clean — no scoring needed.")
     elif skip_rescore:
-        print("   ⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
+        cli_art.cli_info("⏭️  --skip-rescore set: classifying with existing scores, no API calls.")
         for idx in to_score.index:
             df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])
     else:
@@ -579,7 +592,8 @@ def stage1_audit_keepers(
             bullet = str(row.get("Bullet Point", "")).strip()
             tags   = str(row.get("Tags", ""))
             role_company = str(row.get("Role / Company", ""))
-            print(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
+            
+            cli_art.cli_info(f"\n   [{i}/{total}] Scoring: {bullet[:70]}...")
 
             scores = score_bullet(bullet, tags, score_system, role_company=role_company, dry_run=dry_run)
 
@@ -593,20 +607,14 @@ def stage1_audit_keepers(
 
             status = df_keepers.loc[idx, "audit_status"]
             mgr    = str(scores.get("manager_test", "")).upper()
-            print(
-                f"   → status={status}  mgr={mgr}  "
-                f"acc={scores.get('accuracy_score')}  "
-                f"bel={scores.get('believability_score')}  "
-                f"cla={scores.get('clarity_score')}  "
-                f"ats={scores.get('ats_value')}"
-            )
+            cli_art.cli_info(f"   → status={status}  mgr={mgr}  acc={scores.get('accuracy_score')}  bel={scores.get('believability_score')}  cla={scores.get('clarity_score')}  ats={scores.get('ats_value')}")
 
             bullets_since_flush += 1
             is_last = (i == total)
             if bullets_since_flush >= AUDIT_FLUSH_EVERY or is_last:
                 df_keepers.to_csv(KEEPERS_AUDITED, index=False)
                 bullets_since_flush = 0
-                print(f"   {theme.colorize_icon_ansi('save')} Flushed audited keepers ({i}/{total} scored so far).")
+                cli_art.cli_success(f"Flushed audited keepers ({i}/{total} scored so far).")
 
             if i < total:
                 time.sleep(SLEEP_BETWEEN_BULLETS)
@@ -614,7 +622,7 @@ def stage1_audit_keepers(
         n_clean   = (df_keepers["audit_status"] == "CLEAN").sum()
         n_rewrite = (df_keepers["audit_status"] == "NEEDS_REWRITE").sum()
         n_manual  = (df_keepers["audit_status"] == "MANUAL").sum()
-        print(f"\n   Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
+        cli_art.cli_info(f"Stage 1 complete → CLEAN: {n_clean} | NEEDS_REWRITE: {n_rewrite} | MANUAL: {n_manual}")
 
     # ------------------------------------------------------------------
     # Restore source_cluster_id from the startup snapshot.
@@ -639,7 +647,7 @@ def stage1_audit_keepers(
                 df_keepers.loc[idx, "source_cluster_id"] = stamped
                 restored += 1
         if restored:
-            print(f"   {theme.colorize_icon_ansi('resume')} Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
+            cli_art.cli_info(f"Restored {restored} source_cluster_id value(s) from pre-Stage-1 snapshot.")
 
     return df_keepers
 
@@ -659,19 +667,18 @@ def stage2_diff_cluster_map(
     not match any row in the cluster map verbatim. They are counted silently
     and shown only as a summary line at the end.
     """
-    print("\n" + "─" * 60)
-    print("STAGE 2 — Diff Against Cluster Map")
-    print("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 2 — Diff Against Cluster Map", style="dim")
 
     # Prefer updated map; fall back to original
     if os.path.exists(CLUSTER_MAP_UPDATED):
         map_path = CLUSTER_MAP_UPDATED
-        print(f"   Using updated cluster map: {os.path.basename(map_path)}")
+        cli_art.cli_info(f"Using updated cluster map: {os.path.basename(map_path)}")
     elif os.path.exists(CLUSTER_MAP_IN):
         map_path = CLUSTER_MAP_IN
-        print(f"   {theme.colorize_icon_ansi('warning')}  Updated map not found — falling back to: {os.path.basename(map_path)}")
+        cli_art.cli_warning(f"Updated map not found — falling back to: {os.path.basename(map_path)}")
     else:
-        print(f"   {theme.colorize_icon_ansi('warning')}  No cluster map found — skipping Stage 2.")
+        cli_art.cli_warning("No cluster map found — skipping Stage 2.")
         return pd.DataFrame()
 
     df_map = pd.read_csv(map_path)
@@ -714,18 +721,18 @@ def stage2_diff_cluster_map(
             n_not_found += 1
 
     df_disc = pd.DataFrame(discrepancies)
-    print(f"   Keepers checked:          {len(df_keepers)}")
-    print(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites ✓)")
-    print(f"   Actionable discrepancies: {len(df_disc)}")
+    cli_art.cli_info(f"   Keepers checked:          {len(df_keepers)}")
+    cli_art.cli_info(f"   Not found in cluster map: {n_not_found}  (expected — these are rewrites {theme.colorize_icon('success')})")
+    cli_art.cli_info(f"   Actionable discrepancies: {len(df_disc)}")
 
     if not df_disc.empty:
         df_disc.to_csv(DISCREPANCIES_OUT, index=False)
-        print(f"   {theme.colorize_icon_ansi('save')} Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
-        print("   Entries (MANUAL in cluster map, CLEAN in keepers):")
+        cli_art.cli_success(f"Discrepancies written → {os.path.basename(DISCREPANCIES_OUT)}")
+        cli_art.cli_info("   Entries (MANUAL in cluster map, CLEAN in keepers):")
         for _, d in df_disc.iterrows():
-            print(f"      {theme.colorize_icon_ansi('warning')}  [{d['map_status']}] {str(d['Bullet Point'])[:70]}")
+            cli_art.cli_warning(f"[{d['map_status']}] {str(d['Bullet Point'])[:70]}")
     else:
-        print(f"   {theme.colorize_icon_ansi('success')} No actionable discrepancies — keepers and cluster map are in sync.")
+        cli_art.cli_success("No actionable discrepancies — keepers and cluster map are in sync.")
 
     return df_disc
 
@@ -766,9 +773,8 @@ def stage3_build_rewrite_queue(
 
     Sorted by composite score ascending (worst first).
     """
-    print("\n" + "─" * 60)
-    print("STAGE 3 — Triage Queue")
-    print("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 3 — Triage Queue", style="dim")
 
     queue_rows = []
 
@@ -801,12 +807,11 @@ def stage3_build_rewrite_queue(
             ].copy()
             excluded_a = before_a - len(df_keeper_bad)
             if excluded_a:
-                print(f"   Excluded {excluded_a} already-attempted MANUAL bullet(s) from keeper audit "
-                      f"(pass --retry-manual to include them again)")
+                cli_art.cli_info(f"Excluded {excluded_a} already-attempted MANUAL bullet(s) from keeper audit (pass --retry-manual to include them again)")
 
     df_keeper_bad["queue_source"] = "keeper_audit"
     queue_rows.append(df_keeper_bad)
-    print(f"   From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
+    cli_art.cli_info(f"From keeper audit (NEEDS_REWRITE + MANUAL): {len(df_keeper_bad)}")
 
     # Source B: MANUAL bullets in cluster map not already processed.
     # SKIPPED when using_audited_source is True — the audited file is the
@@ -814,8 +819,8 @@ def stage3_build_rewrite_queue(
     # the queue back to the full original size (exactly the problem
     # we're fixing).
     if using_audited_source:
-        print("   Source B (cluster-map MANUAL): SKIPPED — loading from keepers-audited.csv.")
-        print("   Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.")
+        cli_art.cli_info("Source B (cluster-map MANUAL): SKIPPED -- loading from keepers-audited.csv.")
+        cli_art.detail("Only retrying MANUAL/NEEDS_REWRITE rows from keepers-audited.csv.", level=cli_art.NORMAL)
     else:
         map_path = CLUSTER_MAP_UPDATED if os.path.exists(CLUSTER_MAP_UPDATED) else CLUSTER_MAP_IN
         if os.path.exists(map_path):
@@ -858,7 +863,7 @@ def stage3_build_rewrite_queue(
             excluded = before - len(df_map_manual)
             if excluded:
                 suffix = "" if retry_manual else " (pass --retry-manual to include previously-failed clusters again)"
-                print(f"   Excluded {excluded} already-processed bullets (kept, or previously MANUAL){suffix}")
+                cli_art.cli_info(f"Excluded {excluded} already-processed bullets (kept, or previously MANUAL){suffix}")
 
             # Carry over scores if present in the cluster map
             for col in SCORE_COLS:
@@ -867,9 +872,9 @@ def stage3_build_rewrite_queue(
 
             df_map_manual["queue_source"] = "cluster_map_manual"
             queue_rows.append(df_map_manual)
-            print(f"   From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
+            cli_art.cli_info(f"From cluster map MANUAL (not in keepers): {len(df_map_manual)}")
         else:
-            print(f"   {theme.colorize_icon_ansi('warning')}  Cluster map not found — skipping cluster-map MANUAL source.")
+            cli_art.console.print(f"   {theme.colorize_icon('warning')}  Cluster map not found — skipping cluster-map MANUAL source.", soft_wrap=True)
 
     # ------------------------------------------------------------------
     # ALWAYS overwrite the queue file — even when empty.
@@ -882,8 +887,8 @@ def stage3_build_rewrite_queue(
     )
 
     if not queue_rows or all(df.empty for df in queue_rows):
-        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to rewrite!")
-        print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
+        cli_art.console.print(f"   {theme.colorize_icon('success')} Queue is empty — nothing to rewrite!", soft_wrap=True)
+        cli_art.console.print(f"   {theme.colorize_icon('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)", soft_wrap=True)
         return pd.DataFrame()
 
     df_queue = pd.concat(queue_rows, ignore_index=True)
@@ -891,11 +896,11 @@ def stage3_build_rewrite_queue(
     # Deduplicate on bullet text
     before_dedup = len(df_queue)
     df_queue = df_queue.drop_duplicates(subset=["Bullet Point"], keep="first").copy()
-    print(f"   Deduplicated: {before_dedup} → {len(df_queue)} unique bullets")
+    cli_art.cli_info(f"Deduplicated: {before_dedup} -> {len(df_queue)} unique bullets")
 
     if df_queue.empty:
-        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to rewrite!")
-        print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)")
+        cli_art.console.print(f"   {theme.colorize_icon('success')} Queue is empty — nothing to rewrite!", soft_wrap=True)
+        cli_art.console.print(f"   {theme.colorize_icon('save')} Rewrite queue cleared → {os.path.basename(REWRITE_QUEUE_OUT)} (0 rows)", soft_wrap=True)
         return pd.DataFrame()
 
     # Rank worst-first by composite score
@@ -904,18 +909,20 @@ def stage3_build_rewrite_queue(
     df_queue["queue_rank"] = df_queue.index + 1
 
     df_queue.to_csv(REWRITE_QUEUE_OUT, index=False)
-    print(f"   {theme.colorize_icon_ansi('save')} Rewrite queue written ({len(df_queue)} bullets) → {os.path.basename(REWRITE_QUEUE_OUT)}")
-    print(f"   Lowest composite: {df_queue['composite_score'].min():.0f}  "
-          f"Highest: {df_queue['composite_score'].max():.0f}")
+    cli_art.console.print(f"   {theme.colorize_icon('save')} Rewrite queue written ({len(df_queue)} bullets) → {os.path.basename(REWRITE_QUEUE_OUT)}", soft_wrap=True)
+    cli_art.cli_info(f"Lowest composite: {df_queue['composite_score'].min():.0f}  Highest: {df_queue['composite_score'].max():.0f}")
 
     # Print top 10 worst for easy triage
-    print("\n   Top 10 worst (will be rewritten first if --auto-rewrite):")
+    rows = []
     for _, row in df_queue.head(10).iterrows():
-        bp  = str(row.get("Bullet Point", ""))[:65]
-        src = row.get("queue_source", "")
-        cmp = row.get("composite_score", 0)
-        mgr = str(row.get("manager_test", "")).upper()
-        print(f"      #{int(row['queue_rank']):>3}  [{src:<20}]  cmp={cmp:>5.0f}  mgr={mgr:<4}  {bp}...")
+        rows.append({
+            "rank": int(row["queue_rank"]),
+            "source": row.get("queue_source", ""),
+            "composite": row.get("composite_score", 0),
+            "manager_test": str(row.get("manager_test", "")).upper(),
+            "bullet": str(row.get("Bullet Point", ""))[:65],
+        })
+    cli_art.render_rewrite_queue_table(rows, "Top 10 Worst (will be rewritten first if --auto-rewrite)")
 
     return df_queue
 
@@ -957,18 +964,17 @@ def stage4_auto_rewrite(
     Records source_cluster_id on each saved keeper row so that Stage 3 can
     exclude that cluster on the next run by ID rather than by bullet text.
     """
-    print("\n" + "─" * 60)
-    print("STAGE 4 — Auto-Rewrite")
-    print("─" * 60)
+    cli_art.console.print()
+    cli_art.console.rule("STAGE 4 — Auto-Rewrite", style="dim")
 
     if df_queue.empty:
-        print(f"   {theme.colorize_icon_ansi('success')} Queue is empty — nothing to auto-rewrite.")
+        cli_art.console.print(f"   {theme.colorize_icon('success')} Queue is empty — nothing to auto-rewrite.", soft_wrap=True)
         return df_keepers
 
     df_run = df_queue.copy()
     if limit:
         df_run = df_run.head(limit)
-        print(f"   --limit set: processing {limit} of {len(df_queue)} queued bullets.")
+        cli_art.cli_info(f"--limit set: processing {limit} of {len(df_queue)} queued bullets.")
 
     total  = len(df_run)
     n_keep = 0
@@ -977,10 +983,9 @@ def stage4_auto_rewrite(
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         original_bullet_text = str(row.get("Bullet Point", "")).strip()
         bullet_preview = original_bullet_text[:60]
-        print(f"\n{chr(9472) * 60}")
-        print(f"[{i}/{total}] {bullet_preview}...")
-        print(f"   Source: {row.get('queue_source', '')}  "
-              f"Composite: {row.get('composite_score', '?')}")
+        cli_art.console.rule(style="dim")
+        cli_art.cli_info(f"[{i}/{total}] {bullet_preview}...")
+        cli_art.detail(f"Source: {row.get('queue_source', '')}  Composite: {row.get('composite_score', '?')}", level=cli_art.NORMAL)
 
         result = process_bullet(
             row=row,
@@ -1048,8 +1053,8 @@ def stage4_auto_rewrite(
                 "weaknesses":        result.get("weaknesses", ""),
             }
             df_keepers = append_keeper(df_keepers, keeper_row, KEEPERS_AUDITED)
-            print(f"   {theme.colorize_icon_ansi('success')} KEEPER saved (source_cluster_id={source_cluster_id})."
-                  f"{f' Removed {n_superseded} superseded duplicate row(s).' if n_superseded else ''}")
+            cli_art.console.print(f"   {theme.colorize_icon('success')} KEEPER saved (source_cluster_id={source_cluster_id})."
+                  f"{f' Removed {n_superseded} superseded duplicate row(s).' if n_superseded else ''}", soft_wrap=True)
         else:
             n_manual += 1
             _record_manual_attempt(
@@ -1064,14 +1069,14 @@ def stage4_auto_rewrite(
             # future interrupted-run resumability) needs its own save
             # here rather than waiting for main()'s final save.
             df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-            print(f"   🔧 MANUAL — best version retained, not added to keepers. "
+            cli_art.console.print(f"   {theme.colorize_icon('utility')} MANUAL — best version retained, not added to keepers. "
                   f"Recorded (cluster_id={source_cluster_id}) so it won't retry every run."
-                  f"{f' Removed {n_superseded} stale duplicate row(s).' if n_superseded else ''}")
+                  f"{f' Removed {n_superseded} stale duplicate row(s).' if n_superseded else ''}", soft_wrap=True)
 
         if i < total:
             time.sleep(SLEEP_BETWEEN_BULLETS)
 
-    print(f"\n   Stage 4 complete → KEEP: {n_keep} | MANUAL: {n_manual}")
+    cli_art.cli_success(f"Stage 4 complete -> KEEP: {n_keep} | MANUAL: {n_manual}")
     return df_keepers
 
 
@@ -1109,30 +1114,25 @@ def main():
     )
     args = parser.parse_args()
 
-    print("\n" + "#" * 60)
-    print("  audit_keepers.py  —  Keeper Audit Pipeline")
-    print("#" * 60)
-    print(f"  dry_run:             {args.dry_run}")
-    print(f"  skip_rescore:        {args.skip_rescore}")
-    print(f"  auto_rewrite:        {args.auto_rewrite}")
-    print(f"  rebuild_from_keepers: {args.rebuild_from_keepers}")
-    print(f"  retry_manual:        {args.retry_manual}")
-    print(f"  limit:               {args.limit}")
+    cli_art.console.rule(f"[bold {theme.BRAND}]audit_keepers.py -- Keeper Audit Pipeline[/bold {theme.BRAND}]", style="dim")
+    cli_art.detail(f"dry_run: {args.dry_run}  skip_rescore: {args.skip_rescore}  auto_rewrite: {args.auto_rewrite}  "
+                   f"rebuild_from_keepers: {args.rebuild_from_keepers}  retry_manual: {args.retry_manual}  limit: {args.limit}",
+                   level=cli_art.VERBOSE)
 
     # --- Resolve source file ---
     source_file = resolve_source_file(args.rebuild_from_keepers, KEEPERS_IN, KEEPERS_AUDITED)
     if source_file == KEEPERS_AUDITED:
-        print(f"\n   ⚡ Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).")
-        print(   "      CLEAN rows will be skipped; cluster-map Source B skipped entirely.")
+        cli_art.console.print(f"\n   {theme.colorize_icon('discovery')} Loading from {os.path.basename(KEEPERS_AUDITED)} (default -- preserves manual corrections).", soft_wrap=True)
+        cli_art.detail("CLEAN rows will be skipped; cluster-map Source B skipped entirely.", level=cli_art.NORMAL)
     elif args.rebuild_from_keepers:
-        print(f"\n   {theme.colorize_icon_ansi('warning')}  --rebuild-from-keepers: loading fresh from "
+        cli_art.console.print(f"\n   {theme.colorize_icon('warning')}  --rebuild-from-keepers: loading fresh from "
               f"{os.path.basename(KEEPERS_IN)}, discarding any correction only present in "
-              f"{os.path.basename(KEEPERS_AUDITED)}.")
+              f"{os.path.basename(KEEPERS_AUDITED)}.", soft_wrap=True)
 
     using_audited_source = source_file == KEEPERS_AUDITED
 
     if not os.path.exists(source_file):
-        print(f"\n{theme.colorize_icon_ansi('error')}  {source_file} not found. Run rewrite_bullets.py first.")
+        cli_art.console.print(f"\n{theme.colorize_icon('error')}  {source_file} not found. Run rewrite_bullets.py first.", soft_wrap=True)
         sys.exit(1)
 
     df_keepers = pd.read_csv(source_file)
@@ -1146,8 +1146,8 @@ def main():
     if using_audited_source and os.path.exists(KEEPERS_IN):
         df_keepers, n_new = merge_new_rows_from_keepers_in(df_keepers, pd.read_csv(KEEPERS_IN))
         if n_new:
-            print(f"   {theme.colorize_icon_ansi('hint')} Picked up {n_new} new row(s) from "
-                  f"{os.path.basename(KEEPERS_IN)} not yet in {os.path.basename(KEEPERS_AUDITED)}.")
+            cli_art.console.print(f"   {theme.colorize_icon('hint')} Picked up {n_new} new row(s) from "
+                  f"{os.path.basename(KEEPERS_IN)} not yet in {os.path.basename(KEEPERS_AUDITED)}.", soft_wrap=True)
 
     df_keepers = ensure_writable_dtypes(df_keepers)
 
@@ -1156,9 +1156,9 @@ def main():
         if col not in df_keepers.columns:
             df_keepers[col] = ""
 
-    print(f"\n   📂 Loaded keepers: {len(df_keepers)} rows from {os.path.basename(source_file)}")
-    print(f"   📌 Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
-          f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed")
+    cli_art.console.print(f"\n   {theme.colorize_icon('bullet_bank')} Loaded keepers: {len(df_keepers)} rows from {os.path.basename(source_file)}", soft_wrap=True)
+    cli_art.console.print(f"   {theme.colorize_icon('hint')} Startup snapshot: {len(_STARTUP_DONE_IDS)} cluster IDs "
+          f"| {len(_STARTUP_DONE_BULLETS)} bullet texts already processed", soft_wrap=True)
 
     # --- Load rules + KB only when scoring is needed ---
     rules = kb = rewrite_system = rewrite_system_gemma = score_system = None
@@ -1189,7 +1189,7 @@ def main():
     # source_cluster_id values are already restored inside stage1_audit_keepers()
     # from _STARTUP_CLUSTER_ID_MAP, so this write preserves them correctly.
     df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-    print(f"\n   {theme.colorize_icon_ansi('save')} Audited keepers → {os.path.basename(KEEPERS_AUDITED)}")
+    cli_art.console.print(f"\n   {theme.colorize_icon('save')} Audited keepers → {os.path.basename(KEEPERS_AUDITED)}", soft_wrap=True)
 
     # ── Stage 2 ───────────────────────────────────────────────────────────────
     _df_disc = stage2_diff_cluster_map(df_keepers)
@@ -1201,7 +1201,7 @@ def main():
     # ── Stage 4 (optional) ───────────────────────────────────────────────
     if args.auto_rewrite:
         if df_queue.empty:
-            print("\n   STAGE 4 skipped — queue is empty.")
+            cli_art.cli_info("STAGE 4 skipped -- queue is empty.")
         else:
             # Warm cache again over the queue-specific bullets for best prefix hits
             if kb is not None:
@@ -1218,20 +1218,19 @@ def main():
             )
             # Final save after Stage 4 rewrites are appended
             df_keepers.to_csv(KEEPERS_AUDITED, index=False)
-            print(f"\n   {theme.colorize_icon_ansi('save')} Final audited keepers saved → {os.path.basename(KEEPERS_AUDITED)}")
+            cli_art.console.print(f"\n   {theme.colorize_icon('save')} Final audited keepers saved → {os.path.basename(KEEPERS_AUDITED)}", soft_wrap=True)
     else:
         if not df_queue.empty:
-            print(
-                f"\n   {len(df_queue)} bullets queued. "
-                f"Run with --auto-rewrite to process them."
-            )
+            cli_art.cli_info(f"{len(df_queue)} bullets queued. Run with --auto-rewrite to process them.")
 
-    print("\n" + "─" * 60)
-    print(f"  {theme.colorize_icon_ansi('success')}  audit_keepers.py complete")
-    print(f"     Audited keepers  → {os.path.basename(KEEPERS_AUDITED)}")
-    print(f"     Discrepancies    → {os.path.basename(DISCREPANCIES_OUT)}")
-    print(f"     Rewrite queue    → {os.path.basename(REWRITE_QUEUE_OUT)}")
-    print("─" * 60 + "\n")
+    cli_art.console.print()
+    cli_art.console.rule(style="dim")
+    cli_art.console.print(f"  {theme.colorize_icon('success')}  audit_keepers.py complete", soft_wrap=True)
+    cli_art.cli_success(f"Audited keepers  -> {os.path.basename(KEEPERS_AUDITED)}")
+    cli_art.cli_success(f"Discrepancies    -> {os.path.basename(DISCREPANCIES_OUT)}")
+    cli_art.cli_success(f"Rewrite queue    -> {os.path.basename(REWRITE_QUEUE_OUT)}")
+    cli_art.console.rule(style="dim")
+    cli_art.console.print()
 
 
 if __name__ == "__main__":

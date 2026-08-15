@@ -1,7 +1,12 @@
 """
 sync_dashboard_theme.py -- regenerates dashboard/internal/theme/
 resumebuilder.go's accent-color block from scripts/theme.py's own color
-constants, so the two can never drift apart again (B23/P2F9).
+constants, so the two can never drift apart again (B23/P2F9). Also
+regenerates dashboard/internal/theme/subscore_labels.go from
+cli_art.py's own _FIT_DIMENSION_GROUPS, so the Jobs screen's subscore
+labels (Design critique P1: it was rendering raw snake_case schema keys
+like "functional_alignment" straight from the evaluation JSON) can never
+drift from the CLI's own render_comparison_table() labels either.
 
 Before this, the Go file's six accent hexes were hand-copied from
 theme.py with comments merely *claiming* they matched -- nothing enforced
@@ -10,18 +15,22 @@ silently make those comments lie. doctor.py's check_dashboard_theme_sync()
 detects that drift; this script is how you fix it.
 
 Run this after changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/
-WARNING/BRAND/ERROR constants:
+WARNING/BRAND/ERROR constants, or cli_art.py's _FIT_DIMENSION_GROUPS:
 
     python scripts/sync_dashboard_theme.py
 """
 
 import os
 
+import cli_art
 import theme
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DASHBOARD_THEME_PATH = os.path.join(
     PROJECT_ROOT, "dashboard", "internal", "theme", "resumebuilder.go"
+)
+SUBSCORE_LABELS_PATH = os.path.join(
+    PROJECT_ROOT, "dashboard", "internal", "theme", "subscore_labels.go"
 )
 
 # (Go struct field, theme.py constant name, source token) -- the exact
@@ -33,9 +42,9 @@ _ACCENT_FIELDS = [
     ("Green", "SUCCESS", theme.SUCCESS),
     ("Yellow", "WARNING", theme.WARNING),
     ("Sky", "BRAND", theme.BRAND),
-    ("Peach", "WARNING (reused, see above)", theme.WARNING),
+    ("Peach", "PEACH", theme.PEACH),
     ("Red", "ERROR", theme.ERROR),
-    ("Pink", "BRAND_ACCENT (reused, unused field)", theme.BRAND_ACCENT),
+    ("Pink", "PINK", theme.PINK),
 ]
 
 _HEADER = '''package theme
@@ -51,33 +60,58 @@ import "github.com/charmbracelet/lipgloss"
 // terminal theme is active) and Mocha's neutrals are already tuned for
 // exactly this kind of dark-terminal TUI.
 //
-// resume-builder only has six semantic tokens against this struct's eight
-// accent slots, so two get reused rather than invented:
-//   - Peach reuses WARNING (no distinct 5th "orange" tone exists upstream;
-//     the funnel/score-bucket gradients lose one visually distinct step,
-//     which is an honest trade against inventing an unbranded color).
-//   - Pink reuses BRAND_ACCENT (the field is currently unread by every
-//     screen -- see internal/ui/screens -- so any value is a placeholder
-//     until something actually renders it).
+// Colors are Charmtone (github.com/charmbracelet/x/exp/charmtone), the
+// Charm ecosystem's own branded palette -- six carry semantic meaning on
+// the CLI side too (INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/ERROR); Peach
+// and Pink are dashboard-only decorative accents (theme.py's PEACH/PINK)
+// with no CLI role of their own, added so this struct's 8 Catppuccin-
+// shaped accent slots are 8 actually-distinct colors instead of 6 real
+// ones plus 2 reused placeholders.
 //
 // GENERATED from scripts/theme.py by scripts/sync_dashboard_theme.py --
 // do not hand-edit the accent block below. Re-run that script after
 // changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/WARNING/BRAND/
-// ERROR constants; doctor.py's check_dashboard_theme_sync() flags it if
-// this file ever falls out of sync.
-func newResumeBuilder() Theme {
-\treturn Theme{
-\t\t// Structural neutrals -- Catppuccin Mocha, untouched.
-\t\tBase:    lipgloss.Color("#1e1e2e"),
-\t\tSurface: lipgloss.Color("#313244"),
-\t\tOverlay: lipgloss.Color("#45475a"),
-\t\tText:    lipgloss.Color("#cdd6f4"),
-\t\tSubtext: lipgloss.Color("#a6adc8"),
+// ERROR/PEACH/PINK constants; doctor.py's check_dashboard_theme_sync()
+// flags it if this file ever falls out of sync.
+// newCatppuccinMocha moved to catppuccin.go
 
-\t\t// Accents -- resume-builder's scripts/theme.py tokens.
+func newResumeBuilder() Theme {
+	t := Theme{
+		// Structural neutrals -- Catppuccin Mocha, untouched.
+		Base:    lipgloss.Color("#1e1e2e"),
+		Surface: lipgloss.Color("#313244"),
+		Overlay: lipgloss.Color("#45475a"),
+		Text:    lipgloss.Color("#cdd6f4"),
+		Subtext: lipgloss.Color("#a6adc8"),
+
+		// Accents -- resume-builder's scripts/theme.py tokens. Sky
+		// (#8B75FF, BRAND) clears Base (#1e1e2e) at 4.75:1 -- AA text
+		// contrast, but with little margin -- and fails outright against
+		// Surface (#313244) at 3.64:1. It's currently only ever
+		// composited against Base (progress.go/viewer.go section
+		// titles), which is why this isn't visibly broken today; don't
+		// pair it with Background(Surface) without re-measuring, unlike
+		// catppuccin_latte.go's accents (see that file's own contrast
+		// comment), which were deliberately tuned against the tighter of
+		// the two backgrounds.
 '''
 
-_FOOTER = "\t}\n}\n"
+_FOOTER = """	}
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-
+	// by-default, RESUME_BUILDER_ICONS=unicode-fallback logic this
+	// replaced (was previously hardcoded emoji, identical in all 3
+	// theme constructors, that ignored the env var entirely).
+	t.Icons = NewMenuIcons()
+
+	return t
+}
+"""
 
 
 def build_go_theme_source() -> str:
@@ -88,21 +122,77 @@ def build_go_theme_source() -> str:
     return "".join(lines)
 
 
-def sync() -> bool:
-    """Writes the regenerated file. Returns True if the file's content
+_SUBSCORE_LABELS_HEADER = '''package theme
+
+// SubscoreLabels maps each fit/interview-odds/practical-pursue subscore
+// schema key -- as persisted verbatim in a JD's `_evaluation` JSON (see
+// jd_manager.save_evaluation) -- to the human-readable label a job seeker
+// should see. Without this, the Jobs screen's subscore line rendered raw
+// snake_case schema keys (e.g. "functional_alignment: 4") straight from
+// the evaluation JSON, which is internal-jargon leakage the same class of
+// bug this project's own CLI never allows onto the screen.
+//
+// Ported from scripts/cli_art.py's _FIT_DIMENSION_GROUPS, the CLI's own
+// source of truth for these labels (render_comparison_table's grouped
+// subscore table) -- flattened into one map since formatSubscores()
+// (internal/ui/screens/jobs.go) renders one dict at a time with no need
+// for _FIT_DIMENSION_GROUPS's own layer grouping, and every key across
+// all three layers is already unique.
+//
+// GENERATED from scripts/cli_art.py by scripts/sync_dashboard_theme.py --
+// do not hand-edit. Re-run that script after changing
+// _FIT_DIMENSION_GROUPS.
+var SubscoreLabels = map[string]string{
+'''
+
+_SUBSCORE_LABELS_FOOTER = "}\n"
+
+
+def _flat_subscore_labels() -> dict:
+    """Flattens cli_art._FIT_DIMENSION_GROUPS's (layer_label, dict_key,
+    {schema_key: display_label}) triples into one schema_key -> display_label
+    map -- see _SUBSCORE_LABELS_HEADER for why the layer grouping itself
+    doesn't need to survive into the generated Go map."""
+    flat = {}
+    for _layer_label, _dict_key, mapping in cli_art._FIT_DIMENSION_GROUPS:
+        flat.update(mapping)
+    return flat
+
+
+def build_subscore_labels_source() -> str:
+    flat = _flat_subscore_labels()
+    lines = [_SUBSCORE_LABELS_HEADER]
+    for key in sorted(flat):
+        lines.append(f'\t"{key}": "{flat[key]}",\n')
+    lines.append(_SUBSCORE_LABELS_FOOTER)
+    return "".join(lines)
+
+
+def _write_if_changed(path: str, new_source: str) -> bool:
+    """Writes new_source to path. Returns True if the file's content
     actually changed (worth mentioning), False if it was already in sync."""
-    new_source = build_go_theme_source()
     old_source = None
-    if os.path.exists(DASHBOARD_THEME_PATH):
-        with open(DASHBOARD_THEME_PATH, "r", encoding="utf-8") as f:
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
             old_source = f.read()
     if old_source == new_source:
         return False
-    with open(DASHBOARD_THEME_PATH, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(new_source)
     return True
 
 
+def sync() -> bool:
+    """Writes both regenerated files. Returns True if either file's
+    content actually changed (worth mentioning), False if both were
+    already in sync."""
+    theme_changed = _write_if_changed(DASHBOARD_THEME_PATH, build_go_theme_source())
+    labels_changed = _write_if_changed(SUBSCORE_LABELS_PATH, build_subscore_labels_source())
+    return theme_changed or labels_changed
+
+
 if __name__ == "__main__":
-    changed = sync()
-    print(f"{DASHBOARD_THEME_PATH}: {'updated' if changed else 'already in sync'}")
+    theme_changed = _write_if_changed(DASHBOARD_THEME_PATH, build_go_theme_source())
+    labels_changed = _write_if_changed(SUBSCORE_LABELS_PATH, build_subscore_labels_source())
+    cli_art.print_literal(f"{cli_art._escape_markup(DASHBOARD_THEME_PATH)}: {'updated' if theme_changed else 'already in sync'}")
+    cli_art.print_literal(f"{cli_art._escape_markup(SUBSCORE_LABELS_PATH)}: {'updated' if labels_changed else 'already in sync'}")

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestParseApplicationsUsesTrackerNumberColumn(t *testing.T) {
@@ -93,5 +94,52 @@ func TestParseApplicationsResolvesTrackerRelativeReportLinks(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(tempDir, app.ReportPath)); err != nil {
 			t.Fatalf("row %d: resolved report path %q does not exist: %v", i, app.ReportPath, err)
 		}
+	}
+}
+
+func TestLoadReportSummaryCachesUntilFileChanges(t *testing.T) {
+	tempDir := t.TempDir()
+	reportPath := "report.md"
+	fullPath := filepath.Join(tempDir, reportPath)
+
+	if err := os.WriteFile(fullPath, []byte("**TL;DR** | first version\n"), 0o644); err != nil {
+		t.Fatalf("failed to write report: %v", err)
+	}
+
+	_, tldr, _, _ := LoadReportSummary(tempDir, reportPath)
+	if tldr != "first version" {
+		t.Fatalf("expected first read to see %q, got %q", "first version", tldr)
+	}
+
+	// Rewrite with different content but the same mtime (simulating two
+	// reads landing in the same second, the case a cache keyed only on
+	// mtime -- not content hash -- can't distinguish) -- the cache should
+	// still serve the first read's value rather than silently going stale
+	// on every call within the same mtime.
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		t.Fatalf("failed to stat report: %v", err)
+	}
+	if err := os.WriteFile(fullPath, []byte("**TL;DR** | second version\n"), 0o644); err != nil {
+		t.Fatalf("failed to rewrite report: %v", err)
+	}
+	if err := os.Chtimes(fullPath, stat.ModTime(), stat.ModTime()); err != nil {
+		t.Fatalf("failed to pin mtime: %v", err)
+	}
+
+	_, tldr, _, _ = LoadReportSummary(tempDir, reportPath)
+	if tldr != "first version" {
+		t.Fatalf("expected cache hit to still return %q, got %q", "first version", tldr)
+	}
+
+	// A real mtime change must invalidate the cache.
+	newModTime := stat.ModTime().Add(2 * time.Second)
+	if err := os.Chtimes(fullPath, newModTime, newModTime); err != nil {
+		t.Fatalf("failed to bump mtime: %v", err)
+	}
+
+	_, tldr, _, _ = LoadReportSummary(tempDir, reportPath)
+	if tldr != "second version" {
+		t.Fatalf("expected mtime change to invalidate cache and return %q, got %q", "second version", tldr)
 	}
 }

@@ -173,6 +173,7 @@ import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
 import bootstrap_timeline  # noqa: E402
 import tag_bullet_bank  # noqa: E402
+import cli_art
 import theme  # noqa: E402
 
 DRAFT_CSV_FIELDS = ["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"]
@@ -194,15 +195,14 @@ def _save_checkpoint(state: dict) -> None:
 def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
     kind = bootstrap_extractors.detect_file_kind(path)
     if kind == "unsupported":
-        print(f"  Skipping {filename}: unsupported file type.")
+        cli_art.print_literal(f"  Skipping {cli_art._escape_markup(filename)}: unsupported file type.")
         return {"status": "error", "doc_type": "other"}
 
     if kind == "doc":
         converted = bootstrap_extractors.convert_legacy_doc_to_pdf(path)
         if converted is None:
-            print(
-                f"  Skipping {filename}: legacy .doc format and LibreOffice isn't "
-                f"available. Please re-save it as .docx or .pdf."
+            cli_art.print_literal(
+                f"  Skipping {cli_art._escape_markup(filename)}: legacy .doc format and LibreOffice isn't available. Please re-save it as .docx or .pdf."
             )
             return {"status": "error", "doc_type": "other"}
         path, kind = converted, "pdf"
@@ -285,7 +285,11 @@ def _existing_clean_bank_row_count() -> int:
     try:
         with open(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
             return sum(1 for _ in csv.DictReader(f))
-    except Exception:
+    except Exception as e:
+        cli_art.friendly_warning(
+            e, "reading your existing bullet bank",
+            "showing 0 existing rows below, even though the file may not actually be empty",
+        )
         return 0
 
 
@@ -356,9 +360,9 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     if force:
         existing_rows = _existing_clean_bank_row_count()
         if existing_rows:
-            print(
-                f"\n{theme.colorize_icon_ansi('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
-                f"existing row(s) in {os.path.basename(BULLET_BANK_CLEAN_PATH)} with a full "
+            cli_art.print_literal(
+                f"\n{theme.colorize_icon('warning')}  force=True (or --force-overwrite-clean-bank): replacing all {existing_rows} "
+                f"existing row(s) in {cli_art._escape_markup(os.path.basename(BULLET_BANK_CLEAN_PATH))} with a full "
                 "reconstruction from the checkpoint. This discards anything not reachable from "
                 "checkpoint.json and cannot be undone."
             )
@@ -386,11 +390,11 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
             # only "done" is skipped on retry). "failed" is deliberately not
             # "done", so the next run_ingestion() call retries this file
             # instead of skipping it.
-            print(f"  API error processing {filename}: {e}")
+            cli_art.friendly_error(e, f"processing {filename}")
             checkpoint[filename] = {"status": "failed", "doc_type": "other", "reason": str(e)}
             failures += 1
         except Exception as e:
-            print(f"  Error processing {filename}: {e}")
+            cli_art.friendly_error(e, f"processing {filename}")
             checkpoint[filename] = {"status": "error", "doc_type": "other"}
         _save_checkpoint(checkpoint)
 
@@ -459,18 +463,18 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
 
 
 def print_ingestion_summary(summary: dict) -> None:
-    print(
+    cli_art.print_literal(
         f"\nExtracted {summary['extracted']} achievement(s), "
         f"{summary['attributed']} confidently attributed, "
         f"{summary['flagged']} flagged for review, "
         f"{summary['certificates']} certificate(s) found."
     )
     if summary.get("failed"):
-        print(
-            f"{theme.colorize_icon_ansi('warning')}  {summary['failed']} document(s) failed to process "
+        cli_art.console.print(
+            f"{theme.colorize_icon('warning')}  {summary['failed']} document(s) failed to process "
             "(API error -- see above for details). They'll be retried automatically next time you run "
             "ingestion; they were not counted as done."
-        )
+        , soft_wrap=True)
 
 
 import argparse
@@ -497,17 +501,17 @@ _CONFIRMATION_GATES = {
 }
 
 _STAGE_HINTS = {
-    0: f"{theme.colorize_icon_ansi('hint')} Quality check time — every bullet gets scored the way a "
+    0: f"{theme.colorize_icon('hint')} Quality check time — every bullet gets scored the way a "
        "skeptical hiring manager would read it. This is the first API-heavy step.",
-    1: f"{theme.colorize_icon_ansi('hint')} Grouping near-duplicate bullets and keeping only the "
+    1: f"{theme.colorize_icon('hint')} Grouping near-duplicate bullets and keeping only the "
        "strongest version of each.",
-    2: f"{theme.colorize_icon_ansi('hint')} Rewriting anything that didn't pass the quality check — "
+    2: f"{theme.colorize_icon('hint')} Rewriting anything that didn't pass the quality check — "
        "the other API-heavy step.",
-    3: f"{theme.colorize_icon_ansi('hint')} Quick re-check on the rewritten bullets to make sure they "
+    3: f"{theme.colorize_icon('hint')} Quick re-check on the rewritten bullets to make sure they "
        "actually improved.",
-    4: f"{theme.colorize_icon_ansi('hint')} Flagging standout 'hidden gem' bullets — the ones a "
+    4: f"{theme.colorize_icon('hint')} Flagging standout 'hidden gem' bullets — the ones a "
        "hiring manager would specifically remember.",
-    5: f"{theme.colorize_icon_ansi('hint')} Last step — converting everything into a format the "
+    5: f"{theme.colorize_icon('hint')} Last step — converting everything into a format the "
        "system can use to intelligently match bullets to a job description "
        "later.",
 }
@@ -529,18 +533,18 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
     simply re-running this function later resumes correctly."""
     for i, script_name in enumerate(PIPELINE_STAGES):
         if i in _CONFIRMATION_GATES and not skip_confirm:
-            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True).ask()
+            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE).ask()
             if not proceed:
-                print("Stopped. Re-run this same command later to continue from here.")
+                cli_art.print_literal("Stopped. Re-run this same command later to continue from here.")
                 return False
 
-        print(f"\n{_STAGE_HINTS[i]}")
-        print(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {script_name}...")
+        cli_art.print_literal(f"\n{_STAGE_HINTS[i]}")
+        cli_art.print_literal(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {cli_art._escape_markup(script_name)}...")
         if not run_stage(script_name):
-            print(f"\nStage {i + 1} ({script_name}) failed. Re-run this same command to resume from here.")
+            cli_art.print_literal(f"\nStage {i + 1} ({cli_art._escape_markup(script_name)}) failed. Re-run this same command to resume from here.")
             return False
 
-    print(f"\n{theme.colorize_icon_ansi('success')} All done! Your bullet bank is ready.")
+    cli_art.print_literal(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.")
     return True
 
 
@@ -577,7 +581,7 @@ def main():
         bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
 
     if args.dry_run:
-        print("\n--dry-run set: skipping the six-stage pipeline.")
+        cli_art.print_literal("\n--dry-run set: skipping the six-stage pipeline.")
         return
 
     if args.scope in ("bullets", "both"):

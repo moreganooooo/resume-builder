@@ -3,7 +3,7 @@ package theme
 import "github.com/charmbracelet/lipgloss"
 
 func newCatppuccinMocha() Theme {
-	return Theme{
+	t := Theme{
 		// Catppuccin Mocha palette
 		Base:    lipgloss.Color("#1e1e2e"),
 		Surface: lipgloss.Color("#313244"),
@@ -21,4 +21,17 @@ func newCatppuccinMocha() Theme {
 		Red:    lipgloss.Color("#f38ba8"),
 		Pink:   lipgloss.Color("#f5c2e7"),
 	}
+
+	// Populate Token shortcuts
+	t.Token.Text = t.Text
+	t.Token.Subtext = t.Subtext
+	t.Token.Mauve = t.Mauve
+
+	// Populate Icons -- see icons.go's NewMenuIcons for the Nerd-Font-
+	// by-default, RESUME_BUILDER_ICONS=unicode-fallback logic this
+	// replaced (was previously hardcoded emoji, identical in all 3
+	// theme constructors, that ignored the env var entirely).
+	t.Icons = NewMenuIcons()
+
+	return t
 }

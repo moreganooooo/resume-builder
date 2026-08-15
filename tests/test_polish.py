@@ -45,14 +45,24 @@ class TestDiffDocuments(unittest.TestCase):
         doc = {"TAGLINE": "SAME", "SKILLS": ["Python"]}
         self.assertEqual(polish.diff_documents(doc, dict(doc), ["TAGLINE", "SKILLS"]), [])
 
+    # Each changed field now renders as a three-line block -- a label
+    # heading, then the removed and added values on their own icon-marked
+    # lines -- replacing the old single-line raw-repr format. These tests
+    # assert the substance (which fields are reported, with what values)
+    # plus a regression guard that the raw schema key never reaches the
+    # user, which is the specific bug the renderer was rewritten to fix.
+    LINES_PER_CHANGE = 3
+
     def test_scalar_field_change_is_reported(self):
         old = {"TAGLINE": "OLD"}
         new = {"TAGLINE": "NEW"}
         lines = polish.diff_documents(old, new, ["TAGLINE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("TAGLINE", lines[0])
-        self.assertIn("OLD", lines[0])
-        self.assertIn("NEW", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Tagline", block)
+        self.assertIn("OLD", block)
+        self.assertIn("NEW", block)
+        self.assertNotIn("TAGLINE", block)
 
     def test_field_outside_keys_is_never_reported(self):
         old = {"TAGLINE": "OLD", "NAME": "Morgan Escott"}
@@ -64,24 +74,39 @@ class TestDiffDocuments(unittest.TestCase):
         old = {"SKILLS": ["Python", "SQL", "Excel"]}
         new = {"SKILLS": ["Python", "Postgres", "Excel"]}
         lines = polish.diff_documents(old, new, ["SKILLS"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("SKILLS[1]", lines[0])
-        self.assertIn("SQL", lines[0])
-        self.assertIn("Postgres", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        # 1-based and human-labelled ("Skills #2"), not "SKILLS[1]".
+        self.assertIn("Skills #2", block)
+        self.assertIn("SQL", block)
+        self.assertIn("Postgres", block)
+        self.assertNotIn("SKILLS[1]", block)
+        # Unchanged entries stay out of the diff entirely.
+        self.assertNotIn("Python", block)
 
     def test_experience_reports_changed_scalar_field_by_index(self):
         old = {"EXPERIENCE": [{"title": "Old Title", "achievements": ["A"]}]}
         new = {"EXPERIENCE": [{"title": "New Title", "achievements": ["A"]}]}
         lines = polish.diff_documents(old, new, ["EXPERIENCE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("EXPERIENCE[0].title", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Experience #1", block)
+        self.assertIn("Title", block)
+        self.assertIn("Old Title", block)
+        self.assertIn("New Title", block)
+        self.assertNotIn("EXPERIENCE[0]", block)
 
     def test_experience_reports_changed_achievement_by_index(self):
         old = {"EXPERIENCE": [{"title": "Same", "achievements": ["A", "B"]}]}
         new = {"EXPERIENCE": [{"title": "Same", "achievements": ["A", "B changed"]}]}
         lines = polish.diff_documents(old, new, ["EXPERIENCE"])
-        self.assertEqual(len(lines), 1)
-        self.assertIn("EXPERIENCE[0].achievements[1]", lines[0])
+        self.assertEqual(len(lines), self.LINES_PER_CHANGE)
+        block = "\n".join(lines)
+        self.assertIn("Experience #1", block)
+        self.assertIn("Achievement #2", block)
+        self.assertIn("B changed", block)
+        self.assertNotIn("EXPERIENCE[0]", block)
+        self.assertNotIn("achievements[1]", block)
 
     def test_unchanged_experience_job_produces_no_lines(self):
         old = {"EXPERIENCE": [{"title": "Same", "achievements": ["A"]}]}
@@ -199,8 +224,60 @@ class TestSaveAndRender(unittest.TestCase):
         self.assertTrue(os.path.exists(self.resume_json_path))
         expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_Resume.html")
         expected_pdf = os.path.join(polish.OUTPUT_PDF_DIR, "MorganEscott_Title_Company_Resume.pdf")
-        self.assertEqual(result, {"json": self.resume_json_path, "html": expected_html, "pdf": expected_pdf})
+        self.assertEqual(
+            result, {"json": self.resume_json_path, "html": expected_html, "pdf": expected_pdf, "backup": None},
+        )
         mock_render.assert_called_once_with({"TAGLINE": "X"}, expected_html)
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_html")
+    def test_first_save_has_no_backup(self, mock_render, mock_run):
+        # No file exists at self.resume_json_path yet -- there's nothing to
+        # back up, so this must not fabricate a backup path or file.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+
+        self.assertIsNone(result["backup"])
+        self.assertFalse(os.path.exists(polish.backup_path_for(self.resume_json_path)))
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_html")
+    def test_overwrite_backs_up_the_previous_version(self, mock_render, mock_run):
+        # This is the actual undo mechanism (B: reverted confirm() in favor
+        # of real undo) -- a bad Gemini edit must be recoverable by reading
+        # the sibling .bak file back, not just theoretically possible.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with open(self.resume_json_path, "w", encoding="utf-8") as f:
+            json.dump({"TAGLINE": "OLD"}, f)
+
+        result = polish.save_and_render({"TAGLINE": "NEW"}, "resume", self.resume_json_path)
+
+        expected_backup = polish.backup_path_for(self.resume_json_path)
+        self.assertEqual(result["backup"], expected_backup)
+        self.assertTrue(os.path.exists(expected_backup))
+        with open(expected_backup, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"TAGLINE": "OLD"})
+        with open(self.resume_json_path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"TAGLINE": "NEW"})
+
+    @patch("polish.subprocess.run")
+    @patch("polish.render_html")
+    def test_backup_holds_only_the_immediately_prior_version(self, mock_render, mock_run):
+        # "One backup per document" means each save replaces the previous
+        # backup rather than accumulating a numbered history -- confirms
+        # the oldest content (round 1) is gone once round 3 has happened.
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        polish.save_and_render({"TAGLINE": "ROUND1"}, "resume", self.resume_json_path)
+        polish.save_and_render({"TAGLINE": "ROUND2"}, "resume", self.resume_json_path)
+        polish.save_and_render({"TAGLINE": "ROUND3"}, "resume", self.resume_json_path)
+
+        expected_backup = polish.backup_path_for(self.resume_json_path)
+        with open(expected_backup, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"TAGLINE": "ROUND2"})
+        with open(self.resume_json_path, encoding="utf-8") as f:
+            self.assertEqual(json.load(f), {"TAGLINE": "ROUND3"})
 
     @patch("polish.subprocess.run")
     @patch("polish.render_html")

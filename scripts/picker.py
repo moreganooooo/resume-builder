@@ -7,7 +7,6 @@ tailor-pick/coverletter-pick items -- one implementation instead of four.
 
 import os
 
-import click
 import questionary
 
 import cli_art
@@ -29,10 +28,86 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
     back, to avoid a cycle. action customizes the confirmation's verb --
     "evaluate" (default) fits evaluate-then-pick flows; pass a different
     verb (e.g. "tailor") for a batch action that doesn't itself evaluate
-    anything, so the prompt doesn't imply a Gemini call that isn't real."""
+    anything, so the prompt doesn't imply a Gemini call that isn't real.
+
+    A change here to the confirmation wording/behavior should be checked
+    against cli._should_proceed() too -- these two copies aren't kept in
+    sync automatically, only by convention."""
     if skip_confirm:
         return True
-    return click.confirm(f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?")
+    return bool(questionary.confirm(
+        f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask())
+
+
+def _truncate(text: str, max_len: int) -> str:
+    """Ellipsize text to at most max_len characters, "..." included --
+    pagination already bounds how many checkbox rows show at once, but a
+    single row's company/title pair had no width bound of its own, so a
+    long company or title wrapped mid-row on a narrow terminal instead of
+    staying one row per selectable item."""
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    if max_len <= 3:
+        return text[:max_len]
+    return text[: max_len - 3] + "..."
+
+
+# Fixed-width columns shared between render_picker_header()'s header line
+# and every checkbox row below it, so the checkbox rows -- now the only
+# place a JD's data actually renders -- line up under the header instead
+# of the header and rows drifting out of alignment. REC_W (20) is sized
+# to the longest real value, "Low-priority pursue".
+_IDX_W = 4
+_SCORE_W = 7
+_REC_W = 20
+_POSTED_W = 8
+_STATUS_W = 10
+
+
+def _company_title_budget(width: int, extra_fixed: int = 0) -> tuple:
+    """Splits what's left of width -- after the fixed-width columns
+    (index/score/recommendation/posted[/status]) and their separators --
+    between company and title. 35/65, since job titles tend to run
+    longer than company names, with a floor so both stay legible even on
+    a narrow terminal. extra_fixed adds any columns beyond the shared
+    index/score/recommendation/posted set (browse_and_select_jds' own
+    Status column)."""
+    # 6 columns' own trailing two-space separators (12) + render_picker_header's
+    # Panel border/padding overhead (4) -- the header renders inside that Panel,
+    # the checkbox rows below it don't, so without this the header (with its
+    # extra chrome) wraps at a width the plain checkbox rows fit fine at,
+    # breaking the very alignment this budget exists to guarantee.
+    fixed = _IDX_W + _SCORE_W + _REC_W + _POSTED_W + extra_fixed + 16
+    # Floor is deliberately low (18, not e.g. 30) -- a higher floor here
+    # used to force `available` above what an ordinary 80-column terminal
+    # actually has left, which guaranteed the header Panel wrapped onto a
+    # second line on exactly the terminal width this needs to fit.
+    available = max(width - fixed, 18)
+    company_budget = max(int(available * 0.35), 8)
+    title_budget = max(available - company_budget, 10)
+    return company_budget, title_budget
+
+
+def _row_cell(text, width: int, justify: str = "left") -> str:
+    """Pads/truncates one cell to width -- the plain-text half of the
+    header/row alignment contract (see render_picker_header's docstring
+    in cli_art.py)."""
+    text = _truncate(str(text), width)
+    return text.rjust(width) if justify == "right" else text.ljust(width)
+
+
+def _format_row(cells: list, widths: list, justifies: list, styles: list) -> list:
+    """Builds a questionary Choice title -- a list of (style, text)
+    tuples -- with each cell padded to the matching width in `widths`,
+    so the row lines up under render_picker_header()'s header line."""
+    return [
+        (style, _row_cell(text, width, justify) + "  ")
+        for text, width, justify, style in zip(cells, widths, justifies, styles)
+    ]
 
 
 _PAGE_SIZE = 50
@@ -83,6 +158,7 @@ def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: in
         start = page * page_size
         end = min(start + page_size, count)
         render_page(start, end)
+        cli_art.render_picker_instructions()
 
         real_choices = choices_for_page(start, end, selected)
         page_values = {c.value for c in real_choices}
@@ -90,17 +166,17 @@ def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: in
         choices.append(questionary.Separator())
         if page > 0:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "◀ Previous page")], value=_NAV_PREV,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['prev']} Previous page")], value=_NAV_PREV,
             ))
         if page < total_pages - 1:
             choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", "▶ Next page")], value=_NAV_NEXT,
+                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['next']} Next page")], value=_NAV_NEXT,
             ))
         choices.append(questionary.Choice(
-            title=[(f"fg:{theme.SUCCESS} bold", f"✔ Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
+            title=[(f"fg:{theme.SUCCESS} bold", f"{theme.ICONS['success']} Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
         ))
 
-        header = f"Select JD(s) (space to check, enter to confirm this page, {len(selected)} selected so far):"
+        header = f"{len(selected)} selected so far -- pick this page's role(s):"
         result = questionary.checkbox(header, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask()
         if result is None:
             return set()
@@ -160,20 +236,33 @@ def pick_and_process(
         current_page = start // page_size + 1
         progress_filled = min(current_page, total_pages)
         progress_bar = "█" * progress_filled + "░" * (total_pages - progress_filled)
-        cli_art.render_fit_table(
-            results[start:end], start_index=start + 1,
+        company_budget, title_budget = _company_title_budget(cli_art.console.width)
+        legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in theme.RECOMMENDATION_COLORS.items())
+        cli_art.render_picker_header(
             title=f"Page {current_page}/{total_pages} [{progress_bar}] -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
+            columns=[
+                ("#", _IDX_W, "right"), ("Score", _SCORE_W, "right"),
+                ("Recommendation", _REC_W, "left"), ("Company", company_budget, "left"),
+                ("Title", title_budget, "left"), ("Posted", _POSTED_W, "right"),
+            ],
+            legend=legend,
         )
 
     def choices_for_page(start, end, selected):
+        company_budget, title_budget = _company_title_budget(cli_art.console.width)
         choices = []
         for i, r in enumerate(results[start:end], start=start + 1):
             if r["error"]:
                 continue
-            choices.append(questionary.Choice(
-                title=f"{i:>4}  {r['composite_score']:.2f}/5 | {r['recommendation']} | {r['company_name']} | {r['job_title']}",
-                value=r["source_file"], checked=r["source_file"] in selected,
-            ))
+            style = _RECOMMENDATION_STYLES.get(r["recommendation"], "")
+            posted = f"{r['posting_age_days']}d" if r.get("posting_age_days") is not None else "-"
+            row = _format_row(
+                [i, f"{r['composite_score']:.2f}/5", r["recommendation"] or "", r["company_name"] or "", r["job_title"] or "", posted],
+                [_IDX_W, _SCORE_W, _REC_W, company_budget, title_budget, _POSTED_W],
+                ["right", "right", "left", "left", "left", "right"],
+                ["", style, style, "", "", ""],
+            )
+            choices.append(questionary.Choice(title=row, value=r["source_file"], checked=r["source_file"] in selected))
         return choices
 
     selected = _paginated_checkbox(len(results), render_page, choices_for_page, page_size=page_size)
@@ -189,7 +278,16 @@ def pick_and_process(
             completed += 1
         else:
             failed += 1
-    cli_art.console.print(f"\nPicked batch summary: {completed} completed, {failed} failed.")
+    # Use a Rich Text object so the numeric counts are plain (unstyled)
+    # — tests assert against the raw substring "1 completed, 0 failed".
+    from rich.text import Text
+
+    msg = Text("\nPicked batch summary: ")
+    msg.append(str(completed))
+    msg.append(" completed, ")
+    msg.append(str(failed))
+    msg.append(" failed.")
+    cli_art.console.print(msg)
     return (completed, failed)
 
 
@@ -262,22 +360,37 @@ def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_S
     total_pages = (len(rows) + page_size - 1) // page_size
 
     def render_page(start, end):
-        cli_art.render_pipeline_table(
-            rows[start:end], start_index=start + 1,
+        company_budget, title_budget = _company_title_budget(cli_art.console.width, extra_fixed=_STATUS_W + 2)
+        legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in theme.RECOMMENDATION_COLORS.items())
+        cli_art.render_picker_header(
             title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(rows)} evaluated JD(s)",
+            columns=[
+                ("#", _IDX_W, "right"), ("Score", _SCORE_W, "right"),
+                ("Recommendation", _REC_W, "left"), ("Company", company_budget, "left"),
+                ("Title", title_budget, "left"), ("Posted", _POSTED_W, "right"),
+                ("Status", _STATUS_W, "left"),
+            ],
+            legend=legend,
         )
 
     def choices_for_page(start, end, selected):
+        company_budget, title_budget = _company_title_budget(cli_art.console.width, extra_fixed=_STATUS_W + 2)
         choices = []
         for i, r in enumerate(rows[start:end], start=start + 1):
             evaluation = r["evaluation"]
-            score_style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
-            label = [
-                ("", f"{i:>4}  "),
-                (score_style, f"{evaluation.get('composite_score'):.2f}/5 | {evaluation.get('recommendation')}"),
-                ("", f" | {r['company'] or '?'} | {r['title'] or os.path.basename(r['path'])}"),
-            ]
-            choices.append(questionary.Choice(title=label, value=r["path"], checked=r["path"] in selected))
+            style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
+            posted = evaluation.get("posting_age_days")
+            row = _format_row(
+                [
+                    i, f"{evaluation.get('composite_score', 0):.2f}/5", evaluation.get("recommendation") or "",
+                    r["company"] or "?", r["title"] or os.path.basename(r["path"]),
+                    f"{posted}d" if posted is not None else "-", r["status"],
+                ],
+                [_IDX_W, _SCORE_W, _REC_W, company_budget, title_budget, _POSTED_W, _STATUS_W],
+                ["right", "right", "left", "left", "left", "right", "left"],
+                ["", style, style, "", "", "", ""],
+            )
+            choices.append(questionary.Choice(title=row, value=r["path"], checked=r["path"] in selected))
         return choices
 
     selected = _paginated_checkbox(len(rows), render_page, choices_for_page, page_size=page_size)
