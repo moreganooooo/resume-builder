@@ -3,6 +3,7 @@ numpy
 pyyaml
 pydantic
 requests
+idna==3.15
 python-dotenv
 google-genai
 click
