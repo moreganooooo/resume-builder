@@ -97,9 +97,9 @@ func NewMenuIcons() MenuIcons {
 		Path:     "", // nf-fa-file_o
 		Magic:    "", // nf-fa-magic
 
-		// Exact codepoints scripts/theme.py's _NERD_ICONS uses for
-		// "success"/"gem"/"hint"/"skip" (U+F00C/F219/F0EB/F05E).
-		ScoreStrong: "",
+		// Use Unicode fallbacks instead of Nerd Font glyphs (U+F00C/F219/F0EB/F05E)
+		// which don't render reliably across all terminal configurations
+		ScoreStrong: "✓",
 		ScoreGood:   "",
 		ScoreFair:   "",
 		ScoreWeak:   "",

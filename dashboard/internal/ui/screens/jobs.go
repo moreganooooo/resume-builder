@@ -879,7 +879,10 @@ func (m JobsModel) View() string {
 	searchBar := m.renderSearchBar()
 	help := m.renderHelp()
 
-	leftWidth := int(float64(m.width) * 0.35)
+	// Wider left sidebar (job selection) makes sense for scanning a list;
+	// narrower right pane (details) is enough for truncated previews. Users
+	// can read full details by selecting; description wrapping is acceptable.
+	leftWidth := int(float64(m.width) * 0.60)
 	rightWidth := m.width - leftWidth
 	availHeight := m.chromeAvailHeight(m.extraRows())
 
