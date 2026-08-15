@@ -125,16 +125,15 @@ def _gather_candidates(pending_paths: list) -> list:
     return candidates
 
 
-def _jd_label(source_file: str | None) -> str:
-    """Company — Title for a JD's results listing, matching every other
-    list view in this app (none of which identify a JD by raw file path).
-    Falls back to the filename when metadata can't be read, rather than
-    showing nothing."""
+def _styled_jd_label(source_file: str | None) -> str:
+    """Styled version of _jd_label with Rich markup for terminal display."""
     if not source_file:
         return "(unknown)"
     title, company = jd_manager.extract_job_meta(source_file)
     if title or company:
-        return f"{company or '?'} — {title or '?'}"
+        company_str = company or '?'
+        title_str = title or '?'
+        return cli_art.format_jd_label(company_str, title_str)
     return os.path.basename(source_file)
 
 
@@ -207,7 +206,8 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                             pass
                         if isinstance(event, dict) and event.get("type") == "progress":
                             icon_name = _LIVENESS_ICON_BY_RESULT.get(event.get("result"), "warning")
-                            resolved_activity.step(icon_name, "Verify", _jd_label(event.get("source_file")))
+                            message = _styled_jd_label(event.get("source_file"))
+                            resolved_activity.step(icon_name, "Verify", message, preserve_markup=True)
                         else:
                             cli_art.print_subprocess_output(f"  {stripped}")
                 proc.wait(timeout=timeout_s)

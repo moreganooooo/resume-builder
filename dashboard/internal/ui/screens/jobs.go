@@ -760,6 +760,8 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.statusPicker = true
 				m.statusCursor = 0
 			}
+		case "v":
+			m.showHelp = true
 		case "q":
 			return m, func() tea.Msg { return JobsClosedMsg{Quit: true} }
 		case "esc":
@@ -854,6 +856,14 @@ var jobsHelpCategories = []helpCategory{
 	{"View", []helpBinding{
 		{"f", "Cycle filter: all / pending / completed"},
 		{"/", "Search company/title"},
+		{"v", "View terminology definitions"},
+	}},
+	{"Terminology", []helpBinding{
+		{"Composite Score", "Overall fit (40% Fit + 40% Interview Odds + 20% Practical Pursue)"},
+		{"Fit", "How well your background matches job requirements"},
+		{"Interview Odds", "Likelihood of advancing past initial screening"},
+		{"North Star", "Your target skill/role that guides tailoring"},
+		{"Liveness", "Whether a job posting is still actively being filled"},
 	}},
 	{"Exit", []helpBinding{
 		{"Esc", "Clear search, or back to Main Menu"},
@@ -1232,6 +1242,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
+			keyStyle.Render("v") + descStyle.Render(" vocabulary  ") +
 			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))

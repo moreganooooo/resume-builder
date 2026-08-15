@@ -130,7 +130,8 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
                     "personal_social_connections": job_result.get("personalSocialConnections"),
                 })
                 if activity is not None:
-                    activity.step("success", "JobRight", f'Found "{job_title}" @ {company_name}')
+                    message = cli_art.format_job_found_message(job_title, company_name)
+                    activity.step("success", "JobRight", message, preserve_markup=True)
 
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
 

@@ -296,7 +296,8 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
         activity.start_source(len(sources), label="Fetching")
     for provider_id in sources:
         if activity is not None:
-            activity.step("discovery", "Boards", f"Checking {provider_id}")
+            message = f"Checking {cli_art.format_board_name(provider_id)}"
+            activity.step("discovery", "Boards", message, preserve_markup=True)
         # `entry.name` is what a provider falls back to for `company` when
         # its own raw listing has none (e.g. remoteok.mjs: `j.company ||
         # entry.name`) -- use the provider id, not a placeholder, so a
