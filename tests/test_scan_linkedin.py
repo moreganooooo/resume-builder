@@ -94,7 +94,11 @@ class TestFetchLinkedinJobsActivity(unittest.TestCase):
         jobs = scan_linkedin.fetch_linkedin_jobs(activity=activity)
 
         self.assertEqual(len(jobs), 1)
-        activity.step.assert_called_with("success", "LinkedIn", "Found Data Engineer at Acme")
+        activity.step.assert_called_with(
+            "success", "LinkedIn",
+            '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
+            preserve_markup=True
+        )
 
 
 if __name__ == "__main__":
