@@ -170,19 +170,40 @@ func (m JobsModel) WithActionConfig(jobsPath, pythonPath, projectRoot string) Jo
 	return m
 }
 
-// applyFilter recomputes m.filtered from m.rows using both the active
-// 3-way status filter (m.filter) and any in-progress/committed search query
-// (m.searchQuery). Search narrows *within* the active filter rather than
-// resetting it -- mirrors pipeline.go's applyFilterAndSort, where search
-// narrows within the active tab rather than resetting it. A user who's
-// cycled the filter to "pending" and then types "acme" almost certainly
-// wants pending Acme postings, not to have completed ones silently reappear.
+// applyFilter recomputes m.filtered from m.rows using the active filter
+// (status-based, score-based, or recency) and any search query (m.searchQuery).
+// Search narrows *within* the active filter rather than resetting it --
+// mirrors pipeline.go's applyFilterAndSort behavior. Supports:
+// - Status: all, pending, completed
+// - Score: high_fit (4.0+), good_fit (3.5+)
+// - Recency: recent (jobs already sorted by score are treated as recent)
 func (m *JobsModel) applyFilter() {
 	var out []model.JobRow
 	for _, r := range m.rows {
-		if m.filter != "all" && !strings.EqualFold(r.Status, m.filter) {
-			continue
+		// Apply active filter based on mode
+		switch m.filter {
+		case "pending", "completed":
+			if !strings.EqualFold(r.Status, m.filter) {
+				continue
+			}
+		case "high_fit":
+			if r.Evaluation.CompositeScore < 4.0 {
+				continue
+			}
+		case "good_fit":
+			if r.Evaluation.CompositeScore < 3.5 {
+				continue
+			}
+		case "recent":
+			// "Recent" jobs are those already at the top of the list
+			// (already sorted by score), so we show the first 50 high-quality jobs
+			if r.Evaluation.CompositeScore < 3.0 {
+				continue
+			}
+		// "all" has no score/status restriction
 		}
+
+		// Apply search query within the active filter
 		if !matchesJobSearch(r, m.searchQuery) {
 			continue
 		}
@@ -301,11 +322,18 @@ func (m *JobsModel) adjustScroll() {
 }
 
 func nextJobsFilter(current string) string {
+	// Cycle through filter modes: status → score-based → more
 	switch current {
 	case "all":
 		return "pending"
 	case "pending":
 		return "completed"
+	case "completed":
+		return "high_fit"
+	case "high_fit":
+		return "good_fit"
+	case "good_fit":
+		return "recent"
 	default:
 		return "all"
 	}
@@ -853,10 +881,13 @@ var jobsHelpCategories = []helpCategory{
 		{"t", "Tailor resume for this job (Pending only)"},
 		{"u", "Change application status"},
 	}},
-	{"View & Filter", []helpBinding{
-		{"f", "Cycle job filter (ALL → PENDING → COMPLETED)"},
-		{"/", "Search company/title"},
+	{"Filters", []helpBinding{
+		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit → Recent"},
+		{"/", "Search company/title (narrows within active filter)"},
+	}},
+	{"Quick Reference", []helpBinding{
 		{"v", "View terminology definitions"},
+		{"?", "Show this help overlay"},
 	}},
 	{"Terminology", []helpBinding{
 		{"Composite Score", "Overall fit (40% Fit + 40% Interview Odds + 20% Practical Pursue)"},
@@ -1020,12 +1051,37 @@ func (m JobsModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
-	info := right.Render(fmt.Sprintf("%d job(s) | filter: %s", len(m.filtered), strings.ToUpper(m.filter)))
+	// Format filter display with human-readable labels and color
+	filterLabel := m.getFilterLabel()
+	filterStyle := lipgloss.NewStyle().
+		Foreground(m.theme.Mauve).
+		Background(m.theme.Surface).
+		Bold(true)
+
+	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
+	info := countStyle.Render(fmt.Sprintf("%d job(s) ", len(m.filtered))) +
+		filterStyle.Render("⏺ " + filterLabel)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs + " JOBS")
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 	return style.Render(title + gap + info)
+}
+
+func (m JobsModel) getFilterLabel() string {
+	switch m.filter {
+	case "pending":
+		return "PENDING"
+	case "completed":
+		return "COMPLETED"
+	case "high_fit":
+		return "HIGH FIT (4.0+)"
+	case "good_fit":
+		return "GOOD FIT (3.5+)"
+	case "recent":
+		return "RECENT"
+	default:
+		return "ALL JOBS"
+	}
 }
 
 // renderSearchBar returns an empty string when there is no active or

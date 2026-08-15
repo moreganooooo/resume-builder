@@ -71,6 +71,19 @@ func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 	}
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	if m.filter != "high_fit" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "high_fit", m.filter)
+	}
+	// Continue cycling through remaining filters
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	if m.filter != "good_fit" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "good_fit", m.filter)
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	if m.filter != "recent" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "recent", m.filter)
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 	if m.filter != "all" {
 		t.Fatalf("expected filter to cycle back to %q, got %q", "all", m.filter)
 	}
