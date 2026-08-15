@@ -326,3 +326,95 @@ func renderStatusPickerOverlay(t theme.Theme, body string, availWidth int, heade
 	bodyLines = append(bodyLines, picker...)
 	return strings.Join(bodyLines, "\n")
 }
+
+// renderModalOverlay renders content as a centered modal dialog over a
+// dimmed background (similar to Crush IDE's modal style). background is the
+// full-screen content to render behind the modal, content is the modal's body.
+func renderModalOverlay(t theme.Theme, background string, content string, width, height int) string {
+	// Split background and content into lines
+	bgLines := strings.Split(background, "\n")
+	contentLines := strings.Split(content, "\n")
+
+	// Modal dimensions: 80% of screen width, centered
+	modalWidth := int(float64(width) * 0.8)
+	if modalWidth > 100 {
+		modalWidth = 100 // Cap at 100 columns
+	}
+	if modalWidth < 40 {
+		modalWidth = 40 // Minimum 40 columns
+	}
+	modalHeight := len(contentLines) + 4 // +4 for border/padding
+
+	// Ensure we don't exceed screen height
+	if modalHeight > height-4 {
+		modalHeight = height - 4
+	}
+
+	// Calculate centered position
+	startCol := (width - modalWidth) / 2
+	if startCol < 0 {
+		startCol = 0
+	}
+	startRow := (height - modalHeight) / 2
+	if startRow < 0 {
+		startRow = 0
+	}
+
+	// Create modal with border
+	border := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(t.Blue).
+		Background(t.Surface).
+		Foreground(t.Text).
+		Width(modalWidth - 2)
+
+	// Render modal content
+	modalContent := border.Render(strings.Join(contentLines, "\n"))
+	modalLines := strings.Split(modalContent, "\n")
+
+	// Build output: overlay modal on background with dimming
+	var result []string
+	for i := 0; i < height; i++ {
+		// Get background line (or empty if past end)
+		bgLine := ""
+		if i < len(bgLines) {
+			bgLine = bgLines[i]
+		}
+
+		// Check if this row is within modal bounds
+		if i >= startRow && i < startRow+len(modalLines) && i < startRow+modalHeight {
+			// Render modal line with padding on left
+			modalIdx := i - startRow
+			modalLine := ""
+			if modalIdx < len(modalLines) {
+				modalLine = modalLines[modalIdx]
+			}
+
+			// Pad left side of modal
+			leftPad := strings.Repeat(" ", startCol)
+			line := leftPad + modalLine
+
+			// Truncate/pad to width
+			if ansi.StringWidth(line) > width {
+				line = ansi.Truncate(line, width, "")
+			} else if ansi.StringWidth(line) < width {
+				line = line + strings.Repeat(" ", width-ansi.StringWidth(line))
+			}
+			result = append(result, line)
+		} else {
+			// Dim the background
+			dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
+			dimmedLine := dimStyle.Render(bgLine)
+
+			// Pad/truncate to width
+			if ansi.StringWidth(dimmedLine) > width {
+				dimmedLine = ansi.Truncate(dimmedLine, width, "")
+			} else if ansi.StringWidth(dimmedLine) < width {
+				dimmedLine = dimmedLine + strings.Repeat(" ", width-ansi.StringWidth(dimmedLine))
+			}
+			result = append(result, dimmedLine)
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
