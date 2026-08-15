@@ -302,25 +302,14 @@ def _row(path="jds/a.json", status="Pending", company="Acme", title="Writer", **
 
 class TestHandleBrowseJobs(unittest.TestCase):
 
-    @patch("menu.picker.browse_and_select_jds", return_value=[])
-    def test_returns_false_when_nothing_selected(self, mock_browse):
+    @patch("menu.dashboard_module.run", return_value=(False, "No applications found"))
+    def test_returns_false_when_dashboard_fails(self, mock_dashboard):
         self.assertFalse(menu._handle_browse_jobs())
 
-    @patch("menu._browse_single_action", return_value=True)
-    @patch("menu.picker.browse_and_select_jds")
-    def test_single_selection_routes_to_single_action(self, mock_browse, mock_single):
-        row = _row()
-        mock_browse.return_value = [row]
+    @patch("menu.dashboard_module.run", return_value=(True, ""))
+    def test_returns_true_when_dashboard_succeeds(self, mock_dashboard):
         self.assertTrue(menu._handle_browse_jobs())
-        mock_single.assert_called_once_with(row)
-
-    @patch("menu._browse_bulk_action", return_value=True)
-    @patch("menu.picker.browse_and_select_jds")
-    def test_multi_selection_routes_to_bulk_action(self, mock_browse, mock_bulk):
-        rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
-        mock_browse.return_value = rows
-        self.assertTrue(menu._handle_browse_jobs())
-        mock_bulk.assert_called_once_with(rows)
+        mock_dashboard.assert_called_once()
 
 
 class TestHandleTailorPick(unittest.TestCase):

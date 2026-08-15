@@ -27,7 +27,9 @@ class TestFetchJobrightJobsActivity(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         activity.step.assert_called_with(
-            "success", "JobRight", 'Found "Data Engineer" @ Acme',
+            "success", "JobRight",
+            '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
+            preserve_markup=True
         )
 
     @patch.dict(os.environ, {"JOBRIGHT_COOKIE_STRING": "fake-cookie"})
