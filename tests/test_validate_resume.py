@@ -788,5 +788,30 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
         )
 
 
+class TestStrictSemanticSkillGuardrail(unittest.TestCase):
+
+    def test_allows_verified_skills_and_general_terms(self):
+        resume = {
+            "SKILLS": [
+                "**Lifecycle & Campaign:** Outreach.io, Salesforce CRM, Segmentation",
+                "**Marketing Enablement:** Onboarding, Coaching, Process Mapping"
+            ]
+        }
+        violations = validate_resume._check_hallucinated_tools(resume)
+        self.assertEqual(violations, [])
+
+    def test_flags_hallucinated_skills(self):
+        resume = {
+            "SKILLS": [
+                "**Technical Stack:** Kubernetes, React, Outreach.io"
+            ]
+        }
+        violations = validate_resume._check_hallucinated_tools(resume)
+        # Kubernetes and React are definitely hallucinated, but Outreach.io is fine
+        self.assertTrue(any("Kubernetes" in v or "kubernetes" in v for v in violations))
+        self.assertTrue(any("React" in v or "react" in v for v in violations))
+        self.assertFalse(any("Outreach.io" in v or "outreach" in v for v in violations))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -723,7 +723,11 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
         "copywriting", "writing", "design", "brand", "voice", "tone", "analytics",
         "reporting", "metrics", "training", "governance", "automation", "campaigns",
         "process mapping", "diagramming", "templates", "hygiene", "crm", "esp",
-        "lead generation", "prospecting", "b2b", "lifecycle marketing", "customer marketing"
+        "lead generation", "prospecting", "b2b", "lifecycle marketing", "customer marketing",
+        # Lifecycle and campaign marketing core competencies
+        "segmentation", "retention", "drip", "email", "lifecycle", "marketing", "customer",
+        "journey", "funnel", "flow", "flows", "testing", "a/b testing", "optimization",
+        "acquisition", "engagement", "nurture", "newsletters", "trigger", "triggers"
     }
 
     # 1. Load verified tools
