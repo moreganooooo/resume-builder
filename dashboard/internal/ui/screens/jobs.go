@@ -1443,6 +1443,48 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 		}
 	}
 
+	// -- Keyword Coverage / Gap Analysis --
+	if job.Coverage != nil {
+		content = append(content, "")
+		content = append(content, accent.Render("Keyword Coverage & Gap Analysis"))
+
+		// Render Score & Band
+		var bandColor color.Color
+		switch job.Coverage.Band {
+		case "excellent_match":
+			bandColor = m.theme.Green
+		case "good_match":
+			bandColor = m.theme.Green
+		case "weak_match":
+			bandColor = m.theme.Yellow
+		default:
+			bandColor = m.theme.Red
+		}
+
+		scoreStyle := lipgloss.NewStyle().Foreground(bandColor).Bold(true)
+		bandStr := strings.ToUpper(strings.ReplaceAll(job.Coverage.Band, "_", " "))
+		content = append(content, styles.Subtext.Render("Match Score: ")+scoreStyle.Render(fmt.Sprintf("%.0f%% (%s)", job.Coverage.Score, bandStr)))
+
+		// Render Matched Keywords
+		if len(job.Coverage.Matched) > 0 {
+			matchedStr := strings.Join(job.Coverage.Matched, ", ")
+			content = append(content, styles.Subtext.Render("✓ Matched: ")+lipgloss.NewStyle().Foreground(m.theme.Green).Render(matchedStr))
+		}
+
+		// Render Missing Gaps
+		if len(job.Coverage.Missing) > 0 {
+			missingStr := strings.Join(job.Coverage.Missing, ", ")
+			content = append(content, styles.Subtext.Render("✗ Missing Gaps: ")+lipgloss.NewStyle().Foreground(m.theme.Red).Render(missingStr))
+		} else {
+			content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).Render("✓ Perfect coverage! No missing target keywords."))
+		}
+
+		if job.Coverage.CheckedAt != "" {
+			content = append(content,
+				lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Checked: "+job.Coverage.CheckedAt))
+		}
+	}
+
 	// -- Full JD description (at the bottom since it's long) --
 	if job.Description != "" {
 		content = append(content, "")

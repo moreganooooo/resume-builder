@@ -329,6 +329,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                 "company_website": jd_data.get("company_website", "") or "",
                 "skills": jd_data.get("skills") or [],
                 "research": jd_manager.read_research(path),
+                "coverage": jd_manager.read_coverage(path),
             })
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
@@ -352,6 +353,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                 "company_website": jd_data.get("company_website", "") or "",
                 "skills": jd_data.get("skills") or [],
                 "research": jd_manager.read_research(path),
+                "coverage": jd_manager.read_coverage(path),
             })
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
