@@ -2840,6 +2840,7 @@ class ResumeEngine:
 
         letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
         cli_art.detail(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {cli_art._escape_markup(pdf_out)}", level=cli_art.NORMAL)
+        os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
         return letter_data
 
     def build_tailored_resume(
@@ -3769,6 +3770,7 @@ class ResumeEngine:
         jd_manager.delete_checkpoint(job_key)
         resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
         resume_data["_page_count"] = page_count
+        os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
 
         return resume_data
 

@@ -43,19 +43,154 @@ DEFAULT_JOB_LIMIT_PER_QUERY = 20
 _PERSONALIZED_EXTRAS_DELAY_SECONDS = 5
 
 
-def get_li_at_cookie() -> str:
-    """Reads the live li_at session cookie from Chrome. Returns "" if
-    Chrome isn't logged into LinkedIn right now (or the cookie can't be
-    read) -- the caller logs a clear, actionable message in that case."""
+def check_li_cookie_live(cookie_val: str) -> bool:
+    """Verifies if the saved li_at cookie is still valid on LinkedIn."""
+    if not cookie_val:
+        return False
     try:
-        cookie_jar = browser_cookie3.chrome(domain_name="linkedin.com")
-    except Exception as e:
-        cli_art.cli_error(f"Could not read Chrome's cookie store: {e}")
+        session = requests.Session()
+        session.cookies.set("li_at", cookie_val, domain=".linkedin.com")
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "accept-language": "en-US,en;q=0.9",
+        })
+        response = session.get("https://www.linkedin.com/feed/", allow_redirects=False, timeout=5)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def get_li_at_cookie() -> str:
+    """Reads or extracts the live li_at session cookie. Saves and caches it
+    profile-specifically to avoid repeated prompts."""
+    import questionary
+    import theme
+    import os
+    import subprocess
+    import json
+    import profile_paths
+
+    cookie_file = os.path.join(profile_paths.profile_root(), ".linkedin_cookie")
+
+    # 1. Try reading from the profile-specific cache first
+    if os.path.isfile(cookie_file):
+        try:
+            with open(cookie_file, "r") as f:
+                cached_cookie = f.read().strip()
+            if cached_cookie:
+                # Validate the cached cookie liveness
+                if check_li_cookie_live(cached_cookie):
+                    return cached_cookie
+                else:
+                    cli_art.console.print(f"[{theme.BRAND_ACCENT}]⚠ Saved LinkedIn session has expired. Let's re-authenticate![/{theme.BRAND_ACCENT}]")
+        except Exception:
+            pass
+
+    cli_art.console.print()
+    cli_art.console.print(f"[{theme.BRAND}]✦  LINKEDIN COOKIE EXTRACTION  ✦[/{theme.BRAND}]")
+    cli_art.console.print(
+        "To fetch deep details (like applicant stats and full descriptions), we need an active LinkedIn session.\n"
+        "We can extract it from Chrome, manually paste it, or use Playwright to launch a secure visual login window."
+    )
+    cli_art.console.print()
+
+    try:
+        choice = questionary.select(
+            "How would you like to provide your LinkedIn cookie?",
+            choices=[
+                "(Recommended) Log in securely via a visual browser window (automatic capture)",
+                "Extract automatically from Google Chrome (triggers macOS Keychain prompt)",
+                "Paste 'li_at' cookie value (or a Chrome DevTools curl command) manually",
+            ],
+            style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+    except Exception:
+        choice = "(Recommended) Log in securely via a visual browser window (automatic capture)"
+
+    if not choice:
         return ""
 
-    for cookie in cookie_jar:
-        if cookie.name == "li_at":
-            return cookie.value
+    cookie_val = ""
+
+    if "Paste" in choice:
+        cookie_val = questionary.text(
+            "Paste cookie value (or curl command with 'li_at=...'):",
+            style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+        if not cookie_val:
+            return ""
+        cookie_val = cookie_val.strip()
+        if "curl" in cookie_val or "Cookie:" in cookie_val or "cookie:" in cookie_val or "li_at=" in cookie_val:
+            import re
+            match = re.search(r"li_at=([^;\"\s]+)", cookie_val)
+            if match:
+                cookie_val = match.group(1)
+                cli_art.cli_info("Extracted 'li_at' cookie from your pasted inputs!")
+
+    elif "Extract automatically from Google Chrome" in choice:
+        try:
+            cookie_jar = browser_cookie3.chrome(domain_name="linkedin.com")
+            for cookie in cookie_jar:
+                if cookie.name == "li_at":
+                    cookie_val = cookie.value
+                    break
+        except Exception as e:
+            cli_art.cli_error(f"Could not read Chrome's cookie store: {e}")
+            return ""
+
+    elif "visual browser window" in choice:
+        cli_art.console.print()
+        cli_art.console.print(f"[{theme.BRAND}]✦ LAUNCHING SECURE LOGIN WINDOW ✦[/{theme.BRAND}]")
+        cli_art.console.print(
+            "A Chromium browser window will now open.\n"
+            "Please [bold]log in[/bold] to LinkedIn, complete any verification (such as 2FA or CAPTCHAs),\n"
+            "and once you are successfully logged in and redirected to your feed,\n"
+            "we will capture your session cookie automatically and proceed!"
+        )
+        cli_art.console.print()
+
+        script_path = os.path.join(profile_paths.PROJECT_ROOT, "scripts", "linkedin_login.mjs")
+        try:
+            result = subprocess.run(
+                ["node", script_path],
+                capture_output=True,
+                text=True,
+                timeout=240
+            )
+            if result.return_code == 0 and result.stdout:
+                lines = result.stdout.strip().split("\n")
+                for line in lines:
+                    if line.startswith("{") and line.endswith("}"):
+                        try:
+                            data = json.loads(line)
+                            if data.get("success"):
+                                cookie_val = data.get("cookie")
+                                cli_art.display_success_celebration("LINKEDIN COOKIE SECURED", "Your session cookie was captured and cached successfully!")
+                                break
+                            else:
+                                cli_art.cli_error(f"Login failed: {data.get('error')}")
+                        except Exception:
+                            pass
+            else:
+                cli_art.cli_error(f"Login script failed: {result.stderr or 'Closed early'}")
+        except subprocess.TimeoutExpired:
+            cli_art.cli_error("Login session timed out (4 minutes limit exceeded).")
+        except Exception as e:
+            cli_art.cli_error(f"Failed to execute login helper: {e}")
+
+    if cookie_val:
+        if check_li_cookie_live(cookie_val):
+            try:
+                with open(cookie_file, "w") as f:
+                    f.write(cookie_val)
+                cli_art.cli_info("LinkedIn session successfully cached!")
+            except Exception as e:
+                logging.debug(f"Failed to cache cookie: {e}")
+            return cookie_val
+        else:
+            cli_art.cli_error("Captured LinkedIn session is invalid or did not complete login successfully.")
+
     return ""
 
 
