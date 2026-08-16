@@ -1094,7 +1094,8 @@ func (m JobsModel) renderHeader() string {
 	info := countStyle.Render(fmt.Sprintf("%d job(s) ", len(m.filtered))) +
 		filterStyle.Render("⏺ " + filterLabel)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs + "  ✦ JOBS ✧")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs + "  ") +
+		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderGradient("✦ JOBS ✧", "#00A4FF", "#FF985A"))
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 	return style.Render(title + gap + info)
 }

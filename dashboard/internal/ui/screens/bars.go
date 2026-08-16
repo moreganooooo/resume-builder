@@ -3,7 +3,9 @@ package screens
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/lipgloss/v2"
@@ -160,10 +162,102 @@ func renderEmptyDetailPane(t theme.Theme, width, height int) string {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Overlay).
-		Width(width-2).
-		Height(height-2).
-		Padding(1, 2)
-	return borderStyle.Render(lipgloss.NewStyle().Foreground(t.Subtext).Render("Select a job to view details"))
+		Width(width - 2).
+		Height(height - 2).
+		Padding(0, 0)
+
+	innerWidth := width - 4
+	innerHeight := height - 4
+	if innerWidth < 10 || innerHeight < 3 {
+		return borderStyle.Render("Select an item to view details")
+	}
+
+	// Build a 2D grid
+	nowMs := float64(time.Now().UnixNano() / 1e6)
+
+	grid := make([][]string, innerHeight)
+	for y := 0; y < innerHeight; y++ {
+		grid[y] = make([]string, innerWidth)
+		for x := 0; x < innerWidth; x++ {
+			// Deterministic pseudo-random generation of stars using a 2D coordinate hash
+			hash := math.Sin(float64(x)*12.9898+float64(y)*78.233)*43758.5453123
+			hash = hash - math.Floor(hash)
+
+			// Sparse distribution: ~6.5% density
+			if hash < 0.065 {
+				starType := int(hash * 100) % 3
+				twinkleFreq := 1.5 + (hash * 3.0) // 1.5 to 4.5 rad/s
+				phase := hash * 10.0
+
+				// Twinkle amplitude function
+				brightness := 0.5 + 0.5*math.Sin(nowMs*0.001*twinkleFreq+phase)
+
+				var char string
+				switch starType {
+				case 0:
+					char = "✦"
+				case 1:
+					char = "✧"
+				default:
+					char = "·"
+				}
+
+				// Select gradient foreground based on dynamic brightness
+				var col color.Color
+				if brightness > 0.85 {
+					col = t.Mauve
+				} else if brightness > 0.6 {
+					col = t.Sky
+				} else if brightness > 0.35 {
+					col = t.Blue
+				} else {
+					col = t.Overlay
+				}
+
+				grid[y][x] = lipgloss.NewStyle().Foreground(col).Render(char)
+			} else {
+				grid[y][x] = " "
+			}
+		}
+	}
+
+	// Centered label block: "Select an item to view details"
+	labelText := "  ✦ Select an item to view details ✧  "
+	labelLen := len(labelText)
+	if innerWidth > labelLen {
+		midY := innerHeight / 2
+		startX := (innerWidth - labelLen) / 2
+
+		labelStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Text).
+			Background(t.Surface)
+
+		labelRendered := labelStyle.Render(labelText)
+		var rowText strings.Builder
+		for x := 0; x < innerWidth; x++ {
+			if x >= startX && x < startX+labelLen {
+				if x == startX {
+					rowText.WriteString(labelRendered)
+				}
+			} else {
+				rowText.WriteString(grid[midY][x])
+			}
+		}
+		grid[midY] = []string{rowText.String()}
+	}
+
+	// Flatten grid rows
+	var lines []string
+	for y := 0; y < innerHeight; y++ {
+		if len(grid[y]) == 1 {
+			lines = append(lines, grid[y][0])
+		} else {
+			lines = append(lines, strings.Join(grid[y], ""))
+		}
+	}
+
+	return borderStyle.Render(strings.Join(lines, "\n"))
 }
 
 // detailPaneStyles bundles the border + text styles shared by every detail
