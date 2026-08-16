@@ -1121,5 +1121,49 @@ class TestSessionSummary(unittest.TestCase):
         self.assertIn("Nice work.", summary)
 
 
+class TestAltScreenMode(unittest.TestCase):
+
+    @patch("shutil.get_terminal_size")
+    @patch.dict(os.environ, {}, clear=True)
+    def test_should_use_alt_screen_defaults(self, mock_terminal_size):
+        # By default, if terminal height >= 35, it should return True
+        mock_terminal_size.return_value = (80, 40)
+        self.assertTrue(menu._should_use_alt_screen())
+
+        # If height < 35, it should return False
+        mock_terminal_size.return_value = (80, 30)
+        self.assertFalse(menu._should_use_alt_screen())
+
+    @patch.dict(os.environ, {"RESUME_ALT_SCREEN": "1"})
+    def test_should_use_alt_screen_env_override_on(self):
+        self.assertTrue(menu._should_use_alt_screen())
+
+    @patch.dict(os.environ, {"RESUME_ALT_SCREEN": "0"})
+    def test_should_use_alt_screen_env_override_off(self):
+        self.assertFalse(menu._should_use_alt_screen())
+
+    @patch("sys.stdout.isatty")
+    @patch("sys.stdout.write")
+    @patch("sys.stdout.flush")
+    @patch.dict(os.environ, {}, clear=True)
+    def test_alternate_screen_interactive(self, mock_flush, mock_write, mock_isatty):
+        mock_isatty.return_value = True
+        with menu._alternate_screen():
+            pass
+        # Should have written \x1b[?1049h\x1b[H to enter and \x1b[?1049l to exit
+        mock_write.assert_any_call("\x1b[?1049h\x1b[H")
+        mock_write.assert_any_call("\x1b[?1049l")
+        self.assertEqual(mock_flush.call_count, 2)
+
+    @patch("sys.stdout.isatty")
+    @patch("sys.stdout.write")
+    @patch("sys.stdout.flush")
+    def test_alternate_screen_non_interactive(self, mock_flush, mock_write, mock_isatty):
+        mock_isatty.return_value = False
+        with menu._alternate_screen():
+            pass
+        mock_write.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,10 +2,11 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -278,7 +279,7 @@ func (m ProgressModel) renderFunnel() string {
 	}
 
 	// Colors for funnel stages (gradient from cool to warm)
-	stageColors := []lipgloss.Color{
+	stageColors := []color.Color{
 		m.theme.Blue,
 		m.theme.Sky,
 		m.theme.Green,
@@ -347,7 +348,7 @@ func (m ProgressModel) renderScoreDistribution() string {
 	}
 
 	// Colors for score ranges (green to red)
-	bucketColors := []lipgloss.Color{
+	bucketColors := []color.Color{
 		m.theme.Green,
 		m.theme.Green,
 		m.theme.Yellow,
@@ -508,7 +509,7 @@ func (m ProgressModel) renderHelp() string {
 }
 
 // rateColor returns a color based on the rate value.
-func (m ProgressModel) rateColor(rate float64) lipgloss.Color {
+func (m ProgressModel) rateColor(rate float64) color.Color {
 	switch {
 	case rate >= 30:
 		return m.theme.Green

@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/log"
 
@@ -112,6 +113,10 @@ func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 // incoming screen's line count as the reveal's target, without recursing
 // through View()'s own reveal-clamping logic).
 func (m appModel) renderScreen() string {
+	if m.width > 0 && m.height > 0 && (m.width < 80 || m.height < 24) {
+		return renderCompactWarning(m.theme, m.width, m.height)
+	}
+
 	switch m.state {
 	case viewReport:
 		return m.viewer.View()
@@ -124,6 +129,62 @@ func (m appModel) renderScreen() string {
 	default:
 		return m.pipeline.View()
 	}
+}
+
+func renderCompactWarning(t theme.Theme, width, height int) string {
+	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Peach)
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve)
+	descStyle := lipgloss.NewStyle().Foreground(t.Subtext)
+	dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
+
+	title := titleStyle.Render("┃ TERMINAL WINDOW TOO COMPACT")
+	sizeLine := fmt.Sprintf("Current size: %dx%d  Minimum required: 80x24", width, height)
+	instruction := descStyle.Render("Please expand or zoom out your terminal window to resume.")
+	
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Peach).
+		Padding(1, 3).
+		Width(min(width-4, 70)).
+		Align(lipgloss.Center)
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Center,
+		title,
+		"",
+		accentStyle.Render(sizeLine),
+		"",
+		instruction,
+		"",
+		dimStyle.Render("Press Ctrl+C or Q to exit"),
+	)
+
+	rendered := box.Render(content)
+	
+	// Center the box vertically and horizontally on the screen
+	lines := strings.Split(rendered, "\n")
+	boxHeight := len(lines)
+	boxWidth := lipgloss.Width(rendered)
+
+	topPadding := (height - boxHeight) / 2
+	if topPadding < 0 {
+		topPadding = 0
+	}
+	leftPadding := (width - boxWidth) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
+
+	leftPadStr := strings.Repeat(" ", leftPadding)
+	var paddedLines []string
+	for i := 0; i < topPadding; i++ {
+		paddedLines = append(paddedLines, "")
+	}
+	for _, l := range lines {
+		paddedLines = append(paddedLines, leftPadStr+l)
+	}
+	
+	return strings.Join(paddedLines, "\n")
 }
 
 // pipelineDataLoadedMsg carries the result of reloadPipelineDataCmd's
@@ -165,8 +226,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// cleanly from every screen (pipeline/viewer/progress/menu) the same way "q"
 	// does on the pipeline screen -- rather than being silently swallowed by
 	// whichever sub-model's own KeyMsg handling doesn't recognize it.
-	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
-		return m, tea.Quit
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		keyStr := key.String()
+		if keyStr == "ctrl+c" || (keyStr == "q" && m.width > 0 && (m.width < 80 || m.height < 24)) {
+			return m, tea.Quit
+		}
 	}
 
 	// Handled ahead of the viewMenu early-return below (and the main type
@@ -347,7 +411,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m appModel) View() string {
+func (m appModel) View() tea.View {
 	// Reuse the same render the current tick already computed (see
 	// transitionTickMsg's handler above) instead of paying for a second
 	// full View() pass every frame. Falls back to a fresh render whenever
@@ -358,18 +422,24 @@ func (m appModel) View() string {
 	if !m.transitioning || target == "" {
 		target = m.renderScreen()
 	}
+	var content string
 	if !m.transitioning {
-		return target
+		content = target
+	} else {
+		lines := strings.Split(target, "\n")
+		revealed := int(m.transitionPos)
+		if revealed < 0 {
+			revealed = 0
+		}
+		if revealed >= len(lines) {
+			content = target
+		} else {
+			content = strings.Join(lines[:revealed], "\n")
+		}
 	}
-	lines := strings.Split(target, "\n")
-	revealed := int(m.transitionPos)
-	if revealed < 0 {
-		revealed = 0
-	}
-	if revealed >= len(lines) {
-		return target
-	}
-	return strings.Join(lines[:revealed], "\n")
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }
 
 func main() {
@@ -435,7 +505,7 @@ func main() {
 		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0),
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	// ErrInterrupted is bubbletea's documented return value for a SIGINT/
 	// InterruptMsg (see its doc comment) -- the rare case where Ctrl+C
 	// reaches the process as a signal rather than the KeyMsg the appModel.

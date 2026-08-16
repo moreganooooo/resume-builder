@@ -4,12 +4,13 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/log"
-	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"charm.land/huh/v2"
+	"github.com/charmbracelet/log"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
 // WizardData holds the values collected from the user.

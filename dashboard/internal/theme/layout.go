@@ -1,7 +1,7 @@
 package theme
 
 import (
-    "github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Layout helper functions for consistent padding and margins.
@@ -16,11 +16,13 @@ func PadVertical(style lipgloss.Style) lipgloss.Style {
     return style.Padding(1, 0)
 }
 
-// HoverStyle applies a subtle border to indicate hover/selection, using the
-// active theme's own Mauve accent rather than the fixed AccentColor
-// constant -- that constant is the same hex value in every theme, so a
-// selected Pipeline/Jobs row previously kept a dark-theme-tuned border
-// color even under Catppuccin Latte's light palette.
+// HoverStyle applies a sleek, left-only vertical border line (┃) to indicate
+// hover/selection, matching Crush's precise active sidebar indicators.
+// Left padding is adjusted to 1, which combines with the 1-character left
+// border to align content perfectly with unselected rows (which have a flat left padding of 2).
 func HoverStyle(style lipgloss.Style, t Theme) lipgloss.Style {
-    return style.Border(lipgloss.NormalBorder()).BorderForeground(t.Token.Mauve)
+	return style.
+		Border(lipgloss.Border{Left: "┃"}, false, false, false, true).
+		BorderForeground(t.Token.Mauve).
+		PaddingLeft(1)
 }

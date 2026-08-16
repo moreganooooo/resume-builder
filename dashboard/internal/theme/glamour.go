@@ -1,6 +1,9 @@
 package theme
 
 import (
+	"fmt"
+	"image/color"
+
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 )
@@ -36,6 +39,14 @@ func GlamourConfig(t Theme) []glamour.TermRendererOption {
 	}
 }
 
+func colorToHex(c color.Color) string {
+	if c == nil {
+		return ""
+	}
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02x%02x%02x", uint8(r>>8), uint8(g>>8), uint8(b>>8))
+}
+
 // glamourStyle builds an ansi.StyleConfig whose colors all resolve through
 // Theme fields. Every helper that needs a *string (Glamour's StylePrimitive
 // uses pointers, nil means "inherit") gets its own closure; stringPtr is
@@ -44,70 +55,70 @@ func glamourStyle(t Theme) ansi.StyleConfig {
 	return ansi.StyleConfig{
 		Document: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
-				Color:           strPtr(string(t.Text)),
-				BackgroundColor: strPtr(string(t.Base)),
+				Color:           strPtr(colorToHex(t.Text)),
+				BackgroundColor: strPtr(colorToHex(t.Base)),
 			},
 		},
 
 		Heading: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Blue)),
+				Color: strPtr(colorToHex(t.Blue)),
 			},
 		},
 		H1: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Blue)),
+				Color: strPtr(colorToHex(t.Blue)),
 			},
 		},
 		H2: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Mauve)),
+				Color: strPtr(colorToHex(t.Mauve)),
 			},
 		},
 		H3: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Sky)),
+				Color: strPtr(colorToHex(t.Sky)),
 			},
 		},
 		H4: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Text)),
+				Color: strPtr(colorToHex(t.Text)),
 			},
 		},
 		H5: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Subtext)),
+				Color: strPtr(colorToHex(t.Subtext)),
 			},
 		},
 		H6: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
 				Bold:  boolPtr(true),
-				Color: strPtr(string(t.Subtext)),
+				Color: strPtr(colorToHex(t.Subtext)),
 			},
 		},
 
 		Paragraph: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
-				Color: strPtr(string(t.Text)),
+				Color: strPtr(colorToHex(t.Text)),
 			},
 		},
 
 		BlockQuote: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
-				Color: strPtr(string(t.Text)),
+				Color: strPtr(colorToHex(t.Text)),
 			},
 			Indent:       uintPtr(0),
 			IndentToken:  strPtr(""),
 		},
 
 		Text: ansi.StylePrimitive{
-			Color: strPtr(string(t.Text)),
+			Color: strPtr(colorToHex(t.Text)),
 		},
 
 		Strong: ansi.StylePrimitive{
@@ -121,37 +132,37 @@ func glamourStyle(t Theme) ansi.StyleConfig {
 		},
 
 		HorizontalRule: ansi.StylePrimitive{
-			Color: strPtr(string(t.Overlay)),
+			Color: strPtr(colorToHex(t.Overlay)),
 		},
 
 		Item: ansi.StylePrimitive{
-			Color: strPtr(string(t.Blue)),
+			Color: strPtr(colorToHex(t.Blue)),
 		},
 		Enumeration: ansi.StylePrimitive{
-			Color: strPtr(string(t.Blue)),
+			Color: strPtr(colorToHex(t.Blue)),
 		},
 
 		Link: ansi.StylePrimitive{
-			Color:     strPtr(string(t.Token.Mauve)),
+			Color:     strPtr(colorToHex(t.Token.Mauve)),
 			Underline: boolPtr(true),
 		},
 		LinkText: ansi.StylePrimitive{
-			Color:     strPtr(string(t.Token.Mauve)),
+			Color:     strPtr(colorToHex(t.Token.Mauve)),
 			Underline: boolPtr(true),
 		},
 
 		Code: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
-				Color:           strPtr(string(t.Text)),
-				BackgroundColor: strPtr(string(t.Surface)),
+				Color:           strPtr(colorToHex(t.Text)),
+				BackgroundColor: strPtr(colorToHex(t.Surface)),
 			},
 		},
 
 		CodeBlock: ansi.StyleCodeBlock{
 			StyleBlock: ansi.StyleBlock{
 				StylePrimitive: ansi.StylePrimitive{
-					Color:           strPtr(string(t.Text)),
-					BackgroundColor: strPtr(string(t.Surface)),
+					Color:           strPtr(colorToHex(t.Text)),
+					BackgroundColor: strPtr(colorToHex(t.Surface)),
 				},
 				Indent:      uintPtr(1),
 				IndentToken: strPtr("  "),

@@ -4,11 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
+
 
 func tabIndexForFilter(t *testing.T, filter string) int {
 	t.Helper()
@@ -195,12 +196,12 @@ func TestSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
 	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
 
 	// Open input and type "stripe".
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	pm, _ = pm.Update(pressKey("/"))
 	if !pm.searchInput {
 		t.Fatal("expected `/` to open search input")
 	}
 	for _, r := range "stripe" {
-		pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pm, _ = pm.Update(pressKey(string(r)))
 	}
 	if pm.searchQuery != "stripe" {
 		t.Fatalf("expected query to live-update to 'stripe', got %q", pm.searchQuery)
@@ -210,7 +211,7 @@ func TestSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
 	}
 
 	// Enter commits — input closes, query stays.
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	pm, _ = pm.Update(pressKey("enter"))
 	if pm.searchInput {
 		t.Fatal("expected Enter to close input")
 	}
@@ -219,7 +220,7 @@ func TestSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
 	}
 
 	// Esc on a committed query clears the search and restores the full list.
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pm, _ = pm.Update(pressKey("esc"))
 	if pm.searchQuery != "" {
 		t.Fatalf("expected Esc to clear committed query, got %q", pm.searchQuery)
 	}
@@ -246,7 +247,7 @@ func TestSearchEscInInputCancelsAndClears(t *testing.T) {
 		t.Fatalf("setup expected 1 row matching 'stri', got %d", len(pm.filtered))
 	}
 
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pm, _ = pm.Update(pressKey("esc"))
 	if pm.searchInput {
 		t.Fatal("expected Esc in input mode to close input")
 	}
@@ -268,8 +269,8 @@ func TestSearchResetsCursorOnQueryChange(t *testing.T) {
 	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
 	pm.cursor = 2
 
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	pm, _ = pm.Update(pressKey("/"))
+	pm, _ = pm.Update(pressKey("a"))
 
 	if pm.cursor != 0 {
 		t.Fatalf("expected cursor to reset to 0 on query change, got %d", pm.cursor)
@@ -365,7 +366,7 @@ func TestEscWithoutQueryGoesBack(t *testing.T) {
 		t.Fatalf("setup expected empty search query, got %q", pm.searchQuery)
 	}
 
-	pm, cmd := pm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	pm, cmd := pm.Update(pressKey("esc"))
 	if cmd == nil {
 		t.Fatal("expected Esc with no query to emit PipelineClosedMsg, got nil cmd")
 	}
@@ -388,7 +389,7 @@ func TestQAlwaysQuits(t *testing.T) {
 	}
 	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
 
-	_, cmd := pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	_, cmd := pm.Update(pressKey("q"))
 	if cmd == nil {
 		t.Fatal("expected \"q\" to emit PipelineClosedMsg, got nil cmd")
 	}
@@ -412,7 +413,7 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 
 	pm := NewPipelineModel(theme.NewTheme("catppuccin-mocha"), apps, model.PipelineMetrics{Total: len(apps)}, "..", 120, 40)
 
-	pm, _ = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	pm, _ = pm.Update(pressKey("/"))
 	if !pm.searchInput {
 		t.Fatal("expected `/` to open search input")
 	}
@@ -420,7 +421,7 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 	// Typing must not trigger PipelineLoadReportMsg.
 	for _, r := range "stri" {
 		var cmd tea.Cmd
-		pm, cmd = pm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		pm, cmd = pm.Update(pressKey(string(r)))
 		if cmd != nil {
 			if msg := cmd(); msg != nil {
 				if _, ok := msg.(PipelineLoadReportMsg); ok {
@@ -431,7 +432,7 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 	}
 
 	// Backspace must not trigger PipelineLoadReportMsg either.
-	pm, cmd := pm.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	pm, cmd := pm.Update(pressKey("backspace"))
 	if cmd != nil {
 		if msg := cmd(); msg != nil {
 			if _, ok := msg.(PipelineLoadReportMsg); ok {
@@ -441,7 +442,7 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 	}
 
 	// Ctrl+U must not trigger PipelineLoadReportMsg either.
-	pm, cmd = pm.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	pm, cmd = pm.Update(pressKey("ctrl+u"))
 	if cmd != nil {
 		if msg := cmd(); msg != nil {
 			if _, ok := msg.(PipelineLoadReportMsg); ok {

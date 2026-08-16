@@ -6,6 +6,8 @@ import json
 import os
 import random
 import time
+import sys
+import shutil
 
 import questionary
 from rich import box
@@ -186,7 +188,7 @@ def _stats_line_text() -> str:
     return f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
 
 
-def display_main_banner() -> None:
+def display_main_banner(reveal: bool = True) -> None:
     # Sparkles ride the same diagonal gradient/reveal as the letters
     # themselves (composed onto each line before the grid is built, not
     # rendered separately) so they wipe in together as one coherent piece
@@ -216,6 +218,10 @@ def display_main_banner() -> None:
         body.append(SUBTITLE, style="bold")
         body.append(stats_line, style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
+
+    if not reveal or not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
+        console.print(render_frame(None))
+        return
 
     _reveal_banner(decorated_lines, grid, render_frame)
 
@@ -455,10 +461,12 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
         table.add_row(*row)
 
     legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
+    console.print()
     console.print(Panel(
         table, title=title or f"{len(results)} JD(s) evaluated", subtitle=legend,
         border_style=theme.BRAND, box=box.ROUNDED,
     ))
+    console.print()
 
 
 def _liveness_cell(liveness: dict | None) -> str:
@@ -567,10 +575,12 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
         "[dim]Last Liveness/Follow-up hidden below ~110 columns -- widen your terminal to see them[/dim]"
         if narrow else None
     )
+    console.print()
     console.print(Panel(
         table, title=title or f"{len(rows)} evaluated JD(s)", subtitle=subtitle,
         border_style=theme.BRAND, box=box.ROUNDED,
     ))
+    console.print()
 
 
 def render_picker_header(title: str, columns: list, legend: str | None = None) -> None:
@@ -732,7 +742,9 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
     for label, detail in maintenance_rows:
         table.add_row(*((label, detail) if not show_numbers else ("-", label, detail)))
 
+    console.print()
     console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED))
+    console.print()
 
 
 def render_scan_report(source_results: list, total_written: int) -> None:
@@ -779,10 +791,12 @@ def render_scan_report(source_results: list, total_written: int) -> None:
             f"[{issue_style}]{issue_count}[/{issue_style}]",
         )
 
+    console.print()
     console.print(Panel(
         table, title="Scan Results", border_style=theme.BRAND, box=box.ROUNDED,
         subtitle=f"{total_written} new JD(s) written to jds/",
     ))
+    console.print()
 
     for r in source_results:
         if not r.get("new_jobs"):
@@ -896,7 +910,9 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
         if not c["passed"]:
             failed.append(c)
 
+    console.print()
     console.print(Panel(table, title="Doctor Checks", border_style=theme.BRAND, box=box.ROUNDED))
+    console.print()
 
     if test_result is not None:
         test_passed, test_summary = test_result
@@ -1317,7 +1333,7 @@ def new_progress(**kwargs) -> Progress:
                 progress.advance(task)
     """
     return Progress(
-        SpinnerColumn(),
+        SpinnerColumn(spinner_name="dots", style=f"bold {theme.BRAND_ACCENT}"),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(
             bar_width=40,  # Chunky, wide bar
@@ -1343,7 +1359,7 @@ class ScanActivity:
 
     def __init__(self, **progress_kwargs):
         self._progress = Progress(
-            SpinnerColumn(),
+            SpinnerColumn(spinner_name="dots", style=f"bold {theme.BRAND_ACCENT}"),
             TextColumn("[progress.description]{task.description}"),
             console=console,
             **progress_kwargs,
@@ -1495,3 +1511,86 @@ def render_triage_summary_table(counts: dict) -> None:
     table.add_row("DUPLICATE (already in keeper bank, skipped)", str(counts.get("duplicate", 0)))
     table.add_row("Leftover (needs human)", str(counts.get("leftover", 0)))
     console.print(Panel(table, title="Triage Results", border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+
+
+def display_compact_banner(action_title: str) -> None:
+    """Prints a beautiful, ultra-compact 1-line header for active script runs,
+    preserving terminal height for script output while maintaining product branding.
+    """
+    panel_content = Text()
+    panel_content.append("✦ ", style=theme.BRAND_ACCENT)
+    panel_content.append("💎 RESUME BUILDER ", style=f"bold {theme.BRAND}")
+    panel_content.append("│ ", style=theme.MUTED)
+    panel_content.append(action_title.upper(), style=f"bold {theme.INFO}")
+    panel_content.append(" │ ", style=theme.MUTED)
+    panel_content.append("Active Script Execution Mode", style=theme.MUTED)
+    panel_content.append(" ✦", style=theme.BRAND_ACCENT)
+    
+    panel = Panel(
+        panel_content,
+        border_style=theme.BRAND,
+        box=box.ROUNDED,
+        padding=(0, 2),
+        width=console.width
+    )
+    console.print(panel)
+    console.print()
+
+
+def display_footer_commands() -> None:
+    """Draws a beautiful, unified footer command bar at the very bottom line of the terminal,
+    re-using our brand sparkles and Catppuccin styles to match Crush's premium visual grade.
+    """
+    columns, rows = shutil.get_terminal_size()
+    # Save current cursor position
+    sys.stdout.write("\x1b[s")
+    
+    # Move cursor to the very bottom row (row = rows)
+    sys.stdout.write(f"\x1b[{rows};1H")
+    
+    # Format a beautiful styled commands footer
+    footer_text = Text()
+    footer_text.append("✦ ", style=theme.BRAND_ACCENT)
+    footer_text.append("↑↓ / JK", style=f"bold {theme.INFO}")
+    footer_text.append(" navigate  ", style=theme.MUTED)
+    footer_text.append("│  ", style=theme.MUTED)
+    footer_text.append("ENTER", style=f"bold {theme.SUCCESS}")
+    footer_text.append(" select  ", style=theme.MUTED)
+    footer_text.append("│  ", style=theme.MUTED)
+    footer_text.append("CTRL+C", style=f"bold {theme.ERROR}")
+    footer_text.append(" cancel / exit ", style=theme.MUTED)
+    footer_text.append(" ✦", style=theme.BRAND_ACCENT)
+    
+    # Clear line first
+    sys.stdout.write("\x1b[2K")
+    # Draw footer text
+    console.print(footer_text, end="")
+    
+    # Restore saved cursor position
+    sys.stdout.write("\x1b[u")
+    sys.stdout.flush()
+
+
+def display_execution_footer() -> None:
+    """Draws a beautiful, static footer bar at the very bottom line of the terminal during active script execution."""
+    columns, rows = shutil.get_terminal_size()
+    # Save cursor position
+    sys.stdout.write("\x1b[s")
+    # Move cursor to the bottom row
+    sys.stdout.write(f"\x1b[{rows};1H")
+    # Clear line first
+    sys.stdout.write("\x1b[2K")
+    
+    footer_text = Text()
+    footer_text.append("✦ ", style=theme.BRAND_ACCENT)
+    footer_text.append("CTRL+C", style=f"bold {theme.ERROR}")
+    footer_text.append(" stop active script  ", style=theme.MUTED)
+    footer_text.append("│  ", style=theme.MUTED)
+    footer_text.append("Please wait for execution to complete...", style=theme.MUTED)
+    footer_text.append(" ✦", style=theme.BRAND_ACCENT)
+    
+    # Draw footer text
+    console.print(footer_text, end="")
+    # Restore cursor position
+    sys.stdout.write("\x1b[u")
+    sys.stdout.flush()
