@@ -97,8 +97,31 @@ def _run_phase0() -> bool:
         , soft_wrap=True)
         return False
 
-    summary = bootstrap_bullet_bank.run_ingestion()
-    bootstrap_bullet_bank.print_ingestion_summary(summary)
+    scroll_region_modified = False
+    # Clear screen and draw the compact banner!
+    import sys
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("ONBOARDING | DOCUMENT INGESTION")
+
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
+
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        summary = bootstrap_bullet_bank.run_ingestion()
+        bootstrap_bullet_bank.print_ingestion_summary(summary)
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
     return True
 
 
@@ -129,7 +152,30 @@ def _run_phase05() -> bool:
         , soft_wrap=True)
         return False
 
-    bootstrap_profile.run_profile_setup()
+    scroll_region_modified = False
+    # Clear screen and draw the compact banner!
+    import sys
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("ONBOARDING | PROFILE SETUP DRAFT")
+
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
+
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        bootstrap_profile.run_profile_setup()
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
     return True
 
 
@@ -168,8 +214,18 @@ def run_bootstrap_menu() -> bool:
     """Returns True if at least one phase actually ran (worth a "what's
     next" chain prompt back in menu.py), False if the user backed out
     without doing anything."""
+    import sys
+    import menu
+    use_alt = menu._should_use_alt_screen()
     did_something = False
+
     while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_compact_banner("PROFILE ONBOARDING WIZARD")
+            cli_art.display_footer_commands()
+
         # Labels must match _build_choices()'s wording verbatim -- these two
         # rows previously read "Ingest Source Documents"/"Set Up Profile"
         # while the menu directly below called the same steps "Upload Your
@@ -186,8 +242,10 @@ def run_bootstrap_menu() -> bool:
         # show_numbers=False: these rows are numbered 0/0.5/1-6 internally,
         # and "Stage 0.5" is dev-sequencing a first-time user shouldn't see.
         # Row order carries the sequence here. See render_bullet_bank_status().
+        cli_art.console.print()
         cli_art.render_bullet_bank_status(
             stage_rows, [], title="Onboarding Progress", show_numbers=False)
+        cli_art.console.print()
 
         choice = cli_art.select("New User Setup:", choices=_build_choices())
         if not choice or choice == "__back__":
