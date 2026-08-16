@@ -101,7 +101,7 @@ func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.transitioning = true
-	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0)
+	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 0.7)
 	m.transitionPos = 0
 	m.transitionVel = 0
 	m.transitionRender = ""
@@ -502,7 +502,7 @@ func main() {
 		state:            viewMenu,
 		menu:             menu.NewMenuModel(t),
 		transitioning:    !reducedMotion(),
-		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 1.0),
+		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 0.7),
 	}
 
 	p := tea.NewProgram(m)

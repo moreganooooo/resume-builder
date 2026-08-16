@@ -2892,7 +2892,7 @@ class ResumeEngine:
             cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
         else:
             extract_prompt = self.load_prompt("extract_keywords.md")
-            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+            with cli_art.thinking_status("Extracting keywords with Gemini..."):
                 keyword_text, _ = GeminiClient.generate(
                     model=BUILDER_MODEL,
                     system_instruction=extract_prompt,
@@ -3079,7 +3079,7 @@ class ResumeEngine:
             cli_art.detail(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...", level=cli_art.NORMAL)
             time.sleep(PRE_BUILDER_SLEEP)
 
-            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+            with cli_art.thinking_status("Building custom resume with Gemini..."):
                 resume_text, usage = GeminiClient.generate(
                     model=BUILDER_MODEL,
                     system_instruction=builder_system,
@@ -3322,7 +3322,7 @@ class ResumeEngine:
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
             )
-            with cli_art.console.status("Calling Gemini...", spinner="dots"):
+            with cli_art.thinking_status("Auditing CV fit and quality with Gemini..."):
                 critique_text, _ = GeminiClient.generate(
                     model=CRITIQUE_MODEL,
                     system_instruction=critique_system,

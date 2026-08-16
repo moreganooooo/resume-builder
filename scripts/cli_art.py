@@ -1537,6 +1537,55 @@ def display_compact_banner(action_title: str) -> None:
     console.print()
 
 
+def thinking_status(message: str):
+    """Shifting Gradient-Wave loader for Gemini 'Thinking' state.
+    Cycles Peach, Pink, Mauve, and Blue dynamically with sparkling flourishes.
+    """
+    import threading
+    import contextlib
+    
+    # Catppuccin Peach, Pink, Mauve, Lavender, Blue, Sky
+    colors = ["#f9e2af", "#f5c2e7", "#cba6f7", "#b4befe", "#89b4fa", "#89dceb"]
+    stop_event = threading.Event()
+    
+    status = console.status(
+        f"[bold {theme.BRAND}]Thinking[/bold {theme.BRAND}] · {message}",
+        spinner="dots",
+        spinner_style=f"bold {theme.BRAND_ACCENT}"
+    )
+    
+    def update_gradient():
+        idx = 0
+        while not stop_event.is_set():
+            color = colors[idx % len(colors)]
+            c2 = colors[(idx + 1) % len(colors)]
+            c3 = colors[(idx + 2) % len(colors)]
+            
+            sparkles_left = f"[{color}]✦[/] [{c2}]✧[/] [{c3}]✦[/]"
+            sparkles_right = f"[{c3}]✦[/] [{c2}]✧[/] [{color}]✦[/]"
+            
+            # Shifting wave text
+            text = f"{sparkles_left} [bold {color}]Thinking[/] · [{theme.INFO}]{message}[/] {sparkles_right}"
+            status.update(text, spinner="dots", spinner_style=f"bold {color}")
+            idx += 1
+            time.sleep(0.12)
+            
+    status.start()
+    t = threading.Thread(target=update_gradient, daemon=True)
+    t.start()
+    
+    @contextlib.contextmanager
+    def _runner():
+        try:
+            yield status
+        finally:
+            stop_event.set()
+            t.join(timeout=0.2)
+            status.stop()
+            
+    return _runner()
+
+
 def display_footer_commands() -> None:
     """Draws a beautiful, unified footer command bar at the very bottom line of the terminal,
     re-using our brand sparkles and Catppuccin styles to match Crush's premium visual grade.
