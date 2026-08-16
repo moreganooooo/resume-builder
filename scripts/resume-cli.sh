@@ -8,6 +8,37 @@
 # Works under both zsh and bash since the two shells expose the sourced
 # file's path differently.
 
+# Check if script is being run directly instead of sourced
+_RESUME_DIRECT_RUN=0
+if [ -n "$ZSH_VERSION" ]; then
+  if [[ "$ZSH_EVAL_CONTEXT" == "toplevel"* ]]; then
+    _RESUME_DIRECT_RUN=1
+  fi
+elif [ -n "$BASH_VERSION" ]; then
+  if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    _RESUME_DIRECT_RUN=1
+  fi
+fi
+
+if [ "$_RESUME_DIRECT_RUN" -eq 1 ]; then
+  local_path="${BASH_SOURCE[0]:-$0}"
+  abs_path="$(cd "$(dirname "$local_path")" && pwd)/$(basename "$local_path")"
+  echo "--------------------------------------------------------"
+  echo "  ✦  RESUME-BUILDER SHELL SHORTCUTS  ✦"
+  echo "--------------------------------------------------------"
+  echo "You executed this script directly instead of sourcing it."
+  echo "To use the 'resume' command from anywhere in your shell,"
+  echo "please SOURCE this file instead of running it."
+  echo ""
+  echo "Run this command to activate it for your current session:"
+  echo "  source $abs_path"
+  echo ""
+  echo "Or add it to your profile (~/.zshrc or ~/.bashrc) permanently:"
+  echo "  echo \"source $abs_path\" >> ~/.zshrc"
+  echo "--------------------------------------------------------"
+  exit 1
+fi
+
 if [ -n "$ZSH_VERSION" ]; then
   _RESUME_BUILDER_DIR="$(cd "$(dirname "${(%):-%x}")/.." && pwd)"
 else

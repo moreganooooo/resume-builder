@@ -90,6 +90,7 @@ def _build_find_jobs_choices() -> list:
     level down from the main menu" and asked for it here too."""
     return [
         questionary.Choice(title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"),
+        questionary.Choice(title=_icon_title("discovery", "↳ Add Job Description Manually"), value="add_manual_jd"),
         questionary.Choice(title=_icon_title("discovery", "↳ Check Job Posting Liveness"), value="liveness"),
         questionary.Choice(title=_icon_title("evaluate", "↳ Evaluate Pending Roles"), value="evaluate_all"),
         questionary.Choice(title=_icon_title("utility", "↳ Archive Stale Postings"), value="stale_sweep"),
@@ -126,6 +127,7 @@ def _build_settings_upkeep_choices() -> list:
     last_run_label = f"(last run: {last_run[:10]})" if last_run else "(never run)"
     return [
         questionary.Choice(title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"), value="doctor"),
+        questionary.Choice(title=_icon_title("utility", "↳ Manage Scraping, Boards & Search Queries"), value="manage_scraping"),
         questionary.Choice(title=_icon_title("utility", "↳ Generate Sample Resume + Cover Letter (QA)"), value="build_sample"),
         questionary.Choice(title=_icon_title("utility", "↳ Check for GitHub Updates"), value="check_updates"),
         questionary.Choice(title=_icon_title("utility", "↳ Manage Profiles (Rename / Delete)"), value="manage_profiles"),
@@ -421,38 +423,97 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
 def _handle_bootstrap() -> bool:
     import profile_paths
+    import shutil
 
     is_existing = _profile_is_set_up()
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
         # Run the Go wizard binary that presents the new-user onboarding
-        # UI. We execute it from the project root so the relative import
-        # works. subprocess/json are already imported at module level.
-        result = subprocess.run(
-            ["go", "run", "./dashboard/cmd/bootstrap"],
-            cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            # Was a bare "Bootstrap wizard failed" that discarded stderr
-            # entirely -- no detail, no fix, on the very first screen a new
-            # user reaches. The most likely cause by far is that the Go
-            # toolchain isn't installed (it's the one dependency the rest
-            # of this project doesn't need), which the classifier now names.
-            cli_art.friendly_subprocess_error(result.stderr, "starting the setup wizard")
-            return False
-        try:
-            data = json.loads(result.stdout.strip())
-        except json.JSONDecodeError as exc:
-            cli_art.friendly_error(
-                exc, "reading the setup wizard's answers",
-                fix="Run `resume doctor`, then try New User Setup again.")
-            return False
+        # UI if Go is installed. Otherwise, fall back to Python-native questionary.
+        if shutil.which("go") is None:
+            cli_art.console.print()
+            cli_art.console.print(f"[{theme.BRAND}]✦ Go not found -- Falling back to terminal wizard ✦[/{theme.BRAND}]")
+            
+            profile_name = questionary.text(
+                "Profile name (e.g., 'morgan'):",
+                style=cli_art.QUESTIONARY_STYLE,
+                validate=lambda text: True if text.strip() != "" else "Profile name cannot be empty."
+            ).ask()
+            if not profile_name:
+                return False
+            
+            source_choice = questionary.select(
+                "Source of your career data:",
+                choices=["Resume PDF", "LinkedIn export (JSON)", "Manual markdown"],
+                style=cli_art.QUESTIONARY_STYLE
+            ).ask()
+            if not source_choice:
+                return False
+            
+            source_map = {
+                "Resume PDF": "pdf",
+                "LinkedIn export (JSON)": "linkedin",
+                "Manual markdown": "manual"
+            }
+            source_choice_val = source_map[source_choice]
+            
+            ingest_path = ""
+            if source_choice_val != "manual":
+                allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
+                ingest_path = picker.interactive_file_picker(
+                    f"Browse and select your source {source_choice_val.upper()} file:",
+                    allowed_extensions=allowed_exts
+                )
+                if not ingest_path:
+                    return False
+            
+            create_bullet = questionary.confirm(
+                "Build the bullet-bank now?",
+                default=True,
+                style=cli_art.QUESTIONARY_STYLE
+            ).ask()
+            if create_bullet is None:
+                return False
+            
+            data = {
+                "profile_name": profile_name.strip(),
+                "source_choice": source_choice_val,
+                "ingest_path": ingest_path,
+                "create_bullet": bool(create_bullet)
+            }
+        else:
+            result = subprocess.run(
+                ["go", "run", "./dashboard/cmd/bootstrap"],
+                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                cli_art.friendly_subprocess_error(result.stderr, "starting the setup wizard")
+                return False
+            try:
+                data = json.loads(result.stdout.strip())
+            except json.JSONDecodeError as exc:
+                cli_art.friendly_error(
+                    exc, "reading the setup wizard's answers",
+                    fix="Run `resume doctor`, then try New User Setup again.")
+                return False
+        
         name = data.get("profile_name")
         if name:
             bootstrap_bullet_bank.create_new_profile(name)
             profile_paths.set_active_profile(name)
+            
+            source_path = data.get("ingest_path")
+            if source_path and os.path.exists(source_path):
+                dest_dir = os.path.join(profile_paths.PROFILES_DIR, name, "knowledge_base", "bootstrap", "source_documents")
+                os.makedirs(dest_dir, exist_ok=True)
+                shutil.copy(source_path, dest_dir)
+                cli_art.cli_info(f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder.")
+            
+            if data.get("create_bullet"):
+                # Automatically run express auto-pilot onboarding!
+                return bootstrap_menu._run_express_setup(interactive=False)
 
     # Continue with the existing detailed bootstrap menu (phase selection, etc.)
     return bootstrap_menu.run_bootstrap_menu()
@@ -521,6 +582,79 @@ def _handle_scan() -> bool:
     sources = None if choice == "all" else [choice]
     written = scan_module.run_scan(sources)
     return written > 0
+
+
+def _handle_add_manual_jd() -> bool:
+    """Manually add a job description by pasting the details/text directly."""
+    import profile_paths
+    import jd_manager
+    import uuid
+    import datetime
+    from atomic_write import atomic_write
+
+    cli_art.console.print()
+    cli_art.console.print(f"[bold]Add Job Description Manually[/bold]")
+    cli_art.console.print("Please enter the job details below:")
+    cli_art.console.print()
+
+    job_title = questionary.text(
+        "Job Title:",
+        style=cli_art.QUESTIONARY_STYLE,
+        validate=lambda text: True if text.strip() != "" else "Job title cannot be empty."
+    ).ask()
+    if not job_title:
+        return False
+
+    company_name = questionary.text(
+        "Company Name:",
+        style=cli_art.QUESTIONARY_STYLE,
+        validate=lambda text: True if text.strip() != "" else "Company name cannot be empty."
+    ).ask()
+    if not company_name:
+        return False
+
+    source_url = questionary.text(
+        "Source URL (optional, press Enter to skip):",
+        style=cli_art.QUESTIONARY_STYLE
+    ).ask()
+    if source_url is None:
+        return False
+
+    description = questionary.text(
+        "Paste the Job Description text (Press Esc then Enter to finish):",
+        multiline=True,
+        style=cli_art.QUESTIONARY_STYLE,
+        validate=lambda text: True if text.strip() != "" else "Job description cannot be empty."
+    ).ask()
+    if not description:
+        return False
+
+    # Standardize filename: company_title.json
+    safe_company = "".join(c if c.isalnum() else "_" for c in company_name.strip()).lower()
+    safe_title = "".join(c if c.isalnum() else "_" for c in job_title.strip()).lower()
+    filename = f"{safe_company}_{safe_title}_{str(uuid.uuid4())[:8]}.json"
+    
+    jds_dir = profile_paths.jds_dir()
+    os.makedirs(jds_dir, exist_ok=True)
+    filepath = os.path.join(jds_dir, filename)
+
+    job_data = {
+        "job_title": job_title.strip(),
+        "company_name": company_name.strip(),
+        "source_url": source_url.strip() if source_url else "",
+        "source_job_id": str(uuid.uuid4()),
+        "description": description.strip(),
+        "date_added": datetime.datetime.now().isoformat()
+    }
+
+    try:
+        with atomic_write(filepath, "w", encoding="utf-8") as f:
+            json.dump(job_data, f, indent=2)
+        cli_art.cli_info(f"Successfully saved manual JD to: {filepath}")
+        return True
+    except Exception as e:
+        cli_art.friendly_error(e, "saving manual job description")
+        return False
 
 
 def _handle_liveness() -> bool:
@@ -881,6 +1015,7 @@ def _handle_run_doctor() -> None:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+    import profile_paths
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -898,6 +1033,98 @@ def _handle_run_doctor() -> None:
                 test_result = doctor.run_test_suite()
         cli_art.render_doctor_report(checks, test_result)
         maintenance.record_run("doctor")
+
+        # Define mapping of repairable checks and their corresponding auto-repair instructions
+        REPAIRABLE_CHECKS = {
+            "Dashboard theme sync (Go)": {
+                "description": "Regenerate the Go TUI color theme to match theme.py",
+                "command": [sys.executable, "scripts/sync_dashboard_theme.py"],
+            },
+            "Python packages (requirements.txt)": {
+                "description": "Install missing pip packages in your virtual environment",
+                "func": lambda c: [sys.executable, "-m", "pip", "install"] + c["detail"].replace("missing: ", "").split(", ")
+            },
+            "Playwright npm package": {
+                "description": "Run 'npm install' to install browser automation dependencies",
+                "command": ["npm", "install"],
+            },
+            "Playwright Chromium browser": {
+                "description": "Download and install Chromium for PDF generation",
+                "command": ["npx", "playwright", "install", "chromium"],
+            },
+            "GEMINI_API_KEY": {
+                "description": "Provide a Gemini API Key and write it to your active .env file",
+                "special": "gemini_api"
+            }
+        }
+
+        failed_repairs = [c for c in checks if not c["passed"] and c["name"] in REPAIRABLE_CHECKS]
+
+        if failed_repairs:
+            cli_art.console.print()
+            cli_art.console.print(f"[bold {theme.WARNING}]✦  AUTO-REPAIR AVAILABLE  ✦[/bold {theme.WARNING}]")
+            cli_art.console.print("The Doctor detected that some of the failed checks can be repaired automatically:")
+            for c in failed_repairs:
+                desc = REPAIRABLE_CHECKS[c["name"]]["description"]
+                cli_art.console.print(f"  • [bold]{c['name']}[/bold]: {desc}")
+            cli_art.console.print()
+            
+            should_repair = charm_prompt.confirm(
+                "Would you like me to attempt to repair these issues automatically?",
+                default=True
+            )
+            if should_repair:
+                for c in failed_repairs:
+                    cli_art.console.print(f"\n[bold {theme.INFO}]Repairing: {c['name']}...[/bold {theme.INFO}]")
+                    rule = REPAIRABLE_CHECKS[c["name"]]
+                    
+                    if rule.get("special") == "gemini_api":
+                        key_val = questionary.text(
+                            "Enter your GEMINI_API_KEY:",
+                            style=cli_art.QUESTIONARY_STYLE
+                        ).ask()
+                        if key_val:
+                            env_p = profile_paths.env_path()
+                            lines = []
+                            if os.path.exists(env_p):
+                                with open(env_p, "r", encoding="utf-8") as f:
+                                    lines = f.readlines()
+                            
+                            replaced = False
+                            for i, l in enumerate(lines):
+                                if l.strip().startswith("GEMINI_API_KEY="):
+                                    lines[i] = f"GEMINI_API_KEY={key_val.strip()}\n"
+                                    replaced = True
+                                    break
+                            if not replaced:
+                                lines.append(f"GEMINI_API_KEY={key_val.strip()}\n")
+                            
+                            with open(env_p, "w", encoding="utf-8") as f:
+                                f.writelines(lines)
+                            
+                            cli_art.console.print(f"[{theme.SUCCESS}]✓ GEMINI_API_KEY written to {env_p}![/{theme.SUCCESS}]")
+                        else:
+                            cli_art.console.print(f"[{theme.ERROR}]✗ GEMINI_API_KEY setup skipped.[/{theme.ERROR}]")
+                    else:
+                        if "command" in rule:
+                            cmd = rule["command"]
+                        else:
+                            cmd = rule["func"](c)
+                        
+                        try:
+                            res = subprocess.run(cmd, cwd=profile_paths.PROJECT_ROOT, capture_output=True, text=True)
+                            if res.returncode == 0:
+                                cli_art.console.print(f"[{theme.SUCCESS}]✓ {c['name']} repaired successfully![/{theme.SUCCESS}]")
+                            else:
+                                cli_art.console.print(f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {res.stderr.strip()}[/{theme.ERROR}]")
+                        except Exception as err:
+                            cli_art.console.print(f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {err}[/{theme.ERROR}]")
+                
+                # Re-run checks to verify repairs!
+                cli_art.console.print(f"\n[bold {theme.INFO}]Re-running Doctor checks to verify repairs...[/bold {theme.INFO}]")
+                checks = doctor.run_checks()
+                cli_art.render_doctor_report(checks, test_result)
+
     finally:
         if scroll_region_modified:
             sys.stdout.write("\x1b[r")
@@ -972,6 +1199,9 @@ def _handle_settings_upkeep() -> bool:
         if choice == "doctor":
             _handle_run_doctor()
             continue
+        if choice == "manage_scraping":
+            _handle_manage_scraping()
+            continue
         if choice == "build_sample":
             _handle_build_sample()
             continue
@@ -981,6 +1211,309 @@ def _handle_settings_upkeep() -> bool:
         if choice == "manage_profiles":
             _handle_manage_profiles()
             continue
+
+
+def _handle_manage_scraping():
+    import yaml
+    import profile_paths
+    
+    use_alt = _should_use_alt_screen()
+    profile = profile_paths.active_profile()
+    
+    filters_path = os.path.join(profile_paths.board_scanner_dir(profile), "scan_filters.yml")
+    profile_path = os.path.join(profile_paths.profile_dir(profile), "profile.yml")
+    
+    while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_compact_banner("MANAGE SCRAPING, BOARDS & QUERIES")
+            cli_art.display_footer_commands()
+            cli_art.console.print()
+            
+        choices = [
+            questionary.Choice("🔌 Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"),
+            questionary.Choice("➕ Add Custom RSS Job Board Feed", value="add_board"),
+            questionary.Choice("➖ Delete/Remove Custom RSS Job Board Feed", value="delete_board"),
+            questionary.Choice("🔍 Edit LinkedIn Boolean Search Queries", value="linkedin_queries"),
+            questionary.Choice("🎯 Edit Title Keyword Filters (Positive/Negative)", value="title_filters"),
+            questionary.Choice("Back", value="back")
+        ]
+        
+        choice = cli_art.select("Manage Scraping & Filters:", choices=choices)
+        if not choice or choice == "back":
+            return
+            
+        if choice == "toggle_boards":
+            _handle_toggle_boards(filters_path)
+            continue
+        if choice == "add_board":
+            _handle_add_custom_board(filters_path)
+            continue
+        if choice == "delete_board":
+            _handle_delete_custom_board(filters_path)
+            continue
+        if choice == "linkedin_queries":
+            _handle_edit_linkedin_queries(profile_path)
+            continue
+        if choice == "title_filters":
+            _handle_edit_title_filters(filters_path)
+            continue
+
+
+def _handle_toggle_boards(filters_path):
+    import yaml
+    import scan_boards
+    
+    with open(filters_path, "r", encoding="utf-8") as f:
+        filters = yaml.safe_load(f) or {}
+        
+    enabled_boards = filters.get("enabled_boards")
+    if enabled_boards is None:
+        enabled_boards = list(scan_boards.BOARD_PROVIDERS)
+        
+    choices = []
+    for b in scan_boards.BOARD_PROVIDERS:
+        name = cli_art.format_board_name(b)
+        choices.append(questionary.Choice(name, value=b, checked=b in enabled_boards))
+        
+    selected = questionary.checkbox(
+        "Select active job boards (Space to check/uncheck):",
+        choices=choices,
+        style=cli_art.QUESTIONARY_STYLE
+    ).ask()
+    
+    if selected is None:
+        return
+        
+    filters["enabled_boards"] = list(selected)
+    with open(filters_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+        
+    cli_art.cli_info("Active job boards updated successfully!")
+    _pause_and_return()
+
+
+def _handle_add_custom_board(filters_path):
+    import yaml
+    
+    with open(filters_path, "r", encoding="utf-8") as f:
+        filters = yaml.safe_load(f) or {}
+        
+    custom_feeds = filters.get("custom_feeds") or []
+    
+    feed_name = questionary.text(
+        "Enter custom board name (e.g., 'Golang Jobs'):",
+        style=cli_art.QUESTIONARY_STYLE,
+        validate=lambda text: True if text.strip() != "" else "Name cannot be empty."
+    ).ask()
+    if not feed_name:
+        return
+        
+    feed_url = questionary.text(
+        "Enter RSS Feed URL:",
+        style=cli_art.QUESTIONARY_STYLE,
+        validate=lambda text: True if text.strip().startswith(("http://", "https://")) else "Must be a valid HTTP/HTTPS URL."
+    ).ask()
+    if not feed_url:
+        return
+        
+    custom_feeds.append({
+        "name": feed_name.strip(),
+        "url": feed_url.strip()
+    })
+    filters["custom_feeds"] = custom_feeds
+    
+    with open(filters_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+        
+    cli_art.cli_info(f"Custom RSS board '{feed_name}' added successfully!")
+    _pause_and_return()
+
+
+def _handle_delete_custom_board(filters_path):
+    import yaml
+    
+    with open(filters_path, "r", encoding="utf-8") as f:
+        filters = yaml.safe_load(f) or {}
+        
+    custom_feeds = filters.get("custom_feeds") or []
+    if not custom_feeds:
+        cli_art.display_warning("No custom RSS feeds configured.")
+        _pause_and_return()
+        return
+        
+    choices = []
+    for i, feed in enumerate(custom_feeds):
+        choices.append(questionary.Choice(f"{feed['name']} ({feed['url']})", value=i))
+    choices.append(questionary.Choice("Cancel", value="cancel"))
+    
+    selected = cli_art.select("Select custom board to delete:", choices=choices)
+    if selected == "cancel" or selected is None:
+        return
+        
+    deleted = custom_feeds.pop(selected)
+    filters["custom_feeds"] = custom_feeds
+    
+    with open(filters_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+        
+    cli_art.cli_info(f"Custom board '{deleted['name']}' removed successfully!")
+    _pause_and_return()
+
+
+def _handle_edit_linkedin_queries(profile_path):
+    import yaml
+    import time
+    
+    with open(profile_path, "r", encoding="utf-8") as f:
+        profile_data = yaml.safe_load(f) or {}
+        
+    queries = profile_data.get("linkedin_search_queries") or []
+    
+    while True:
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.flush()
+        cli_art.display_compact_banner("EDIT LINKEDIN BOOLEAN QUERIES")
+        
+        cli_art.console.print("Current Boolean search queries used on LinkedIn:\n")
+        if not queries:
+            cli_art.console.print("  [yellow](None configured -- falling back to target roles)[/yellow]\n")
+        else:
+            for q in queries:
+                cli_art.console.print(f"  • [cyan]\"{q}\"[/cyan]")
+            cli_art.console.print()
+            
+        choices = [
+            questionary.Choice("➕ Add New Boolean Query String", value="add"),
+            questionary.Choice("➖ Delete/Remove Boolean Query String", value="delete"),
+            questionary.Choice("Back", value="back")
+        ]
+        
+        act = cli_art.select("Edit Queries:", choices=choices)
+        if not act or act == "back":
+            break
+            
+        if act == "add":
+            new_q = questionary.text(
+                "Enter your new Boolean Query:",
+                style=cli_art.QUESTIONARY_STYLE,
+                validate=lambda text: True if text.strip() != "" else "Query cannot be empty."
+            ).ask()
+            if new_q:
+                queries.append(new_q.strip())
+                profile_data["linkedin_search_queries"] = queries
+                with open(profile_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(profile_data, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Boolean query added successfully!")
+                time.sleep(1)
+        elif act == "delete":
+            if not queries:
+                cli_art.display_warning("No queries to delete.")
+                time.sleep(1)
+                continue
+            choices_del = [questionary.Choice(q, value=q) for q in queries] + ["Cancel"]
+            to_del = cli_art.select("Select query to remove:", choices=choices_del)
+            if to_del and to_del != "Cancel":
+                queries.remove(to_del)
+                profile_data["linkedin_search_queries"] = queries
+                with open(profile_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(profile_data, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Boolean query removed successfully!")
+                time.sleep(1)
+
+
+def _handle_edit_title_filters(filters_path):
+    import yaml
+    import time
+    
+    with open(filters_path, "r", encoding="utf-8") as f:
+        filters = yaml.safe_load(f) or {}
+        
+    title_filter = filters.get("title_filter") or {"positive": [], "negative": []}
+    
+    while True:
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.flush()
+        cli_art.display_compact_banner("EDIT TITLE KEYWORD FILTERS")
+        
+        cli_art.console.print("These keywords filter all standard job board listings.\n")
+        
+        pos = title_filter.get("positive") or []
+        neg = title_filter.get("negative") or []
+        
+        cli_art.console.print(f"[green]✔ POSITIVE KEYWORDS[/green] (at least one MUST be present):")
+        if not pos:
+            cli_art.console.print("  (Empty -- all titles pass)")
+        else:
+            cli_art.console.print(f"  {', '.join(pos)}")
+            
+        cli_art.console.print(f"\n[red]✘ NEGATIVE KEYWORDS[/red] (if present, job is skipped):")
+        if not neg:
+            cli_art.console.print("  (None configured)")
+        else:
+            cli_art.console.print(f"  {', '.join(neg)}")
+        cli_art.console.print()
+        
+        choices = [
+            questionary.Choice("➕ Add Positive Keyword", value="add_pos"),
+            questionary.Choice("➕ Add Negative Keyword", value="add_neg"),
+            questionary.Choice("➖ Delete Positive Keyword", value="del_pos"),
+            questionary.Choice("➖ Delete Negative Keyword", value="del_neg"),
+            questionary.Choice("Back", value="back")
+        ]
+        
+        act = cli_art.select("Action:", choices=choices)
+        if not act or act == "back":
+            break
+            
+        if act == "add_pos":
+            k = questionary.text("Enter positive title keyword:", style=cli_art.QUESTIONARY_STYLE).ask()
+            if k:
+                pos.append(k.strip())
+                title_filter["positive"] = sorted(list(set(pos)))
+                filters["title_filter"] = title_filter
+                with open(filters_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Positive filter updated!")
+                time.sleep(1)
+        elif act == "add_neg":
+            k = questionary.text("Enter negative title keyword:", style=cli_art.QUESTIONARY_STYLE).ask()
+            if k:
+                neg.append(k.strip())
+                title_filter["negative"] = sorted(list(set(neg)))
+                filters["title_filter"] = title_filter
+                with open(filters_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Negative filter updated!")
+                time.sleep(1)
+        elif act == "del_pos":
+            if not pos:
+                continue
+            choices_del = [questionary.Choice(x, value=x) for x in pos] + ["Cancel"]
+            to_del = cli_art.select("Select positive keyword to remove:", choices=choices_del)
+            if to_del and to_del != "Cancel":
+                pos.remove(to_del)
+                title_filter["positive"] = pos
+                filters["title_filter"] = title_filter
+                with open(filters_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Positive keyword removed!")
+                time.sleep(1)
+        elif act == "del_neg":
+            if not neg:
+                continue
+            choices_del = [questionary.Choice(x, value=x) for x in neg] + ["Cancel"]
+            to_del = cli_art.select("Select negative keyword to remove:", choices=choices_del)
+            if to_del and to_del != "Cancel":
+                neg.remove(to_del)
+                title_filter["negative"] = neg
+                filters["title_filter"] = title_filter
+                with open(filters_path, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                cli_art.cli_info("Negative keyword removed!")
+                time.sleep(1)
+
 
 def _handle_manage_profiles():
     import shutil
@@ -1277,6 +1810,7 @@ _HANDLERS = {
     "bootstrap": _handle_bootstrap,
     "update_knowledge": _handle_update_knowledge,
     "scan": _handle_scan,
+    "add_manual_jd": _handle_add_manual_jd,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
     "tailor_all": _handle_tailor_all,
@@ -1392,9 +1926,38 @@ def offer_next_steps(
     if not cli_art.console.is_terminal:
         return
 
+    # Clear screen and display a clean slate for the "What's Next?" prompt!
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("Completed Actions & Next Steps")
+    cli_art.display_footer_commands()
+
     value = _CLI_ACTION_TO_VALUE.get(action, action)
+    
+    # Trigger a premium, high-energy success celebration for milestones!
+    if value in ("tailor_pick", "tailor_all", "coverletter_pick", "express"):
+        if value == "express":
+            cli_art.display_success_celebration(
+                "Express Auto-pilot Setup Complete!",
+                "We ingested your files, extracted your key achievements, populated your Bullet Bank, and built your tailored resume."
+            )
+        elif value == "coverletter_pick":
+            cli_art.display_success_celebration(
+                "Cover Letter Customized Successfully!",
+                "Your cover letter has been perfectly tailored and aligned to match the target job description."
+            )
+        else:
+            cli_art.display_success_celebration(
+                "Resume Customized & Polished!",
+                "All your achievement bullets have been dynamically rewritten and adapted for this specific role."
+            )
+
     next_options = _CHAIN.get(value) or []
     choices = [questionary.Choice(title=_chain_choice_title(label, v), value=v) for label, v in next_options]
+
+    last_pdf = os.environ.get("RESUME_BUILDER_LAST_PDF")
+    if last_pdf and os.path.exists(last_pdf):
+        choices.insert(0, questionary.Choice(title="↗ View Generated PDF", value="__view_pdf__"))
 
     if from_cli:
         if value in ("tailor_pick", "coverletter_pick") and jd_file:
@@ -1405,13 +1968,26 @@ def offer_next_steps(
         choices.append(questionary.Choice(title=_icon_title("utility", "Exit"), value="__exit__"))
     else:
         if not choices:
-            return
+            # If we have a view_pdf option, we shouldn't return early even if there are no downstream chains!
+            if not last_pdf or not os.path.exists(last_pdf):
+                return
         choices.append(questionary.Choice(title=_icon_title("utility", "Back to Menu"), value="__back__"))
 
     cli_art.display_whats_next_panel()
     choice = cli_art.select("Choose one:", choices=choices)
 
     if not choice or choice in ("__back__", "__exit__"):
+        return
+    if choice == "__view_pdf__":
+        if last_pdf and os.path.exists(last_pdf):
+            if sys.platform == "darwin":
+                subprocess.run(["open", last_pdf])
+            elif sys.platform == "win32":
+                os.startfile(last_pdf)
+            else:
+                subprocess.run(["xdg-open", last_pdf])
+        # Re-offer the next steps recursively after opening the viewer
+        offer_next_steps(action, session_stats, jd_file=jd_file, from_cli=from_cli)
         return
     if choice == "__help__":
         cli_art.display_help()
@@ -1529,10 +2105,10 @@ def _should_use_alt_screen() -> bool:
         return True
     if os.environ.get("RESUME_ALT_SCREEN") == "0":
         return False
-    # Graceful auto-detection: if terminal is at least 35 rows tall, we can go fullscreen!
-    # This prevents the scrolling overflow issue on very small terminal screens.
+    # Graceful auto-detection: if terminal is at least 24 rows tall, we can go fullscreen!
+    # This prevents the scrolling overflow issue on standard terminal screens.
     columns, rows = shutil.get_terminal_size()
-    return rows >= 35
+    return rows >= 24
 
 
 def run_interactive_menu() -> None:
