@@ -82,10 +82,13 @@ def init_db(conn: sqlite3.Connection) -> None:
         """)
 
 
-def upsert_job(job_data: Dict[str, Any], profile: Optional[str] = None) -> None:
+def upsert_job(job_data: Dict[str, Any], profile: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> None:
     """Inserts or updates a job posting record in the database."""
     job_id = job_data.get("id") or job_data.get("filename") or f"{job_data.get('company', 'Unknown')}_{job_data.get('title', 'Role')}"
-    conn = get_db(profile)
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
     
     raw_status = (job_data.get("status") or "pending").lower()
     if "expire" in raw_status:
@@ -125,35 +128,53 @@ def upsert_job(job_data: Dict[str, Any], profile: Optional[str] = None) -> None:
     deal_breakers = json.dumps(job_data.get("deal_breakers", [])) if isinstance(job_data.get("deal_breakers"), list) else str(job_data.get("deal_breakers", ""))
     metadata_json = json.dumps({k: v for k, v in job_data.items() if k not in ("id", "title", "company", "location", "jd_text", "raw_text", "status")})
 
-    with conn:
-        conn.execute("""
-            INSERT INTO jobs (id, title, company, location, raw_text, status, capability_score, recruiter_score, final_score, deal_breakers, metadata_json, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(id) DO UPDATE SET
-                title=excluded.title,
-                company=excluded.company,
-                location=excluded.location,
-                raw_text=excluded.raw_text,
-                status=excluded.status,
-                capability_score=excluded.capability_score,
-                recruiter_score=excluded.recruiter_score,
-                final_score=excluded.final_score,
-                deal_breakers=excluded.deal_breakers,
-                metadata_json=excluded.metadata_json,
-                updated_at=CURRENT_TIMESTAMP
-        """, (job_id, title, company, location, raw_text, status, cap_score, rec_score, final_score, deal_breakers, metadata_json))
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO jobs (id, title, company, location, raw_text, status, capability_score, recruiter_score, final_score, deal_breakers, metadata_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    company=excluded.company,
+                    location=excluded.location,
+                    raw_text=excluded.raw_text,
+                    status=excluded.status,
+                    capability_score=excluded.capability_score,
+                    recruiter_score=excluded.recruiter_score,
+                    final_score=excluded.final_score,
+                    deal_breakers=excluded.deal_breakers,
+                    metadata_json=excluded.metadata_json,
+                    updated_at=CURRENT_TIMESTAMP
+            """, (job_id, title, company, location, raw_text, status, cap_score, rec_score, final_score, deal_breakers, metadata_json))
+    finally:
+        if close_conn:
+            conn.close()
 
 
-def get_jobs_by_status(status: str, profile: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_jobs_by_status(status: str, profile: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
     """Returns all job records matching a given status."""
-    conn = get_db(profile)
-    cursor = conn.execute("SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC", (status,))
-    rows = cursor.fetchall()
-    return [dict(row) for row in rows]
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        cursor = conn.execute("SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC", (status,))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        if close_conn:
+            conn.close()
 
 
-def update_job_status(job_id: str, new_status: str, profile: Optional[str] = None) -> None:
+def update_job_status(job_id: str, new_status: str, profile: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> None:
     """Updates status for a specific job ID."""
-    conn = get_db(profile)
-    with conn:
-        conn.execute("UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, job_id))
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        with conn:
+            conn.execute("UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (new_status, job_id))
+    finally:
+        if close_conn:
+            conn.close()
