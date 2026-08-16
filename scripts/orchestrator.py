@@ -900,6 +900,26 @@ class FitEvaluationSchema(BaseModel):
     posting_legitimacy_notes:   str                       = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
 
 
+class CapabilityEvaluationSchema(BaseModel):
+    archetype:                  str                       = Field(description="Best-matching role archetype, or closest hybrid of two")
+    fit_subscores:              FitSubscores
+    capability_gaps:            List[str]                 = Field(description="Conceptual capability gaps or narrative omissions; empty if none")
+
+
+class RecruiterEvaluationSchema(BaseModel):
+    hard_blockers:              List[str]                 = Field(description="Explicit disqualifying constraints found; empty list if none")
+    interview_odds_subscores:   InterviewOddsSubscores
+    practical_pursue_subscores: PracticalPursueSubscores
+    prestige_tier:              Literal["Tier-1", "Tier-2", "Tier-3"] = Field(description="Classification of the company size and volume risk")
+    recommendation:             Literal["Strong pursue", "Selective pursue", "Low-priority pursue", "Skip"]
+    why:                        str                       = Field(description="2-4 plain-language sentences justifying the recommendation")
+    recruiter_read:             str                       = Field(description="1-2 sentences on how a recruiter is likely to read this candidate for this role at first glance")
+    posting_legitimacy:         Literal["High Confidence", "Proceed with Caution", "Suspicious"] = Field(description="Does this posting look real, active, and worth pursuing?")
+    posting_legitimacy_notes:   str                       = Field(description="1-2 sentences on the signals behind the posting_legitimacy assessment")
+    ghost_job_red_flags:        List[str]                 = Field(description="Explicit indicators of fake, stale, or evergreen listings; empty if none")
+
+
+
 # Applying early matters a lot, and the scanners now pull in enough
 # volume that a posting sitting open for weeks shouldn't rank the same
 # as one found today.
@@ -2574,11 +2594,9 @@ class ResumeEngine:
 
     def evaluate_fit(self, jd_path: str) -> dict:
         """
-        Standalone go/no-go fit check for a JD -- independent of the tailor+
-        render pipeline (no checkpoint, no output files, no applications.md
-        write). Ports career-ops's weighted-match rubric (see
-        prompts/evaluate_fit.md); returns {} if the JD can't be read or the
-        model call fails to parse.
+        Ultra-Premium grounded two-stage fit evaluation check for a JD.
+        Loads profile.yml dynamically to apply custom deal-breaker skips and 
+        advanced Bayesian calculations in Python.
         """
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
@@ -2586,31 +2604,138 @@ class ResumeEngine:
             cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
             return {}
 
-        eval_prompt = self.load_prompt("evaluate_fit.md")
-        eval_text, _ = GeminiClient.generate(
+        # Load candidate profile configuration
+        profile = {}
+        try:
+            profile = self.load_yaml(self.kb_dir, "profile.yml") or {}
+        except Exception as e:
+            cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not load profile.yml: {e}", soft_wrap=True)
+
+        remote_required = profile.get("location", {}).get("remote_required", False)
+
+        # 1. Prepare evaluation context
+        fit_context = self.build_fit_evaluation_context(jd_text)
+
+        # 2. Stage 1 LLM Call: Capability Fit
+        capability_prompt = self.load_prompt("evaluate_capability.md")
+        cap_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
-            system_instruction=eval_prompt,
-            contents=self.build_fit_evaluation_context(jd_text),
-            response_schema=FitEvaluationSchema,
+            system_instruction=capability_prompt,
+            contents=fit_context,
+            response_schema=CapabilityEvaluationSchema,
             temperature=0.0,
         )
-        evaluation = GeminiClient.parse_json(eval_text or "")
-        if not evaluation:
-            cli_art.console.print(f"  {cli_art.ERROR} Fit evaluation returned no parseable result.", soft_wrap=True)
-            return {}
+        capability_data = GeminiClient.parse_json(cap_text or "") or {}
 
+        # 3. Stage 2 LLM Call: Recruiter & Legitimacy Fit
+        recruiter_prompt = self.load_prompt("evaluate_recruiter.md")
+        rec_text, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=recruiter_prompt,
+            contents=fit_context,
+            response_schema=RecruiterEvaluationSchema,
+            temperature=0.0,
+        )
+        recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
+
+        # 4. Synthesize Split Results into the unified FitEvaluationSchema format
+        evaluation = {
+            "archetype": capability_data.get("archetype", "Unknown"),
+            "hard_blockers": recruiter_data.get("hard_blockers", []),
+            "fit_subscores": capability_data.get("fit_subscores", {}),
+            "interview_odds_subscores": recruiter_data.get("interview_odds_subscores", {}),
+            "practical_pursue_subscores": recruiter_data.get("practical_pursue_subscores", {}),
+            "recommendation": recruiter_data.get("recommendation", "Selective pursue"),
+            "why": recruiter_data.get("why", ""),
+            "recruiter_read": recruiter_data.get("recruiter_read", ""),
+            "posting_legitimacy": recruiter_data.get("posting_legitimacy", "Proceed with Caution"),
+            "posting_legitimacy_notes": recruiter_data.get("posting_legitimacy_notes", ""),
+            # Advanced Metadata injection
+            "capability_gaps": capability_data.get("capability_gaps", []),
+            "ghost_job_red_flags": recruiter_data.get("ghost_job_red_flags", []),
+            "prestige_tier": recruiter_data.get("prestige_tier", "Tier-2"),
+        }
+
+        # 5. Prestige-Tier Funnel Friction Calibration
+        prestige_tier = evaluation["prestige_tier"]
+        funnel_friction_score = evaluation["interview_odds_subscores"].get("funnel_friction", 3)
+        if prestige_tier == "Tier-1":
+            evaluation["interview_odds_subscores"]["funnel_friction"] = min(funnel_friction_score, 2)
+        elif prestige_tier == "Tier-3":
+            evaluation["interview_odds_subscores"]["funnel_friction"] = min(funnel_friction_score + 1, 5)
+
+        # 6. Compute base weighted subscores
+        fit_score = compute_fit_score(evaluation["fit_subscores"])
+        interview_odds_score = compute_interview_odds_score(evaluation["interview_odds_subscores"])
+        practical_pursue_score = compute_practical_pursue_score(evaluation["practical_pursue_subscores"])
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
-        fit_score = compute_fit_score(evaluation.get("fit_subscores", {}))
-        interview_odds_score = compute_interview_odds_score(evaluation.get("interview_odds_subscores", {}))
-        practical_pursue_score = compute_practical_pursue_score(evaluation.get("practical_pursue_subscores", {}))
+
+        # 7. Apply Generic, Profile-Driven Hard-Stops & Skip Overrides in Python
+        triggered_by_profile_filters = False
+        blockers_triggered = list(evaluation["hard_blockers"])
+
+        # A. Remote required verification
+        remote_val = evaluation["practical_pursue_subscores"].get("remote_quality", 5)
+        if remote_required and remote_val < 5:
+            triggered_by_profile_filters = True
+            msg = f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
+            if msg not in blockers_triggered:
+                blockers_triggered.append(msg)
+
+        # B. Profile-level deal-breaker validation
+        if blockers_triggered:
+            triggered_by_profile_filters = True
+            evaluation["hard_blockers"] = blockers_triggered
+
+        # C. Apply Overrides
+        if triggered_by_profile_filters:
+            evaluation["recommendation"] = "Skip"
+            evaluation["why"] = f"Application skipped due to triggered deal-breakers: {', '.join(blockers_triggered)}"
+            composite = 0.00
+            estimated_prob = 0.0
+        else:
+            composite = fit_composite_score(
+                fit_score, interview_odds_score, practical_pursue_score, posting_age_days,
+            )
+            # D. Advanced Bayesian Probability Converter (piecewise linear interpolation)
+            x = interview_odds_score
+            points = [(1.0, 0.1), (2.0, 1.0), (3.0, 2.5), (4.0, 8.0), (5.0, 20.0)]
+            or_multiplier = 1.0
+            if x <= 1.0:
+                or_multiplier = 0.1
+            elif x >= 5.0:
+                or_multiplier = 20.0
+            else:
+                for i in range(len(points) - 1):
+                    x0, y0 = points[i]
+                    x1, y1 = points[i+1]
+                    if x0 <= x <= x1:
+                        or_multiplier = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+                        break
+
+            p_baseline = 0.02  # 2% baseline response rate
+            odds_baseline = p_baseline / (1.0 - p_baseline)
+            odds_new = or_multiplier * odds_baseline
+            estimated_prob = round((odds_new / (1.0 + odds_new)) * 100.0, 1)
+
+        # E. Heuristic Ghost Job Probability Calculator
+        red_flags_count = len(evaluation["ghost_job_red_flags"])
+        ghost_score = 0.0
+        if posting_age_days is not None:
+            if posting_age_days > 30:
+                ghost_score += 0.40
+            elif posting_age_days > 14:
+                ghost_score += 0.20
+        ghost_score += min(red_flags_count * 0.20, 0.50)
+        evaluation["ghost_job_probability"] = round(min(ghost_score * 100.0, 95.0), 1)
 
         evaluation["posting_age_days"] = posting_age_days
         evaluation["fit_score"] = fit_score
         evaluation["interview_odds_score"] = interview_odds_score
         evaluation["practical_pursue_score"] = practical_pursue_score
-        evaluation["composite_score"] = fit_composite_score(
-            fit_score, interview_odds_score, practical_pursue_score, posting_age_days,
-        )
+        evaluation["composite_score"] = composite
+        evaluation["estimated_interview_probability"] = estimated_prob
+
         return evaluation
 
     def _extract_company_research(self, source_text: str, source_label: str) -> dict | None:
@@ -2831,11 +2956,32 @@ class ResumeEngine:
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
+        # Load keeper bullets and embeddings for advanced semantic grounding check
+        keeper_bullets = []
+        keeper_embs = None
+        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        if os.path.exists(bank_csv) and os.path.exists(emb_npy):
+            try:
+                import pandas as pd
+                import numpy as np
+                df = pd.read_csv(bank_csv)
+                keeper_bullets = df["Bullet Point"].fillna("").tolist()
+                keeper_embs = np.load(emb_npy)
+            except Exception:
+                pass
+
         # kb_corpus=background_context: the same grounding corpus the model
         # was given in system_instruction, re-used here so validate() can
         # check that specific factual claims (metrics, years-of-experience,
         # date ranges) in the letter actually trace back to it -- see B14.
-        violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
+        violations = validate_coverletter.validate(
+            letter_data,
+            style_rules,
+            kb_corpus=background_context,
+            keeper_bullets=keeper_bullets,
+            keeper_embs=keeper_embs
+        )
 
         if violations:
             cli_art.detail(f"  Validator found {len(violations)} issue(s), retrying once:", level=cli_art.NORMAL)
@@ -2855,7 +3001,13 @@ class ResumeEngine:
             fixed_data = GeminiClient.parse_json(fix_text or "")
             if fixed_data:
                 letter_data = fixed_data
-                violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=background_context)
+                violations = validate_coverletter.validate(
+                    letter_data,
+                    style_rules,
+                    kb_corpus=background_context,
+                    keeper_bullets=keeper_bullets,
+                    keeper_embs=keeper_embs
+                )
             if violations:
                 cli_art.detail(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:", level=cli_art.NORMAL)
                 for v in violations:
