@@ -53,6 +53,16 @@ Job boards are notorious for keeping filled or dead listings active to inflate t
 ### 🚫 It Cannot Lie About You
 Every bullet point the builder is allowed to use lives in an audited bank (`bullet-bank-keepers-audited.csv`) that’s already been checked for truthfulness, banned language, and vague verbs *before* a single job description ever sees it. The AI can rephrase and select—**it cannot invent**. Numbers are verified against structured metrics; if you don't have the receipts, it doesn't make the cut.
 
+### 🔬 Premium Features & AI Orchestration Advancements
+We have taken our tailoring, validation, and CLI experience to a world-class level:
+* **ATS Keyword & Ligature Verification:** The renderer runs real-time programmatic verification checks on the output PDFs to guarantee that target keywords survive the Chromium-to-PDF rendering text layer without ligature corruption (e.g. `fi`/`fl` merging into Unicode equivalents like `ﬁ`), bad line breaks, or text truncation.
+* **LLM-Based Semantic Vocabulary Translation:** Gone are the days of fragile, post-hoc regex word replacements. Preferred terms scraped during company research are injected directly into the Gemini rewrite instructions, allowing the model to naturally craft grammatically flawless, pluralization-safe sentences natively.
+* **CV-Context Bullet Auditing:** During tailoring, the system feeds completed bullets (both role-specific and other CV roles) into the rewrite prompt context. This completely prevents verb repetition, metric duplication, or phrasing redundancy across your document.
+* **The Summary Paradox (Structural Archetypes):** Codified narrative summary templates mapped directly to your targeted business stages—**Scale-First/Growth** (enterprise scale, process optimization) vs. **Zero-to-One/Builder** (startups, product launches), verified programmatically via custom linter specificity checkers.
+* **Cover Letter Hook-First Introductions:** Upgraded cover letter generators ban flat, passive openings (*"My name is..."*, *"I am writing to apply..."*) in favor of high-impact narrative hooks, enforced via automatic regex-linter retries.
+* **Interactive Skills CRUD Dashboard:** A dedicated CLI sub-screen (Settings -> View & Manage Profile Skills) allowing you to view, add, edit, and delete tools or categories stored atomically in your `verified_tools.json` file.
+* **Global Go-Precompiled Charmbracelet Prompts:** The entire CLI's selections, checkbox menus, and confirmations have been upgraded to Charm's state-of-the-art terminal prompt system (`Go/huh`), with automatic on-the-fly pre-compilation for instant, sub-millisecond launches!
+
 ### ⚡ Go-Based TUI Dashboard
 Our visual command dashboard is written in Go utilizing the gorgeous **Charmbracelet (Bubble Tea)** terminal ecosystem. To give you instant career dopamine, we compiled this into a native binary that loads in **10 milliseconds** and is styled with a gorgeous Catppuccin Macchiato color palette, complete with gamified success celebrations and twinkling terminal animations.
 

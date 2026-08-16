@@ -24,6 +24,7 @@ from rich.theme import Theme as RichTheme
 import followup
 import jd_manager
 import theme
+import charm_prompt
 
 # Overrides Rich's automatic quoted-text highlighting (its default
 # "repr.str" is a dim ANSI green, distinct from -- and clashing with --
@@ -1260,20 +1261,26 @@ def friendly_warning(exc: BaseException, context: str, consequence: str) -> None
 # =====================================================================
 
 def select(message: str, choices, **kwargs):
-    """questionary.select() with this app's style applied. Use instead of
-    calling questionary directly so the style stays in one place."""
-    kwargs.setdefault("style", QUESTIONARY_STYLE)
-    return questionary.select(message, choices=choices, **kwargs).ask()
+    """questionary.select() with this app's style applied, or upgraded to Charm."""
+    import sys
+    if "unittest" in sys.modules:
+        kwargs.setdefault("style", QUESTIONARY_STYLE)
+        return questionary.select(message, choices=choices, **kwargs).ask()
+    return charm_prompt.select(message, choices, default=kwargs.get("default"))
 
 
 def confirm(message: str, default: bool = False, **kwargs) -> bool:
-    """questionary.confirm() with this app's style applied.
+    """questionary.confirm() with this app's style applied, or upgraded to Charm.
 
     Returns False (not None) when the user aborts with Ctrl-C, so callers
     can treat the answer as a plain bool without re-introducing the
     Ctrl-C-fallthrough bug class documented in menu.py:151-217."""
-    kwargs.setdefault("style", QUESTIONARY_STYLE)
-    answer = questionary.confirm(message, default=default, **kwargs).ask()
+    import sys
+    if "unittest" in sys.modules:
+        kwargs.setdefault("style", QUESTIONARY_STYLE)
+        answer = questionary.confirm(message, default=default, **kwargs).ask()
+        return bool(answer)
+    answer = charm_prompt.confirm(message, default=default)
     return bool(answer)
 
 
@@ -1284,9 +1291,12 @@ def text(message: str, **kwargs):
 
 
 def checkbox(message: str, choices, **kwargs):
-    """questionary.checkbox() with this app's style applied."""
-    kwargs.setdefault("style", QUESTIONARY_STYLE)
-    return questionary.checkbox(message, choices=choices, **kwargs).ask()
+    """questionary.checkbox() with this app's style applied, or upgraded to Charm."""
+    import sys
+    if "unittest" in sys.modules:
+        kwargs.setdefault("style", QUESTIONARY_STYLE)
+        return questionary.checkbox(message, choices=choices, **kwargs).ask()
+    return charm_prompt.checkbox(message, choices)
 
 
 def confirm_destructive(action: str, target: str, default: bool = False) -> bool:

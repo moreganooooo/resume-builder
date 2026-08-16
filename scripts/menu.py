@@ -42,6 +42,7 @@ import scan as scan_module
 import liveness as liveness_module
 import polish as polish_module
 import theme
+import skills_menu
 
 def _icon_title(icon_name: str, label: str) -> list:
     """Build a questionary Choice title as [icon_tuple, text_tuple] so the
@@ -127,6 +128,7 @@ def _build_settings_upkeep_choices() -> list:
     last_run_label = f"(last run: {last_run[:10]})" if last_run else "(never run)"
     return [
         questionary.Choice(title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"), value="doctor"),
+        questionary.Choice(title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"), value="manage_skills"),
         questionary.Choice(title=_icon_title("utility", "↳ Manage Scraping, Boards & Search Queries"), value="manage_scraping"),
         questionary.Choice(title=_icon_title("utility", "↳ Generate Sample Resume + Cover Letter (QA)"), value="build_sample"),
         questionary.Choice(title=_icon_title("utility", "↳ Check for GitHub Updates"), value="check_updates"),
@@ -1198,6 +1200,9 @@ def _handle_settings_upkeep() -> bool:
             return False
         if choice == "doctor":
             _handle_run_doctor()
+            continue
+        if choice == "manage_skills":
+            skills_menu.run_skills_menu()
             continue
         if choice == "manage_scraping":
             _handle_manage_scraping()

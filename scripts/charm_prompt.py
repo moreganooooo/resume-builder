@@ -39,34 +39,60 @@ import cli_art
 _CANCEL_EXIT_CODE = 130
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_DASHBOARD_DIR = os.path.join(_PROJECT_ROOT, "dashboard")
+_BIN_PATH = os.path.join(_DASHBOARD_DIR, "bin", "prompt")
 
 
 def _option_dict(choice) -> dict:
     if isinstance(choice, dict):
         return {"label": choice["label"], "value": choice["value"]}
-    return {"label": choice.title, "value": choice.value}
+    if hasattr(choice, "title") and hasattr(choice, "value"):
+        # Handle Choice objects that have titles as lists/styled text
+        label = choice.title
+        if isinstance(label, list):
+            # Strip questionary color styling tuples to get raw label text
+            label = "".join(item[1] for item in label if isinstance(item, tuple))
+        return {"label": str(label).strip(), "value": choice.value}
+    return {"label": str(choice), "value": str(choice)}
 
 
 def _go_available() -> bool:
     return shutil.which("go") is not None
 
 
+def _compile_prompt_if_needed() -> str:
+    """Pre-compiles the Go prompt binary if missing, returning the path
+    to the compiled binary. If compilation fails or Go is missing, returns None."""
+    if not _go_available():
+        return None
+    
+    if os.path.exists(_BIN_PATH):
+        return _BIN_PATH
+        
+    os.makedirs(os.path.dirname(_BIN_PATH), exist_ok=True)
+    try:
+        subprocess.run(
+            ["go", "build", "-o", _BIN_PATH, "./cmd/prompt"],
+            cwd=_DASHBOARD_DIR,
+            check=True,
+            capture_output=True,
+        )
+        return _BIN_PATH
+    except Exception:
+        return None
+
+
 def _run_prompt(spec: dict):
-    # No spinner/status line wraps this call, deliberately: stdout/stderr
-    # are captured here so this function can read back the form's final
-    # JSON answer, yet the huh form still renders live and reads real
-    # keystrokes -- meaning it takes over the terminal by some path other
-    # than the captured stdout/stderr this function sees. A Rich Live/
-    # status spinner writes to that same terminal on its own timer;
-    # racing it against however the form takes over risks corrupting the
-    # handoff (two things drawing over each other), for a delay that's a
-    # couple of seconds on `go run`'s cold build cache and sub-second
-    # otherwise. Not worth that risk to a working interactive path for a
-    # cold-start-only cosmetic gap; revisit only if this is actually
-    # reported as sluggish.
+    # Run from _DASHBOARD_DIR where go.mod is located
+    bin_path = _compile_prompt_if_needed()
+    if bin_path and os.path.exists(bin_path):
+        cmd = [bin_path, json.dumps(spec)]
+    else:
+        cmd = ["go", "run", "./cmd/prompt", json.dumps(spec)]
+        
     result = subprocess.run(
-        ["go", "run", "./dashboard/cmd/prompt", json.dumps(spec)],
-        cwd=_PROJECT_ROOT,
+        cmd,
+        cwd=_DASHBOARD_DIR,
         capture_output=True,
         text=True,
     )

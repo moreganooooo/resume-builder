@@ -103,11 +103,65 @@ def _all_bullets(resume_data: dict) -> list[str]:
     return bullets
 
 
-def validate_pdf_text(pdf_path: str, resume_data: dict) -> tuple[list[str], list[str]]:
+def _check_keyword_coverage_pdf(extracted: str, jd_keywords: dict, resume_data: dict) -> list[str]:
+    """Verify that any keyword matched in the resume data JSON also survives
+    intact in the extracted PDF text layer."""
+    if not jd_keywords:
+        return []
+
+    import validate_resume
+    # We pass empty rules dict to check_keyword_coverage since we only want the matched list
+    json_coverage = validate_resume.check_keyword_coverage(resume_data, jd_keywords, {})
+    matched_in_json = json_coverage.get("matched", [])
+
+    warnings = []
+    for kw in matched_in_json:
+        if not kw:
+            continue
+        normalized_kw = _normalize(kw)
+        if normalized_kw not in extracted:
+            warnings.append(
+                f"ATS Keyword corrupted in PDF text layer: {kw!r} "
+                f"(present in resume JSON but missing/unparseable in PDF)"
+            )
+    return warnings
+
+
+def _check_coverletter_keyword_coverage_pdf(extracted: str, jd_keywords: dict, letter_data: dict) -> list[str]:
+    """Verify that any keyword found in the cover letter JSON also survives
+    intact in the extracted cover letter PDF text layer."""
+    if not jd_keywords:
+        return []
+
+    all_keywords = (
+        list(jd_keywords.get("tools", []))
+        + list(jd_keywords.get("hard_skills", []))
+        + list(jd_keywords.get("core_functions", []))
+    )
+
+    # Build a haystack of letter JSON content
+    letter_haystack = _normalize(" ".join(letter_data.get("body_paragraphs", []) or []))
+
+    warnings = []
+    for kw in all_keywords:
+        if not kw:
+            continue
+        normalized_kw = _normalize(kw)
+        if normalized_kw in letter_haystack:
+            if normalized_kw not in extracted:
+                warnings.append(
+                    f"ATS Keyword corrupted in Cover Letter PDF text layer: {kw!r} "
+                    f"(present in cover letter JSON but missing/unparseable in PDF)"
+                )
+    return warnings
+
+
+def validate_pdf_text(pdf_path: str, resume_data: dict, jd_keywords: dict = None) -> tuple[list[str], list[str]]:
     """
     Extracts text from the rendered PDF and checks that the tagline, summary,
     why-section text, every bullet, and every skills line from the source
-    resume JSON survived intact in the PDF's text layer.
+    resume JSON survived intact in the PDF's text layer. Also verifies that all
+    matched JD keywords are uncorrupted in the PDF.
 
     Returns (fatal, advisories) -- two categorically different findings down
     one channel used to collapse into a single warnings list, which let a
@@ -156,10 +210,14 @@ def validate_pdf_text(pdf_path: str, resume_data: dict) -> tuple[list[str], list
         if _normalize(skill_line) not in extracted:
             advisories.append(f"Skills line not found intact in PDF text layer: {skill_line[:80]}")
 
+    # Verify matched keywords are not corrupted in PDF text layer
+    if jd_keywords:
+        advisories.extend(_check_keyword_coverage_pdf(extracted, jd_keywords, resume_data))
+
     return [], advisories
 
 
-def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict) -> list[str]:
+def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict, jd_keywords: dict = None) -> list[str]:
     """
     Same check, cover-letter shaped: body paragraphs and the greeting instead
     of EXPERIENCE bullets and SKILLS lines.
@@ -186,5 +244,9 @@ def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict) -> list[str]
     greeting = letter_data.get("greeting") or ""
     if greeting and _normalize(greeting) not in extracted:
         warnings.append(f"Greeting not found intact in PDF text layer: {greeting[:80]}")
+
+    # Verify placed cover letter keywords are not corrupted in PDF text layer
+    if jd_keywords:
+        warnings.extend(_check_coverletter_keyword_coverage_pdf(extracted, jd_keywords, letter_data))
 
     return warnings

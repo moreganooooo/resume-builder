@@ -144,10 +144,36 @@ def _check_kb_traceability(cover_letter_data: dict, kb_corpus: str) -> list[str]
     return violations
 
 
+_CLICHED_OPENER_PATTERNS = [
+    re.compile(r"\bi\s+am\s+writing\s+to\b", re.IGNORECASE),
+    re.compile(r"\bi\s+was\s+excited\s+to\b", re.IGNORECASE),
+    re.compile(r"\bi\s+am\s+thrilled\s+to\b", re.IGNORECASE),
+    re.compile(r"\bmy\s+name\s+is\b", re.IGNORECASE),
+    re.compile(r"\bplease\s+accept\s+this\b", re.IGNORECASE),
+    re.compile(r"\bwith\s+great\s+enthusiasm\b", re.IGNORECASE),
+]
+
+
+def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
+    paragraphs = cover_letter_data.get("body_paragraphs", [])
+    if not paragraphs:
+        return []
+    first_para = paragraphs[0].strip()
+    prefix = first_para[:120].lower()
+    violations = []
+    for pattern in _CLICHED_OPENER_PATTERNS:
+        if pattern.search(prefix):
+            violations.append(
+                f"Cover letter uses clichéd/passive opener pattern near the beginning of the first paragraph: {first_para!r}"
+            )
+    return violations
+
+
 def validate(cover_letter_data: dict, style_rules: dict, kb_corpus: str = "") -> list[str]:
     violations = []
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
     violations.extend(_check_paragraph_count(cover_letter_data))
     violations.extend(_check_third_person_slip(cover_letter_data))
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
+    violations.extend(_check_cliched_openers(cover_letter_data))
     return violations

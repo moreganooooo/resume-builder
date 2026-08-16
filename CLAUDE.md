@@ -45,11 +45,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   (Python packages, Node/Playwright, API keys, fonts, KB files) is
   actually set up correctly, plus a real test-suite run — reach for it
   before manually debugging a "why isn't this working" environment issue.
-- `dashboard/` is a vendored Go module (Bubble Tea TUI, `resume
-  dashboard`) — the one part of this repo not in Python. `scripts/
-  dashboard.py` shells out to it via `go run .` (never `go build`, so no
-  compiled binary should ever land in the repo). Needs the Go toolchain
-  installed; everything else in this repo does not.
+- `dashboard/` is a vendored Go module (Bubble Tea TUI, `resume dashboard`) — the one part of this repo not in Python. `scripts/dashboard.py` and `scripts/charm_prompt.py` dynamically pre-compile their Go binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`) on first launch for sub-millisecond execution (gitignored - never committed). They gracefully fall back to slow `go run` or Questionary prompts if Go is unavailable. Needs the Go toolchain installed for native execution.
 - **Multi-computer sync (Syncthing):** a profile's data can sync across
   machines via Syncthing, four independent folders per profile —
   `scripts/profile_paths.sync_roots(profile)` is the single source of
@@ -156,14 +152,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   prompt. All three tiers feed the same `research_company.md` extraction
   call, so there's exactly one place producing a `CompanyResearchSchema`
   — add new tiers by producing source text, not by adding a schema.
-  Its `vocabulary_substitutions` field (e.g. `customers -> guests`)
-  reaches the Summary and Why sections through prompt instructions, but
-  reaches bullets **only** through
-  `company_research.apply_vocabulary_substitutions_to_resume()`, a
-  deterministic regex pass run just before Step 6 — bullets are
-  pre-audited verified text, so the model is explicitly forbidden from
-  rewording them for tone. See
-  `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
+  Its `vocabulary_substitutions` field (e.g. `customers -> guests`) reaches
+  the Summary and Cover Letter sections via prompt instructions, and is
+  integrated into bullet rewrites via **semantic LLM translation during Step 3**. 
+  Instead of blindly applying post-hoc regexes, preferred vocabulary terms 
+  are injected directly into the LLM bullet-rewrite instructions alongside the 
+  rest of the CV context, allowing the model to naturally construct grammatically 
+  perfect, pluralization-safe sentences using the user's authentic voice.
+  See `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a
