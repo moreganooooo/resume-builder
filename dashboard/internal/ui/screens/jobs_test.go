@@ -6,14 +6,41 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
-	"time"
 )
+
+
+func pressKey(s string) tea.KeyPressMsg {
+	if len(s) == 1 {
+		return tea.KeyPressMsg(tea.Key{Code: rune(s[0]), Text: s})
+	}
+	switch s {
+	case "up":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyUp})
+	case "down":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyDown})
+	case "esc":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc})
+	case "enter":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	case "backspace":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyBackspace})
+	case "ctrl+u":
+		return tea.KeyPressMsg(tea.Key{Code: 'u', Mod: tea.ModCtrl})
+	case "pgdown":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyPgDown})
+	case "pgup":
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyPgUp})
+	default:
+		return tea.KeyPressMsg(tea.Key{Text: s})
+	}
+}
 
 func testJobRows() []model.JobRow {
 	return []model.JobRow{
@@ -35,17 +62,17 @@ func TestNewJobsModelDefaultsToAllFilterShowingEveryRow(t *testing.T) {
 func TestCursorMovementClampsAtBoundaries(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m, _ = m.Update(pressKey("up"))
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor clamped to 0, got %d", m.cursor)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(pressKey("down"))
 	if m.cursor != 1 {
 		t.Fatalf("expected cursor at 1, got %d", m.cursor)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(pressKey("down"))
 	if m.cursor != 1 {
 		t.Fatalf("expected cursor clamped to 1 (last row), got %d", m.cursor)
 	}
@@ -54,7 +81,7 @@ func TestCursorMovementClampsAtBoundaries(t *testing.T) {
 func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "pending" {
 		t.Fatalf("expected filter %q, got %q", "pending", m.filter)
 	}
@@ -62,7 +89,7 @@ func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 		t.Fatalf("expected only Pending rows, got %+v", m.filtered)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "completed" {
 		t.Fatalf("expected filter %q, got %q", "completed", m.filter)
 	}
@@ -70,20 +97,20 @@ func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 		t.Fatalf("expected only Completed rows, got %+v", m.filtered)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "high_fit" {
 		t.Fatalf("expected filter to cycle to %q, got %q", "high_fit", m.filter)
 	}
 	// Continue cycling through remaining filters
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "good_fit" {
 		t.Fatalf("expected filter to cycle to %q, got %q", "good_fit", m.filter)
 	}
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "recent" {
 		t.Fatalf("expected filter to cycle to %q, got %q", "recent", m.filter)
 	}
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "all" {
 		t.Fatalf("expected filter to cycle back to %q, got %q", "all", m.filter)
 	}
@@ -98,7 +125,7 @@ func TestCurrentJobReturnsFalseWhenEmpty(t *testing.T) {
 
 func TestQPressEmitsJobsClosedMsg(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_, cmd := m.Update(pressKey("q"))
 	if cmd == nil {
 		t.Fatal("expected a command from pressing q")
 	}
@@ -115,7 +142,7 @@ func TestQPressEmitsJobsClosedMsg(t *testing.T) {
 // from "q", which still exits the whole program.
 func TestEscPressEmitsJobsClosedMsgBack(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := m.Update(pressKey("esc"))
 	if cmd == nil {
 		t.Fatal("expected a command from pressing esc")
 	}
@@ -196,7 +223,7 @@ func TestRenderJobDetailPaneSurfacesPostingLegitimacyWarning(t *testing.T) {
 func TestRenderSidebarListShowsEmptyStateWhenNoRows(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), nil, 100, 30)
 	rendered := ansi.Strip(m.renderSidebarList(40, 20))
-	if !strings.Contains(rendered, "No evaluated jobs match this filter") {
+	if !strings.Contains(rendered, "No evaluated jobs match") {
 		t.Fatalf("expected empty-state message, got %q", rendered)
 	}
 }
@@ -222,7 +249,7 @@ func TestLPressDispatchesLivenessAction(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
 
-	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m, cmd := m.Update(pressKey("l"))
 
 	if m.actionInProgress != "liveness" {
 		t.Fatalf("expected actionInProgress %q, got %q", "liveness", m.actionInProgress)
@@ -234,12 +261,12 @@ func TestLPressDispatchesLivenessAction(t *testing.T) {
 
 func TestTPressNoOpOnCompletedJob(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select the Completed row (Beta)
+	m, _ = m.Update(pressKey("down")) // select the Completed row (Beta)
 	if job, _ := m.CurrentJob(); job.Status != "Completed" {
 		t.Fatalf("test setup: expected cursor on a Completed job, got %+v", job)
 	}
 
-	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m, cmd := m.Update(pressKey("t"))
 
 	if m.actionInProgress != "" {
 		t.Fatalf("expected no action dispatched for a Completed job, got %q", m.actionInProgress)
@@ -253,7 +280,7 @@ func TestKeysIgnoredWhileActionInProgress(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m.actionInProgress = "tailor"
 
-	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, cmd := m.Update(pressKey("down"))
 
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor unchanged while action in progress, got %d", m.cursor)
@@ -267,7 +294,7 @@ func TestKeyPressDismissesActionError(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m.actionError = "something failed"
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(pressKey("down"))
 
 	if m.actionError != "" {
 		t.Fatal("expected actionError cleared by keypress")
@@ -335,7 +362,7 @@ func TestActionCompleteMsgFailureSetsErrorWithoutReloading(t *testing.T) {
 
 func TestUOpensStatusPicker(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m, _ = m.Update(pressKey("u"))
 	if !m.statusPicker {
 		t.Fatal("expected statusPicker to open")
 	}
@@ -346,15 +373,15 @@ func TestUOpensStatusPicker(t *testing.T) {
 
 func TestStatusPickerCursorClampsAtBoundaries(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m, _ = m.Update(pressKey("u"))
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m, _ = m.Update(pressKey("up"))
 	if m.statusCursor != 0 {
 		t.Fatalf("expected statusCursor clamped to 0, got %d", m.statusCursor)
 	}
 
 	for range jobsApplicationStatuses {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m, _ = m.Update(pressKey("down"))
 	}
 	if m.statusCursor != len(jobsApplicationStatuses)-1 {
 		t.Fatalf("expected statusCursor clamped to %d, got %d", len(jobsApplicationStatuses)-1, m.statusCursor)
@@ -363,8 +390,8 @@ func TestStatusPickerCursorClampsAtBoundaries(t *testing.T) {
 
 func TestStatusPickerEscCancels(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m, _ = m.Update(pressKey("u"))
+	m, _ = m.Update(pressKey("esc"))
 	if m.statusPicker {
 		t.Fatal("expected statusPicker to close on esc")
 	}
@@ -381,9 +408,9 @@ func TestStatusPickerEscCancels(t *testing.T) {
 func TestStatusPickerEnterRequiresConfirmation(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m, _ = m.Update(pressKey("u"))
 
-	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m, cmd := m.Update(pressKey("enter"))
 	if !m.statusPicker || !m.statusConfirm {
 		t.Fatal("expected an inline confirm step before the status picker closes")
 	}
@@ -394,7 +421,7 @@ func TestStatusPickerEnterRequiresConfirmation(t *testing.T) {
 		t.Fatal("expected no command before confirmation")
 	}
 
-	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m, cmd = m.Update(pressKey("enter"))
 	if m.statusPicker {
 		t.Fatal("expected statusPicker closed after confirmation")
 	}
@@ -412,13 +439,13 @@ func TestStatusPickerEnterRequiresConfirmation(t *testing.T) {
 func TestStatusPickerConfirmEscCancelsBackToPicker(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m = m.WithActionConfig("/tmp/jobs.json", "python3", "/tmp")
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = m.Update(pressKey("u"))
+	m, _ = m.Update(pressKey("enter"))
 	if !m.statusConfirm {
 		t.Fatal("expected confirm state after first enter")
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m, _ = m.Update(pressKey("esc"))
 	if m.statusConfirm {
 		t.Fatal("expected confirm state cancelled by esc")
 	}
@@ -475,7 +502,7 @@ func TestScrollFollowsCursorPastVisibleWindow(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), manyJobRows(30), 100, 12)
 
 	for range 25 {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m, _ = m.Update(pressKey("down"))
 	}
 	if m.cursor != 25 {
 		t.Fatalf("expected cursor at 25, got %d", m.cursor)
@@ -492,7 +519,7 @@ func TestScrollFollowsCursorPastVisibleWindow(t *testing.T) {
 func TestScrollJumpsToTopAndBottom(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), manyJobRows(30), 100, 12)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	m, _ = m.Update(pressKey("G"))
 	if m.cursor != 29 {
 		t.Fatalf("expected G to move cursor to the last row (29), got %d", m.cursor)
 	}
@@ -500,7 +527,7 @@ func TestScrollJumpsToTopAndBottom(t *testing.T) {
 		t.Fatalf("expected the last row (Company 29) to be visible after G, got:\n%s", rendered)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	m, _ = m.Update(pressKey("g"))
 	if m.cursor != 0 {
 		t.Fatalf("expected g to move cursor to the first row (0), got %d", m.cursor)
 	}
@@ -599,7 +626,7 @@ func TestJobsSearchComposesWithActiveFilter(t *testing.T) {
 func TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m, _ = m.Update(pressKey("/"))
 	if !m.searchInput {
 		t.Fatal("expected `/` to open search input")
 	}
@@ -608,7 +635,7 @@ func TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts(t *testing.T) {
 	// typed while search is focused, they must become query characters
 	// instead of firing those actions.
 	for _, r := range "fu" {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m, _ = m.Update(pressKey(string(r)))
 	}
 	if m.searchQuery != "fu" {
 		t.Fatalf("expected typed letters to become the search query, got %q", m.searchQuery)
@@ -624,15 +651,15 @@ func TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts(t *testing.T) {
 func TestJobsSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), searchTestJobRows(), 100, 30)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m, _ = m.Update(pressKey("/"))
 	for _, r := range "stripe" {
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m, _ = m.Update(pressKey(string(r)))
 	}
 	if len(m.filtered) != 1 || m.filtered[0].Company != "Stripe" {
 		t.Fatalf("expected live filter to leave only Stripe, got %+v", m.filtered)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = m.Update(pressKey("enter"))
 	if m.searchInput {
 		t.Fatal("expected Enter to close input")
 	}
@@ -640,7 +667,7 @@ func TestJobsSearchEnterCommitsAndEscClearsCommittedQuery(t *testing.T) {
 		t.Fatalf("expected Enter to keep committed query, got %q", m.searchQuery)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m, _ = m.Update(pressKey("esc"))
 	if m.searchQuery != "" {
 		t.Fatalf("expected Esc to clear committed query, got %q", m.searchQuery)
 	}
@@ -790,21 +817,21 @@ func TestDetailScrollOffsetResetAndClamping(t *testing.T) {
 	m.detailScrollOffset = 5
 
 	// Cursor movement down should reset detailScrollOffset to 0
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m, _ = m.Update(pressKey("j"))
 	if m.detailScrollOffset != 0 {
 		t.Errorf("expected detailScrollOffset to reset to 0 on cursor down, got %d", m.detailScrollOffset)
 	}
 
 	m.detailScrollOffset = 10
 	// Cursor movement up should reset detailScrollOffset to 0
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m, _ = m.Update(pressKey("k"))
 	if m.detailScrollOffset != 0 {
 		t.Errorf("expected detailScrollOffset to reset to 0 on cursor up, got %d", m.detailScrollOffset)
 	}
 
 	m.detailScrollOffset = 8
 	// Movement with pgdown should reset detailScrollOffset to 0
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m, _ = m.Update(pressKey("pgdown"))
 	if m.detailScrollOffset != 0 {
 		t.Errorf("expected detailScrollOffset to reset on page down, got %d", m.detailScrollOffset)
 	}

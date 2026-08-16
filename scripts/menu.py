@@ -13,8 +13,10 @@ confirmation, zero results) returns False and goes straight back to the
 main menu instead.
 """
 
+import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -142,7 +144,14 @@ def _run_leaf_submenu(prompt: str, build_choices, session_stats: dict) -> None:
     same "loop until Back" shape _handle_settings_upkeep (née
     _handle_maintenance) already used, now shared by all four category
     submenus."""
+    use_alt = _should_use_alt_screen()
     while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_main_banner(reveal=False)
+            cli_art.display_footer_commands()
+            
         choice = cli_art.select(prompt, choices=build_choices())
         if not choice or choice == "back":
             return
@@ -361,19 +370,32 @@ def _print_source_docs_instructions(source_docs_dir: str) -> None:
     degrades to plain unstyled text everywhere else -- either way the raw
     path/URL stays visible in the message itself, never hidden behind an
     opaque label."""
-    cli_art.console.print(
+    from rich.panel import Panel
+    from rich import box
+
+    content = (
         f"Go to your source folder ([link=file://{source_docs_dir}]{source_docs_dir}[/link]) "
         "and drop in any documentation related to your job search. Your current resume and "
         "LinkedIn profile (exporting your profile as a PDF is perfect -- "
         "[link=https://www.linkedin.com/help/linkedin/answer/a541960]see LinkedIn's instructions "
         "here[/link]) are a great place to start. You can also consider things like:\n\n"
-        "  - Letters of recommendation\n"
-        "  - Public LinkedIn recommendations\n"
-        "  - Certifications\n"
-        "  - Patents you own (look at you go!)\n"
-        "  - Writing samples\n\n"
-        "Once you're finished, restart this program and click New User again to continue!"
+        "  ✦ Letters of recommendation\n"
+        "  ✦ Public LinkedIn recommendations\n"
+        "  ✦ Certifications\n"
+        "  ✦ Patents you own (look at you go!)\n"
+        "  ✦ Writing samples\n\n"
+        "[bold]Once you're finished, restart this program and click New User again to continue![/bold]"
     )
+    
+    cli_art.console.print()
+    cli_art.console.print(Panel(
+        content,
+        title=f"[bold {theme.BRAND}]Setup Instructions[/bold {theme.BRAND}]",
+        border_style=theme.BRAND_ACCENT,
+        box=box.ROUNDED,
+        padding=(1, 2)
+    ))
+    cli_art.console.print()
 
 
 def _profile_is_set_up(profile: str = None) -> bool:
@@ -550,6 +572,8 @@ def _print_evaluation_detail(row: dict) -> None:
                            f"[bold]Interview odds:[/bold] {evaluation.get('interview_odds_score')}/5  "
                            f"[bold]Practical pursue:[/bold] {evaluation.get('practical_pursue_score')}/5")
     cli_art.console.print(f"[bold]Recommendation:[/bold] {evaluation.get('recommendation') or 'unknown'}")
+    cli_art.console.print()
+    cli_art.console.rule(style=f"dim {theme.BRAND_ACCENT}")
     cli_art.console.print()
     has_dimensions = False
     for group_label, subscores_key, labels in cli_art._FIT_DIMENSION_GROUPS:
@@ -1318,14 +1342,71 @@ def offer_next_steps(
     _run_with_chain(choice, session_stats if session_stats is not None else {})
 
 
+def _pause_and_return() -> None:
+    cli_art.console.print()
+    cli_art.console.print(f"[{theme.MUTED}]Press Enter to return to the menu...[/{theme.MUTED}]")
+    if sys.stdin.isatty():
+        try:
+            sys.stdin.readline()
+        except (KeyboardInterrupt, IOError):
+            pass
+
+
 def _run_with_chain(value: str, session_stats: dict) -> None:
-    did_something = _HANDLERS[value]()
+    interactive_actions = {"career_dashboard", "browse_jobs", "bullet_bank", "settings_upkeep", "help"}
+    
+    action_titles = {
+        "bootstrap": "Profile Bootstrapping Wizard",
+        "update_knowledge": "Knowledge Base Update",
+        "scan": "Job Search Scanner",
+        "liveness": "Liveness Verification Check",
+        "evaluate_all": "JD Evaluation & Fit Scoring",
+        "tailor_all": "Resume & Cover Letter Customization",
+        "tailor_pick": "Targeted Resume Customization",
+        "coverletter_pick": "Targeted Cover Letter Customization",
+        "polish": "Polishing Documents with Gemini",
+        "stale_sweep": "Stale Application Sweep",
+    }
+    
+    is_interactive = value in interactive_actions
+    title = action_titles.get(value)
+    
+    scroll_region_modified = False
+    
+    if not is_interactive and title:
+        # Clear screen and draw the compact banner!
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.flush()
+        cli_art.display_compact_banner(title)
+        
+        # Draw the gorgeous execution footer static at the bottom row (row = rows)
+        cli_art.display_execution_footer()
+        
+        # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+        columns, rows = shutil.get_terminal_size()
+        sys.stdout.write(f"\x1b[5;{rows-1}r")
+        sys.stdout.write("\x1b[5;1H")
+        sys.stdout.flush()
+        scroll_region_modified = True
+
+    try:
+        did_something = _HANDLERS[value]()
+    finally:
+        if scroll_region_modified:
+            # Clean up: restore the scroll region back to the entire screen window
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+
     if did_something:
         label = _SESSION_LABELS.get(value)
         if label:
             session_stats[label] = session_stats.get(label, 0) + 1
 
+    if is_interactive:
+        return
+
     if not did_something or not _CHAIN.get(value):
+        _pause_and_return()
         return
 
     offer_next_steps(value, session_stats)
@@ -1338,55 +1419,91 @@ def _session_summary(session_stats: dict) -> str:
     return f"{cli_art.SUCCESS} " + " · ".join(parts) + " · Nice work."
 
 
+@contextlib.contextmanager
+def _alternate_screen():
+    """Switches the terminal to the alternate screen buffer and restores it at exit.
+    Only writes ANSI escape codes when running interactively in a TTY.
+    """
+    is_interactive = sys.stdout.isatty() and not os.environ.get("RESUME_BUILDER_TESTING")
+    if is_interactive:
+        sys.stdout.write("\x1b[?1049h\x1b[H")
+        sys.stdout.flush()
+    try:
+        yield
+    finally:
+        if is_interactive:
+            sys.stdout.write("\x1b[?1049l")
+            sys.stdout.flush()
+
+
+def _should_use_alt_screen() -> bool:
+    """Detects if we can safely run in alternate screen (fullscreen) mode."""
+    if os.environ.get("RESUME_ALT_SCREEN") == "1":
+        return True
+    if os.environ.get("RESUME_ALT_SCREEN") == "0":
+        return False
+    # Graceful auto-detection: if terminal is at least 35 rows tall, we can go fullscreen!
+    # This prevents the scrolling overflow issue on very small terminal screens.
+    columns, rows = shutil.get_terminal_size()
+    return rows >= 35
+
+
 def run_interactive_menu() -> None:
-    # NOT wrapped in cli_art.console.screen() (alt-screen) -- tried that
-    # for just this launch sequence, but alt-screen buffers have no
-    # scrollback at all, so once the banner + profile/icon/update prompts'
-    # combined height exceeds the terminal's actual visible rows, whatever
-    # scrolls past the top is gone for good instead of just scrolled (as
-    # it is here, in normal scrollback). A real "stays visible" launch
-    # sequence needs a genuine full-screen layout (fixed header/footer,
-    # scrollable body via prompt_toolkit's own full_screen Application),
-    # not a wrapper around sequential prints -- same scope as the full
-    # immersive-CLI rewrite this was meant to be a small taste of.
-    cli_art.display_main_banner()
-    if not _confirm_active_profile():
-        # Ctrl-C/Esc at the profile gate -- exit now, same as Ctrl-C on the
-        # main menu's own select() below, rather than falling through into
-        # icon-set/update-check prompts and a menu the user never asked for.
-        cli_art.display_exit_footer()
-        return
-    _confirm_icon_set()
-    _prompt_for_update()
-    cli_art.display_tip()
+    # Wrapped in an elegant fullscreen/alt-screen context manager.
+    # Terminal size is auto-detected to ensure adequate height, or can be
+    # explicitly controlled via the RESUME_ALT_SCREEN environment variable.
+    use_alt = _should_use_alt_screen()
+    ctx = _alternate_screen() if use_alt else contextlib.nullcontext()
 
-    session_stats = {}
-    first_loop = True
-
-    while True:
-        if first_loop:
-            first_loop = False
-        else:
-            cli_art.display_breadcrumb()
-        cli_art.console.print()
-        choice = cli_art.select("What would you like to do?", choices=_menu_choices())
-
-        if choice == "exit" or not choice:
-            cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
+    with ctx:
+        cli_art.display_main_banner()
+        if not _confirm_active_profile():
+            # Ctrl-C/Esc at the profile gate -- exit now, same as Ctrl-C on the
+            # main menu's own select() below, rather than falling through into
+            # icon-set/update-check prompts and a menu the user never asked for.
             cli_art.display_exit_footer()
-            break
+            return
+        _confirm_icon_set()
+        _prompt_for_update()
+        cli_art.display_tip()
 
-        if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
-            cli_art.console.print(
-                f"[{theme.BRAND}]Take a look around! Choose \"New User? Start Here!\" when you're "
-                f"ready to set up your own profile -- nothing else runs until then.[/{theme.BRAND}]"
-            )
-            continue
+        session_stats = {}
+        first_loop = True
 
-        if choice in _SUBMENUS:
-            _SUBMENUS[choice](session_stats)
-        else:
-            _run_with_chain(choice, session_stats)
+        while True:
+            if use_alt and not first_loop:
+                # Clear terminal and home cursor
+                sys.stdout.write("\x1b[2J\x1b[H")
+                sys.stdout.flush()
+                # Draw main banner instantly (reveal=False)
+                cli_art.display_main_banner(reveal=False)
+            elif first_loop:
+                first_loop = False
+            else:
+                cli_art.display_breadcrumb()
+            
+            if use_alt:
+                cli_art.display_footer_commands()
 
-        if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
-            os.environ.pop("RESUME_GUEST_MODE", None)
+            cli_art.console.print()
+            choice = cli_art.select("What would you like to do?", choices=_menu_choices())
+
+            if choice == "exit" or not choice:
+                cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
+                cli_art.display_exit_footer()
+                break
+
+            if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
+                cli_art.console.print(
+                    f"[{theme.BRAND}]Take a look around! Choose \"New User? Start Here!\" when you're "
+                    f"ready to set up your own profile -- nothing else runs until then.[/{theme.BRAND}]"
+                )
+                continue
+
+            if choice in _SUBMENUS:
+                _SUBMENUS[choice](session_stats)
+            else:
+                _run_with_chain(choice, session_stats)
+
+            if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
+                os.environ.pop("RESUME_GUEST_MODE", None)

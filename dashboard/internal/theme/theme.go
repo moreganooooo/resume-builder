@@ -2,35 +2,50 @@
 package theme
 
 import (
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"image/color"
+	"os"
+
+	"charm.land/huh/v2"
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/termenv"
 )
+
+var terminalProfile = colorprofile.Detect(os.Stdout, os.Environ())
+
+func c(ansi, ansi256, truecolor string) color.Color {
+	complete := lipgloss.Complete(terminalProfile)
+	return complete(
+		lipgloss.Color(ansi),
+		lipgloss.Color(ansi256),
+		lipgloss.Color(truecolor),
+	)
+}
 
 // Theme holds all color definitions for the pipeline dashboard.
 type Theme struct {
 	// Base colors
-	Base    lipgloss.Color
-	Surface lipgloss.Color
-	Overlay lipgloss.Color
-	Text    lipgloss.Color
-	Subtext lipgloss.Color
+	Base    color.Color
+	Surface color.Color
+	Overlay color.Color
+	Text    color.Color
+	Subtext color.Color
 
 	// Accent colors
-	Blue   lipgloss.Color
-	Mauve  lipgloss.Color
-	Green  lipgloss.Color
-	Yellow lipgloss.Color
-	Sky    lipgloss.Color
-	Peach  lipgloss.Color
-	Red    lipgloss.Color
-	Pink   lipgloss.Color
+	Blue   color.Color
+	Mauve  color.Color
+	Green  color.Color
+	Yellow color.Color
+	Sky    color.Color
+	Peach  color.Color
+	Red    color.Color
+	Pink   color.Color
 
 	// Token grouping for UI components
 	Token struct {
-		Text    lipgloss.Color
-		Subtext lipgloss.Color
-		Mauve   lipgloss.Color
+		Text    color.Color
+		Subtext color.Color
+		Mauve   color.Color
 	}
 
 	// Icon set for UI elements
@@ -81,13 +96,9 @@ func NewTheme(name string) Theme {
 	}
 }
 
-// HuhTheme converts the internal Theme into a *huh.Theme that matches the
-// current colour palette. huh.Theme has no flat Base/Secondary/Accent
-// fields (that was never a real huh API) -- it's a full FieldStyles tree,
-// so this starts from huh's own Charm preset and recolors just the
-// pieces our palette actually differs on. Returns a pointer since that's
-// what Form.WithTheme (the only real setter -- there is no Form.Theme
-// method) expects.
+// HuhTheme converts the internal Theme into a huh.Theme that matches the
+// current colour palette. huh.Theme is an interface in v2, and we wrap our
+// styles builder inside huh.ThemeFunc to conform to the interface cleanly.
 //
 // Focused.Title/SelectSelector use Token.Mauve, not the module-level
 // BrandColor constant (tokens.go, formerly wired into a now-removed
@@ -98,10 +109,12 @@ func NewTheme(name string) Theme {
 // BrandColor measures 6.63:1 against the dark themes' Base but only
 // 2.19:1 against Catppuccin Latte's -- unreadable for a focused field's
 // own label under the one theme that needed a real per-theme token here.
-func (t Theme) HuhTheme() *huh.Theme {
-	ht := huh.ThemeCharm()
-	ht.Focused.Title = ht.Focused.Title.Foreground(t.Token.Mauve)
-	ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.Token.Mauve)
-	ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
-	return ht
+func (t Theme) HuhTheme() huh.Theme {
+	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		ht := huh.ThemeCharm(isDark)
+		ht.Focused.Title = ht.Focused.Title.Foreground(t.Token.Mauve)
+		ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.Token.Mauve)
+		ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
+		return ht
+	})
 }

@@ -5,14 +5,14 @@
 package main
 
 import (
-    "errors"
-    "fmt"
-    "log"
-    "os"
+	"errors"
+	"fmt"
+	"log"
+	"os"
 
-    "github.com/charmbracelet/huh"
-    "github.com/moreganooooo/resume-builder/dashboard/internal/ui/bootstrap"
-    "github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"charm.land/huh/v2"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/bootstrap"
 )
 
 // cancelExitCode matches the shell SIGINT convention (128 + SIGINT's 2),

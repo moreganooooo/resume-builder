@@ -2,10 +2,11 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -18,16 +19,14 @@ import (
 // narrower than both pieces combined -- the composed line just wraps onto
 // a second row, breaking the bar's single-line layout. fitBar truncates
 // right first (it's given priority room up to the full available budget),
-// then truncates left with whatever's left over, using ansi.Truncate --
-// ANSI-escape-aware, so it can safely shorten an already-styled/rendered
-// string -- so the composed line fits at any width down to 0, not just
-// down to whatever width right alone happens to need.
+// left second, and pads the remaining space with a background-colored gap
+// of exact width.
 //
-// bg is the bar's own panel background (every caller wraps the returned
-// three pieces in an outer style with this same Background). The caller's
-// left/right strings arrive already-rendered (each ending in its own SGR
-// reset), so the gap returned here is pre-rendered with bg too -- otherwise
-// that reset clears the outer style's background for every column after
+// Background styling: fitBar returns (left, right, gap) rather than a
+// pre-concatenated string. If it rendered the full line itself, any Reset
+// sequence inside right (automatically appended by LipGloss when rendering
+// a style) would strip the bar-level background color for the gap. That
+// reset clears the outer style's background for every column after
 // the first rendered fragment, and the plain-string gap (and anything
 // concatenated after it) falls back to the terminal's default background
 // instead of bg. Confirmed by dumping the raw ANSI bytes of the composed
@@ -36,7 +35,7 @@ import (
 // (title, keyStyle, descStyle, etc.) to set Background(bg) themselves --
 // fitBar only owns the gap, since it never sees those styles, only their
 // rendered output.
-func fitBar(left, right string, width, reserved int, bg lipgloss.Color) (string, string, string) {
+func fitBar(left, right string, width, reserved int, bg color.Color) (string, string, string) {
 	avail := width - reserved
 	if avail < 0 {
 		avail = 0

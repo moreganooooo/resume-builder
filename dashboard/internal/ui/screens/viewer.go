@@ -2,13 +2,14 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"regexp"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -528,7 +529,7 @@ func (m ViewerModel) renderInlineElements(line string) string {
 // renderInlineElementsAs walks the raw line once and reapplies baseColor around
 // every plain-text span, so resets emitted by inline tokens (code, bold, link,
 // bare URL) don't leak through to subsequent text.
-func (m ViewerModel) renderInlineElementsAs(line string, baseColor lipgloss.Color) string {
+func (m ViewerModel) renderInlineElementsAs(line string, baseColor color.Color) string {
 	baseStyle := lipgloss.NewStyle().Foreground(baseColor)
 	codeStyle := lipgloss.NewStyle().Background(m.theme.Surface).Foreground(m.theme.Text)
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Yellow)

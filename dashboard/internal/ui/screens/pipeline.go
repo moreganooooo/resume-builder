@@ -2,14 +2,15 @@ package screens
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
@@ -284,7 +285,7 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	case PipelineURLOpenFailedMsg:
 		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.showHelp {
 			switch msg.String() {
 			case "?", "esc", "q":
@@ -307,7 +308,7 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
+func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 	if m.notice != "" {
 		m.notice = ""
 		return m, nil
@@ -476,7 +477,7 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 }
 
 // handleSearchInput consumes keys while the search input bar is open.
-func (m PipelineModel) handleSearchInput(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
+func (m PipelineModel) handleSearchInput(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.searchInput = false
@@ -508,8 +509,8 @@ func (m PipelineModel) handleSearchInput(msg tea.KeyMsg) (PipelineModel, tea.Cmd
 		return m, nil
 	}
 
-	if r := msg.Runes; len(r) > 0 {
-		m.searchQuery += strings.ToLower(string(r))
+	if msg.Text != "" {
+		m.searchQuery += strings.ToLower(msg.Text)
 		m.applyFilterAndSort()
 		m.cursor = 0
 		m.scrollOffset = 0
@@ -523,7 +524,7 @@ func (m PipelineModel) handleSearchInput(msg tea.KeyMsg) (PipelineModel, tea.Cmd
 // and this only accepts the inline confirm/cancel keys -- see
 // renderStatusPickerOverlay's doc comment in bars.go for why a status
 // change doesn't commit on the first Enter.
-func (m PipelineModel) handleStatusPicker(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
+func (m PipelineModel) handleStatusPicker(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 	if m.statusConfirm {
 		switch msg.String() {
 		case "enter", "y", "Y":
@@ -917,7 +918,13 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 	statusColor := m.statusColorMap()[norm]
 
 	content = append(content, styles.Subtext.Render("Interview Probability: ")+score.Render(scoreIcon(m.theme, app.Score)+" "+fmt.Sprintf("%.1f", app.Score)))
-	content = append(content, styles.Subtext.Render("Status: ")+lipgloss.NewStyle().Foreground(statusColor).Render(statusLabel(norm)))
+	statusPill := lipgloss.NewStyle().
+		Background(statusColor).
+		Foreground(m.theme.Base).
+		Padding(0, 1).
+		Bold(true).
+		Render(strings.ToUpper(statusLabel(norm)))
+	content = append(content, styles.Subtext.Render("Status: ")+statusPill)
 
 	dateStr := app.Date
 	if dateStr == "" {
@@ -981,7 +988,12 @@ func (m PipelineModel) renderSearchBar() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	prompt := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
+	var prompt string
+	if m.searchInput {
+		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Surface).Background(m.theme.Blue).Padding(0, 1).Render(" SEARCH ")
+	} else {
+		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
+	}
 	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
@@ -1179,6 +1191,9 @@ func (m PipelineModel) renderHelp() string {
 	}
 
 	if m.searchInput {
+		style = style.Foreground(m.theme.Subtext)
+		keyStyle = keyStyle.Foreground(m.theme.Subtext).Bold(false)
+		descStyle = descStyle.Foreground(m.theme.Subtext)
 		return style.Render(
 			keyStyle.Render("type") + descStyle.Render(" filter live  ") +
 				keyStyle.Render("Enter") + descStyle.Render(" keep  ") +
@@ -1224,8 +1239,8 @@ func (m PipelineModel) renderHelp() string {
 // as low as 1.4:1 against the metrics bar's Surface background -- Subtext is
 // the token actually designed to be read as dimmed body text (4.7-7.4:1
 // across all three themes' Surface/Base pairs).
-func (m PipelineModel) statusColorMap() map[string]lipgloss.Color {
-	return map[string]lipgloss.Color{
+func (m PipelineModel) statusColorMap() map[string]color.Color {
+	return map[string]color.Color{
 		"interview": m.theme.Green,
 		"offer":     m.theme.Green,
 		"applied":   m.theme.Sky,
