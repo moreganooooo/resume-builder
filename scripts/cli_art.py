@@ -231,11 +231,13 @@ def display_stats_line() -> None:
 
 
 TIPS = [
-    "resume run --pick lets you interactively choose which pending JDs to tailor, instead of the whole batch.",
-    "resume test -v lists every test by name instead of just dots.",
-    "New here? The menu's top \"New User? Start Here!\" option bootstraps a bullet bank from your existing resume or LinkedIn export.",
-    "resume polish lets you conversationally tweak an already-generated resume or cover letter.",
-    "Evaluating a JD persists its score onto the file itself, so \"Customize Resume for a Specific JD\" never re-scores it.",
+    "Want the AI to sound like you? Drop past cover letters, personal bios, or emails into source_documents/ — our engine extracts and clones your unique tone and style automatically!",
+    "What is a 'Bullet Bank'? It is your living achievement inventory. Curate your accomplishments there, and the AI will auto-select and adapt the best matches for each job description!",
+    "To target your job search, customize your active search keywords inside your profile's search_queries.json file directly in-app or in your editor.",
+    "Did you know? Logging into LinkedIn or JobRight in Google Chrome lets our scanner fetch session cookies automatically on macOS — no manual copy-pasting required!",
+    "Running low on time? Try 'Express Setup (Auto-pilot)' — it ingests your source files, constructs your bullet bank, and builds a customized resume in a single click!",
+    "Have a specific edit in mind? Use 'Polish Resume or Cover Letter' to conversationally ask the AI for exact visual, wording, or structure tweaks.",
+    "Landed an interview? Update your status in the Applications Tracker to unlock achievements and watch your funnel conversion rate rise!"
 ]
 
 
@@ -1519,9 +1521,9 @@ def display_compact_banner(action_title: str) -> None:
     """
     panel_content = Text()
     panel_content.append("✦ ", style=theme.BRAND_ACCENT)
-    panel_content.append("💎 RESUME BUILDER ", style=f"bold {theme.BRAND}")
+    panel_content.append(make_gradient_text("💎 RESUME BUILDER ", theme.BRAND, theme.BRAND_ACCENT))
     panel_content.append("│ ", style=theme.MUTED)
-    panel_content.append(action_title.upper(), style=f"bold {theme.INFO}")
+    panel_content.append(make_gradient_text(action_title.upper(), theme.INFO, theme.SUCCESS))
     panel_content.append(" │ ", style=theme.MUTED)
     panel_content.append("Active Script Execution Mode", style=theme.MUTED)
     panel_content.append(" ✦", style=theme.BRAND_ACCENT)
@@ -1643,3 +1645,80 @@ def display_execution_footer() -> None:
     # Restore cursor position
     sys.stdout.write("\x1b[u")
     sys.stdout.flush()
+
+
+def make_gradient_text(text: str, start_color: str, end_color: str, bold: bool = True) -> Text:
+    """Creates a beautifully-blended linear gradient text using TrueColor RGB hex codes."""
+    r1, g1, b1 = int(start_color[1:3], 16), int(start_color[3:5], 16), int(start_color[5:7], 16)
+    r2, g2, b2 = int(end_color[1:3], 16), int(end_color[3:5], 16), int(end_color[5:7], 16)
+    
+    gradient_text = Text()
+    n = len(text)
+    if n <= 1:
+        gradient_text.append(text, style=f"{'bold ' if bold else ''}{start_color}")
+        return gradient_text
+        
+    for i, char in enumerate(text):
+        t = i / (n - 1)
+        r = int(r1 + (r2 - r1) * t)
+        g = int(g1 + (g2 - g1) * t)
+        b = int(b1 + (b2 - b1) * t)
+        hex_color = f"#{r:02x}{g:02x}{b:02x}"
+        gradient_text.append(char, style=f"{'bold ' if bold else ''}{hex_color}")
+        
+    return gradient_text
+
+
+def display_success_celebration(title: str, subtitle: str) -> None:
+    """Prints a magnificent, high-energy celebratory card to keep job seekers motivated
+    and deliver that essential hit of career dopamine! Incorporates twinkling terminal animations!
+    """
+    import time
+    import random
+    
+    panel_content = Text()
+    panel_content.append("\n🎉 ✦ ─── HECK YEAH! ─── ✦ 🎉\n\n", style=f"bold {theme.BRAND_ACCENT}")
+    panel_content.append(title.upper(), style=f"bold {theme.SUCCESS}")
+    panel_content.append("\n\n", style="default")
+    panel_content.append(subtitle, style=f"italic {theme.INFO}")
+    panel_content.append("\n\n💡 Remember: Every tailored resume brings you one step closer to your dream gig!", style=theme.MUTED)
+    panel_content.append("\nGo crush this application! 🚀\n", style=f"bold {theme.BRAND}")
+    
+    grad_title = make_gradient_text("🌟 ACHIEVEMENT UNLOCKED 🌟", theme.BRAND_ACCENT, theme.BRAND)
+    
+    panel = Panel(
+        panel_content,
+        border_style=theme.BRAND_ACCENT,
+        box=box.DOUBLE,
+        padding=(1, 4),
+        title=grad_title,
+        title_align="center"
+    )
+    
+    sparkles = ["✨", "✦", "✧", "⭐", "🎉", "🔥", "💫", "💎"]
+    sys.stdout.write("\x1b[?25l")  # Hide cursor
+    sys.stdout.flush()
+    
+    try:
+        for frame in range(12):
+            sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
+            sys.stdout.flush()
+            
+            console.print()
+            sparkle_row_1 = "   " + " ".join(random.choices(sparkles, k=8))
+            console.print(make_gradient_text(sparkle_row_1, theme.BRAND_ACCENT, theme.BRAND))
+            console.print()
+            console.print(panel)
+            console.print()
+            sparkle_row_2 = "   " + " ".join(random.choices(sparkles, k=8))
+            console.print(make_gradient_text(sparkle_row_2, theme.BRAND, theme.BRAND_ACCENT))
+            time.sleep(0.1)
+    finally:
+        sys.stdout.write("\x1b[?25h")  # Restore cursor
+        sys.stdout.flush()
+        
+    sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
+    sys.stdout.flush()
+    console.print()
+    console.print(panel)
+    console.print()

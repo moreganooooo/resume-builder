@@ -173,7 +173,9 @@ class TestDisplayTip(unittest.TestCase):
         finally:
             cli_art.console = original
         output = console.export_text()
-        self.assertTrue(any(tip in output for tip in cli_art.TIPS))
+        clean_output = "".join(c for c in output if c.isalnum()).lower()
+        matched = any("".join(c for c in tip if c.isalnum()).lower() in clean_output for tip in cli_art.TIPS)
+        self.assertTrue(matched)
 
 
 class TestShortWhy(unittest.TestCase):

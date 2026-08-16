@@ -179,7 +179,70 @@ def _run_phase05() -> bool:
     return True
 
 
-def _build_choices() -> list:
+def _run_express_setup(interactive: bool = True) -> bool:
+    """Runs the entire onboarding pipeline end-to-end unattended."""
+    source_docs_dir = bootstrap_bullet_bank.SOURCE_DOCS_DIR
+    os.makedirs(source_docs_dir, exist_ok=True)
+    files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
+    if not files:
+        import menu
+        menu._print_source_docs_instructions(source_docs_dir)
+        return False
+
+    secrets = bootstrap_profile.collect_secrets()
+    if not secrets["gemini_key_set"]:
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('warning')}  Skipping express setup -- GEMINI_API_KEY isn't set yet. "
+            "Add it to your profile's .env, then try again."
+        , soft_wrap=True)
+        return False
+
+    if interactive:
+        confirm = questionary.confirm(
+            "This will run all 8 onboarding stages (Ingestion, Profile Setup, and the 6-stage Bullet Bank pipeline) automatically. Proceed?",
+            default=True,
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        if not confirm:
+            return False
+
+    scroll_region_modified = False
+    import sys
+    import shutil
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("ONBOARDING | EXPRESS AUTO-PILOT")
+    cli_art.display_execution_footer()
+
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        cli_art.print_literal("Stage 1 of 8: Processing source documents...")
+        summary = bootstrap_bullet_bank.run_ingestion()
+        bootstrap_bullet_bank.print_ingestion_summary(summary)
+
+        cli_art.print_literal("\nStage 2 of 8: Drafting your profile (identity, tags, cv.md)...")
+        bootstrap_profile.run_profile_setup()
+
+        cli_art.print_literal("\nStages 3-8: Running the six-stage bullet bank pipeline (unattended)...")
+        bootstrap_bullet_bank.run_full_pipeline(skip_confirm=True)
+
+        cli_art.print_literal(f"\n{theme.colorize_icon('success')} All done! Express setup complete. Your profile and bullet bank are fully prepared!")
+    except Exception as e:
+        cli_art.print_literal(f"\n{theme.colorize_icon('warning')} Express setup encountered an error: {e}")
+        return False
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+    return True
+
+
+def _build_choices(include_express: bool = False) -> list:
     # Labels here are plain-language stage names, not the internal "Phase
     # 0"/"Phase 0.5" dev-sequencing numbers this module's own docstring
     # (and the rest of this codebase) uses to talk about these two steps
@@ -188,7 +251,15 @@ def _build_choices() -> list:
     # numbers these 0/"0.5" alongside Stages 1-6 -- that ordering is
     # genuinely useful there, so it stays; only the user-facing menu
     # copy changes here.
-    choices = [
+    choices = []
+    if include_express:
+        choices.append(questionary.Choice(
+            title=[("class:text", "⚡ Express Setup (Auto-pilot)  "),
+                   ("class:description", "(run all 8 steps end-to-end unattended)")],
+            value="express",
+        ))
+    
+    choices += [
         questionary.Choice(
             title=[("class:text", "Upload Your Documents  "),
                    ("class:description", "(extract achievements from uploaded files)")],
@@ -247,11 +318,13 @@ def run_bootstrap_menu() -> bool:
             stage_rows, [], title="Onboarding Progress", show_numbers=False)
         cli_art.console.print()
 
-        choice = cli_art.select("New User Setup:", choices=_build_choices())
+        choice = cli_art.select("New User Setup:", choices=_build_choices(include_express=True))
         if not choice or choice == "__back__":
             return did_something
 
-        if choice == "phase0":
+        if choice == "express":
+            did_something = _run_express_setup(interactive=True) or did_something
+        elif choice == "phase0":
             did_something = _run_phase0() or did_something
         elif choice == "phase05":
             did_something = _run_phase05() or did_something

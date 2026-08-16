@@ -1126,12 +1126,12 @@ class TestAltScreenMode(unittest.TestCase):
     @patch("shutil.get_terminal_size")
     @patch.dict(os.environ, {}, clear=True)
     def test_should_use_alt_screen_defaults(self, mock_terminal_size):
-        # By default, if terminal height >= 35, it should return True
+        # By default, if terminal height >= 24, it should return True
         mock_terminal_size.return_value = (80, 40)
         self.assertTrue(menu._should_use_alt_screen())
 
-        # If height < 35, it should return False
-        mock_terminal_size.return_value = (80, 30)
+        # If height < 24, it should return False
+        mock_terminal_size.return_value = (80, 20)
         self.assertFalse(menu._should_use_alt_screen())
 
     @patch.dict(os.environ, {"RESUME_ALT_SCREEN": "1"})

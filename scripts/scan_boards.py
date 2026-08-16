@@ -289,7 +289,14 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
     cli_art.ScanActivity) is optional -- when given, announces each
     provider as it's checked through the shared themed step-log instead
     of nothing at all."""
-    sources = sources or BOARD_PROVIDERS
+    filters = _load_filters()
+    enabled_boards = filters.get("enabled_boards")
+    is_default_run = sources is None
+    if sources is None:
+        if enabled_boards is not None:
+            sources = [b for b in BOARD_PROVIDERS if b in enabled_boards]
+        else:
+            sources = BOARD_PROVIDERS
 
     jobs = []
     if activity is not None:
@@ -342,5 +349,62 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
             }
             _flag_thin_description(job, provider_id, url)
             jobs.append(job)
+
+    # Fetch custom RSS feeds!
+    custom_feeds = filters.get("custom_feeds") or []
+    if custom_feeds and is_default_run:
+        for feed in custom_feeds:
+            feed_name = feed.get("name")
+            feed_url = feed.get("url")
+            if not feed_name or not feed_url:
+                continue
+                
+            if activity is not None:
+                activity.step("discovery", "Boards", f"Checking custom feed: {feed_name}", preserve_markup=True)
+                
+            try:
+                r = requests.get(feed_url, timeout=10)
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.content, "xml")
+                    items = soup.find_all("item")
+                    feed_jobs_count = 0
+                    for item in items:
+                        title_el = item.find("title")
+                        link_el = item.find("link")
+                        if not title_el or not link_el:
+                            continue
+                        title = html.unescape(title_el.text.strip())
+                        url = link_el.text.strip()
+                        if not _passes_title_filter(title):
+                            continue
+                            
+                        desc_el = item.find("description")
+                        desc = _html_to_text(desc_el.text.strip()) if desc_el else ""
+                        
+                        company = ""
+                        author_el = item.find("author")
+                        if author_el:
+                            company = author_el.text.strip()
+                        else:
+                            # Try dc:creator
+                            dc_creator = item.find("dc:creator")
+                            if dc_creator:
+                                company = dc_creator.text.strip()
+                                
+                        job = {
+                            "job_title": title,
+                            "company_name": company or feed_name,
+                            "source_platform": f"custom_{feed_name.lower().replace(' ', '_')}",
+                            "source_job_id": None,
+                            "source_url": url,
+                            "location": "Remote",
+                            "posted_at": "",
+                            "description": desc,
+                        }
+                        jobs.append(job)
+                        feed_jobs_count += 1
+                    logging.info(f"scan_boards: custom feed {feed_name} returned {feed_jobs_count} job(s).")
+            except Exception as e:
+                logging.warning(f"scan_boards: Failed to fetch custom feed {feed_name}: {e}")
 
     return jobs

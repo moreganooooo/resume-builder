@@ -422,3 +422,83 @@ def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_S
     return [r for r in rows if r["path"] in selected]
 
 
+def interactive_file_picker(prompt: str, start_dir: str = None, allowed_extensions: list = None) -> str:
+    """A gorgeous, interactive TUI file picker that lets users navigate folders
+    and pick files without tedious path-typing.
+    """
+    import sys
+    if not start_dir:
+        start_dir = os.path.expanduser("~/Downloads")
+        if not os.path.exists(start_dir):
+            start_dir = os.getcwd()
+            
+    current_dir = os.path.abspath(start_dir)
+    
+    while True:
+        # Clear screen
+        sys.stdout.write("\x1b[2J\x1b[H")
+        sys.stdout.flush()
+        
+        cli_art.display_compact_banner("Interactive File Picker")
+        cli_art.console.print(f"✦ [{theme.BRAND}]Current Directory:[/{theme.BRAND}] {current_dir}\n")
+        
+        choices = []
+        # Parent directory choice
+        parent_dir = os.path.dirname(current_dir)
+        if parent_dir != current_dir:
+            choices.append(questionary.Choice("📁 .. (Go Up)", value=".."))
+            
+        try:
+            items = sorted(os.listdir(current_dir))
+        except Exception as e:
+            cli_art.console.print(f"[{theme.ERROR}]Error listing directory: {e}[/{theme.ERROR}]")
+            questionary.press_any_key_to_continue().ask()
+            # fallback to parent directory
+            current_dir = parent_dir
+            continue
+            
+        folders = []
+        files = []
+        
+        for item in items:
+            if item.startswith("."):
+                continue # Skip hidden files
+            full_path = os.path.join(current_dir, item)
+            if os.path.isdir(full_path):
+                folders.append(item)
+            elif os.path.isfile(full_path):
+                if allowed_extensions:
+                    ext = os.path.splitext(item)[1].lower()
+                    if ext in allowed_extensions:
+                        files.append(item)
+                else:
+                    files.append(item)
+                    
+        # Add folders to choices
+        for f in sorted(folders, key=lambda s: s.lower()):
+            choices.append(questionary.Choice(f"📁 {f}/", value=os.path.join(current_dir, f)))
+            
+        # Add files to choices
+        for f in sorted(files, key=lambda s: s.lower()):
+            choices.append(questionary.Choice(f"📄 {f}", value=os.path.join(current_dir, f)))
+            
+        choices.append(questionary.Choice("❌ [Cancel]", value="__cancel__"))
+        
+        selected = questionary.select(
+            prompt,
+            choices=choices,
+            style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+        
+        if not selected or selected == "__cancel__":
+            return ""
+            
+        if selected == "..":
+            current_dir = parent_dir
+        elif os.path.isdir(selected):
+            current_dir = selected
+        else:
+            return selected
+
+
+
