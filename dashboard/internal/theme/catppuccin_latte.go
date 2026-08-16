@@ -1,15 +1,13 @@
 package theme
 
-import "github.com/charmbracelet/lipgloss"
-
 func newCatppuccinLatte() Theme {
 	t := Theme{
 		// Catppuccin Latte palette
-		Base:    lipgloss.Color("#eff1f5"),
-		Surface: lipgloss.Color("#dce0e8"),
-		Overlay: lipgloss.Color("#9ca0b0"),
-		Text:    lipgloss.Color("#4c4f69"),
-		Subtext: lipgloss.Color("#5c5f77"),
+		Base:    c("15", "255", "#eff1f5"),
+		Surface: c("7", "254", "#dce0e8"),
+		Overlay: c("8", "248", "#9ca0b0"),
+		Text:    c("0", "239", "#4c4f69"),
+		Subtext: c("8", "241", "#5c5f77"),
 
 		// Accents. Every one of these is darkened from stock Catppuccin
 		// Latte -- this dashboard renders them at body-text size (scoreStyle,
@@ -30,14 +28,14 @@ func newCatppuccinLatte() Theme {
 		// a true yellow or orange hue cannot reach 4.5:1 on a near-white
 		// background without doing that; this is the actual color, not a
 		// rendering bug.
-		Blue:   lipgloss.Color("#1a56db"),
-		Mauve:  lipgloss.Color("#761aed"),
-		Green:  lipgloss.Color("#29681c"),
-		Yellow: lipgloss.Color("#805211"),
-		Sky:    lipgloss.Color("#026288"),
-		Peach:  lipgloss.Color("#a03b01"),
-		Red:    lipgloss.Color("#b80d32"),
-		Pink:   lipgloss.Color("#a81a82"),
+		Blue:   c("4", "26", "#1a56db"),
+		Mauve:  c("5", "93", "#761aed"),
+		Green:  c("2", "28", "#29681c"),
+		Yellow: c("3", "94", "#805211"),
+		Sky:    c("6", "31", "#026288"),
+		Peach:  c("1", "130", "#a03b01"),
+		Red:    c("1", "124", "#b80d32"),
+		Pink:   c("13", "126", "#a81a82"),
 	}
 
 	// Populate Token shortcuts

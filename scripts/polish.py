@@ -203,13 +203,14 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
         f"=== REQUESTED EDIT ===\n{instruction}"
     )
 
-    text, _usage = GeminiClient.generate(
-        model=BUILDER_MODEL,
-        system_instruction=system_instruction,
-        contents=contents,
-        response_schema=schema,
-        temperature=0.0,
-    )
+    with cli_art.console.status(f"[bold {theme.BRAND}]Thinking[/bold {theme.BRAND}] · Polishing your document with Gemini...", spinner="dots", spinner_style=f"bold {theme.BRAND_ACCENT}"):
+        text, _usage = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=system_instruction,
+            contents=contents,
+            response_schema=schema,
+            temperature=0.0,
+        )
     result = GeminiClient.parse_json(text or "")
     if not result:
         return None

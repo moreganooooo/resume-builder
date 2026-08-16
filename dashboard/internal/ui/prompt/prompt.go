@@ -9,7 +9,7 @@ package prompt
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 

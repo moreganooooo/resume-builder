@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/color"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -13,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -153,7 +154,7 @@ func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsMod
 		theme:   t,
 		spinner: sp,
 		progress: progress.New(
-			progress.WithGradient(string(t.Sky), string(t.Mauve)),
+			progress.WithColors(t.Sky, t.Mauve),
 		),
 	}
 	m.applyFilter()
@@ -469,7 +470,7 @@ func (m JobsModel) applyReloadedRows(rows []model.JobRow) JobsModel {
 // and this only accepts the inline confirm/cancel keys -- see
 // renderStatusPickerOverlay's doc comment in bars.go for why a status
 // change doesn't commit on the first Enter.
-func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
+func (m JobsModel) handleStatusPickerKey(msg tea.KeyPressMsg) (JobsModel, tea.Cmd) {
 	if m.statusConfirm {
 		switch msg.String() {
 		case "enter", "y", "Y":
@@ -528,7 +529,7 @@ func (m JobsModel) handleStatusPickerKey(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 // is what stops a typed letter from also triggering a single-letter Jobs
 // shortcut like "f"/"l"/"t"/"u" -- this function is the only place keys are
 // interpreted while the input is focused.
-func (m JobsModel) handleSearchInput(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
+func (m JobsModel) handleSearchInput(msg tea.KeyPressMsg) (JobsModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.searchInput = false
@@ -560,8 +561,8 @@ func (m JobsModel) handleSearchInput(msg tea.KeyMsg) (JobsModel, tea.Cmd) {
 		return m, nil
 	}
 
-	if r := msg.Runes; len(r) > 0 {
-		m.searchQuery += strings.ToLower(string(r))
+	if msg.Text != "" {
+		m.searchQuery += strings.ToLower(msg.Text)
 		m.applyFilter()
 		m.cursor = 0
 		m.scrollOffset = 0
@@ -651,12 +652,10 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 
 	case progress.FrameMsg:
 		newModel, cmd := m.progress.Update(msg)
-		if pm, ok := newModel.(progress.Model); ok {
-			m.progress = pm
-		}
+		m.progress = newModel
 		return m, cmd
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.actionInProgress != "" {
 			// esc kills the in-flight subprocess instead of leaving it
 			// orphaned -- previously every key (including esc/Ctrl+C) was
@@ -785,7 +784,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 					m.actionInProgress = "tailor"
 					m.actionStartedAt = time.Now()
 					m.actionChan = make(chan tea.Msg)
-					m.progress = progress.New(progress.WithGradient(string(m.theme.Sky), string(m.theme.Mauve)))
+					m.progress = progress.New(progress.WithColors(m.theme.Sky, m.theme.Mauve))
 					m.actionStepLabel = ""
 					ctx, cancel := context.WithCancel(context.Background())
 					m.actionCancel = cancel
@@ -1009,7 +1008,7 @@ func (m JobsModel) renderActionStatus() string {
 	// liveness/status have no such signal and stay on the indeterminate
 	// spinner rather than faking a percent.
 	if m.actionInProgress == "tailor" {
-		m.progress.Width = m.width - 6
+		m.progress.SetWidth(m.width - 6)
 		label := m.actionStepLabel
 		if label == "" {
 			label = actionLabel(m.actionInProgress)
@@ -1133,7 +1132,12 @@ func (m JobsModel) renderSearchBar() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	prompt := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
+	var prompt string
+	if m.searchInput {
+		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Surface).Background(m.theme.Blue).Padding(0, 1).Render(" SEARCH ")
+	} else {
+		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
+	}
 	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
@@ -1241,6 +1245,32 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	accent := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve)
 	score := scoreStyle(m.theme, job.Evaluation.CompositeScore)
 
+	jobStatusPill := func(status string) string {
+		var color color.Color
+		switch strings.ToLower(status) {
+		case "pending":
+			color = m.theme.Yellow
+		case "completed":
+			color = m.theme.Green
+		case "applied":
+			color = m.theme.Sky
+		case "responded":
+			color = m.theme.Blue
+		case "interview", "offer":
+			color = m.theme.Green
+		case "rejected", "discarded", "withdrawn":
+			color = m.theme.Subtext
+		default:
+			color = m.theme.Text
+		}
+		return lipgloss.NewStyle().
+			Background(color).
+			Foreground(m.theme.Base).
+			Padding(0, 1).
+			Bold(true).
+			Render(strings.ToUpper(status))
+	}
+
 	var content []string
 	eval := job.Evaluation
 
@@ -1286,7 +1316,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 
 	content = append(content, "")
 	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
-	content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Status))
+	content = append(content, styles.Subtext.Render("Status: ")+jobStatusPill(job.Status))
 
 	// -- Why / Recruiter Read --
 	if eval.Why != "" {
@@ -1361,7 +1391,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	if job.Application != nil {
 		content = append(content, "")
 		content = append(content, accent.Render("Application"))
-		content = append(content, styles.Subtext.Render("Status: ")+styles.Value.Render(job.Application.Status))
+		content = append(content, styles.Subtext.Render("Status: ")+jobStatusPill(job.Application.Status))
 		if job.Application.AppliedAt != nil {
 			content = append(content, styles.Subtext.Render("Applied: ")+styles.Value.Render(*job.Application.AppliedAt))
 		}
@@ -1476,6 +1506,9 @@ func (m JobsModel) renderHelp() string {
 		// Mirrors pipeline.go's own searchInput help-bar swap -- while typing,
 		// the normal shortcut list is misleading (those keys aren't live), so
 		// it's replaced with the keys that actually do something right now.
+		style = style.Foreground(m.theme.Subtext)
+		keyStyle = keyStyle.Foreground(m.theme.Subtext).Bold(false)
+		descStyle = descStyle.Foreground(m.theme.Subtext)
 		return style.Render(
 			keyStyle.Render("type") + descStyle.Render(" filter live  ") +
 				keyStyle.Render("Enter") + descStyle.Render(" keep  ") +
