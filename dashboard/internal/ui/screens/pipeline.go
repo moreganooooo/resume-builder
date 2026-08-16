@@ -1043,7 +1043,8 @@ func (m PipelineModel) renderHeader() string {
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
 	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Pipeline + "  ✦ CAREER PIPELINE ✧")
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Pipeline + "  ") +
+		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderGradient("✦ CAREER PIPELINE ✧", "#00A4FF", "#FF60FF"))
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 
 	return style.Render(title + gap + info)
