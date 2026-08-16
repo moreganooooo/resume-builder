@@ -79,7 +79,7 @@ func NewMenuModel(t theme.Theme) MenuModel {
 
 	// Header text (icon + title) -- styled and backgrounded at render time
 	// in View(), so it can track the list's live width across resizes.
-	l.Title = t.Icons.Menu + "  MAIN MENU"
+	l.Title = t.Icons.Menu + "  ✦ MAIN MENU ✧"
 
 	return MenuModel{list: l, theme: t}
 }
