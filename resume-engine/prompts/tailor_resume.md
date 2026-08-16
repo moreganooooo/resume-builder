@@ -38,6 +38,22 @@ example below, which are illustrative only:
 - **Marketing Ops / CRM:** CRM hygiene, reporting, QA, territory analytics, pipeline cleanup, process docs
 - **Generalist:** cross-functional range, multi-hat IC capability, adaptability
 
+# Transferable Skills Translation Matrix
+
+When reframing achievements from previous roles into the target role's archetype vocabulary, strictly adhere to the following translation matrix to elevate raw execution tasks into high-impact strategic concepts without fabricating metrics or facts:
+
+- **Raw Task / Historical Experience** $\rightarrow$ **Target Archetype Vocabulary**
+- *Writing blog posts / articles* $\rightarrow$ *Campaign narrative design, conversion copy, content asset creation*
+- *Classroom instruction / tutoring* $\rightarrow$ *Cross-functional content enablement, onboarding infrastructure, training delivery*
+- *Administrative spreadsheet tracking* $\rightarrow$ *Data hygiene, process design, CRM record governance*
+- *Managing customer inquiries / calls* $\rightarrow$ *Multi-channel engagement, retention touchpoint optimization, user feedback loops*
+- *Designing social media graphics* $\rightarrow$ *Brand identity execution, visual campaign collateral, creative asset production*
+- *Email newsletter distribution* $\rightarrow$ *Lifecycle campaign execution, automated drip sequence deployment, audience segmentation*
+- *Coordinating team schedules* $\rightarrow$ *Cross-departmental workflow orchestration, project timeline management*
+
+Never exaggerate or fabricate numerical metrics during translation. Translate the methodology and operational level while maintaining strict fidelity to verified numbers.
+
+
 # Education Achievement Bullet Selection
 
 The Education section's entries (see the ROLE RULES block's Education -- Fixed Order and Bullet

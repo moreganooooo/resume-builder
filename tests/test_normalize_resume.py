@@ -54,7 +54,8 @@ class TestNormalizeResume(unittest.TestCase):
         data = dict(self.raw)
         data["EXPERIENCE"] = [{"title": "X", "company": "Treering Yearbooks", "period": "08/2016 – 08/2024", "achievements": [], "career_note": "something the builder made up"}]
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["EXPERIENCE"][0]["career_note"], fixed_content.CAREER_NOTE)
+        treering = next(j for j in result["EXPERIENCE"] if "Treering" in j["company"])
+        self.assertEqual(treering["career_note"], fixed_content.CAREER_NOTE)
 
     def test_does_not_add_career_note_for_other_companies(self):
         data = dict(self.raw)

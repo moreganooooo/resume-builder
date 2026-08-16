@@ -43,6 +43,13 @@ Most resume builders write in generic "AI-beige" jargon. We hate that.
 * After every build, a **Holistic Critique Pass** reviews the output, explicitly categorizing lines into *Distinctive Sections* (sentences that sound unmistakably like you) and *Flat Sections* (competent but generic).
 * The AI optimizer is **strictly forbidden** from touching your Distinctive Sections, ensuring that the final resume maintains your authentic, human personality!
 
+### 📝 Programmatic Resume-Writing Upgrade Suite
+* **STAR/XYZ Syntactic Quality Grader:** Programmatic parser in `scripts/validate_resume.py` that evaluates every experience achievement bullet against Google's XYZ formula (*Accomplished [X], as measured by [Y], by doing [Z]*), enforcing active verbs, metrics, and causal connectors.
+* **Authenticity & Voice Calibration Linter:** Linter that eliminates generic AI clichés (*proven track record, results-driven professional*) and matches style against `voice-anchors.md`.
+* **Proud Career Break Calibrator:** Automatically detects employment gaps >3 months and inserts a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity red flags.
+* **Transferable Skills Translation Matrix:** Guidance matrix in `tailor_resume.md` that translates raw tasks (blog posts, tutoring, spreadsheets) into sophisticated marketing archetype vocabulary without metric exaggeration.
+
+
 ### 🏢 Behind-The-Scenes Company Research
 When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages. 
 * It extracts their core business register and corporate culture.

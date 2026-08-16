@@ -58,9 +58,17 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
 
     if result.get("EXPERIENCE"):
         new_experience = []
+        career_break_entry = getattr(fixed_content, "CAREER_BREAK_ENTRY", None)
+        has_break_already = any("career break" in str(job.get("company", "")).lower() for job in result["EXPERIENCE"])
+
         for job in result["EXPERIENCE"]:
             job = dict(job)
             company = _RENAME_SUFFIX_PATTERN.sub("", job.get("company", ""))
+
+            if career_break_entry and not has_break_already and company == "Treering Yearbooks":
+                new_experience.append(dict(career_break_entry))
+                has_break_already = True
+
 
             meta = fixed_content.COMPANY_META.get(company)
             if meta:
