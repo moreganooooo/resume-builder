@@ -83,7 +83,7 @@ class TestDealBreakerOverridesAndBayesianOdds(unittest.TestCase):
         # Verify
         self.assertEqual(result["recommendation"], "Strong pursue")
         self.assertEqual(result["composite_score"], 5.0)
-        self.assertEqual(result["estimated_interview_probability"], 29.0)  # OR = 20.0 for 5.0 odds score
+        self.assertEqual(result["estimated_interview_probability"], 25.0)  # Calibrated probability for 5.0 odds score
         self.assertEqual(result["ghost_job_probability"], 0.0)
 
     @patch("orchestrator.GeminiClient.generate")

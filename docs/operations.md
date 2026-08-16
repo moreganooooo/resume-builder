@@ -61,10 +61,10 @@ Most platforms offer a basic single "Match" percentage. We pioneered a **rigorou
     Predicts automated gating, recruiter friction, title continuity, domain credibility, and **Chronological Resume Gap Risk**. To support career transitions, the engine evaluates gap-periods based on company profile rigidity—penalizing traditional corporates while maintaining strong scores for modern, empathetic, or mission-driven organizations.
 
 ### 📈 Advanced Scoring Engine Features:
-*   **Bayesian Probability Converter**: Translates qualitative 1-5 interview odds scores into an empirical **Absolute Interview Probability Percentage** using piecewise linear interpolation against an industry baseline ($2.0\%$), reflecting up to a $20\text{x}$ response multiplier for elite fits.
-*   **Prestige-Tier Volume Calibration**: Classifies companies into volume risk categories. Tier-1 giants (extreme competition) have their funnel friction scores capped in Python, while Tier-3 boutiques receive positive boosts to reward your application.
-*   **Heuristic Ghost Job Probability**: Evaluates explicit red flags (placeholder boilerplate, evergreen phrasing, posting age) to compute a deterministic risk percentage of fake or inactive listings.
-*   **Dynamic Profile Overrides**: An automated Python check scans your `profile.yml` deal-breakers list. If `remote_required` is `True` and the LLM scores `remote_quality < 5` (hybrid/onsite signals detected) or returns matched hard blockers, Python forces the composite score to `0.00` and automatically archives the JD as a `"Skip"`.
+* **Piecewise Probability Scale**: Translates qualitative 1-5 interview odds scores into an empirical **Absolute Interview Probability Percentage** using piecewise linear interpolation against an industry baseline ($2.0\%$), reflecting up to a $20\text{x}$ response multiplier for elite fits.
+* **Prestige-Tier Volume Calibration**: Classifies companies into volume risk categories. Tier-1 giants (extreme competition) have their funnel friction scores capped in Python, while Tier-3 boutiques receive positive boosts to reward your application.
+* **Heuristic Ghost Job Probability**: Evaluates explicit red flags (placeholder boilerplate, evergreen phrasing, posting age) to compute a deterministic risk percentage of fake or inactive listings.
+* **Dynamic Profile Overrides**: An automated Python check scans your `profile.yml` deal-breakers list. If `remote_required` is `True` and the LLM scores `remote_quality < 5` (hybrid/onsite signals detected) or returns matched hard blockers, Python forces the composite score to `0.00` and automatically archives the JD as a `"Skip"`.
 
 
 ---
@@ -121,9 +121,10 @@ Our tailoring engine treats your professional resume and cover letter as a unifi
 ### Resume Tailoring:
 * **The Compounding Selector:** Selects the absolute highest-impact achievements from your audited bullet bank matching the job's core technical requirements.
 * **CV-Context Auditing:** Feeds previously completed bullets (both role-specific and other roles in the CV) into the LLM context to prevent macro-redundancy, verb repetition, or metric duplication across the resume.
+* **Typst Vector PDF Engine (`render_typst.py`):** Generates structured `.typ` document markup and compiles sub-second vector PDFs with native ATS typography and zero browser memory overhead.
 * **The Summary Paradox (Structural Archetypes):** Generates target-specific resume summaries based on business archetypes—**Scale-First/Growth** (process/enterprise optimization) vs. **Zero-to-One/Builder** (startup/launch scale)—validated programmatically with custom metrics/specificity linter checks.
 * **Metrics Verification:** Verifies all numerical values against `verified_metrics.json`—**it cannot fabricate or invent metrics**.
-* **ATS Keyword & Ligature Verification:** Once compiled, the program reads the final PDF's rendered text layer to programmatically assert that all target keywords survived Chromium-to-PDF layout conversion without ligature corruption (e.g. `fi`, `fl`, `ff` combining into single symbols), bad line-breaks, or truncations.
+* **ATS Keyword & Ligature Verification:** Once compiled, the program reads the final PDF's rendered text layer to programmatically assert that all target keywords survived layout conversion without ligature corruption (e.g. `fi`, `fl`, `ff` combining into single symbols), bad line-breaks, or truncations.
 
 ### Cover Letter Tailoring:
 * **Hook-First Openings:** Strictly bans flat, passive, or clichéd introductory sentences (*"My name is..."*, *"I am writing to apply..."*) in favor of an engaging, research-grounded narrative hook.
@@ -133,12 +134,15 @@ Our tailoring engine treats your professional resume and cover letter as a unifi
 
 ---
 
-## 🔬 7. Programmatic Resume-Writing Upgrade Suite
+## 🔬 7. Programmatic Resume-Writing Upgrade Suite & Storage Engine
 
 We implemented an advanced, multi-dimensional technical upgrade to guarantee that every tailored resume meets an elite professional writing standard:
 
-1. **STAR/XYZ Syntactic Quality Grader:** Programmatic parser in `scripts/validate_resume.py` that evaluates every experience achievement bullet against Google's XYZ formula (*Accomplished [X], as measured by [Y], by doing [Z]*). Deducts points for missing active verbs, numerical metrics, or causal outcome connectors, feeding weak bullets back into the validator's repair loop.
-2. **Authenticity & Voice Calibration Metric:** Linter that scans for generic AI clichés (*proven track record, results-driven professional, passion for innovation*) and cross-references stylistic tone against `voice-anchors.md` to ensure a bold, systems-driven, authentic human voice.
-3. **Proud Career Break Calibrator:** Automated timeline gap engine in `scripts/normalize_resume.py` that detects employment gaps >3 months and programmatically constructs a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity flags.
-4. **Transferable Skills Translation Matrix:** Direct reframing matrix embedded in `tailor_resume.md` that guides the LLM to translate raw historical tasks (e.g. blog posts, classroom tutoring, administrative tracking) into sophisticated archetype vocabulary without ever fabricating or exaggerating raw metrics.
-5. **Single-Column Layout & ATS Ligature Safeguards:** Enforces clean, semantic single-column HTML/CSS rendering with static DM Sans fonts and explicit zero-ligature flags (`font-variant-ligatures: none`), guaranteeing 100% text extraction accuracy across Workday, Greenhouse, and Lever parsers.
+1. **Embedded ACID SQLite Storage (`data.db`):** Replaced legacy flat-file syncing with embedded SQLite database storage at `profiles/<profile>/data.db` managed by `scripts/db.py`. Stores job descriptions, application funnel states, and bullet bank achievements with ACID transaction safety and indexed query speed.
+2. **Typst Vector PDF Compilation (`scripts/render_typst.py`):** Integrated Typst vector document compilation for sub-second, 100% ATS-compliant PDF generation without headless browser dependencies.
+3. **STAR/XYZ Syntactic Quality Grader:** Programmatic parser in `scripts/validate_resume.py` that evaluates every experience achievement bullet against Google's XYZ formula (*Accomplished [X], as measured by [Y], by doing [Z]*). Deducts points for missing active verbs, numerical metrics, or causal outcome connectors, feeding weak bullets back into the validator's repair loop.
+4. **Authenticity & Voice Calibration Metric:** Linter that scans for generic AI clichés (*proven track record, results-driven professional, passion for innovation*) and cross-references stylistic tone against `voice-anchors.md` to ensure a bold, systems-driven, authentic human voice.
+5. **Proud Career Break Calibrator:** Automated timeline gap engine in `scripts/normalize_resume.py` that detects employment gaps >3 months and programmatically constructs a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity flags.
+6. **Transferable Skills Translation Matrix:** Direct reframing matrix embedded in `tailor_resume.md` that guides the LLM to translate raw historical tasks (e.g. blog posts, classroom tutoring, administrative tracking) into sophisticated archetype vocabulary without ever fabricating or exaggerating raw metrics.
+7. **Single-Column Layout & ATS Ligature Safeguards:** Enforces clean, semantic single-column rendering with static DM Sans fonts and explicit zero-ligature flags (`font-variant-ligatures: none`), guaranteeing 100% text extraction accuracy across Workday, Greenhouse, and Lever parsers.
+

@@ -67,7 +67,7 @@ def check_venv() -> dict:
     detail = f".venv/ {'found' if exists else 'missing'}, {'ready to use' if ok else 'not usable'}"
     return _check(
         ".venv/ exists and is ready", ok, detail,
-        "Rebuild .venv/: /usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate && "
+        f"Rebuild .venv/: {sys.executable} -m venv .venv && source .venv/bin/activate && "
         "pip install -r requirements.txt.",
     )
 
@@ -372,5 +372,17 @@ def run_test_suite() -> tuple:
     )
     passed = result.returncode == 0
     lines = [line for line in result.stderr.strip().splitlines() if line.strip()]
-    summary = "\n".join(lines[-3:]) if lines else ("OK" if passed else "FAILED")
+    if passed:
+        summary = "\n".join(lines[-3:]) if lines else "OK"
+    else:
+        # Include failure tracebacks if tests fail so developer sees exact root cause
+        summary = result.stderr.strip() if result.stderr else "FAILED"
     return passed, summary
+
+
+if __name__ == "__main__":
+    import cli_art
+    results = run_checks()
+    test_passed, test_summary = run_test_suite()
+    cli_art.render_doctor_report(results, (test_passed, test_summary))
+

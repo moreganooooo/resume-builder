@@ -5,6 +5,7 @@ block art, just a clean styled banner."""
 import json
 import os
 import random
+import re
 import time
 import sys
 import shutil
@@ -45,6 +46,15 @@ QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
 
 
+def scrub_pii(text: str) -> str:
+    """Redacts candidate emails and phone numbers from tracebacks and log messages."""
+    if not text:
+        return ""
+    clean = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[REDACTED_EMAIL]', str(text))
+    clean = re.sub(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b', '[REDACTED_PHONE]', clean)
+    return clean
+
+
 def display_error(message: str) -> None:
     """A failure reads with real visual weight -- a bordered panel, not a
     bare icon-prefixed line. message is escaped before interpolation --
@@ -52,7 +62,7 @@ def display_error(message: str) -> None:
     to look like a style tag (e.g. a company name in brackets), rather
     than raising or rendering it literally, so caller-supplied text must
     never reach console.print unescaped."""
-    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {_escape_markup(message)}"
+    body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {_escape_markup(scrub_pii(message))}"
     console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
 
 

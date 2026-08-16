@@ -112,11 +112,13 @@ async function generatePDF() {
   const args = process.argv.slice(2);
 
   // Parse arguments
-  let inputPath, outputPath, format = 'a4';
+  let inputPath, outputPath, format = 'a4', maxPages = 1;
 
   for (const arg of args) {
     if (arg.startsWith('--format=')) {
       format = arg.split('=')[1].toLowerCase();
+    } else if (arg.startsWith('--max-pages=')) {
+      maxPages = parseInt(arg.split('=')[1], 10) || 1;
     } else if (!inputPath) {
       inputPath = arg;
     } else if (!outputPath) {
@@ -125,7 +127,7 @@ async function generatePDF() {
   }
 
   if (!inputPath || !outputPath) {
-    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4]');
+    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--max-pages=1]');
     process.exit(1);
   }
 
@@ -141,7 +143,8 @@ async function generatePDF() {
 
   console.log(`${ICON.input}Input:  ${inputPath}`);
   console.log(`${ICON.output}Output: ${outputPath}`);
-  console.log(`${ICON.format}Format: ${format.toUpperCase()}`);
+  console.log(`${ICON.format}Format: ${format.toUpperCase()} (Max Pages Target: ${maxPages})`);
+
 
   // Read HTML to inject font paths as absolute file:// URLs
   let html = await readFile(inputPath, 'utf-8');
@@ -219,7 +222,7 @@ async function generatePDF() {
     // Programmatically detect container overflow or page budget overflow and tune the DOM.
     const pageHeightInches = format === 'letter' ? 11 : 11.69;
     const printableHeightPx = Math.floor((pageHeightInches - 1.0) * 96);
-    const maxTwoPageHeightPx = printableHeightPx * 2;
+    const targetMaxHeightPx = printableHeightPx * maxPages;
 
     await page.evaluate((maxHeight) => {
       const pageEl = document.querySelector('.page');
@@ -241,7 +244,7 @@ async function generatePDF() {
         return; // Already perfectly within budget!
       }
 
-      console.log(`[Layout Protective Tuning] Height ${currentHeight}px exceeds the 2-page budget of ${maxHeight}px. Commencing typographic tightening loop...`);
+      console.log(`[Layout Protective Tuning] Height ${currentHeight}px exceeds the page budget of ${maxHeight}px. Commencing typographic tightening loop...`);
 
       // Incremental tightening factors
       const lineHeights = [1.2, 1.15, 1.12, 1.08, 1.05, 1.02];
@@ -288,7 +291,8 @@ async function generatePDF() {
       }
 
       console.log(`[Layout Protective Tuning] Applied ${idx} tightening iterations. Final Height: ${currentHeight}px (Target: <= ${maxHeight}px)`);
-    }, maxTwoPageHeightPx);
+    }, targetMaxHeightPx);
+
 
     // Generate PDF
     const pdfBuffer = await page.pdf({

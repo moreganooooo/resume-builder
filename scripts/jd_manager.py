@@ -85,6 +85,45 @@ def extract_source_url(jd_path: str) -> str:
     return ""
 
 
+def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None:
+    """Syncs a loaded JD dict into profiles/<profile>/data.db via db.upsert_job."""
+    try:
+        import db
+        job_id = data.get("source_job_id") or data.get("id") or compute_job_key(jd_path)
+        eval_data = data.get("_evaluation") or {}
+        app_data = data.get("_application") or {}
+        
+        status = "pending"
+        raw_status = (app_data.get("status") or "").lower()
+        if "completed" in jd_path or "completed" in raw_status or "tailored" in raw_status:
+            status = "completed"
+        elif "expired" in jd_path or "expired" in raw_status:
+            status = "expired"
+        elif "archived" in jd_path or "archived" in raw_status:
+            status = "archived"
+        elif raw_status in ("applied", "interview", "responded", "offer"):
+            status = "applied"
+        elif "evaluat" in raw_status:
+            status = "evaluating"
+
+        job_record = {
+            "id": job_id,
+            "title": data.get("job_title") or data.get("title") or "Untitled Role",
+            "company": data.get("company_name") or data.get("company") or "Unknown Company",
+            "location": data.get("location") or "",
+            "raw_text": data.get("jd_text") or data.get("raw_text") or json.dumps(data),
+            "status": status,
+            "capability_score": eval_data.get("fit_score"),
+            "recruiter_score": eval_data.get("interview_odds_score"),
+            "final_score": eval_data.get("composite_score"),
+            "deal_breakers": eval_data.get("hard_blockers") or [],
+            **data
+        }
+        db.upsert_job(job_record, profile=profile)
+    except Exception as e:
+        logging.debug(f"SQLite db sync skipped/failed for {jd_path}: {e}")
+
+
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
     """Persists an evaluate_fit() result into the JD's own JSON file under
     an _evaluation key, so a later picker can filter/sort/label by it
@@ -119,6 +158,8 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
 
 
 def read_evaluation(jd_path: str) -> dict | None:
@@ -162,6 +203,7 @@ def save_research(jd_path: str, research: dict) -> None:
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
 
 
 def read_research(jd_path: str) -> dict | None:
@@ -198,6 +240,7 @@ def save_coverage(jd_path: str, coverage: dict) -> None:
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
 
 
 def read_coverage(jd_path: str) -> dict | None:
@@ -235,6 +278,8 @@ def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
 
 
 def move_jd_to(jd_path: str, dest_dir: str) -> str:
@@ -455,6 +500,8 @@ def save_application_status(jd_path: str, status: str, log_followup: bool = Fals
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
 
 
 def read_application_status(jd_path: str) -> dict | None:
@@ -562,10 +609,20 @@ class JDTracker:
             os.makedirs(parent, exist_ok=True)
         file_exists = os.path.exists(self.csv_path)
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
+            try:
+                import fcntl
+                fcntl.flock(f, fcntl.LOCK_EX)
+            except (ImportError, OSError):
+                pass
             writer = csv.DictWriter(f, fieldnames=TRACKER_FIELDNAMES)
             if not file_exists:
                 writer.writeheader()
             writer.writerow(row)
+            try:
+                import fcntl
+                fcntl.flock(f, fcntl.LOCK_UN)
+            except (ImportError, OSError):
+                pass
 
     def is_completed(self, job_key: str) -> bool:
         return any(row["job_key"] == job_key and row["status"] == "completed"
@@ -669,7 +726,17 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
         f"{status} | {pdf_cell} | {link_cell} | {report_cell} | {notes} |\n"
     )
     with open(path, "a", encoding="utf-8") as f:
+        try:
+            import fcntl
+            fcntl.flock(f, fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
         f.write(row)
+        try:
+            import fcntl
+            fcntl.flock(f, fcntl.LOCK_UN)
+        except (ImportError, OSError):
+            pass
 
 
 def _read_dedup_fields(path: str) -> tuple:

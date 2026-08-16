@@ -14,7 +14,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 - Requires Python 3.10+ (code uses `str | None` syntax). A venv already
   exists at `.venv/` — `source .venv/bin/activate` (or `resume activate`
   from any shell, see Shortcuts below). If it's ever missing/broken, rebuild
-  with `/usr/local/bin/python3.13 -m venv .venv && source .venv/bin/activate
+  with `python3 -m venv .venv && source .venv/bin/activate
   && pip install -r requirements.txt`.
 - PDF generation (`scripts/generate-pdf.mjs`) needs Node + Playwright's
   Chromium browser installed: `npm install && npx playwright install
@@ -160,6 +160,9 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   rest of the CV context, allowing the model to naturally construct grammatically 
   perfect, pluralization-safe sentences using the user's authentic voice.
   See `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
+- **Embedded ACID SQLite Store (`db.py`):** `profiles/<profile>/data.db` manages connection pooling, schema initialization, and database queries for job postings, application funnel status transitions, and bullet bank achievements with transaction safety and indexed query performance.
+- **Dynamic Credentials Shield (`gemini_client.py`):** `gemini_client.py` calculates API authorization headers dynamically per call via `_get_auth_headers()`, ensuring profile switches immediately adopt the active profile's `GEMINI_API_KEY`.
+- **Typst Vector PDF Engine (`render_typst.py`):** Provides sub-second vector PDF generation directly from structured `.typ` document templates without headless browser overhead.
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a

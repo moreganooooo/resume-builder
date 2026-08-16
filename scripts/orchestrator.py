@@ -229,6 +229,28 @@ KB_ALLOWLIST = sorted([
     "voice-anchors.md",
 ])
 
+
+def get_active_kb_files(kb_dir: str) -> list:
+    """Dynamically discovers Knowledge Base files in kb_dir while
+    preserving KB_ALLOWLIST, excluding oversized raw dumps like
+    bullet-bank-keepers-audited.csv, detective-findings.csv, and hidden files."""
+    if not os.path.isdir(kb_dir):
+        return sorted(KB_ALLOWLIST)
+
+    EXCLUDED_FILES = {"bullet-bank-keepers-audited.csv", "detective-findings.csv"}
+    VALID_EXTS = {".md", ".txt", ".json", ".yaml", ".yml", ".csv"}
+
+    discovered = set(KB_ALLOWLIST)
+    for name in os.listdir(kb_dir):
+        if name.startswith(".") or name in EXCLUDED_FILES:
+            continue
+        ext = os.path.splitext(name)[1].lower()
+        if ext in VALID_EXTS:
+            discovered.add(name)
+
+    return sorted(discovered)
+
+
 # --- TIER 2 FILTERING CONSTANTS ---
 # Ported verbatim from rewrite_bullets.py. These are what actually make
 # the segment bundle small and relevant instead of a raw file dump.
@@ -1417,15 +1439,16 @@ class ResumeEngine:
         with open(path, "r") as f:
             return f.read()
 
+
     def load_knowledge_base(self):
         """
-        Stitches allowlisted KB files into a single static context string.
-        KB_ALLOWLIST is pre-sorted so the output is byte-for-byte identical
-        across every run, maximising Google implicit prompt-prefix cache hits.
+        Stitches allowlisted and dynamically discovered KB files into a single
+        static context string. Output is sorted so it is byte-for-byte
+        identical across runs for optimal prompt-prefix caching.
         """
         master_context = "=== SYSTEM KNOWLEDGE BASE ===\n\n"
         if os.path.exists(self.kb_dir):
-            for filename in KB_ALLOWLIST:
+            for filename in get_active_kb_files(self.kb_dir):
                 filepath = os.path.join(self.kb_dir, filename)
                 if not os.path.exists(filepath):
                     cli_art.console.print(f"  {theme.colorize_icon('warning')} KB allowlist entry not found, skipping: {filename}", soft_wrap=True)
@@ -1436,6 +1459,9 @@ class ResumeEngine:
                 except Exception as e:
                     cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not load KB file {filename}: {e}", soft_wrap=True)
         return master_context
+
+
+
 
     def build_role_rules_block(self, profile_data: dict) -> str:
         """Formats profile.yml's roles/protected_bullets/fixed_credentials/
@@ -2697,26 +2723,21 @@ class ResumeEngine:
             composite = fit_composite_score(
                 fit_score, interview_odds_score, practical_pursue_score, posting_age_days,
             )
-            # D. Advanced Bayesian Probability Converter (piecewise linear interpolation)
+            # D. Empirical Score Calibration Converter
+            # Maps 1-5 subscore to calibrated estimated response rate percentage (0.2% - 25.0%)
             x = interview_odds_score
-            points = [(1.0, 0.1), (2.0, 1.0), (3.0, 2.5), (4.0, 8.0), (5.0, 20.0)]
-            or_multiplier = 1.0
+            points = [(1.0, 0.2), (2.0, 2.0), (3.0, 5.0), (4.0, 12.0), (5.0, 25.0)]
             if x <= 1.0:
-                or_multiplier = 0.1
+                estimated_prob = 0.2
             elif x >= 5.0:
-                or_multiplier = 20.0
+                estimated_prob = 25.0
             else:
                 for i in range(len(points) - 1):
                     x0, y0 = points[i]
                     x1, y1 = points[i+1]
                     if x0 <= x <= x1:
-                        or_multiplier = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+                        estimated_prob = round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
                         break
-
-            p_baseline = 0.02  # 2% baseline response rate
-            odds_baseline = p_baseline / (1.0 - p_baseline)
-            odds_new = or_multiplier * odds_baseline
-            estimated_prob = round((odds_new / (1.0 + odds_new)) * 100.0, 1)
 
         # E. Heuristic Ghost Job Probability Calculator
         red_flags_count = len(evaluation["ghost_job_red_flags"])

@@ -107,58 +107,42 @@ _NERD_ICONS = {
 # ambiguous-width (not emoji, but can measure wide under some CJK-font
 # configurations) -- also moved to ASCII rather than relying on locale.
 _UNICODE_ICONS = {
-    "success": "✓",  # ✓
-    "error": "✗",  # ✗
-    "warning": "⚠",  # ⚠
-    "hint": "!",  # note/FYI (was ◆, ambiguous-width)
-    "discovery": "?",  # search/explore (was ◎, ambiguous-width)
-    "evaluate": "%",  # score/metrics (was 📊, double-width emoji)
-    "build": "+",  # action/construct (was ⚡, double-width emoji)
-    "utility": "⚙",  # gear (settings/tools)
-    "bullet_bank": "□",  # box (storage/database)
-    "skip": "-",  # excluded/rejection (was 🚫, double-width emoji)
-    "save": "s",  # save/archive (was 💾, double-width emoji)
-    "resume": ">",  # play/continue (was ▶, ambiguous-width)
-    "complete": "✓",  # checkmark (done, consistent with success)
-    "gem": "*",  # quality/priority (was ◆, ambiguous-width)
-    "prev": "<",  # pagination/back (was ◀, ambiguous-width)
-    "next": ">",  # pagination forward, same glyph as "resume"
-    "back": "<",  # navigate back, same glyph as "prev" (was ←, ambiguous-width)
+    "success": "✓",
+    "error": "✗",
+    "warning": "⚠",
+    "hint": "✦",
+    "discovery": "🔍",
+    "evaluate": "📊",
+    "build": "⚙",
+    "utility": "🛠",
+    "bullet_bank": "💎",
+    "skip": "⊘",
+    "save": "💾",
+    "resume": "▶",
+    "complete": "✓",
+    "gem": "✦",
+    "prev": "❮",
+    "next": "❯",
+    "back": "❮",
 }
 
-# Icon-set resolution, in priority order (B33):
-#   1. RESUME_BUILDER_ICONS=unicode (exact, case-sensitive match) -- an
-#      explicit override always wins and is never re-asked.
-#   2. This profile's persisted first-launch answer (ui_config.py), if any.
-#   3. A real terminal with no answer yet: default to Nerd Font (today's
-#      icons) until the interactive prompt (menu._confirm_icon_set(), run
-#      once at startup) asks and persists a real answer.
-#   4. No terminal (piped output, CI, tests) and no answer yet: default to
-#      Unicode -- deterministic and never garbled, unlike guessing at font
-#      support that can't actually be probed from a TTY.
 def _resolve_icon_set_name() -> str:
     if os.environ.get("RESUME_BUILDER_ICONS") == "unicode":
         return "unicode"
+    if os.environ.get("RESUME_BUILDER_ICONS") == "nerd":
+        return "nerd"
     try:
         import ui_config
         persisted = ui_config.get_icon_set()
     except (ImportError, AttributeError, OSError, ValueError):
-        # Deliberately silent, unlike every other swallowed-exception site
-        # in this codebase (which now warn -- see cli_art.friendly_error).
-        # Two reasons this one stays quiet: (1) it runs at module-import
-        # time on the *normal* first-run path, where ui_config simply has
-        # no persisted answer yet -- warning would fire on every launch
-        # for a non-problem; (2) theme.py is imported BY cli_art.py, so
-        # calling cli_warning() here would be a circular import.
-        # The exception list is narrowed rather than bare `Exception` so a
-        # genuine bug inside ui_config.get_icon_set() still surfaces
-        # instead of silently degrading to the Unicode icon set.
         persisted = None
-    if persisted:
+    if persisted in ("unicode", "nerd"):
         return persisted
     if sys.stdin.isatty():
         return "nerd"
     return "unicode"
+
+
 
 
 _ICON_SET_NAME = _resolve_icon_set_name()

@@ -11,7 +11,7 @@ A: To prevent cognitive model saturation and score compression, our system utili
 1.  **Capability & Functional Fit (Stage 1)**: Measures your actual career experience alignment, target role overlap, and tools/process overlap against the JD. It returns a structured **CoBlack-Style Capability Gaps list** highlighting precisely where your narrative or experience falls short of the JD's core needs.
 2.  **Recruiter Perception & Hiring Odds (Stage 2)**: Models the psychological friction an automated filter or a human recruiter will face. It checks title continuity, domain credibility, and **Chronological Resume Gaps** (using empathy-aware criteria based on company profile rigidity), and extracts explicit **Ghost Job Red Flags**.
 
-### Q: What is the Bayesian Interview Probability Converter?
+### Q: What is the Piecewise Interview Probability Scale?
 A: It is a mathematical converter that translates your qualitative 1-5 `interview_odds_score` into a literal **Absolute Interview Probability Percentage** using baseline response rates ($P_{\text{baseline}} = 2.0\%$) and piecewise-interpolated Odds Ratios:
 *   An elite score ($4.5+$) calculates as a **$20\text{x}$ response rate multiplier** (translating to a $\sim 29.0\%$ absolute response rate).
 *   A strong score ($4.0+$) calculates as an **$8\text{x}$ multiplier** (translating to $\sim 14.5\%$).
@@ -100,3 +100,9 @@ A: Standard "AI-beige" cover letter templates often start with passive, flat phr
 
 ### Q: What is the "Ligature Trap" in PDF resume rendering?
 A: When rendering HTML templates to PDFs, Chromium often combines characters like `fi`, `fl`, or `ff` into single Unicode ligature symbols (`ﬁ`, `ﬂ`). While this looks beautiful on paper, standard Applicant Tracking Systems (ATS) can fail to parse or index these ligatures correctly, filtering your resume out. Our system programmatically inspects the raw text layer of the final PDF output to assert that all targeted job keywords survived the rendering layer perfectly intact.
+
+### Q: How does the embedded SQLite database (`data.db`) work?
+A: Every active profile stores job descriptions, application pipeline states, and bullet bank achievements inside an embedded ACID SQLite database located at `profiles/<profile>/data.db`. Handled via `scripts/db.py`, SQLite eliminates flat-file synchronization locks and JSON corruption, allowing lightning-fast query filtering and transaction-safe concurrency across TUI sessions.
+
+### Q: What is the Typst Vector PDF Renderer?
+A: Typst is a modern, high-performance document markup and compilation system. Implemented in `scripts/render_typst.py`, the Typst renderer generates structured `.typ` document markup and compiles vector PDFs in sub-second time directly from CLI without invoking headless Chromium browsers. Both Typst and Chromium rendering engines are fully supported.

@@ -110,16 +110,26 @@ def _add_skill(data: dict):
         return
         
     evidence_count_str = questionary.text("Evidence Count (number of projects/roles using this):", default="1").ask()
+    if evidence_count_str is None:
+        cli_art.display_warning("Skill creation cancelled.")
+        return
+
     try:
         evidence_count = int(evidence_count_str)
     except ValueError:
         evidence_count = 1
         
     use_notes = questionary.text("Use Notes (how you have used this skill/tool):").ask()
-    use_notes = (use_notes or "").strip()
+    if use_notes is None:
+        cli_art.display_warning("Skill creation cancelled.")
+        return
+    use_notes = use_notes.strip()
     
     tr_references_str = questionary.text("Evidence/Project References (comma-separated, e.g. TR-0007, profile.yml):", default="profile.yml").ask()
-    tr_references = [r.strip() for r in (tr_references_str or "").split(",") if r.strip()]
+    if tr_references_str is None:
+        cli_art.display_warning("Skill creation cancelled.")
+        return
+    tr_references = [r.strip() for r in tr_references_str.split(",") if r.strip()]
     
     new_tool = {
         "id": _generate_next_id(tools),
