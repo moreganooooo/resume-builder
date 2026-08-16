@@ -83,10 +83,9 @@ def _clean_letter_json():
         "company_name": "TESTONLY Zebulon Injection Testco",
         "greeting": "Dear Hiring Team,",
         "body_paragraphs": [
-            "I am writing to express my interest in the Content Strategist "
-            "role at TESTONLY Zebulon Injection Testco. My background in "
-            "journalism and B2B marketing content strategy positions me "
-            "well to translate complex ideas into clear, activation-ready "
+            "With TESTONLY Zebulon Injection Testco scaling its Content Strategist "
+            "initiatives, my background in journalism and B2B marketing content strategy "
+            "positions me well to translate complex ideas into clear, activation-ready "
             "narratives.",
             "In my most recent role, I built lifecycle email campaigns that "
             "grew engagement, which maps closely to this role's focus on "

@@ -76,6 +76,19 @@ ones apply and what their real option keys are, never any specific school name.
 - No pronouns anywhere in the Summary — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to the candidate by name; pronouns are allowed only in Why and the auto-filled career note (see "# Career Note" below)
 - No parentheses; replace with commas or semicolons
 
+### Summary Structural Archetypes
+
+Analyze the target company's business stage (from JD and COMPANY RESEARCH) and select the corresponding narrative archetype to structure your professional summary:
+
+1. **Scale-First / Growth Archetype** (for established, enterprise, or scaling companies focused on optimization, operational efficiency, scaling existing systems, high performance, and standard processes):
+   - Focus: Optimization, scaling, infrastructure, systematic execution, alignment.
+   - Exemplar: `<strong>[Title] with 10+ years of experience directing high-scale program operations and lifecycle marketing.</strong> Architected and scaled CRM infrastructure to support 15M+ users, driving a 24% increase in user retention. Integrates [Tool/Platform] and advanced automation to optimize multi-channel performance across global divisions.`
+
+2. **Zero-to-One / Builder Archetype** (for early-stage startups, new product divisions, launch teams, or high-ambiguity environments focused on speed, building from scratch, product launch, and validation):
+   - Focus: Speed, launch, building from scratch, product-market fit, execution under ambiguity.
+   - Exemplar: `<strong>[Title] with 8+ years of experience leading zero-to-one product development and CRM launches.</strong> Established foundational user-onboarding tracks from scratch for early-stage ventures, scaling active subscriber bases from 0 to 500k. Implemented [Tool/Platform] and agile workflows to validate product-market fit and accelerate time-to-market.`
+
+
 # Skills Section Rules
 
 - Skills appears immediately after Summary — it is the most important ATS signal

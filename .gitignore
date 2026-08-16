@@ -91,12 +91,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # === GO (dashboard/) ===
-# scripts/dashboard.py always invokes `go run .`, never `go build`, so
-# nothing here is expected to appear -- this just guards against a stray
-# manual `go build` leaving a compiled binary or local module cache.
+# scripts/dashboard.py and scripts/charm_prompt.py precompile binaries to dashboard/bin/
 /dashboard/dashboard
 /dashboard/rb-dashboard
 /dashboard/prompt
+/dashboard/bin/
 
 
 # === MULTI-COMPUTER SYNC (Syncthing) ===

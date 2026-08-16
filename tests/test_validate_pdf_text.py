@@ -156,6 +156,31 @@ class TestValidatePdfText(unittest.TestCase):
             self.assertEqual(len(fatal), 1)
             self.assertIn("corrupt PDF", fatal[0])
 
+    def test_no_keyword_warning_when_keywords_not_corrupted(self):
+        resume = {
+            "SKILLS": ["**Lifecycle Marketing:** Salesforce, Hubspot"],
+            "EXPERIENCE": [],
+        }
+        jd_keywords = {"tools": ["Salesforce"], "hard_skills": [], "core_functions": []}
+        with patch("validate_pdf_text.extract_text", return_value="Lifecycle Marketing: Salesforce, Hubspot"):
+            fatal, advisories = validate_pdf_text.validate_pdf_text("fake.pdf", resume, jd_keywords)
+            self.assertEqual(fatal, [])
+            self.assertEqual(advisories, [])
+
+    def test_flags_corrupted_keyword_in_pdf(self):
+        resume = {
+            "SKILLS": ["**Lifecycle Marketing:** Salesforce, Hubspot"],
+            "EXPERIENCE": [],
+        }
+        jd_keywords = {"tools": ["Salesforce"], "hard_skills": [], "core_functions": []}
+        with patch("validate_pdf_text.extract_text", return_value="Lifecycle Marketing: Salesf0rce, Hubspot"):
+            fatal, advisories = validate_pdf_text.validate_pdf_text("fake.pdf", resume, jd_keywords)
+            self.assertEqual(fatal, [])
+            self.assertEqual(len(advisories), 2)
+            keyword_corrupt_warns = [w for w in advisories if "ATS Keyword corrupted" in w]
+            self.assertEqual(len(keyword_corrupt_warns), 1)
+            self.assertIn("Salesforce", keyword_corrupt_warns[0])
+
 
 def _letter():
     return {
@@ -228,6 +253,27 @@ class TestValidateCoverletterPdfText(unittest.TestCase):
             warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", _letter())
             self.assertEqual(len(warnings), 1)
             self.assertIn("cover-letter", warnings[0])
+
+    def test_no_coverletter_keyword_warning_when_not_corrupted(self):
+        letter = {
+            "body_paragraphs": ["I have experience with Salesforce."],
+        }
+        jd_keywords = {"tools": ["Salesforce"], "hard_skills": [], "core_functions": []}
+        with patch("validate_pdf_text.extract_text", return_value="I have experience with Salesforce."):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", letter, jd_keywords)
+            self.assertEqual(warnings, [])
+
+    def test_flags_corrupted_coverletter_keyword(self):
+        letter = {
+            "body_paragraphs": ["I have experience with Salesforce."],
+        }
+        jd_keywords = {"tools": ["Salesforce"], "hard_skills": [], "core_functions": []}
+        with patch("validate_pdf_text.extract_text", return_value="I have experience with Salesf0rce."):
+            warnings = validate_pdf_text.validate_coverletter_pdf_text("fake.pdf", letter, jd_keywords)
+            self.assertEqual(len(warnings), 2)
+            keyword_corrupt_warns = [w for w in warnings if "ATS Keyword corrupted in Cover Letter" in w]
+            self.assertEqual(len(keyword_corrupt_warns), 1)
+            self.assertIn("Salesforce", keyword_corrupt_warns[0])
 
 
 if __name__ == "__main__":

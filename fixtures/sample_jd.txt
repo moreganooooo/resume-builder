@@ -1,175 +1,200 @@
 {
-    "status": "new",
-    "source_platform": "jobright",
-    "source_job_id": "6a06fec9152f493123c4bc6c",
-    "source_url": "https://boards.greenhouse.io/embed/job_app?token=7712627003&utm_source=jobright",
-    "match_score": 95.4717,
-    "application_type": "external",
-    "application_url": "https://boards.greenhouse.io/embed/job_app?token=7712627003&utm_source=jobright",
-    "job_title": "Content Strategist",
-    "company_name": "Abnormal AI",
-    "company_linkedin_url": "https://www.linkedin.com/company/18586257",
-    "company_website": "https://abnormal.ai/",
-    "location": "United States",
-    "is_remote": true,
-    "work_model": "Remote",
-    "publish_time": "2026-06-15 08:18:01",
-    "publish_time_desc": "2 days ago",
-    "employment_type": "Full-time",
-    "seniority_level": "Entry, Mid Level",
-    "description": "Abnormal AI is looking for a Content Strategist to join their Content Marketing team. This role focuses on connecting messaging to activation, supporting campaign execution, and transforming raw inputs into cohesive content across various channels.\n\nPartner with Integrated Marketing and Content Marketing leadership to support campaign messaging and downstream execution\n\nContribute to campaign execution across priority initiatives, helping maintain consistency as messaging is translated into emails, landing pages, social copy, webinars, and other assets\n\nBuild familiarity with the company’s campaigns and messaging, and help help maintain alignment with campaign messaging across outputs\n\nReview and adapt content across formats to support repackaging and downstream use\n\nTranslate raw inputs — including research, customer stories, internal podcasts, webinars, threat reports, and internal conversations — into activation-ready content and narrative outputs\n\nIdentify opportunities to extend the value of existing content by creating derivative assets (e.g., summaries, slides, clips, videos, or industry-specific cutdowns)\n\nHelp turn existing content and moments into amplification opportunities, including web experiences, campaign packages, contributed content, podcast pitches, and other distribution plays\n\nUse AI-assisted workflows to accelerate ideation, distillation, repackaging, and content transformation, while applying editorial judgment to refine outputs\n\nContribute to building lightweight workflows for slicing, packaging, and distributing content more efficiently across channels\n\nOperate as a flexible generalist, contributing across a range of content and campaign needs with guidance from Content Marketing leadership",
-    "description_html": null,
-    "job_summary": "Abnormal AI is looking for a Content Strategist to join their Content Marketing team. This role focuses on connecting messaging to activation, supporting campaign execution, and transforming raw inputs into cohesive content across various channels.",
-    "skills": [
-        {
-            "skill": "Content marketing",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "B2B SaaS",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Cybersecurity",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "ChatGPT",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Claude",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Content operations tools",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Asana",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "CMS platforms",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Campaign messaging",
-            "score": 3,
-            "type": "hard_skill"
-        },
-        {
-            "skill": "Collaborative mindset",
-            "score": 3,
-            "type": "soft_skill"
-        },
-        {
-            "skill": "Openness to feedback",
-            "score": 3,
-            "type": "soft_skill"
-        }
-    ],
-    "qualifications": {
-        "mustHave": [
-            "2–4+ years of experience in B2B SaaS, cybersecurity, content marketing, or related roles",
-            "Strong writing and editing fundamentals, with the ability to turn complex ideas into clear and concise content",
-            "Experience or strong interest in using AI tools (e.g., ChatGPT, Claude) to create, transform, or repurpose content",
-            "Ability to work across multiple projects and stakeholders in a fast-moving environment",
-            "Willingness to learn, iterate quickly, and adapt to new tools and workflows",
-            "Strong attention to detail and a bias toward action",
-            "Collaborative mindset and openness to feedback"
-        ],
-        "preferredHave": [
-            "Experience supporting integrated marketing or campaign-based work",
-            "Familiarity with content operations tools (Asana, CMS platforms)",
-            "Experience creating derivative content formats (e.g., clips, summaries, presentations, or multimedia assets)",
-            "Background in cybersecurity, SaaS, or highly technical products",
-            "Experience working in high-growth or fast-changing environments"
-        ]
+  "status": "new",
+  "source_platform": "jobright",
+  "source_job_id": "6a06fec9152f493123c4bc6c",
+  "source_url": "https://boards.greenhouse.io/embed/job_app?token=7712627003&utm_source=jobright",
+  "match_score": 95.4717,
+  "application_type": "external",
+  "application_url": "https://boards.greenhouse.io/embed/job_app?token=7712627003&utm_source=jobright",
+  "job_title": "Content Strategist",
+  "company_name": "Abnormal AI",
+  "company_linkedin_url": "https://www.linkedin.com/company/18586257",
+  "company_website": "https://abnormal.ai/",
+  "location": "United States",
+  "is_remote": true,
+  "work_model": "Remote",
+  "publish_time": "2026-06-15 08:18:01",
+  "publish_time_desc": "2 days ago",
+  "employment_type": "Full-time",
+  "seniority_level": "Entry, Mid Level",
+  "description": "Abnormal AI is looking for a Content Strategist to join their Content Marketing team. This role focuses on connecting messaging to activation, supporting campaign execution, and transforming raw inputs into cohesive content across various channels.\n\nPartner with Integrated Marketing and Content Marketing leadership to support campaign messaging and downstream execution\n\nContribute to campaign execution across priority initiatives, helping maintain consistency as messaging is translated into emails, landing pages, social copy, webinars, and other assets\n\nBuild familiarity with the company\u2019s campaigns and messaging, and help help maintain alignment with campaign messaging across outputs\n\nReview and adapt content across formats to support repackaging and downstream use\n\nTranslate raw inputs \u2014 including research, customer stories, internal podcasts, webinars, threat reports, and internal conversations \u2014 into activation-ready content and narrative outputs\n\nIdentify opportunities to extend the value of existing content by creating derivative assets (e.g., summaries, slides, clips, videos, or industry-specific cutdowns)\n\nHelp turn existing content and moments into amplification opportunities, including web experiences, campaign packages, contributed content, podcast pitches, and other distribution plays\n\nUse AI-assisted workflows to accelerate ideation, distillation, repackaging, and content transformation, while applying editorial judgment to refine outputs\n\nContribute to building lightweight workflows for slicing, packaging, and distributing content more efficiently across channels\n\nOperate as a flexible generalist, contributing across a range of content and campaign needs with guidance from Content Marketing leadership",
+  "description_html": null,
+  "job_summary": "Abnormal AI is looking for a Content Strategist to join their Content Marketing team. This role focuses on connecting messaging to activation, supporting campaign execution, and transforming raw inputs into cohesive content across various channels.",
+  "skills": [
+    {
+      "skill": "Content marketing",
+      "score": 3,
+      "type": "hard_skill"
     },
-    "core_responsibilities": [
-        "Partner with Integrated Marketing and Content Marketing leadership to support campaign messaging and downstream execution",
-        "Contribute to campaign execution across priority initiatives, helping maintain consistency as messaging is translated into emails, landing pages, social copy, webinars, and other assets",
-        "Build familiarity with the company’s campaigns and messaging, and help help maintain alignment with campaign messaging across outputs",
-        "Review and adapt content across formats to support repackaging and downstream use",
-        "Translate raw inputs — including research, customer stories, internal podcasts, webinars, threat reports, and internal conversations — into activation-ready content and narrative outputs",
-        "Identify opportunities to extend the value of existing content by creating derivative assets (e.g., summaries, slides, clips, videos, or industry-specific cutdowns)",
-        "Help turn existing content and moments into amplification opportunities, including web experiences, campaign packages, contributed content, podcast pitches, and other distribution plays",
-        "Use AI-assisted workflows to accelerate ideation, distillation, repackaging, and content transformation, while applying editorial judgment to refine outputs",
-        "Contribute to building lightweight workflows for slicing, packaging, and distributing content more efficiently across channels",
-        "Operate as a flexible generalist, contributing across a range of content and campaign needs with guidance from Content Marketing leadership"
-    ],
-    "social_connections": [
-        {
-            "firstName": "Renee",
-            "fullName": "Renee Gardner",
-            "logoUrl": "",
-            "companyName": "Abnormal Security",
-            "jobTitle": "VP, Total Rewards and People Technology",
-            "linkedinUrl": "https://www.linkedin.com/in/renee-gardner-03a9466/"
-        },
-        {
-            "firstName": "Aarthi",
-            "fullName": "Aarthi Balaraman",
-            "logoUrl": "",
-            "companyName": "Abnormal AI",
-            "jobTitle": "Senior Technical Recruiter",
-            "linkedinUrl": "https://www.linkedin.com/in/aarthibalaraman/"
-        },
-        {
-            "firstName": "Callista",
-            "fullName": "Callista Hinman Baron",
-            "logoUrl": "",
-            "companyName": "Abnormal Security",
-            "jobTitle": "Content Marketing Manager",
-            "linkedinUrl": "https://www.linkedin.com/in/callistahinman/"
-        },
-        {
-            "firstName": "Sebastian",
-            "fullName": "Sebastian Buffa",
-            "logoUrl": "",
-            "companyName": "Abnormal AI",
-            "jobTitle": "Media Producer",
-            "linkedinUrl": "https://www.linkedin.com/in/sebastian-buffa-39174033/"
-        }
-    ],
-    "personal_social_connections": {
-        "company": [],
-        "school": [
-            {
-                "firstName": "Robin",
-                "fullName": "Robin Rottinghaus",
-                "logoUrl": "https://static.licdn.com/aero-v1/sc/h/1c5u578iilxfi4m4dvc4q810q",
-                "companyName": "Abnormal Security",
-                "jobTitle": "Sr. Account Based Marketing Manager",
-                "linkedinUrl": "https://www.linkedin.com/in/robinrottinghaus/",
-                "matchSchoolName": "The University of Kansas"
-            },
-            {
-                "firstName": "Matt",
-                "fullName": "Matt Keary",
-                "logoUrl": "https://media.licdn.com/dms/image/C4E03AQEKbEydPtxJxQ/profile-displayphoto-shrink_200_200/0/1625068340312?e=2147483647&v=beta&t=j9MS8audSHrkQLNlPoiA0kRgSj2tiAv3H7mqX2OptWE",
-                "companyName": "Abnormal Security",
-                "jobTitle": "Sales Compensation Manager",
-                "linkedinUrl": "https://www.linkedin.com/in/mkeary/",
-                "matchSchoolName": "The University of Kansas"
-            },
-            {
-                "firstName": "Vanessa",
-                "fullName": "Vanessa Torres",
-                "companyName": "Abnormal AI",
-                "jobTitle": "Sr. Talent Partner",
-                "linkedinUrl": "https://www.linkedin.com/in/vatorres/",
-                "matchSchoolName": "The University of Kansas"
-            }
-        ]
+    {
+      "skill": "B2B SaaS",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Cybersecurity",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "ChatGPT",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Claude",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Content operations tools",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Asana",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "CMS platforms",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Campaign messaging",
+      "score": 3,
+      "type": "hard_skill"
+    },
+    {
+      "skill": "Collaborative mindset",
+      "score": 3,
+      "type": "soft_skill"
+    },
+    {
+      "skill": "Openness to feedback",
+      "score": 3,
+      "type": "soft_skill"
     }
+  ],
+  "qualifications": {
+    "mustHave": [
+      "2\u20134+ years of experience in B2B SaaS, cybersecurity, content marketing, or related roles",
+      "Strong writing and editing fundamentals, with the ability to turn complex ideas into clear and concise content",
+      "Experience or strong interest in using AI tools (e.g., ChatGPT, Claude) to create, transform, or repurpose content",
+      "Ability to work across multiple projects and stakeholders in a fast-moving environment",
+      "Willingness to learn, iterate quickly, and adapt to new tools and workflows",
+      "Strong attention to detail and a bias toward action",
+      "Collaborative mindset and openness to feedback"
+    ],
+    "preferredHave": [
+      "Experience supporting integrated marketing or campaign-based work",
+      "Familiarity with content operations tools (Asana, CMS platforms)",
+      "Experience creating derivative content formats (e.g., clips, summaries, presentations, or multimedia assets)",
+      "Background in cybersecurity, SaaS, or highly technical products",
+      "Experience working in high-growth or fast-changing environments"
+    ]
+  },
+  "core_responsibilities": [
+    "Partner with Integrated Marketing and Content Marketing leadership to support campaign messaging and downstream execution",
+    "Contribute to campaign execution across priority initiatives, helping maintain consistency as messaging is translated into emails, landing pages, social copy, webinars, and other assets",
+    "Build familiarity with the company\u2019s campaigns and messaging, and help help maintain alignment with campaign messaging across outputs",
+    "Review and adapt content across formats to support repackaging and downstream use",
+    "Translate raw inputs \u2014 including research, customer stories, internal podcasts, webinars, threat reports, and internal conversations \u2014 into activation-ready content and narrative outputs",
+    "Identify opportunities to extend the value of existing content by creating derivative assets (e.g., summaries, slides, clips, videos, or industry-specific cutdowns)",
+    "Help turn existing content and moments into amplification opportunities, including web experiences, campaign packages, contributed content, podcast pitches, and other distribution plays",
+    "Use AI-assisted workflows to accelerate ideation, distillation, repackaging, and content transformation, while applying editorial judgment to refine outputs",
+    "Contribute to building lightweight workflows for slicing, packaging, and distributing content more efficiently across channels",
+    "Operate as a flexible generalist, contributing across a range of content and campaign needs with guidance from Content Marketing leadership"
+  ],
+  "social_connections": [
+    {
+      "firstName": "Renee",
+      "fullName": "Renee Gardner",
+      "logoUrl": "",
+      "companyName": "Abnormal Security",
+      "jobTitle": "VP, Total Rewards and People Technology",
+      "linkedinUrl": "https://www.linkedin.com/in/renee-gardner-03a9466/"
+    },
+    {
+      "firstName": "Aarthi",
+      "fullName": "Aarthi Balaraman",
+      "logoUrl": "",
+      "companyName": "Abnormal AI",
+      "jobTitle": "Senior Technical Recruiter",
+      "linkedinUrl": "https://www.linkedin.com/in/aarthibalaraman/"
+    },
+    {
+      "firstName": "Callista",
+      "fullName": "Callista Hinman Baron",
+      "logoUrl": "",
+      "companyName": "Abnormal Security",
+      "jobTitle": "Content Marketing Manager",
+      "linkedinUrl": "https://www.linkedin.com/in/callistahinman/"
+    },
+    {
+      "firstName": "Sebastian",
+      "fullName": "Sebastian Buffa",
+      "logoUrl": "",
+      "companyName": "Abnormal AI",
+      "jobTitle": "Media Producer",
+      "linkedinUrl": "https://www.linkedin.com/in/sebastian-buffa-39174033/"
+    }
+  ],
+  "personal_social_connections": {
+    "company": [],
+    "school": [
+      {
+        "firstName": "Robin",
+        "fullName": "Robin Rottinghaus",
+        "logoUrl": "https://static.licdn.com/aero-v1/sc/h/1c5u578iilxfi4m4dvc4q810q",
+        "companyName": "Abnormal Security",
+        "jobTitle": "Sr. Account Based Marketing Manager",
+        "linkedinUrl": "https://www.linkedin.com/in/robinrottinghaus/",
+        "matchSchoolName": "The University of Kansas"
+      },
+      {
+        "firstName": "Matt",
+        "fullName": "Matt Keary",
+        "logoUrl": "https://media.licdn.com/dms/image/C4E03AQEKbEydPtxJxQ/profile-displayphoto-shrink_200_200/0/1625068340312?e=2147483647&v=beta&t=j9MS8audSHrkQLNlPoiA0kRgSj2tiAv3H7mqX2OptWE",
+        "companyName": "Abnormal Security",
+        "jobTitle": "Sales Compensation Manager",
+        "linkedinUrl": "https://www.linkedin.com/in/mkeary/",
+        "matchSchoolName": "The University of Kansas"
+      },
+      {
+        "firstName": "Vanessa",
+        "fullName": "Vanessa Torres",
+        "companyName": "Abnormal AI",
+        "jobTitle": "Sr. Talent Partner",
+        "linkedinUrl": "https://www.linkedin.com/in/vatorres/",
+        "matchSchoolName": "The University of Kansas"
+      }
+    ]
+  },
+  "_research": {
+    "_research_source": "website",
+    "overall_tone_adjective": "confident and mission-driven",
+    "tone_register": "mixed",
+    "pronoun_framing": "we-centric",
+    "sentence_style": "short and punchy",
+    "jargon_density": "high",
+    "recurring_keywords": [
+      "behavioral",
+      "AI-native",
+      "autonomous"
+    ],
+    "company_facts": [
+      "Abnormal Security provides a behavioral security platform that uses AI to analyze human behavior and stop cyberattacks.",
+      "The company was founded in 2018 by former adtech professionals to apply anomaly-based decision-making to cybersecurity.",
+      "The platform operates autonomously to triage threats and make security decisions on behalf of enterprise customers."
+    ],
+    "company_hq_location": "",
+    "notable_highlights": [
+      "Protects more than 25% of the Fortune 500.",
+      "Utilizes AI agents across all internal departments including Product, CS, and Finance."
+    ],
+    "vocabulary_substitutions": [],
+    "researched_at": "2026-08-16T01:39:22"
+  }
 }
