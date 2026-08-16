@@ -76,3 +76,19 @@ A: To deliver an immediate hit of career dopamine and keep you motivated, comple
   ```bash
   rm -rf node_modules package-lock.json && npm install && npx playwright install chromium
   ```
+
+---
+
+## 💎 7. Premium AI Tailoring & Modern CLI Tools
+
+### Q: How does the new Interactive Profile Skills Screen work?
+A: It is accessible directly from your terminal under `Settings & Upkeep -> View & Manage Profile Skills`. It displays an elegant, categorised TUI dashboard of your verified skills stored in `verified_tools.json`. You can view comprehensive usage details, add new skills with autocomplete suggestions, edit confidence meters, and delete entries entirely from your keyboard without manual JSON edits.
+
+### Q: What are Go-Precompiled Charmbracelet Prompts?
+A: To provide an extremely responsive keyboard feel, confirmations, selections, and checkboxes are globally handled by a compiled Go binary from Charmbracelet's `huh` prompt ecosystem. The program automatically compiles this binary under `dashboard/bin/prompt` upon its first launch. Subsequent keyboard actions react instantly in **less than 1 millisecond** with premium styling and smooth animations.
+
+### Q: Why does the system automatically rewrite Cover Letter openings?
+A: Standard "AI-beige" cover letter templates often start with passive, flat phrases (*"My name is..."*, *"I am writing to express my interest in..."*). Our system strictly bans these clichéd openings in favor of captivating, values-grounded narrative hooks. A post-generation linter automatically scans the text; if a cliché is found, it triggers a self-corrective rewrite loop to produce a compelling 12/10 hook.
+
+### Q: What is the "Ligature Trap" in PDF resume rendering?
+A: When rendering HTML templates to PDFs, Chromium often combines characters like `fi`, `fl`, or `ff` into single Unicode ligature symbols (`ﬁ`, `ﬂ`). While this looks beautiful on paper, standard Applicant Tracking Systems (ATS) can fail to parse or index these ligatures correctly, filtering your resume out. Our system programmatically inspects the raw text layer of the final PDF output to assert that all targeted job keywords survived the rendering layer perfectly intact.

@@ -17,6 +17,7 @@ This loads our high-fidelity, Bubble Tea-based terminal dashboard, styled in a s
 2. **Interactive Triage:** Move jobs through stages visually using arrow keys instead of editing database entries manually.
 3. **Live Metrics View:** Monitor your conversion funnel (e.g., Application-to-Interview ratios) with live ASCII bar charts.
 4. **Gamification & Achievement Loops:** Milestones (like submitting your 10th tailored resume) unlock high-energy celebration cards complete with twinkling terminal animations (`display_success_celebration`) to keep your momentum and career dopamine high!
+5. **Global Charmbracelet Prompts:** Confirmations, select menus, and checkboxes across the entire CLI are globally routed through Charm's state-of-the-art terminal prompt system (`Go/huh`), which compiles dynamically on its first launch into `dashboard/bin/prompt` for lightning-fast, sub-millisecond keyboard reactions.
 
 ---
 
@@ -82,6 +83,9 @@ This program gets smarter about you the more you use it. It is designed as a sec
   * Every bullet point lives in your audited bank (`bullet-bank-keepers-audited.csv`).
   * If the AI suggests a beautiful, high-impact phrasing during a tailoring run and you approve it, that customized line is automatically queued back into your profile's "Keepers" database as an approved achievement.
   * Your bullet bank is a living, breathing asset that automatically compounds, refines, and expands with every single build!
+* **Interactive Profile Skills CLI Dashboard (`verified_tools.json`):** 
+  * Under `Settings & Upkeep -> View & Manage Profile Skills`, a custom CLI dashboard displays your verified skills/tools grouped elegantly by category with confidence rating meters.
+  * Supports full, atomic-write CLI CRUD operations (Add, Edit, Delete, View Detail) ensuring data consistency under `verified_tools.json` so your skills profile stays instantly updated as you learn new technologies.
 
 ---
 
@@ -91,6 +95,7 @@ This program gets smarter about you the more you use it. It is designed as a sec
 When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages. 
 * It extracts their core business register and corporate culture.
 * It dynamically injects this context into your Resume Summary and Cover Letter's "Why this company" sections. 
+* **Semantic Vocabulary Translation:** Preferred vocabulary substitutions (e.g. `customers -> guests`) are injected directly into the LLM bullet rewrite context during Step 3, replacing old post-hoc regex matches with semantic, grammatically perfect sentence layouts in the model's native translation step.
 * **The result:** A warm, values-driven tone-match for non-profit and mission-driven orgs, and a highly polished, crisp, metrics-focused tone-match for sharp B2B SaaS companies.
 
 ### 🗣️ Capturing Your Unique Writing Style:
@@ -104,15 +109,17 @@ Most resume builders write in generic "AI-beige" jargon. We hate that.
 
 ## 📝 6. Personalized Document Tailoring
 
-Our tailoring engine treats your professional resume and cover letter as a unified, cohesive narrative:
+Our tailoring engine treats your professional resume and cover letter as a unified, cohesive narrative, enforced by premium validation checkers:
 
 ### Resume Tailoring:
-* Selects the absolute highest-impact achievements from your audited bullet bank matching the job's core technical requirements.
-* Verifies all numerical values against `verified_metrics.json`—**it cannot fabricate or invent metrics**.
-* Adjusts chronological emphasis, surfacing relevant historical roles only when a job posting contains highly relevant keyword gates.
+* **The Compounding Selector:** Selects the absolute highest-impact achievements from your audited bullet bank matching the job's core technical requirements.
+* **CV-Context Auditing:** Feeds previously completed bullets (both role-specific and other roles in the CV) into the LLM context to prevent macro-redundancy, verb repetition, or metric duplication across the resume.
+* **The Summary Paradox (Structural Archetypes):** Generates target-specific resume summaries based on business archetypes—**Scale-First/Growth** (process/enterprise optimization) vs. **Zero-to-One/Builder** (startup/launch scale)—validated programmatically with custom metrics/specificity linter checks.
+* **Metrics Verification:** Verifies all numerical values against `verified_metrics.json`—**it cannot fabricate or invent metrics**.
+* **ATS Keyword & Ligature Verification:** Once compiled, the program reads the final PDF's rendered text layer to programmatically assert that all target keywords survived Chromium-to-PDF layout conversion without ligature corruption (e.g. `fi`, `fl`, `ff` combining into single symbols), bad line-breaks, or truncations.
 
 ### Cover Letter Tailoring:
-* Drafts a compelling, high-fidelity cover letter in your active writing voice.
-* Integrates the backend company research to write an authentic, deep, and convincing "Why us" opening paragraph.
-* Structures the body copy to map your compounding achievements directly to the job's hardest problems.
-* Automatically appends your absolute path signature image (`signature.png`) with clean, vector-perfect HTML margins.
+* **Hook-First Openings:** Strictly bans flat, passive, or clichéd introductory sentences (*"My name is..."*, *"I am writing to apply..."*) in favor of an engaging, research-grounded narrative hook.
+* **Linter Validation Retries:** Automatically runs a regex validator loop over the output cover letter. If a clichéd opener is detected, it triggers a corrective prompt cycle to rewrite and heal the opening paragraph.
+* **"Why Us" Alignment:** Integrates background company research to write an authentic, deep, and convincing opening and closing.
+* **Signature Block:** Automatically appends your absolute path signature image (`signature.png`) with clean, vector-perfect HTML margins.

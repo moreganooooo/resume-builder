@@ -415,6 +415,9 @@ def build_rewrite_prompt(
     weaknesses: str,
     kb_context: str,
     minimal_schema: bool = False,
+    vocabulary_substitutions: list = None,
+    already_written_bullets: list = None,
+    other_cv_bullets: list = None,
 ) -> str:
     persona = persona_context(tags)
     weakness_text = (
@@ -437,6 +440,46 @@ def build_rewrite_prompt(
         f"Known weaknesses to fix: {weakness_text}",
         f"Bullet to rewrite: {bullet}",
     ])
+
+    if already_written_bullets or other_cv_bullets:
+        avoid_parts = []
+        if already_written_bullets:
+            # Filters out empty or None values
+            valid_written = [b for b in already_written_bullets if b]
+            if valid_written:
+                avoid_parts.extend([
+                    "",
+                    "=== ALREADY WRITTEN BULLETS FOR THIS SAME ROLE ===",
+                    "You MUST NOT repeat any verbs, phrasing structures, or specific metric claims already used in these bullets. Vary your vocabulary and sentence structure:",
+                    "\n".join(f"- {b}" for b in valid_written),
+                ])
+        if other_cv_bullets:
+            valid_other = [b for b in other_cv_bullets if b]
+            if valid_other:
+                avoid_parts.extend([
+                    "",
+                    "=== ALREADY WRITTEN BULLETS FOR OTHER ROLES IN THE CV ===",
+                    "Ensure your rewritten bullet does not repeat verbs or duplicate key claims from other parts of the resume:",
+                    "\n".join(f"- {b}" for b in valid_other),
+                ])
+        if avoid_parts:
+            parts.extend(avoid_parts)
+
+    if vocabulary_substitutions:
+        pairs = [
+            f"{p.get('generic_term')} -> {p.get('company_term')}"
+            for p in vocabulary_substitutions
+            if isinstance(p, dict) and p.get("generic_term") and p.get("company_term")
+        ]
+        if pairs:
+            parts.extend([
+                "",
+                "=== PREFERRED VOCABULARY ===",
+                "You MUST integrate the following vocabulary substitutions where applicable. "
+                "Integrate them naturally into your sentence, ensuring perfect grammatical alignment, "
+                "correct pluralization/singularization, and smooth flow:",
+                "\n".join(f"- {pair}" for pair in pairs),
+            ])
 
     if minimal_schema:
         parts.extend(["", 'Output JSON: {"rewritten_bullet":""}'])
@@ -1898,6 +1941,7 @@ class ResumeEngine:
         static_prefix: str,
         resume_from: List[str] = None,
         on_bullet_complete=None,
+        vocabulary_substitutions: list = None,
     ) -> List[str]:
         """
         Skeptical Editor audit loop.
@@ -2144,12 +2188,26 @@ class ResumeEngine:
                             if active_segment_bundle else active_static_prefix
                         )
 
+                        already_written = [
+                            refined_bullets[idx]
+                            for idx, (_, c, _) in enumerate(bullet_tuples[:len(refined_bullets)])
+                            if c == company
+                        ]
+                        other_cv_bullets = [
+                            refined_bullets[idx]
+                            for idx, (_, c, _) in enumerate(bullet_tuples[:len(refined_bullets)])
+                            if c != company
+                        ]
+
                         rewrite_contents = build_rewrite_prompt(
                             bullet=bullet,
                             tags=tags,
                             weaknesses=critique_data.get("weaknesses", ""),
                             kb_context=context_block,
                             minimal_schema=use_minimal,
+                            vocabulary_substitutions=vocabulary_substitutions,
+                            already_written_bullets=already_written,
+                            other_cv_bullets=other_cv_bullets,
                         )
 
                         try:
@@ -2747,6 +2805,10 @@ class ResumeEngine:
             return {}
 
         jd_data = _parse_jd_data(jd_text)
+        job_key = jd_manager.compute_job_key(jd_path)
+        checkpoint = jd_manager.load_checkpoint(job_key)
+        jd_keywords = checkpoint.get("jd_keywords") if checkpoint else None
+
         research = self.research_company(jd_data, jd_text)
         if research:
             jd_manager.save_research(jd_path, research)
@@ -2832,7 +2894,7 @@ class ResumeEngine:
             return {}
         cli_art.print_subprocess_output(pdf_result.stdout)
 
-        cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data)
+        cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data, jd_keywords=jd_keywords)
         if cl_text_warnings:
             cli_art.detail(f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found {len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse from the file, not just the pre-render JSON):", level=cli_art.NORMAL)
             for w in cl_text_warnings:
@@ -2936,7 +2998,19 @@ class ResumeEngine:
             checkpoint["bullet_tuples"] = bullet_tuples
             jd_manager.save_checkpoint(job_key, checkpoint)
         cli_art.print_literal(f"  {len(bullet_tuples)} bullet tuples retrieved.")
-        cli_art.print_literal()
+        # --- Step 2b: Load company research and vocabulary substitutions early ---
+        research = jd_manager.read_research(jd_path)
+        if research:
+            cli_art.console.print(f"  {theme.colorize_icon('success')} Loaded saved company research from JD.", soft_wrap=True)
+        else:
+            jd_data = _parse_jd_data(jd_text)
+            research = self.research_company(jd_data, jd_text)
+            if research:
+                jd_manager.save_research(jd_path, research)
+
+        vocabulary_substitutions = (research or {}).get("vocabulary_substitutions", [])
+        checkpoint["vocabulary_substitutions"] = vocabulary_substitutions
+        jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 3: Audit and refine bullets ---
         cli_art.console.rule("Step 3: Auditing bullets...", style="dim", align="left")
@@ -2951,6 +3025,7 @@ class ResumeEngine:
             static_prefix,
             resume_from=checkpoint.get("refined_bullets", []),
             on_bullet_complete=_save_bullets_checkpoint,
+            vocabulary_substitutions=vocabulary_substitutions,
         )
         refined_bullets = [b for b in refined_tuples if b]  # plain strings for builder
         checkpoint["refined_bullets"] = refined_tuples
@@ -3006,9 +3081,13 @@ class ResumeEngine:
             kb_context = self.load_knowledge_base()
 
             jd_data = _parse_jd_data(jd_text)
-            research = self.research_company(jd_data, jd_text)
+            research = jd_manager.read_research(jd_path)
             if research:
-                jd_manager.save_research(jd_path, research)
+                cli_art.console.print(f"  {theme.colorize_icon('success')} Loaded saved company research from JD.", soft_wrap=True)
+            else:
+                research = self.research_company(jd_data, jd_text)
+                if research:
+                    jd_manager.save_research(jd_path, research)
             research_block = format_company_research_block(research) if research else ""
 
             situational_block = ""
@@ -3713,7 +3792,7 @@ class ResumeEngine:
         if fired_situational_roles:
             cli_art.console.print(f"  {theme.colorize_icon('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}", soft_wrap=True)
 
-        pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data)
+        pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data, jd_keywords=jd_keywords)
         if pdf_fatal:
             cli_art.console.print(
                 f"  {theme.colorize_icon('error')} PDF text-layer check could not verify the rendered file "

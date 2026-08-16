@@ -17,9 +17,10 @@ def _valid_letter():
         "company_name": "Acme Corp",
         "greeting": "Dear Hiring Team,",
         "body_paragraphs": [
-            "I was excited to see the Content Strategist opening at Acme Corp, since it "
-            "lines up directly with my background in campaign messaging and content "
-            "operations.",
+            "With Acme Corp scaling its CRM and user acquisition, having a foundational "
+            "content strategy that converts cold traffic into loyal users is critical. "
+            "My background in campaign messaging and content operations maps directly "
+            "to these high-growth needs.",
             "In my most recent role, I built lifecycle email campaigns that grew "
             "engagement by double digits, which maps closely to the JD's focus on "
             "activation-ready content.",
@@ -57,6 +58,24 @@ class TestValidateCoverLetter(unittest.TestCase):
         letter["body_paragraphs"][0] = "Morgan has years of experience in content strategy."
         violations = validate_coverletter.validate(letter, STYLE_RULES)
         self.assertTrue(any("Third-person self-reference" in v for v in violations))
+
+    def test_flags_cliched_openers(self):
+        cliches = [
+            "I am writing to express my interest in the Content Strategist role.",
+            "I was excited to see your job opening.",
+            "I am thrilled to apply for this job.",
+            "My name is Morgan and I am writing...",
+            "Please accept this letter as my official application.",
+            "With great enthusiasm, I submit my candidacy.",
+        ]
+        for cliche in cliches:
+            letter = _valid_letter()
+            letter["body_paragraphs"][0] = cliche + " " + letter["body_paragraphs"][0]
+            violations = validate_coverletter.validate(letter, STYLE_RULES)
+            self.assertTrue(
+                any("clichéd/passive opener" in v for v in violations),
+                f"Failed to flag clichéd opener: {cliche!r}"
+            )
 
     def test_allows_legitimate_third_party_pronoun(self):
         # Known trade-off, not a bug: "her"/"she" is a blunt heuristic (see
