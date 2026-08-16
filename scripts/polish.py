@@ -203,7 +203,7 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
         f"=== REQUESTED EDIT ===\n{instruction}"
     )
 
-    with cli_art.console.status(f"[bold {theme.BRAND}]Thinking[/bold {theme.BRAND}] · Polishing your document with Gemini...", spinner="dots", spinner_style=f"bold {theme.BRAND_ACCENT}"):
+    with cli_art.thinking_status("Polishing your document with Gemini..."):
         text, _usage = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=system_instruction,
