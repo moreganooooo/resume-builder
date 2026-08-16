@@ -232,7 +232,7 @@ func (m ViewerModel) renderHeader() string {
 		Width(m.width).
 		Padding(0, 2)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.title)
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render("✦ " + m.title + " ✧")
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	scroll := right.Render(func() string {
