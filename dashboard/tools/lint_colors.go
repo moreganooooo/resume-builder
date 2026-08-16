@@ -51,6 +51,7 @@ var identifierPattern = regexp.MustCompile(`lipgloss\.Color\(([A-Za-z_][A-Za-z0-
 // color constant.
 var themeConstructorFiles = map[string]bool{
 	"internal/theme/tokens.go":           true,
+	"internal/theme/theme.go":            true,
 	"internal/theme/resumebuilder.go":    true,
 	"internal/theme/catppuccin.go":       true,
 	"internal/theme/catppuccin_latte.go": true,
