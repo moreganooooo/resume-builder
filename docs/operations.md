@@ -130,3 +130,15 @@ Our tailoring engine treats your professional resume and cover letter as a unifi
 * **Linter Validation Retries:** Automatically runs a regex validator loop over the output cover letter. If a clichéd opener is detected, it triggers a corrective prompt cycle to rewrite and heal the opening paragraph.
 * **"Why Us" Alignment:** Integrates background company research to write an authentic, deep, and convincing opening and closing.
 * **Signature Block:** Automatically appends your absolute path signature image (`signature.png`) with clean, vector-perfect HTML margins.
+
+---
+
+## 🔬 7. Programmatic Resume-Writing Upgrade Suite
+
+We implemented an advanced, multi-dimensional technical upgrade to guarantee that every tailored resume meets an elite professional writing standard:
+
+1. **STAR/XYZ Syntactic Quality Grader:** Programmatic parser in `scripts/validate_resume.py` that evaluates every experience achievement bullet against Google's XYZ formula (*Accomplished [X], as measured by [Y], by doing [Z]*). Deducts points for missing active verbs, numerical metrics, or causal outcome connectors, feeding weak bullets back into the validator's repair loop.
+2. **Authenticity & Voice Calibration Metric:** Linter that scans for generic AI clichés (*proven track record, results-driven professional, passion for innovation*) and cross-references stylistic tone against `voice-anchors.md` to ensure a bold, systems-driven, authentic human voice.
+3. **Proud Career Break Calibrator:** Automated timeline gap engine in `scripts/normalize_resume.py` that detects employment gaps >3 months and programmatically constructs a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity flags.
+4. **Transferable Skills Translation Matrix:** Direct reframing matrix embedded in `tailor_resume.md` that guides the LLM to translate raw historical tasks (e.g. blog posts, classroom tutoring, administrative tracking) into sophisticated archetype vocabulary without ever fabricating or exaggerating raw metrics.
+5. **Single-Column Layout & ATS Ligature Safeguards:** Enforces clean, semantic single-column HTML/CSS rendering with static DM Sans fonts and explicit zero-ligature flags (`font-variant-ligatures: none`), guaranteeing 100% text extraction accuracy across Workday, Greenhouse, and Lever parsers.
