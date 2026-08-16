@@ -66,6 +66,26 @@ class TestStarQualityGrader(unittest.TestCase):
         violations = validate_resume.validate(resume, self.style_rules, enforce_star=True)
         self.assertTrue(any("Voice Authenticity Guardrail" in v for v in violations))
 
+    def test_career_break_entry_skipped_from_star_grading(self):
+        resume = {
+            "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
+            "SKILLS": ["**Marketing:** CRM"],
+            "EXPERIENCE": [
+                {
+                    "company": "Career Break — Professional Development & Retraining",
+                    "title": "Upskilling & Caregiver",
+                    "period": "08/2024 – 08/2025",
+                    "achievements": [
+                        "Completed comprehensive certifications in Google Data Analytics and HubSpot Lifecycle Marketing Software.",
+                        "Developed personal data pipelines and campaign flow automation projects applying Python and SQL."
+                    ]
+                }
+            ],
+            "WHY_TEXT": ""
+        }
+        violations = validate_resume.validate(resume, self.style_rules, enforce_star=True)
+        self.assertEqual(violations, [])
+
 
 if __name__ == "__main__":
     unittest.main()

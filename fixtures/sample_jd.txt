@@ -195,6 +195,6 @@
       "Utilizes AI agents across all internal departments including Product, CS, and Finance."
     ],
     "vocabulary_substitutions": [],
-    "researched_at": "2026-08-16T01:39:22"
+    "researched_at": "2026-08-16T13:04:45"
   }
 }
