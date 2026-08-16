@@ -19,7 +19,7 @@ import db
 import profile_paths
 
 
-def migrate_jobs(profile: str) -> int:
+def migrate_jobs(profile: str, conn=None) -> int:
     """Migrates all JSON files across jds/<profile>/ subdirectories into SQLite."""
     jd_base = profile_paths.jd_dir(profile) if hasattr(profile_paths, "jd_dir") else os.path.join(profile_paths.PROJECT_ROOT, "jds", profile)
     
@@ -44,7 +44,7 @@ def migrate_jobs(profile: str) -> int:
                 # Standardize payload
                 data["id"] = fname
                 data["status"] = status if status != "pending" else (data.get("status") or status)
-                db.upsert_job(data, profile=profile)
+                db.upsert_job(data, profile=profile, conn=conn)
                 count += 1
             except Exception as e:
                 print(f"Error migrating {fpath}: {e}")
@@ -101,8 +101,12 @@ def migrate_bullet_bank(profile: str) -> int:
 def main():
     profile = profile_paths.active_profile()
     print(f"Migrating profile '{profile}' filesystem records to SQLite data.db...")
-    jobs_count = migrate_jobs(profile)
-    bullets_count = migrate_bullet_bank(profile)
+    conn = db.get_db(profile)
+    try:
+        jobs_count = migrate_jobs(profile, conn=conn)
+        bullets_count = migrate_bullet_bank(profile)
+    finally:
+        conn.close()
     print(f"✓ Migration Complete: {jobs_count} job postings & {bullets_count} bullet records migrated to SQLite.")
 
 
