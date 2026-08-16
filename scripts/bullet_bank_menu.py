@@ -347,10 +347,36 @@ def _handle_choice(choice: str) -> None:
     entry = _ALL_ENTRIES[choice]
     if entry.get("api_cost") and not _confirm(entry["label"]):
         return
-    script_path = os.path.join(SCRIPT_DIR, entry["script"])
-    result = subprocess.run([sys.executable, script_path, *entry.get("args", [])])
-    if result.returncode != 0:
-        cli_art.display_error(f"{entry['script']} exited with an error -- check the output above.")
+
+    scroll_region_modified = False
+    title = f"BULLET BANK | {entry['label'].upper()}"
+
+    # Clear screen and draw the compact banner!
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner(title)
+
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
+
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        script_path = os.path.join(SCRIPT_DIR, entry["script"])
+        result = subprocess.run([sys.executable, script_path, *entry.get("args", [])])
+        if result.returncode != 0:
+            cli_art.display_error(f"{entry['script']} exited with an error -- check the output above.")
+    finally:
+        if scroll_region_modified:
+            # Clean up: restore the scroll region back to the entire screen window
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
 
 
 def _build_choices() -> list:
@@ -408,10 +434,23 @@ def _build_choices() -> list:
 
 
 def run_bullet_bank_menu() -> None:
+    # Check if we should use alternate screen / fullscreen mode
+    import menu
+    use_alt = menu._should_use_alt_screen()
+
     while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_compact_banner("BULLET BANK MANAGEMENT")
+            cli_art.display_footer_commands()
+
         stage_rows = [(s["number"], s["label"], *_stage_status(s)) for s in STAGES]
         maintenance_rows = [(m["label"], _maintenance_status(m)) for m in MAINTENANCE]
+        
+        cli_art.console.print()
         cli_art.render_bullet_bank_status(stage_rows, maintenance_rows)
+        cli_art.console.print()
 
         choice = cli_art.select("Bullet Bank Management:", choices=_build_choices())
 
@@ -422,7 +461,6 @@ def run_bullet_bank_menu() -> None:
             # menu at this module's top level would be circular -- safe
             # here since it only runs once both modules are already fully
             # loaded (mirrors bootstrap_menu.py's own _run_phase0()).
-            import menu
             menu._handle_update_knowledge()
             continue
         _handle_choice(choice)
