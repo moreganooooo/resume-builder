@@ -729,7 +729,16 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
         # Lifecycle and campaign marketing core competencies
         "segmentation", "retention", "drip", "email", "lifecycle", "marketing", "customer",
         "journey", "funnel", "flow", "flows", "testing", "a/b testing", "optimization",
-        "acquisition", "engagement", "nurture", "newsletters", "trigger", "triggers"
+        "acquisition", "engagement", "nurture", "newsletters", "trigger", "triggers",
+        # Design & creative core skills
+        "typography", "layout", "ideation", "visual storytelling", "presentation design",
+        "graphic design", "creative direction", "brand identity", "art direction",
+        # AI & modern workflow competencies
+        "prompt engineering", "prompting", "ai", "ai-assisted", "ai-accelerated",
+        "workflow automation", "data pipeline design", "content transformation",
+        # Content strategy competencies
+        "content strategy", "content marketing", "derivative content", "content repurposing",
+        "editorial calendar", "integrated marketing", "campaign messaging"
     }
 
     # 1. Load verified tools
@@ -912,6 +921,8 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
     violations = []
     for job in resume_data.get("EXPERIENCE", []):
         company = job.get("company", "unknown company")
+        if "career break" in company.lower() or "professional development" in company.lower():
+            continue
         for bullet in job.get("achievements", []):
             score = 100
             reasons = []

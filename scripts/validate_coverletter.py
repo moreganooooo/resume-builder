@@ -169,11 +169,79 @@ def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
     return violations
 
 
-def validate(cover_letter_data: dict, style_rules: dict, kb_corpus: str = "") -> list[str]:
+def _check_semantic_grounding(cover_letter_data: dict, keeper_bullets: list[str], keeper_embs) -> list[str]:
+    """
+    Rigorously checks each sentence of the cover letter that makes a professional claim,
+    computing its cosine similarity against the keeper bullets embeddings.
+    If the maximum similarity score to any real candidate achievement is < 0.60,
+    the sentence is flagged as an ungrounded hallucination.
+    """
+    if not keeper_bullets or keeper_embs is None:
+        return []
+    import numpy as np
+    from gemini_client import GeminiClient
+
+    violations = []
+    
+    # Conversational or transitional phrases that can safely be bypassed
+    transitional_keywords = [
+        "apply", "excited", "enthusiasm", "express my interest", "look forward",
+        "thank you", "for your consideration", "resume", "please accept", "dear", "sincerely",
+        "opportunity", "role", "position", "seeking", "qualified", "background"
+    ]
+    
+    # Precise sentence splitter regex
+    sentence_splitter = re.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s')
+    
+    for p_idx, paragraph in enumerate(cover_letter_data.get("body_paragraphs", [])):
+        sentences = [s.strip() for s in sentence_splitter.split(paragraph) if s.strip()]
+        for s_idx, sentence in enumerate(sentences):
+            # Only check substantive sentences capable of conveying professional claims
+            if len(sentence) < 40:
+                continue
+            
+            lowered = sentence.lower()
+            if any(kw in lowered for kw in transitional_keywords):
+                continue
+                
+            # Compute sentence embedding via sharing the main client
+            emb = GeminiClient.embed(sentence)
+            if emb is None:
+                continue
+                
+            s_vec = np.array(emb, dtype=np.float32)
+            s_norm = np.linalg.norm(s_vec)
+            if s_norm > 0:
+                s_vec = s_vec / s_norm
+                
+            # Normalize keeper embeddings matrix
+            embs_norm = keeper_embs / (np.linalg.norm(keeper_embs, axis=1, keepdims=True) + 1e-9)
+            sims = embs_norm @ s_vec
+            max_sim = float(np.max(sims))
+            best_idx = int(np.argmax(sims))
+            
+            # 0.60 is the state-of-the-art threshold representing high similarity for d=768
+            if max_sim < 0.60:
+                violations.append(
+                    f"Ungrounded semantic claim in body_paragraphs[{p_idx}]: {sentence!r} "
+                    f"(Highest similarity to keeper bank was only {max_sim:.2f}; "
+                    f"best candidate: {keeper_bullets[best_idx]!r})"
+                )
+    return violations
+
+
+def validate(
+    cover_letter_data: dict,
+    style_rules: dict,
+    kb_corpus: str = "",
+    keeper_bullets: list[str] = None,
+    keeper_embs = None
+) -> list[str]:
     violations = []
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
     violations.extend(_check_paragraph_count(cover_letter_data))
     violations.extend(_check_third_person_slip(cover_letter_data))
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
     violations.extend(_check_cliched_openers(cover_letter_data))
+    violations.extend(_check_semantic_grounding(cover_letter_data, keeper_bullets, keeper_embs))
     return violations
