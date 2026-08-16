@@ -180,12 +180,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
             proc = subprocess.Popen(
                 ["node", script, "--json-file", LIVENESS_INPUT_PATH],
                 stdout=stdout_file, stderr=subprocess.PIPE, text=True, bufsize=1,
-                # RESUME_BUILDER_ICONS: check-liveness.mjs's stderr progress
-                # lines are streamed straight to the terminal below (B21),
-                # raw icons and all -- there's no shared theming layer
-                # across the JS/Python boundary, so without this the child
-                # only ever sees an explicit shell-level override, never
-                # this process's resolved preference (B45).
+                start_new_session=True,
                 env={**_child_env(), "RESUME_BUILDER_ICONS": theme.icon_set_name()},
             )
             try:
@@ -215,16 +210,14 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.", soft_wrap=True)
                 return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
             finally:
-                # subprocess.run() deliberately does not kill the child on
-                # KeyboardInterrupt (bpo-25942), assuming process-group
-                # delivery that doesn't happen here -- verified live: Ctrl-C
-                # on the Python process left the Node child running,
-                # still making outbound requests to employer sites.
-                # Explicit kill()+wait() means an interrupted or timed-out
-                # run never orphans it (B21).
                 if proc.poll() is None:
-                    proc.kill()
+                    try:
+                        import signal
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    except Exception:
+                        proc.kill()
                 proc.wait()
+
 
         if proc.returncode != 0:
             cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).", soft_wrap=True)

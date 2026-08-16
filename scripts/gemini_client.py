@@ -29,15 +29,18 @@ import theme
 # an existing environment variable.
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-load_dotenv(profile_paths.env_path(), override=True)
+def _get_api_key() -> str:
+    # Always read current environment variable dynamically
+    load_dotenv(profile_paths.env_path(), override=True)
+    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
-API_KEY  = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+def _get_auth_headers() -> dict:
+    return {"x-goog-api-key": _get_api_key()}
+
+# Backward-compatible property-like module access
+AUTH_HEADERS = property(lambda self: _get_auth_headers()) if False else None
+
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-# x-goog-api-key header, not ?key= query param -- current docs (ai.google.dev)
-# only show the header form; query params also risk landing in server/proxy
-# logs. Doesn't affect ACCESS_TOKEN_TYPE_UNSUPPORTED (verified: identical 401
-# with either transport) -- this is a hygiene/future-proofing change only.
-AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 
 RETRYABLE          = {429, 500, 502, 503, 504}
 SERVER_ERRORS      = {500, 502, 503, 504}
@@ -91,6 +94,18 @@ class SustainedFailureError(RuntimeError):
     a signal this is a quota-level issue, not a transient blip."""
 
 
+_CONSECUTIVE_FAILURES_STATE = [0]
+
+
+class _ConsecutiveFailuresDescriptor:
+
+    def __get__(self, obj, cls=None):
+        return _CONSECUTIVE_FAILURES_STATE[0]
+
+    def __set__(self, obj, value):
+        _CONSECUTIVE_FAILURES_STATE[0] = int(value)
+
+
 class GeminiClient:
 
     _cache_map = {}
@@ -130,7 +145,7 @@ class GeminiClient:
             "ttl": "1200s"  # 20 minutes
         }
         try:
-            req_headers = {**AUTH_HEADERS, "Content-Type": "application/json"}
+            req_headers = {**_get_auth_headers(), "Content-Type": "application/json"}
             resp = requests.post(cache_url, json=payload, headers=req_headers, timeout=30)
             if resp.status_code == 200:
                 data = resp.json()
@@ -166,7 +181,7 @@ class GeminiClient:
     # which succeeded at 138s). 90s was cutting off requests that would
     # otherwise have completed, not detecting genuinely stuck ones.
     _timeout = 180
-    _consecutive_full_failures = 0
+    _consecutive_full_failures = _ConsecutiveFailuresDescriptor()
     SUSTAINED_FAILURE_THRESHOLD = 2
 
     # gemma-4-31b-it's TPM cap is 16k tokens/minute (confirmed 2026-07-16),
@@ -412,7 +427,7 @@ class GeminiClient:
                 body["tools"] = tools
 
             try:
-                resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)
+                resp = requests.post(url, json=body, headers=_get_auth_headers(), timeout=GeminiClient._timeout)
                 # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
                 if resp.status_code == 400 and cache_name and "cache" in resp.text.lower():
                     # Evict from class map
@@ -427,7 +442,7 @@ class GeminiClient:
                     # Retry this attempt with inline systemInstruction directly
                     body.pop("cachedContent", None)
                     body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-                    resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)
+                    resp = requests.post(url, json=body, headers=_get_auth_headers(), timeout=GeminiClient._timeout)
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
@@ -539,7 +554,7 @@ class GeminiClient:
             "outputDimensionality": EMBED_DIM,
         }
         try:
-            resp = requests.post(url, json=payload, headers=AUTH_HEADERS, timeout=30)
+            resp = requests.post(url, json=payload, headers=_get_auth_headers(), timeout=30)
             resp.raise_for_status()
             return resp.json().get("embedding", {}).get("values")
         except Exception as e:
