@@ -204,6 +204,92 @@ async function generatePDF() {
       )),
     ]);
 
+    // Stage 1: Inject wild-card styles to strictly disable font ligatures resume-wide.
+    // This provides unconditional protection against ATS text layer corruption.
+    await page.addStyleTag({
+      content: `
+        * {
+          font-variant-ligatures: none !important;
+          font-feature-settings: "liga" 0, "clig" 0, "calt" 0, "hlig" 0, "dlig" 0 !important;
+        }
+      `
+    });
+
+    // Stage 2: Element-Level Layout & Page Overflow Protection
+    // Programmatically detect container overflow or page budget overflow and tune the DOM.
+    const pageHeightInches = format === 'letter' ? 11 : 11.69;
+    const printableHeightPx = Math.floor((pageHeightInches - 1.0) * 96);
+    const maxTwoPageHeightPx = printableHeightPx * 2;
+
+    await page.evaluate((maxHeight) => {
+      const pageEl = document.querySelector('.page');
+      if (!pageEl) return;
+
+      // Ensure clipped contents due to overflow:hidden are logged or expanded
+      const allEls = document.querySelectorAll('*');
+      for (const el of allEls) {
+        const style = window.getComputedStyle(el);
+        if (style.overflow === 'hidden' && el.scrollHeight > el.clientHeight && el.clientHeight > 0) {
+          el.style.overflow = 'visible';
+          el.style.height = 'auto';
+        }
+      }
+
+      // Check current content height
+      let currentHeight = pageEl.scrollHeight;
+      if (currentHeight <= maxHeight) {
+        return; // Already perfectly within budget!
+      }
+
+      console.log(`[Layout Protective Tuning] Height ${currentHeight}px exceeds the 2-page budget of ${maxHeight}px. Commencing typographic tightening loop...`);
+
+      // Incremental tightening factors
+      const lineHeights = [1.2, 1.15, 1.12, 1.08, 1.05, 1.02];
+      const letterSpacings = ['normal', '-0.005em', '-0.01em', '-0.015em', '-0.02em'];
+      const bottomMargins = [12, 10, 8, 6, 5, 4];
+      const fontSizes = ['10px', '9.5px', '9px'];
+
+      let idx = 0;
+      const maxIterations = 6;
+      while (currentHeight > maxHeight && idx < maxIterations) {
+        const lh = lineHeights[Math.min(idx, lineHeights.length - 1)];
+        const ls = letterSpacings[Math.min(idx, letterSpacings.length - 1)];
+        const bm = bottomMargins[Math.min(idx, bottomMargins.length - 1)];
+
+        // Tighten body/container typographic properties
+        document.body.style.lineHeight = lh.toString();
+        document.body.style.letterSpacing = ls;
+
+        // Apply fine-tuned spacing overrides to sections, jobs, and bullet blocks
+        const jobs = document.querySelectorAll('.job, .edu-item, .cert-item');
+        for (const job of jobs) {
+          job.style.marginBottom = `${bm}px`;
+        }
+
+        const sections = document.querySelectorAll('.section');
+        for (const sec of sections) {
+          sec.style.marginBottom = `${bm + 4}px`;
+        }
+
+        const bullets = document.querySelectorAll('.job-bullets li');
+        for (const li of bullets) {
+          li.style.marginBottom = '2px';
+        }
+
+        // Apply fallback font size reducing if still overflowing in later iterations
+        if (idx >= 3) {
+          const fs = fontSizes[Math.min(idx - 3, fontSizes.length - 1)];
+          document.body.style.fontSize = fs;
+        }
+
+        // Force a browser reflow and measure new height
+        currentHeight = pageEl.scrollHeight;
+        idx++;
+      }
+
+      console.log(`[Layout Protective Tuning] Applied ${idx} tightening iterations. Final Height: ${currentHeight}px (Target: <= ${maxHeight}px)`);
+    }, maxTwoPageHeightPx);
+
     // Generate PDF
     const pdfBuffer = await page.pdf({
       format: format,

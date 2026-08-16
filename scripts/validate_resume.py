@@ -699,6 +699,118 @@ def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules
     return {"score": score, "band": band, "matched": matched, "missing": missing}
 
 
+def _check_hallucinated_tools(resume_data: dict) -> list[str]:
+    """
+    Checks if any skills or tools mentioned in the SKILLS section of the resume are
+    not present in the verified tools list or master profile configuration.
+    """
+    import os
+    import json
+    import re
+    import yaml
+
+    # Locate knowledge base
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    kb_dir = os.path.join(project_root, "profiles", "morgan", "knowledge_base")
+    
+    verified_tools_path = os.path.join(kb_dir, "verified_tools.json")
+    profile_yml_path = os.path.join(kb_dir, "profile.yml")
+
+    allowed_terms = {
+        # Common general-purpose categories and terms
+        "management", "strategy", "coaching", "ops", "enablement", "onboarding",
+        "copywriting", "writing", "design", "brand", "voice", "tone", "analytics",
+        "reporting", "metrics", "training", "governance", "automation", "campaigns",
+        "process mapping", "diagramming", "templates", "hygiene", "crm", "esp",
+        "lead generation", "prospecting", "b2b", "lifecycle marketing", "customer marketing"
+    }
+
+    # 1. Load verified tools
+    if os.path.exists(verified_tools_path):
+        try:
+            with open(verified_tools_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for tool in data.get("tools", []):
+                    allowed_terms.add(tool["name"].lower())
+                    # Also add category name words
+                    if tool.get("category"):
+                        for w in re.split(r"[,;/ \s]+", tool["category"].lower()):
+                            if len(w) > 3:
+                                allowed_terms.add(w)
+        except Exception:
+            pass
+
+    # 2. Load profile.yml
+    if os.path.exists(profile_yml_path):
+        try:
+            with open(profile_yml_path, "r", encoding="utf-8") as f:
+                pdata = yaml.safe_load(f) or {}
+                # Add tags and their keywords
+                for tag in pdata.get("tags", []):
+                    allowed_terms.add(tag["name"].lower())
+                    for kw in tag.get("keywords", []):
+                        allowed_terms.add(kw.lower())
+                # Add target roles
+                target_roles = pdata.get("target_roles", {}) or {}
+                for role_group in ["primary", "secondary"]:
+                    for role in target_roles.get(role_group, []):
+                        for w in role.lower().split():
+                            if len(w) > 3:
+                                allowed_terms.add(w)
+        except Exception:
+            pass
+
+    # Standard synonyms
+    synonyms = {
+        "sf": "salesforce crm", "sfdc": "salesforce crm", "salesforce": "salesforce crm",
+        "excel": "google sheets / g-connector", "google sheet": "google sheets / g-connector",
+        "sheets": "google sheets / g-connector", "illustrator": "adobe creative suite",
+        "photoshop": "adobe creative suite", "indesign": "adobe creative suite",
+        "html": "html (email)", "css": "html (email)", "persistiq": "persist",
+    }
+    for syn in synonyms:
+        allowed_terms.add(syn)
+
+    violations = []
+    skills = resume_data.get("SKILLS", []) or []
+    for line in skills:
+        # Strip bold header category part e.g. "**Sales Operations:** Salesforce CRM"
+        clean_line = re.sub(r"^\*\*.+?\*\*[:\-]?\s*", "", line)
+        parts = []
+        for p in re.split(r"[,;|]", clean_line):
+            clean_part = p.strip().strip("[]()\"'").lower()
+            if clean_part:
+                parts.append((p.strip(), clean_part))
+
+        for orig_part, part in parts:
+            # Check if this part (e.g. "salesforce crm") directly matches or contains/is-contained-in
+            # any of our allowed terms, or if the individual words in it are allowed.
+            matched = False
+            if part in allowed_terms:
+                matched = True
+            else:
+                # Substring check
+                for allowed in allowed_terms:
+                    if part in allowed or allowed in part:
+                        matched = True
+                        break
+            
+            # If not matched as a whole phrase, check if each word in it is a common/allowed word
+            if not matched:
+                words = [w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2]
+                if words and all(w in allowed_terms or any(w in a or a in w for a in allowed_terms) for w in words):
+                    matched = True
+
+            if not matched:
+                violations.append(
+                    f"Strict Semantic Guardrail: Hallucinated skill or tool detected: {orig_part!r} "
+                    f"(not present in verified_tools.json or profile.yml)"
+                )
+
+    return violations
+
+
 def validate(
     resume_data: dict,
     style_rules: dict,
@@ -718,6 +830,7 @@ def validate(
     violations.extend(_check_bullet_widows(resume_data, style_rules))
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
+    violations.extend(_check_hallucinated_tools(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
