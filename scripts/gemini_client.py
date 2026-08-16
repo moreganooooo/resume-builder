@@ -6,6 +6,7 @@ the circular import between them.
 """
 
 import copy
+import hashlib
 import json
 import os
 import random
@@ -91,6 +92,73 @@ class SustainedFailureError(RuntimeError):
 
 
 class GeminiClient:
+
+    _cache_map = {}
+
+    @classmethod
+    def _get_or_create_cache(cls, model: str, system_instruction: str) -> str | None:
+        """
+        Intercepts large system instructions, creates a cachedContent block
+        on the Gemini REST API, and caches the returned cache handle for 20 minutes
+        to prevent redundant transmissions and reduce tokens cost by up to 90%.
+        """
+        if "gemini" not in model.lower():
+            return None
+        # 15,000 chars is roughly 3.5k-4k tokens (above Gemini's 4,096 limit to be safe)
+        if len(system_instruction) < 15000:
+            return None
+
+        # Clean model name (caching needs models/ prefix)
+        base_model = model.split(":")[0]
+        if not base_model.startswith("models/"):
+            base_model = f"models/{base_model}"
+
+        key = hashlib.sha256(f"{base_model}:{system_instruction}".encode("utf-8")).hexdigest()
+        now = time.time()
+
+        if key in cls._cache_map:
+            entry = cls._cache_map[key]
+            if entry["expiry"] > now + 30:
+                return entry["cache_name"]
+
+        cache_url = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
+        payload = {
+            "model": base_model,
+            "systemInstruction": {
+                "parts": [{"text": system_instruction}]
+            },
+            "ttl": "1200s"  # 20 minutes
+        }
+        try:
+            req_headers = {**AUTH_HEADERS, "Content-Type": "application/json"}
+            resp = requests.post(cache_url, json=payload, headers=req_headers, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                cache_name = data.get("name")
+                expire_str = data.get("expireTime")
+                expiry = now + 1150  # Default fallback expiry
+                if expire_str:
+                    try:
+                        m = re.match(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})", expire_str)
+                        if m:
+                            from datetime import datetime, timezone
+                            dt = datetime(
+                                int(m.group(1)), int(m.group(2)), int(m.group(3)),
+                                int(m.group(4)), int(m.group(5)), int(m.group(6)),
+                                tzinfo=timezone.utc
+                            )
+                            expiry = dt.timestamp()
+                    except Exception:
+                        pass
+                cls._cache_map[key] = {"cache_name": cache_name, "expiry": expiry}
+                cli_art.console.print(f"    {theme.colorize_icon('success')} Explicit Context Cache created: [dim]{cache_name}[/dim] (size: {len(system_instruction)} chars)", soft_wrap=True)
+                return cache_name
+            else:
+                cli_art.console.print(f"    {cli_art.WARNING} Context cache creation failed (HTTP {resp.status_code}): {resp.text[:200]}", soft_wrap=True)
+                return None
+        except Exception as e:
+            cli_art.console.print(f"    {cli_art.WARNING} Context cache exception: {e}", soft_wrap=True)
+            return None
 
     # Was 90 -- verified live (2026-07-16) that large-context calls to
     # gemini-3.1-flash-lite can genuinely take 100-140+s to respond right
@@ -325,17 +393,41 @@ class GeminiClient:
             # supported natively; the earlier manual merge into `contents`
             # was a workaround for older Gemma versions that didn't respect
             # a separate systemInstruction field.
+            # Attempt to use or create explicit context cache for Gemini requests
+            cache_name = None
+            if "gemini" in model.lower():
+                cache_name = GeminiClient._get_or_create_cache(model, system_instruction)
+
             body = {
-                "systemInstruction": {"parts": [{"text": system_instruction}]},
                 "contents": [{"role": "user", "parts": [{"text": contents}]}],
                 "generationConfig": generation_config,
                 "serviceTier": tier,
             }
+            if cache_name:
+                body["cachedContent"] = cache_name
+            else:
+                body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
             if tools:
                 body["tools"] = tools
 
             try:
                 resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)
+                # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
+                if resp.status_code == 400 and cache_name and "cache" in resp.text.lower():
+                    # Evict from class map
+                    cls_key = None
+                    for k, entry in GeminiClient._cache_map.items():
+                        if entry.get("cache_name") == cache_name:
+                            cls_key = k
+                            break
+                    if cls_key:
+                        GeminiClient._cache_map.pop(cls_key, None)
+                    cli_art.console.print(f"    {theme.colorize_icon('warning')} Context cache expired or evicted. Self-healing fallback to inline systemInstruction...", soft_wrap=True)
+                    # Retry this attempt with inline systemInstruction directly
+                    body.pop("cachedContent", None)
+                    body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+                    resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=GeminiClient._timeout)
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
