@@ -3823,6 +3823,7 @@ class ResumeEngine:
         # missing keyword doesn't block the build.
         ats_match_rules = self.load_yaml(self.scoring_dir, "ats_match.yaml")
         coverage = validate_resume.check_keyword_coverage(resume_data, jd_keywords, ats_match_rules)
+        jd_manager.save_coverage(jd_path, coverage)
         coverage_icon = 'success' if coverage["band"] in ("excellent_match", "good_match") else 'warning'
         cli_art.console.print(f"  {theme.colorize_icon(coverage_icon)} JD-keyword coverage: {coverage['score']}% "
               f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})", soft_wrap=True)

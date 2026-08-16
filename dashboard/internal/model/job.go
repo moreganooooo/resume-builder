@@ -16,6 +16,17 @@ type JobRow struct {
 	Evaluation     Evaluation   `json:"evaluation"`
 	Liveness       *Liveness    `json:"liveness"`
 	Application    *Application `json:"application"`
+	Coverage       *Coverage    `json:"coverage"`
+}
+
+// Coverage mirrors the _coverage key persisted by
+// scripts/jd_manager.py's save_coverage().
+type Coverage struct {
+	Score     float64  `json:"score"`
+	Band      string   `json:"band"`
+	Matched   []string `json:"matched"`
+	Missing   []string `json:"missing"`
+	CheckedAt string   `json:"checked_at"`
 }
 
 // Research mirrors the _research key persisted by
