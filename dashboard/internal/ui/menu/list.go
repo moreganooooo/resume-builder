@@ -141,11 +141,11 @@ func (m MenuModel) View() string {
 	headerStyle := theme.PadHorizontal(
 		lipgloss.NewStyle().
 			Bold(true).
-			Foreground(m.theme.Token.Mauve).
 			Background(m.theme.Surface).
 			Width(width),
 	)
-	header := headerStyle.Render(m.list.Title)
+	titleText := m.theme.Icons.Menu + "  " + theme.RenderGradient("✦ MAIN MENU ✧", "#FF60FF", "#00A4FF")
+	header := headerStyle.Render(titleText)
 
 	// This screen only ever exposes 5 items (Pipeline/Progress/Reports/
 	// Jobs/Quit) against the `resume` CLI's own 15 -- nothing signaled that

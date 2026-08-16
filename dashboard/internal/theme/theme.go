@@ -2,8 +2,10 @@
 package theme
 
 import (
+	"fmt"
 	"image/color"
 	"os"
+	"strings"
 
 	"charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
@@ -118,3 +120,46 @@ func (t Theme) HuhTheme() huh.Theme {
 		return ht
 	})
 }
+
+func parseHex(h string) (r, g, b int) {
+	if len(h) > 0 && h[0] == '#' {
+		h = h[1:]
+	}
+	if len(h) == 3 {
+		fmt.Sscanf(h, "%1x%1x%1x", &r, &g, &b)
+		r = r * 17
+		g = g * 17
+		b = b * 17
+		return
+	}
+	if len(h) == 6 {
+		fmt.Sscanf(h, "%2x%2x%2x", &r, &g, &b)
+	}
+	return
+}
+
+// RenderGradient takes a string and blends it from startHex to endHex color character-by-character.
+func RenderGradient(text string, startHex, endHex string) string {
+	r1, g1, b1 := parseHex(startHex)
+	r2, g2, b2 := parseHex(endHex)
+
+	runes := []rune(text)
+	n := len(runes)
+	if n <= 1 {
+		return text
+	}
+
+	var result strings.Builder
+	for i, rn := range runes {
+		t := float64(i) / float64(n-1)
+		r := int(float64(r1) + t*float64(r2-r1))
+		g := int(float64(g1) + t*float64(g2-g1))
+		b := int(float64(b1) + t*float64(b2-b1))
+
+		colorHex := fmt.Sprintf("#%02x%02x%02x", r, g, b)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorHex))
+		result.WriteString(style.Render(string(rn)))
+	}
+	return result.String()
+}
+
