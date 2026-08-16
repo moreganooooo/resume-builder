@@ -4,16 +4,24 @@ Here are answers to the most common questions, edge cases, and environment troub
 
 ---
 
-## 📊 1. Scoring: Fit Score vs. ATS Odds Score
+## 📊 1. The Re-Engineered Dual Scoring System (Fit vs. Interview Odds)
 
-### Q: What is the difference between my Fit Score and my ATS Odds Score?
-A: Our system evaluates job postings from two completely independent directions:
-1. **The Fit Score:** Measures your actual professional alignment against the job's core technical requirements, leadership scope, and domain context. It uses a **10-dimensional weighted rubric** to ask: *Is this a role where you would genuinely excel and be happy?*
-2. **The ATS Odds Score:** Models the **probabilistic likelihood of your resume passing initial automated screening and HR filters**. It checks for formatting traps, page-count boundary violations, and target keyword density. It asks: *Will an automated system let your resume through to a human?*
+### Q: What is the difference between my Capability Fit and my Interview/Hiring Odds?
+A: To prevent cognitive model saturation and score compression, our system utilizes a state-of-the-art **Split-Agent Pipeline** evaluating job postings across two dedicated, isolated LLM stages:
+1.  **Capability & Functional Fit (Stage 1)**: Measures your actual career experience alignment, target role overlap, and tools/process overlap against the JD. It returns a structured **CoBlack-Style Capability Gaps list** highlighting precisely where your narrative or experience falls short of the JD's core needs.
+2.  **Recruiter Perception & Hiring Odds (Stage 2)**: Models the psychological friction an automated filter or a human recruiter will face. It checks title continuity, domain credibility, and **Chronological Resume Gaps** (using empathy-aware criteria based on company profile rigidity), and extracts explicit **Ghost Job Red Flags**.
 
-### Q: What does it mean if my Fit Score is high but my Odds Score is low (or vice versa)?
-* **High Fit / Low Odds:** You are perfectly qualified for the job, but your current resume text lacks the dense, specific terminology or keywords that automated screeners search for. **Solution:** Run the `tailor` module to inject the correct keyword mapping while preserving your voice.
-* **Low Fit / High Odds:** You have matched all the keyword patterns perfectly, but your underlying professional level or stack depth doesn't align with the role's actual expectations (e.g., applying for a Haskell role when your background is strictly Python). **Solution:** Focus on roles where both scores align!
+### Q: What is the Bayesian Interview Probability Converter?
+A: It is a mathematical converter that translates your qualitative 1-5 `interview_odds_score` into a literal **Absolute Interview Probability Percentage** using baseline response rates ($P_{\text{baseline}} = 2.0\%$) and piecewise-interpolated Odds Ratios:
+*   An elite score ($4.5+$) calculates as a **$20\text{x}$ response rate multiplier** (translating to a $\sim 29.0\%$ absolute response rate).
+*   A strong score ($4.0+$) calculates as an **$8\text{x}$ multiplier** (translating to $\sim 14.5\%$).
+*   This removes abstract scoring bias and grounds your job-hunt pipeline in empirical, statistics-based probability.
+
+### Q: How do Profile-Driven Overrides and Deal-Breakers work?
+A: If you enable `location.remote_required` in your profile configuration (`profile.yml`), any job description evaluated with onsite or hybrid language (resulting in `remote_quality < 5` or triggered `hard_blockers`) is immediately caught by a Python post-processor. 
+*   The system overrides the composite score to a flat **`0.00`** and recommendation to **`Skip`**.
+*   The job is **automatically archived** out of your pending queue, keeping your search hyper-focused. This framework is fully generic and works for any user's profile deal-breakers!
+
 
 ---
 

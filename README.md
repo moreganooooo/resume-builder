@@ -23,10 +23,14 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 
 ## ✨ Core Sub-Systems & Unique Selling Points
 
-### 📊 Fit Score vs. ATS Odds Score (Dual-Metric Audit)
-Most platforms give you a single "Match" percentage. We pioneered a **dual-metric analysis** that evaluates job postings from two completely different dimensions:
-* **The Fit Score:** Evaluates your actual professional capability against the role's text using a **10-dimensional weighted rubric** (core tech stack, leadership scale, domain context, communication style). It asks: *Is this a job you would actually excel at and enjoy?*
-* **The ATS Odds Score:** A rare, highly unique metric that models the **probabilistic likelihood of your resume passing the initial automated screening, HR filter, and keyword ATS bots**. It checks for keyword density, structural page-count boundaries, and formatting gates. It asks: *Will an automated system let your resume through to a human?*
+### 📊 Re-Engineered Dual-Metric Scoring (Split-Agent Architecture)
+Most platforms offer a basic single "Match" percentage. We pioneered a **rigorous split-agent dual evaluation** that isolates career capacity from recruiter friction to eliminate model cognitive saturation:
+*   **Capability Fit (Stage 1):** Evaluates functional depth, target role overlap, and tools/process overlap to output a structured **CoBlack-Style Capability Gaps list** highlighting precisely where your resume text requires strategic adjustment.
+*   **Hiring Odds (Stage 2):** Predicts automated gating, recruiter friction, title continuity, domain credibility, and **Chronological Resume Gap Risk** (empathy-aware criteria calibrated dynamically by company profile rigidity).
+*   **Bayesian Probability Converter**: Translates qualitative 1-5 interview odds scores into an empirical **Absolute Interview Probability Percentage** (reflecting up to an $20\text{x}$ response multiplier for elite fits).
+*   **Dynamic Profile Overrides**: An automated Python check scans your `profile.yml` deal-breakers list. If `remote_required` is `True` and `remote_quality < 5` (hybrid/onsite signals detected) or matched hard blockers trigger, Python forces the composite score to `0.00` and automatically archives the JD as a `"Skip"`.
+*   **Prestige-Tier Calibration & Ghost Job Probability**: Applies mathematical caps to funnel friction for high-volume Tier-1 giants and calculates a deterministic risk percentage of fake or inactive listings based on explicit red flags.
+
 
 ### 🧠 Dynamic Knowledge System (Compounding Brain)
 This program gets smarter about you the more you use it. It is designed as a secure, local knowledge base that grows organically.

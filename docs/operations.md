@@ -39,26 +39,33 @@ Job boards are notorious for keeping filled or dead listings active to inflate t
 
 ---
 
-## 📊 3. Dual-Metric Scoring: Fit Score vs. Odds Score
+## 📊 3. Re-Engineered Dual-Metric Scoring (Split-Agent Architecture)
 
-Most platforms give you a single "Match" percentage. We pioneered a **dual-metric analysis** that evaluates job postings from two completely different dimensions:
+Most platforms offer a basic single "Match" percentage. We pioneered a **rigorous split-agent dual evaluation** that isolates career capacity from recruiter friction to eliminate model cognitive saturation:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 📊 DUAL-METRIC PROFILE AUDIT                                 │
+┌ 📊 SPLIT-AGENT PIPELINE AUDIT                               │
 ├─────────────────────────────────────────────────────────────┤
-│  🎯 FIT SCORE: 85%  ──▶  How well you actually fit the role │
-│                          (10-dimensional weighted rubric)   │
+│  🎯 CAPABILITY FIT (Stage 1) ──▶  Direct functional fit     │
+│                                   & CoBlack Capability Gaps │
 │                                                             │
-│  🎲 ODDS SCORE: 92% ──▶  Your mathematical probability of   │
-│                          clearing the initial ATS screening │
+│  🎲 HIRING ODDS (Stage 2)    ──▶  Chronological gap risk    │
+│                                   & Bayesian absolute odds  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-1. **The Fit Score (Your Perspective):**
-   Evaluates your actual professional capability against the role's text using a **10-dimensional weighted rubric** (e.g., core tech stack depth, leadership scale, domain context, communication expectations). It asks: *Is this a job you would actually excel at and enjoy?*
-2. **The Odds Score (The ATS/Screener Perspective):**
-   A rare, highly unique metric that models the **probabilistic likelihood of your resume passing the initial automated screening, HR filter, and keyword keyword ATS bots**. It checks for keyword density, structural page-count boundaries, and formatting gates. It asks: *Will an automated system let your resume through to a human?*
+1.  **Capability Fit (Stage 1 - Technical & Functional):**
+    Evaluates your actual professional career experience against the role's operations (including functional depth, target role overlap, and tools/process overlap) and outputs a structured **Capability Gaps list**. This identifies precisely where your resume text requires strategic adjustment.
+2.  **Hiring Odds (Stage 2 - Recruiter & Practical Filters):**
+    Predicts automated gating, recruiter friction, title continuity, domain credibility, and **Chronological Resume Gap Risk**. To support career transitions, the engine evaluates gap-periods based on company profile rigidity—penalizing traditional corporates while maintaining strong scores for modern, empathetic, or mission-driven organizations.
+
+### 📈 Advanced Scoring Engine Features:
+*   **Bayesian Probability Converter**: Translates qualitative 1-5 interview odds scores into an empirical **Absolute Interview Probability Percentage** using piecewise linear interpolation against an industry baseline ($2.0\%$), reflecting up to a $20\text{x}$ response multiplier for elite fits.
+*   **Prestige-Tier Volume Calibration**: Classifies companies into volume risk categories. Tier-1 giants (extreme competition) have their funnel friction scores capped in Python, while Tier-3 boutiques receive positive boosts to reward your application.
+*   **Heuristic Ghost Job Probability**: Evaluates explicit red flags (placeholder boilerplate, evergreen phrasing, posting age) to compute a deterministic risk percentage of fake or inactive listings.
+*   **Dynamic Profile Overrides**: An automated Python check scans your `profile.yml` deal-breakers list. If `remote_required` is `True` and the LLM scores `remote_quality < 5` (hybrid/onsite signals detected) or returns matched hard blockers, Python forces the composite score to `0.00` and automatically archives the JD as a `"Skip"`.
+
 
 ---
 
