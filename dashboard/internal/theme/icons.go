@@ -61,65 +61,53 @@ type MenuIcons struct {
 }
 
 func NewMenuIcons() MenuIcons {
-	if os.Getenv("RESUME_BUILDER_ICONS") == "unicode" {
+	if os.Getenv("RESUME_BUILDER_ICONS") == "nerd" {
 		return MenuIcons{
-			Pipeline: "⚙",
-			Progress: "%",
-			Report:   "▤",
-			Quit:     "x",
-			Menu:     "☰",
-			Jobs:     "▣",
-			Profile:  "@",
-			Search:   "s",
-			// "#" previously here didn't evoke "folder"/"source" the way
-			// every other fallback in this set reads as a recognizable
-			// pictogram for its Nerd Font original -- ⊔ (open container/
-			// tray shape) is a closer visual match for nf-fa-folder_open,
-			// same narrow-width geometric-symbol style as Pipeline/Report/
-			// Jobs above (Neutral East Asian width, single terminal column,
-			// unlike an emoji folder glyph would be).
-			Source:   "⊔",
-			Path:     "/",
-			Magic:    "*",
-			Trash:    "d",
-			Edit:     "e",
-			External: "o",
-			Clock:    "t",
-			Graph:    "g",
+			Pipeline:    "", // nf-fa-cog
+			Progress:    "", // nf-fa-bar_chart
+			Report:      "", // nf-fa-file_text_o
+			Quit:        "", // nf-fa-sign_out
+			Menu:        "", // nf-fa-bars
+			Jobs:        "▣", // briefcase / job board icon replacement
+			Profile:     "", // nf-fa-user
+			Search:      "", // nf-fa-search
+			Source:      "", // nf-fa-folder_open
+			Path:        "", // nf-fa-file_o
+			Magic:       "", // nf-fa-magic
+			Trash:       "", // nf-fa-trash
+			Edit:        "", // nf-fa-pencil
+			External:    "", // nf-fa-external_link
+			Clock:       "", // nf-fa-clock_o
+			Graph:       "", // nf-fa-line_chart
 
-			// Exact ASCII fallbacks scripts/theme.py's _UNICODE_ICONS uses
-			// for "success"/"gem"/"hint"/"skip" -- single-width, colorless-
-			// by-default in every terminal/font, same reasoning as that
-			// module's own B22/P1F7 fix.
 			ScoreStrong: "✓",
-			ScoreGood:   "◆",
+			ScoreGood:   "✦",
 			ScoreFair:   "★",
-			ScoreWeak:   "○",
+			ScoreWeak:   "⊘",
 		}
 	}
 	return MenuIcons{
-		Pipeline: "", // nf-fa-cog
-		Progress: "", // nf-fa-bar_chart
-		Report:   "", // nf-fa-file_text_o
-		Quit:     "", // nf-fa-sign_out
-		Menu:     "", // nf-fa-bars
-		Jobs:     "▣", // briefcase / job board icon replacement (U+25A3, renders reliably without NerdFont)
-		Profile:  "", // nf-fa-user
-		Search:   "", // nf-fa-search
-		Source:   "", // nf-fa-folder_open
-		Path:     "", // nf-fa-file_o
-		Magic:    "", // nf-fa-magic
-		Trash:    "", // nf-fa-trash
-		Edit:     "", // nf-fa-pencil
-		External: "", // nf-fa-external_link
-		Clock:    "", // nf-fa-clock_o
-		Graph:    "", // nf-fa-line_chart
+		Pipeline:    "⚙",
+		Progress:    "📊",
+		Report:      "📄",
+		Quit:        "✕",
+		Menu:        "☰",
+		Jobs:        "💼",
+		Profile:     "👤",
+		Search:      "🔍",
+		Source:      "📁",
+		Path:        "📄",
+		Magic:       "✦",
+		Trash:       "🗑",
+		Edit:        "✏",
+		External:    "↗",
+		Clock:       "⏱",
+		Graph:       "📈",
 
-		// Use Unicode fallbacks instead of Nerd Font glyphs (U+F00C/F219/F0EB/F05E)
-		// which don't render reliably across all terminal configurations
 		ScoreStrong: "✓",
-		ScoreGood:   "◆",
+		ScoreGood:   "✦",
 		ScoreFair:   "★",
-		ScoreWeak:   "○",
+		ScoreWeak:   "⊘",
 	}
 }
+

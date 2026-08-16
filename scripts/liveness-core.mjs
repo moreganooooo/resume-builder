@@ -82,14 +82,15 @@ export function classifyLiveness({ status = 0, finalUrl = '', bodyText = '', app
     return { result: 'expired', code: 'expired_url', reason: `redirect to ${finalUrl}` };
   }
 
+  if (hasApplyControl(applyControls)) {
+    return { result: 'active', code: 'apply_control_visible', reason: 'visible apply control detected' };
+  }
+
   const expiredBody = firstMatch(HARD_EXPIRED_PATTERNS, bodyText);
   if (expiredBody) {
     return { result: 'expired', code: 'expired_body', reason: `pattern matched: ${expiredBody.source}` };
   }
 
-  if (hasApplyControl(applyControls)) {
-    return { result: 'active', code: 'apply_control_visible', reason: 'visible apply control detected' };
-  }
 
   const listingPage = firstMatch(LISTING_PAGE_PATTERNS, bodyText);
   if (listingPage) {

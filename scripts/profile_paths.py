@@ -52,7 +52,7 @@ def active_profile() -> str:
 # right after create_new_profile() + set_active_profile() -- the exact
 # same-session "just created this profile, now act on it" sequence this
 # list exists to make safe.
-_RELOAD_ON_PROFILE_SWITCH = ("jd_manager", "polish", "bootstrap_bullet_bank", "bootstrap_profile", "bullet_bank_menu")
+_RELOAD_ON_PROFILE_SWITCH = ("gemini_client", "jd_manager", "polish", "bootstrap_bullet_bank", "bootstrap_profile", "bullet_bank_menu")
 
 
 def set_active_profile(name: str) -> None:
@@ -235,10 +235,14 @@ _SYNC_STIGNORE_CONTENT = (
     "// Syncthing per-folder ignore file -- machine-local cruft that should\n"
     "// never sync between devices. Secrets/PII are deliberately NOT\n"
     "// excluded here; see CLAUDE.md's \"Multi-computer sync\" section for why.\n"
+    "data.db-wal\n"
+    "data.db-shm\n"
+    "*.lock\n"
     "__pycache__\n"
     "*.pyc\n"
     ".DS_Store\n"
 )
+
 
 
 def write_sync_ignore_files(profile: str = None) -> None:

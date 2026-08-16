@@ -8,6 +8,7 @@ import requests
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import gemini_client
 from gemini_client import GeminiClient, MODEL_FALLBACKS, SustainedFailureError  # noqa: E402
 
 
@@ -82,12 +83,10 @@ class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
 class TestSustainedFailureDetection(unittest.TestCase):
 
     def setUp(self):
-        # Class-level counter persists across tests in the same process --
-        # reset before and after every test in this class for isolation.
-        GeminiClient._consecutive_full_failures = 0
+        gemini_client.GeminiClient._consecutive_full_failures = 0
 
     def tearDown(self):
-        GeminiClient._consecutive_full_failures = 0
+        gemini_client.GeminiClient._consecutive_full_failures = 0
 
     def _rate_limited_response(self):
         resp = MagicMock()
@@ -98,7 +97,7 @@ class TestSustainedFailureDetection(unittest.TestCase):
     @patch("gemini_client.requests.post")
     def test_first_full_exhaustion_returns_none_without_raising(self, mock_post):
         mock_post.return_value = self._rate_limited_response()
-        text, usage = GeminiClient.generate(
+        text, usage = gemini_client.GeminiClient.generate(
             model="gemini-3.1-flash-lite",
             system_instruction="sys",
             contents="do the thing",
@@ -106,19 +105,19 @@ class TestSustainedFailureDetection(unittest.TestCase):
         )
         self.assertIsNone(text)
         self.assertEqual(usage, {})
-        self.assertEqual(GeminiClient._consecutive_full_failures, 1)
+        self.assertEqual(gemini_client.GeminiClient._consecutive_full_failures, 1)
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
     def test_second_consecutive_full_exhaustion_raises(self, mock_post):
         mock_post.return_value = self._rate_limited_response()
 
-        GeminiClient.generate(
+        gemini_client.GeminiClient.generate(
             model="gemini-3.1-flash-lite", system_instruction="sys",
             contents="do the thing", max_retries=2,
         )
-        with self.assertRaises(SustainedFailureError):
-            GeminiClient.generate(
+        with self.assertRaises(gemini_client.SustainedFailureError):
+            gemini_client.GeminiClient.generate(
                 model="gemini-3.1-flash-lite", system_instruction="sys",
                 contents="do the thing", max_retries=2,
             )
@@ -131,20 +130,20 @@ class TestSustainedFailureDetection(unittest.TestCase):
             _success_response(),                                          # success -- resets counter
             self._rate_limited_response(), self._rate_limited_response(),  # exhaustion again -- only #1 now
         ]
-        GeminiClient.generate(
+        gemini_client.GeminiClient.generate(
             model="gemini-3.1-flash-lite", system_instruction="sys",
             contents="do the thing", max_retries=2,
         )
-        GeminiClient.generate(
+        gemini_client.GeminiClient.generate(
             model="gemini-3.1-flash-lite", system_instruction="sys",
             contents="do the thing", max_retries=2,
         )
-        text, usage = GeminiClient.generate(
+        text, usage = gemini_client.GeminiClient.generate(
             model="gemini-3.1-flash-lite", system_instruction="sys",
             contents="do the thing", max_retries=2,
         )
         self.assertIsNone(text)
-        self.assertEqual(GeminiClient._consecutive_full_failures, 1)
+        self.assertEqual(gemini_client.GeminiClient._consecutive_full_failures, 1)
 
 
 class TestModelFallbackOptOut(unittest.TestCase):
@@ -201,20 +200,20 @@ class TestModelFallbackOptOut(unittest.TestCase):
 class TestGemmaPacing(unittest.TestCase):
 
     def setUp(self):
-        GeminiClient._last_gemma_call_ts = 0.0
+        gemini_client.GeminiClient._last_gemma_call_ts = 0.0
 
     def tearDown(self):
-        GeminiClient._last_gemma_call_ts = 0.0
+        gemini_client.GeminiClient._last_gemma_call_ts = 0.0
 
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.time.time")
     @patch("gemini_client.requests.post")
     def test_waits_out_the_remainder_when_last_gemma_call_was_recent(self, mock_post, mock_time, mock_sleep):
         mock_post.return_value = _success_response()
-        GeminiClient._last_gemma_call_ts = 1000.0
+        gemini_client.GeminiClient._last_gemma_call_ts = 1000.0
         mock_time.return_value = 1010.0  # only 10s since the last Gemma call
 
-        GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
 
         mock_sleep.assert_called_once()
         self.assertAlmostEqual(mock_sleep.call_args.args[0], 55.0)  # 65s cap - 10s elapsed
@@ -224,10 +223,10 @@ class TestGemmaPacing(unittest.TestCase):
     @patch("gemini_client.requests.post")
     def test_no_wait_once_the_interval_has_already_elapsed(self, mock_post, mock_time, mock_sleep):
         mock_post.return_value = _success_response()
-        GeminiClient._last_gemma_call_ts = 1000.0
+        gemini_client.GeminiClient._last_gemma_call_ts = 1000.0
         mock_time.return_value = 1070.0  # 70s since the last Gemma call -- past the 65s floor
 
-        GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
 
         mock_sleep.assert_not_called()
 
@@ -235,9 +234,9 @@ class TestGemmaPacing(unittest.TestCase):
     @patch("gemini_client.requests.post")
     def test_flash_lite_calls_are_never_paced(self, mock_post, mock_sleep):
         mock_post.return_value = _success_response()
-        GeminiClient._last_gemma_call_ts = 0.0  # as if a Gemma call just happened at epoch 0
+        gemini_client.GeminiClient._last_gemma_call_ts = 0.0  # as if a Gemma call just happened at epoch 0
 
-        GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="do the thing")
 
         mock_sleep.assert_not_called()
 

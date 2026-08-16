@@ -131,7 +131,8 @@ class TestChoicesAndHandlers(unittest.TestCase):
             unicode_title = _title_text(
                 next(c for c in menu._build_choices() if c.value == "bullet_bank").title
             )
-            self.assertIn("□", unicode_title)  # "□", theme.py's unicode bullet_bank glyph
+            self.assertIn(theme._UNICODE_ICONS["bullet_bank"], unicode_title)  # theme.py's unicode bullet_bank glyph
+
             self.assertNotEqual(nerd_title, unicode_title)
         finally:
             theme.set_icon_set(original)
