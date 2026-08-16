@@ -711,10 +711,14 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     import re
     import yaml
 
-    # Locate knowledge base
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(script_dir)
-    kb_dir = os.path.join(project_root, "profiles", "morgan", "knowledge_base")
+    # Locate knowledge base for active profile
+    try:
+        import profile_paths
+        kb_dir = profile_paths.get_kb_dir()
+    except Exception:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        kb_dir = os.path.join(project_root, "profiles", "morgan", "knowledge_base")
     
     verified_tools_path = os.path.join(kb_dir, "verified_tools.json")
     profile_yml_path = os.path.join(kb_dir, "profile.yml")
