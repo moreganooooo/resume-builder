@@ -869,16 +869,40 @@ def _handle_bullet_bank() -> bool:
 
 
 def _handle_run_doctor() -> None:
-    checks = doctor.run_checks()
-    run_tests = charm_prompt.confirm(
-        "Also run the full test suite? (slower, ~20s)", default=True,
-    )
-    test_result = None
-    if run_tests:
-        with cli_art.console.status("Running test suite...", spinner="dots"):
-            test_result = doctor.run_test_suite()
-    cli_art.render_doctor_report(checks, test_result)
-    maintenance.record_run("doctor")
+    scroll_region_modified = False
+
+    # Clear screen and draw the compact banner!
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("SETTINGS & UPKEEP | DOCTOR CHECKS")
+
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
+
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        checks = doctor.run_checks()
+        run_tests = charm_prompt.confirm(
+            "Also run the full test suite? (slower, ~20s)", default=True,
+        )
+        test_result = None
+        if run_tests:
+            with cli_art.console.status("Running test suite...", spinner="dots"):
+                test_result = doctor.run_test_suite()
+        cli_art.render_doctor_report(checks, test_result)
+        maintenance.record_run("doctor")
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+    _pause_and_return()
 
 
 def _handle_build_sample() -> None:
@@ -888,15 +912,39 @@ def _handle_build_sample() -> None:
     nothing gets moved into jds/<profile>/completed/ or logged as a real
     completed application. Safe to run any time, by anyone, before ever
     touching a real JD -- exactly the point of having it."""
-    result = build_sample.build_sample()
-    if result["resume"] and result["coverletter"]:
-        cli_art.display_success(
-            f"Sample resume + cover letter built:\n"
-            f"  {result['resume']['_output_paths']['pdf']}\n"
-            f"  {result['coverletter']['_output_paths']['pdf']}"
-        )
-    else:
-        cli_art.display_error("Sample build failed -- see output above for details.")
+    scroll_region_modified = False
+
+    # Clear screen and draw the compact banner!
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("SETTINGS & UPKEEP | BUILD SAMPLE")
+
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
+
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        result = build_sample.build_sample()
+        if result["resume"] and result["coverletter"]:
+            cli_art.display_success(
+                f"Sample resume + cover letter built:\n"
+                f"  {result['resume']['_output_paths']['pdf']}\n"
+                f"  {result['coverletter']['_output_paths']['pdf']}"
+            )
+        else:
+            cli_art.display_error("Sample build failed -- see output above for details.")
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+    _pause_and_return()
 
 
 def _handle_settings_upkeep() -> bool:
@@ -909,7 +957,15 @@ def _handle_settings_upkeep() -> bool:
     (triage_needs_review.py/retire_rewrite_queue.py, done 2026-07-15) --
     that stays exactly where it is; this houses genuinely cross-cutting
     tasks that aren't bullet-bank-specific."""
+    use_alt = _should_use_alt_screen()
     while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_compact_banner("SETTINGS & UPKEEP")
+            cli_art.display_footer_commands()
+            cli_art.console.print()
+
         choice = cli_art.select("Settings & Upkeep", choices=_build_settings_upkeep_choices())
         if not choice or choice == "back":
             return False
@@ -929,7 +985,14 @@ def _handle_settings_upkeep() -> bool:
 def _handle_manage_profiles():
     import shutil
     import profile_paths
+    use_alt = _should_use_alt_screen()
     while True:
+        if use_alt:
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_compact_banner("SETTINGS & UPKEEP | PROFILE MANAGEMENT")
+            cli_art.display_footer_commands()
+            cli_art.console.print()
         names = sorted(
             n for n in os.listdir(profile_paths.PROFILES_DIR)
             if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
@@ -1157,33 +1220,57 @@ def _prompt_for_update() -> None:
 
 def _handle_check_updates() -> bool:
     """Maintenance menu option to check for and apply updates."""
-    if git_update.has_uncommitted_changes():
-        cli_art.console.print(
-            f"{cli_art.WARNING} You have uncommitted changes -- please commit or stash them first."
-        )
-        return False
+    scroll_region_modified = False
 
-    with cli_art.console.status("Checking for updates...", spinner="dots"):
-        has_updates, message = git_update.check_for_updates()
+    # Clear screen and draw the compact banner!
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("SETTINGS & UPKEEP | CHECK FOR UPDATES")
 
-    if has_updates:
-        cli_art.console.print(f"{cli_art.SUCCESS} Updates available: {message}")
-        update = charm_prompt.confirm(
-            "Pull the latest changes?",
-            default=True,
-        )
+    # Draw the gorgeous execution footer static at the bottom row (row = rows)
+    cli_art.display_execution_footer()
 
-        if update:
-            success, result = git_update.pull_updates()
-            if success:
-                cli_art.console.print(f"{cli_art.SUCCESS} Updated successfully\n")
-                return True
-            else:
-                cli_art.console.print(f"{cli_art.ERROR} Update failed: {result}\n")
-                return False
-    else:
-        cli_art.console.print(f"{cli_art.SUCCESS} {message}\n")
-        return False
+    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+    import shutil
+    columns, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        if git_update.has_uncommitted_changes():
+            cli_art.console.print(
+                f"{cli_art.WARNING} You have uncommitted changes -- please commit or stash them first."
+            )
+            return False
+
+        with cli_art.console.status("Checking for updates...", spinner="dots"):
+            has_updates, message = git_update.check_for_updates()
+
+        if has_updates:
+            cli_art.console.print(f"{cli_art.SUCCESS} Updates available: {message}")
+            update = charm_prompt.confirm(
+                "Pull the latest changes?",
+                default=True,
+            )
+
+            if update:
+                success, result = git_update.pull_updates()
+                if success:
+                    cli_art.console.print(f"{cli_art.SUCCESS} Updated successfully\n")
+                    return True
+                else:
+                    cli_art.console.print(f"{cli_art.ERROR} Update failed: {result}\n")
+                    return False
+        else:
+            cli_art.console.print(f"{cli_art.SUCCESS} {message}\n")
+            return False
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+    _pause_and_return()
 
 
 _HANDLERS = {
