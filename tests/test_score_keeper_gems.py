@@ -1,5 +1,7 @@
 """Unit tests for scripts/score_keeper_gems.py."""
 
+# pylint: disable=no-member
+
 import csv
 import json
 import os

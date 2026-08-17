@@ -4,6 +4,7 @@ coverage
 isort
 black
 bandit
+pylint
 flake8
 pydocstyle
 radon
