@@ -36,7 +36,7 @@ jobs:
         bandit -r scripts/ -ll -q
     - name: Code quality with pylint
       run: |
-        PYTHONPATH=scripts pylint $(git ls-files '*.py') --rcfile=.pylintrc
+        PYTHONPATH=scripts pylint $(git ls-files '*.py') --rcfile=.pylintrc --fail-under=8.0
     - name: Complexity analysis with radon
       run: |
         radon cc scripts/ -a -nb
