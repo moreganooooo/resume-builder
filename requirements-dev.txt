@@ -1,0 +1,9 @@
+# Development and testing dependencies
+mypy
+coverage
+isort
+black
+bandit
+flake8
+pydocstyle
+radon
