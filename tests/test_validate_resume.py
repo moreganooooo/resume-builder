@@ -812,6 +812,32 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
         self.assertTrue(any("React" in v or "react" in v for v in violations))
         self.assertFalse(any("Outreach.io" in v or "outreach" in v for v in violations))
 
+    def test_reads_from_the_active_profiles_own_kb_dir_not_a_hardcoded_morgan_path(self):
+        """F3: this used to call a function that never existed
+        (profile_paths.get_kb_dir), so the except branch's hardcoded
+        profiles/morgan/knowledge_base fallback fired unconditionally --
+        for every profile, on every call. Proves the real profile_paths.
+        kb_dir() is now actually used by patching it to a fixture
+        directory for a *different* profile and confirming that fixture's
+        verified_tools.json is what gets read, not morgan's real one."""
+        import os
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "verified_tools.json"), "w", encoding="utf-8") as f:
+                json.dump({"tools": [{"name": "TotallyFakeToolXYZ", "category": ""}]}, f)
+
+            with patch("profile_paths.kb_dir", return_value=tmpdir):
+                resume = {"SKILLS": ["**Stack:** TotallyFakeToolXYZ"]}
+                violations = validate_resume._check_hallucinated_tools(resume)
+                # If this were still silently reading morgan's real kb_dir,
+                # "TotallyFakeToolXYZ" (present only in this fixture) would
+                # be flagged as hallucinated. It shouldn't be, since the
+                # patched kb_dir says it's verified.
+                self.assertFalse(any("TotallyFakeToolXYZ" in v for v in violations))
+
 
 if __name__ == "__main__":
     unittest.main()

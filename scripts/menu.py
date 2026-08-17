@@ -851,6 +851,23 @@ def _handle_draft_followup(row: dict) -> None:
         _handle_log_followup(row)
 
 
+def _prompt_for_referral_if_unset(jd_path: str) -> None:
+    """Feature #5: asks once per JD whether there's a referral contact for
+    this specific application, saving it via jd_manager.save_referral() so
+    build_tailored_coverletter() can name it in the opening paragraph.
+    Skipped entirely once a referral is already on file -- a re-run of the
+    cover letter (e.g. after polishing) shouldn't re-prompt for the same
+    JD. Optional; Enter to skip leaves no referral saved."""
+    if jd_manager.read_referral(jd_path):
+        return
+    referral_text = questionary.text(
+        "Do you have a referral for this role? (optional, press Enter to skip)",
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if referral_text:
+        jd_manager.save_referral(jd_path, referral_text)
+
+
 def _browse_single_action(row: dict) -> bool:
     while True:
         action_choices = [questionary.Choice(title="View More Details", value="details")]
@@ -881,6 +898,7 @@ def _browse_single_action(row: dict) -> bool:
             completed, _failed = orchestrator.run_pipeline(jd_path=row["path"])
             return completed > 0
         if action == "coverletter":
+            _prompt_for_referral_if_unset(row["path"])
             engine = orchestrator.ResumeEngine()
             return bool(engine.build_tailored_coverletter(row["path"]))
         if action == "update_status":
@@ -1344,7 +1362,7 @@ def _handle_delete_custom_board(filters_path):
         
     custom_feeds = filters.get("custom_feeds") or []
     if not custom_feeds:
-        cli_art.display_warning("No custom RSS feeds configured.")
+        cli_art.console.print(f"{cli_art.WARNING} No custom RSS feeds configured.", soft_wrap=True)
         _pause_and_return()
         return
         
@@ -1414,7 +1432,7 @@ def _handle_edit_linkedin_queries(profile_path):
                 time.sleep(1)
         elif act == "delete":
             if not queries:
-                cli_art.display_warning("No queries to delete.")
+                cli_art.console.print(f"{cli_art.WARNING} No queries to delete.", soft_wrap=True)
                 time.sleep(1)
                 continue
             choices_del = [questionary.Choice(q, value=q) for q in queries] + ["Cancel"]
@@ -1536,7 +1554,7 @@ def _handle_manage_profiles():
             if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
         )
         if not names:
-            cli_art.display_warning("No profiles exist.")
+            cli_art.console.print(f"{cli_art.WARNING} No profiles exist.", soft_wrap=True)
             return
 
         choice = cli_art.select(

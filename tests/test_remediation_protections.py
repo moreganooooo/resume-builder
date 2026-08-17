@@ -92,6 +92,31 @@ class TestRemediationProtections(unittest.TestCase):
                 # When sha is stale, embed_bullet_bank.main should be triggered
                 self.assertTrue(mock_reembed.called)
 
+    def test_vector_store_row_count_mismatch_triggers_reembed(self):
+        """Pins F11 (docs/review/master_audit_document.md): adding or
+        removing a bullet changes the row count, not just the content
+        hash -- that path must also trigger re-embedding. Before the F11
+        fix, this returned [] with zero re-embed calls, silently and
+        permanently breaking vector search on the single most common
+        bullet-bank edit."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            meta_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.meta")
+            csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
+            npy_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.npy")
+
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({"bullets_sha": "irrelevant-matches-nothing"}, f)
+            with open(csv_path, "w", encoding="utf-8") as f:
+                f.write("Bullet Point\nBullet One\nBullet Two\n")  # 2 rows
+
+            import numpy as np
+            np.save(npy_path, np.zeros((1, 768)))  # only 1 embedding row -- mismatch
+
+            with patch("embed_bullet_bank.main") as mock_reembed, \
+                 patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir):
+                vector_store.search_bullet_bank("dummy_query", top_k=5)
+                self.assertTrue(mock_reembed.called)
+
     def test_jd_manager_atomic_file_lock(self):
         """Verify _append_row in JDTracker functions correctly under fcntl.flock."""
         with tempfile.NamedTemporaryFile("w+", delete=False) as tmpfile:

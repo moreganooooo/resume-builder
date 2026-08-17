@@ -59,6 +59,21 @@ def _check_paragraph_count(cover_letter_data: dict) -> list[str]:
     return []
 
 
+# Mirrors tailor_coverletter.md's own "300-450 words total" instruction --
+# see that prompt for why this range (split the difference between the
+# prompt's original 400-450 tuning and the 250-350 research benchmark for
+# peak callback rate).
+_MIN_WORD_COUNT = 300
+_MAX_WORD_COUNT = 450
+
+
+def _check_word_count(cover_letter_data: dict) -> list[str]:
+    total_words = sum(len(p.split()) for p in cover_letter_data.get("body_paragraphs", []))
+    if total_words < _MIN_WORD_COUNT or total_words > _MAX_WORD_COUNT:
+        return [f"Expected {_MIN_WORD_COUNT}-{_MAX_WORD_COUNT} words across body paragraphs, got {total_words}"]
+    return []
+
+
 def _third_person_terms() -> list[str]:
     """Terms that would indicate the letter slipped into third person about
     the candidate themself: their full name, first name, and -- only if
@@ -240,6 +255,7 @@ def validate(
     violations = []
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
     violations.extend(_check_paragraph_count(cover_letter_data))
+    violations.extend(_check_word_count(cover_letter_data))
     violations.extend(_check_third_person_slip(cover_letter_data))
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
     violations.extend(_check_cliched_openers(cover_letter_data))

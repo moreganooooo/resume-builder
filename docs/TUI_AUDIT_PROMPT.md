@@ -9,7 +9,7 @@ A re-runnable audit framework and prompt for AI coding assistants to review, ref
 ```markdown
 # TASK: TUI & Charmbracelet Ecosystem Design, Usability & Architecture Audit
 
-Perform a comprehensive UX, visual craft, and architectural review of the CLI/TUI screens across both the Python CLI (`scripts/`) and Go Bubble Tea Dashboard (`dashboard/`). Identify opportunities to elevate visual design, fix layout bugs, and incorporate advanced Charmbracelet ecosystem components (`lipgloss`, `bubbletea`, `bubbles`, `harmonica`, `huh`, and Python `rich`).
+Perform a comprehensive UX, visual craft, and architectural review of the CLI/TUI screens across both the Python CLI (`scripts/`) and Go Bubble Tea Dashboard (`dashboard/`). Identify opportunities to elevate visual design, fix layout bugs, and incorporate advanced Charmbracelet ecosystem components.
 
 ---
 

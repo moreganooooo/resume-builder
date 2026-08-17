@@ -1,7 +1,9 @@
 """
 batch_evaluate.py -- the shared "evaluate every pending JD" scoring loop,
 reused by both `resume evaluate` (batch mode) and `resume run --pick` (the
-interactive picker). Real Gemini cost: one call per pending JD. See
+interactive picker). Real Gemini cost: TWO calls per pending JD (capability
++ recruiter, both BUILDER_MODEL -- the split-agent design evaluate_fit()
+was upgraded to). See
 docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 
@@ -14,9 +16,16 @@ import orchestrator
 import theme
 
 # Keeps evaluate_fit() calls under this account's Gemini API tier (15 RPM
-# for gemini-3.1-flash-lite): 60s / 15 = 4.0s minimum spacing, plus a
-# buffer so a rolling-window quota counter doesn't still trip it.
-SECONDS_BETWEEN_CALLS = 4.5
+# for gemini-3.1-flash-lite / BUILDER_MODEL). evaluate_fit() now makes TWO
+# back-to-back calls per JD (capability + recruiter, both BUILDER_MODEL,
+# with no pacing between them) rather than one -- this constant used to
+# assume one call/JD (60s / 15 = 4.0s minimum), which at 2 calls/JD was
+# actually running at ~2/4.5s =~ 26.7 RPM, nearly double the 15 RPM cap,
+# and produced a constant stream of HTTP 429s and exponential-backoff
+# stalls on any real batch run. 15 RPM / 2 calls-per-JD = 7.5 JD/min = 8.0s
+# minimum spacing, plus a buffer so a rolling-window quota counter doesn't
+# still trip it.
+SECONDS_BETWEEN_CALLS = 9.0
 
 
 def _sort_key(result: dict) -> tuple:

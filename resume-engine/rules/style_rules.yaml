@@ -215,6 +215,15 @@ forbidden_phrases:
   - cutting-edge
   - wear many hats
   - to whom it may concern
+  - furthermore
+  - testament to
+  - delve
+  - delve into
+  - in conclusion
+  - seamlessly
+  - seamless integration
+  - it is important to note
+  - plays a pivotal role
 
 # "leverage"/"leverage technology"/"utilized" were removed from the hard-gate
 # forbidden_phrases list above -- unlike the cliches above them, these are

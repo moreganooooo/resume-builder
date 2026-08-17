@@ -48,6 +48,36 @@ class TestExtractVisibleText(unittest.TestCase):
         text = company_research._extract_visible_text(html)
         self.assertEqual(text, "Line one Line two")
 
+    def test_strips_nav_header_footer_boilerplate(self):
+        """F10: raw nav/header/footer text was previously flattened into
+        the same blob as real page content, diluting the company-research
+        prompt with things like 'Home About Careers Contact'."""
+        html = (
+            "<html><body>"
+            "<nav>Home About Careers Contact</nav>"
+            "<header>Acme Corp</header>"
+            "<main><p>Acme Corp builds widgets for the enterprise.</p></main>"
+            "<footer>Privacy Policy | Terms</footer>"
+            "</body></html>"
+        )
+        text = company_research._extract_visible_text(html)
+        self.assertIn("widgets for the enterprise", text)
+        self.assertNotIn("Home About Careers", text)
+        self.assertNotIn("Privacy Policy", text)
+
+    def test_strips_cookie_consent_banner_by_class_or_id(self):
+        html = (
+            '<html><body>'
+            '<div id="cookie-banner">We use cookies. Accept All</div>'
+            '<div class="consent-modal">Manage your consent preferences</div>'
+            '<main><p>Acme Corp builds widgets for the enterprise.</p></main>'
+            '</body></html>'
+        )
+        text = company_research._extract_visible_text(html)
+        self.assertIn("widgets for the enterprise", text)
+        self.assertNotIn("Accept All", text)
+        self.assertNotIn("consent preferences", text)
+
 
 class TestFetchCompanyPages(unittest.TestCase):
 

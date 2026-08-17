@@ -32,6 +32,24 @@ import theme
 import bootstrap_menu
 
 
+def _read_version() -> str:
+    """Reads the `version = "..."` line from pyproject.toml directly
+    rather than importlib.metadata.version("resume-builder") -- this
+    project is never actually `pip install`-ed (just a plain venv +
+    requirements.txt per CLAUDE.md's Setup section), so package metadata
+    is never registered and that lookup would always raise
+    PackageNotFoundError. Also avoids tomllib, which isn't available on
+    the 3.10 floor this project still supports."""
+    import re
+    pyproject_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyproject.toml")
+    try:
+        with open(pyproject_path, "r", encoding="utf-8") as f:
+            match = re.search(r'^version\s*=\s*"([^"]+)"', f.read(), re.MULTILINE)
+        return match.group(1) if match else "unknown"
+    except OSError:
+        return "unknown"
+
+
 def _should_proceed(count: int, skip_confirm: bool) -> bool:
     """Confirmation gate for anything that scores every pending JD (real
     Gemini cost, one call per JD). skip_confirm=True (the --yes flag)
@@ -58,10 +76,15 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
 
 
 @click.group(invoke_without_command=True)
+@click.version_option(version=_read_version(), prog_name="resume-builder")
 @click.option("--profile", default=None, help="Override RESUME_PROFILE for this invocation only.")
+@click.option("--verbose", is_flag=True, default=False, help="Show debug-level log output (e.g. best-effort SQLite sync failures) that's normally suppressed.")
 @click.pass_context
-def cli(ctx, profile):
+def cli(ctx, profile, verbose):
     """resume-builder: tailor and render resumes per job description."""
+    if verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
     if profile:
         profile_paths.set_active_profile(profile)
     if ctx.invoked_subcommand is None:
@@ -132,7 +155,8 @@ def run_batch(master, pick, yes):
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
 @click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to generate a cover letter for")
 @click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick")
-def coverletter(jd_file, pick, yes):
+@click.option("--referral", default=None, help="Referral contact for this specific application (e.g. \"Jane Doe, former coworker\") -- named in the letter's opening paragraph. Not valid with --pick, since one referral can't apply to multiple JDs.")
+def coverletter(jd_file, pick, yes, referral):
     """Generate + render a cover letter for a single JD file."""
     if pick and jd_file:
         cli_art.display_error("Pass a JD file OR --pick, not both.")
@@ -140,8 +164,14 @@ def coverletter(jd_file, pick, yes):
     if not pick and not jd_file:
         cli_art.display_error("Pass a JD file, or use --pick to select interactively.")
         raise SystemExit(1)
+    if pick and referral:
+        cli_art.display_error("--referral isn't valid with --pick -- one referral can't apply to multiple JDs.")
+        raise SystemExit(1)
 
     engine = orchestrator.ResumeEngine()
+
+    if referral:
+        jd_manager.save_referral(jd_file, referral)
 
     if pick:
         def _process_one(path):
@@ -318,6 +348,64 @@ def dashboard_cmd():
     if not success:
         cli_art.display_error(message)
         sys.exit(1)
+
+
+def _write_gemini_api_key(key_val: str) -> None:
+    """Writes/replaces GEMINI_API_KEY in the active profile's .env --
+    same logic menu.py's doctor auto-repair flow uses, so both paths
+    stay consistent (F14)."""
+    env_p = profile_paths.env_path()
+    lines = []
+    if os.path.exists(env_p):
+        with open(env_p, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    replaced = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith("GEMINI_API_KEY="):
+            lines[i] = f"GEMINI_API_KEY={key_val.strip()}\n"
+            replaced = True
+            break
+    if not replaced:
+        lines.append(f"GEMINI_API_KEY={key_val.strip()}\n")
+    os.makedirs(os.path.dirname(env_p), exist_ok=True)
+    with open(env_p, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+@cli.command(name="quickstart")
+def quickstart_cmd():
+    """One-shot setup check for a new profile/new machine: runs the same
+    health checks as `resume doctor`, interactively fills in a missing
+    GEMINI_API_KEY (the one step every fresh checkout actually needs a
+    human for), and prints exact next-step commands for anything else
+    that's still missing -- so a new user doesn't have to know CLAUDE.md's
+    Setup section by heart before their first `resume run` (F14)."""
+    cli_art.display_banner("Quickstart: checking your setup")
+    checks = doctor.run_checks()
+    cli_art.render_doctor_report(checks, None)
+
+    api_key_check = next((c for c in checks if c["name"] == "GEMINI_API_KEY"), None)
+    if api_key_check and not api_key_check["passed"]:
+        cli_art.console.print()
+        key_val = cli_art.text(
+            "No GEMINI_API_KEY found -- enter it now to finish setup (leave blank to skip):",
+        )
+        if key_val and key_val.strip():
+            _write_gemini_api_key(key_val)
+            cli_art.display_success("GEMINI_API_KEY written -- re-checking...")
+            checks = doctor.run_checks()
+            cli_art.render_doctor_report(checks, None)
+
+    remaining = [c for c in checks if not c["passed"]]
+    if remaining:
+        cli_art.console.print()
+        cli_art.console.print(f"[bold {theme.WARNING}]Still needs attention:[/bold {theme.WARNING}]")
+        for c in remaining:
+            cli_art.console.print(f"  • [bold]{c['name']}[/bold]: {c['fix'] or c['detail']}")
+    else:
+        cli_art.display_success("Everything checks out -- try `resume sample` to build a test resume, or `resume run` for a real one.")
+
+    maintenance.record_run("doctor")
 
 
 if __name__ == "__main__":

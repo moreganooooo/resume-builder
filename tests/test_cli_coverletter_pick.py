@@ -40,6 +40,26 @@ class TestCoverletterPickValidation(unittest.TestCase):
         self.assertIn("Aborted", result.output)
         mock_evaluate.assert_not_called()
 
+    def test_referral_with_pick_is_an_error(self):
+        runner = CliRunner()
+        with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]):
+            result = runner.invoke(cli.cli, ["coverletter", "--pick", "--referral", "Jane Doe"])
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("isn't valid with --pick", result.output)
+
+    def test_referral_flag_is_saved_before_building(self):
+        with patch("cli.jd_manager.save_referral") as mock_save_referral, \
+             patch("cli.orchestrator.ResumeEngine") as mock_engine_cls:
+            mock_engine = MagicMock()
+            mock_engine.build_tailored_coverletter.return_value = {"ok": True}
+            mock_engine_cls.return_value = mock_engine
+
+            runner = CliRunner()
+            result = runner.invoke(cli.cli, ["coverletter", "README.md", "--referral", "Jane Doe, former coworker"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_save_referral.assert_called_once_with("README.md", "Jane Doe, former coworker")
+
     def test_pick_generates_only_for_selected_jd(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = ["jds/b.json"]

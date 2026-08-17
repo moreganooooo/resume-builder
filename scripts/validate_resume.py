@@ -711,15 +711,18 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     import re
     import yaml
 
-    # Locate knowledge base for active profile
-    try:
-        import profile_paths
-        kb_dir = profile_paths.get_kb_dir()
-    except Exception:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)
-        kb_dir = os.path.join(project_root, "profiles", "morgan", "knowledge_base")
-    
+    # Locate knowledge base for the active profile. Previously this called
+    # profile_paths.get_kb_dir() -- a function that has never existed
+    # (the real one is kb_dir()) -- so the except branch's hardcoded
+    # profiles/morgan/knowledge_base fallback fired unconditionally, on
+    # every call, for every profile. Harmless only by coincidence, since
+    # the sole real profile is named "morgan"; for any other profile this
+    # silently validated tools against a different person's knowledge
+    # base. Let failures genuinely propagate now -- validating against
+    # the wrong profile's data is worse than a loud crash (F3).
+    import profile_paths
+    kb_dir = profile_paths.kb_dir()
+
     verified_tools_path = os.path.join(kb_dir, "verified_tools.json")
     profile_yml_path = os.path.join(kb_dir, "profile.yml")
 
@@ -922,6 +925,23 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
         "facilitating", "saving", "trimming", "shaping", "streamlining", "empowering", "enhancing"
     ]
 
+    # A number is the strongest form of XYZ's "as measured by," but it
+    # isn't the only legitimate one -- a promotion, a leadership hand-off,
+    # or a named stakeholder outcome are real evidence of impact too.
+    # Without this, the metric check alone (40 of 100 points) makes it
+    # mathematically impossible for any purely qualitative bullet to ever
+    # clear the 70-point threshold, regardless of how well-written it is
+    # (see docs/review/master_audit_document.md F9).
+    QUALITATIVE_EVIDENCE_PHRASES = [
+        "promoted to", "promoted from", "recognized by", "recognized for",
+        "selected to", "selected as", "trusted with", "trusted to",
+        "became the go-to", "became a trusted", "praised by", "praised for",
+        "adopted company-wide", "adopted org-wide", "asked to lead",
+        "tapped to lead", "handpicked", "entrusted with", "earned the trust of",
+        "rebuilt trust with", "restored confidence", "chosen to lead",
+        "recommended by", "nominated for", "named as", "appointed to",
+    ]
+
     violations = []
     for job in resume_data.get("EXPERIENCE", []):
         company = job.get("company", "unknown company")
@@ -937,14 +957,24 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
                 score -= 30
                 reasons.append("no strong past-tense active verb found at start")
 
-            # 2. Metric check
+            lowered = bullet.lower()
+
+            # 2. Metric or qualitative-evidence check. Only the full
+            # 40-point penalty (no metric AND no qualitative evidence)
+            # should be enough to fail a bullet on this axis alone; a
+            # bullet with strong qualitative evidence of impact costs less.
             metrics = _extract_metric_signatures(bullet)
-            if not metrics:
+            has_qualitative_evidence = any(
+                phrase in lowered for phrase in QUALITATIVE_EVIDENCE_PHRASES
+            )
+            if not metrics and not has_qualitative_evidence:
                 score -= 40
-                reasons.append("no quantified metric or numeric evidence found")
+                reasons.append("no quantified metric or qualitative evidence of impact found")
+            elif not metrics:
+                score -= 15
+                reasons.append("no quantified metric (qualitative evidence of impact present)")
 
             # 3. Outcome / Causal Connector check
-            lowered = bullet.lower()
             has_outcome = any(indicator in lowered for indicator in result_indicators)
             if not has_outcome:
                 score -= 30

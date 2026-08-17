@@ -362,6 +362,30 @@ class TestRunChecks(unittest.TestCase):
             self.assertIn("fix", r)
 
 
+class TestCheckDataDb(unittest.TestCase):
+
+    def test_passes_when_db_is_reachable_and_queryable(self):
+        import tempfile
+        import shutil
+        tmpdir = tempfile.mkdtemp()
+        try:
+            with patch("profile_paths.profile_root", return_value=tmpdir):
+                result = doctor.check_data_db()
+            self.assertTrue(result["passed"])
+            self.assertIn("reachable", result["detail"])
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_fails_with_actionable_fix_when_db_open_raises(self):
+        import db
+        with patch.object(db, "get_db", side_effect=OSError("disk full")):
+            result = doctor.check_data_db()
+        self.assertFalse(result["passed"])
+        self.assertIn("disk full", result["detail"])
+        self.assertTrue(result["fix"])
+        self.assertIn("migrate_filesystem_to_db.py", result["fix"])
+
+
 class TestRunTestSuite(unittest.TestCase):
 
     @patch("doctor.subprocess.run")

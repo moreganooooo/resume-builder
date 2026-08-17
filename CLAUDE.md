@@ -30,6 +30,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   A caret would silently resolve to 1.62.x and break all rendering.
 - Bare `python3` on this machine may resolve to an unrelated stray venv —
   always activate `.venv/` first (see `.claude.local.md`).
+- CSV-append locking (`jd_manager.py`'s `_append_row`/`append_application_row`,
+  used for `jd_tracker_log.csv` and `applications.md`) uses `fcntl.flock`,
+  which is POSIX-only. It degrades gracefully (not a crash) on native
+  Windows — the `import fcntl` fails, gets caught, and the append proceeds
+  unlocked — but that means concurrent writers on native Windows (not
+  WSL2, which is POSIX) aren't actually protected against interleaved
+  lines. Low real-world risk for a single-user CLI, but worth knowing if
+  native-Windows support is ever load-bearing.
 - The interactive menu's icons default to Nerd Font glyphs — if your
   terminal doesn't have one active, set `RESUME_BUILDER_ICONS=unicode` in
   your shell profile (or before invoking `resume`) to fall back to plain
@@ -67,6 +75,16 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   it being typed in by hand. See README's "Multi-computer sync" section
   for the actual Syncthing pairing/folder-sharing walkthrough (a manual,
   per-device step that can't be scripted from here).
+- **No OS keyring/vault integration for secrets — deliberate, not an
+  oversight.** `GEMINI_API_KEY`, `JOBRIGHT_COOKIE_STRING`, and the
+  LinkedIn `.linkedin_cookie` all sit as plaintext files under
+  `profiles/<name>/`. This was considered and intentionally not built:
+  the `.env`-file approach is what makes the Syncthing-based
+  multi-computer story above work without per-device manual entry, and a
+  single-user personal tool on trusted machines doesn't carry the same
+  threat model as a multi-tenant service. Both files are covered by the
+  blanket `profiles/*/` `.gitignore` rule, so there's no git-leak risk —
+  the tradeoff is plaintext-at-rest on disk, not plaintext-in-git.
 
 ## Shortcuts
 - `resume run` / `resume run jds/<profile>/some_file.txt` — batch or
