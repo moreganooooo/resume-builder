@@ -232,7 +232,9 @@ statements you find; skip anything that is not a specific accomplishment.
 """,
 }
 
-_RESUME_EXTRACTION_PROMPT = _BASE_EXTRACTION_RULES + """
+_RESUME_EXTRACTION_PROMPT = (
+    _BASE_EXTRACTION_RULES
+    + """
 This document is a resume or LinkedIn profile export. For each job/role
 listed, extract the company name, job title, start/end dates as written,
 and every achievement bullet under that role, verbatim or lightly
@@ -244,6 +246,7 @@ list instead of treating them as achievement bullets -- a credential isn't
 an achievement. Do not invent an issuer or date if the document doesn't
 state one; use null instead.
 """
+)
 
 _CERTIFICATE_PROMPT = """
 You are extracting a professional certificate or credential from a document.

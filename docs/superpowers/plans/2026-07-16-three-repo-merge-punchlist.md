@@ -328,7 +328,7 @@ nothing here changed, only IDEAS.md did).
         it, `j.company` as an object, `j.locations` as an array,
         `j.posted` as a unix timestamp) -- the provider returned zero
         results unconditionally, confirmed against the live API and
-        rebuilt against the real shape. Also found and fixed: 
+        rebuilt against the real shape. Also found and fixed:
         `websearch.mjs`'s location-extraction fallback was matching
         arbitrary capitalized words in search snippets ("Partnering",
         "You", "Explore", "Give") as if they were real locations,

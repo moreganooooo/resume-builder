@@ -1,6 +1,6 @@
 # Technical Audit: Elevating Fit & Interview Odds Scoring in Resume-Builder
 
-*Prepared by: Antigravity AI Coding Assistant*  
+*Prepared by: Antigravity AI Coding Assistant*
 *Date: August 16, 2026 | Focus: Scoring Robustness, Structural Audit, and Professional-Grade Calibration*
 
 ---
@@ -9,7 +9,7 @@
 
 The current scoring system within the `resume-builder` project represents a highly thoughtful, well-architected framework for a hobbyist or early-stage platform. By separating **Fit** (can you do the work?), **Interview Odds** (will a recruiter believe it in six seconds?), and **Practical Pursue** (is it worth your time?), you have already avoided the classic "black-box blending" trap that plagues major platforms like LinkedIn Easy Apply or basic keyword-matching tools.
 
-However, when audited against modern, enterprise-grade talent matching systems (such as CoBlack, Eightfold AI, HiringOdds.com, and CodeSignal) and academic research standards, the current implementation reveals critical vulnerabilities. 
+However, when audited against modern, enterprise-grade talent matching systems (such as CoBlack, Eightfold AI, HiringOdds.com, and CodeSignal) and academic research standards, the current implementation reveals critical vulnerabilities.
 
 ### 🏷️ System Maturity Rating: **Level 2 — Structured Heuristic**
 
@@ -30,14 +30,14 @@ To elevate these scores from "educated guesses" to something both you and other 
 
 ## 🏗️ Technical Deconstruction of the Current Pipeline
 
-The current scoring pipeline is governed by two core components: `resume-engine/prompts/evaluate_fit.md` and `scripts/orchestrator.py`. 
+The current scoring pipeline is governed by two core components: `resume-engine/prompts/evaluate_fit.md` and `scripts/orchestrator.py`.
 
 ```mermaid
 sequenceDiagram
     participant User as CLI/User
     participant Orc as scripts/orchestrator.py
     participant LLM as Gemini 3.5 Flash
-    
+
     User->>Orc: Trigger evaluate_fit(jd_path)
     Orc->>Orc: Read JD, load trimmed profile.yml & role_dna.yaml
     Orc->>LLM: Generate FitEvaluationSchema (Temp: 0.0)
@@ -61,8 +61,8 @@ sequenceDiagram
 To elevate this platform to professional quality, we must be brutally honest about the architectural limitations. Here are the four primary areas of concern:
 
 ### 1. The "Single-Call Cognitive Saturation" Bottleneck
-Your current pipeline forces the LLM to evaluate **18 different subscores** simultaneously in a single prompt. 
-*   **The Risk**: LLMs under high cognitive load suffer from **regression-to-the-mean** and **dimension bleeding**. 
+Your current pipeline forces the LLM to evaluate **18 different subscores** simultaneously in a single prompt.
+*   **The Risk**: LLMs under high cognitive load suffer from **regression-to-the-mean** and **dimension bleeding**.
 *   **The Behavior**: If a job description reads well and is a strong "functional fit," the LLM will subconsciously bleed that positive signal into "recruiter legibility" or "narrative burden," even if there is a massive title gap. The scores tend to cluster around `3` and `4` because the model lacks the isolation needed to make harsh, independent deductions.
 
 ### 2. The "Voodoo Variable" Hallucination Gap
@@ -72,12 +72,12 @@ The prompt asks the LLM to score elements like:
 *   `compensation_viability` (is the salary viable vs. target?)
 *   `time_to_offer` (is it a quick process or slow bureaucracy?)
 
-*   **The Audit**: **These variables do not exist in the text of the job description.** A JD will never say *"We have extreme competition and a slow, bureaucratic hiring process."* 
+*   **The Audit**: **These variables do not exist in the text of the job description.** A JD will never say *"We have extreme competition and a slow, bureaucratic hiring process."*
 *   **The Consequence**: The LLM is forced to make a wild, zero-shot guess or hallucinate these values based on its generic pre-training data. If the company is famous, it guesses high; if it's a startup, it guesses low. This is highly subjective and degrades the statistical integrity of the composite score.
 
 ### 3. The "Grounding Gap" (Opaque Evidence)
 The system scores `evidence_match` (can the resume prove the posting's core asks with concrete metrics) and `tools_process_overlap` by looking only at a highly trimmed, high-level summary inside `profile.yml`.
-*   **The Audit**: It never inspects Morgan's actual, audited bullet bank (`bullet-bank-keepers-audited.csv`), verified claims (`verified-claims.csv`), or specific projects. 
+*   **The Audit**: It never inspects Morgan's actual, audited bullet bank (`bullet-bank-keepers-audited.csv`), verified claims (`verified-claims.csv`), or specific projects.
 *   **The Consequence**: The LLM is forced to *hypothesize* whether Morgan can prove these claims, writing confidently in `recruiter_read` about experience the JD merely *asserted* it wanted, rather than what Morgan *actually proved* in her historical bullet inventory.
 
 ### 4. Rigid, Uniform Weighting
@@ -95,19 +95,19 @@ To achieve this, we will re-engineer the subscore metrics using **grounded data 
 ```mermaid
 graph TD
     JD[Job Description Text] --> Split[Scoring Orchestrator]
-    
+
     subgraph Isolated Evaluation Engines
         Split --> T_Index[1. Title Continuity Engine]
         Split --> B_Ground[2. Empirical Evidence Matcher]
         Split --> ATS_Sim[3. ATS Rejection Risk Simulator]
         Split --> Ghost_Det[4. Ghost Job Heuristics Module]
     end
-    
+
     T_Index --> Composite[Weighted Odds Combiner]
     B_Ground --> Composite
     ATS_Sim --> Composite
     Ghost_Det --> Composite
-    
+
     subgraph Data Sources
         B_Ground -.-> |Semantic Search| Bullets[(bullet-bank-keepers-audited.csv)]
         Bullets -.-> |Vectors| Embeddings[(bullet_vectors_ge2_d768.npy)]
@@ -124,7 +124,7 @@ Instead of asking the LLM to guess "title continuity," we run a deterministic te
 
 #### 2. The Empirical Bullet-Bank Grounder (Vector Search)
 We link the `evidence_match` score directly to Morgan's actual vector-embedded bullet bank (`bullet_vectors_ge2_d768.npy`).
-*   **The Logic**: Extract the core required skills from the job description (using your keyword parser), and perform a Cosine Similarity search against Morgan's audited bullet bank. 
+*   **The Logic**: Extract the core required skills from the job description (using your keyword parser), and perform a Cosine Similarity search against Morgan's audited bullet bank.
 *   **The Scoring**:
     *   **Score 5**: Found 3+ highly relevant bullet gems (similarity > 0.82) with verified metrics.
     *   **Score 3**: Found matches, but they are generic or lack specific metrics.
@@ -144,7 +144,7 @@ Morgan's research indicates that **18% to 27% of 2026 job postings are ghost job
 *   *Academic Backing*: Research shows that training a simple classifier on metadata can achieve up to **97.64% accuracy** in detecting fake/ghost postings.
 
 #### 5. Funnel Friction Calibration
-If applicant volume metrics are available (e.g., via a scraper or LinkedIn API feed), we inject this directly into the friction calculation. 
+If applicant volume metrics are available (e.g., via a scraper or LinkedIn API feed), we inject this directly into the friction calculation.
 *   **The Logic**: A role at a highly visible enterprise (like Instacart or Qualtrics) with "Over 500 applicants" automatically caps `funnel_friction` at `1` or `2`, regardless of how perfect her fit is. A niche role at a mid-market EdTech firm with "12 applicants" receives a `5`.
 *   **The Benefit**: Helps Morgan focus her limited energy where her response odds are statistically highest (the "sweet spot" of 21–80 applications).
 
@@ -194,17 +194,17 @@ class EmpiricalScoringEngine:
     def __init__(self, workspace_path: str):
         self.workspace_path = workspace_path
         self.kb_path = os.path.join(workspace_path, "profiles/morgan/knowledge_base")
-        
+
         # Load bullet bank and pre-computed vectors
         self.bullets_df = None
         self.bullet_vectors = None
         self._load_bullet_database()
-        
+
     def _load_database(self):
         try:
             keepers_path = os.path.join(self.kb_path, "bullet-bank-keepers-audited.csv")
             vectors_path = os.path.join(self.kb_path, "bullet_vectors_ge2_d768.npy")
-            
+
             if os.path.exists(keepers_path) and os.path.exists(vectors_path):
                 self.bullets_df = pd.read_csv(keepers_path)
                 self.bullet_vectors = np.load(vectors_path)
@@ -218,18 +218,18 @@ class EmpiricalScoringEngine:
         """
         if self.bullet_vectors is None or self.bullets_df is None:
             return {"score": 3.0, "reason": "No grounding database found. Defaulting to baseline."}
-            
+
         # In a real pipeline, we would embed the JD keywords using the same model
         # For this prototype, we simulate a vector matching lookups
         matches_found = []
         scores = []
-        
+
         # Simulating semantic lookup
         for keyword in jd_keywords:
             # Look for exact or highly similar substring matches in our keepers
             keyword_lower = keyword.lower()
             matching_rows = self.bullets_df[self.bullets_df['bullet'].str.lower().str.contains(keyword_lower, na=False)]
-            
+
             if not matching_rows.empty:
                 # High-fidelity match
                 matches_found.append(keyword)
@@ -237,13 +237,13 @@ class EmpiricalScoringEngine:
             else:
                 # Weak or indirect match
                 scores.append(1.0)
-                
+
         if not scores:
             return {"score": 1.0, "reason": "No keyword overlap found in historical bullet bank."}
-            
+
         avg_score = round(sum(scores) / len(scores), 1)
         evidence_score = max(1.0, min(5.0, avg_score))
-        
+
         return {
             "score": evidence_score,
             "matched_keywords": matches_found,
@@ -258,7 +258,7 @@ class EmpiricalScoringEngine:
         """
         signals = []
         risk_score = 0.0
-        
+
         # 1. Temporal Staleness (Heavy indicator)
         if posting_age_days > 21:
             signals.append("Posting is over 21 days old (High probability of staleness)")
@@ -266,7 +266,7 @@ class EmpiricalScoringEngine:
         elif posting_age_days > 10:
             signals.append("Posting is over 10 days old (Moderate staleness risk)")
             risk_score += 0.20
-            
+
         # 2. Evergreen Pipeline Language Heuristics
         evergreen_patterns = [
             r"always looking for",
@@ -277,29 +277,29 @@ class EmpiricalScoringEngine:
             r"resume drop",
             r"proactive hiring"
         ]
-        
+
         found_patterns = []
         for pattern in evergreen_patterns:
             if re.search(pattern, jd_text, re.IGNORECASE):
                 found_patterns.append(pattern)
-                
+
         if found_patterns:
             signals.append(f"Evergreen pipeline language detected: {found_patterns}")
             risk_score += 0.30
-            
+
         # 3. Description Boilerplate Heuristic
         # Fake or placeholder jobs typically have very short descriptions (<1000 characters)
         if len(jd_text) < 1000:
             signals.append("Extremely sparse job description (often indicates a placeholder or evergreen post)")
             risk_score += 0.20
-            
+
         # Calculate final legitimacy rating
         legitimacy = "High Confidence"
         if risk_score >= 0.60:
             legitimacy = "Suspicious"
         elif risk_score >= 0.30:
             legitimacy = "Proceed with Caution"
-            
+
         return {
             "legitimacy": legitimacy,
             "risk_score": round(risk_score, 2),
@@ -314,7 +314,7 @@ class EmpiricalScoringEngine:
 To align this audit with your personal career strategies, let's look at a few critical open questions:
 
 1.  **How do you want to handle your gap-period (2024-25) in your narrative matching?**
-    *   Currently, your `exit_story` beautifully and transparently explains taking intentional time to support a loved one's health and invest in professional growth. 
+    *   Currently, your `exit_story` beautifully and transparently explains taking intentional time to support a loved one's health and invest in professional growth.
     *   Do you want the **Interview Odds Score** to flag roles with highly traditional/rigid applicant screeners (like large financial institutions or conservative defense companies) which might over-penalize a career pause, and prioritize EdTech or mission-driven organizations where empathy and non-linear paths are celebrated?
 2.  **What is your personal tolerance for hybrid vs. remote quality?**
     *   Your profile states "remote-only availability" as a deal-breaker. Should we upgrade the scoring math so that **any role indicating onsite/hybrid-required automatically overrides the composite score to a hard "Skip" (0.00)**, rather than letting a high functional fit score gently pull it back up?

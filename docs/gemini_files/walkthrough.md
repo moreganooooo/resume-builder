@@ -63,7 +63,7 @@ For any given evaluation, you will now receive a beautiful, data-rich output con
   "interview_odds_score": 4.25,
   "practical_pursue_score": 4.80,
   "composite_score": 4.41,
-  
+
   // 🔥 NEW ULTRA-PREMIUM METADATA FIELDS INJECTED 🔥
   "estimated_interview_probability": 14.5, // Absolute mathematical probability
   "capability_gaps": [

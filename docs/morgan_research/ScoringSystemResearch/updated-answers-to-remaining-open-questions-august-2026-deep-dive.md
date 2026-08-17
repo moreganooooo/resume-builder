@@ -50,7 +50,7 @@
   3. Ghost job detection (pattern recognition)
   4. **Pipeline probability modeling** (Bayesian or logistic regression most likely)
   5. Market benchmarking (contextual adjustment)
-  
+
 - **Industry Comparables:**
   - Pin.com's **pipeline-velocity engine** uses role characteristics, pipeline shape, and recruiter activity to forecast close probability [Source](https://www.pin.com/blog/predictive-hiring-analytics/)
   - **Greenhouse "Offer Forecast"** uses similar probability modeling for offer acceptance
@@ -291,7 +291,7 @@ Most likely: Weighted ensemble where:
 
 **Industry Benchmarks:**
 - **Talent Pronto (2026):** 36.9% of employers hired from existing talent pipeline in 2025 [Source](https://www.talentpronto.ai/blog-posts/talent-pipeline-management)
-- **Recruiting Funnel Metrics:** 
+- **Recruiting Funnel Metrics:**
   - ~97% of applicants eliminated before human contact
   - ~1 hire per 180 applicants (0.56% conversion rate) [Source](https://www.talentpronto.ai/blog-posts/talent-pipeline-management)
 - **Pin.com:** Pipeline-velocity engine forecasts which requisitions will close inside target window [Source](https://www.pin.com/blog/predictive-hiring-analytics/)

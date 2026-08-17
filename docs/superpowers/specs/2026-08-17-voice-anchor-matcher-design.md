@@ -1,8 +1,8 @@
 # Voice Anchor Matcher Design
 
-**Status**: Approved, ready for implementation planning  
-**Part of**: Group D, `docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md` (Feature #9)  
-**Author**: Antigravity & Claude (pair programming), aligned with Morgan 2026-08-17  
+**Status**: Approved, ready for implementation planning
+**Part of**: Group D, `docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md` (Feature #9)
+**Author**: Antigravity & Claude (pair programming), aligned with Morgan 2026-08-17
 
 ---
 

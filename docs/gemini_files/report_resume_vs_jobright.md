@@ -119,8 +119,8 @@ ATS Parse-Back Simulation: Create a parser check after rendering. For example, a
   "name": "Morgan Smith",
   "contact": {"email": "morgan@example.com", "phone": "123-456-7890"},
   "sections": ["Experience", "Education", "Skills"],
-  "raw_text": "Morgan Smith ...", 
-  "errors": ["Skills section not found"] 
+  "raw_text": "Morgan Smith ...",
+  "errors": ["Skills section not found"]
 }
 
 If errors is non-empty, trigger a resume reformat request. This aligns with Kickresume/Worded practice of showing exactly what the ATS sees【41†L219-L227】【40†L257-L266】.
@@ -159,7 +159,7 @@ Below is an example of how a redesigned Skill Coverage JSON might be structured 
 And a sample prompt template for planning (as mentioned):
 
 Assistant: You are a savvy career advisor.
-Input: 
+Input:
   Resume Text: "..."
   Job Description: "..."
 Task: Identify missing skills and outline a resume revision plan.
@@ -317,5 +317,3 @@ Sources: Industry analyses and academic reviews of resume parsing and matching�
 ### [Table]
 
 |  |
-
-

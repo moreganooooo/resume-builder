@@ -100,7 +100,7 @@ For candidates pivoting between target archetypes (e.g., moving from sales enabl
 
 *   **Implementation:**
     *   When the orchestrator detects a shift between the candidate's historical role and the target JD's archetype, it activates the **Translation Matrix**:
-    
+
     | Source Term (Past Experience) | Target Archetype | translated Term (Reframed Bullet) | Rationale |
     | :--- | :--- | :--- | :--- |
     | "Led classroom training" | Marketing Enablement | "Directed cross-functional onboarding and content enablement" | Highlights governance and structured systems. |
@@ -113,7 +113,7 @@ For candidates pivoting between target archetypes (e.g., moving from sales enabl
 
 ## 🚀 Part 4: Programmatic Title Alignment Matrix
 
-To capitalize on the **3.5x callback boost** identified in the Huntr research, we can refine our **Job Title Reframing** architecture. 
+To capitalize on the **3.5x callback boost** identified in the Huntr research, we can refine our **Job Title Reframing** architecture.
 
 *   **Rule-Guarded Title Mapping:** We can programmatically structure our `Job Title Reframing` module. When tailoring a resume, the engine automatically checks if the target job title shares a high percentage of semantic overlap with the candidate's historical title.
 *   **Honesty-Preserving Parentheticals:** If a role's responsibilities perfectly align with the target job description but the original title was idiosyncratic, the system reframes it using the **Additive Format** (`Original Title + Targeted Title Emphasis`) to maximize both ATS scoring and recruiter clarity, without ever violating the Prime Directive.
@@ -122,7 +122,7 @@ To capitalize on the **3.5x callback boost** identified in the Huntr research, w
 
 ## 💬 Summary for Morgan
 
-Morgan, your current setup is exceptionally powerful—features like the **strict tool hallucination guardrails** and **global metric uniqueness checks** are highly advanced. 
+Morgan, your current setup is exceptionally powerful—features like the **strict tool hallucination guardrails** and **global metric uniqueness checks** are highly advanced.
 
 However, to elevate this to a professional, bulletproof 2026 standard, we can transition from simply *instructing* the LLM to follow resume-writing rules to **programmatically checking and scoring them** (just like Teal, Rezi, and Jobscan do).
 

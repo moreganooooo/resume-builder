@@ -184,4 +184,3 @@ func (m MenuModel) View() string {
 // Messages exposed to the parent application.
 type MenuSelectMsg struct{ Command string }
 type MenuQuitMsg struct{}
-

@@ -99,7 +99,7 @@ else
     printf "[ ${BOLD}${INFO}INFO${RESET} ] Installing complete requirements list (~250MB)...\n"
     pip install --upgrade pip
     pip install -r requirements.txt
-    
+
     # Check for node/npm to compile Playwright
     if command -v npm >/dev/null 2>&1; then
         printf "[ ${BOLD}${INFO}INFO${RESET} ] Detected Node.js. Triggering Playwright Chromium compilation...\n"
@@ -154,7 +154,7 @@ if [ "$IS_MOBILE" -eq 1 ]; then
     printf "\nApply these beautiful optimizations? [Y/n]: "
     read -r opt_choice
     opt_choice="${opt_choice:-Y}"
-    
+
     if [ "$opt_choice" = "Y" ] || [ "$opt_choice" = "y" ]; then
         printf "\n[ ${BOLD}${BRAND}WAIT${RESET} ] Downloading and setting up Nerd Fonts...\n"
         mkdir -p "$HOME/.termux"
@@ -164,7 +164,7 @@ if [ "$IS_MOBILE" -eq 1 ]; then
         else
             printf "[ ${BOLD}${WARNING}WARN${RESET} ] Could not fetch font. Skipping font installation.\n"
         fi
-        
+
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Writing Catppuccin Macchiato color configuration...\n"
         # Write Catppuccin Macchiato colors to colors.properties
         cat << 'EOF' > "$HOME/.termux/colors.properties"
@@ -188,11 +188,11 @@ color14    = #8bd5ca
 color15    = #a5adcb
 EOF
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Applied Catppuccin color profile.\n"
-        
+
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Configuring Termux Clipboard API...\n"
         pkg install termux-api -y >/dev/null 2>&1
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Clipboard sync package registered.\n"
-        
+
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Provisioning extra navigation keys...\n"
         # Set Termux properties for extra keys
         cat << 'EOF' > "$HOME/.termux/termux.properties"
@@ -201,7 +201,7 @@ extra-keys = [ \
 ]
 EOF
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Terminal touch navigation panel provisioned.\n"
-        
+
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Creating One-Tap Home Screen Launcher...\n"
         mkdir -p "$HOME/.shortcuts/tasks"
         cat << EOF > "$HOME/.shortcuts/tasks/ResumeBuilder"
@@ -212,7 +212,7 @@ python scripts/menu.py
 EOF
         chmod +x "$HOME/.shortcuts/tasks/ResumeBuilder"
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Home Screen launch widget configured successfully.\n"
-        
+
         # Reload Termux settings
         termux-reload-settings >/dev/null 2>&1
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Reloaded Termux layout configuration.\n"

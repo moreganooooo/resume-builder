@@ -2,8 +2,8 @@
 
 **Research Question**: How do the `diagnose_resume` and `update_resume` tools in Jobright's MCP connector (https://tedix.dev/apps/resume-builder/) operate at a technical level? What rulesets, algorithms, and code power their resume grading and writing capabilities?
 
-**Date**: July 24, 2026  
-**Researcher**: Morgan Escott  
+**Date**: July 24, 2026
+**Researcher**: Morgan Escott
 **Status**: COMPREHENSIVE - Source-backed investigation of Jobright's AI resume analysis infrastructure
 
 ---
@@ -58,16 +58,16 @@ Jobright's MCP connector at `https://mcp.jobright.ai/mcp` implements a **three-s
 
 ### 1. MCP Server Infrastructure
 
-**Endpoint**: `https://mcp.jobright.ai/mcp`  
-**Protocol**: JSON-RPC 2.0 over Streamable HTTP  
-**Transport**: Server-Sent Events (SSE) for streaming responses  
-**Authentication**: 
+**Endpoint**: `https://mcp.jobright.ai/mcp`
+**Protocol**: JSON-RPC 2.0 over Streamable HTTP
+**Transport**: Server-Sent Events (SSE) for streaming responses
+**Authentication**:
 - OAuth2 (preferred) with PKCE flow
 - API key fallback via `x-api-key` header
 - Open Access for basic functionality (per Tedix listing)
 
-**Server Type**: Remote MCP server (not local command-based)  
-**Distribution**: ChatGPT App Store, Claude Connector Directory  
+**Server Type**: Remote MCP server (not local command-based)
+**Distribution**: ChatGPT App Store, Claude Connector Directory
 **Status**: Intermittent (reachable per Tedix health checks)
 
 ### 2. Tool Inventory
@@ -120,19 +120,19 @@ Based on open source MCP resume servers and Jobright's documentation:
 def extract_text_from_docx(file_path: Path) -> str:
     doc = Document(file_path)
     text_parts = []
-    
+
     # Extract paragraphs
     for paragraph in doc.paragraphs:
         if paragraph.text.strip():
             text_parts.append(paragraph.text)
-    
+
     # Extract tables (ATS problematic - flagged)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 if cell.text.strip():
                     text_parts.append(cell.text)
-    
+
     return "\n".join(text_parts)
 ```
 
@@ -148,10 +148,10 @@ Based on Jobright's published system prompts and open source implementations:
 
 ```python
 SYSTEM_PROMPT = """
-You are an expert recruiter and ATS (Applicant Tracking System) analyzer 
+You are an expert recruiter and ATS (Applicant Tracking System) analyzer
 with deep knowledge of hiring practices across industries.
 
-Your role is to analyze resumes against job descriptions and provide 
+Your role is to analyze resumes against job descriptions and provide
 actionable, specific feedback to help candidates optimize their applications.
 
 Your analysis should be:
@@ -175,7 +175,7 @@ Consider these aspects:
 
 def create_analysis_prompt(resume_text: str, job_description: str) -> str:
     return f"""
-Analyze this resume against the job description and identify gaps, 
+Analyze this resume against the job description and identify gaps,
 mismatches, and opportunities for improvement.
 
 === RESUME ===
@@ -185,7 +185,7 @@ mismatches, and opportunities for improvement.
 {job_description}
 
 Provide a comprehensive analysis following the structured format.
-Be specific, actionable, and honest. Focus on changes that will 
+Be specific, actionable, and honest. Focus on changes that will
 genuinely improve the candidate's chances.
 
 KEY RULES:
@@ -260,7 +260,7 @@ class BulletPointAnalysis(BaseModel):
 
 class GapAnalysisResult(BaseModel):
     """Complete gap analysis result returned by diagnose_resume."""
-    overall_match_score: int = Field(ge=0, le=100, 
+    overall_match_score: int = Field(ge=0, le=100,
         description="Overall match score 0-100")
     critical_gaps: List[CriticalGap]
     missing_keywords: MissingKeywords
@@ -271,9 +271,9 @@ class GapAnalysisResult(BaseModel):
     bullet_analyses: List[BulletPointAnalysis]  # Inferred from Jobright's bullet focus
     quick_wins: List[str] = Field(description="Easy changes with immediate impact")
     summary: str = Field(description="2-3 sentence overall assessment")
-    ats_compatibility_score: float = Field(ge=0, le=1, 
+    ats_compatibility_score: float = Field(ge=0, le=1,
         description="ATS parsing success probability")
-    keyword_match_percentage: float = Field(ge=0, le=100, 
+    keyword_match_percentage: float = Field(ge=0, le=100,
         description="Percentage of JD keywords present")
 ```
 
@@ -298,20 +298,20 @@ class GapAnalysisResult(BaseModel):
 def calculate_keyword_match(resume_text: str, jd_text: str) -> dict:
     # Extract keywords from job description
     jd_keywords = extract_keywords(jd_text)
-    
+
     # Extract keywords from resume
     resume_keywords = extract_keywords(resume_text)
-    
+
     # Calculate match
     matches = set(jd_keywords) & set(resume_keywords)
     match_percentage = len(matches) / len(jd_keywords) * 100
-    
+
     # Density check (from Reddit research)
     keyword_density = calculate_density(resume_text, jd_keywords)
-    
+
     # Stuffing detection (Workday threshold)
     is_stuffed = keyword_density > 0.03  # 3% threshold
-    
+
     return {
         "match_percentage": match_percentage,
         "matched_keywords": list(matches),
@@ -350,13 +350,13 @@ def calculate_keyword_match(resume_text: str, jd_text: str) -> dict:
 **Verb Analysis**:
 ```python
 STRONG_VERBS = {
-    "Built", "Designed", "Developed", "Led", "Optimized", 
-    "Analyzed", "Created", "Implemented", "Managed", 
+    "Built", "Designed", "Developed", "Led", "Optimized",
+    "Analyzed", "Created", "Implemented", "Managed",
     "Coordinated", "Executed", "Architected", "Engineered"
 }
 
 WEAK_VERBS = {
-    "Assisted", "Participated", "Helped", "Supported", 
+    "Assisted", "Participated", "Helped", "Supported",
     "Was responsible for", "Contributed to"
 }
 ```
@@ -391,14 +391,14 @@ FORMATTING_RULES = {
 def analyze_experience(resume_text: str, jd_text: str) -> ExperienceAnalysis:
     # Extract years from JD
     jd_years = extract_years(jd_text)
-    
+
     # Extract years from resume
     resume_years = extract_years(resume_text)
-    
+
     # Seniority matching
     jd_seniority = determine_seniority(jd_text)
     resume_seniority = determine_seniority(resume_text)
-    
+
     return ExperienceAnalysis(
         required_years=jd_years,
         resume_shows_years=resume_years,
@@ -448,9 +448,9 @@ def calculate_overall_score(
         "experience_match": 0.10,
         "formatting_score": 0.05
     }
-    
+
     score = sum(
-        weight * value 
+        weight * value
         for weight, value in {
             **weights,
             "keyword_match": keyword_match / 100,
@@ -460,7 +460,7 @@ def calculate_overall_score(
             "formatting_score": formatting_score
         }.items()
     )
-    
+
     return int(score * 100)
 ```
 
@@ -525,38 +525,38 @@ def update_resume(
 ) -> dict:
     """
     Apply modifications to a parsed resume.
-    
+
     MUST be called when user requests any resume modification.
     DO NOT generate resume content directly - use this tool.
-    
+
     Args:
         fileId: The file identifier returned by parser_resume
         items: Array of patch operations with exactly two fields: fileId and items
-    
+
     Returns:
         Modified resume data and new fileId
     """
     # Validate input structure
     if not isinstance(items, list):
         raise ValueError("items must be an array")
-    
+
     for item in items:
         if not all(k in item for k in ["indexPath", "action"]):
             raise ValueError("Each item must have indexPath and action")
-        
+
         if item["action"] in ["add", "update"] and "value" not in item:
             raise ValueError("add/update operations require value")
-    
+
     # Apply patches
     resume_data = get_resume_by_fileid(fileId)
-    
+
     for operation in items:
         resume_data = apply_patch(resume_data, operation)
-    
+
     # Save and return
     new_fileId = generate_uuid()
     save_resume(resume_data, new_fileId)
-    
+
     return {"fileId": new_fileId, "resume": resume_data}
 ```
 
@@ -565,10 +565,10 @@ def update_resume(
 ```python
 def apply_patch(resume_data: dict, operation: PatchOperation) -> dict:
     """Apply a single patch operation to resume data."""
-    
+
     # Parse indexPath
     path_parts = operation.indexPath.split(".")
-    
+
     # Navigate to target
     target = resume_data
     for part in path_parts[:-1]:
@@ -585,10 +585,10 @@ def apply_patch(resume_data: dict, operation: PatchOperation) -> dict:
             target = target[part]
         else:
             raise KeyError(f"Path {operation.indexPath} not found")
-    
+
     # Apply operation
     final_key = path_parts[-1]
-    
+
     if operation.action == "update":
         if "[" in final_key and "]" in final_key:
             key, index = parse_array_index(final_key)
@@ -596,7 +596,7 @@ def apply_patch(resume_data: dict, operation: PatchOperation) -> dict:
                 target[key][index] = operation.value
         else:
             target[final_key] = operation.value
-    
+
     elif operation.action == "add":
         if "[" in final_key and "]" in final_key:
             key, index = parse_array_index(final_key)
@@ -604,7 +604,7 @@ def apply_patch(resume_data: dict, operation: PatchOperation) -> dict:
                 target[key].insert(index, operation.value)
         else:
             target[final_key] = operation.value
-    
+
     elif operation.action == "delete":
         if "[" in final_key and "]" in final_key:
             key, index = parse_array_index(final_key)
@@ -612,7 +612,7 @@ def apply_patch(resume_data: dict, operation: PatchOperation) -> dict:
                 del target[key][index]
         else:
             del target[final_key]
-    
+
     return resume_data
 ```
 
@@ -701,32 +701,32 @@ Each bullet is scored across 7 dimensions (0-1 scale):
 ```python
 def score_bullet(bullet: str, jd_keywords: List[str]) -> float:
     scores = {}
-    
+
     # Verb score
     scores["verb"] = calculate_verb_score(bullet)
-    
+
     # Quantification score
     scores["quantification"] = calculate_quantification_score(bullet)
-    
+
     # Impact score
     scores["impact"] = calculate_impact_score(bullet)
-    
+
     # Specificity score
     scores["specificity"] = calculate_specificity_score(bullet, jd_keywords)
-    
+
     # Structure score
     scores["structure"] = calculate_structure_score(bullet)
-    
+
     # Tone score
     scores["tone"] = calculate_tone_score(bullet)
-    
+
     # Relevance score
     scores["relevance"] = calculate_relevance_score(bullet, jd_keywords)
-    
+
     # Weighted average
-    weights = {"verb": 0.20, "quantification": 0.25, "impact": 0.20, 
+    weights = {"verb": 0.20, "quantification": 0.25, "impact": 0.20,
                "specificity": 0.15, "structure": 0.10, "tone": 0.05, "relevance": 0.05}
-    
+
     return sum(scores[dim] * weights[dim] for dim in scores)
 ```
 
@@ -802,7 +802,7 @@ ats_rules:
     allow_graphics: false
     allow_icons: false
     allow_images: false
-    
+
   structure:
     required_sections: ["Work Experience", "Education", "Skills"]
     valid_headings:
@@ -817,12 +817,12 @@ ats_rules:
       - "My Journey"
       - "Professional History"
       - "Where I've Been"
-    
+
   content:
     contact_info_location: "main_body"
     avoid_headers: true
     avoid_footers: true
-    
+
   keyword:
     optimal_count: 25-35
     max_density: 0.03  # 3% per 100 words
@@ -839,7 +839,7 @@ bullet_rules:
     weak: ["Assisted", "Participated", "Helped", "Supported", "Was responsible for"]
     required: true
     position: "start"
-    
+
   quantification:
     required: true
     patterns:
@@ -848,7 +848,7 @@ bullet_rules:
       - "[number] users/customers"
       - "$[number] revenue/savings"
       - "[number] hours/days saved"
-    
+
   impact:
     required: true
     patterns:
@@ -857,7 +857,7 @@ bullet_rules:
       - "improved [metric]"
       - "saved [resource]"
       - "generated [result]"
-    
+
   specificity:
     required: true
     patterns:
@@ -865,14 +865,14 @@ bullet_rules:
       - "with [methodology]"
       - "for [specific audience]"
       - "on [platform]"
-    
+
   structure:
     frameworks:
       - "Action → Scope → Tool → Metric"
       - "Challenge → Action → Result"
       - "Situation → Task → Action → Result"
     max_length: 2 lines
-    
+
   tone:
     avoid:
       - "highly passionate about"
@@ -895,37 +895,37 @@ def extract_keywords(text: str) -> Set[str]:
     """Extract normalized keywords from text."""
     # Remove common words
     stopwords = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for"}
-    
+
     # Extract phrases and single words
     words = re.findall(r'\b[A-Z]?[a-z]+(?:\s+[A-Z]?[a-z]+){0,3}\b', text.lower())
-    
+
     # Filter and normalize
     keywords = set()
     for word in words:
         word = word.strip().lower()
         if word and word not in stopwords and len(word) > 2:
             keywords.add(word)
-    
+
     return keywords
 
 def calculate_keyword_match(resume_text: str, jd_text: str) -> dict:
     jd_keywords = extract_keywords(jd_text)
     resume_keywords = extract_keywords(resume_text)
-    
+
     # Exact matches
     exact_matches = jd_keywords & resume_keywords
-    
+
     # Semantic matches (would use embeddings in production)
     semantic_matches = find_semantic_matches(jd_keywords, resume_keywords)
-    
+
     all_matches = exact_matches | semantic_matches
-    
+
     match_percentage = len(all_matches) / len(jd_keywords) * 100 if jd_keywords else 100
-    
+
     # Density calculation
     total_words = len(resume_text.split())
     keyword_density = len(all_matches) / total_words if total_words > 0 else 0
-    
+
     return {
         "exact_match_percentage": len(exact_matches) / len(jd_keywords) * 100,
         "semantic_match_percentage": len(semantic_matches) / len(jd_keywords) * 100,
@@ -943,45 +943,45 @@ def calculate_keyword_match(resume_text: str, jd_text: str) -> dict:
 ```python
 def score_bullet_point(bullet: str, jd_keywords: List[str]) -> dict:
     """Score a bullet point across all dimensions."""
-    
+
     scores = {}
     suggestions = []
-    
+
     # 1. Verb Score
     verb_score, verb_suggestions = analyze_verb(bullet)
     scores["verb"] = verb_score
     suggestions.extend(verb_suggestions)
-    
+
     # 2. Quantification Score
     quant_score, quant_suggestions = analyze_quantification(bullet)
     scores["quantification"] = quant_score
     suggestions.extend(quant_suggestions)
-    
+
     # 3. Impact Score
     impact_score, impact_suggestions = analyze_impact(bullet)
     scores["impact"] = impact_score
     suggestions.extend(impact_suggestions)
-    
+
     # 4. Specificity Score
     spec_score, spec_suggestions = analyze_specificity(bullet, jd_keywords)
     scores["specificity"] = spec_score
     suggestions.extend(spec_suggestions)
-    
+
     # 5. Structure Score
     struct_score, struct_suggestions = analyze_structure(bullet)
     scores["structure"] = struct_score
     suggestions.extend(struct_suggestions)
-    
+
     # 6. Tone Score
     tone_score, tone_suggestions = analyze_tone(bullet)
     scores["tone"] = tone_score
     suggestions.extend(tone_suggestions)
-    
+
     # 7. Relevance Score
     rel_score, rel_suggestions = analyze_relevance(bullet, jd_keywords)
     scores["relevance"] = rel_score
     suggestions.extend(rel_suggestions)
-    
+
     # Calculate weighted overall
     weights = {
         "verb": 0.20,
@@ -992,9 +992,9 @@ def score_bullet_point(bullet: str, jd_keywords: List[str]) -> dict:
         "tone": 0.05,
         "relevance": 0.05
     }
-    
+
     overall = sum(scores[dim] * weights[dim] for dim in scores)
-    
+
     return {
         "bullet": bullet,
         "dimension_scores": scores,
@@ -1009,46 +1009,46 @@ def score_bullet_point(bullet: str, jd_keywords: List[str]) -> dict:
 ```python
 def score_ats_compatibility(resume_text: str, file_format: str) -> dict:
     """Score resume for ATS parsing compatibility."""
-    
+
     score = 1.0  # Start perfect
     issues = []
-    
+
     # Format check
     if file_format not in [".docx", ".pdf"]:
         score -= 0.3
         issues.append(f"Unsupported format: {file_format}")
-    
+
     # Structure checks
     if has_tables(resume_text):
         score -= 0.25
         issues.append("Resume contains tables - ATS may fail to parse")
-    
+
     if has_graphics(resume_text):
         score -= 0.25
         issues.append("Resume contains graphics - ATS may fail to parse")
-    
+
     if has_multi_columns(resume_text):
         score -= 0.3
         issues.append("Multi-column layout - ATS parsing issues")
-    
+
     # Heading checks
     headings = extract_headings(resume_text)
     invalid_headings = [h for h in headings if h.lower() not in VALID_HEADINGS]
     if invalid_headings:
         score -= 0.1 * len(invalid_headings)
         issues.append(f"Non-standard headings: {', '.join(invalid_headings)}")
-    
+
     # Content placement
     if has_header_footer_content(resume_text):
         score -= 0.1
         issues.append("Key information in headers/footers may be missed")
-    
+
     # Keyword density
     density = calculate_keyword_density(resume_text)
     if density > 0.05:
         score -= 0.2
         issues.append(f"High keyword density ({density:.1%}) - may trigger stuffing detection")
-    
+
     return {
         "score": max(0, score),
         "issues": issues,
@@ -1077,17 +1077,17 @@ ats_platforms:
     stuffing_detection: true
     table_parsing: poor
     header_footer_extraction: false
-    
+
   greenhouse:
     semantic_matching: true
     experience_date_parsing: true
     section_heading_detection: true
-    
+
   taleo:
     strict_keyword_matching: true
     formatting_sensitivity: high
     header_footer_extraction: poor
-    
+
   icims:
     custom_field_mapping: true
     skills_section_parsing: true
@@ -1130,11 +1130,11 @@ IF verb_score < 0.7
 IF patch.action == "add" AND patch.indexPath contains "skills"
     → VALIDATE: skill exists in resume or is from missing_keywords
     → REJECT IF: skill not mentioned anywhere in resume
-    
+
 IF patch.action == "update" AND patch.indexPath contains "bullet"
     → VALIDATE: new value has quantification
     → WARN IF: no metrics in new bullet
-    
+
 IF patch.action == "delete"
     → VALIDATE: not deleting required field (name, dates, etc.)
     → REJECT IF: would make resume incomplete
@@ -1216,16 +1216,16 @@ def parser_resume(file: bytes) -> dict:
     """
     # Save file temporarily
     temp_path = save_temp_file(file)
-    
+
     # Extract text
     resume_text = extract_text(temp_path)
-    
+
     # Generate fileId
     file_id = generate_uuid()
-    
+
     # Store for later use
     store_resume(file_id, resume_text, file)
-    
+
     return {"fileId": file_id, "status": "parsed"}
 
 # Tool: Diagnose resume
@@ -1237,13 +1237,13 @@ def diagnose_resume(fileId: str) -> GapAnalysisResult:
     """
     # Retrieve resume
     resume_text = get_resume_text(fileId)
-    
+
     # Get job description from context (would be passed or stored)
     job_description = get_job_description(fileId)
-    
+
     # Create analysis prompt
     prompt = create_analysis_prompt(resume_text, job_description)
-    
+
     # Call LLM with structured output
     response = openai_client.beta.chat.completions.parse(
         model="gpt-4o-mini",
@@ -1254,15 +1254,15 @@ def diagnose_resume(fileId: str) -> GapAnalysisResult:
         response_format=GapAnalysisResult,
         temperature=0.7
     )
-    
+
     result = response.choices[0].message.parsed
-    
+
     # Post-process: add ATS-specific checks
     result.ats_compatibility_score = score_ats_compatibility(resume_text)
-    
+
     # Store analysis
     store_analysis(fileId, result)
-    
+
     return result
 
 # Tool: Update resume
@@ -1274,24 +1274,24 @@ def update_resume(fileId: str, items: List[dict]) -> dict:
     """
     # Validate input
     validate_patch_operations(items)
-    
+
     # Get current resume
     resume_data = get_resume_data(fileId)
-    
+
     # Apply patches
     for operation in items:
         resume_data = apply_patch(resume_data, operation)
-    
+
     # Re-analyze for ATS compatibility
     ats_score = score_ats_compatibility(resume_data)
-    
+
     if ats_score < 0.6:
         raise ValueError("Updates would make resume non-ATS-compliant")
-    
+
     # Save new version
     new_fileId = generate_uuid()
     store_resume(new_fileId, resume_data)
-    
+
     return {"fileId": new_fileId, "status": "updated"}
 
 # Start server
@@ -1469,6 +1469,6 @@ While the exact proprietary implementation details remain closed-source, the ope
 
 ---
 
-*End of Report*  
-*Generated: July 24, 2026*  
+*End of Report*
+*Generated: July 24, 2026*
 *Research Skill: deep-research*

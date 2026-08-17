@@ -8,19 +8,20 @@ for the initial bulk-scoring pass when keepers haven't been scored yet.
 
 """
 
-import os
 import json
+import os
 import time
 import urllib.request
+
 import pandas as pd
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------------------------
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # archive is 2 levels deep
-KB_DIR       = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
+KB_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "knowledge_base")
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"), override=True)
 
@@ -29,20 +30,27 @@ KEEPERS_CSV = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-API_KEY      = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-BASE_URL     = "https://generativelanguage.googleapis.com/v1beta/models"
-MODEL        = "gemini-3.1-flash-lite"
-SLEEP_SECS   = 4
+API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+MODEL = "gemini-3.1-flash-lite"
+SLEEP_SECS = 4
 
 SCORE_COLS = [
-    "accuracy_score", "believability_score", "clarity_score",
-    "ats_value", "hidden_gem_score", "hidden_gem_flag",
-    "manager_test", "weaknesses", "hidden_gem_reason",
+    "accuracy_score",
+    "believability_score",
+    "clarity_score",
+    "ats_value",
+    "hidden_gem_score",
+    "hidden_gem_flag",
+    "manager_test",
+    "weaknesses",
+    "hidden_gem_reason",
 ]
 
 # ---------------------------------------------------------------------------
 # GEMINI CALL
 # ---------------------------------------------------------------------------
+
 
 def critique_bullet(bullet_text: str) -> dict:
     prompt = (
@@ -60,7 +68,10 @@ def critique_bullet(bullet_text: str) -> dict:
 
     payload = {
         "contents": [{"parts": [{"text": f"{prompt}\n\nBULLET: {bullet_text}"}]}],
-        "generationConfig": {"temperature": 0.0, "responseMimeType": "application/json"},
+        "generationConfig": {
+            "temperature": 0.0,
+            "responseMimeType": "application/json",
+        },
     }
     url = f"{BASE_URL}/{MODEL}:generateContent?key={API_KEY}"
     req = urllib.request.Request(
@@ -83,6 +94,7 @@ def critique_bullet(bullet_text: str) -> dict:
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
+
 
 def main():
     print("\n" + "=" * 60)
@@ -110,7 +122,10 @@ def main():
     skipped = 0
     for i, row in df.iterrows():
         # Skip if already scored
-        if pd.notna(row.get("accuracy_score")) and str(row.get("accuracy_score")).strip() != "":
+        if (
+            pd.notna(row.get("accuracy_score"))
+            and str(row.get("accuracy_score")).strip() != ""
+        ):
             skipped += 1
             continue
 

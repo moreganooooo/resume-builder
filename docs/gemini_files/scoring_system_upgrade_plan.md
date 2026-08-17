@@ -23,11 +23,11 @@ This document outlines the final, ultra-premium technical design and implementat
 ## 🙋 User Review Required
 
 > [!IMPORTANT]
-> **No Downstream Code Breaks**: 
+> **No Downstream Code Breaks**:
 > All new metrics (`estimated_interview_probability`, `capability_gaps`, `ghost_job_probability`, `prestige_tier`) will be injected as optional metadata fields into the returned evaluation dictionary. This ensures that the Terminal UI, batch evaluators, and Go-based dashboards continue to work seamlessly.
 
 > [!WARNING]
-> **Rigid Override Failure Case**: 
+> **Rigid Override Failure Case**:
 > If the Python override triggers a "Skip" (score `0.00`) due to a remote deal-breaker or profile hard-stop, the `estimated_interview_probability` will be forced to `0.0%` because the candidate has zero intent to apply.
 
 ---
@@ -139,7 +139,7 @@ We will rewrite `evaluate_fit(self, jd_path: str)` to execute both calls, run th
     def evaluate_fit(self, jd_path: str) -> dict:
         """
         Ultra-Premium grounded two-stage fit evaluation check for a JD.
-        Loads profile.yml dynamically to apply custom deal-breaker skips and 
+        Loads profile.yml dynamically to apply custom deal-breaker skips and
         advanced Bayesian calculations in Python.
         """
         try:
