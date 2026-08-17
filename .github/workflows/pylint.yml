@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -24,22 +24,22 @@ jobs:
         pip install -r requirements-dev.txt
     - name: Check imports with isort
       run: |
-        isort --check-only scripts/ resume_engine/ tests/
+        isort --check-only scripts/ tests/
     - name: Check code formatting with black
       run: |
-        black --check scripts/ resume_engine/ tests/
+        black --check scripts/ tests/
     - name: Type checking with mypy
       run: |
-        mypy scripts/ resume_engine/ --ignore-missing-imports
+        mypy scripts/ --ignore-missing-imports
     - name: Security scanning with bandit
       run: |
-        bandit -r scripts/ resume_engine/ -ll -q
+        bandit -r scripts/ -ll -q
     - name: Code quality with pylint
       run: |
-        pylint $(git ls-files '*.py') --exit-zero
+        PYTHONPATH=scripts pylint $(git ls-files '*.py') --rcfile=.pylintrc
     - name: Complexity analysis with radon
       run: |
-        radon cc scripts/ resume_engine/ -a -nb
+        radon cc scripts/ -a -nb
     - name: Run unit tests
       run: |
         python -m unittest discover -s tests -v
@@ -47,3 +47,21 @@ jobs:
       run: |
         coverage run -m unittest discover -s tests
         coverage report --fail-under=60
+
+  go-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+    - name: Run golangci-lint
+      run: |
+        ~/go/bin/golangci-lint run ./dashboard/...
+    - name: Run Go tests
+      run: |
+        cd dashboard && go test ./...
