@@ -18,7 +18,7 @@ const RECOGNITION_RULES = [
 
 /**
  * Identifies the provider ID from a URL string.
- * @param {string} url 
+ * @param {string} url
  * @returns {string|null}
  */
 export function recognizeProvider(url) {

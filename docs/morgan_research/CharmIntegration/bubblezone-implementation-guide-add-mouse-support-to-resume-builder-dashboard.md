@@ -73,7 +73,7 @@ func (m *Manager) UpdateZones(
 	viewerWidth, viewerHeight int,
 ) {
 	m.zone.Clear()
-	
+
 	// Add zones for pipeline rows
 	for i := 0; i < pipelineRows; i++ {
 		zoneID := "pipeline-row-" + string(rune(i+'0'))
@@ -86,7 +86,7 @@ func (m *Manager) UpdateZones(
 			2+i,                 // y offset (start at row 2)
 		))
 	}
-	
+
 	// Add zones for filter tabs
 	for i, tab := range filterTabs {
 		zoneID := "tab-" + tab
@@ -100,7 +100,7 @@ func (m *Manager) UpdateZones(
 			0, // top row
 		))
 	}
-	
+
 	// Add zone for status picker
 	m.statusPickerZone = "status-picker"
 	m.zone.AddZone(m.statusPickerZone, bubblezone.NewZone(
@@ -109,7 +109,7 @@ func (m *Manager) UpdateZones(
 		10, // x
 		2,  // y
 	))
-	
+
 	// Add zone for viewer
 	m.viewerZone = "viewer"
 	m.zone.AddZone(m.viewerZone, bubblezone.NewZone(
@@ -130,13 +130,13 @@ func (m *Manager) HandleMouseEvent(msg tea.MouseMsg) (action string, rowIndex in
 	if !m.hasMouseSupport {
 		return "", -1, ""
 	}
-	
+
 	// Check if mouse is in any zone
 	zoneID, ok := m.zone.Contains(msg)
 	if !ok {
 		return "", -1, ""
 	}
-	
+
 	// Handle click based on zone type
 	if msg.Type == tea.MouseLeftClick {
 		// Check pipeline row zones
@@ -145,14 +145,14 @@ func (m *Manager) HandleMouseEvent(msg tea.MouseMsg) (action string, rowIndex in
 				return "select-row", idx, ""
 			}
 		}
-		
+
 		// Check filter tab zones
 		for tab, zoneID := range m.filterTabZones {
 			if zoneID == zoneID {
 				return "select-tab", -1, tab
 			}
 		}
-		
+
 		// Check other zones
 		switch zoneID {
 		case m.statusPickerZone:
@@ -161,7 +161,7 @@ func (m *Manager) HandleMouseEvent(msg tea.MouseMsg) (action string, rowIndex in
 			return "viewer-click", -1, ""
 		}
 	}
-	
+
 	// Handle scroll wheel in viewer
 	if msg.Type == tea.MouseScrollDown && zoneID == m.viewerZone {
 		return "viewer-scroll-down", -1, ""
@@ -169,7 +169,7 @@ func (m *Manager) HandleMouseEvent(msg tea.MouseMsg) (action string, rowIndex in
 	if msg.Type == tea.MouseScrollUp && zoneID == m.viewerZone {
 		return "viewer-scroll-up", -1, ""
 	}
-	
+
 	return "", -1, ""
 }
 
@@ -214,11 +214,11 @@ func initialModel() model {
 // Update your Update function to handle mouse events
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	
+
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		action, rowIndex, tabName := m.zoneManager.HandleMouseEvent(msg)
-		
+
 		switch action {
 		case "select-row":
 			// Handle row selection
@@ -227,38 +227,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(
 				// Your existing row selection command
 			)
-			
+
 		case "select-tab":
 			// Handle tab selection
 			m.activeFilter = tabName
 			m.updatePipeline()
 			return m, nil
-			
+
 		case "toggle-status-picker":
 			// Toggle status picker visibility
 			m.statusPickerOpen = !m.statusPickerOpen
 			return m, nil
-			
+
 		case "viewer-scroll-down":
 			// Scroll viewer down
 			m.viewer.ScrollDown()
 			return m, nil
-			
+
 		case "viewer-scroll-up":
 			// Scroll viewer up
 			m.viewer.ScrollUp()
 			return m, nil
 		}
-		
+
 		// If we didn't handle it, pass to other handlers
 		fallthrough
-		
+
 	default:
 		// Handle other messages
 		}
-		
+
 	// ... rest of your Update logic
-	
+
 	return m, cmd
 }
 
@@ -272,15 +272,15 @@ func (m model) View() string {
 		m.viewer.Width,
 		m.viewer.Height,
 	)
-	
+
 	// Render your UI as before
 	view := m.renderUI() // your existing render function
-	
+
 	// Add zone debug overlay (optional, for development)
 	if m.mouseEnabled {
 		view = m.zoneManager.GetZone().Render(view)
 	}
-	
+
 	return view
 }
 ```
@@ -295,20 +295,20 @@ Modify your pipeline rendering to work with zones:
 // In your pipeline rendering function
 func (m model) renderPipeline() string {
 	var sb strings.Builder
-	
+
 	// Add header
 	sb.WriteString("Pipeline\n")
-	
+
 	// Render each row with zone awareness
 	for i, item := range m.pipelineList.Items() {
 		// Get the row content
 		rowContent := m.renderPipelineRow(item, i)
-		
+
 		// If mouse is enabled, the zone manager will handle clicks
 		// The zone IDs are already registered in UpdateZones
 		sb.WriteString(rowContent)
 	}
-	
+
 	return sb.String()
 }
 
@@ -317,13 +317,13 @@ func (m model) renderPipelineRow(item list.Item, index int) string {
 	// Check if mouse is hovering over this row
 	zoneID := "pipeline-row-" + string(rune(index+'0'))
 	isHovered := m.zoneManager.GetZone().IsInZone(zoneID, m.lastMousePos)
-	
+
 	// Apply different style if hovered
 	style := m.theme.PipelineRow
 	if isHovered {
 		style = m.theme.PipelineRowHover // Make sure this exists in your theme
 	}
-	
+
 	// Render the row
 	return style.Render("▶ " + item.Title())
 }
@@ -349,13 +349,13 @@ Update `dashboard/internal/theme/resumebuilder.go`:
 // Add to your Theme struct
 type Theme struct {
 	// ... existing fields
-	
+
 	// Mouse interaction styles
 	PipelineRowHover    lipgloss.Style
 	TabHover            lipgloss.Style
 	StatusPickerHover   lipgloss.Style
 	ViewerHover         lipgloss.Style
-	
+
 	// Active/selected states for mouse
 	PipelineRowActive  lipgloss.Style
 	TabActive           lipgloss.Style
@@ -365,31 +365,31 @@ type Theme struct {
 func NewTheme(cp catppuccin.Palette) Theme {
 	t := Theme{
 		// ... existing theme initialization
-		
+
 		PipelineRowHover: lipgloss.NewStyle()
 			.Foreground(cp.Lavender)
 			.Background(cp.Surface)
 			.Bold(true),
-			
+
 		TabHover: lipgloss.NewStyle()
 			.Foreground(cp.Pink)
 			.Underline(true),
-			
+
 		StatusPickerHover: lipgloss.NewStyle()
 			.Foreground(cp.Mauve)
 			.Background(cp.Crust),
-			
+
 		PipelineRowActive: lipgloss.NewStyle()
 			.Foreground(cp.Text)
 			.Background(cp.Blue)
 			.Bold(true),
-			
+
 		TabActive: lipgloss.NewStyle()
 			.Foreground(cp.Lavender)
 			.Background(cp.Surface)
 			.Underline(true),
 	}
-	
+
 	return t
 }
 ```
@@ -411,7 +411,7 @@ func (m *model) handlePipelineInput(msg tea.Msg) tea.Cmd {
 			// Select row
 			return m.selectPipelineRow(m.pipelineList.Index())
 		}
-		
+
 	case tea.MouseMsg:
 		// Mouse handling
 		action, rowIndex, _ := m.zoneManager.HandleMouseEvent(msg)
@@ -420,7 +420,7 @@ func (m *model) handlePipelineInput(msg tea.Msg) tea.Cmd {
 			return m.selectPipelineRow(rowIndex)
 		}
 	}
-	
+
 	return nil
 }
 ```
@@ -432,25 +432,25 @@ func (m *model) handlePipelineInput(msg tea.Msg) tea.Cmd {
 func (m model) renderFilterTabs() string {
 	tabs := []string{"All", "Recent", "Archived"}
 	var sb strings.Builder
-	
+
 	for i, tab := range tabs {
 		zoneID := "tab-" + tab
 		isActive := tab == m.activeFilter
 		isHovered := m.zoneManager.GetZone().IsInZone(zoneID, m.lastMousePos)
-		
+
 		style := m.theme.Tab
 		if isActive {
 			style = m.theme.TabActive
 		} else if isHovered {
 			style = m.theme.TabHover
 		}
-		
+
 		sb.WriteString(style.Render(tab))
 		if i < len(tabs)-1 {
 			sb.WriteString(" ")
 		}
 	}
-	
+
 	return sb.String()
 }
 ```
@@ -467,7 +467,7 @@ func (m *model) handleStatusPicker(msg tea.Msg) tea.Cmd {
 			m.statusPickerOpen = !m.statusPickerOpen
 			return nil
 		}
-		
+
 		// Handle clicks on status options
 		for i, status := range m.statusOptions {
 			zoneID := "status-option-" + strconv.Itoa(i)
@@ -478,7 +478,7 @@ func (m *model) handleStatusPicker(msg tea.Msg) tea.Cmd {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -488,7 +488,7 @@ func (m *Manager) UpdateZones(
 	statusOptions []string,
 ) {
 	// ... existing zone setup
-	
+
 	// Add zones for status options
 	for i, status := range statusOptions {
 		zoneID := "status-option-" + strconv.Itoa(i)
@@ -510,16 +510,16 @@ func (m *model) handleViewerInput(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		action, _, _ := m.zoneManager.HandleMouseEvent(msg)
-		
+
 		switch action {
 		case "viewer-scroll-down":
 			m.viewer.ScrollDown()
 			return nil
-			
+
 		case "viewer-scroll-up":
 			m.viewer.ScrollUp()
 			return nil
-			
+
 		case "viewer-click":
 			// Handle click on links or interactive elements
 			if m.viewer.HasLinkAtPosition(msg.X, msg.Y) {
@@ -527,7 +527,7 @@ func (m *model) handleViewerInput(msg tea.Msg) tea.Cmd {
 			}
 		}
 	}
-	
+
 	return nil
 }
 ```
@@ -542,10 +542,10 @@ func (m model) renderHelpOverlay() string {
 	if !m.helpOpen {
 		return ""
 	}
-	
+
 	// Create a semi-transparent overlay
 	overlay := m.theme.HelpOverlay
-	
+
 	// Add close button zone
 	closeZoneID := "help-close"
 	m.zoneManager.GetZone().AddZone(closeZoneID, bubblezone.NewZone(
@@ -554,15 +554,15 @@ func (m model) renderHelpOverlay() string {
 		m.width-12, // right-aligned
 		2,         // top
 	))
-	
+
 	// Check if mouse is over close button
 	isCloseHovered := m.zoneManager.GetZone().IsInZone(closeZoneID, m.lastMousePos)
-	
+
 	closeStyle := m.theme.HelpClose
 	if isCloseHovered {
 		closeStyle = m.theme.HelpCloseHover
 	}
-	
+
 	helpContent := `
 ` + m.theme.HelpTitle.Render("Help") + `
 
@@ -571,7 +571,7 @@ func (m model) renderHelpOverlay() string {
 		m.theme.HelpText.Render("Use arrow keys or mouse to navigate\n") +
 		m.theme.HelpText.Render("Press Enter or click to select\n") +
 		closeStyle.Render("[Close]")
-	
+
 	return overlay.Render(helpContent)
 }
 
@@ -585,18 +585,18 @@ func (m *model) handleHelpInput(msg tea.Msg) tea.Cmd {
 				m.helpOpen = false
 				return nil
 			}
-			
+
 			// Click anywhere else to close
 			return nil
 		}
-		
+
 		// Handle ? key to open help (keyboard)
 		if msg.String() == "?" {
 			m.helpOpen = !m.helpOpen
 			return nil
 		}
 	}
-	
+
 	return nil
 }
 ```
@@ -636,13 +636,13 @@ For terminals that don't support mouse:
 func initialModel() model {
 	// Check if terminal supports mouse
 	mouseSupported := termenv.HasMouseSupport()
-	
+
 	m := model{
 		// ... existing initialization
 		zoneManager:   zone.New(),
 		mouseEnabled:  mouseSupported,
 	}
-	
+
 	return m
 }
 
@@ -651,7 +651,7 @@ func (m model) View() string {
 	if !m.mouseEnabled && m.showMouseWarning {
 		return m.theme.Warning.Render("⚠️  Mouse not supported in this terminal. Use keyboard navigation.") + "\n\n" + m.renderUI()
 	}
-	
+
 	return m.renderUI()
 }
 ```
@@ -701,7 +701,7 @@ func (m model) View() string {
 		)
 		m.zonesNeedUpdate = false
 	}
-	
+
 	return m.renderUI()
 }
 ```
@@ -733,23 +733,23 @@ type model struct {
 	pipelineList    list.Model
 	viewer          *Viewer // your custom viewer
 	statusPicker    *StatusPicker
-	
+
 	// State
 	activeFilter    string
 	statusOptions   []string
 	selectedStatus  string
 	statusPickerOpen bool
 	helpOpen        bool
-	
+
 	// Mouse support
 	zoneManager     *zone.Manager
 	mouseEnabled    bool
 	lastMousePos    tea.MouseMsg
 	zonesNeedUpdate bool
-	
+
 	// Theme
 	theme theme.Theme
-	
+
 	// Dimensions
 	width, height int
 }
@@ -757,15 +757,15 @@ type model struct {
 func initialModel() model {
 	// Initialize theme
 	t := theme.New()
-	
+
 	// Initialize components
 	pipelineList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	pipelineList.SetShowStatusBar(false)
 	pipelineList.SetFilteringEnabled(false)
-	
+
 	// Check mouse support
 	mouseSupported := true // Add actual detection
-	
+
 	return model{
 		pipelineList:    pipelineList,
 		viewer:          NewViewer(),
@@ -787,85 +787,85 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.zonesNeedUpdate = true
-		
+
 	case tea.MouseMsg:
 		m.lastMousePos = msg
-		
+
 		// Handle mouse events
 		action, rowIndex, tabName := m.zoneManager.HandleMouseEvent(msg)
-		
+
 		switch action {
 		case "select-row":
 			if rowIndex >= 0 && rowIndex < m.pipelineList.Length() {
 				m.pipelineList.Select(rowIndex)
 				return m, m.selectPipelineRow(rowIndex)
 			}
-			
+
 		case "select-tab":
 			m.activeFilter = tabName
 			m.updatePipeline()
 			return m, nil
-			
+
 		case "toggle-status-picker":
 			m.statusPickerOpen = !m.statusPickerOpen
 			m.zonesNeedUpdate = true
 			return m, nil
-			
+
 		case "viewer-scroll-down":
 			m.viewer.ScrollDown()
 			return m, nil
-			
+
 		case "viewer-scroll-up":
 			m.viewer.ScrollUp()
 			return m, nil
-			
+
 		case "help-close":
 			m.helpOpen = false
 			return m, nil
 		}
-		
+
 		// If mouse moved, we might need to redraw for hover effects
 		if msg.Type == tea.MouseMotion {
 			return m, nil
 		}
-		
+
 		fallthrough
-		
+
 	case tea.KeyMsg:
 		// Handle keyboard
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-			
+
 		case "?":
 			m.helpOpen = !m.helpOpen
 			return m, nil
-			
+
 		case "enter":
 			// Handle enter key for selected item
 			if m.pipelineList.FilterState() == list.Filtering {
 				break
 			}
 			return m, m.selectPipelineRow(m.pipelineList.Index())
-			
+
 		case "tab":
 			// Cycle through filter tabs
 			m.cycleFilterTabs()
 			m.updatePipeline()
 			return m, nil
-			
+
 		case "s":
 			// Toggle status picker
 			m.statusPickerOpen = !m.statusPickerOpen
 			m.zonesNeedUpdate = true
 			return m, nil
-			
+
 		case "up", "down":
 			// Handle keyboard navigation
 			if m.statusPickerOpen {
@@ -879,12 +879,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	}
-	
+
 	// Update components
 	var cmd2 tea.Cmd
 	m.pipelineList, cmd2 = m.pipelineList.Update(msg)
 	cmd = tea.Batch(cmd, cmd2)
-	
+
 	return m, cmd
 }
 
@@ -901,51 +901,51 @@ func (m model) View() string {
 		)
 		m.zonesNeedUpdate = false
 	}
-	
+
 	// Build the view
 	var sb strings.Builder
-	
+
 	// Header
 	sb.WriteString(m.renderHeader())
-	
+
 	// Filter tabs
 	sb.WriteString(m.renderFilterTabs())
-	
+
 	// Pipeline
 	sb.WriteString(m.renderPipeline())
-	
+
 	// Status picker (if open)
 	if m.statusPickerOpen {
 		sb.WriteString(m.renderStatusPicker())
 	}
-	
+
 	// Viewer
 	sb.WriteString(m.renderViewer())
-	
+
 	// Help overlay
 	if m.helpOpen {
 		sb.WriteString(m.renderHelpOverlay())
 	}
-	
+
 	// Mouse warning
 	if !m.mouseEnabled && m.showMouseWarning {
 		sb.WriteString(m.theme.Warning.Render("⚠️  Mouse not supported. Use keyboard."))
 	}
-	
+
 	// Add zone rendering for mouse support
 	if m.mouseEnabled {
 		return m.zoneManager.GetZone().Render(sb.String())
 	}
-	
+
 	return sb.String()
 }
 
 func main() {
 	p := tea.NewProgram(initialModel())
-	
+
 	// Enable mouse cell motion events
 	p.EnableMouseCellMotion()
-	
+
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)

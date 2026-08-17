@@ -198,5 +198,3 @@ func RenderFlowingGradient(text string, c1, c2 color.Color, phase float64) strin
 	result.WriteString("\x1b[0m")
 	return result.String()
 }
-
-

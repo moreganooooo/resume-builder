@@ -8,7 +8,7 @@ This document presents a comprehensive UX/UI and Product Design evaluation of th
 * **Tech-savvy but highly impatient:** Comfortable with the command line and terminal aesthetics, but has zero tolerance for friction.
 * **Refuses to read the README:** Will clone the repo, immediately look for a launch script or run python on files, and expects the program to guide him.
 * **ADHD Brain (Dopamine-driven):** Highly sensitive to silent delays (which feel like freezes) and repetitive manual workflows (which feel like chores). Thrives on immediate feedback, micro-animations, and instant gratification.
-* **The "I told you about this, it's all yours" test:** Taylor is handed the repository folder with no prior context or explanation. 
+* **The "I told you about this, it's all yours" test:** Taylor is handed the repository folder with no prior context or explanation.
 
 ---
 
@@ -35,7 +35,7 @@ Below is a diagnostic scoring of the current user journey from cloning the repos
 > [!WARNING]
 > **What Taylor does:** Clones the repository, enters the folder, sees `scripts/resume-cli.sh`, and runs `./scripts/resume-cli.sh`.
 >
-> **What happens:** **Absolutely nothing.** The terminal prints zero output, doesn't start any program, and exits instantly. 
+> **What happens:** **Absolutely nothing.** The terminal prints zero output, doesn't start any program, and exits instantly.
 >
 > **Why it happens:** `resume-cli.sh` is written to be *sourced* (`source scripts/resume-cli.sh`) to inject the `resume` function into the active shell. Sourcing is a developer-centric concept. To an impatient user, running a shell script directly and getting absolute silence means: *"This program is broken."* They will delete the folder and give up.
 >
@@ -58,8 +58,8 @@ Below is a diagnostic scoring of the current user journey from cloning the repos
 > [!CAUTION]
 > **What Taylor does:** Launches "New User? Start Here!". A beautiful Charm-based terminal wizard greets him, asking for his profile name and featuring a robust file browser where he searches his home directory, selects `Taylor_Resume_2026.pdf`, and hits Enter. He confirms "Build the bullet-bank now? [Yes]".
 >
-> **What happens:** The wizard exits and drops him into a second menu titled "Onboarding Progress." Step 0 says: **`Never run: no source documents uploaded yet`**. If he clicks Step 0, it tells him: *"Go to profiles/taylor/knowledge_base/bootstrap/source_documents and drop in your resume."* 
-> 
+> **What happens:** The wizard exits and drops him into a second menu titled "Onboarding Progress." Step 0 says: **`Never run: no source documents uploaded yet`**. If he clicks Step 0, it tells him: *"Go to profiles/taylor/knowledge_base/bootstrap/source_documents and drop in your resume."*
+>
 > **Why it happens:** This is a major structural gap. The Go onboarding binary (`dashboard/cmd/bootstrap`) collects the `SourceChoice` and `IngestPath`, but the Python menu wrapper (`scripts/menu.py` inside `_handle_bootstrap()`) **only reads the `profile_name`** from the returned JSON! It completely discards the selected file path and the "Build bullet-bank" confirmation! The user's effort to browse and select their resume is treated as a ghost interaction.
 >
 > **The Fix:** Update the Python menu wrapper `_handle_bootstrap()` in `scripts/menu.py` to check for `ingest_path`. If present, it should automatically copy that file into the newly-scaffolded profile's `source_documents/` folder. If `create_bullet` is true, it should immediately trigger the ingestion and bootstrap pipeline automatically.
@@ -81,7 +81,7 @@ Below is a diagnostic scoring of the current user journey from cloning the repos
 >
 > **Why it happens:** The onboarding "New User" flow is built on a Go binary (`go run ./dashboard/cmd/bootstrap`). This means **Go is NOT optional for a new user** who wants to set up a profile through the interactive terminal menu. It is an absolute, hard blocker on the very first button click.
 >
-> **The Fix:** 
+> **The Fix:**
 > * **Option A (Aesthetic preservation):** Update the README to declare Go as a **required** dependency for the interactive terminal experience.
 > * **Option B (Graceful fallback):** If Go is missing, instead of crashing, fall back to a simple, terminal-native Python-based questionary prompt to collect the profile name and bootstrap the directories.
 
@@ -120,13 +120,13 @@ Below is a diagnostic scoring of the current user journey from cloning the repos
 > [!WARNING]
 > **What Taylor does:** Tries to use the automatic scrapers. Selects "Scan for New Jobs" and chooses LinkedIn or JobRight.
 >
-> **What happens:** 
-> * **For LinkedIn:** The script uses `browser_cookie3` to read cookies from his local Chrome. On macOS, this triggers a scary, native system Keychain prompt asking for his master password. 
+> **What happens:**
+> * **For LinkedIn:** The script uses `browser_cookie3` to read cookies from his local Chrome. On macOS, this triggers a scary, native system Keychain prompt asking for his master password.
 > * **For JobRight:** It demands a `JOBRIGHT_COOKIE_STRING` in his `.env`, requiring him to open DevTools, inspect the network tab, copy a request as a cURL command, paste it into an editor, and extract the cookie string.
 >
 > **Why it happens:** Modern security protocols make cookie extraction hard. On macOS, Chrome's safe storage is encrypted inside the System Keychain.
 >
-> **The UX Impact:** 
+> **The UX Impact:**
 > * The macOS Keychain prompt is highly alarming; many users will deny it out of security hygiene, causing the script to throw a traceback and crash.
 > * The JobRight cURL dance is a massive barrier for an ADHD user; the moment they see instructions containing "Open DevTools and copy as cURL", they will close the app.
 >
@@ -140,7 +140,7 @@ Below is a diagnostic scoring of the current user journey from cloning the repos
 > [!WARNING]
 > **What Taylor does:** Clicks "Career Dashboard" or "Browse & Manage Jobs" to check his application statuses.
 >
-> **What happens:** The terminal goes completely silent and empty for **5 to 8 seconds** before finally rendering the TUI dashboard. 
+> **What happens:** The terminal goes completely silent and empty for **5 to 8 seconds** before finally rendering the TUI dashboard.
 >
 > **Why it happens:** The career dashboard is a Go TUI. Every single time the user opens it, Python executes `go run .`. This compiles the entire Go application from source on the fly. 5-8 seconds of a frozen terminal is a lifetime to an ADHD brain—it feels like the program crashed.
 >
@@ -172,7 +172,7 @@ graph TD
     C -->|Friction: Go dependency crash| D("Create Python fallback or list Go as hard requirement")
     C -->|Friction: IngestPath is discarded| E("Auto-copy selected resume & trigger auto-setup")
     C -->|Friction: 8 manual clicks| F("Add '⚡ Express Setup (Auto-pilot)' Option")
-    
+
     C --> G["Primary Workflow"]
     G -->|Friction: No manual job input| H("Add '↳ Paste Job Description Manually' Tool")
     G -->|Friction: 8s compiling latency| I("Compile Go Dashboard once; run binary instantly")

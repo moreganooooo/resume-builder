@@ -205,7 +205,7 @@ graph TD
         E --> F[Shared Rulesets]
         E --> G[Shared Scoring]
     end
-    
+
     subgraph Web Tools
         H[Web Frontend] --> I[Resume Checker]
         H --> J[Resume Helper]
@@ -218,7 +218,7 @@ graph TD
         L --> E
         M --> E
     end
-    
+
     E --> N[Jobright Backend Services]
 ```
 

@@ -427,39 +427,39 @@ Resume Analysis → Skills Extraction → Experience Parsing → Preference Matc
 
 def calculate_compatibility(user_profile, job_description):
     scores = {}
-    
+
     # Skills Match (40% weight)
     required_skills = extract_skills(job_description, type='required')
     preferred_skills = extract_skills(job_description, type='preferred')
     user_skills = user_profile['skills']
-    
+
     required_match = calculate_skill_overlap(user_skills, required_skills)
     preferred_match = calculate_skill_overlap(user_skills, preferred_skills)
-    
+
     scores['skills'] = (required_match * 0.7 + preferred_match * 0.3) * 100
-    
+
     # Experience Match (25% weight)
     required_experience = extract_experience_requirements(job_description)
     user_experience = user_profile['experience']
-    
+
     exp_match = calculate_experience_fit(user_experience, required_experience)
     scores['experience'] = exp_match * 100
-    
+
     # Preference Match (20% weight)
     location_match = calculate_location_match(user_profile, job_description)
     salary_match = calculate_salary_match(user_profile, job_description)
     remote_match = calculate_remote_match(user_profile, job_description)
-    
+
     scores['preferences'] = (location_match * 0.5 + salary_match * 0.3 + remote_match * 0.2) * 100
-    
+
     # Cultural Fit (10% weight)
     culture_match = calculate_culture_fit(user_profile, job_description)
     scores['culture'] = culture_match * 100
-    
+
     # ATS Optimization (5% weight)
     ats_match = calculate_ats_compatibility(user_profile, job_description)
     scores['ats'] = ats_match * 100
-    
+
     # Weighted composite score
     weights = {
         'skills': 0.40,
@@ -468,9 +468,9 @@ def calculate_compatibility(user_profile, job_description):
         'culture': 0.10,
         'ats': 0.05
     }
-    
+
     final_score = sum(scores[dimension] * weights[dimension] for dimension in scores)
-    
+
     return {
         'final_score': final_score,
         'dimension_scores': scores

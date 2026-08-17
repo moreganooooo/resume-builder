@@ -292,7 +292,7 @@ def calculate_overall_score(dimension_scores):
         'experience_match': 0.10,
         'formatting': 0.05
     }
-    
+
     return sum(
         dimension_scores[dimension] * weights[dimension]
         for dimension in weights
@@ -334,7 +334,7 @@ class Rule:
     description: str
     weight: float
     check_function: Callable
-    
+
 # Loaded at server startup
 RULES = [
     Rule(category="ats_compatibility", name="file_format", ...),
@@ -442,7 +442,7 @@ Analyzed comparable implementations (gapinmyresume-mcp) and Jobright's confirmed
    # From gapinmyresume-mcp/prompts.py (verified via GitHub search results)
    class CriticalGap(BaseModel):
        importance: Literal["critical", "high", "medium", "low"]
-   
+
    class ContentImprovement(BaseModel):
        priority: Literal["high", "medium", "low"]
    ```
@@ -494,16 +494,16 @@ def resolve_rule_conflicts(rules, resume_data, job_description):
         category_scores[category] = category_scores.get(category, 0) + (
             score * CATEGORY_WEIGHTS[category]
         )
-    
+
     # Step 2: For intra-category conflicts, use sub-weights
     # (if defined, otherwise first-match or LLM judgment)
-    
+
     # Step 3: LLM tiebreaking for ambiguous cases
     conflicts = detect_conflicts(rules, resume_data, job_description)
     if conflicts:
         llm_judgment = call_llm_for_tiebreaking(conflicts, resume_data, job_description)
         apply_llm_overrides(llm_judgment)
-    
+
     return calculate_final_score(category_scores)
 
 # Category weights (confirmed)
@@ -1047,42 +1047,42 @@ if fingerprint not in seen_fingerprints:
 
 ### Model Stack
 
-✅ **LLM**: OpenAI GPT-4o or GPT-5  
-✅ **Embeddings**: text-embedding-3-small  
-✅ **Framework**: FastMCP (Python)  
-✅ **Training**: 10M+ job descriptions  
-✅ **Infrastructure**: Cloud-hosted  
-❓ **Context Window**: Unknown (likely 32K+)  
+✅ **LLM**: OpenAI GPT-4o or GPT-5
+✅ **Embeddings**: text-embedding-3-small
+✅ **Framework**: FastMCP (Python)
+✅ **Training**: 10M+ job descriptions
+✅ **Infrastructure**: Cloud-hosted
+❓ **Context Window**: Unknown (likely 32K+)
 ❓ **Fallback**: Unknown (likely GPT-4o-mini)
 
 ### Rulesets
 
-✅ **Categories**: 6 (ATS Compatibility, Keyword Matching, Bullet Quality, Experience Analysis, Formatting, Content Improvements)  
-✅ **Bullet Dimensions**: 7 (Verb, Quantification, Impact, Specificity, Structure, Tone, Relevance)  
-✅ **Weights**: 40/25/20/10/5  
-✅ **Implementation**: Static rules with dynamic application  
-❓ **Update Frequency**: Unknown  
+✅ **Categories**: 6 (ATS Compatibility, Keyword Matching, Bullet Quality, Experience Analysis, Formatting, Content Improvements)
+✅ **Bullet Dimensions**: 7 (Verb, Quantification, Impact, Specificity, Structure, Tone, Relevance)
+✅ **Weights**: 40/25/20/10/5
+✅ **Implementation**: Static rules with dynamic application
+❓ **Update Frequency**: Unknown
 ❓ **Custom Rules**: Unknown
 
 ### ATS Simulation
 
-✅ **Platforms**: Greenhouse, Lever, Workday, iCIMS, Taleo, BambooHR  
-✅ **Parsing**: python-docx, PyPDF2/pdfplumber  
-✅ **Rules**: File format, structure, keyword density (25-35 optimal, 80%+ target)  
-✅ **Simulation Depth**: Levels 1-3 (parsing, structure, platform-specific)  
-❓ **Version Support**: Unknown  
+✅ **Platforms**: Greenhouse, Lever, Workday, iCIMS, Taleo, BambooHR
+✅ **Parsing**: python-docx, PyPDF2/pdfplumber
+✅ **Rules**: File format, structure, keyword density (25-35 optimal, 80%+ target)
+✅ **Simulation Depth**: Levels 1-3 (parsing, structure, platform-specific)
+❓ **Version Support**: Unknown
 ❓ **Platform-Specific Quirks**: Unknown
 
 ### Data Sources
 
-✅ **Scale**: 8M+ total, 400K+ new daily  
-✅ **Sources**: LinkedIn, Indeed, Glassdoor, company career pages, niche boards  
-✅ **Aggregation**: Web scraping + API integrations  
-✅ **Deduplication**: Proprietary fingerprinting  
-✅ **Update Frequency**: Near real-time (minutes to hours)  
-✅ **Freshness**: Ghost job problem acknowledged, filtering in place  
-✅ **Geographic**: US-only  
-❓ **Partnerships**: Unknown  
+✅ **Scale**: 8M+ total, 400K+ new daily
+✅ **Sources**: LinkedIn, Indeed, Glassdoor, company career pages, niche boards
+✅ **Aggregation**: Web scraping + API integrations
+✅ **Deduplication**: Proprietary fingerprinting
+✅ **Update Frequency**: Near real-time (minutes to hours)
+✅ **Freshness**: Ghost job problem acknowledged, filtering in place
+✅ **Geographic**: US-only
+❓ **Partnerships**: Unknown
 ❓ **API Feeds**: Unknown
 
 ---
@@ -1117,7 +1117,7 @@ if fingerprint not in seen_fingerprints:
 
 ---
 
-*Report generated: July 24, 2026*  
-*Research duration: 4+ hours*  
-*Sources consulted: 50+*  
+*Report generated: July 24, 2026*
+*Research duration: 4+ hours*
+*Sources consulted: 50+*
 *Questions answered: 49/61 (81%)*

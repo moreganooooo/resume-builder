@@ -1,8 +1,8 @@
 # One-Command Application Pipeline Design
 
-**Status**: Proposed, awaiting review  
-**Part of**: Group E, `docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md` (Feature #19)  
-**Author**: Antigravity & Claude (pair programming), aligned with Morgan 2026-08-17  
+**Status**: Proposed, awaiting review
+**Part of**: Group E, `docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md` (Feature #19)
+**Author**: Antigravity & Claude (pair programming), aligned with Morgan 2026-08-17
 
 ---
 
