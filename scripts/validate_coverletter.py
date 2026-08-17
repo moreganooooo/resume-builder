@@ -22,6 +22,7 @@ paragraph, and none of the three checks below caught it.
 import re
 
 import profile_paths
+import voice_metrics
 
 # Numbers with a distinctive suffix (percentage, dollar amount, or K/M
 # scale), an explicit "N years/yrs" experience claim, or a year range
@@ -245,12 +246,19 @@ def _check_semantic_grounding(cover_letter_data: dict, keeper_bullets: list[str]
     return violations
 
 
+def _check_voice_metrics(cover_letter_data: dict, voice_rules: dict | None = None) -> list[str]:
+    if not voice_rules:
+        return []
+    return voice_metrics.analyze_voice_metrics(cover_letter_data, rules=voice_rules)
+
+
 def validate(
     cover_letter_data: dict,
     style_rules: dict,
     kb_corpus: str = "",
     keeper_bullets: list[str] = None,
-    keeper_embs = None
+    keeper_embs = None,
+    voice_rules: dict = None,
 ) -> list[str]:
     violations = []
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
@@ -260,4 +268,5 @@ def validate(
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
     violations.extend(_check_cliched_openers(cover_letter_data))
     violations.extend(_check_semantic_grounding(cover_letter_data, keeper_bullets, keeper_embs))
+    violations.extend(_check_voice_metrics(cover_letter_data, voice_rules))
     return violations
