@@ -859,6 +859,51 @@ class TestSaveAndReadReferral(unittest.TestCase):
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
 
 
+class TestSaveAndReadAtsClassification(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_ats_classification_persist")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_save_then_read_round_trips_provider_and_tier(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        jd_manager.save_ats_classification(path, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+        result = jd_manager.read_ats_classification(path)
+        self.assertEqual(result["provider_id"], "workday")
+        self.assertEqual(result["weight_tier"], "enterprise_high")
+        self.assertIn("classified_at", result)
+
+    def test_save_preserves_the_rest_of_the_jd_content(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_ats_classification(path, {"provider_id": "greenhouse", "weight_tier": "startup_zero"})
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["job_title"], "Role")
+        self.assertEqual(data["company_name"], "Acme")
+
+    def test_read_ats_classification_returns_none_when_never_saved(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        self.assertIsNone(jd_manager.read_ats_classification(path))
+
+    def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
+        jd_manager.save_ats_classification(path, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+
 class TestComputePostingAgeDays(unittest.TestCase):
 
     def setUp(self):

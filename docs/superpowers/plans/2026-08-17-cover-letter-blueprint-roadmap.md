@@ -1,7 +1,7 @@
 # Cover Letter Blueprint Roadmap
 
 > **Source**: `docs/cover_letter_research_master_blueprint.md` (Gemini-authored, 23-feature roadmap)
-> **Status as of 2026-08-17**: Group A complete. Groups B-E not started.
+> **Status as of 2026-08-17**: Groups A-B complete. Groups C-E not started.
 > **Purpose**: Tracks the decomposed, verified subset of the blueprint actually worth building, so this work can resume in a fresh session without re-deriving context.
 
 ## Why this doc exists
@@ -35,12 +35,16 @@ Features #4, #5, #8. Bounded scope (additive changes to existing validators/conf
 
 Full suite: 1585 tests passing after Group A.
 
-### Group B — ATS-aware keyword strategy (not started)
+### Group B — ATS-aware keyword strategy ✅ COMPLETE
 Features #1 (ATS classification) + #12 (first-100-words keyword front-loading), paired deliberately: **classification alone has no value** — it's just metadata unless something downstream consumes it (established via explicit discussion with the user before scoping). #12 gives it a consumer.
 
-- #1: build a per-JD ATS classifier, reusing `scan_ats.py`'s `_ATS_HOST_PATTERNS` dict as the primitive (Workday/Taleo → enterprise/high-ATS-weight; Greenhouse/Lever → startup/zero-ATS-weight; Ashby → evidence-based; Rippling → AI-prescreened). Needs a source JD URL to classify from.
-- #12: keyword extraction already exists (`orchestrator.py`'s `JDKeywordSchema`) — this is a prompt-instruction change to front-load top keywords into the opening 100 words of paragraph 1, likely weighted higher when Group B's classifier says "enterprise/high ATS weight."
-- Not yet brainstormed: where the classifier's output gets persisted (likely a new `_ats_classification` per-JD metadata key, following the same convention as `#5`'s `_referral`), and exactly how its result modulates the cover-letter prompt.
+- **#1 ATS classification**: `scan_ats.py`'s `_ATS_HOST_PATTERNS` extended with `taleo.net` and `ats.rippling.com` (was 7 providers, now 9). New `_ATS_WEIGHT_TIERS` dict + `classify_ats(source_url)` function map provider → `enterprise_high` (Workday/Taleo), `ai_prescreened` (Rippling), `startup_zero` (Greenhouse/Lever), `evidence_based` (Ashby), or `unknown` (Recruitee/SmartRecruiters/Workable, or an unrecognized host). New `jd_manager.save_ats_classification()`/`read_ats_classification()` pair, following the exact `_referral` convention (per-JD `_ats_classification` key: provider_id, weight_tier, classified_at) — computed once, cached, read back on rebuilds rather than reclassified every time.
+- **#12 keyword front-loading**: new `orchestrator._build_keyword_block()` flattens `JDKeywordSchema`'s `tools`/`hard_skills`/`core_functions` (capped at 8, in that field order), formatted into a new `=== KEYWORDS ===` context block with front-loading instruction wording that scales by `weight_tier` — "critical" for enterprise/AI-prescreened tiers, "light touch" for human-read tiers, "helpful context" for unknown/unclassified. `tailor_coverletter.md` got one new rule explaining the block. Wired into `build_tailored_coverletter()` right after the existing referral block.
+- **Standalone-run gap closed**: `build_tailored_coverletter()` previously read `jd_keywords` from the checkpoint but never used it — and a cover-letter-only run (no prior resume build) has no checkpoint at all. Now, if no checkpoint keywords exist, it makes one extra `GeminiClient.generate()` call to `extract_keywords.md` on demand, in-memory only (deliberately not written to a checkpoint, preserving the "cover letter has no checkpoint" invariant from the function's own docstring).
+
+**Gotcha hit during implementation**: the new on-demand keyword-extraction call means `build_tailored_coverletter()` can now call `GeminiClient.generate()` twice (keywords, then the letter) instead of always once — any test asserting on `mock_generate.call_args_list[0]` to inspect the letter-generation call broke, because index 0 became the keyword-extraction call whenever the test JD had no seeded checkpoint. Fixed by switching those assertions to `call_args_list[-1]` (`tests/test_orchestrator_coverletter_enrichment.py`'s `TestReferralInjection` class). A second, subtler gotcha: `jd_manager.compute_job_key()` hashes a JD file's raw bytes when it has no `source_job_id`, so any metadata-persisting call that rewrites the file (`save_ats_classification()`, `save_referral()`, etc.) changes the job_key — a test seeding a checkpoint must do so *after* any such rewrite, keyed off a freshly recomputed job_key, not one cached from before the rewrite.
+
+Full suite: 1608 tests passing after Group B (was 1585 after Group A).
 
 ### Group C — DOCX exporter (not started, architectural — needs its own spec)
 Feature #3. Genuinely net-new subsystem — no DOCX *output* infra exists anywhere in the repo today (`python-docx` is currently only used to *read* uploaded resumes, in `bootstrap_extractors.py`). Needs design decisions before implementation:
@@ -62,7 +66,6 @@ Feature #19. Every sub-step it would chain (liveness check, dual-metric scoring,
 ## Resuming this work
 
 1. Re-read this doc for status and the group boundaries/dependencies.
-2. For Group B: brainstorm (bounded-scope, per the `superpowers:brainstorming` skill) starting from "where does the classification result get persisted" and "how does it change the cover-letter prompt" — both open questions above.
-3. For Groups C and D: these need the full architectural brainstorming path (multiple design decisions, new subsystems) — expect clarifying questions, 2-3 proposed approaches, a written design doc under `docs/superpowers/specs/`, then `superpowers:writing-plans` before implementation.
-4. For Group E: bounded, can move straight to a short in-chat design once B and C exist (or sooner, as a dumb version, if explicitly requested out of order).
-5. The other 15 features from the original 23-feature blueprint were deliberately excluded from this roadmap (already shipped, misdescribed, or lower value/effort ratio than the 8 selected) — see Verification findings above before reviving any of them.
+2. For Groups C and D: these need the full architectural brainstorming path (multiple design decisions, new subsystems) — expect clarifying questions, 2-3 proposed approaches, a written design doc under `docs/superpowers/specs/`, then `superpowers:writing-plans` before implementation.
+3. For Group E: bounded, can move straight to a short in-chat design once B and C exist (both now true for B) (or sooner, as a dumb version, if explicitly requested out of order).
+4. The other 15 features from the original 23-feature blueprint were deliberately excluded from this roadmap (already shipped, misdescribed, or lower value/effort ratio than the 8 selected) — see Verification findings above before reviving any of them.
