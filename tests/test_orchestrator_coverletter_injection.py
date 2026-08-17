@@ -87,36 +87,20 @@ def _clean_letter_json():
         "company_name": "TESTONLY Zebulon Injection Testco",
         "greeting": "Dear Hiring Team,",
         "body_paragraphs": [
-            "With TESTONLY Zebulon Injection Testco scaling its Content Strategist "
-            "initiatives, my background in journalism and B2B marketing content strategy "
-            "positions me well to translate complex ideas into clear, activation-ready "
-            "narratives that speak directly to a technical audience without losing the "
-            "human thread that makes a campaign actually land, especially across the kind "
-            "of fast-moving, cross-functional launches this role clearly demands week over "
-            "week, each with its own audience segments, timelines, and success metrics to "
-            "track alongside the rest of the marketing calendar and the broader company "
-            "roadmap.",
-            "In my most recent role, I built lifecycle email campaigns that "
-            "grew engagement, which maps closely to this role's focus on "
-            "activation-ready content and cross-functional collaboration with product "
-            "and sales teams. I partnered closely with engineering to instrument "
-            "tracking for every campaign touchpoint, then used that data to prioritize "
-            "the messaging sequences most likely to move a cold lead toward a signed "
-            "contract, iterating weekly rather than waiting for quarterly reviews to "
-            "catch underperforming sequences and documenting what worked so the next "
-            "campaign starts from evidence instead of guesswork, a habit that compounds "
-            "across every subsequent launch this team runs.",
-            "Beyond the metrics, I bring a collaborative approach to content operations, "
-            "regularly partnering with design and revenue operations to keep messaging "
-            "consistent across every channel a prospect might encounter. I thrive in "
-            "environments where priorities shift quickly and enjoy building the kind of "
-            "repeatable systems that let a small team punch above its weight, which is "
-            "exactly the kind of environment this role describes, and I would welcome "
-            "the chance to bring that same energy to a team scaling as quickly as this "
-            "one clearly is, helping build the next stage of that story alongside the "
-            "rest of the team from day one, iterating quickly and sharing progress "
-            "openly along the way so nothing gets lost between one campaign and the "
-            "next, especially as the team continues to grow into new markets.",
+            "With TESTONLY Zebulon Injection Testco scaling its Content Strategist initiatives, my background in journalism and marketing content strategy positions me well to drive immediate value. "
+            "Translating complex concepts into clear, activation-ready narratives that speak directly to an audience has been central to my work for over eight years across multiple industries. "
+            "Fast-moving cross-functional launches demand rigor, empathy, and operational precision. "
+            "That is why I ground every campaign in clear audience segments, timelines, and measurable success metrics that align directly with executive goals and broader company roadmaps.",
+            "In my most recent role at Treering, lifecycle email campaigns grew engagement by double digits across several critical user segments. "
+            "This work maps directly to your focus on activation-ready content and cross-functional collaboration with product and sales teams. "
+            "Partnering closely with engineering to instrument tracking for every campaign touchpoint allowed us to prioritize messaging sequences most likely to move a cold lead toward a signed contract. "
+            "Iterating weekly rather than quarterly keeps campaigns sharp, relevant, and evidence-based. "
+            "Documenting what works ensures each subsequent launch starts from proof rather than intuition, creating institutional knowledge that compounds across every sprint and quarterly milestone for the wider growth team.",
+            "Beyond the metrics, collaborative workflows define my approach to content operations and cross-functional project management. "
+            "Regular alignment with design and revenue teams keeps messaging consistent across every prospect touchpoint, eliminating friction before launch. "
+            "Thriving in fast-paced environments where priorities shift quickly, I build repeatable systems, templates, and clear documentation that let a small team punch above its weight. "
+            "I welcome the opportunity to bring that disciplined energy to your team and contribute from day one, helping drive sustainable growth across the entire organization. "
+            "Thank you for your time and consideration, and I look forward to discussing how my experience can support your upcoming product launches and ongoing strategic initiatives.",
         ],
         "sign_off": "Sincerely,",
     })
@@ -229,6 +213,7 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
             json.dump(jd_json, f)
 
         self.job_key = jd_manager.compute_job_key(self.jd_path)
+        jd_manager.save_checkpoint(self.job_key, {"jd_keywords": {"hard_skills": ["messaging"]}})
         stem = orchestrator._build_output_stem(self.jd_path)
         self.json_out = os.path.join(self.engine.output_json_dir, f"{stem}_CoverLetter.json")
         self.html_out = os.path.join(self.engine.output_html_dir, f"{stem}_CoverLetter.html")
@@ -239,6 +224,10 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
         for path in (self.json_out, self.html_out):
             if os.path.exists(path):
                 os.remove(path)
+        if self.job_key:
+            checkpoint_path = jd_manager._checkpoint_path(self.job_key)
+            if os.path.exists(checkpoint_path):
+                os.remove(checkpoint_path)
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
