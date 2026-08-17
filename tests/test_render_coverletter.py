@@ -122,6 +122,12 @@ class TestRenderCoverLetter(unittest.TestCase):
         # if unused) -- what must be absent is an actual <img> element.
         self.assertNotIn("<img", html)
 
+    def test_empty_company_name_title(self):
+        render_coverletter(_minimal_letter_data(company_name=""), self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("<title>Cover Letter - Morgan Escott</title>", html)
+
 
 class TestBuildSignatureBlockHtml(unittest.TestCase):
 
@@ -175,3 +181,18 @@ class TestBuildRecipientBlockHtml(unittest.TestCase):
         self.assertIn("A&amp;B Corp", html)
         self.assertIn("Pat &lt;b&gt;Lee&lt;/b&gt;", html)
         self.assertIn("NY &amp; NJ", html)
+
+    def test_main_cli_execution(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_path = os.path.join(tmpdir, "letter.json")
+            out_html = os.path.join(tmpdir, "letter.html")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(_minimal_letter_data(), f)
+            with patch("sys.argv", ["render_coverletter.py", json_path, out_html]):
+                with patch("render_coverletter.cli_art.console.print"):
+                    render_coverletter_module.main()
+                    self.assertTrue(os.path.exists(out_html))

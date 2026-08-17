@@ -303,6 +303,9 @@ def main():
                 soft_wrap=True,
             )
 
+    if scored_since_flush > 0 or not Path(args.output).exists():
+        _write_scored_csv(args.output, rows, final_headers)
+
     cli_art.console.print(
         f"\n{theme.colorize_icon('success')} Scored CSV saved: {args.output}",
         soft_wrap=True,

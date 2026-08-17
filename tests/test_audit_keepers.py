@@ -706,5 +706,223 @@ class TestStage3ExcludesPreviouslyManualClustersFromSourceA(unittest.TestCase):
         self.assertIn("Bullet two.", df_queue["Bullet Point"].tolist())
 
 
+class TestStage1AndMainFlow(unittest.TestCase):
+    """Unit tests for Stage 1, Stage 2, and main() execution in audit_keepers."""
+
+    def test_merge_prior_audited_progress(self):
+        """Test merging prior audit status and scores into current keepers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audited_path = os.path.join(tmpdir, "keepers-audited.csv")
+            pd.DataFrame(
+                [
+                    {
+                        "Bullet Point": "Prior Bullet",
+                        "audit_status": "CLEAN",
+                        "accuracy_score": 90,
+                        "believability_score": 90,
+                        "clarity_score": 90,
+                        "ats_value": 90,
+                        "manager_test": "PASS",
+                        "weaknesses": "None",
+                    }
+                ]
+            ).to_csv(audited_path, index=False)
+
+            df_keepers = pd.DataFrame(
+                [
+                    {"Bullet Point": "Prior Bullet", "audit_status": ""},
+                    {"Bullet Point": "New Bullet", "audit_status": ""},
+                ]
+            )
+
+            with patch("audit_keepers.KEEPERS_AUDITED", audited_path):
+                res = audit_keepers._merge_prior_audited_progress(df_keepers)
+                self.assertEqual(res.loc[0, "audit_status"], "CLEAN")
+                self.assertEqual(res.loc[0, "accuracy_score"], 90)
+                self.assertEqual(res.loc[1, "audit_status"], "")
+
+    @patch("audit_keepers.score_bullet")
+    def test_stage1_audit_keepers_dry_run_and_rescore(self, mock_score):
+        """Test Stage 1 with skip_rescore and dry_run."""
+        mock_score.return_value = {
+            "accuracy_score": 85,
+            "believability_score": 85,
+            "clarity_score": 85,
+            "ats_value": 85,
+            "manager_test": "PASS",
+            "weaknesses": "",
+        }
+        df_keepers = pd.DataFrame(
+            [
+                {
+                    "Bullet Point": "Bullet one.",
+                    "audit_status": "",
+                    "accuracy_score": None,
+                    "believability_score": None,
+                    "clarity_score": None,
+                    "ats_value": None,
+                    "manager_test": "FAIL",
+                }
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audited_path = os.path.join(tmpdir, "keepers-audited.csv")
+            with patch("audit_keepers.KEEPERS_AUDITED", audited_path):
+                # skip_rescore True
+                res_skipped = audit_keepers.stage1_audit_keepers(
+                    df_keepers.copy(),
+                    score_system="system prompt",
+                    skip_rescore=True,
+                )
+
+                # dry_run True
+                res_dry = audit_keepers.stage1_audit_keepers(
+                    df_keepers.copy(),
+                    score_system="system prompt",
+                    dry_run=True,
+                    skip_rescore=False,
+                )
+                self.assertIn("audit_status", res_dry.columns)
+
+    def test_stage2_diff_cluster_map(self):
+        """Test Stage 2 diff summary output and discrepancy writing."""
+        df_keepers = pd.DataFrame(
+            [
+                {
+                    "Bullet Point": "Good bullet",
+                    "audit_status": "CLEAN",
+                    "accuracy_score": 90,
+                    "believability_score": 90,
+                    "clarity_score": 90,
+                    "ats_value": 90,
+                    "manager_test": "PASS",
+                },
+                {
+                    "Bullet Point": "Discrepancy bullet",
+                    "audit_status": "CLEAN",
+                    "accuracy_score": 90,
+                    "believability_score": 90,
+                    "clarity_score": 90,
+                    "ats_value": 90,
+                    "manager_test": "PASS",
+                },
+                {
+                    "Bullet Point": "Rewritten bullet",
+                    "audit_status": "CLEAN",
+                    "accuracy_score": 90,
+                    "believability_score": 90,
+                    "clarity_score": 90,
+                    "ats_value": 90,
+                    "manager_test": "PASS",
+                },
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            map_path = os.path.join(tmpdir, "cluster-map.csv")
+            disc_path = os.path.join(tmpdir, "audit-discrepancies.csv")
+            pd.DataFrame(
+                [
+                    {"Bullet Point": "Good bullet", "rewrite_status": "CLEAN"},
+                    {"Bullet Point": "Discrepancy bullet", "rewrite_status": "MANUAL"},
+                ]
+            ).to_csv(map_path, index=False)
+
+            with (
+                patch("audit_keepers.CLUSTER_MAP_UPDATED", map_path),
+                patch("audit_keepers.DISCREPANCIES_OUT", disc_path),
+            ):
+                res = audit_keepers.stage2_diff_cluster_map(df_keepers)
+                self.assertEqual(len(res), 1)
+                self.assertEqual(res.iloc[0]["Bullet Point"], "Discrepancy bullet")
+                self.assertTrue(os.path.exists(disc_path))
+
+    def test_stage1_all_clean_skips_scoring(self):
+        """Test Stage 1 when all keepers are already CLEAN."""
+        df_keepers = pd.DataFrame(
+            [
+                {
+                    "Bullet Point": "Already clean bullet",
+                    "audit_status": "CLEAN",
+                    "accuracy_score": 90,
+                    "believability_score": 90,
+                    "clarity_score": 90,
+                    "ats_value": 90,
+                    "manager_test": "PASS",
+                }
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audited_path = os.path.join(tmpdir, "keepers-audited.csv")
+            with patch("audit_keepers.KEEPERS_AUDITED", audited_path):
+                res = audit_keepers.stage1_audit_keepers(
+                    df_keepers,
+                    score_system="system",
+                    using_audited_source=True,
+                )
+                self.assertEqual(len(res), 1)
+
+    @patch(
+        "audit_keepers.build_system_prompts",
+        return_value=("sys", "sys_gemma", "sys_score"),
+    )
+    @patch("audit_keepers.KnowledgeBase")
+    @patch("audit_keepers.RulesBundle")
+    @patch("audit_keepers.stage4_auto_rewrite")
+    @patch("audit_keepers.stage3_build_rewrite_queue")
+    @patch("audit_keepers.stage2_diff_cluster_map")
+    @patch("audit_keepers.stage1_audit_keepers")
+    def test_main_flow(
+        self, mock_s1, mock_s2, mock_s3, mock_s4, mock_rules, mock_kb, mock_prompts
+    ):
+        """Test main CLI flow execution with various CLI flags."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            keepers_path = os.path.join(tmpdir, "bullet-bank-keepers.csv")
+            audited_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
+            df = pd.DataFrame(
+                [
+                    {
+                        "Bullet Point": "Test bullet",
+                        "Role / Company": "Data Eng / Acme",
+                        "Tags": "python, sql",
+                        "audit_status": "CLEAN",
+                    }
+                ]
+            )
+            df.to_csv(keepers_path, index=False)
+
+            mock_s1.return_value = df
+            mock_s3.return_value = df
+            mock_s4.return_value = df
+
+            with (
+                patch("audit_keepers.KEEPERS_IN", keepers_path),
+                patch("audit_keepers.KEEPERS_AUDITED", audited_path),
+                patch(
+                    "sys.argv",
+                    [
+                        "audit_keepers.py",
+                        "--dry-run",
+                        "--skip-rescore",
+                        "--auto-rewrite",
+                    ],
+                ),
+            ):
+                audit_keepers.main()
+                mock_s1.assert_called_once()
+                mock_s2.assert_called_once()
+                mock_s3.assert_called_once()
+                mock_s4.assert_called_once()
+
+            # Test missing source file exits cleanly
+            with (
+                patch("audit_keepers.KEEPERS_IN", "/nonexistent/path.csv"),
+                patch("audit_keepers.KEEPERS_AUDITED", "/nonexistent/audited.csv"),
+                patch("sys.argv", ["audit_keepers.py"]),
+            ):
+                with self.assertRaises(SystemExit):
+                    audit_keepers.main()
+
+
 if __name__ == "__main__":
     unittest.main()

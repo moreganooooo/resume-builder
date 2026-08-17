@@ -62,7 +62,7 @@ def build_sample() -> dict:
     return {"resume": resume_result, "coverletter": coverletter_result}
 
 
-if __name__ == "__main__":
+def main():
     result = build_sample()
     resume_ok = bool(result["resume"])
     coverletter_ok = bool(result["coverletter"])
@@ -90,3 +90,7 @@ if __name__ == "__main__":
 
     if not (resume_ok and coverletter_ok):
         raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
