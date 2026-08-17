@@ -1,7 +1,7 @@
 # Cover Letter Blueprint Roadmap
 
 > **Source**: `docs/cover_letter_research_master_blueprint.md` (Gemini-authored, 23-feature roadmap)
-> **Status as of 2026-08-17**: Groups A-C complete. Groups D-E not started.
+> **Status as of 2026-08-17**: Groups A-E complete. All 5 roadmap groups fully implemented and verified.
 > **Purpose**: Tracks the decomposed, verified subset of the blueprint actually worth building, so this work can resume in a fresh session without re-deriving context.
 
 ## Why this doc exists
@@ -68,12 +68,18 @@ Feature #9. Statistical stylometry and voice anchor analyzer:
 
 Full suite: 1648 tests passing after Group D (was 1634 after Group C).
 
-### Group E — One-command pipeline (not started, bounded — glue only)
-Feature #19. Every sub-step it would chain (liveness check, dual-metric scoring, resume build, cover letter build, company research, DB logging) already works individually — this is pure orchestration, no new logic. Deliberately sequenced last because it benefits from Group B (ATS-aware format/strategy selection) and Group C (DOCX vs. PDF choice) already existing, so the one-command version can be "smart" from day one rather than needing a later retrofit. Could still be built earlier as a dumb chain-only version if that's ever wanted out of order.
+### Group E — One-command pipeline ✅ COMPLETE
+Feature #19. Unified application package generation pipeline that orchestrates liveness verification, candidate-role fit evaluation, tailored resume generation, tailored cover letter generation (with ATS classification and keyword front-loading), and status/DB updates:
+- **Design Spec**: [`docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md`](file:///Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md)
+- **Implementation Plan**: [`docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md`](file:///Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md)
+- **`orchestrator.py`**: Implemented `ResumeEngine.build_application_package()` and module-level `run_application_package()` supporting fail-fast liveness and fit gating, producing all 4 artifacts (Resume PDF/DOCX + Cover Letter PDF/DOCX), logging to SQLite and tracker, and moving JD to `jds/completed/`. Tests in `tests/test_application_package.py`.
+- **`cli_art.py`**: Added `render_application_package_hud()` for beautiful Rich terminal output with company, role, ATS classification tier, and direct artifact file links. Tests in `tests/test_cli_art_package_hud.py`.
+- **`cli.py`**: Added `resume package` and `resume build` commands supporting `--master`, `--output`, `--referral`, `--force`, `--skip-liveness`, `--skip-fit`, `--pick`, and `--yes`. Tests in `tests/test_cli_package.py`.
+- **`menu.py`**: Added "Build Full Application Package" to interactive menu submenu under Build Documents with next-step chaining. Tests in `tests/test_menu_package.py`.
+
+Full suite: 1663 tests passing after Group E (was 1648 after Group D).
 
 ## Resuming this work
 
-1. Re-read this doc for status and the group boundaries/dependencies.
-2. For Groups A, B, C, and D: all completed and tested (1648 total tests passing).
-3. For Group E: bounded, can move straight to a short in-chat design once ready.
-4. The other 15 features from the original 23-feature blueprint were deliberately excluded from this roadmap (already shipped, misdescribed, or lower value/effort ratio than the 8 selected) — see Verification findings above before reviving any of them.
+1. All 5 roadmap groups (A, B, C, D, E) are fully implemented, integrated, and verified (1,663 total tests passing).
+2. The other 15 features from the original 23-feature blueprint were deliberately excluded from this roadmap (already shipped, misdescribed, or lower value/effort ratio than the 8 selected) — see Verification findings above before reviving any of them.
