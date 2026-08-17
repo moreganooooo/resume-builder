@@ -425,6 +425,45 @@ def read_referral(jd_path: str) -> dict | None:
     return data.get("_referral")
 
 
+def save_ats_classification(jd_path: str, classification: dict) -> None:
+    """Persists an ATS provider classification (see
+    scan_ats.classify_ats()) into the JD's own JSON file under an
+    _ats_classification key (provider_id, weight_tier, classified_at),
+    matching _referral's existing pattern -- computed once per JD, then
+    cached rather than reclassified on every rebuild. No-ops silently for
+    non-JSON-dict JDs, same as save_referral()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_ats_classification"] = {
+        "provider_id": classification.get("provider_id", ""),
+        "weight_tier": classification.get("weight_tier", "unknown"),
+        "classified_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
+
+def read_ats_classification(jd_path: str) -> dict | None:
+    """Reads back a persisted _ats_classification (see
+    save_ats_classification()), or None if the JD isn't a JSON dict or has
+    no classification recorded."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_ats_classification")
+
+
 # Real posted-date field names vary by source: resume-builder's own board/
 # ATS providers (scan_boards.py/scan_ats.py) normalize to posted_at (ISO
 # string); JobRight and LinkedIn (scan_jobright.py/scan_linkedin.py) use

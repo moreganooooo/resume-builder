@@ -69,10 +69,46 @@ _ATS_HOST_PATTERNS = [
     ("smartrecruiters", "smartrecruiters.com"),
     ("workable", "workable.com"),
     ("workday", "myworkdayjobs.com"),
+    ("taleo", "taleo.net"),
+    ("rippling", "ats.rippling.com"),
 ]
 
 
 _ATS_PROVIDER_IDS = frozenset(provider_id for provider_id, _ in _ATS_HOST_PATTERNS)
+
+# How heavily each ATS platform weighs literal keyword-matching, for cover
+# letter keyword front-loading (docs/superpowers/plans/2026-08-17-cover-
+# letter-blueprint-roadmap.md Group B, Feature #12). Workday/Taleo are
+# classic enterprise ATS keyword scanners; Rippling's screen is explicitly
+# AI-prescreened; Greenhouse/Lever postings are read by a human first;
+# Ashby is evidence-based (structured scorecards, not keyword density).
+# Providers with no strong signal either way default to "unknown" via
+# .get() at the call site rather than being listed here.
+_ATS_WEIGHT_TIERS = {
+    "workday": "enterprise_high",
+    "taleo": "enterprise_high",
+    "rippling": "ai_prescreened",
+    "greenhouse": "startup_zero",
+    "lever": "startup_zero",
+    "ashby": "evidence_based",
+}
+
+
+def classify_ats(source_url: str) -> dict | None:
+    """Classifies a JD's source_url against the known ATS host patterns
+    (Feature #1). Returns {"provider_id", "weight_tier"}, or None when
+    source_url is empty or matches no known ATS host -- callers should
+    treat None as "unclassified," not as an error."""
+    if not source_url:
+        return None
+    haystack = source_url.lower()
+    for provider_id, host_fragment in _ATS_HOST_PATTERNS:
+        if host_fragment in haystack:
+            return {
+                "provider_id": provider_id,
+                "weight_tier": _ATS_WEIGHT_TIERS.get(provider_id, "unknown"),
+            }
+    return None
 
 
 def _resolve_provider_id(entry: dict) -> str:
