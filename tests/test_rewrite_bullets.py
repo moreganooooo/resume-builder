@@ -339,6 +339,12 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
     def setUp(self):
         self.kb = KnowledgeBase()
+        self.kb.static_prefix = "FULL STATIC PREFIX WITH EXTRA CONTEXT " * 10
+        self.kb.gemma_static_prefix = "GEMMA PREFIX"
+        self.kb.context_block_for_bullet = (
+            lambda *a: "FULL CONTEXT BLOCK WITH EXTRA INFORMATION " * 10
+        )
+        self.kb.context_block_for_bullet_gemma = lambda *a: "GEMMA SLIM BLOCK"
         df = pd.DataFrame(
             {
                 "Role / Company": ["Acme Corp"],
