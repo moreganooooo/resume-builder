@@ -668,10 +668,19 @@ def _handle_liveness() -> bool:
     return checked > 0
 
 
+def _print_no_pending_jds_hint(action: str = "tailor") -> None:
+    """Friendly, compassionate empty state with direct next steps for job discovery."""
+    cli_art.console.print(f"Nothing to {action} -- no pending JDs.")
+    cli_art.console.print(
+        f"  {theme.colorize_icon('hint')} [bold]Next step:[/bold] Run [bold]Find Jobs -> Scan for New Jobs[/bold] "
+        "or paste a job link in 'Add Job Description Manually' to get started in seconds.\n"
+    )
+
+
 def _handle_evaluate_all() -> bool:
     pending = jd_manager.get_pending_jds()
     if not pending:
-        cli_art.console.print("Nothing to evaluate -- no pending JDs.")
+        _print_no_pending_jds_hint("evaluate")
         return False
     already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
     if not to_evaluate:
@@ -690,7 +699,7 @@ def _handle_evaluate_all() -> bool:
 def _handle_tailor_all() -> bool:
     pending = jd_manager.get_pending_jds()
     if not pending:
-        cli_art.console.print("Nothing to tailor -- no pending JDs.")
+        _print_no_pending_jds_hint("tailor")
         return False
     if not picker.should_proceed(len(pending), skip_confirm=False, action="tailor"):
         cli_art.console.print("Aborted.")

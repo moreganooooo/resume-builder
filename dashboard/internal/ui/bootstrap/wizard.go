@@ -111,30 +111,33 @@ func Run(t theme.Theme) (WizardData, error) {
 					_ = info // silence unused variable warning
 					return nil
 				}),
-			// Whether to generate the bullet bank now.
+			// Whether to generate achievements library / bullet bank now.
 			huh.NewConfirm().
-				Title(t.Icons.Magic+" Build the bullet‑bank now?").
-				Description("You can always run it later with `resume bullet‑bank`. ").
+				Title(t.Icons.Magic+" Generate your achievements library now?").
+				Description("Creates tailored bullet points from your career experience (recommended).").
 				Value(&data.CreateBullet),
 		),
 	).WithTheme(t.HuhTheme())
 
 	err = form.Run()
-	if err == nil {
-		// Persist wizard data for future runs -- best-effort convenience,
-		// not required for this run to have succeeded, so a persistence
-		// failure logs (rather than fails the wizard) and only affects a
-		// future run's defaults.
-		if cfgDir, e := os.UserConfigDir(); e == nil {
-			cfgPath := filepath.Join(cfgDir, "resume-builder", "wizard.json")
-			if e := os.MkdirAll(filepath.Dir(cfgPath), 0o755); e != nil {
-				log.Warnf("could not create %s: %v", filepath.Dir(cfgPath), e)
-			} else if e := os.WriteFile(cfgPath, []byte(data.ToJSON()), 0o644); e != nil {
-				log.Warnf("could not write %s: %v", cfgPath, e)
-			}
-		} else {
-			log.Warnf("could not determine user config dir: %v", e)
-		}
+	if err != nil {
+		return data, err
 	}
-	return data, err
+
+	// Persist wizard data for future runs -- best-effort convenience,
+	// not required for this run to have succeeded, so a persistence
+	// failure logs (rather than fails the wizard) and only affects a
+	// future run's defaults.
+	if cfgDir, e := os.UserConfigDir(); e == nil {
+		cfgPath := filepath.Join(cfgDir, "resume-builder", "wizard.json")
+		if e := os.MkdirAll(filepath.Dir(cfgPath), 0o755); e != nil {
+			log.Warnf("could not create %s: %v", filepath.Dir(cfgPath), e)
+		} else if e := os.WriteFile(cfgPath, []byte(data.ToJSON()), 0o644); e != nil {
+			log.Warnf("could not write %s: %v", cfgPath, e)
+		}
+	} else {
+		log.Warnf("could not determine user config dir: %v", e)
+	}
+
+	return data, nil
 }

@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -104,6 +105,9 @@ func NewEmptyViewerModel(t theme.Theme, width, height int) ViewerModel {
 
 // rebuildRender recomputes renderedLines from raw lines using the current width.
 func (m *ViewerModel) rebuildRender() {
+	if m.rawContent == "" && len(m.lines) > 0 {
+		m.rawContent = strings.Join(m.lines, "\n")
+	}
 	m.renderedLines = m.renderAll()
 	m.clampScrollOffset()
 }
@@ -279,14 +283,58 @@ func (m ViewerModel) renderBody() string {
 	return padStyle.Render(strings.Join(flat, "\n"))
 }
 
-// renderAll converts every raw markdown line into visual terminal lines,
-// walking m.lines and dispatching each block (table, fenced code, heading/
-// quote/list via isSpecialBlockLine, or plain paragraph) to the matching
-// styler below. This is deliberately not routed through Glamour: Glamour's
-// word-wrap can't hard-wrap an unbroken token (e.g. a long line inside a
-// fenced code block) to fit m.width the way ansi.Wrap here does, since
-// there's no word boundary to break at.
+// renderWithGlamour renders rawContent via Glamour with project-token styling,
+// post-processing output lines with ansi.Wrap to guarantee unbroken tokens fit m.width.
+func (m ViewerModel) renderWithGlamour() ([]string, error) {
+	raw := m.rawContent
+	if raw == "" && len(m.lines) > 0 {
+		raw = strings.Join(m.lines, "\n")
+	}
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	w := m.width - 6
+	if w < 10 {
+		w = 10
+	}
+	opts := append(theme.GlamourConfig(m.theme), glamour.WithWordWrap(w))
+	r, err := glamour.NewTermRenderer(opts...)
+	if err != nil {
+		return nil, err
+	}
+	out, err := r.Render(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	rawLines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	for _, l := range rawLines {
+		if ansi.StringWidth(l) > w {
+			for _, wl := range strings.Split(ansi.Hardwrap(l, w, true), "\n") {
+				result = append(result, wl)
+			}
+		} else {
+			result = append(result, l)
+		}
+	}
+	return result, nil
+}
+
+// renderAll converts raw markdown into visual terminal lines using Glamour,
+// falling back to the manual block/line parser if Glamour rendering fails.
 func (m ViewerModel) renderAll() []string {
+	if len(m.lines) == 0 && strings.TrimSpace(m.rawContent) == "" {
+		return nil
+	}
+	if rendered, err := m.renderWithGlamour(); err == nil && len(rendered) > 0 {
+		return rendered
+	}
+	return m.renderAllFallback()
+}
+
+// renderAllFallback is the manual line-by-line block parser fallback.
+func (m ViewerModel) renderAllFallback() []string {
 	var styled []string
 	i := 0
 	for i < len(m.lines) {

@@ -153,3 +153,92 @@ func TestViewerIndentsWrappedBlockquoteLines(t *testing.T) {
 		t.Fatalf("expected wrapped blockquote continuation to align with text, got %q", lines[1])
 	}
 }
+
+func TestViewerGlamourRendering(t *testing.T) {
+	content := `# Career Report
+
+## Summary
+Experienced **Software Engineer** specializing in distributed systems.
+
+- Delivered 40% latency reduction
+- Scaled ingestion pipeline to 1M events/sec
+
+| Skill | Level |
+| --- | --- |
+| Go | Expert |
+| Python | Advanced |
+`
+	m := ViewerModel{
+		rawContent: content,
+		lines:      strings.Split(content, "\n"),
+		width:      80,
+		height:     24,
+		theme:      theme.NewTheme("catppuccin-mocha"),
+	}
+
+	rendered, err := m.renderWithGlamour()
+	if err != nil {
+		t.Fatalf("renderWithGlamour failed: %v", err)
+	}
+	if len(rendered) == 0 {
+		t.Fatalf("expected non-empty rendered lines from Glamour")
+	}
+
+	joined := ansi.Strip(strings.Join(rendered, "\n"))
+	if !strings.Contains(joined, "Career Report") {
+		t.Errorf("expected rendered output to contain 'Career Report', got: %s", joined)
+	}
+	if !strings.Contains(joined, "Summary") {
+		t.Errorf("expected rendered output to contain 'Summary', got: %s", joined)
+	}
+	if !strings.Contains(joined, "Delivered 40% latency reduction") {
+		t.Errorf("expected bullet point in output, got: %s", joined)
+	}
+}
+
+func TestViewerNavigationAndBounds(t *testing.T) {
+	content := strings.Repeat("Line of content\n\n", 50)
+	m := ViewerModel{
+		rawContent: content,
+		lines:      strings.Split(content, "\n"),
+		width:      80,
+		height:     20,
+		theme:      theme.NewTheme("catppuccin-mocha"),
+	}
+	m.rebuildRender()
+
+	// Initial offset is 0
+	if m.scrollOffset != 0 {
+		t.Errorf("expected initial scrollOffset 0, got %d", m.scrollOffset)
+	}
+
+	// Down arrow / 'j' scrolls down
+	m, _ = m.Update(pressKey("down"))
+	if m.scrollOffset != 1 {
+		t.Errorf("expected scrollOffset 1 after down key, got %d", m.scrollOffset)
+	}
+
+	// End / 'G' jumps to bottom
+	m, _ = m.Update(pressKey("G"))
+	maxScroll := len(m.renderedLines) - m.bodyHeight()
+	if m.scrollOffset != maxScroll {
+		t.Errorf("expected scrollOffset %d at bottom, got %d", maxScroll, m.scrollOffset)
+	}
+
+	// Home / 'g' jumps to top
+	m, _ = m.Update(pressKey("g"))
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0 at top, got %d", m.scrollOffset)
+	}
+
+	// '?' toggles help
+	m, _ = m.Update(pressKey("?"))
+	if !m.showHelp {
+		t.Errorf("expected showHelp true after '?'")
+	}
+	m, _ = m.Update(pressKey("esc"))
+	if m.showHelp {
+		t.Errorf("expected showHelp false after 'esc'")
+	}
+}
+

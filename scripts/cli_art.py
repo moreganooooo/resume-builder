@@ -888,13 +888,43 @@ HELP_ENTRIES = [
 ]
 
 
+def display_playbook() -> None:
+    """Renders the simple, compassionate 3-Step Job Search Playbook for ADHD job-seekers."""
+    content = Text()
+    content.append("🎯 STEP 1: Find & Pick High-Fit Roles\n", style=f"bold {theme.BRAND}")
+    content.append("   • Run 'Find Jobs' -> 'Scan for New Jobs' (or paste a job link directly).\n", style=theme.MUTED)
+    content.append("   • The AI scores fit automatically so you never waste energy on low-odds roles.\n\n", style=theme.MUTED)
+
+    content.append("🚀 STEP 2: 1-Click Tailor & Build\n", style=f"bold {theme.SUCCESS}")
+    content.append("   • Select 'Build Documents' -> 'Build Full Application Package'.\n", style=theme.MUTED)
+    content.append("   • Generates an ATS-optimized PDF resume and tailored cover letter in seconds.\n\n", style=theme.MUTED)
+
+    content.append("💼 STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}")
+    content.append("   • Open 'Track & Follow Up' -> 'Career Dashboard' to review and submit.\n", style=theme.MUTED)
+    content.append("   • Keep track of applications, interview dates, and reminders without stress.\n", style=theme.MUTED)
+
+    panel = Panel(
+        content,
+        title=f"[bold {theme.BRAND}]✦ 3-STEP JOB HUNT PLAYBOOK ✦[/bold {theme.BRAND}]",
+        title_align="center",
+        border_style=theme.BRAND,
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+
+
 def display_help() -> None:
+    display_playbook()
     table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
     table.add_column("Command")
     table.add_column("What it does")
     for command, description in HELP_ENTRIES:
         table.add_row(command, description)
     console.print(Panel(table, title="resume-builder shortcuts", border_style=theme.BRAND, box=box.ROUNDED))
+
 
 
 def display_applications_tracker(content: str) -> None:
@@ -1566,8 +1596,8 @@ def thinking_status(message: str):
     import threading
     import contextlib
     
-    # Catppuccin Peach, Pink, Mauve, Lavender, Blue, Sky
-    colors = ["#f9e2af", "#f5c2e7", "#cba6f7", "#b4befe", "#89b4fa", "#89dceb"]
+    # Catppuccin Peach, Pink, Mauve, Lavender, Blue, Sky tokens from theme.py
+    colors = theme.THINKING_GRADIENT_COLORS
     stop_event = threading.Event()
     
     status = console.status(
@@ -1809,3 +1839,50 @@ def render_application_package_hud(package_result: dict) -> None:
     console.print()
     console.print(panel)
     console.print()
+
+
+def sparkle_banner(title: str, subtitle: str = "") -> None:
+    """Renders a sparkling header with Catppuccin gradient flourishes and subtle shimmer icons."""
+    content = Text()
+    content.append("✦ ", style=theme.BRAND_ACCENT)
+    content.append(make_gradient_text(f"✧ {title} ✧", theme.BRAND, theme.BRAND_ACCENT))
+    content.append(" ✦", style=theme.BRAND_ACCENT)
+    if subtitle:
+        content.append(f"\n{subtitle}", style=theme.MUTED)
+
+    panel = Panel(
+        content,
+        border_style=theme.BRAND,
+        box=box.ROUNDED,
+        padding=(0, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+
+
+def render_sparkle_celebration(title: str, message: str, tips: list[str] = None) -> None:
+    """Renders a high-dopamine, ADHD-friendly completion screen celebrating user progress."""
+    content = Text()
+    content.append("✨ ", style=theme.BRAND_ACCENT)
+    content.append(make_gradient_text(title, theme.SUCCESS, theme.BRAND_ACCENT))
+    content.append(" ✨\n\n", style=theme.BRAND_ACCENT)
+    content.append(f"{message}\n")
+
+    if tips:
+        content.append(f"\n[{theme.BRAND_ACCENT}]What to do next:[/{theme.BRAND_ACCENT}]\n")
+        for tip in tips:
+            content.append(f"  • {tip}\n", style=theme.MUTED)
+
+    panel = Panel(
+        content,
+        title=f"[{theme.BRAND}]✦ SUCCESS ✦[/{theme.BRAND}]",
+        title_align="center",
+        border_style=theme.SUCCESS,
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
+

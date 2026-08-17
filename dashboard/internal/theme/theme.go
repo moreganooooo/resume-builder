@@ -4,6 +4,7 @@ package theme
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"os"
 	"strings"
 
@@ -16,12 +17,7 @@ import (
 var terminalProfile = colorprofile.Detect(os.Stdout, os.Environ())
 
 func c(ansi, ansi256, truecolor string) color.Color {
-	complete := lipgloss.Complete(terminalProfile)
-	return complete(
-		lipgloss.Color(ansi),
-		lipgloss.Color(ansi256),
-		lipgloss.Color(truecolor),
-	)
+	return lipgloss.Color(truecolor)
 }
 
 // Theme holds all color definitions for the pipeline dashboard.
@@ -138,6 +134,20 @@ func parseHex(h string) (r, g, b int) {
 	return
 }
 
+// ColorToHex converts a standard image/color.Color to a "#rrggbb" hex string.
+func ColorToHex(c color.Color) string {
+	if c == nil {
+		return "#000000"
+	}
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("#%02x%02x%02x", uint8(r>>8), uint8(g>>8), uint8(b>>8))
+}
+
+// RenderColorGradient takes a string and blends it from color c1 to c2 character-by-character.
+func RenderColorGradient(text string, c1, c2 color.Color) string {
+	return RenderGradient(text, ColorToHex(c1), ColorToHex(c2))
+}
+
 // RenderGradient takes a string and blends it from startHex to endHex color character-by-character.
 func RenderGradient(text string, startHex, endHex string) string {
 	r1, g1, b1 := parseHex(startHex)
@@ -156,10 +166,37 @@ func RenderGradient(text string, startHex, endHex string) string {
 		g := int(float64(g1) + t*float64(g2-g1))
 		b := int(float64(b1) + t*float64(b2-b1))
 
-		colorHex := fmt.Sprintf("#%02x%02x%02x", r, g, b)
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorHex))
-		result.WriteString(style.Render(string(rn)))
+		fmt.Fprintf(&result, "\x1b[38;2;%d;%d;%dm%c", r, g, b, rn)
 	}
+	result.WriteString("\x1b[0m")
 	return result.String()
 }
+
+// RenderFlowingGradient renders text with an animated wave gradient that cycles between c1 and c2 based on phase.
+func RenderFlowingGradient(text string, c1, c2 color.Color, phase float64) string {
+	r1, g1, b1, _ := c1.RGBA()
+	r2, g2, b2, _ := c2.RGBA()
+
+	red1, green1, blue1 := int(uint8(r1>>8)), int(uint8(g1>>8)), int(uint8(b1>>8))
+	red2, green2, blue2 := int(uint8(r2>>8)), int(uint8(g2>>8)), int(uint8(b2>>8))
+
+	runes := []rune(text)
+	if len(runes) == 0 {
+		return text
+	}
+
+	var result strings.Builder
+	for i, rn := range runes {
+		// Sine wave mapped to [0, 1] range with spatial frequency and time phase
+		t := (math.Sin(float64(i)*0.35+phase) + 1.0) / 2.0
+		r := int(float64(red1) + t*float64(red2-red1))
+		g := int(float64(green1) + t*float64(green2-green1))
+		b := int(float64(blue1) + t*float64(blue2-blue1))
+
+		fmt.Fprintf(&result, "\x1b[38;2;%d;%d;%dm%c", r, g, b, rn)
+	}
+	result.WriteString("\x1b[0m")
+	return result.String()
+}
+
 

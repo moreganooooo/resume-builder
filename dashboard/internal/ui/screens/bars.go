@@ -293,27 +293,49 @@ func newDetailPaneStyles(t theme.Theme, width, height int) detailPaneStyles {
 // categorized reference (Navigation/Actions/View/Exit) instead, dismissed
 // the same way (`?`, Esc, or q) everywhere it appears.
 
-// helpBinding is one key -> description pair shown in a screen's `?` help
+// HelpBinding is one key -> description pair shown in a screen's `?` help
 // overlay.
+type HelpBinding struct {
+	Key  string
+	Desc string
+}
+
 type helpBinding struct {
 	key  string
 	desc string
 }
 
-// helpCategory groups related bindings under a heading -- Navigation,
+// HelpCategory groups related bindings under a heading -- Navigation,
 // Actions, View, or Exit, matching how the design critique asked for these
 // to be organized rather than dumped as one flat list.
+type HelpCategory struct {
+	Label    string
+	Bindings []HelpBinding
+}
+
 type helpCategory struct {
 	label    string
 	bindings []helpBinding
 }
 
-// renderHelpOverlay renders title's full keybinding reference as a
+// RenderHelpOverlay renders title's full keybinding reference as a
 // bordered, categorized box that replaces the screen's normal body for as
 // long as help is open -- simpler and more robust on a narrow terminal
 // than trying to compose it alongside the split-pane content the way
 // fitBar composes header/help bars, since the overlay owns the whole
 // frame and can just wrap/clip its own lines to width/height directly.
+func RenderHelpOverlay(t theme.Theme, title string, categories []HelpCategory, width, height int) string {
+	var internalCats []helpCategory
+	for _, c := range categories {
+		var internalBindings []helpBinding
+		for _, b := range c.Bindings {
+			internalBindings = append(internalBindings, helpBinding{key: b.Key, desc: b.Desc})
+		}
+		internalCats = append(internalCats, helpCategory{label: c.Label, bindings: internalBindings})
+	}
+	return renderHelpOverlay(t, title, internalCats, width, height)
+}
+
 func renderHelpOverlay(t theme.Theme, title string, categories []helpCategory, width, height int) string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).

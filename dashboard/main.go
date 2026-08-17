@@ -12,9 +12,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/log"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -50,9 +50,8 @@ type appModel struct {
 	// already-rendered View() output, rather than a hard cut. Generic --
 	// works on any screen's output as-is, no per-screen rendering changes.
 	transitioning    bool
-	transitionSpring harmonica.Spring
+	transitionSpring anim.Spring
 	transitionPos    float64
-	transitionVel    float64
 
 	// transitionRender caches the incoming screen's full View() output for
 	// the current tick, computed once in the transitionTickMsg handler
@@ -74,18 +73,9 @@ func tickTransition() tea.Cmd {
 	})
 }
 
-// reducedMotion mirrors theme.NewIcons' RESUME_BUILDER_ICONS=unicode
-// precedent: a single env-var escape hatch, checked fresh (no persisted
-// profile state the dashboard binary can reach) for users who don't want
-// the harmonica-spring reveal -- vestibular sensitivity, or just a laggy
-// SSH session where 60fps redraws are their own kind of annoying.
-func reducedMotion() bool {
-	return os.Getenv("RESUME_BUILDER_MOTION") == "reduced"
-}
-
 // startTransition switches to newState and begins revealing it top-down.
-// damping of 1.0 is critically damped -- no bounce/overshoot, which would
-// make lines flicker in and out rather than settle once, cleanly.
+// Damping of 0.7 provides an organic, responsive underdamped bounce that
+// settles smoothly without rigid abruptness, matching the TUI motion design.
 //
 // Recording m.state as previousState before overwriting it -- rather than
 // only setting previousState at each menu-selection/open-report/open-
@@ -96,15 +86,15 @@ func reducedMotion() bool {
 func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 	m.previousState = m.state
 	m.state = newState
-	if reducedMotion() {
+	if anim.ReducedMotion() {
 		m.transitioning = false
 		return m, nil
 	}
 	m.transitioning = true
-	m.transitionSpring = harmonica.NewSpring(harmonica.FPS(60), 7.0, 0.7)
+	m.transitionRender = m.renderScreen()
+	target := float64(len(strings.Split(m.transitionRender, "\n")))
+	m.transitionSpring = anim.NewSpring(anim.Organic, 0, target)
 	m.transitionPos = 0
-	m.transitionVel = 0
-	m.transitionRender = ""
 	return m, tickTransition()
 }
 
@@ -240,10 +230,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.transitioning {
 			return m, nil
 		}
-		m.transitionRender = m.renderScreen()
-		target := len(strings.Split(m.transitionRender, "\n"))
-		m.transitionPos, m.transitionVel = m.transitionSpring.Update(m.transitionPos, m.transitionVel, float64(target))
-		if m.transitionPos >= float64(target)-0.5 {
+		pos, settled := m.transitionSpring.Update()
+		m.transitionPos = pos
+		if settled {
 			m.transitioning = false
 			return m, nil
 		}
@@ -501,8 +490,8 @@ func main() {
 		// reducedMotion() opts out, matching startTransition's own check.
 		state:            viewMenu,
 		menu:             menu.NewMenuModel(t),
-		transitioning:    !reducedMotion(),
-		transitionSpring: harmonica.NewSpring(harmonica.FPS(60), 7.0, 0.7),
+		transitioning:    !anim.ReducedMotion(),
+		transitionSpring: anim.NewSpring(anim.Organic, 0, 24),
 	}
 
 	p := tea.NewProgram(m)
