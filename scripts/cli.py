@@ -132,9 +132,7 @@ def run_batch(master, pick, yes):
         with cli_art.new_progress() as progress:
             task = progress.add_task(f"[bold {theme.BRAND}]Processing JDs...", total=len(pending))
             for i, jd_path in enumerate(pending, 1):
-                jd = jd_manager.read_jd_json(jd_path)
-                company = jd.get("company", "?")
-                title = jd.get("title", "?")
+                company, title = jd_manager.extract_job_meta(jd_path)
                 progress.update(task, description=f"[{i}/{len(pending)}] {company} — {title}")
                 c, f = orchestrator.run_pipeline(jd_path=jd_path, master_resume_path=master)
                 completed += c

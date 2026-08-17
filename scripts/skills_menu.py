@@ -57,8 +57,7 @@ def _generate_next_id(tools: list) -> str:
         if tid.startswith("tool_"):
             try:
                 num = int(tid.split("_")[1])
-                if num > highest:
-                    highest = num
+                highest = max(highest, num)
             except ValueError:
                 pass
     return f"tool_{highest + 1:03d}"

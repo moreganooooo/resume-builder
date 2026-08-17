@@ -2965,7 +2965,7 @@ class ResumeEngine:
         cli_art.console.rule("Step 2: Mining bullet bank...", style="dim", align="left")
         bullet_tuples = checkpoint.get("bullet_tuples")
         if bullet_tuples is not None:
-                cli_art.print_literal(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
+            cli_art.print_literal(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
         else:
             bullet_tuples = self.mine_bullet_bank(
                 jd_text, master_resume,
@@ -3573,7 +3573,7 @@ class ResumeEngine:
                         cli_art.console.print(f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
                               f"discarding just this recommendation:", soft_wrap=True)
                         for v in rec_violations:
-                                cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
+                            cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
                         skipped.append(f"{rec} (attempted, discarded: introduced a validator violation)")
                     elif this_applied:
                         resume_data = candidate_resume_data
@@ -3710,12 +3710,12 @@ class ResumeEngine:
                     # in that response discarded the one edit that actually
                     # freed a page, and Why silently stuck around for every
                     # remaining trim attempt.
-                                        cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)...")
-                                        resume_data = dict(resume_data)
-                                        resume_data["SECTION_WHY"] = ""
-                                        resume_data["WHY_TEXT"] = ""
-                                        render_html(resume_data, html_out)
-                                        continue
+                    cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)...")
+                    resume_data = dict(resume_data)
+                    resume_data["SECTION_WHY"] = ""
+                    resume_data["WHY_TEXT"] = ""
+                    render_html(resume_data, html_out)
+                    continue
 
             cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
             trim_contents = (

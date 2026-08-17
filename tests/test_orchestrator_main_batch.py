@@ -221,7 +221,7 @@ class TestMainBatchMode(unittest.TestCase):
         def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
             if jd_path == self.good_path:
                 return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
-            raise Exception("boom")
+            raise RuntimeError("boom")
 
         mock_build.side_effect = build_side_effect
         mock_tracker = mock_tracker_cls.return_value

@@ -37,8 +37,7 @@ def _get_api_key() -> str:
 def _get_auth_headers() -> dict:
     return {"x-goog-api-key": _get_api_key()}
 
-# Backward-compatible property-like module access
-AUTH_HEADERS = property(lambda self: _get_auth_headers()) if False else None
+AUTH_HEADERS = None
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
