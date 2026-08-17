@@ -215,7 +215,7 @@ func (m ProgressModel) renderHeader() string {
 	style = theme.PadHorizontal(style)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Background(m.theme.Surface).Render(m.theme.Icons.Progress + "  ") +
-		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderGradient("✦ SEARCH PROGRESS ✧", "#FF985A", "#FF84FF"))
+		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ SEARCH PROGRESS ✧", m.theme.Peach, m.theme.Pink))
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	total := len(m.metrics.FunnelStages)
