@@ -7,3 +7,9 @@ bandit
 flake8
 pydocstyle
 radon
+pre-commit
+yamllint
+safety
+commitizen
+codespell
+sphinx
