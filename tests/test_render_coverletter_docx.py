@@ -114,6 +114,44 @@ class TestRenderCoverletterDocx(unittest.TestCase):
             if os.path.isdir(subdir):
                 os.rmdir(subdir)
 
+    def test_recipient_block_with_contact_name_without_title(self):
+        render_coverletter_docx(
+            _minimal_letter_data(contact_name="Maggie Smith", contact_title=""),
+            self.out_path,
+        )
+        doc = Document(self.out_path)
+        texts = self._paragraph_texts(doc)
+        self.assertIn("Attn: Maggie Smith", texts)
+
+    def test_minimal_fields_without_tagline_greeting_or_signoff(self):
+        data = {
+            "company_name": "",
+            "tagline": "",
+            "greeting": "",
+            "body_paragraphs": [],
+            "sign_off": "",
+        }
+        render_coverletter_docx(data, self.out_path)
+        doc = Document(self.out_path)
+        texts = self._paragraph_texts(doc)
+        self.assertIn("Morgan Escott", texts)
+
+    def test_main_cli_execution(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        import render_coverletter_docx as rcl_docx
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_path = os.path.join(tmpdir, "letter.json")
+            out_docx = os.path.join(tmpdir, "letter.docx")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(_minimal_letter_data(), f)
+            with patch("sys.argv", ["render_coverletter_docx.py", json_path, out_docx]):
+                rcl_docx.main()
+                self.assertTrue(os.path.exists(out_docx))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -360,5 +360,103 @@ class TestWebsearchPacing(unittest.TestCase):
         mock_sleep.assert_not_called()
 
 
+class TestNormalizeRawJobAndLoaders(unittest.TestCase):
+    def test_normalize_raw_job_invalid_titles_and_urls(self):
+        self.assertIsNone(scan_ats._normalize_raw_job({}, "greenhouse", "Acme"))
+        self.assertIsNone(
+            scan_ats._normalize_raw_job(
+                {"title": "https://example.com", "url": "https://example.com"},
+                "greenhouse",
+                "Acme",
+            )
+        )
+        self.assertIsNone(
+            scan_ats._normalize_raw_job(
+                {"title": "http://example.com", "url": "https://example.com"},
+                "greenhouse",
+                "Acme",
+            )
+        )
+        self.assertIsNone(
+            scan_ats._normalize_raw_job(
+                {"title": "Valid Title", "url": ""}, "greenhouse", "Acme"
+            )
+        )
+
+    @patch("scan_boards._html_to_text", return_value="Parsed HTML description")
+    @patch("scan_boards._passes_title_filter", return_value=True)
+    @patch("scan_boards._passes_location_filter", return_value=True)
+    def test_normalize_raw_job_with_inline_description(
+        self, mock_loc, mock_title, mock_html
+    ):
+        raw = {
+            "title": "Senior Marketing Manager",
+            "url": "https://boards.greenhouse.io/job/1",
+            "description": "<p>Parsed HTML description</p>",
+            "company": "Acme Corp",
+            "location": "Remote",
+            "posted_at": "2026-08-01",
+        }
+        job = scan_ats._normalize_raw_job(raw, "greenhouse", "Acme")
+        self.assertIsNotNone(job)
+        self.assertEqual(job["description"], "Parsed HTML description")
+        self.assertEqual(job["company_name"], "Acme Corp")
+        mock_html.assert_called_once_with("<p>Parsed HTML description</p>")
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider")
+    @patch("scan_ats._load_search_queries")
+    @patch("scan_ats._load_tracked_companies")
+    def test_fetch_ats_jobs_with_activity(
+        self, mock_companies, mock_queries, mock_run, mock_fetch_text
+    ):
+        from unittest.mock import MagicMock
+
+        activity = MagicMock()
+        mock_companies.return_value = [
+            {
+                "name": "Acme",
+                "careers_url": "https://boards.greenhouse.io/acme",
+                "enabled": True,
+            }
+        ]
+        mock_queries.return_value = [
+            {
+                "name": "Greenhouse Sweep",
+                "query": "site:boards.greenhouse.io remote",
+                "enabled": True,
+            }
+        ]
+        mock_run.return_value = [
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://boards.greenhouse.io/job/2",
+                "location": "Remote",
+                "company": "Acme",
+            }
+        ]
+        jobs = scan_ats.fetch_ats_jobs(activity=activity)
+        self.assertEqual(len(jobs), 2)
+        activity.start_source.assert_called_once()
+        self.assertTrue(activity.step.called)
+
+    def test_file_loaders(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tracked_path = os.path.join(tmpdir, "tracked_companies.yml")
+            search_path = os.path.join(tmpdir, "search_queries.yml")
+            with open(tracked_path, "w", encoding="utf-8") as f:
+                f.write("tracked_companies:\n  - name: TestCo\n")
+            with open(search_path, "w", encoding="utf-8") as f:
+                f.write("search_queries:\n  - name: TestQuery\n")
+
+            with patch("profile_paths.board_scanner_dir", return_value=tmpdir):
+                comps = scan_ats._load_tracked_companies()
+                queries = scan_ats._load_search_queries()
+                self.assertEqual(comps, [{"name": "TestCo"}])
+                self.assertEqual(queries, [{"name": "TestQuery"}])
+
+
 if __name__ == "__main__":
     unittest.main()

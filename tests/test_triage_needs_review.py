@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
@@ -254,6 +255,88 @@ class TestHeaderAwareAppend(unittest.TestCase):
         rows = self._read()
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["source"], "manual")
+
+
+class TestSafeIntAndMissingNeedsReview(TriageTestCase):
+    def test_safe_int(self):
+        self.assertEqual(triage_needs_review.safe_int("42"), 42)
+        self.assertEqual(triage_needs_review.safe_int("42.7"), 42)
+        self.assertEqual(triage_needs_review.safe_int("not_a_num", default=5), 5)
+        self.assertEqual(triage_needs_review.safe_int(None, default=10), 10)
+
+    def test_missing_needs_review_file_handled(self):
+        # File does not exist
+        with patch("triage_needs_review.cli_art.cli_info") as mock_info:
+            triage_needs_review.main()
+            mock_info.assert_called_with(
+                "needs-review.csv not found. Nothing to triage."
+            )
+
+
+class TestRoutingBranches(TriageTestCase):
+    def test_rewrite_and_retire_and_leftover_routing(self):
+        rows = [
+            {
+                "Bullet Point": "Needs rewrite under 3 attempts",
+                "Role / Company": "Acme",
+                "Tags": "[ops]",
+                "manager_test": "FAIL",
+                "believability_score": "50",
+                "rewrite_attempts": "1",
+                "rewrite_status": "",
+            },
+            {
+                "Bullet Point": "Needs retirement at 3 attempts",
+                "Role / Company": "Acme",
+                "Tags": "[ops]",
+                "manager_test": "FAIL",
+                "believability_score": "50",
+                "rewrite_attempts": "3",
+                "rewrite_status": "",
+            },
+            {
+                "Bullet Point": "Uncertain / unhandled case",
+                "Role / Company": "Acme",
+                "Tags": "[ops]",
+                "manager_test": "MAYBE",
+                "believability_score": "70",
+                "rewrite_attempts": "0",
+                "rewrite_status": "",
+            },
+            {
+                "Bullet Point": "Already marked closed out",
+                "Role / Company": "Acme",
+                "Tags": "[ops]",
+                "manager_test": "FAIL",
+                "believability_score": "50",
+                "rewrite_attempts": "0",
+                "rewrite_status": "CLOSED_OUT",
+            },
+        ]
+        self._write_needs_review(rows)
+        triage_needs_review.main()
+
+        # Check rewrite queue
+        self.assertTrue(os.path.exists(self.rewrite_queue))
+        with open(self.rewrite_queue, newline="", encoding="utf-8") as f:
+            r = list(csv.DictReader(f))
+            self.assertEqual(len(r), 1)
+            self.assertEqual(r[0]["Bullet Point"], "Needs rewrite under 3 attempts")
+            self.assertEqual(r[0]["rewrite_status"], "REWRITE")
+
+        # Check retired bullets
+        self.assertTrue(os.path.exists(self.retired))
+        with open(self.retired, newline="", encoding="utf-8") as f:
+            r = list(csv.DictReader(f))
+            self.assertEqual(len(r), 1)
+            self.assertEqual(r[0]["Bullet Point"], "Needs retirement at 3 attempts")
+            self.assertEqual(r[0]["rewrite_status"], "RETIRED")
+
+        # Check needs-review.csv remains with leftover rows
+        self.assertTrue(os.path.exists(self.needs_review))
+        with open(self.needs_review, newline="", encoding="utf-8") as f:
+            r = list(csv.DictReader(f))
+            self.assertEqual(len(r), 2)
 
 
 if __name__ == "__main__":

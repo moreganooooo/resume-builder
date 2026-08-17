@@ -134,7 +134,7 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     return output_path
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Render a cover letter JSON into HTML")
     parser.add_argument("input_json")
     parser.add_argument("output_html")
@@ -142,3 +142,7 @@ if __name__ == "__main__":
     with open(args.input_json, "r", encoding="utf-8") as f:
         data = json.load(f)
     render_coverletter(data, args.output_html)
+
+
+if __name__ == "__main__":
+    main()

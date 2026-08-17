@@ -89,6 +89,88 @@ class TestGenerateTypstMarkup(unittest.TestCase):
         # @ is one of the six escaped Typst symbols, so it's escaped here too.
         self.assertIn("jane\\@example.com | Austin, TX", markup)
 
+    def test_markup_with_tagline_and_job_without_location(self):
+        data = {
+            "NAME": "Jane Doe",
+            "TAGLINE": "Product Lead",
+            "EXPERIENCE": [
+                {
+                    "title": "Lead",
+                    "company": "Startup",
+                    "period": "2024",
+                    "location": "",
+                    "achievements": ["Built feature"],
+                }
+            ],
+        }
+        markup = render_typst.generate_typst_markup(data)
+        self.assertIn("Product Lead", markup)
+        self.assertIn("*Startup*", markup)
+
+
+class TestRenderTypstFunction(unittest.TestCase):
+    def test_render_typst_binary_missing(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_file = os.path.join(tmpdir, "resume.json")
+            pdf_file = os.path.join(tmpdir, "resume.pdf")
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump({"NAME": "Test User"}, f)
+
+            with patch("shutil.which", return_value=None):
+                res = render_typst.render_typst(json_file, pdf_file)
+                self.assertTrue(res)
+                typ_file = os.path.join(tmpdir, "resume.typ")
+                self.assertTrue(os.path.exists(typ_file))
+
+    def test_render_typst_binary_success(self):
+        import json
+        import tempfile
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_file = os.path.join(tmpdir, "resume.json")
+            pdf_file = os.path.join(tmpdir, "resume.pdf")
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump({"NAME": "Test User"}, f)
+
+            with (
+                patch("shutil.which", return_value="/usr/bin/typst"),
+                patch("subprocess.run", return_value=MagicMock(returncode=0)),
+            ):
+                res = render_typst.render_typst(json_file, pdf_file)
+                self.assertTrue(res)
+
+    def test_render_typst_binary_failure(self):
+        import json
+        import tempfile
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_file = os.path.join(tmpdir, "resume.json")
+            pdf_file = os.path.join(tmpdir, "resume.pdf")
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump({"NAME": "Test User"}, f)
+
+            with (
+                patch("shutil.which", return_value="/usr/bin/typst"),
+                patch(
+                    "subprocess.run",
+                    return_value=MagicMock(returncode=1, stderr="compile error"),
+                ),
+            ):
+                res = render_typst.render_typst(json_file, pdf_file)
+                self.assertFalse(res)
+
+    def test_render_typst_exception_handled(self):
+        res = render_typst.render_typst(
+            "/nonexistent/file.json", "/nonexistent/file.pdf"
+        )
+        self.assertFalse(res)
+
 
 if __name__ == "__main__":
     unittest.main()

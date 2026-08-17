@@ -80,6 +80,53 @@ class TestBuildVoiceAnchors(unittest.TestCase):
         content = build_voice_anchors.build_voice_anchors(self.tmp_csv)
         self.assertNotIn("### Prioritizing tasks", content)
 
+    def test_main_missing_index(self):
+        from unittest.mock import patch
+
+        with patch.object(build_voice_anchors, "INDEX_CSV", "/nonexistent/answers.csv"):
+            with self.assertRaises(SystemExit) as cm:
+                build_voice_anchors.main()
+            self.assertEqual(cm.exception.code, 1)
+
+    def test_main_success(self):
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = os.path.join(tmpdir, "application-answers-index.csv")
+            output = os.path.join(tmpdir, "voice-anchors.md")
+            with open(source, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "Filename",
+                        "Prompt / Topic",
+                        "Themes & Highlights",
+                        "Reusability Tags",
+                        "Answer Length",
+                        "Strong For",
+                        "Quote Worth Pulling",
+                    ],
+                )
+                w.writeheader()
+                w.writerow(
+                    {
+                        "Prompt / Topic": "Teamwork",
+                        "Quote Worth Pulling": "I value team velocity.",
+                    }
+                )
+
+            with (
+                patch.object(build_voice_anchors, "INDEX_CSV", source),
+                patch.object(build_voice_anchors, "OUTPUT_MD", output),
+            ):
+                build_voice_anchors.main()
+                self.assertTrue(os.path.exists(output))
+                with open(output, "r", encoding="utf-8") as f:
+                    text = f.read()
+                    self.assertIn("### Teamwork", text)
+                    self.assertIn("I value team velocity.", text)
+
 
 if __name__ == "__main__":
     unittest.main()

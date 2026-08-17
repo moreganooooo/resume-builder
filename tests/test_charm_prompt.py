@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -132,6 +133,108 @@ class TestCheckbox(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=130, stdout="", stderr="")
         result = charm_prompt.checkbox("Pick some", [{"label": "A", "value": "a"}])
         self.assertIsNone(result)
+
+
+class TestOptionDict(unittest.TestCase):
+    def test_dict_input(self):
+        res = charm_prompt._option_dict({"label": "L", "value": "V"})
+        self.assertEqual(res, {"label": "L", "value": "V"})
+
+    def test_choice_with_string_title(self):
+        choice = MagicMock()
+        choice.title = "Option A"
+        choice.value = "opt_a"
+        res = charm_prompt._option_dict(choice)
+        self.assertEqual(res, {"label": "Option A", "value": "opt_a"})
+
+    def test_choice_with_styled_list_title(self):
+        choice = MagicMock()
+        choice.title = [("class:bold", "Styled "), ("", "Option")]
+        choice.value = "opt_styled"
+        res = charm_prompt._option_dict(choice)
+        self.assertEqual(res, {"label": "Styled Option", "value": "opt_styled"})
+
+    def test_plain_scalar_input(self):
+        res = charm_prompt._option_dict("simple_string")
+        self.assertEqual(res, {"label": "simple_string", "value": "simple_string"})
+
+
+class TestCompilationAndGoAvailable(unittest.TestCase):
+    @patch("charm_prompt._go_available", return_value=False)
+    def test_compile_when_no_go(self, mock_go):
+        self.assertIsNone(charm_prompt._compile_prompt_if_needed())
+
+    @patch("charm_prompt._go_available", return_value=True)
+    @patch("os.path.exists", return_value=True)
+    def test_compile_when_bin_exists(self, mock_exists, mock_go):
+        self.assertEqual(
+            charm_prompt._compile_prompt_if_needed(), charm_prompt._BIN_PATH
+        )
+
+    @patch("charm_prompt._go_available", return_value=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("os.makedirs")
+    @patch("subprocess.run")
+    def test_compile_build_success(self, mock_run, mock_makedirs, mock_exists, mock_go):
+        res = charm_prompt._compile_prompt_if_needed()
+        self.assertEqual(res, charm_prompt._BIN_PATH)
+        mock_run.assert_called_once()
+
+    @patch("charm_prompt._go_available", return_value=True)
+    @patch("os.path.exists", return_value=False)
+    @patch("os.makedirs")
+    @patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "cmd"))
+    def test_compile_build_failure(self, mock_run, mock_makedirs, mock_exists, mock_go):
+        self.assertIsNone(charm_prompt._compile_prompt_if_needed())
+
+
+class TestFallbackWhenGoNotAvailable(unittest.TestCase):
+    @patch("charm_prompt._go_available", return_value=False)
+    @patch("charm_prompt.questionary.confirm")
+    def test_confirm_fallback(self, mock_q, mock_go):
+        mock_q.return_value.ask.return_value = True
+        self.assertTrue(charm_prompt.confirm("Fallback?"))
+
+    @patch("charm_prompt._go_available", return_value=False)
+    @patch("charm_prompt.questionary.select")
+    def test_select_fallback(self, mock_q, mock_go):
+        mock_q.return_value.ask.return_value = "opt1"
+        self.assertEqual(charm_prompt.select("Fallback?", ["opt1"]), "opt1")
+
+    @patch("charm_prompt._go_available", return_value=False)
+    @patch("charm_prompt.questionary.checkbox")
+    def test_checkbox_fallback(self, mock_q, mock_go):
+        mock_q.return_value.ask.return_value = ["opt1"]
+        self.assertEqual(charm_prompt.checkbox("Fallback?", ["opt1"]), ["opt1"])
+
+
+class TestDegradationOnRuntimeError(unittest.TestCase):
+    @patch("charm_prompt._go_available", return_value=True)
+    @patch("charm_prompt._run_prompt", side_effect=RuntimeError("crashed"))
+    @patch("charm_prompt.questionary.select")
+    def test_select_degrade(self, mock_q, mock_run, mock_go):
+        mock_q.return_value.ask.return_value = "fallback_val"
+        res = charm_prompt.select("Choice?", ["A", "B"])
+        self.assertEqual(res, "fallback_val")
+
+    @patch("charm_prompt._go_available", return_value=True)
+    @patch("charm_prompt._run_prompt", side_effect=RuntimeError("crashed"))
+    @patch("charm_prompt.questionary.checkbox")
+    def test_checkbox_degrade(self, mock_q, mock_run, mock_go):
+        mock_q.return_value.ask.return_value = ["fallback_box"]
+        res = charm_prompt.checkbox("Boxes?", ["A", "B"])
+        self.assertEqual(res, ["fallback_box"])
+
+
+class TestRunPromptDirectly(unittest.TestCase):
+    @patch("charm_prompt._compile_prompt_if_needed", return_value="/custom/bin/prompt")
+    @patch("os.path.exists", return_value=True)
+    @patch("subprocess.run")
+    def test_run_with_existing_bin(self, mock_run, mock_exists, mock_compile):
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"ok": true}')
+        res = charm_prompt._run_prompt({"test": 1})
+        self.assertEqual(res, {"ok": True})
+        self.assertEqual(mock_run.call_args[0][0][0], "/custom/bin/prompt")
 
 
 if __name__ == "__main__":

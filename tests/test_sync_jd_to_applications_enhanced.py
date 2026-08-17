@@ -55,6 +55,72 @@ class TestLoadJson(unittest.TestCase):
             mock_warn.assert_called_once()
             self.assertIn(str(path), mock_warn.call_args[0][0])
 
+    def test_json_with_trailing_data_parses_first_object(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "extra.json"
+            path.write_text('{"company": "Acme"} extra trailing text', encoding="utf-8")
+            result = sync_jd.load_json(path)
+            self.assertEqual(result, {"company": "Acme"})
+
+    def test_file_read_os_error_warns_and_returns_empty_dict(self):
+        path = Path("/nonexistent/path/never_exists.json")
+        with patch("sync_jd_to_applications_enhanced.cli_art.cli_warning") as mock_warn:
+            result = sync_jd.load_json(path)
+            self.assertEqual(result, {})
+            mock_warn.assert_called_once()
+
+
+class TestHelpers(unittest.TestCase):
+    def test_format_score(self):
+        self.assertEqual(sync_jd.format_score({"composite_score": 4.5}), "4.50/5")
+        self.assertEqual(sync_jd.format_score({"composite_score": 5}), "5.00/5")
+        self.assertEqual(sync_jd.format_score({}), "NA")
+        self.assertEqual(sync_jd.format_score({"composite_score": "high"}), "NA")
+
+    def test_parse_existing_md(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            md_path = Path(tmp) / "applications.md"
+            self.assertEqual(sync_jd.parse_existing_md(md_path), {})
+
+            content = (
+                "| # | Date | Company | Role | Score | Status | PDF | Link | Report | Notes |\n"
+                "|---|------|---------|------|-------|--------|-----|------|--------|-------|\n"
+                "Random non-table line\n"
+                "| 1 | short | row |\n"
+                "| 1 | 2026-08-01 | Acme | Dev | 4.50/5 | Evaluated | ✓ | [Apply](url) | rep.pdf | Call next week |\n"
+            )
+            md_path.write_text(content, encoding="utf-8")
+            existing = sync_jd.parse_existing_md(md_path)
+            self.assertEqual(
+                existing.get(("2026-08-01", "Acme", "Dev")), "Call next week"
+            )
+
+    def test_format_row(self):
+        data = {
+            "date": "2026-08-01",
+            "company": "Acme",
+            "role": "Lead",
+            "evaluation": {"composite_score": 4.2},
+            "status": "Interview",
+            "has_pdf": True,
+            "source_url": "https://example.com",
+            "report_path": "report.pdf",
+            "notes": "Custom note",
+        }
+        row = sync_jd.format_row(1, data, preserved_notes="Old note")
+        self.assertIn(
+            "| 1 | 2026-08-01 | Acme | Lead | 4.20/5 | Interview | ✓ | [Apply](https://example.com) | report.pdf | Custom note |",
+            row,
+        )
+
+        data_no_notes = {
+            "date": "2026-08-01",
+            "company": "Acme",
+            "role": "Lead",
+        }
+        row_preserved = sync_jd.format_row(2, data_no_notes, preserved_notes="Old note")
+        self.assertIn("Old note |", row_preserved)
+
 
 class TestMainWritesSuccessMessage(unittest.TestCase):
     """main() derives project_root from __file__, so this exercises it
@@ -97,6 +163,15 @@ class TestMainWritesSuccessMessage(unittest.TestCase):
         for call in mock_print.call_args_list:
             if call.args:
                 self.assertNotIn("[sync]", call.args[0])
+
+    def test_main_no_json_files_exits(self):
+        for f in self.jds_dir.glob("*.json"):
+            f.unlink()
+        with patch("sync_jd_to_applications_enhanced.cli_art.cli_error") as mock_err:
+            with self.assertRaises(SystemExit) as cm:
+                sync_jd.main(self.PROFILE)
+            self.assertEqual(cm.exception.code, 1)
+            mock_err.assert_called_once()
 
 
 if __name__ == "__main__":

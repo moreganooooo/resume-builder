@@ -82,6 +82,11 @@ build/
 .venv/
 venv/
 env/
+.coverage
+.coverage.*
+coverage.xml
+.mypy_cache/
+.pytest_cache/
 
 
 # === NODE ===
