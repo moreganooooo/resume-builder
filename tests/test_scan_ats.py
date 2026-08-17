@@ -36,6 +36,43 @@ class TestResolveProviderId(unittest.TestCase):
         self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://acme.com/careers", "scan_method": "websearch"}), "")
 
 
+class TestClassifyAts(unittest.TestCase):
+
+    def test_workday_classifies_enterprise_high(self):
+        result = scan_ats.classify_ats("https://acme.wd1.myworkdayjobs.com/External/job/123")
+        self.assertEqual(result, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+
+    def test_taleo_classifies_enterprise_high(self):
+        result = scan_ats.classify_ats("https://acme.taleo.net/careersection/2/jobdetail.ftl")
+        self.assertEqual(result, {"provider_id": "taleo", "weight_tier": "enterprise_high"})
+
+    def test_rippling_classifies_ai_prescreened(self):
+        result = scan_ats.classify_ats("https://ats.rippling.com/acme/jobs/abc123")
+        self.assertEqual(result, {"provider_id": "rippling", "weight_tier": "ai_prescreened"})
+
+    def test_greenhouse_classifies_startup_zero(self):
+        result = scan_ats.classify_ats("https://boards.greenhouse.io/acme/jobs/123")
+        self.assertEqual(result, {"provider_id": "greenhouse", "weight_tier": "startup_zero"})
+
+    def test_lever_classifies_startup_zero(self):
+        result = scan_ats.classify_ats("https://jobs.lever.co/acme/abc")
+        self.assertEqual(result, {"provider_id": "lever", "weight_tier": "startup_zero"})
+
+    def test_ashby_classifies_evidence_based(self):
+        result = scan_ats.classify_ats("https://jobs.ashbyhq.com/acme/abc")
+        self.assertEqual(result, {"provider_id": "ashby", "weight_tier": "evidence_based"})
+
+    def test_recruitee_classifies_unknown_tier(self):
+        result = scan_ats.classify_ats("https://acme.recruitee.com/o/role")
+        self.assertEqual(result, {"provider_id": "recruitee", "weight_tier": "unknown"})
+
+    def test_no_match_returns_none(self):
+        self.assertIsNone(scan_ats.classify_ats("https://acme.com/careers/role"))
+
+    def test_empty_source_url_returns_none(self):
+        self.assertIsNone(scan_ats.classify_ats(""))
+
+
 class TestFetchAtsJobs(unittest.TestCase):
 
     @patch("scan_boards._fetch_posting_text", return_value="")

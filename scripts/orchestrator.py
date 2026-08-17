@@ -41,6 +41,7 @@ import validate_resume
 import validate_pdf_text
 import validate_coverletter
 import jd_manager
+import scan_ats
 import bullet_feedback
 import kb_snapshot
 from bullet_bank_hash import bullets_sha
@@ -1093,6 +1094,47 @@ def format_company_research_block(research: dict) -> str:
         )
 
     return block
+
+
+# Front-loading emphasis wording per ATS weight_tier (see
+# scan_ats.classify_ats()) -- enterprise/AI-prescreened platforms scan for
+# exact literal terms, so keyword front-loading matters there; startup/
+# evidence-based platforms are read by a human first, so the same terms
+# should read naturally rather than mechanically. "unknown" (no
+# classification, or a source_url the classifier didn't recognize) gets
+# the same light-touch wording as the human-read tiers.
+_ATS_TIER_EMPHASIS = {
+    "enterprise_high": "critical -- this posting runs through an enterprise ATS that scans for exact literal term matches",
+    "ai_prescreened": "critical -- this posting is AI-prescreened, which weighs exact keyword matches heavily",
+    "startup_zero": "a light touch -- a human reads this first, so work these in naturally rather than front-loading mechanically",
+    "evidence_based": "a light touch -- weave these in naturally alongside real evidence rather than front-loading mechanically",
+    "unknown": "helpful context -- include naturally where they fit",
+}
+
+
+def _build_keyword_block(jd_keywords: dict | None, ats_classification: dict | None) -> str:
+    """Formats up to 8 top JD keywords (Feature #12) into a
+    '=== KEYWORDS ===' context block build_tailored_coverletter() folds
+    into its system-instruction context, with front-loading emphasis
+    scaled by the JD's ATS weight_tier (Feature #1). Returns '' when no
+    keywords are available -- most callers before this feature existed."""
+    if not jd_keywords:
+        return ""
+    terms = (
+        list(jd_keywords.get("tools") or [])
+        + list(jd_keywords.get("hard_skills") or [])
+        + list(jd_keywords.get("core_functions") or [])
+    )[:8]
+    if not terms:
+        return ""
+
+    weight_tier = (ats_classification or {}).get("weight_tier", "unknown")
+    emphasis = _ATS_TIER_EMPHASIS.get(weight_tier, _ATS_TIER_EMPHASIS["unknown"])
+    return (
+        "\n\n=== KEYWORDS ===\n"
+        f"Top terms from this job description: {', '.join(terms)}\n"
+        f"Front-loading these into the first 100 words of paragraph 1 is {emphasis}.\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2658,6 +2700,21 @@ class ResumeEngine:
         checkpoint = jd_manager.load_checkpoint(job_key)
         jd_keywords = checkpoint.get("jd_keywords") if checkpoint else None
 
+        # Feature #12 needs keywords even for a standalone cover-letter-only
+        # run (no prior resume build, so no checkpoint to reuse). Extracted
+        # in-memory only -- deliberately not written to a checkpoint, since
+        # this function is checkpoint-free by design (see docstring above).
+        if not jd_keywords:
+            keyword_prompt = self.load_prompt("extract_keywords.md")
+            keyword_text, _ = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=keyword_prompt,
+                contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
+                response_schema=JDKeywordSchema,
+                temperature=0.0,
+            )
+            jd_keywords = GeminiClient.parse_json(keyword_text or "") or None
+
         research = self.research_company(jd_data, jd_text)
         if research:
             jd_manager.save_research(jd_path, research)
@@ -2679,9 +2736,22 @@ class ResumeEngine:
             if referral and referral.get("text") else ""
         )
 
+        # Feature #1: classify which ATS this posting runs on, cached per-JD
+        # (see jd_manager.save/read_ats_classification()) so a rebuild
+        # doesn't reclassify. Feature #12's keyword block uses the result's
+        # weight_tier to decide how hard to push front-loading.
+        ats_classification = jd_manager.read_ats_classification(jd_path)
+        if ats_classification is None:
+            source_url = jd_manager.extract_source_url(jd_path)
+            ats_classification = scan_ats.classify_ats(source_url)
+            if ats_classification:
+                jd_manager.save_ats_classification(jd_path, ats_classification)
+
+        keyword_block = _build_keyword_block(jd_keywords, ats_classification)
+
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
         background_context = self.build_audit_static_prefix(include_evidence_guide=True)
-        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}"
+        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}"
 
         letter_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
