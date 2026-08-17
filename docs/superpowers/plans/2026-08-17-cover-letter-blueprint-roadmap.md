@@ -1,7 +1,7 @@
 # Cover Letter Blueprint Roadmap
 
 > **Source**: `docs/cover_letter_research_master_blueprint.md` (Gemini-authored, 23-feature roadmap)
-> **Status as of 2026-08-17**: Groups A-B complete. Groups C-E not started.
+> **Status as of 2026-08-17**: Groups A-C complete. Groups D-E not started.
 > **Purpose**: Tracks the decomposed, verified subset of the blueprint actually worth building, so this work can resume in a fresh session without re-deriving context.
 
 ## Why this doc exists
@@ -46,12 +46,14 @@ Features #1 (ATS classification) + #12 (first-100-words keyword front-loading), 
 
 Full suite: 1608 tests passing after Group B (was 1585 after Group A).
 
-### Group C — DOCX exporter (not started, architectural — needs its own spec)
-Feature #3. Genuinely net-new subsystem — no DOCX *output* infra exists anywhere in the repo today (`python-docx` is currently only used to *read* uploaded resumes, in `bootstrap_extractors.py`). Needs design decisions before implementation:
-- Library choice (`python-docx` is already a dependency for reading, likely reusable for writing)
-- Template fidelity vs. the Typst-rendered PDF as the source of truth — how much visual parity is expected
-- Where it hooks into `orchestrator.py`'s render pipeline (parallel to `render_coverletter()`'s PDF path, or a separate on-demand command)
-- Whether this is cover-letter-only or eventually resume-only too (blueprint's Feature #3 concept covers both, citing Taleo/Workday's 97% DOCX parse rate)
+### Group C — DOCX exporter ✅ COMPLETE
+Feature #3. Added automatic, ATS-optimized `.docx` export for both resumes and cover letters, built directly with `python-docx` and wired into `orchestrator.py` to generate alongside existing JSON/HTML/PDF artifacts on every build.
+
+- **`render_coverletter_docx.py`**: Added renderer producing ATS-optimized single-column `.docx` cover letters with recipient block, dynamic tagline, and contact info. Tests in `tests/test_render_coverletter_docx.py`.
+- **`render_resume_docx.py`**: Added renderer producing ATS-optimized single-column `.docx` resumes with Word standard styles (`Title`, `Heading 1`, `Normal`, `List Bullet`). Tests in `tests/test_render_resume_docx.py`.
+- **`orchestrator.py` integration**: Added `self.output_docx_dir`, wired cover letter DOCX generation right after PDF creation in `build_tailored_coverletter()`, and wired resume DOCX generation right after PDF text check in `build_tailored_resume()`. Tests in `tests/test_orchestrator_docx_export.py`.
+
+Full suite: 1634 tests passing after Group C (was 1608 after Group B).
 
 ### Group D — Voice anchor matcher (not started, architectural — needs its own spec)
 Feature #9. Needs design decisions:
