@@ -55,12 +55,12 @@ Feature #3. Added automatic, ATS-optimized `.docx` export for both resumes and c
 
 Full suite: 1634 tests passing after Group C (was 1608 after Group B).
 
-### Group D — Voice anchor matcher (not started, architectural — needs its own spec)
-Feature #9. Needs design decisions:
-- What baseline corpus represents "Morgan's authentic voice" (existing `build_voice_anchors.py` output is quote artifacts, not a statistical baseline — may need new corpus-building work)
-- What metrics to compute (sentence-length variance, vocabulary diversity/burstiness are the blueprint's suggestions)
-- Where it plugs into the validation retry loop in `build_tailored_coverletter()`, and what threshold triggers a violation
-- This is a different failure mode than #8's cliché blocklist — catches *statistical* AI-tells, not specific banned words (established via explicit discussion with the user)
+### Group D — Voice anchor matcher 📋 SPEC & PLAN COMPLETE (READY FOR IMPLEMENTATION)
+Feature #9. Statistical stylometry and voice anchor analyzer:
+- **Design Spec**: [`docs/superpowers/specs/2026-08-17-voice-anchor-matcher-design.md`](file:///Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-voice-anchor-matcher-design.md)
+- **Implementation Plan**: [`docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md`](file:///Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md)
+- **Architecture**: Pure-function stylometry engine (`scripts/voice_metrics.py`), declarative rules (`resume-engine/scoring/voice_rules.yaml`), prompt enhancement (`resume-engine/prompts/tailor_coverletter.md`), validator integration (`scripts/validate_coverletter.py`), and orchestrator retry loop wiring (`scripts/orchestrator.py`).
+- **Failure Mode**: Catches *statistical* AI tells (monotonous sentence length variance $\sigma < 4.5$, low burstiness/span $< 12$, low TTR $< 0.46$, repetitive consecutive openers) vs. Morgan's authentic writing specimens.
 
 ### Group E — One-command pipeline (not started, bounded — glue only)
 Feature #19. Every sub-step it would chain (liveness check, dual-metric scoring, resume build, cover letter build, company research, DB logging) already works individually — this is pure orchestration, no new logic. Deliberately sequenced last because it benefits from Group B (ATS-aware format/strategy selection) and Group C (DOCX vs. PDF choice) already existing, so the one-command version can be "smart" from day one rather than needing a later retrofit. Could still be built earlier as a dumb chain-only version if that's ever wanted out of order.
