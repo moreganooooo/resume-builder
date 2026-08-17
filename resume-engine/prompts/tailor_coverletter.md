@@ -30,6 +30,8 @@ Using the job description and the background context provided, write:
 - If no `=== COMPANY RESEARCH ===` block is present, do not claim to know anything about the company's culture, mission, or values beyond what's stated in the JD text itself -- proceed without it, exactly as before.
 - Keep each paragraph to 4-6 lines, 300-450 words total across the whole
   letter -- warmly strategic, not an essay.
+- **Sentence length variance & rhythm**: Avoid monotonous, synthetic cadence where every sentence is 16-20 words. Mix short, punchy declarative statements (4-8 words) with nuanced, compound analytical sentences (22-35 words) to reflect authentic human burstiness and rhythm.
+- **Varied sentence openers**: Never begin consecutive sentences with the same pronoun or verb structure (e.g. avoid repeating "I built...", "I led...", "I managed...").
 
 # Output
 
