@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import validate_coverletter  # noqa: E402
@@ -39,7 +41,12 @@ class TestValidateCoverletterVoice(unittest.TestCase):
             self.style_rules,
             voice_rules=self.voice_rules,
         )
-        self.assertTrue(any("monotonous" in v.lower() or "sentence starters" in v.lower() for v in violations))
+        self.assertTrue(
+            any(
+                "monotonous" in v.lower() or "sentence starters" in v.lower()
+                for v in violations
+            )
+        )
 
     def test_validate_passes_on_high_variance_natural_prose(self):
         letter_data = {
@@ -58,7 +65,13 @@ class TestValidateCoverletterVoice(unittest.TestCase):
             self.style_rules,
             voice_rules=self.voice_rules,
         )
-        voice_violations = [v for v in violations if "monotonous" in v.lower() or "lexical" in v.lower() or "starters" in v.lower()]
+        voice_violations = [
+            v
+            for v in violations
+            if "monotonous" in v.lower()
+            or "lexical" in v.lower()
+            or "starters" in v.lower()
+        ]
         self.assertEqual(voice_violations, [])
 
     def test_validate_handles_none_voice_rules_gracefully(self):
@@ -79,7 +92,13 @@ class TestValidateCoverletterVoice(unittest.TestCase):
             self.style_rules,
             voice_rules=None,
         )
-        voice_violations = [v for v in violations if "monotonous" in v.lower() or "lexical" in v.lower() or "starters" in v.lower()]
+        voice_violations = [
+            v
+            for v in violations
+            if "monotonous" in v.lower()
+            or "lexical" in v.lower()
+            or "starters" in v.lower()
+        ]
         self.assertEqual(voice_violations, [])
 
 

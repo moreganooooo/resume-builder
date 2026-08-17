@@ -52,23 +52,31 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
     # here so build_education() doesn't need to know about slot numbers.
     achievement_keys = {
         institution: result.get(f"EDU_ACHIEVEMENT_KEY_{i}", "")
-        for i, (institution, _options) in enumerate(profile_paths.education_achievement_slots(), 1)
+        for i, (institution, _options) in enumerate(
+            profile_paths.education_achievement_slots(), 1
+        )
     }
     result["EDUCATION"] = fixed_content.build_education(achievement_keys)
 
     if result.get("EXPERIENCE"):
         new_experience = []
         career_break_entry = getattr(fixed_content, "CAREER_BREAK_ENTRY", None)
-        has_break_already = any("career break" in str(job.get("company", "")).lower() for job in result["EXPERIENCE"])
+        has_break_already = any(
+            "career break" in str(job.get("company", "")).lower()
+            for job in result["EXPERIENCE"]
+        )
 
         for job in result["EXPERIENCE"]:
             job = dict(job)
             company = _RENAME_SUFFIX_PATTERN.sub("", job.get("company", ""))
 
-            if career_break_entry and not has_break_already and company == "Treering Yearbooks":
+            if (
+                career_break_entry
+                and not has_break_already
+                and company == "Treering Yearbooks"
+            ):
                 new_experience.append(dict(career_break_entry))
                 has_break_already = True
-
 
             meta = fixed_content.COMPANY_META.get(company)
             if meta:
@@ -86,10 +94,17 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
                 job["title"] = fixed_title
 
             descriptor = fixed_content.COMPANY_TITLE_DESCRIPTOR.get(company)
-            if descriptor and job.get("title") and not job["title"].rstrip().endswith(f"({descriptor})"):
+            if (
+                descriptor
+                and job.get("title")
+                and not job["title"].rstrip().endswith(f"({descriptor})")
+            ):
                 job["title"] = f"{job['title']} ({descriptor})"
 
-            if fixed_content.CAREER_NOTE_COMPANY and company == fixed_content.CAREER_NOTE_COMPANY:
+            if (
+                fixed_content.CAREER_NOTE_COMPANY
+                and company == fixed_content.CAREER_NOTE_COMPANY
+            ):
                 job["career_note"] = fixed_content.CAREER_NOTE
 
             clients = fixed_content.CLIENTS.get(company)

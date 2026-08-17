@@ -5,7 +5,9 @@ import unittest
 
 import yaml
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import profile_paths  # noqa: E402
@@ -21,8 +23,12 @@ class TestMorganProfileYmlNewSchema(unittest.TestCase):
     def test_roles_section_has_all_six_companies_with_required_fields(self):
         roles = {r["name"]: r for r in self.data["roles"]}
         expected_companies = {
-            "Mercor", "Treering Yearbooks", "Inside Sales Team",
-            "Element 8 / Strategy LLC", "VML", "Callahan Creek",
+            "Mercor",
+            "Treering Yearbooks",
+            "Inside Sales Team",
+            "Element 8 / Strategy LLC",
+            "VML",
+            "Callahan Creek",
         }
         self.assertEqual(set(roles.keys()), expected_companies)
         for role in roles.values():
@@ -54,7 +60,11 @@ class TestMorganProfileYmlNewSchema(unittest.TestCase):
         creds = self.data["fixed_credentials"]
         self.assertEqual(len(creds["certifications"]), 3)
         self.assertEqual(len(creds["education"]), 3)
-        jccc = [e for e in creds["education"] if e["institution"] == "Johnson County Community College"][0]
+        jccc = [
+            e
+            for e in creds["education"]
+            if e["institution"] == "Johnson County Community College"
+        ][0]
         self.assertEqual(jccc["bullet_count"], 1)
 
     def test_voice_calibration_example_present(self):

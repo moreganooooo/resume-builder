@@ -65,13 +65,27 @@ def split_sentences(text: str) -> List[str]:
 def compute_sentence_length_stats(sentences: List[str]) -> Dict[str, Any]:
     """Computes word counts, mean, standard deviation, and span across sentences."""
     if not sentences:
-        return {"counts": [], "mean": 0.0, "std_dev": 0.0, "span": 0, "min": 0, "max": 0}
+        return {
+            "counts": [],
+            "mean": 0.0,
+            "std_dev": 0.0,
+            "span": 0,
+            "min": 0,
+            "max": 0,
+        }
 
     counts = [len(re.findall(r"\b\w+(?:[-']\w+)?\b", s)) for s in sentences]
     counts = [c for c in counts if c > 0]
 
     if not counts:
-        return {"counts": [], "mean": 0.0, "std_dev": 0.0, "span": 0, "min": 0, "max": 0}
+        return {
+            "counts": [],
+            "mean": 0.0,
+            "std_dev": 0.0,
+            "span": 0,
+            "min": 0,
+            "max": 0,
+        }
 
     n = len(counts)
     mean = sum(counts) / n
@@ -107,7 +121,9 @@ def compute_type_token_ratio(text: str) -> Dict[str, float]:
     return {"ttr": ttr, "total_tokens": n, "unique_tokens": v}
 
 
-def detect_consecutive_opener_repetitions(sentences: List[str], max_consecutive: int = 2) -> List[str]:
+def detect_consecutive_opener_repetitions(
+    sentences: List[str], max_consecutive: int = 2
+) -> List[str]:
     """Detects 3+ consecutive sentences starting with identical 1-2 word openers."""
     violations = []
     if len(sentences) < 3:
@@ -145,7 +161,9 @@ def detect_consecutive_opener_repetitions(sentences: List[str], max_consecutive:
     return list(dict.fromkeys(violations))
 
 
-def analyze_voice_metrics(cover_letter_data: dict, rules: dict | None = None) -> List[str]:
+def analyze_voice_metrics(
+    cover_letter_data: dict, rules: dict | None = None
+) -> List[str]:
     """Evaluates cover letter paragraphs against voice anchor and stylometric rules."""
     paragraphs = cover_letter_data.get("body_paragraphs", [])
     if not paragraphs:
@@ -203,6 +221,8 @@ def analyze_voice_metrics(cover_letter_data: dict, rules: dict | None = None) ->
         max_consecutive=thresholds["max_consecutive_same_opener"],
     )
     for issue in opener_issues:
-        violations.append(f"Repetitive sentence starters: {issue}. Vary grammatical structure and sentence openings.")
+        violations.append(
+            f"Repetitive sentence starters: {issue}. Vary grammatical structure and sentence openings."
+        )
 
     return violations

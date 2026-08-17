@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import kb_snapshot  # noqa: E402
@@ -17,8 +19,12 @@ class TestSnapshotKb(unittest.TestCase):
         self.kb_dir = os.path.join(self.tmp_dir, "knowledge_base")
         self.snapshot_root = os.path.join(self.tmp_dir, "kb_snapshots")
         os.makedirs(self.kb_dir, exist_ok=True)
-        self._kb_patcher = patch("kb_snapshot.profile_paths.kb_dir", return_value=self.kb_dir)
-        self._snap_patcher = patch("kb_snapshot.profile_paths.kb_snapshot_dir", return_value=self.snapshot_root)
+        self._kb_patcher = patch(
+            "kb_snapshot.profile_paths.kb_dir", return_value=self.kb_dir
+        )
+        self._snap_patcher = patch(
+            "kb_snapshot.profile_paths.kb_snapshot_dir", return_value=self.snapshot_root
+        )
         self._kb_patcher.start()
         self._snap_patcher.start()
 
@@ -51,7 +57,9 @@ class TestSnapshotKb(unittest.TestCase):
     def test_does_not_recurse_into_subdirectories(self):
         self._write_kb_file("bullet-bank.md")
         os.makedirs(os.path.join(self.kb_dir, "archive"), exist_ok=True)
-        with open(os.path.join(self.kb_dir, "archive", "old.md"), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(self.kb_dir, "archive", "old.md"), "w", encoding="utf-8"
+        ) as f:
             f.write("archived")
 
         dest = kb_snapshot.snapshot_kb()
@@ -61,7 +69,12 @@ class TestSnapshotKb(unittest.TestCase):
 
     def test_rotation_keeps_only_the_newest_n_snapshots(self):
         self._write_kb_file("bullet-bank.md")
-        names = ["20260801-000000", "20260802-000000", "20260803-000000", "20260804-000000"]
+        names = [
+            "20260801-000000",
+            "20260802-000000",
+            "20260803-000000",
+            "20260804-000000",
+        ]
         with patch("kb_snapshot.time.strftime", side_effect=names):
             for _ in range(4):
                 kb_snapshot.snapshot_kb(keep=2)

@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -14,7 +16,9 @@ class TestSchemaCleanup(unittest.TestCase):
     def test_project_item_model_no_longer_exists(self):
         self.assertFalse(hasattr(orchestrator, "ProjectItem"))
 
-    def test_skills_relevance_score_description_has_no_stale_competencies_reference(self):
+    def test_skills_relevance_score_description_has_no_stale_competencies_reference(
+        self,
+    ):
         field = orchestrator.ResumeCritiqueSchema.model_fields["skills_relevance_score"]
         self.assertNotIn("Competencies", field.description)
 
@@ -44,11 +48,16 @@ class TestSchemaCleanup(unittest.TestCase):
 
         ku_field = props["EDU_ACHIEVEMENT_KEY_1"]
         self.assertIn("enum", ku_field)
-        self.assertEqual(set(ku_field["enum"]), {"content_generalist", "email_ops", "content"})
+        self.assertEqual(
+            set(ku_field["enum"]), {"content_generalist", "email_ops", "content"}
+        )
 
         kckcc_field = props["EDU_ACHIEVEMENT_KEY_2"]
         self.assertIn("enum", kckcc_field)
-        self.assertEqual(set(kckcc_field["enum"]), {"writing_content", "enablement_mgmt", "generalist"})
+        self.assertEqual(
+            set(kckcc_field["enum"]),
+            {"writing_content", "enablement_mgmt", "generalist"},
+        )
 
     def test_experience_entry_required_fields_survive_ref_resolution_and_sanitize(self):
         """
@@ -64,7 +73,11 @@ class TestSchemaCleanup(unittest.TestCase):
         400" this schema used to avoid).
         """
         raw_schema = orchestrator.TemplateSchema.model_json_schema()
-        self.assertIn("$defs", raw_schema, "test setup check: Pydantic should still emit $defs for a nested model")
+        self.assertIn(
+            "$defs",
+            raw_schema,
+            "test setup check: Pydantic should still emit $defs for a nested model",
+        )
 
         resolved = GeminiClient.resolve_refs(raw_schema)
         sanitized = GeminiClient.sanitize_schema(resolved)
@@ -72,7 +85,9 @@ class TestSchemaCleanup(unittest.TestCase):
         self.assertNotIn("$defs", sanitized)
         exp_items = sanitized["properties"]["EXPERIENCE"]["items"]
         self.assertNotIn("$ref", exp_items)
-        self.assertEqual(set(exp_items["required"]), {"title", "company", "period", "achievements"})
+        self.assertEqual(
+            set(exp_items["required"]), {"title", "company", "period", "achievements"}
+        )
         self.assertEqual(exp_items["properties"]["achievements"]["type"], "array")
         # Every required property must actually still exist in "properties" --
         # this is the exact invariant sanitize_schema violated when it treated
@@ -81,12 +96,17 @@ class TestSchemaCleanup(unittest.TestCase):
         # property that no longer existed (Gemini rejected this with
         # "property is not defined").
         for required_field in exp_items["required"]:
-            self.assertIn(required_field, exp_items["properties"],
-                          f"{required_field!r} is required but missing from properties")
+            self.assertIn(
+                required_field,
+                exp_items["properties"],
+                f"{required_field!r} is required but missing from properties",
+            )
 
     def test_resolve_refs_raises_on_unresolvable_ref(self):
         with self.assertRaises(ValueError):
-            GeminiClient.resolve_refs({"properties": {"x": {"$ref": "#/$defs/Missing"}}})
+            GeminiClient.resolve_refs(
+                {"properties": {"x": {"$ref": "#/$defs/Missing"}}}
+            )
 
     def test_sanitize_schema_preserves_property_named_title(self):
         """
@@ -127,13 +147,17 @@ class TestSanitizeNoneForPrompt(unittest.TestCase):
     """
 
     def test_replaces_top_level_none_with_empty_string(self):
-        result = orchestrator._sanitize_none_for_prompt({"WHY_TEXT": None, "TAGLINE": "Real value"})
+        result = orchestrator._sanitize_none_for_prompt(
+            {"WHY_TEXT": None, "TAGLINE": "Real value"}
+        )
         self.assertEqual(result, {"WHY_TEXT": "", "TAGLINE": "Real value"})
 
     def test_replaces_none_nested_in_lists_and_dicts(self):
-        result = orchestrator._sanitize_none_for_prompt({
-            "EXPERIENCE": [{"title": "X", "career_note": None}],
-        })
+        result = orchestrator._sanitize_none_for_prompt(
+            {
+                "EXPERIENCE": [{"title": "X", "career_note": None}],
+            }
+        )
         self.assertEqual(result["EXPERIENCE"][0]["career_note"], "")
 
     def test_does_not_mutate_the_input(self):

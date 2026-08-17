@@ -34,7 +34,10 @@ def load_situational_roles(profile: str = None) -> dict:
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
     roles = {entry["display_name"]: entry for entry in data.get("roles", [])}
-    return {"situational_min_bullets": data.get("situational_min_bullets", 2), "roles": roles}
+    return {
+        "situational_min_bullets": data.get("situational_min_bullets", 2),
+        "roles": roles,
+    }
 
 
 def _any_match(patterns: list, text_lower: str) -> bool:
@@ -52,7 +55,9 @@ def detect_situational_candidates(jd_text: str, roles_data: dict = None) -> list
 
     for display_name, config in roles.items():
         if "admin_keywords" in config and "design_keywords" in config:
-            if _any_match(config["admin_keywords"], text_lower) and _any_match(config["design_keywords"], text_lower):
+            if _any_match(config["admin_keywords"], text_lower) and _any_match(
+                config["design_keywords"], text_lower
+            ):
                 candidates.append(display_name)
             continue
         if _any_match(config.get("trigger_keywords", []), text_lower):

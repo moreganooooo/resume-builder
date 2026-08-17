@@ -24,7 +24,16 @@ import requests
 from bs4 import BeautifulSoup
 from gemini_client import GeminiClient
 
-CANDIDATE_PATHS = ["/about", "/about-us", "/mission", "/values", "/culture", "/team", "/careers", "/jobs"]
+CANDIDATE_PATHS = [
+    "/about",
+    "/about-us",
+    "/mission",
+    "/values",
+    "/culture",
+    "/team",
+    "/careers",
+    "/jobs",
+]
 MIN_USEFUL_CHARS = 200
 EARLY_STOP_CHARS = 1500
 MAX_TOTAL_CHARS = 6000
@@ -35,8 +44,13 @@ REQUEST_TIMEOUT_SECONDS = 10
 # above the real domain) -- these are never a usable company_website for
 # fetch_company_pages()'s About/Mission scraping, so any match is rejected.
 _REJECTED_DOMAINS = (
-    "linkedin.com", "indeed.com", "glassdoor.com", "google.com",
-    "wikipedia.org", "crunchbase.com", "ziprecruiter.com",
+    "linkedin.com",
+    "indeed.com",
+    "glassdoor.com",
+    "google.com",
+    "wikipedia.org",
+    "crunchbase.com",
+    "ziprecruiter.com",
 )
 FIND_WEBSITE_MODEL = "gemini-3.1-flash-lite"
 SEARCH_RESEARCH_MODEL = "gemini-3.1-flash-lite"
@@ -44,7 +58,9 @@ SEARCH_RESEARCH_MODEL = "gemini-3.1-flash-lite"
 # Tier 2's self-reported confidence. Anything but "high" falls through to
 # Tier 3 -- many companies share a name, and a confidently-wrong writeup
 # about the wrong Acme is worse than falling back to the JD's own text.
-_CONFIDENCE_PATTERN = re.compile(r"^\s*CONFIDENCE:\s*(high|medium|low)\b", re.IGNORECASE)
+_CONFIDENCE_PATTERN = re.compile(
+    r"^\s*CONFIDENCE:\s*(high|medium|low)\b", re.IGNORECASE
+)
 
 
 def _candidate_urls(company_website: str) -> list:
@@ -56,8 +72,10 @@ def _candidate_urls(company_website: str) -> list:
 
 _BOILERPLATE_TAGS = ["script", "style", "nav", "header", "footer", "aside"]
 _BOILERPLATE_SELECTORS = [
-    '[class*="cookie" i]', '[id*="cookie" i]',
-    '[class*="consent" i]', '[id*="consent" i]',
+    '[class*="cookie" i]',
+    '[id*="cookie" i]',
+    '[class*="consent" i]',
+    '[id*="consent" i]',
 ]
 
 
@@ -127,7 +145,7 @@ def find_company_website(company_name: str) -> str | None:
                 "Reply with exactly one URL and nothing else -- no "
                 "markdown, no explanation, no citation brackets."
             ),
-            contents=f"What is the official website homepage URL for the company \"{company_name}\"?",
+            contents=f'What is the official website homepage URL for the company "{company_name}"?',
             tools=[{"google_search": {}}],
             temperature=0.0,
         )
@@ -147,7 +165,9 @@ def find_company_website(company_name: str) -> str | None:
     return url
 
 
-def research_company_via_search(company_name: str, context_hint: str = "") -> str | None:
+def research_company_via_search(
+    company_name: str, context_hint: str = ""
+) -> str | None:
     """
     Tier 2 of ResumeEngine.research_company()'s fallback chain: when no
     company website is known or scrapeable, ask Gemini (with Google Search
@@ -168,7 +188,11 @@ def research_company_via_search(company_name: str, context_hint: str = "") -> st
     if not company_name:
         return None
 
-    hint = f"\n\nContext from the job posting (use this to disambiguate same-named companies): {context_hint}" if context_hint else ""
+    hint = (
+        f"\n\nContext from the job posting (use this to disambiguate same-named companies): {context_hint}"
+        if context_hint
+        else ""
+    )
 
     try:
         text, _ = GeminiClient.generate(
@@ -188,7 +212,7 @@ def research_company_via_search(company_name: str, context_hint: str = "") -> st
                 "what you actually found -- never fill gaps with plausible "
                 "guesses."
             ),
-            contents=f"Research the company \"{company_name}\".{hint}",
+            contents=f'Research the company "{company_name}".{hint}',
             tools=[{"google_search": {}}],
             temperature=0.0,
         )
@@ -202,7 +226,7 @@ def research_company_via_search(company_name: str, context_hint: str = "") -> st
     if not match or match.group(1).lower() != "high":
         return None
 
-    body = text[match.end():].strip()
+    body = text[match.end() :].strip()
     return body or None
 
 
@@ -265,7 +289,9 @@ def apply_vocabulary_substitutions(text: str, substitutions: list) -> str:
     return text
 
 
-def apply_vocabulary_substitutions_to_resume(resume_data: dict, substitutions: list) -> dict:
+def apply_vocabulary_substitutions_to_resume(
+    resume_data: dict, substitutions: list
+) -> dict:
     """
     Applies apply_vocabulary_substitutions() to every Work Experience
     bullet in a built resume dict, in place, returning the same dict.
@@ -286,7 +312,11 @@ def apply_vocabulary_substitutions_to_resume(resume_data: dict, substitutions: l
         if not isinstance(achievements, list):
             continue
         role["achievements"] = [
-            apply_vocabulary_substitutions(bullet, substitutions) if isinstance(bullet, str) else bullet
+            (
+                apply_vocabulary_substitutions(bullet, substitutions)
+                if isinstance(bullet, str)
+                else bullet
+            )
             for bullet in achievements
         ]
 

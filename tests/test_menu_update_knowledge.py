@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bullet_bank_menu  # noqa: E402
@@ -27,7 +29,9 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
 
     @patch("menu.cli_art.console.print")
     @patch("menu.os.path.isdir", return_value=False)
-    def test_returns_false_without_prompting_when_profile_has_no_kb(self, mock_isdir, mock_print):
+    def test_returns_false_without_prompting_when_profile_has_no_kb(
+        self, mock_isdir, mock_print
+    ):
         with patch("menu.questionary.checkbox") as mock_checkbox:
             result = menu._handle_update_knowledge()
         self.assertFalse(result)
@@ -41,7 +45,12 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
     @patch("menu.os.path.exists", return_value=False)
     @patch("menu.os.path.isdir", return_value=True)
     def test_configured_profile_without_a_bootstrap_checkpoint_is_not_locked_out(
-        self, mock_isdir, mock_exists, mock_makedirs, mock_listdir, mock_instructions,
+        self,
+        mock_isdir,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_instructions,
     ):
         """B7: this gated on bootstrap/checkpoint.json -- evidence of *how* a
         profile was created -- so Morgan's own 628-bullet, 1,144-JD profile was
@@ -50,7 +59,7 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
         and reach the source-documents step."""
         with patch("menu.questionary.checkbox") as mock_checkbox:
             result = menu._handle_update_knowledge()
-        self.assertFalse(result)          # no new files to ingest
+        self.assertFalse(result)  # no new files to ingest
         mock_instructions.assert_called_once()  # but it got past the setup gate
         mock_checkbox.assert_not_called()
 
@@ -77,7 +86,11 @@ class TestHandleUpdateKnowledgeEmptyFolder(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_returns_false_and_shows_instructions_when_no_new_files(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_instructions,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_instructions,
     ):
         with patch("menu.questionary.checkbox") as mock_checkbox:
             result = menu._handle_update_knowledge()
@@ -104,8 +117,15 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_both_selected_runs_scope_both(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_isfile,
-        mock_checkbox, mock_confirm, mock_intro, mock_run,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_isfile,
+        mock_checkbox,
+        mock_confirm,
+        mock_intro,
+        mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
         mock_confirm.return_value = True
@@ -127,8 +147,15 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_only_bullets_selected_runs_scope_bullets(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_isfile,
-        mock_checkbox, mock_confirm, mock_intro, mock_run,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_isfile,
+        mock_checkbox,
+        mock_confirm,
+        mock_intro,
+        mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets"]
         mock_confirm.return_value = True
@@ -148,8 +175,15 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_only_profile_selected_runs_scope_profile(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_isfile,
-        mock_checkbox, mock_confirm, mock_intro, mock_run,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_isfile,
+        mock_checkbox,
+        mock_confirm,
+        mock_intro,
+        mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["profile"]
         mock_confirm.return_value = True
@@ -167,7 +201,13 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_nothing_checked_returns_false_without_running(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_isfile, mock_checkbox, mock_run,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_isfile,
+        mock_checkbox,
+        mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = []
         result = menu._handle_update_knowledge()
@@ -182,7 +222,14 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_declining_final_confirm_returns_false_without_running(
-        self, mock_exists, mock_makedirs, mock_listdir, mock_isfile, mock_checkbox, mock_confirm, mock_run,
+        self,
+        mock_exists,
+        mock_makedirs,
+        mock_listdir,
+        mock_isfile,
+        mock_checkbox,
+        mock_confirm,
+        mock_run,
     ):
         mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
         mock_confirm.return_value = False

@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -84,7 +86,9 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         # The tagline is a single hard-coded "[Role] | [Descriptor]" string
         # with no per-segment markup, unlike contact-row/job-meta/cert-item,
         # which already build their pipes as their own <span class="sep">.
-        data = _minimal_resume_data(TAGLINE="CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING")
+        data = _minimal_resume_data(
+            TAGLINE="CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING"
+        )
         render_html(data, self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
@@ -94,13 +98,17 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         )
 
     def test_education_renders_pipe_separated_meta_with_no_bold_location(self):
-        data = _minimal_resume_data(EDUCATION=[{
-            "degree": "Bachelor of Science, Journalism",
-            "institution": "University of Kansas",
-            "location": "Lawrence, KS",
-            "year": "2006 – 2008",
-            "bullets": ["3.56 GPA"],
-        }])
+        data = _minimal_resume_data(
+            EDUCATION=[
+                {
+                    "degree": "Bachelor of Science, Journalism",
+                    "institution": "University of Kansas",
+                    "location": "Lawrence, KS",
+                    "year": "2006 – 2008",
+                    "bullets": ["3.56 GPA"],
+                }
+            ]
+        )
         render_html(data, self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
@@ -117,10 +125,16 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         # wants to keep a visible arrow, so render_html must emit the &rarr;
         # entity reference instead of the raw arrow character, or the
         # normalizer's raw-string regex would still catch and convert it.
-        data = _minimal_resume_data(EXPERIENCE=[{
-            "title": "Design Assistant → Lead Designer", "company": "Element 8 / Strategy LLC", "period": "01/2011 – 10/2011",
-            "achievements": ["Established the brand identity from scratch"],
-        }])
+        data = _minimal_resume_data(
+            EXPERIENCE=[
+                {
+                    "title": "Design Assistant → Lead Designer",
+                    "company": "Element 8 / Strategy LLC",
+                    "period": "01/2011 – 10/2011",
+                    "achievements": ["Established the brand identity from scratch"],
+                }
+            ]
+        )
         render_html(data, self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
@@ -128,18 +142,30 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         self.assertNotIn("Design Assistant → Lead Designer", html)
 
     def test_career_note_renders_after_bullets_with_bold_label(self):
-        data = _minimal_resume_data(EXPERIENCE=[{
-            "title": "Creative Strategy Lead", "company": "Treering Yearbooks", "period": "08/2016 – 08/2024",
-            "achievements": ["Founded the Content Committee"],
-            "career_note": "Returning with renewed focus.",
-        }])
+        data = _minimal_resume_data(
+            EXPERIENCE=[
+                {
+                    "title": "Creative Strategy Lead",
+                    "company": "Treering Yearbooks",
+                    "period": "08/2016 – 08/2024",
+                    "achievements": ["Founded the Content Committee"],
+                    "career_note": "Returning with renewed focus.",
+                }
+            ]
+        )
         render_html(data, self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
         bullets_pos = html.index("Founded the Content Committee")
         career_note_pos = html.index("Returning with renewed focus.")
-        self.assertLess(bullets_pos, career_note_pos, "career note must render after the bullets, not before")
-        self.assertIn('<strong>Career Note:</strong> Returning with renewed focus.', html)
+        self.assertLess(
+            bullets_pos,
+            career_note_pos,
+            "career note must render after the bullets, not before",
+        )
+        self.assertIn(
+            "<strong>Career Note:</strong> Returning with renewed focus.", html
+        )
 
 
 class TestWhySectionDropsCleanly(unittest.TestCase):

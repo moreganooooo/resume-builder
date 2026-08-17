@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import importlib
@@ -42,16 +44,20 @@ class TestIconSwitch(unittest.TestCase):
     def test_persisted_choice_is_honored_over_the_tty_default(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("RESUME_BUILDER_ICONS", None)
-            with patch("sys.stdin.isatty", return_value=True), \
-                 patch("ui_config.get_icon_set", return_value="unicode"):
+            with (
+                patch("sys.stdin.isatty", return_value=True),
+                patch("ui_config.get_icon_set", return_value="unicode"),
+            ):
                 reloaded = importlib.reload(theme)
         self.assertEqual(reloaded.ICONS["success"], "✓")
 
     def test_real_terminal_with_no_answer_defaults_to_nerd_font(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("RESUME_BUILDER_ICONS", None)
-            with patch("sys.stdin.isatty", return_value=True), \
-                 patch("ui_config.get_icon_set", return_value=None):
+            with (
+                patch("sys.stdin.isatty", return_value=True),
+                patch("ui_config.get_icon_set", return_value=None),
+            ):
                 reloaded = importlib.reload(theme)
         self.assertEqual(reloaded.ICONS["success"], "")
 
@@ -62,8 +68,10 @@ class TestIconSwitch(unittest.TestCase):
         # that's never garbled rather than the one that might be.
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("RESUME_BUILDER_ICONS", None)
-            with patch("sys.stdin.isatty", return_value=False), \
-                 patch("ui_config.get_icon_set", return_value=None):
+            with (
+                patch("sys.stdin.isatty", return_value=False),
+                patch("ui_config.get_icon_set", return_value=None),
+            ):
                 reloaded = importlib.reload(theme)
         self.assertEqual(reloaded.ICONS["success"], "✓")
 
@@ -85,7 +93,9 @@ class TestIconSwitch(unittest.TestCase):
 class TestRecommendationColors(unittest.TestCase):
 
     def test_keys_match_fit_evaluation_schema_literal(self):
-        schema_values = orchestrator.FitEvaluationSchema.model_fields["recommendation"].annotation.__args__
+        schema_values = orchestrator.FitEvaluationSchema.model_fields[
+            "recommendation"
+        ].annotation.__args__
         self.assertEqual(set(theme.RECOMMENDATION_COLORS.keys()), set(schema_values))
         self.assertEqual(set(theme.RECOMMENDATION_STYLES.keys()), set(schema_values))
 

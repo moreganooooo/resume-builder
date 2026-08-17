@@ -18,11 +18,16 @@ import requests
 
 JOBRIGHT_API_BASE_URL = "https://jobright.ai/swan/recommend/list/jobs"
 JOBRIGHT_HEADERS = {
-    "accept": "application/json, text/plain, */*", "accept-language": "en-US,en;q=0.9",
-    "priority": "u=1, i", "referer": "https://jobright.ai/jobs/recommend",
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "en-US,en;q=0.9",
+    "priority": "u=1, i",
+    "referer": "https://jobright.ai/jobs/recommend",
     "sec-ch-ua": '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
-    "sec-ch-ua-mobile": "?0", "sec-ch-ua-platform": '"macOS"', "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors", "sec-fetch-site": "same-origin",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
     "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     "x-client-type": "web",
 }
@@ -39,7 +44,9 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
     expects from a JD file)."""
     cookie_string = os.environ.get("JOBRIGHT_COOKIE_STRING")
     if not cookie_string:
-        cli_art.cli_error("JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan.")
+        cli_art.cli_error(
+            "JOBRIGHT_COOKIE_STRING not configured. Skipping JobRight scan."
+        )
         return []
 
     headers = JOBRIGHT_HEADERS.copy()
@@ -49,15 +56,23 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
     jobs = []
 
     for position in range(0, end_position + 1, JOBRIGHT_POSITION_INCREMENT):
-        page_url = f"{JOBRIGHT_API_BASE_URL}?refresh=false&sortCondition=0&position={position}"
+        page_url = (
+            f"{JOBRIGHT_API_BASE_URL}?refresh=false&sortCondition=0&position={position}"
+        )
         # Up to 11 paginated requests with a 2s backoff on a 500 -- without
         # a visible line per page, `resume scan --source jobright` looks
         # hung for 20+ seconds with logging.info's output invisible by
         # default.
         if activity is not None:
-            activity.step("discovery", "JobRight", f"Fetching page (position {position}/{end_position})")
+            activity.step(
+                "discovery",
+                "JobRight",
+                f"Fetching page (position {position}/{end_position})",
+            )
         else:
-            cli_art.cli_info(f"Fetching JobRight jobs (position {position}/{end_position})...")
+            cli_art.cli_info(
+                f"Fetching JobRight jobs (position {position}/{end_position})..."
+            )
         logging.info(f"Fetching JobRight data for position {position}...")
 
         try:
@@ -91,7 +106,9 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
                 if not job_title or not company_name:
                     continue
 
-                apply_link = job_result.get("applyLink") or job_result.get("originalUrl")
+                apply_link = job_result.get("applyLink") or job_result.get(
+                    "originalUrl"
+                )
                 description_parts = [job_result.get("jobSummary", "")]
                 resp = job_result.get("coreResponsibilities")
                 if isinstance(resp, list):
@@ -100,34 +117,40 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
                     description_parts.append(resp)
                 description = "\n\n".join(filter(None, description_parts))
 
-                jobs.append({
-                    "status": "new",
-                    "source_platform": "jobright",
-                    "source_job_id": job_id,
-                    "source_url": job_result.get("originalUrl"),
-                    "match_score": match_score,
-                    "application_type": "external" if apply_link else "unknown",
-                    "application_url": apply_link,
-                    "job_title": job_title,
-                    "company_name": company_name,
-                    "company_linkedin_url": company_result.get("companyLinkedinURL"),
-                    "company_website": company_result.get("companyURL"),
-                    "location": job_result.get("jobLocation"),
-                    "is_remote": job_result.get("isRemote"),
-                    "work_model": job_result.get("workModel"),
-                    "publish_time": job_result.get("publishTime"),
-                    "publish_time_desc": job_result.get("publishTimeDesc"),
-                    "employment_type": job_result.get("employmentType"),
-                    "seniority_level": job_result.get("jobSeniority"),
-                    "description": description,
-                    "description_html": None,
-                    "job_summary": job_result.get("jobSummary"),
-                    "skills": job_result.get("jdCoreSkills"),
-                    "qualifications": job_result.get("qualifications"),
-                    "core_responsibilities": job_result.get("coreResponsibilities"),
-                    "social_connections": job_result.get("socialConnections"),
-                    "personal_social_connections": job_result.get("personalSocialConnections"),
-                })
+                jobs.append(
+                    {
+                        "status": "new",
+                        "source_platform": "jobright",
+                        "source_job_id": job_id,
+                        "source_url": job_result.get("originalUrl"),
+                        "match_score": match_score,
+                        "application_type": "external" if apply_link else "unknown",
+                        "application_url": apply_link,
+                        "job_title": job_title,
+                        "company_name": company_name,
+                        "company_linkedin_url": company_result.get(
+                            "companyLinkedinURL"
+                        ),
+                        "company_website": company_result.get("companyURL"),
+                        "location": job_result.get("jobLocation"),
+                        "is_remote": job_result.get("isRemote"),
+                        "work_model": job_result.get("workModel"),
+                        "publish_time": job_result.get("publishTime"),
+                        "publish_time_desc": job_result.get("publishTimeDesc"),
+                        "employment_type": job_result.get("employmentType"),
+                        "seniority_level": job_result.get("jobSeniority"),
+                        "description": description,
+                        "description_html": None,
+                        "job_summary": job_result.get("jobSummary"),
+                        "skills": job_result.get("jdCoreSkills"),
+                        "qualifications": job_result.get("qualifications"),
+                        "core_responsibilities": job_result.get("coreResponsibilities"),
+                        "social_connections": job_result.get("socialConnections"),
+                        "personal_social_connections": job_result.get(
+                            "personalSocialConnections"
+                        ),
+                    }
+                )
                 if activity is not None:
                     message = cli_art.format_job_found_message(job_title, company_name)
                     activity.step("success", "JobRight", message, preserve_markup=True)
@@ -137,7 +160,9 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
         except requests.exceptions.HTTPError as e:
             cli_art.cli_error(f"HTTP error fetching position {position}: {e}")
             if e.response is not None and e.response.status_code in (401, 403):
-                cli_art.cli_error("Auth error -- JobRight cookie may be expired. Stopping.")
+                cli_art.cli_error(
+                    "Auth error -- JobRight cookie may be expired. Stopping."
+                )
                 break
             time.sleep(JOBRIGHT_REQUEST_DELAY_SECONDS)
             continue
@@ -145,5 +170,7 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
             cli_art.cli_error(f"Request error fetching position {position}: {e}")
             break
 
-    logging.info(f"JobRight scan finished: {len(jobs)} jobs above match-score {MIN_MATCH_SCORE}.")
+    logging.info(
+        f"JobRight scan finished: {len(jobs)} jobs above match-score {MIN_MATCH_SCORE}."
+    )
     return jobs

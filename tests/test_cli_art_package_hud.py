@@ -4,7 +4,12 @@ import sys
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+    ),
+)
 
 import cli_art
 
@@ -17,7 +22,10 @@ class TestPackageHUD(unittest.TestCase):
             "company_name": "Spotify",
             "job_title": "Senior Content Strategist",
             "evaluation": {"composite_score": 4.5, "recommendation": "Strong Pursue"},
-            "ats_classification": {"provider_id": "workday", "weight_tier": "enterprise_high"},
+            "ats_classification": {
+                "provider_id": "workday",
+                "weight_tier": "enterprise_high",
+            },
             "output_paths": {
                 "resume_pdf": "output/morgan/pdf/MorganEscott_Spotify_Resume.pdf",
                 "resume_docx": "output/morgan/docx/MorganEscott_Spotify_Resume.docx",

@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import situational_roles  # noqa: E402
@@ -25,7 +27,9 @@ class TestDetectSituationalCandidates(unittest.TestCase):
         self.assertIn("Unisource Document Products", candidates)
 
     def test_matches_kansas_colloquies_on_journalism_language(self):
-        jd_text = "We need a reporter for our newspaper's editorial team covering local news."
+        jd_text = (
+            "We need a reporter for our newspaper's editorial team covering local news."
+        )
         candidates = situational_roles.detect_situational_candidates(jd_text)
         self.assertIn("Kansas Colloquies", candidates)
 
@@ -64,7 +68,9 @@ class TestDetectSituationalCandidates(unittest.TestCase):
 class TestBankMinimumsFor(unittest.TestCase):
 
     def test_maps_display_names_to_bank_tags_with_minimum_of_2(self):
-        minimums = situational_roles.bank_minimums_for(["KU Payroll Office", "DeJoy, Knauff & Blood"])
+        minimums = situational_roles.bank_minimums_for(
+            ["KU Payroll Office", "DeJoy, Knauff & Blood"]
+        )
         self.assertEqual(minimums, {"Payroll": 2, "DeJoy": 2})
 
     def test_empty_candidates_returns_empty_dict(self):

@@ -45,12 +45,14 @@ def convert_legacy_doc_to_pdf(path: str) -> str | None:
 
 def _extract_docx_text(path: str) -> str:
     import docx
+
     doc = docx.Document(path)
     return "\n".join(p.text for p in doc.paragraphs)
 
 
 def _extract_pptx_text(path: str) -> str:
     from pptx import Presentation
+
     prs = Presentation(path)
     lines = []
     for slide in prs.slides:
@@ -67,6 +69,7 @@ def _extract_odt_text(path: str) -> str:
     from odf import teletype
     from odf import text as odf_text
     from odf.opendocument import load
+
     doc = load(path)
     paragraphs = doc.getElementsByType(odf_text.P)
     return "\n".join(teletype.extractText(p) for p in paragraphs)
@@ -74,6 +77,7 @@ def _extract_odt_text(path: str) -> str:
 
 def _extract_spreadsheet_text(path: str) -> str:
     import pandas as pd
+
     ext = os.path.splitext(path)[1].lower()
     if ext == ".csv":
         df = pd.read_csv(path)
@@ -119,11 +123,23 @@ UPLOAD_MODEL = "gemma-4-31b-it"
 
 
 class RawAchievement(BaseModel):
-    raw_text: str = Field(description="The achievement as written or lightly rephrased for clarity -- never invent detail not in the source.")
-    company_hint: Optional[str] = Field(default=None, description="Company/employer name if stated or strongly implied nearby in the source text.")
-    date_hint: Optional[str] = Field(default=None, description="Any date or date range mentioned near this achievement, verbatim as written.")
-    title_hint: Optional[str] = Field(default=None, description="Job title mentioned near this achievement, if any.")
-    confidence: Literal["high", "medium", "low"] = Field(description="high: company/date clearly stated. medium: implied but not explicit. low: no attribution context at all.")
+    raw_text: str = Field(
+        description="The achievement as written or lightly rephrased for clarity -- never invent detail not in the source."
+    )
+    company_hint: Optional[str] = Field(
+        default=None,
+        description="Company/employer name if stated or strongly implied nearby in the source text.",
+    )
+    date_hint: Optional[str] = Field(
+        default=None,
+        description="Any date or date range mentioned near this achievement, verbatim as written.",
+    )
+    title_hint: Optional[str] = Field(
+        default=None, description="Job title mentioned near this achievement, if any."
+    )
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="high: company/date clearly stated. medium: implied but not explicit. low: no attribution context at all."
+    )
 
 
 class RawAchievementList(BaseModel):
@@ -150,7 +166,14 @@ class ResumeExtraction(BaseModel):
 
 
 class DocumentClassification(BaseModel):
-    doc_type: Literal["resume", "linkedin_export", "recommendation_letter", "achievement_notes", "certificate", "other"]
+    doc_type: Literal[
+        "resume",
+        "linkedin_export",
+        "recommendation_letter",
+        "achievement_notes",
+        "certificate",
+        "other",
+    ]
 
 
 class IngestionAPIError(RuntimeError):
@@ -189,18 +212,21 @@ become resume bullet points later. Follow these rules strictly:
 """
 
 _EXTRACTION_PROMPTS = {
-    "recommendation_letter": _BASE_EXTRACTION_RULES + """
+    "recommendation_letter": _BASE_EXTRACTION_RULES
+    + """
 This document is a letter of recommendation written ABOUT this person by
 someone else, in third person. Extract only the specific, concrete
 achievements or projects the letter describes this person doing -- not the
 letter-writer's own opinions, adjectives, or general praise with no
 underlying specific action attached.
 """,
-    "achievement_notes": _BASE_EXTRACTION_RULES + """
+    "achievement_notes": _BASE_EXTRACTION_RULES
+    + """
 This document is free-form notes the person wrote about their own past
 achievements. Extract each distinct achievement as its own entry.
 """,
-    "other": _BASE_EXTRACTION_RULES + """
+    "other": _BASE_EXTRACTION_RULES
+    + """
 This document's type is unclear. Extract any concrete, achievement-shaped
 statements you find; skip anything that is not a specific accomplishment.
 """,
@@ -258,12 +284,16 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
         temperature=0.0,
     )
     response = client.models.generate_content(
-        model=UPLOAD_MODEL, contents=[uploaded, "Extract the requested information."], config=config,
+        model=UPLOAD_MODEL,
+        contents=[uploaded, "Extract the requested information."],
+        config=config,
     )
     return response.text
 
 
-def classify_document_type(filename: str, text: str | None, dry_run: bool = False) -> str:
+def classify_document_type(
+    filename: str, text: str | None, dry_run: bool = False
+) -> str:
     """Classifies a document by filename heuristic first; falls back to an
     LLM call over its text only when a heuristic doesn't match AND text is
     available. PDFs/images (text=None) with no filename match default to
@@ -279,7 +309,9 @@ def classify_document_type(filename: str, text: str | None, dry_run: bool = Fals
         return "achievement_notes"
 
     if dry_run:
-        cli_art.print_literal(f"[DRY RUN] would classify {cli_art._escape_markup(filename)!r} via LLM over its text sample.")
+        cli_art.print_literal(
+            f"[DRY RUN] would classify {cli_art._escape_markup(filename)!r} via LLM over its text sample."
+        )
         return "other"
 
     sample = text[:2000]
@@ -299,26 +331,37 @@ def classify_document_type(filename: str, text: str | None, dry_run: bool = Fals
 
 
 def extract_achievements(
-    doc_type: str, *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+    doc_type: str,
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
 ) -> list[RawAchievement]:
     """Extracts achievement-shaped content for doc_type in
     ('recommendation_letter', 'achievement_notes', 'other'). Exactly one of
     text or upload_path must be set."""
     if (text is None) == (upload_path is None):
-        raise ValueError("extract_achievements requires exactly one of text or upload_path")
+        raise ValueError(
+            "extract_achievements requires exactly one of text or upload_path"
+        )
 
     system_prompt = _EXTRACTION_PROMPTS.get(doc_type, _EXTRACTION_PROMPTS["other"])
 
     if dry_run:
-        cli_art.print_literal(f"[DRY RUN] would extract achievements (doc_type={cli_art._escape_markup(doc_type)!r}) with prompt:\n{system_prompt}")
+        cli_art.print_literal(
+            f"[DRY RUN] would extract achievements (doc_type={cli_art._escape_markup(doc_type)!r}) with prompt:\n{system_prompt}"
+        )
         return []
 
     if upload_path is not None:
         raw = _generate_from_upload(upload_path, system_prompt, RawAchievementList)
     else:
         raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL, system_instruction=system_prompt,
-            contents=text, response_schema=RawAchievementList, temperature=0.0,
+            model=EXTRACTION_MODEL,
+            system_instruction=system_prompt,
+            contents=text,
+            response_schema=RawAchievementList,
+            temperature=0.0,
         )
         if raw is None:
             raise IngestionAPIError(
@@ -330,13 +373,18 @@ def extract_achievements(
 
 
 def extract_certificate(
-    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
 ) -> Certificate | None:
     """Extracts a single credential (name/issuer/date) from a document
     classified as 'certificate'. Returns None if no credential name was
     found. Exactly one of text or upload_path must be set."""
     if (text is None) == (upload_path is None):
-        raise ValueError("extract_certificate requires exactly one of text or upload_path")
+        raise ValueError(
+            "extract_certificate requires exactly one of text or upload_path"
+        )
 
     if dry_run:
         cli_art.print_literal("[DRY RUN] would extract a certificate.")
@@ -346,8 +394,11 @@ def extract_certificate(
         raw = _generate_from_upload(upload_path, _CERTIFICATE_PROMPT, Certificate)
     else:
         raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL, system_instruction=_CERTIFICATE_PROMPT,
-            contents=text, response_schema=Certificate, temperature=0.0,
+            model=EXTRACTION_MODEL,
+            system_instruction=_CERTIFICATE_PROMPT,
+            contents=text,
+            response_schema=Certificate,
+            temperature=0.0,
         )
         if raw is None:
             raise IngestionAPIError(
@@ -360,7 +411,10 @@ def extract_certificate(
 
 
 def extract_resume_timeline_and_achievements(
-    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
 ) -> ResumeExtraction:
     """Used specifically for documents classified as 'resume' or
     'linkedin_export' -- extracts the employment timeline (company, title,
@@ -371,18 +425,27 @@ def extract_resume_timeline_and_achievements(
     ResumeExtraction.certifications, rather than treating a credential as
     an achievement bullet. Exactly one of text or upload_path must be set."""
     if (text is None) == (upload_path is None):
-        raise ValueError("extract_resume_timeline_and_achievements requires exactly one of text or upload_path")
+        raise ValueError(
+            "extract_resume_timeline_and_achievements requires exactly one of text or upload_path"
+        )
 
     if dry_run:
-        cli_art.print_literal("[DRY RUN] would extract resume/LinkedIn timeline, achievements, and certifications.")
+        cli_art.print_literal(
+            "[DRY RUN] would extract resume/LinkedIn timeline, achievements, and certifications."
+        )
         return ResumeExtraction(experience=[], certifications=[])
 
     if upload_path is not None:
-        raw = _generate_from_upload(upload_path, _RESUME_EXTRACTION_PROMPT, ResumeExtraction)
+        raw = _generate_from_upload(
+            upload_path, _RESUME_EXTRACTION_PROMPT, ResumeExtraction
+        )
     else:
         raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL, system_instruction=_RESUME_EXTRACTION_PROMPT,
-            contents=text, response_schema=ResumeExtraction, temperature=0.0,
+            model=EXTRACTION_MODEL,
+            system_instruction=_RESUME_EXTRACTION_PROMPT,
+            contents=text,
+            response_schema=ResumeExtraction,
+            temperature=0.0,
         )
         if raw is None:
             raise IngestionAPIError(
@@ -390,7 +453,11 @@ def extract_resume_timeline_and_achievements(
                 "see the WARNING above for the status code."
             )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
-    return ResumeExtraction(**data) if data else ResumeExtraction(experience=[], certifications=[])
+    return (
+        ResumeExtraction(**data)
+        if data
+        else ResumeExtraction(experience=[], certifications=[])
+    )
 
 
 class ContactInfo(BaseModel):
@@ -547,12 +614,17 @@ tool names, or project names that aren't there.
 
 
 def extract_contact_info(
-    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
 ) -> ContactInfo:
     """Extracts identity/contact fields from a resume or LinkedIn export's
     text. Exactly one of text or upload_path must be set."""
     if (text is None) == (upload_path is None):
-        raise ValueError("extract_contact_info requires exactly one of text or upload_path")
+        raise ValueError(
+            "extract_contact_info requires exactly one of text or upload_path"
+        )
 
     if dry_run:
         cli_art.print_literal("[DRY RUN] would extract contact info.")
@@ -562,32 +634,45 @@ def extract_contact_info(
         raw = _generate_from_upload(upload_path, _CONTACT_INFO_PROMPT, ContactInfo)
     else:
         raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL, system_instruction=_CONTACT_INFO_PROMPT,
-            contents=text, response_schema=ContactInfo, temperature=0.0,
+            model=EXTRACTION_MODEL,
+            system_instruction=_CONTACT_INFO_PROMPT,
+            contents=text,
+            response_schema=ContactInfo,
+            temperature=0.0,
         )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return ContactInfo(**data) if data else ContactInfo()
 
 
 def extract_recommendation_quote(
-    *, text: str | None = None, upload_path: str | None = None, dry_run: bool = False,
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
 ) -> RecommendationQuote | None:
     """Extracts a real quote + attribution from a recommendation letter.
     Returns None if no usable quote was found. Exactly one of text or
     upload_path must be set."""
     if (text is None) == (upload_path is None):
-        raise ValueError("extract_recommendation_quote requires exactly one of text or upload_path")
+        raise ValueError(
+            "extract_recommendation_quote requires exactly one of text or upload_path"
+        )
 
     if dry_run:
         cli_art.print_literal("[DRY RUN] would extract a recommendation quote.")
         return None
 
     if upload_path is not None:
-        raw = _generate_from_upload(upload_path, _RECOMMENDATION_QUOTE_PROMPT, RecommendationQuote)
+        raw = _generate_from_upload(
+            upload_path, _RECOMMENDATION_QUOTE_PROMPT, RecommendationQuote
+        )
     else:
         raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL, system_instruction=_RECOMMENDATION_QUOTE_PROMPT,
-            contents=text, response_schema=RecommendationQuote, temperature=0.0,
+            model=EXTRACTION_MODEL,
+            system_instruction=_RECOMMENDATION_QUOTE_PROMPT,
+            contents=text,
+            response_schema=RecommendationQuote,
+            temperature=0.0,
         )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     if not data.get("quote"):
@@ -596,7 +681,9 @@ def extract_recommendation_quote(
 
 
 def suggest_secondary_roles(
-    primary_roles: list[str], achievements_text: str, dry_run: bool = False,
+    primary_roles: list[str],
+    achievements_text: str,
+    dry_run: bool = False,
 ) -> list[str]:
     """Suggests 2-3 adjacent target job titles based on confirmed primary
     roles and a sample of real achievement text."""
@@ -605,16 +692,21 @@ def suggest_secondary_roles(
         return []
 
     raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL, system_instruction=_SECONDARY_ROLES_PROMPT,
+        model=EXTRACTION_MODEL,
+        system_instruction=_SECONDARY_ROLES_PROMPT,
         contents=f"Primary roles: {', '.join(primary_roles)}\n\nAchievements:\n{achievements_text[:4000]}",
-        response_schema=RoleSuggestions, temperature=0.0,
+        response_schema=RoleSuggestions,
+        temperature=0.0,
     )
     data = GeminiClient.parse_json(raw)
     return data.get("secondary_roles", [])
 
 
 def generate_tag_taxonomy(
-    primary_roles: list[str], secondary_roles: list[str], achievements_text: str, dry_run: bool = False,
+    primary_roles: list[str],
+    secondary_roles: list[str],
+    achievements_text: str,
+    dry_run: bool = False,
 ) -> TagTaxonomy:
     """Derives a per-profile bullet-tag taxonomy (name/persona_description/
     keywords per tag) from this candidate's own target roles and real
@@ -630,16 +722,24 @@ def generate_tag_taxonomy(
 
     roles_text = ", ".join(primary_roles + secondary_roles)
     raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL, system_instruction=_TAG_TAXONOMY_PROMPT,
+        model=EXTRACTION_MODEL,
+        system_instruction=_TAG_TAXONOMY_PROMPT,
         contents=f"Target roles: {roles_text}\n\nSample achievements:\n{achievements_text[:6000]}",
-        response_schema=TagTaxonomy, temperature=0.2,
+        response_schema=TagTaxonomy,
+        temperature=0.2,
     )
     data = GeminiClient.parse_json(raw)
     taxonomy = TagTaxonomy(**data) if data else TagTaxonomy()
     if not taxonomy.tags:
-        taxonomy = TagTaxonomy(tags=[
-            TagDefinition(name="generalist", persona_description="general or cross-functional roles", keywords=[]),
-        ])
+        taxonomy = TagTaxonomy(
+            tags=[
+                TagDefinition(
+                    name="generalist",
+                    persona_description="general or cross-functional roles",
+                    keywords=[],
+                ),
+            ]
+        )
     return taxonomy
 
 
@@ -652,8 +752,10 @@ def draft_background_guide(source_texts: list[str], dry_run: bool = False) -> st
 
     combined = "\n\n---\n\n".join(t for t in source_texts if t)[:8000]
     raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL, system_instruction=_BACKGROUND_GUIDE_PROMPT,
-        contents=combined, temperature=0.4,
+        model=EXTRACTION_MODEL,
+        system_instruction=_BACKGROUND_GUIDE_PROMPT,
+        contents=combined,
+        temperature=0.4,
     )
     return (raw or "").strip()
 
@@ -675,13 +777,17 @@ def draft_voice_anchors(source_texts: list[str], dry_run: bool = False) -> str:
     if not combined:
         return ""
     raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL, system_instruction=_VOICE_ANCHORS_PROMPT,
-        contents=combined, temperature=0.4,
+        model=EXTRACTION_MODEL,
+        system_instruction=_VOICE_ANCHORS_PROMPT,
+        contents=combined,
+        temperature=0.4,
     )
     return (raw or "").strip()
 
 
-def extract_ledger_entries(achievements_text: str, dry_run: bool = False) -> LedgerExtraction:
+def extract_ledger_entries(
+    achievements_text: str, dry_run: bool = False
+) -> LedgerExtraction:
     """Derives simple metrics/tools/projects lists from already-extracted
     achievement bullets, for the verified_metrics/tools/projects.json
     ledger files. Single model call over achievements_text as given --
@@ -689,12 +795,17 @@ def extract_ledger_entries(achievements_text: str, dry_run: bool = False) -> Led
     extract_ledger_entries_chunked() rather than passing raw text longer
     than one call can safely see (see that function's docstring)."""
     if dry_run:
-        cli_art.print_literal("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        cli_art.print_literal(
+            "[DRY RUN] would extract ledger entries (metrics/tools/projects)."
+        )
         return LedgerExtraction()
 
     raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL, system_instruction=_LEDGER_PROMPT,
-        contents=achievements_text, response_schema=LedgerExtraction, temperature=0.0,
+        model=EXTRACTION_MODEL,
+        system_instruction=_LEDGER_PROMPT,
+        contents=achievements_text,
+        response_schema=LedgerExtraction,
+        temperature=0.0,
     )
     data = GeminiClient.parse_json(raw)
     return LedgerExtraction(**data) if data else LedgerExtraction()
@@ -723,7 +834,9 @@ def _chunk_lines(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def extract_ledger_entries_chunked(achievements_text: str, dry_run: bool = False) -> LedgerExtraction:
+def extract_ledger_entries_chunked(
+    achievements_text: str, dry_run: bool = False
+) -> LedgerExtraction:
     """extract_ledger_entries(), but safe for a profile with more
     achievement text than a single call can see. The old direct call
     silently truncated achievements_text to 6000 chars, meaning a person
@@ -735,7 +848,9 @@ def extract_ledger_entries_chunked(achievements_text: str, dry_run: bool = False
     than one chunk, while keeping the same name/label attributed to two
     DIFFERENT employers as two separate entries (per _LEDGER_PROMPT)."""
     if dry_run:
-        cli_art.print_literal("[DRY RUN] would extract ledger entries (metrics/tools/projects).")
+        cli_art.print_literal(
+            "[DRY RUN] would extract ledger entries (metrics/tools/projects)."
+        )
         return LedgerExtraction()
 
     chunks = _chunk_lines(achievements_text, LEDGER_CHUNK_CHARS)
@@ -749,7 +864,11 @@ def extract_ledger_entries_chunked(achievements_text: str, dry_run: bool = False
     for chunk in chunks:
         result = extract_ledger_entries(chunk)
         for m in result.metrics:
-            key = (m.label.strip().lower(), m.value.strip().lower(), m.employer.strip().lower())
+            key = (
+                m.label.strip().lower(),
+                m.value.strip().lower(),
+                m.employer.strip().lower(),
+            )
             if key not in seen_metrics:
                 seen_metrics.add(key)
                 metrics.append(m)

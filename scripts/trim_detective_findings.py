@@ -31,7 +31,13 @@ KB_DIR = profile_paths.kb_dir()
 SOURCE_CSV = os.path.join(KB_DIR, "detective-findings.csv")
 OUTPUT_CSV = os.path.join(KB_DIR, "detective-findings-trimmed.csv")
 
-KEEP_COLUMNS = ["Source File", "Finding Type", "Best Details", "Confidence", "Use Caveat"]
+KEEP_COLUMNS = [
+    "Source File",
+    "Finding Type",
+    "Best Details",
+    "Confidence",
+    "Use Caveat",
+]
 
 
 def trim_detective_findings(source_csv: str = SOURCE_CSV) -> list[dict]:

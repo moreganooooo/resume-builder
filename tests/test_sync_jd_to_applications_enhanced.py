@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import sync_jd_to_applications_enhanced as sync_jd  # noqa: E402
@@ -19,7 +21,9 @@ class TestLoadJson(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "a.json"
             path.write_text(json.dumps({"company": "Acme"}), encoding="utf-8")
-            with patch("sync_jd_to_applications_enhanced.cli_art.cli_warning") as mock_warn:
+            with patch(
+                "sync_jd_to_applications_enhanced.cli_art.cli_warning"
+            ) as mock_warn:
                 result = sync_jd.load_json(path)
             self.assertEqual(result, {"company": "Acme"})
             mock_warn.assert_not_called()
@@ -29,7 +33,9 @@ class TestLoadJson(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "empty.json"
             path.write_text("", encoding="utf-8")
-            with patch("sync_jd_to_applications_enhanced.cli_art.cli_warning") as mock_warn:
+            with patch(
+                "sync_jd_to_applications_enhanced.cli_art.cli_warning"
+            ) as mock_warn:
                 result = sync_jd.load_json(path)
             self.assertEqual(result, {})
             mock_warn.assert_not_called()
@@ -41,7 +47,9 @@ class TestLoadJson(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "malformed.json"
             path.write_text("{not valid json at all", encoding="utf-8")
-            with patch("sync_jd_to_applications_enhanced.cli_art.cli_warning") as mock_warn:
+            with patch(
+                "sync_jd_to_applications_enhanced.cli_art.cli_warning"
+            ) as mock_warn:
                 result = sync_jd.load_json(path)
             self.assertEqual(result, {})
             mock_warn.assert_called_once()
@@ -62,7 +70,8 @@ class TestMainWritesSuccessMessage(unittest.TestCase):
         self.data_dir = project_root / "data" / self.PROFILE
         self.jds_dir.mkdir(parents=True)
         (self.jds_dir / "a.json").write_text(
-            json.dumps({"date": "2026-08-01", "company": "Acme", "role": "Engineer"}), encoding="utf-8",
+            json.dumps({"date": "2026-08-01", "company": "Acme", "role": "Engineer"}),
+            encoding="utf-8",
         )
 
     def tearDown(self):
@@ -70,8 +79,14 @@ class TestMainWritesSuccessMessage(unittest.TestCase):
         shutil.rmtree(self.data_dir, ignore_errors=True)
 
     def test_success_message_has_no_bracket_tag_and_no_double_prefix(self):
-        with patch("sync_jd_to_applications_enhanced.cli_art.cli_success") as mock_success, \
-             patch("sync_jd_to_applications_enhanced.cli_art.console.print") as mock_print:
+        with (
+            patch(
+                "sync_jd_to_applications_enhanced.cli_art.cli_success"
+            ) as mock_success,
+            patch(
+                "sync_jd_to_applications_enhanced.cli_art.console.print"
+            ) as mock_print,
+        ):
             sync_jd.main(self.PROFILE)
 
         mock_success.assert_called_once()

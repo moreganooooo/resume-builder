@@ -30,8 +30,8 @@ from datetime import date
 # bullet_feedback.py (which writes needs-review.csv) resolves this path from
 # the script's own location, not the caller's cwd — match that here so this
 # script finds the same file regardless of where it's invoked from.
-SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT   = os.path.dirname(SCRIPT_DIR)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
@@ -39,20 +39,29 @@ import cli_art
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
 
-KB_BASE        = profile_paths.kb_dir()
-NEEDS_REVIEW   = os.path.join(KB_BASE, "needs-review.csv")
-KEEPERS_CSV    = os.path.join(KB_BASE, "bullet-bank-keepers.csv")
-REWRITE_QUEUE  = os.path.join(KB_BASE, "rewrite-queue.csv")
-RETIRED_PATH   = os.path.join(KB_BASE, "retired-bullets.csv")
+KB_BASE = profile_paths.kb_dir()
+NEEDS_REVIEW = os.path.join(KB_BASE, "needs-review.csv")
+KEEPERS_CSV = os.path.join(KB_BASE, "bullet-bank-keepers.csv")
+REWRITE_QUEUE = os.path.join(KB_BASE, "rewrite-queue.csv")
+RETIRED_PATH = os.path.join(KB_BASE, "retired-bullets.csv")
 
 TODAY = str(date.today())
 
 KEEP_FIELDS = [
-    "Bullet Point", "Role / Company", "Tags",
-    "accuracy_score", "believability_score", "clarity_score",
-    "ats_value", "manager_test", "weaknesses",
-    "hidden_gem_score", "hidden_gem_flag", "hidden_gem_reason",
-    "final_bullet", "rewrite_status",
+    "Bullet Point",
+    "Role / Company",
+    "Tags",
+    "accuracy_score",
+    "believability_score",
+    "clarity_score",
+    "ats_value",
+    "manager_test",
+    "weaknesses",
+    "hidden_gem_score",
+    "hidden_gem_flag",
+    "hidden_gem_reason",
+    "final_bullet",
+    "rewrite_status",
 ]
 
 # The columns that make a row traceable at all. Everything else in
@@ -62,12 +71,25 @@ KEEP_FIELDS = [
 REQUIRED_FIELDS = ["Bullet Point", "Role / Company"]
 
 QUEUE_FIELDS = [
-    "cluster_id", "cluster_size", "is_representative", "next_action",
-    "Bullet Point", "Role / Company", "Tags",
-    "accuracy_score", "believability_score", "clarity_score",
-    "ats_value", "manager_test", "weaknesses",
-    "final_bullet", "rewrite_status", "rewrite_attempts",
-    "rewrite_reasoning", "context_gaps", "rewrite_date",
+    "cluster_id",
+    "cluster_size",
+    "is_representative",
+    "next_action",
+    "Bullet Point",
+    "Role / Company",
+    "Tags",
+    "accuracy_score",
+    "believability_score",
+    "clarity_score",
+    "ats_value",
+    "manager_test",
+    "weaknesses",
+    "final_bullet",
+    "rewrite_status",
+    "rewrite_attempts",
+    "rewrite_reasoning",
+    "context_gaps",
+    "rewrite_date",
 ]
 
 
@@ -125,11 +147,15 @@ def append_rows(path, rows, fieldnames):
         # doesn't have yet (hidden_gem_*, final_bullet, rewrite_status are
         # added by later stages). Say so out loud rather than dropping them
         # silently -- silence is what let the column shift go unnoticed.
-        cli_art.cli_warning(f"{os.path.basename(path)} has no column for {dropped} -- not written.")
+        cli_art.cli_warning(
+            f"{os.path.basename(path)} has no column for {dropped} -- not written."
+        )
 
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=disk_header, extrasaction="ignore")
-        writer.writerows({name: row.get(name, "") for name in disk_header} for row in rows)
+        writer.writerows(
+            {name: row.get(name, "") for name in disk_header} for row in rows
+        )
 
 
 def existing_keeper_bullets(path) -> set:
@@ -158,10 +184,10 @@ def main():
 
     cli_art.cli_info(f"Triaging {len(all_rows)} rows from needs-review.csv...")
 
-    keep_rows   = []
-    rewrite_rows= []
+    keep_rows = []
+    rewrite_rows = []
     retire_rows = []
-    leftover    = []
+    leftover = []
     n_duplicate = 0
 
     # Snapshot of what's already in the keeper bank, updated as this batch
@@ -170,10 +196,10 @@ def main():
     known_bullets = existing_keeper_bullets(KEEPERS_CSV)
 
     for row in all_rows:
-        mgr_test   = str(row.get("manager_test", "")).strip().upper()
-        believ     = safe_int(row.get("believability_score", 0))
-        attempts   = safe_int(row.get("rewrite_attempts", 0))
-        status     = str(row.get("rewrite_status", "")).strip().upper()
+        mgr_test = str(row.get("manager_test", "")).strip().upper()
+        believ = safe_int(row.get("believability_score", 0))
+        attempts = safe_int(row.get("rewrite_attempts", 0))
+        status = str(row.get("rewrite_status", "")).strip().upper()
 
         # Skip already-routed rows
         if status in ("KEEPER", "REWRITE", "RETIRED", "CLOSED_OUT"):
@@ -191,21 +217,26 @@ def main():
                 known_bullets.add(bullet_text)
         elif mgr_test == "FAIL" and attempts < 3:
             row["rewrite_status"] = "REWRITE"
-            row["next_action"]    = "REWRITE"
-            row["rewrite_date"]   = TODAY
+            row["next_action"] = "REWRITE"
+            row["rewrite_date"] = TODAY
             rewrite_rows.append(row)
         elif mgr_test == "FAIL" and attempts >= 3:
             row["rewrite_status"] = "RETIRED"
-            row["next_action"]    = "CLOSED_OUT"
-            row["rewrite_date"]   = TODAY
+            row["next_action"] = "CLOSED_OUT"
+            row["rewrite_date"] = TODAY
             retire_rows.append(row)
         else:
             leftover.append(row)
 
-    cli_art.render_triage_summary_table({
-        "keep": len(keep_rows), "rewrite": len(rewrite_rows), "retire": len(retire_rows),
-        "duplicate": n_duplicate, "leftover": len(leftover),
-    })
+    cli_art.render_triage_summary_table(
+        {
+            "keep": len(keep_rows),
+            "rewrite": len(rewrite_rows),
+            "retire": len(retire_rows),
+            "duplicate": n_duplicate,
+            "leftover": len(leftover),
+        }
+    )
 
     if keep_rows:
         append_rows(KEEPERS_CSV, keep_rows, KEEP_FIELDS)
@@ -226,7 +257,9 @@ def main():
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(leftover)
-        cli_art.cli_info(f"{len(leftover)} rows remain in {NEEDS_REVIEW} for manual review.")
+        cli_art.cli_info(
+            f"{len(leftover)} rows remain in {NEEDS_REVIEW} for manual review."
+        )
     else:
         os.remove(NEEDS_REVIEW)
         cli_art.cli_success(f"All rows routed. Deleted {NEEDS_REVIEW}.")

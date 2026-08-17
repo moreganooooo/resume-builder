@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -26,30 +28,35 @@ class TestFormatCompanyResearchBlock(unittest.TestCase):
 
     def test_omits_vocabulary_line_when_field_is_empty(self):
         block = orchestrator.format_company_research_block(
-            dict(self.BASE, vocabulary_substitutions=[]))
+            dict(self.BASE, vocabulary_substitutions=[])
+        )
         self.assertNotIn("Preferred vocabulary", block)
 
     def test_includes_vocabulary_line_when_pairs_present(self):
-        block = orchestrator.format_company_research_block(dict(
-            self.BASE,
-            vocabulary_substitutions=[
-                {"generic_term": "customers", "company_term": "guests"},
-                {"generic_term": "employees", "company_term": "team members"},
-            ],
-        ))
+        block = orchestrator.format_company_research_block(
+            dict(
+                self.BASE,
+                vocabulary_substitutions=[
+                    {"generic_term": "customers", "company_term": "guests"},
+                    {"generic_term": "employees", "company_term": "team members"},
+                ],
+            )
+        )
         self.assertIn("Preferred vocabulary", block)
         self.assertIn("customers -> guests", block)
         self.assertIn("employees -> team members", block)
 
     def test_skips_malformed_pairs_in_the_line(self):
-        block = orchestrator.format_company_research_block(dict(
-            self.BASE,
-            vocabulary_substitutions=[
-                {"generic_term": "", "company_term": "guests"},
-                {"generic_term": "customers", "company_term": "guests"},
-                "not a dict",
-            ],
-        ))
+        block = orchestrator.format_company_research_block(
+            dict(
+                self.BASE,
+                vocabulary_substitutions=[
+                    {"generic_term": "", "company_term": "guests"},
+                    {"generic_term": "customers", "company_term": "guests"},
+                    "not a dict",
+                ],
+            )
+        )
         vocab_line = block.split("Preferred vocabulary")[1]
         self.assertIn("customers -> guests", vocab_line)
         # Exactly one pair survived -- no separator means no second entry.
@@ -62,8 +69,12 @@ class TestFormatCompanyResearchBlock(unittest.TestCase):
         self.assertIn("Runs 400 neighborhood stores.", block)
 
     def test_includes_notable_highlights_when_present(self):
-        block = orchestrator.format_company_research_block(dict(
-            self.BASE, notable_highlights=["Named to Forbes Cloud 100 five years running."]))
+        block = orchestrator.format_company_research_block(
+            dict(
+                self.BASE,
+                notable_highlights=["Named to Forbes Cloud 100 five years running."],
+            )
+        )
         self.assertIn("Notable highlights", block)
         self.assertIn("Forbes Cloud 100", block)
 
@@ -72,7 +83,9 @@ class TestFormatCompanyResearchBlock(unittest.TestCase):
         self.assertNotIn("Notable highlights", block)
 
     def test_omits_notable_highlights_line_when_empty_list(self):
-        block = orchestrator.format_company_research_block(dict(self.BASE, notable_highlights=[]))
+        block = orchestrator.format_company_research_block(
+            dict(self.BASE, notable_highlights=[])
+        )
         self.assertNotIn("Notable highlights", block)
 
 
@@ -80,9 +93,13 @@ class TestCompanyResearchSchemaNewFields(unittest.TestCase):
 
     def test_new_fields_default_to_empty(self):
         model = orchestrator.CompanyResearchSchema(
-            overall_tone_adjective="warm", tone_register="conversational",
-            pronoun_framing="we-centric", sentence_style="short and punchy",
-            jargon_density="low", recurring_keywords=[], company_facts=[],
+            overall_tone_adjective="warm",
+            tone_register="conversational",
+            pronoun_framing="we-centric",
+            sentence_style="short and punchy",
+            jargon_density="low",
+            recurring_keywords=[],
+            company_facts=[],
             vocabulary_substitutions=[],
         )
         self.assertEqual(model.company_hq_location, "")

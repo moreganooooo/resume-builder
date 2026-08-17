@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import normalize_resume  # noqa: E402
@@ -27,51 +29,120 @@ class TestNormalizeResume(unittest.TestCase):
 
     def test_injects_company_meta_for_known_companies(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Mercor",
+                "period": "08/2025 – 08/2025",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["EXPERIENCE"][0]["size_revenue"], "~800 employees; $75M+ revenue")
-        self.assertEqual(result["EXPERIENCE"][0]["location"], "Short-Term Contract | Remote")
+        self.assertEqual(
+            result["EXPERIENCE"][0]["size_revenue"], "~800 employees; $75M+ revenue"
+        )
+        self.assertEqual(
+            result["EXPERIENCE"][0]["location"], "Short-Term Contract | Remote"
+        )
 
     def test_leaves_unknown_company_without_meta(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Some Startup Nobody Hardcoded", "period": "01/2020 – 01/2021", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Some Startup Nobody Hardcoded",
+                "period": "01/2020 – 01/2021",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
         self.assertNotIn("size_revenue", result["EXPERIENCE"][0])
 
     def test_appends_fixed_title_descriptor_for_known_companies(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "Sales/Marketing Strategy + QA Expert", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "Sales/Marketing Strategy + QA Expert",
+                "company": "Mercor",
+                "period": "08/2025 – 08/2025",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["EXPERIENCE"][0]["title"], "Sales/Marketing Strategy + QA Expert (AI Training)")
+        self.assertEqual(
+            result["EXPERIENCE"][0]["title"],
+            "Sales/Marketing Strategy + QA Expert (AI Training)",
+        )
 
     def test_does_not_double_append_descriptor_if_builder_already_included_it(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "Sales/Marketing Strategy + QA Expert (AI Training)", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "Sales/Marketing Strategy + QA Expert (AI Training)",
+                "company": "Mercor",
+                "period": "08/2025 – 08/2025",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["EXPERIENCE"][0]["title"], "Sales/Marketing Strategy + QA Expert (AI Training)")
+        self.assertEqual(
+            result["EXPERIENCE"][0]["title"],
+            "Sales/Marketing Strategy + QA Expert (AI Training)",
+        )
 
     def test_forces_the_career_note_for_treering_regardless_of_builder_output(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Treering Yearbooks", "period": "08/2016 – 08/2024", "achievements": [], "career_note": "something the builder made up"}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Treering Yearbooks",
+                "period": "08/2016 – 08/2024",
+                "achievements": [],
+                "career_note": "something the builder made up",
+            }
+        ]
         result = normalize_resume.normalize(data)
         treering = next(j for j in result["EXPERIENCE"] if "Treering" in j["company"])
         self.assertEqual(treering["career_note"], fixed_content.CAREER_NOTE)
 
     def test_does_not_add_career_note_for_other_companies(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Mercor", "period": "08/2025 – 08/2025", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Mercor",
+                "period": "08/2025 – 08/2025",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
         self.assertNotIn("career_note", result["EXPERIENCE"][0])
 
     def test_appends_company_rename_note_for_known_companies(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Inside Sales Team", "period": "10/2015 – 08/2016", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Inside Sales Team",
+                "period": "10/2015 – 08/2016",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["EXPERIENCE"][0]["company"], "Inside Sales Team (Now Alleyoop)")
+        self.assertEqual(
+            result["EXPERIENCE"][0]["company"], "Inside Sales Team (Now Alleyoop)"
+        )
 
     def test_forces_fixed_title_for_element_8_regardless_of_builder_output(self):
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "Whatever The Builder Made Up", "company": "Element 8 / Strategy LLC", "period": "01/2011 – 10/2011", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "Whatever The Builder Made Up",
+                "company": "Element 8 / Strategy LLC",
+                "period": "01/2011 – 10/2011",
+                "achievements": [],
+            }
+        ]
         result = normalize_resume.normalize(data)
         # The fixed title still gets the usual industry descriptor appended,
         # same as every other company's title.
@@ -85,12 +156,27 @@ class TestNormalizeResume(unittest.TestCase):
         # would silently stop matching COMPANY_META/CLIENTS/etc. on the 2nd+
         # pass, since "Callahan Creek (Now BarkleyOKRP)" isn't a dict key.
         data = dict(self.raw)
-        data["EXPERIENCE"] = [{"title": "X", "company": "Callahan Creek", "period": "05/2009 – 05/2010", "achievements": []}]
+        data["EXPERIENCE"] = [
+            {
+                "title": "X",
+                "company": "Callahan Creek",
+                "period": "05/2009 – 05/2010",
+                "achievements": [],
+            }
+        ]
         once = normalize_resume.normalize(data)
         twice = normalize_resume.normalize(once)
-        self.assertEqual(twice["EXPERIENCE"][0]["company"], "Callahan Creek (Now BarkleyOKRP)")
-        self.assertEqual(twice["EXPERIENCE"][0]["clients"], fixed_content.CLIENTS["Callahan Creek"]["list"])
-        self.assertEqual(twice["EXPERIENCE"][0]["size_revenue"], fixed_content.COMPANY_META["Callahan Creek"]["size_revenue"])
+        self.assertEqual(
+            twice["EXPERIENCE"][0]["company"], "Callahan Creek (Now BarkleyOKRP)"
+        )
+        self.assertEqual(
+            twice["EXPERIENCE"][0]["clients"],
+            fixed_content.CLIENTS["Callahan Creek"]["list"],
+        )
+        self.assertEqual(
+            twice["EXPERIENCE"][0]["size_revenue"],
+            fixed_content.COMPANY_META["Callahan Creek"]["size_revenue"],
+        )
 
     def test_injects_fixed_contact_info(self):
         result = normalize_resume.normalize(self.raw)
@@ -120,14 +206,18 @@ class TestNormalizeResume(unittest.TestCase):
     def test_injects_fixed_education_using_the_selected_achievement_keys(self):
         result = normalize_resume.normalize(self.raw)
         self.assertEqual(len(result["EDUCATION"]), 3)
-        self.assertIn("800% social media follower growth", result["EDUCATION"][0]["bullets"][1])
+        self.assertIn(
+            "800% social media follower growth", result["EDUCATION"][0]["bullets"][1]
+        )
 
     def test_education_uses_abbreviated_degree_names_to_avoid_wrapping(self):
         # "Bachelor of Science, Journalism + Strategic Communication" was
         # long enough to wrap the KU education line to a 2nd line; BS/AA are
         # equally valid, HR-acceptable degree abbreviations.
         result = normalize_resume.normalize(self.raw)
-        self.assertEqual(result["EDUCATION"][0]["degree"], "BS, Journalism + Strategic Communication")
+        self.assertEqual(
+            result["EDUCATION"][0]["degree"], "BS, Journalism + Strategic Communication"
+        )
         self.assertEqual(result["EDUCATION"][1]["degree"], "AA, Journalism")
 
     def test_forces_section_header_labels(self):
@@ -140,7 +230,9 @@ class TestNormalizeResume(unittest.TestCase):
 
     def test_forces_tagline_uppercase_and_ampersand(self):
         result = normalize_resume.normalize(self.raw)
-        self.assertEqual(result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST")
+        self.assertEqual(
+            result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST"
+        )
 
     def test_does_not_mutate_the_input_dict(self):
         original = dict(self.raw)
@@ -151,7 +243,9 @@ class TestNormalizeResume(unittest.TestCase):
         data = dict(self.raw)
         data["TAGLINE"] = "Lifecycle Marketing Manager And CRM Strategist"
         result = normalize_resume.normalize(data)
-        self.assertEqual(result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST")
+        self.assertEqual(
+            result["TAGLINE"], "LIFECYCLE MARKETING MANAGER & CRM STRATEGIST"
+        )
 
 
 class TestNormalizeUsesActiveProfilesFixedContent(unittest.TestCase):

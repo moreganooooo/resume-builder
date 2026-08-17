@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import picker  # noqa: E402
@@ -31,13 +33,26 @@ class TestPickAndProcessRowWidthClamp(unittest.TestCase):
         long_title = "B" * 80
         mock_question = MagicMock()
         mock_question.ask.return_value = None  # abort after inspecting choices
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": long_company, "job_title": long_title,
-                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
-             ]), \
-             patch("picker.questionary.checkbox", return_value=mock_question) as mock_checkbox, \
-             patch("picker.cli_art.console") as mock_console:
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": long_company,
+                        "job_title": long_title,
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                        "error": False,
+                    },
+                ],
+            ),
+            patch(
+                "picker.questionary.checkbox", return_value=mock_question
+            ) as mock_checkbox,
+            patch("picker.cli_art.console") as mock_console,
+        ):
             mock_console.width = 80
             mock_confirm.return_value.ask.return_value = True
             picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
@@ -77,28 +92,49 @@ class TestPickAndProcess(unittest.TestCase):
         mock_confirm.assert_not_called()
 
     def test_declined_confirmation_returns_zero_zero_without_evaluating(self):
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch("picker.batch_evaluate.evaluate_all_pending") as mock_evaluate,
+        ):
             mock_confirm.return_value.ask.return_value = False
-            result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
+            result = picker.pick_and_process(
+                ["jds/a.json"], lambda path: True, "tailor"
+            )
         self.assertEqual(result, (0, 0))
         mock_evaluate.assert_not_called()
 
     def test_all_errored_results_returns_zero_zero_without_showing_picker(self):
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
-                  "composite_score": None, "recommendation": None, "error": True},
-             ]), \
-             patch("picker.questionary.checkbox") as mock_checkbox:
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": "A",
+                        "job_title": "Role A",
+                        "composite_score": None,
+                        "recommendation": None,
+                        "error": True,
+                    },
+                ],
+            ),
+            patch("picker.questionary.checkbox") as mock_checkbox,
+        ):
             mock_confirm.return_value.ask.return_value = True
-            result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
+            result = picker.pick_and_process(
+                ["jds/a.json"], lambda path: True, "tailor"
+            )
         self.assertEqual(result, (0, 0))
         mock_checkbox.assert_not_called()
 
     def test_always_evaluates_fresh_not_skip_by_default(self):
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[]) as mock_evaluate:
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending", return_value=[]
+            ) as mock_evaluate,
+        ):
             mock_confirm.return_value.ask.return_value = True
             picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
         mock_evaluate.assert_called_once_with(["jds/a.json"], skip_evaluated=False)
@@ -106,14 +142,27 @@ class TestPickAndProcess(unittest.TestCase):
     def test_nothing_selected_returns_zero_zero(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = None
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
-                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
-             ]), \
-             patch("picker.questionary.checkbox", return_value=mock_question):
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": "A",
+                        "job_title": "Role A",
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                        "error": False,
+                    },
+                ],
+            ),
+            patch("picker.questionary.checkbox", return_value=mock_question),
+        ):
             mock_confirm.return_value.ask.return_value = True
-            result = picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor")
+            result = picker.pick_and_process(
+                ["jds/a.json"], lambda path: True, "tailor"
+            )
         self.assertEqual(result, (0, 0))
 
     def test_processes_only_selected_paths_and_counts_success_and_failure(self):
@@ -123,28 +172,60 @@ class TestPickAndProcess(unittest.TestCase):
         def fake_process(path):
             return path == "jds/a.json"  # a succeeds, b fails
 
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
-                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
-                 {"source_file": "jds/b.json", "company_name": "B", "job_title": "Role B",
-                  "composite_score": 3.0, "recommendation": "Selective pursue", "error": False},
-             ]), \
-             patch("picker.questionary.checkbox", return_value=mock_question):
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": "A",
+                        "job_title": "Role A",
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                        "error": False,
+                    },
+                    {
+                        "source_file": "jds/b.json",
+                        "company_name": "B",
+                        "job_title": "Role B",
+                        "composite_score": 3.0,
+                        "recommendation": "Selective pursue",
+                        "error": False,
+                    },
+                ],
+            ),
+            patch("picker.questionary.checkbox", return_value=mock_question),
+        ):
             mock_confirm.return_value.ask.return_value = True
-            result = picker.pick_and_process(["jds/a.json", "jds/b.json"], fake_process, "tailor")
+            result = picker.pick_and_process(
+                ["jds/a.json", "jds/b.json"], fake_process, "tailor"
+            )
         self.assertEqual(result, (1, 1))
 
     def test_skip_confirm_true_never_calls_questionary_confirm(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = ["jds/a.json"]
-        with patch("picker.questionary.confirm") as mock_confirm, \
-             patch("picker.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
-                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
-             ]), \
-             patch("picker.questionary.checkbox", return_value=mock_question):
-            picker.pick_and_process(["jds/a.json"], lambda path: True, "tailor", skip_confirm=True)
+        with (
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch(
+                "picker.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": "A",
+                        "job_title": "Role A",
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                        "error": False,
+                    },
+                ],
+            ),
+            patch("picker.questionary.checkbox", return_value=mock_question),
+        ):
+            picker.pick_and_process(
+                ["jds/a.json"], lambda path: True, "tailor", skip_confirm=True
+            )
         mock_confirm.assert_not_called()
 
 
@@ -155,10 +236,18 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_completed_jds", return_value=["jds/completed/c.json"])
     @patch("picker.jd_manager.get_pending_jds", return_value=["jds/p.json"])
-    def test_combines_pending_and_completed_with_status_tags(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
+    def test_combines_pending_and_completed_with_status_tags(
+        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+    ):
         mock_read.side_effect = lambda path: {
-            "jds/p.json": {"composite_score": 3.0, "recommendation": "Selective pursue"},
-            "jds/completed/c.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/p.json": {
+                "composite_score": 3.0,
+                "recommendation": "Selective pursue",
+            },
+            "jds/completed/c.json": {
+                "composite_score": 4.0,
+                "recommendation": "Strong pursue",
+            },
         }[path]
 
         rows = picker.list_all_evaluated_jds()
@@ -171,8 +260,12 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
-    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"])
-    def test_excludes_jds_with_no_evaluation(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
+    @patch(
+        "picker.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]
+    )
+    def test_excludes_jds_with_no_evaluation(
+        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+    ):
         mock_read.side_effect = lambda path: {
             "jds/a.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
             "jds/b.json": None,
@@ -186,11 +279,22 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
-    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/low.json", "jds/high.json"])
-    def test_sorts_best_score_first(self, mock_pending, mock_completed, mock_read, mock_live, mock_meta):
+    @patch(
+        "picker.jd_manager.get_pending_jds",
+        return_value=["jds/low.json", "jds/high.json"],
+    )
+    def test_sorts_best_score_first(
+        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+    ):
         mock_read.side_effect = lambda path: {
-            "jds/low.json": {"composite_score": 2.5, "recommendation": "Low-priority pursue"},
-            "jds/high.json": {"composite_score": 4.8, "recommendation": "Strong pursue"},
+            "jds/low.json": {
+                "composite_score": 2.5,
+                "recommendation": "Low-priority pursue",
+            },
+            "jds/high.json": {
+                "composite_score": 4.8,
+                "recommendation": "Strong pursue",
+            },
         }[path]
 
         rows = picker.list_all_evaluated_jds()
@@ -200,7 +304,10 @@ class TestListAllEvaluatedJds(unittest.TestCase):
 
 def _row(path, score, recommendation, status="Pending", title=None, company=None):
     return {
-        "path": path, "status": status, "title": title or path, "company": company or "Acme",
+        "path": path,
+        "status": status,
+        "title": title or path,
+        "company": company or "Acme",
         "evaluation": {"composite_score": score, "recommendation": recommendation},
     }
 
@@ -209,8 +316,10 @@ class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.list_all_evaluated_jds", return_value=[])
     def test_empty_list_prints_hint_and_returns_empty(self, mock_list):
-        with patch("picker.questionary.checkbox") as mock_checkbox, \
-             patch("picker.cli_art.console.print") as mock_print:
+        with (
+            patch("picker.questionary.checkbox") as mock_checkbox,
+            patch("picker.cli_art.console.print") as mock_print,
+        ):
             result = picker.browse_and_select_jds()
         self.assertEqual(result, [])
         mock_checkbox.assert_not_called()
@@ -220,7 +329,9 @@ class TestBrowseAndSelectJds(unittest.TestCase):
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
     def test_renders_the_header_for_the_current_page_only(self, mock_list, mock_render):
-        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
+        rows = [
+            _row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)
+        ]
         mock_list.return_value = rows
         mock_question = MagicMock()
         mock_question.ask.return_value = [picker._NAV_DONE]
@@ -256,8 +367,22 @@ class TestBrowseAndSelectJds(unittest.TestCase):
     @patch("picker.list_all_evaluated_jds")
     def test_returns_the_selected_rows_not_just_paths(self, mock_list, mock_render):
         rows = [
-            _row("jds/a.json", 4.0, "Strong pursue", status="Pending", title="Role A", company="Acme"),
-            _row("jds/b.json", 3.0, "Selective pursue", status="Completed", title="Role B", company="Beta"),
+            _row(
+                "jds/a.json",
+                4.0,
+                "Strong pursue",
+                status="Pending",
+                title="Role A",
+                company="Acme",
+            ),
+            _row(
+                "jds/b.json",
+                3.0,
+                "Selective pursue",
+                status="Completed",
+                title="Role B",
+                company="Beta",
+            ),
         ]
         mock_list.return_value = rows
         mock_question = MagicMock()
@@ -270,7 +395,9 @@ class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
-    def test_result_order_matches_best_score_first_regardless_of_selection_order(self, mock_list, mock_render):
+    def test_result_order_matches_best_score_first_regardless_of_selection_order(
+        self, mock_list, mock_render
+    ):
         rows = [
             _row("jds/high.json", 4.8, "Strong pursue"),
             _row("jds/low.json", 2.5, "Low-priority pursue"),
@@ -278,22 +405,32 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         mock_list.return_value = rows
         mock_question = MagicMock()
         # Selected in reverse order -- result should still come back high first.
-        mock_question.ask.return_value = ["jds/low.json", "jds/high.json", picker._NAV_DONE]
+        mock_question.ask.return_value = [
+            "jds/low.json",
+            "jds/high.json",
+            picker._NAV_DONE,
+        ]
         with patch("picker.questionary.checkbox", return_value=mock_question):
             result = picker.browse_and_select_jds()
         self.assertEqual([r["path"] for r in result], ["jds/high.json", "jds/low.json"])
 
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
-    def test_paginates_at_page_size_and_persists_selection_across_pages(self, mock_list, mock_render):
-        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)]
+    def test_paginates_at_page_size_and_persists_selection_across_pages(
+        self, mock_list, mock_render
+    ):
+        rows = [
+            _row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)
+        ]
         mock_list.return_value = rows
 
         page1 = MagicMock()
         page1.ask.return_value = ["jds/0.json", picker._NAV_NEXT]
         page2 = MagicMock()
         page2.ask.return_value = [picker._NAV_DONE]
-        with patch("picker.questionary.checkbox", side_effect=[page1, page2]) as mock_checkbox:
+        with patch(
+            "picker.questionary.checkbox", side_effect=[page1, page2]
+        ) as mock_checkbox:
             result = picker.browse_and_select_jds(page_size=3)
 
         self.assertEqual(mock_checkbox.call_count, 2)
@@ -304,8 +441,12 @@ class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
-    def test_unchecking_a_row_on_a_revisited_page_drops_it(self, mock_list, mock_render):
-        rows = [_row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(2)]
+    def test_unchecking_a_row_on_a_revisited_page_drops_it(
+        self, mock_list, mock_render
+    ):
+        rows = [
+            _row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(2)
+        ]
         mock_list.return_value = rows
 
         visit_page0_select = MagicMock()
@@ -313,12 +454,20 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         visit_page1_back = MagicMock()
         visit_page1_back.ask.return_value = [picker._NAV_PREV]
         visit_page0_uncheck = MagicMock()
-        visit_page0_uncheck.ask.return_value = [picker._NAV_NEXT]  # jds/0.json left unchecked this time
+        visit_page0_uncheck.ask.return_value = [
+            picker._NAV_NEXT
+        ]  # jds/0.json left unchecked this time
         visit_page1_done = MagicMock()
         visit_page1_done.ask.return_value = [picker._NAV_DONE]
 
-        with patch("picker.questionary.checkbox", side_effect=[
-            visit_page0_select, visit_page1_back, visit_page0_uncheck, visit_page1_done,
-        ]):
+        with patch(
+            "picker.questionary.checkbox",
+            side_effect=[
+                visit_page0_select,
+                visit_page1_back,
+                visit_page0_uncheck,
+                visit_page1_done,
+            ],
+        ):
             result = picker.browse_and_select_jds(page_size=1)
         self.assertEqual(result, [])

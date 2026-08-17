@@ -25,8 +25,9 @@ class TestVerbRuleConsistency(unittest.TestCase):
         for weak_verb, entry in self.language_quality["weak_verbs"].items():
             for suggestion in entry.get("preferred", []):
                 self.assertNotIn(
-                    suggestion, self.vague_verbs,
-                    f"language_quality.yaml recommends vague verb '{suggestion}' as an upgrade for '{weak_verb}'"
+                    suggestion,
+                    self.vague_verbs,
+                    f"language_quality.yaml recommends vague verb '{suggestion}' as an upgrade for '{weak_verb}'",
                 )
 
     def test_no_vague_verb_in_language_quality_elite_verbs(self):
@@ -66,20 +67,31 @@ class TestVerbRuleConsistency(unittest.TestCase):
             for tier_name, verbs in preferred.items():
                 for v in verbs:
                     self.assertNotIn(
-                        v, self.vague_verbs,
-                        f"verb_intent_mapping.yaml's '{intent}.{tier_name}' recommends vague verb '{v}'"
+                        v,
+                        self.vague_verbs,
+                        f"verb_intent_mapping.yaml's '{intent}.{tier_name}' recommends vague verb '{v}'",
                     )
 
     def test_style_rules_recommended_verbs_list_has_no_self_contradiction(self):
         recommended_dict = next(
-            (r for r in self.style_rules["verb_rules"] if isinstance(r, dict) and "Recommended verbs" in r),
-            None
+            (
+                r
+                for r in self.style_rules["verb_rules"]
+                if isinstance(r, dict) and "Recommended verbs" in r
+            ),
+            None,
         )
-        self.assertIsNotNone(recommended_dict, "Could not find Recommended verbs in verb_rules")
+        self.assertIsNotNone(
+            recommended_dict, "Could not find Recommended verbs in verb_rules"
+        )
         recommended_line = recommended_dict["Recommended verbs"]
         recommended = {v.strip() for v in recommended_line.split(",")}
         overlap = {v for v in recommended if v.lower() in self.vague_verbs}
-        self.assertEqual(overlap, set(), f"style_rules.yaml's own Recommended verbs list contains vague verbs: {overlap}")
+        self.assertEqual(
+            overlap,
+            set(),
+            f"style_rules.yaml's own Recommended verbs list contains vague verbs: {overlap}",
+        )
 
 
 if __name__ == "__main__":

@@ -46,7 +46,9 @@ def split_evaluated(pending_paths: list) -> tuple:
     return already_evaluated, unevaluated
 
 
-def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True) -> list:
+def evaluate_all_pending(
+    pending_paths: list = None, skip_evaluated: bool = True
+) -> list:
     """
     Runs ResumeEngine.evaluate_fit() over every path in pending_paths
     (defaults to jd_manager.get_pending_jds() if None). Returns a list of
@@ -66,38 +68,47 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
     if skip_evaluated:
         already_evaluated, pending_paths = split_evaluated(pending_paths)
         if already_evaluated:
-            cli_art.print_literal(f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s).")
+            cli_art.print_literal(
+                f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s)."
+            )
 
     engine = orchestrator.ResumeEngine()
     results = []
 
     with cli_art.new_progress() as progress:
-        task = progress.add_task(f"[bold {theme.BRAND}]Evaluating JDs...", total=len(pending_paths))
+        task = progress.add_task(
+            f"[bold {theme.BRAND}]Evaluating JDs...", total=len(pending_paths)
+        )
         for i, path in enumerate(pending_paths):
             if i > 0:
                 time.sleep(SECONDS_BETWEEN_CALLS)
             job_title, company_name = jd_manager.extract_job_meta(path)
             label = company_name or os.path.basename(path)
-            progress.update(task, description=f"[{i + 1}/{len(pending_paths)}] Weighing the fit for {label}...")
+            progress.update(
+                task,
+                description=f"[{i + 1}/{len(pending_paths)}] Weighing the fit for {label}...",
+            )
             evaluation = engine.evaluate_fit(path)
 
             if not evaluation:
-                results.append({
-                    "job_key": jd_manager.compute_job_key(path),
-                    "source_file": path,
-                    "company_name": company_name or "unknown",
-                    "job_title": job_title or "unknown",
-                    "composite_score": None,
-                    "fit_score": None,
-                    "interview_odds_score": None,
-                    "practical_pursue_score": None,
-                    "recommendation": None,
-                    "why": "",
-                    "hard_blockers": [],
-                    "posting_legitimacy": "",
-                    "posting_age_days": None,
-                    "error": True,
-                })
+                results.append(
+                    {
+                        "job_key": jd_manager.compute_job_key(path),
+                        "source_file": path,
+                        "company_name": company_name or "unknown",
+                        "job_title": job_title or "unknown",
+                        "composite_score": None,
+                        "fit_score": None,
+                        "interview_odds_score": None,
+                        "practical_pursue_score": None,
+                        "recommendation": None,
+                        "why": "",
+                        "hard_blockers": [],
+                        "posting_legitimacy": "",
+                        "posting_age_days": None,
+                        "error": True,
+                    }
+                )
                 progress.advance(task)
                 continue
 
@@ -112,22 +123,24 @@ def evaluate_all_pending(pending_paths: list = None, skip_evaluated: bool = True
             if evaluation.get("recommendation") == "Skip":
                 path = jd_manager.archive_jd(path)
 
-            results.append({
-                "job_key": job_key,
-                "source_file": path,
-                "company_name": company_name or "unknown",
-                "job_title": job_title or "unknown",
-                "composite_score": evaluation.get("composite_score"),
-                "fit_score": evaluation.get("fit_score"),
-                "interview_odds_score": evaluation.get("interview_odds_score"),
-                "practical_pursue_score": evaluation.get("practical_pursue_score"),
-                "recommendation": evaluation.get("recommendation"),
-                "why": evaluation.get("why") or "",
-                "hard_blockers": evaluation.get("hard_blockers") or [],
-                "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
-                "posting_age_days": evaluation.get("posting_age_days"),
-                "error": False,
-            })
+            results.append(
+                {
+                    "job_key": job_key,
+                    "source_file": path,
+                    "company_name": company_name or "unknown",
+                    "job_title": job_title or "unknown",
+                    "composite_score": evaluation.get("composite_score"),
+                    "fit_score": evaluation.get("fit_score"),
+                    "interview_odds_score": evaluation.get("interview_odds_score"),
+                    "practical_pursue_score": evaluation.get("practical_pursue_score"),
+                    "recommendation": evaluation.get("recommendation"),
+                    "why": evaluation.get("why") or "",
+                    "hard_blockers": evaluation.get("hard_blockers") or [],
+                    "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
+                    "posting_age_days": evaluation.get("posting_age_days"),
+                    "error": False,
+                }
+            )
             progress.advance(task)
 
     results.sort(key=_sort_key)

@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------------------------
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
@@ -39,32 +39,37 @@ import cli_art
 import profile_paths  # noqa: E402
 import theme
 
-KB_DIR       = profile_paths.kb_dir()
+KB_DIR = profile_paths.kb_dir()
 
 load_dotenv(profile_paths.env_path(), override=True)
 
-KEEPERS_CSV  = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
-GEMS_CSV     = os.path.join(KB_DIR, "hidden-gems.csv")
+KEEPERS_CSV = os.path.join(KB_DIR, "bullet-bank-keepers.csv")
+GEMS_CSV = os.path.join(KB_DIR, "hidden-gems.csv")
 
 # ---------------------------------------------------------------------------
 # CRITERIA THRESHOLDS
 # ---------------------------------------------------------------------------
-GEM_SCORE_MIN        = 90   # hidden_gem_score >= this
-ACCURACY_MIN         = 90   # accuracy_score   >= this (combined with believability)
-BELIEVABILITY_MIN   = 90   # believability_score >= this (combined with accuracy)
+GEM_SCORE_MIN = 90  # hidden_gem_score >= this
+ACCURACY_MIN = 90  # accuracy_score   >= this (combined with believability)
+BELIEVABILITY_MIN = 90  # believability_score >= this (combined with accuracy)
 
 
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def main():
     cli_art.console.print()
     cli_art.console.rule("DETECT HIDDEN GEMS", style="dim")
 
     if not os.path.exists(KEEPERS_CSV):
-        cli_art.console.print(f"  {cli_art.ERROR} {KEEPERS_CSV} not found.", soft_wrap=True)
-        cli_art.cli_warning("Run the audit + rewrite pipeline first to produce keepers.")
+        cli_art.console.print(
+            f"  {cli_art.ERROR} {KEEPERS_CSV} not found.", soft_wrap=True
+        )
+        cli_art.cli_warning(
+            "Run the audit + rewrite pipeline first to produce keepers."
+        )
         return
 
     df = pd.read_csv(KEEPERS_CSV)
@@ -86,9 +91,8 @@ def main():
         mask |= flag_col.isin(["true", "1", "yes"])
 
     if "accuracy_score" in df.columns and "believability_score" in df.columns:
-        mask |= (
-            (df["accuracy_score"]     >= ACCURACY_MIN) &
-            (df["believability_score"] >= BELIEVABILITY_MIN)
+        mask |= (df["accuracy_score"] >= ACCURACY_MIN) & (
+            df["believability_score"] >= BELIEVABILITY_MIN
         )
 
     gems = df[mask].copy()
@@ -103,7 +107,9 @@ def main():
         return
 
     # Sort: hidden_gem_score desc, then believability desc
-    sort_cols = [c for c in ("hidden_gem_score", "believability_score") if c in gems.columns]
+    sort_cols = [
+        c for c in ("hidden_gem_score", "believability_score") if c in gems.columns
+    ]
     if sort_cols:
         gems = gems.sort_values(sort_cols, ascending=False)
 

@@ -25,15 +25,17 @@ def cosine_similarity_matrix(query_vec: np.ndarray, matrix: np.ndarray) -> np.nd
     q_norm = np.linalg.norm(query_vec)
     if q_norm == 0:
         return np.zeros(len(matrix), dtype=np.float32)
-    
+
     m_norms = np.linalg.norm(matrix, axis=1)
     m_norms[m_norms == 0] = 1.0
-    
+
     dot_products = np.dot(matrix, query_vec)
     return dot_products / (m_norms * q_norm)
 
 
-def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, str, float]]:
+def search_bullet_bank(
+    jd_text: str, top_k: int = 20
+) -> list[tuple[str, str, str, float]]:
     """
     RAG search over bullet bank using gemini-embedding-2.
     Returns list of tuples: (bullet_text, role_company, tags, similarity_score)
@@ -48,6 +50,7 @@ def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, st
 
     try:
         import pandas as pd
+
         df = pd.read_csv(csv_path)
         embs = np.load(npy_path)
     except Exception:
@@ -65,12 +68,15 @@ def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, st
         # someone manually reran embed_bullet_bank.py.
         try:
             import embed_bullet_bank
+
             embed_bullet_bank.main()
             embs = np.load(npy_path)
             if len(df) != len(embs):
                 return []
         except Exception as e:
-            print(f"Warning: vector auto-reembedding failed ({e}); falling back to keyword search.")
+            print(
+                f"Warning: vector auto-reembedding failed ({e}); falling back to keyword search."
+            )
             return []
 
     if os.path.exists(meta_path):
@@ -81,10 +87,13 @@ def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, st
             if meta.get("bullets_sha") != current_sha:
                 try:
                     import embed_bullet_bank
+
                     embed_bullet_bank.main()
                     embs = np.load(npy_path)
                 except Exception as e:
-                    print(f"Warning: vector auto-reembedding failed ({e}); falling back to keyword search.")
+                    print(
+                        f"Warning: vector auto-reembedding failed ({e}); falling back to keyword search."
+                    )
                     return []
         except Exception:
             pass
@@ -99,7 +108,11 @@ def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, st
 
     results = []
     bullets = df["Bullet Point"].fillna("").tolist()
-    companies = df["Role / Company"].fillna("").tolist() if "Role / Company" in df.columns else [""] * len(df)
+    companies = (
+        df["Role / Company"].fillna("").tolist()
+        if "Role / Company" in df.columns
+        else [""] * len(df)
+    )
     tags = df["Tags"].fillna("").tolist() if "Tags" in df.columns else [""] * len(df)
 
     for idx in top_indices:

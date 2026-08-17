@@ -64,10 +64,10 @@ def _compile_prompt_if_needed() -> str:
     to the compiled binary. If compilation fails or Go is missing, returns None."""
     if not _go_available():
         return None
-    
+
     if os.path.exists(_BIN_PATH):
         return _BIN_PATH
-        
+
     os.makedirs(os.path.dirname(_BIN_PATH), exist_ok=True)
     try:
         subprocess.run(
@@ -88,7 +88,7 @@ def _run_prompt(spec: dict):
         cmd = [bin_path, json.dumps(spec)]
     else:
         cmd = ["go", "run", "./cmd/prompt", json.dumps(spec)]
-        
+
     result = subprocess.run(
         cmd,
         cwd=_DASHBOARD_DIR,
@@ -98,11 +98,15 @@ def _run_prompt(spec: dict):
     if result.returncode == _CANCEL_EXIT_CODE:
         return None
     if result.returncode != 0:
-        raise RuntimeError(f"charm_prompt failed (exit {result.returncode}): {result.stderr.strip()}")
+        raise RuntimeError(
+            f"charm_prompt failed (exit {result.returncode}): {result.stderr.strip()}"
+        )
     try:
         return json.loads(result.stdout.strip())
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"charm_prompt returned invalid JSON: {result.stdout!r}") from e
+        raise RuntimeError(
+            f"charm_prompt returned invalid JSON: {result.stdout!r}"
+        ) from e
 
 
 def _warn_and_degrade(e: Exception) -> None:
@@ -116,12 +120,16 @@ def _warn_and_degrade(e: Exception) -> None:
 
 def confirm(message: str, default: bool = True) -> bool | None:
     if not _go_available():
-        return questionary.confirm(message, default=default, style=cli_art.QUESTIONARY_STYLE).ask()
+        return questionary.confirm(
+            message, default=default, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
     try:
         data = _run_prompt({"type": "confirm", "message": message, "default": default})
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.confirm(message, default=default, style=cli_art.QUESTIONARY_STYLE).ask()
+        return questionary.confirm(
+            message, default=default, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
     if data is None:
         return None
     return data["confirmed"]
@@ -132,7 +140,11 @@ def select(message: str, choices: list, default: str | None = None) -> str | Non
         return questionary.select(
             message, choices=choices, default=default, style=cli_art.QUESTIONARY_STYLE
         ).ask()
-    spec = {"type": "select", "message": message, "options": [_option_dict(c) for c in choices]}
+    spec = {
+        "type": "select",
+        "message": message,
+        "options": [_option_dict(c) for c in choices],
+    }
     if default is not None:
         spec["default_value"] = default
     try:
@@ -149,13 +161,21 @@ def select(message: str, choices: list, default: str | None = None) -> str | Non
 
 def checkbox(message: str, choices: list) -> list | None:
     if not _go_available():
-        return questionary.checkbox(message, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask()
-    spec = {"type": "checkbox", "message": message, "options": [_option_dict(c) for c in choices]}
+        return questionary.checkbox(
+            message, choices=choices, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+    spec = {
+        "type": "checkbox",
+        "message": message,
+        "options": [_option_dict(c) for c in choices],
+    }
     try:
         data = _run_prompt(spec)
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.checkbox(message, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask()
+        return questionary.checkbox(
+            message, choices=choices, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
     if data is None:
         return None
     return data.get("values", [])

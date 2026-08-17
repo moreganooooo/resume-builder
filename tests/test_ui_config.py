@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import ui_config  # noqa: E402
@@ -15,7 +17,9 @@ class TestUiConfig(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_ui_config")
         os.makedirs(self.tmp_dir, exist_ok=True)
         self.path = os.path.join(self.tmp_dir, "ui_config.json")
-        self._patcher = patch("ui_config.profile_paths.ui_config_path", return_value=self.path)
+        self._patcher = patch(
+            "ui_config.profile_paths.ui_config_path", return_value=self.path
+        )
         self._patcher.start()
 
     def tearDown(self):
@@ -52,6 +56,7 @@ class TestUiConfig(unittest.TestCase):
             f.write('{"other_key": "keep me"}')
         ui_config.save_icon_set("nerd")
         import json
+
         with open(self.path, "r", encoding="utf-8") as f:
             config = json.load(f)
         self.assertEqual(config["other_key"], "keep me")

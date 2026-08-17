@@ -6,7 +6,12 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+    ),
+)
 
 import jd_manager
 import orchestrator
@@ -39,7 +44,11 @@ class TestApplicationPackage(unittest.TestCase):
     @patch("liveness.verify_jd_paths")
     def test_liveness_expired_moves_to_expired_and_aborts(self, mock_liveness):
         mock_liveness.return_value = {
-            "active": 0, "likely_active": 0, "expired": 1, "uncertain": 0, "moved": 1,
+            "active": 0,
+            "likely_active": 0,
+            "expired": 1,
+            "uncertain": 0,
+            "moved": 1,
             "expired_source_paths": [self.jd_path],
         }
         res = self.engine.build_application_package(self.jd_path)
@@ -49,9 +58,19 @@ class TestApplicationPackage(unittest.TestCase):
 
     @patch("liveness.verify_jd_paths")
     def test_fit_skip_moves_to_archived_and_aborts(self, mock_liveness):
-        mock_liveness.return_value = {"active": 1, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0}
-        with patch.object(self.engine, "evaluate_fit") as mock_eval, \
-             patch("jd_manager.archive_jd", return_value="jds/archived/test_job.json") as mock_archive:
+        mock_liveness.return_value = {
+            "active": 1,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "moved": 0,
+        }
+        with (
+            patch.object(self.engine, "evaluate_fit") as mock_eval,
+            patch(
+                "jd_manager.archive_jd", return_value="jds/archived/test_job.json"
+            ) as mock_archive,
+        ):
             mock_eval.return_value = {
                 "recommendation": "Skip",
                 "composite_score": 2.1,
@@ -67,16 +86,32 @@ class TestApplicationPackage(unittest.TestCase):
 
     @patch("liveness.verify_jd_paths")
     def test_fit_skip_with_force_proceeds(self, mock_liveness):
-        mock_liveness.return_value = {"active": 1, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0}
-        with patch.object(self.engine, "evaluate_fit") as mock_eval, \
-             patch.object(self.engine, "build_tailored_resume") as mock_resume, \
-             patch.object(self.engine, "build_tailored_coverletter") as mock_cl, \
-             patch("jd_manager.archive_jd") as mock_archive, \
-             patch("shutil.move"), \
-             patch("db.checkpoint"):
+        mock_liveness.return_value = {
+            "active": 1,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "moved": 0,
+        }
+        with (
+            patch.object(self.engine, "evaluate_fit") as mock_eval,
+            patch.object(self.engine, "build_tailored_resume") as mock_resume,
+            patch.object(self.engine, "build_tailored_coverletter") as mock_cl,
+            patch("jd_manager.archive_jd") as mock_archive,
+            patch("shutil.move"),
+            patch("db.checkpoint"),
+        ):
             mock_eval.return_value = {"recommendation": "Skip", "composite_score": 2.1}
-            mock_resume.return_value = {"_output_paths": {"pdf": "res.pdf", "docx": "res.docx", "json": "res.json"}}
-            mock_cl.return_value = {"_output_paths": {"pdf": "cl.pdf", "docx": "cl.docx", "json": "cl.json"}}
+            mock_resume.return_value = {
+                "_output_paths": {
+                    "pdf": "res.pdf",
+                    "docx": "res.docx",
+                    "json": "res.json",
+                }
+            }
+            mock_cl.return_value = {
+                "_output_paths": {"pdf": "cl.pdf", "docx": "cl.docx", "json": "cl.json"}
+            }
 
             res = self.engine.build_application_package(self.jd_path, force=True)
             self.assertIsNotNone(res)
@@ -87,13 +122,24 @@ class TestApplicationPackage(unittest.TestCase):
 
     @patch("liveness.verify_jd_paths")
     def test_full_package_builds_all_four_artifacts(self, mock_liveness):
-        mock_liveness.return_value = {"active": 1, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0}
-        with patch.object(self.engine, "evaluate_fit") as mock_eval, \
-             patch.object(self.engine, "build_tailored_resume") as mock_resume, \
-             patch.object(self.engine, "build_tailored_coverletter") as mock_cl, \
-             patch("shutil.move"), \
-             patch("db.checkpoint"):
-            mock_eval.return_value = {"recommendation": "Strong Pursue", "composite_score": 4.5}
+        mock_liveness.return_value = {
+            "active": 1,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "moved": 0,
+        }
+        with (
+            patch.object(self.engine, "evaluate_fit") as mock_eval,
+            patch.object(self.engine, "build_tailored_resume") as mock_resume,
+            patch.object(self.engine, "build_tailored_coverletter") as mock_cl,
+            patch("shutil.move"),
+            patch("db.checkpoint"),
+        ):
+            mock_eval.return_value = {
+                "recommendation": "Strong Pursue",
+                "composite_score": 4.5,
+            }
             mock_resume.return_value = {
                 "_output_paths": {
                     "pdf": "/path/to/resume.pdf",
@@ -111,13 +157,17 @@ class TestApplicationPackage(unittest.TestCase):
                 }
             }
 
-            res = self.engine.build_application_package(self.jd_path, referral="Jane Doe")
+            res = self.engine.build_application_package(
+                self.jd_path, referral="Jane Doe"
+            )
             self.assertIsNotNone(res)
             self.assertEqual(res.get("status"), "completed")
             self.assertEqual(res["output_paths"]["resume_pdf"], "/path/to/resume.pdf")
             self.assertEqual(res["output_paths"]["resume_docx"], "/path/to/resume.docx")
             self.assertEqual(res["output_paths"]["coverletter_pdf"], "/path/to/cl.pdf")
-            self.assertEqual(res["output_paths"]["coverletter_docx"], "/path/to/cl.docx")
+            self.assertEqual(
+                res["output_paths"]["coverletter_docx"], "/path/to/cl.docx"
+            )
             # Verify referral was saved
             ref = jd_manager.read_referral(self.jd_path)
             self.assertEqual(ref.get("text"), "Jane Doe")

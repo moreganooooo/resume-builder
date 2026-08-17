@@ -50,7 +50,8 @@ def snapshot_kb(profile: str = None, keep: int = KEEP) -> str | None:
             shutil.copy2(src, os.path.join(dest, name))
 
     existing = sorted(
-        d for d in os.listdir(snapshot_root)
+        d
+        for d in os.listdir(snapshot_root)
         if os.path.isdir(os.path.join(snapshot_root, d))
     )
     for stale in existing[:-keep] if keep > 0 else existing:

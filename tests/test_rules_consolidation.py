@@ -13,7 +13,9 @@ import orchestrator  # noqa: E402
 class TestRetiredRuleFiles(unittest.TestCase):
 
     def test_formatting_rules_yaml_no_longer_exists(self):
-        self.assertFalse(os.path.exists(os.path.join(RULES_DIR, "formatting_rules.yaml")))
+        self.assertFalse(
+            os.path.exists(os.path.join(RULES_DIR, "formatting_rules.yaml"))
+        )
 
     def test_ats_rules_yaml_no_longer_exists(self):
         self.assertFalse(os.path.exists(os.path.join(RULES_DIR, "ats_rules.yaml")))
@@ -22,7 +24,9 @@ class TestRetiredRuleFiles(unittest.TestCase):
         engine = orchestrator.ResumeEngine()
         critique_system = engine.build_bullet_critique_system()
         self.assertNotIn("ATS RULES:", critique_system)
-        self.assertIn("STYLE RULES", critique_system.upper())  # style_rules.yaml's ats_rules: section still covers this
+        self.assertIn(
+            "STYLE RULES", critique_system.upper()
+        )  # style_rules.yaml's ats_rules: section still covers this
 
 
 if __name__ == "__main__":

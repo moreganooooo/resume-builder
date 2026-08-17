@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 import pandas as pd
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 from rewrite_bullets import (  # noqa: E402
@@ -24,24 +26,34 @@ from rewrite_bullets import (  # noqa: E402
 
 
 def _claims_df():
-    return pd.DataFrame({
-        "Claim / Finding": [
-            "Built 62+ email sequences",
-            "Managed Salesforce CRM data hygiene",
-            "Led content committee governance",
-            "Sourced $1M+ in revenue",
-            "Designed brand identity for Element 8",
-        ],
-        "Metric(s)": ["62 sequences", "2000+ accounts", "100+ assets", "$1M+", "N/A"],
-        "Confidence": ["High", "High", "High", "High", "High"],
-        "Evidence / Detail": ["", "", "", "", ""],
-    })
+    return pd.DataFrame(
+        {
+            "Claim / Finding": [
+                "Built 62+ email sequences",
+                "Managed Salesforce CRM data hygiene",
+                "Led content committee governance",
+                "Sourced $1M+ in revenue",
+                "Designed brand identity for Element 8",
+            ],
+            "Metric(s)": [
+                "62 sequences",
+                "2000+ accounts",
+                "100+ assets",
+                "$1M+",
+                "N/A",
+            ],
+            "Confidence": ["High", "High", "High", "High", "High"],
+            "Evidence / Detail": ["", "", "", "", ""],
+        }
+    )
 
 
 class TestFilterClaimsByTagsMaxRows(unittest.TestCase):
 
     def test_default_max_rows_matches_existing_constant(self):
-        df = pd.concat([_claims_df()] * 5, ignore_index=True)  # 25 rows, all [email]-matchable
+        df = pd.concat(
+            [_claims_df()] * 5, ignore_index=True
+        )  # 25 rows, all [email]-matchable
         filtered = filter_claims_by_tags(df, "[email]")
         self.assertLessEqual(len(filtered), 12)  # MAX_CLAIMS_ROWS default unchanged
 
@@ -53,10 +65,30 @@ class TestFilterClaimsByTagsMaxRows(unittest.TestCase):
 
 def _metric_entries():
     return [
-        {"id": "m1", "category": "campaign_performance", "label": "Email open rate", "context": "PTA sequence, 74% open"},
-        {"id": "m2", "category": "campaign_performance", "label": "Email reply rate", "context": "Hot Zone sequence, 39% reply"},
-        {"id": "m3", "category": "ops", "label": "CRM pipeline scrub", "context": "Uncovered $3M+ in stale Salesforce pipeline"},
-        {"id": "m4", "category": "design", "label": "Brand flyer", "context": "COVID response flyer, Illustrator"},
+        {
+            "id": "m1",
+            "category": "campaign_performance",
+            "label": "Email open rate",
+            "context": "PTA sequence, 74% open",
+        },
+        {
+            "id": "m2",
+            "category": "campaign_performance",
+            "label": "Email reply rate",
+            "context": "Hot Zone sequence, 39% reply",
+        },
+        {
+            "id": "m3",
+            "category": "ops",
+            "label": "CRM pipeline scrub",
+            "context": "Uncovered $3M+ in stale Salesforce pipeline",
+        },
+        {
+            "id": "m4",
+            "category": "design",
+            "label": "Brand flyer",
+            "context": "COVID response flyer, Illustrator",
+        },
     ]
 
 
@@ -69,13 +101,17 @@ class TestFilterJsonEntriesByTags(unittest.TestCase):
         self.assertIn("m2", ids)
 
     def test_respects_max_rows_cap(self):
-        entries = _metric_entries() * 3  # 12 entries, all [ops]-matchable via "salesforce"/"crm"
+        entries = (
+            _metric_entries() * 3
+        )  # 12 entries, all [ops]-matchable via "salesforce"/"crm"
         filtered = filter_json_entries_by_tags(entries, "[ops]", max_rows=3)
         self.assertLessEqual(len(filtered), 3)
 
     def test_too_few_matches_falls_back_to_head(self):
         # "[generalist]" has no keywords in profile.yml's tags: -> include_all -> head(max_rows)
-        filtered = filter_json_entries_by_tags(_metric_entries(), "[generalist]", max_rows=2)
+        filtered = filter_json_entries_by_tags(
+            _metric_entries(), "[generalist]", max_rows=2
+        )
         self.assertEqual(len(filtered), 2)
 
     def test_load_json_entries_reads_list_under_key(self):
@@ -117,21 +153,29 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         # detail leak into non-Treering bullets on keyword overlap alone.
         # Gemma's segment for a non-Treering company must never include
         # the "VERIFIED PROJECTS" section at all.
-        df = pd.DataFrame({
-            "Role / Company": ["Inside Sales Team"],
-            "Tags": ["[email]"],
-        })
+        df = pd.DataFrame(
+            {
+                "Role / Company": ["Inside Sales Team"],
+                "Tags": ["[email]"],
+            }
+        )
         self.kb.warm_segment_cache(df)
-        gemma_block = self.kb.context_block_for_bullet_gemma("Inside Sales Team", "[email]")
+        gemma_block = self.kb.context_block_for_bullet_gemma(
+            "Inside Sales Team", "[email]"
+        )
         self.assertNotIn("VERIFIED PROJECTS", gemma_block)
 
     def test_context_block_for_bullet_gemma_returns_slim_segment(self):
-        df = pd.DataFrame({
-            "Role / Company": ["Treering Yearbooks"],
-            "Tags": ["[email]"],
-        })
+        df = pd.DataFrame(
+            {
+                "Role / Company": ["Treering Yearbooks"],
+                "Tags": ["[email]"],
+            }
+        )
         self.kb.warm_segment_cache(df)
-        gemma_block = self.kb.context_block_for_bullet_gemma("Treering Yearbooks", "[email]")
+        gemma_block = self.kb.context_block_for_bullet_gemma(
+            "Treering Yearbooks", "[email]"
+        )
         full_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
         self.assertIsInstance(gemma_block, str)
         self.assertLessEqual(len(gemma_block), len(full_block))
@@ -148,19 +192,31 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         self.assertNotIn("VERIFIED PROJECTS", self.kb.gemma_static_prefix)
 
     def test_full_tier_segment_scopes_projects_to_own_employer(self):
-        df = pd.DataFrame({
-            "Role / Company": ["Treering Yearbooks", "Element 8 / Strategy LLC", "Inside Sales Team"],
-            "Tags": ["[email]", "[brand]", "[email]"],
-        })
+        df = pd.DataFrame(
+            {
+                "Role / Company": [
+                    "Treering Yearbooks",
+                    "Element 8 / Strategy LLC",
+                    "Inside Sales Team",
+                ],
+                "Tags": ["[email]", "[brand]", "[email]"],
+            }
+        )
         self.kb.warm_segment_cache(df)
 
-        treering_block = self.kb.context_block_for_bullet("Treering Yearbooks", "[email]")
+        treering_block = self.kb.context_block_for_bullet(
+            "Treering Yearbooks", "[email]"
+        )
         self.assertIn("VERIFIED PROJECTS (Treering Yearbooks only)", treering_block)
         self.assertNotIn("Strategy LLC Brand Identity", treering_block)
 
-        strategy_block = self.kb.context_block_for_bullet("Element 8 / Strategy LLC", "[brand]")
+        strategy_block = self.kb.context_block_for_bullet(
+            "Element 8 / Strategy LLC", "[brand]"
+        )
         self.assertIn("Strategy LLC Brand Identity", strategy_block)
-        self.assertNotIn("Outreach.io Platform Rollout", strategy_block)  # a Treering project
+        self.assertNotIn(
+            "Outreach.io Platform Rollout", strategy_block
+        )  # a Treering project
 
         ist_block = self.kb.context_block_for_bullet("Inside Sales Team", "[email]")
         self.assertNotIn("VERIFIED PROJECTS", ist_block)
@@ -210,9 +266,12 @@ class TestScoreBulletSendsRoleCompanyContext(unittest.TestCase):
 
     @patch("rewrite_bullets.GeminiClient.generate")
     def test_role_company_appears_in_the_scoring_payload(self, mock_generate):
-        mock_generate.return_value = ('{"accuracy_score": 90, "believability_score": 90, '
-                                       '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
-                                       '"weaknesses": "None"}', {})
+        mock_generate.return_value = (
+            '{"accuracy_score": 90, "believability_score": 90, '
+            '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
+            '"weaknesses": "None"}',
+            {},
+        )
         score_bullet(
             "Built a complete brand identity from scratch.",
             tags="[brand]",
@@ -224,9 +283,12 @@ class TestScoreBulletSendsRoleCompanyContext(unittest.TestCase):
 
     @patch("rewrite_bullets.GeminiClient.generate")
     def test_missing_role_company_defaults_to_empty_not_a_crash(self, mock_generate):
-        mock_generate.return_value = ('{"accuracy_score": 90, "believability_score": 90, '
-                                       '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
-                                       '"weaknesses": "None"}', {})
+        mock_generate.return_value = (
+            '{"accuracy_score": 90, "believability_score": 90, '
+            '"clarity_score": 90, "ats_value": 90, "manager_test": "PASS", '
+            '"weaknesses": "None"}',
+            {},
+        )
         score_bullet("A bullet.", tags="[brand]", score_system="system prompt")
         mock_generate.assert_called_once()
 
@@ -234,9 +296,21 @@ class TestScoreBulletSendsRoleCompanyContext(unittest.TestCase):
 class TestFilterProjectsByEmployer(unittest.TestCase):
 
     PROJECTS = [
-        {"id": "proj_treering", "name": "Outreach.io Platform Rollout", "employer": "Treering Yearbooks"},
-        {"id": "proj_vml", "name": "VML Carlson Hotels Digital Strategy Report", "employer": "VML (agency internship)"},
-        {"id": "proj_strategy", "name": "Strategy LLC Brand Identity System", "employer": "Element 8 → Strategy LLC"},
+        {
+            "id": "proj_treering",
+            "name": "Outreach.io Platform Rollout",
+            "employer": "Treering Yearbooks",
+        },
+        {
+            "id": "proj_vml",
+            "name": "VML Carlson Hotels Digital Strategy Report",
+            "employer": "VML (agency internship)",
+        },
+        {
+            "id": "proj_strategy",
+            "name": "Strategy LLC Brand Identity System",
+            "employer": "Element 8 → Strategy LLC",
+        },
     ]
 
     def test_matches_only_the_bullets_own_employer(self):
@@ -265,24 +339,33 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
     def setUp(self):
         self.kb = KnowledgeBase()
-        df = pd.DataFrame({
-            "Role / Company": ["Acme Corp"],
-            "Tags": ["[content]"],
-        })
+        df = pd.DataFrame(
+            {
+                "Role / Company": ["Acme Corp"],
+                "Tags": ["[content]"],
+            }
+        )
         self.kb.warm_segment_cache(df)
-        self.row = pd.Series({
-            "Bullet Point": "Wrote content for a team.",
-            "Role / Company": "Acme Corp",
-            "Tags": "[content]",
-            "weaknesses": "",
-            "accuracy_score": None, "believability_score": None,
-            "clarity_score": None, "ats_value": None, "manager_test": None,
-        })
+        self.row = pd.Series(
+            {
+                "Bullet Point": "Wrote content for a team.",
+                "Role / Company": "Acme Corp",
+                "Tags": "[content]",
+                "weaknesses": "",
+                "accuracy_score": None,
+                "believability_score": None,
+                "clarity_score": None,
+                "ats_value": None,
+                "manager_test": None,
+            }
+        )
 
     @patch("rewrite_bullets.time.sleep", lambda *a, **kw: None)
     @patch("rewrite_bullets.score_bullet")
     @patch("rewrite_bullets.GeminiClient.generate")
-    def test_gemma_exhaustion_falls_back_to_flash_lite_with_full_context(self, mock_generate, mock_score):
+    def test_gemma_exhaustion_falls_back_to_flash_lite_with_full_context(
+        self, mock_generate, mock_score
+    ):
         # First call (Gemma) exhausts and returns None; second call
         # (flash-lite) succeeds. Assert: exactly 2 generate() calls, the
         # first targets gemma-4-31b-it with model_fallback=False, the
@@ -290,17 +373,27 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
         # (longer than Gemma's slim one).
         mock_generate.side_effect = [
             (None, {}),
-            ('{"rewritten_bullet": "Authored content for a cross-functional team.", "reasoning": "", "context_gaps": ""}', {}),
+            (
+                '{"rewritten_bullet": "Authored content for a cross-functional team.", "reasoning": "", "context_gaps": ""}',
+                {},
+            ),
         ]
         mock_score.return_value = {
-            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
-            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+            "accuracy_score": 95,
+            "believability_score": 95,
+            "clarity_score": 95,
+            "ats_value": 90,
+            "manager_test": "PASS",
+            "weaknesses": "",
         }
 
         result = process_bullet(
-            self.row, self.kb,
-            rewrite_system="sys", rewrite_system_gemma="sys-gemma",
-            score_system="score-sys", dry_run=False,
+            self.row,
+            self.kb,
+            rewrite_system="sys",
+            rewrite_system_gemma="sys-gemma",
+            score_system="score-sys",
+            dry_run=False,
         )
 
         self.assertEqual(mock_generate.call_count, 2)
@@ -341,14 +434,21 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
             {},
         )
         mock_score.return_value = {
-            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
-            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+            "accuracy_score": 95,
+            "believability_score": 95,
+            "clarity_score": 95,
+            "ats_value": 90,
+            "manager_test": "PASS",
+            "weaknesses": "",
         }
 
         result = process_bullet(
-            self.row, self.kb,
-            rewrite_system="sys", rewrite_system_gemma="sys-gemma",
-            score_system="score-sys", dry_run=False,
+            self.row,
+            self.kb,
+            rewrite_system="sys",
+            rewrite_system_gemma="sys-gemma",
+            score_system="score-sys",
+            dry_run=False,
             start_model="gemini-3.1-flash-lite",
         )
 

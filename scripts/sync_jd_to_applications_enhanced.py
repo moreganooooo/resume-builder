@@ -38,6 +38,7 @@ import cli_art
 # Helper utilities
 # ----------------------------------------------------------------------
 
+
 def load_json(path: Path) -> dict:
     """Read a JSON file and return its dict representation.
     Robustly handles empty files or files with extra data.
@@ -62,7 +63,9 @@ def load_json(path: Path) -> dict:
                 obj, _ = decoder.raw_decode(text)
                 return obj
         except Exception as e:
-            cli_art.cli_warning(f"Couldn't parse {path}, showing a placeholder row: {e}")
+            cli_art.cli_warning(
+                f"Couldn't parse {path}, showing a placeholder row: {e}"
+            )
             return {}
     except Exception as e:
         cli_art.cli_warning(f"Couldn't read {path}, showing a placeholder row: {e}")
@@ -126,9 +129,11 @@ def format_row(idx: int, data: dict, preserved_notes: str | None) -> str:
     # Assemble the exact 10‑column format expected by the dashboard
     return f"| {idx} | {date} | {company} | {role} | {score} | {status} | {pdf_flag} | {link} | {report} | {notes} |"
 
+
 # ----------------------------------------------------------------------
 # Main sync routine
 # ----------------------------------------------------------------------
+
 
 def main(profile: str = "morgan"):
     project_root = Path(__file__).resolve().parents[1]
@@ -148,7 +153,11 @@ def main(profile: str = "morgan"):
     rows = []
     for idx, jf in enumerate(json_files, start=1):
         payload = load_json(jf)
-        key = (payload.get("date", "—"), payload.get("company", "unknown"), payload.get("role", "unknown"))
+        key = (
+            payload.get("date", "—"),
+            payload.get("company", "unknown"),
+            payload.get("role", "unknown"),
+        )
         preserved = existing_notes.get(key)
         rows.append(format_row(idx, payload, preserved))
 
@@ -162,6 +171,7 @@ def main(profile: str = "morgan"):
     os.makedirs(data_dir, exist_ok=True)
     md_path.write_text(content, encoding="utf-8")
     cli_art.cli_success(f"Wrote {len(rows)} rows to {md_path}")
+
 
 if __name__ == "__main__":
     profile_arg = sys.argv[1] if len(sys.argv) > 1 else "morgan"

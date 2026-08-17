@@ -47,7 +47,7 @@ def _add_bold_markdown_runs(paragraph, text: str) -> None:
         if not part:
             continue
         run = paragraph.add_run(part)
-        run.bold = (i % 2 == 1)
+        run.bold = i % 2 == 1
 
 
 def _is_blank_or_null(value: str) -> bool:
@@ -64,13 +64,15 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     # --- Header ---
     doc.add_heading(resume_data.get("NAME", ""), level=0)
     contact_parts = [
-        p for p in (
+        p
+        for p in (
             resume_data.get("TAGLINE", ""),
             resume_data.get("PHONE", ""),
             resume_data.get("EMAIL", ""),
             resume_data.get("LINKEDIN_DISPLAY", ""),
             resume_data.get("LOCATION", ""),
-        ) if p
+        )
+        if p
     ]
     if contact_parts:
         doc.add_paragraph(" | ".join(contact_parts))
@@ -78,7 +80,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     # --- Summary ---
     summary_text = resume_data.get("SUMMARY_TEXT", "")
     if summary_text:
-        doc.add_heading(resume_data.get("SECTION_SUMMARY", "Professional Summary"), level=1)
+        doc.add_heading(
+            resume_data.get("SECTION_SUMMARY", "Professional Summary"), level=1
+        )
         p = doc.add_paragraph()
         _add_bold_first_sentence(p, summary_text)
 
@@ -93,7 +97,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     # --- Experience ---
     experience = resume_data.get("EXPERIENCE", [])
     if experience:
-        doc.add_heading(resume_data.get("SECTION_EXPERIENCE", "Work Experience"), level=1)
+        doc.add_heading(
+            resume_data.get("SECTION_EXPERIENCE", "Work Experience"), level=1
+        )
         for job in experience:
             title_p = doc.add_paragraph()
             title_run = title_p.add_run(job.get("title", ""))
@@ -102,7 +108,11 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
             company = job.get("company", "")
             if job.get("size_revenue"):
                 company = f"{company} ({job['size_revenue']})"
-            meta_parts = [p for p in (company, job.get("location", ""), job.get("period", "")) if p]
+            meta_parts = [
+                p
+                for p in (company, job.get("location", ""), job.get("period", ""))
+                if p
+            ]
             if meta_parts:
                 doc.add_paragraph(" | ".join(meta_parts))
 
@@ -124,9 +134,20 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     # --- Certifications ---
     certifications = resume_data.get("CERTIFICATIONS", [])
     if certifications:
-        doc.add_heading(resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"), level=1)
+        doc.add_heading(
+            resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
+            level=1,
+        )
         for cert in certifications:
-            cert_parts = [p for p in (cert.get("title", ""), cert.get("org", ""), cert.get("year", "")) if p]
+            cert_parts = [
+                p
+                for p in (
+                    cert.get("title", ""),
+                    cert.get("org", ""),
+                    cert.get("year", ""),
+                )
+                if p
+            ]
             doc.add_paragraph(" | ".join(cert_parts))
 
     # --- Education ---
@@ -134,7 +155,15 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     if education:
         doc.add_heading(resume_data.get("SECTION_EDUCATION", "Education"), level=1)
         for edu in education:
-            meta_parts = [m for m in (edu.get("institution", ""), edu.get("location", ""), edu.get("year", "")) if m]
+            meta_parts = [
+                m
+                for m in (
+                    edu.get("institution", ""),
+                    edu.get("location", ""),
+                    edu.get("year", ""),
+                )
+                if m
+            ]
             p = doc.add_paragraph()
             degree = edu.get("degree", "")
             if degree:
@@ -152,7 +181,11 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     why_text = resume_data.get("WHY_TEXT", "")
     if not _is_blank_or_null(why_text):
         section_why = resume_data.get("SECTION_WHY", "")
-        heading = section_why if not _is_blank_or_null(section_why) else "Additional Relevant Experience"
+        heading = (
+            section_why
+            if not _is_blank_or_null(section_why)
+            else "Additional Relevant Experience"
+        )
         doc.add_heading(heading, level=1)
         # WHY_TEXT contains literal <p>/<em> tags (see render_html.py's
         # build_why_html() comment) -- split into paragraphs on </p> and

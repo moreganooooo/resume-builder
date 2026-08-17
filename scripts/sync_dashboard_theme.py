@@ -47,7 +47,7 @@ _ACCENT_FIELDS = [
     ("Pink", "PINK", theme.PINK),
 ]
 
-_HEADER = '''package theme
+_HEADER = """package theme
 
 import "github.com/charmbracelet/lipgloss"
 
@@ -94,7 +94,7 @@ func newResumeBuilder() Theme {
 		// catppuccin_latte.go's accents (see that file's own contrast
 		// comment), which were deliberately tuned against the tighter of
 		// the two backgrounds.
-'''
+"""
 
 _FOOTER = """	}
 
@@ -117,12 +117,14 @@ _FOOTER = """	}
 def build_go_theme_source() -> str:
     lines = [_HEADER]
     for field, label, hexcode in _ACCENT_FIELDS:
-        lines.append(f'\t\t{field}:{" " * (7 - len(field))}lipgloss.Color("{hexcode}"), // {label}\n')
+        lines.append(
+            f'\t\t{field}:{" " * (7 - len(field))}lipgloss.Color("{hexcode}"), // {label}\n'
+        )
     lines.append(_FOOTER)
     return "".join(lines)
 
 
-_SUBSCORE_LABELS_HEADER = '''package theme
+_SUBSCORE_LABELS_HEADER = """package theme
 
 // SubscoreLabels maps each fit/interview-odds/practical-pursue subscore
 // schema key -- as persisted verbatim in a JD's `_evaluation` JSON (see
@@ -143,7 +145,7 @@ _SUBSCORE_LABELS_HEADER = '''package theme
 // do not hand-edit. Re-run that script after changing
 // _FIT_DIMENSION_GROUPS.
 var SubscoreLabels = map[string]string{
-'''
+"""
 
 _SUBSCORE_LABELS_FOOTER = "}\n"
 
@@ -187,12 +189,20 @@ def sync() -> bool:
     content actually changed (worth mentioning), False if both were
     already in sync."""
     theme_changed = _write_if_changed(DASHBOARD_THEME_PATH, build_go_theme_source())
-    labels_changed = _write_if_changed(SUBSCORE_LABELS_PATH, build_subscore_labels_source())
+    labels_changed = _write_if_changed(
+        SUBSCORE_LABELS_PATH, build_subscore_labels_source()
+    )
     return theme_changed or labels_changed
 
 
 if __name__ == "__main__":
     theme_changed = _write_if_changed(DASHBOARD_THEME_PATH, build_go_theme_source())
-    labels_changed = _write_if_changed(SUBSCORE_LABELS_PATH, build_subscore_labels_source())
-    cli_art.print_literal(f"{cli_art._escape_markup(DASHBOARD_THEME_PATH)}: {'updated' if theme_changed else 'already in sync'}")
-    cli_art.print_literal(f"{cli_art._escape_markup(SUBSCORE_LABELS_PATH)}: {'updated' if labels_changed else 'already in sync'}")
+    labels_changed = _write_if_changed(
+        SUBSCORE_LABELS_PATH, build_subscore_labels_source()
+    )
+    cli_art.print_literal(
+        f"{cli_art._escape_markup(DASHBOARD_THEME_PATH)}: {'updated' if theme_changed else 'already in sync'}"
+    )
+    cli_art.print_literal(
+        f"{cli_art._escape_markup(SUBSCORE_LABELS_PATH)}: {'updated' if labels_changed else 'already in sync'}"
+    )

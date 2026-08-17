@@ -4,7 +4,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import company_research  # noqa: E402
@@ -67,11 +69,11 @@ class TestExtractVisibleText(unittest.TestCase):
 
     def test_strips_cookie_consent_banner_by_class_or_id(self):
         html = (
-            '<html><body>'
+            "<html><body>"
             '<div id="cookie-banner">We use cookies. Accept All</div>'
             '<div class="consent-modal">Manage your consent preferences</div>'
-            '<main><p>Acme Corp builds widgets for the enterprise.</p></main>'
-            '</body></html>'
+            "<main><p>Acme Corp builds widgets for the enterprise.</p></main>"
+            "</body></html>"
         )
         text = company_research._extract_visible_text(html)
         self.assertIn("widgets for the enterprise", text)
@@ -90,7 +92,9 @@ class TestFetchCompanyPages(unittest.TestCase):
 
     @patch("company_research.requests.get")
     def test_stops_early_once_enough_content_collected(self, mock_get):
-        big_text = "<p>" + ("word " * 400) + "</p>"  # ~2000 chars visible, over EARLY_STOP_CHARS
+        big_text = (
+            "<p>" + ("word " * 400) + "</p>"
+        )  # ~2000 chars visible, over EARLY_STOP_CHARS
         mock_get.return_value = _response(status_code=200, text=big_text)
         result = company_research.fetch_company_pages("acme.com")
         self.assertGreater(len(result), 0)
@@ -98,13 +102,12 @@ class TestFetchCompanyPages(unittest.TestCase):
 
     @patch("company_research.requests.get")
     def test_combines_text_across_multiple_successful_pages(self, mock_get):
-        mock_get.side_effect = (
-            [
-                _response(status_code=200, text="<p>About us content.</p>"),
-                _response(status_code=404, text=""),
-                _response(status_code=200, text="<p>Careers page content.</p>"),
-            ]
-            + [_response(status_code=404, text="")] * (len(company_research.CANDIDATE_PATHS) - 3)
+        mock_get.side_effect = [
+            _response(status_code=200, text="<p>About us content.</p>"),
+            _response(status_code=404, text=""),
+            _response(status_code=200, text="<p>Careers page content.</p>"),
+        ] + [_response(status_code=404, text="")] * (
+            len(company_research.CANDIDATE_PATHS) - 3
         )
         result = company_research.fetch_company_pages("acme.com")
         self.assertIn("About us content.", result)
@@ -140,7 +143,10 @@ class TestFindCompanyWebsite(unittest.TestCase):
 
     @patch("company_research.GeminiClient.generate")
     def test_strips_surrounding_prose_around_the_url(self, mock_generate):
-        mock_generate.return_value = ("Sure! The URL is https://www.acme.com/ -- hope that helps.", {})
+        mock_generate.return_value = (
+            "Sure! The URL is https://www.acme.com/ -- hope that helps.",
+            {},
+        )
         result = company_research.find_company_website("Acme Corp")
         self.assertEqual(result, "https://www.acme.com/")
 
@@ -166,29 +172,34 @@ class TestApplyVocabularySubstitutions(unittest.TestCase):
 
     def test_replaces_lowercase_occurrence(self):
         result = company_research.apply_vocabulary_substitutions(
-            "Grew customers by 30%", self.SUBS)
+            "Grew customers by 30%", self.SUBS
+        )
         self.assertEqual(result, "Grew guests by 30%")
 
     def test_preserves_leading_capital(self):
         result = company_research.apply_vocabulary_substitutions(
-            "Customers drove the renewal", self.SUBS)
+            "Customers drove the renewal", self.SUBS
+        )
         self.assertEqual(result, "Guests drove the renewal")
 
     def test_preserves_all_caps(self):
         result = company_research.apply_vocabulary_substitutions(
-            "CUSTOMERS FIRST", self.SUBS)
+            "CUSTOMERS FIRST", self.SUBS
+        )
         self.assertEqual(result, "GUESTS FIRST")
 
     def test_respects_word_boundaries(self):
         # "customers" must not match inside "customersuccess"
         result = company_research.apply_vocabulary_substitutions(
-            "Owned customersuccess tooling", self.SUBS)
+            "Owned customersuccess tooling", self.SUBS
+        )
         self.assertEqual(result, "Owned customersuccess tooling")
 
     def test_singular_is_not_matched_by_plural_pair(self):
         # \b means "customers" cannot match the shorter "customer".
         result = company_research.apply_vocabulary_substitutions(
-            "Each customer mattered", self.SUBS)
+            "Each customer mattered", self.SUBS
+        )
         self.assertEqual(result, "Each customer mattered")
 
     def test_applies_multiple_pairs_in_one_string(self):
@@ -197,13 +208,15 @@ class TestApplyVocabularySubstitutions(unittest.TestCase):
             {"generic_term": "employees", "company_term": "team members"},
         ]
         result = company_research.apply_vocabulary_substitutions(
-            "Trained employees to serve customers", subs)
+            "Trained employees to serve customers", subs
+        )
         self.assertEqual(result, "Trained team members to serve guests")
 
     def test_empty_substitutions_is_a_no_op(self):
         self.assertEqual(
             company_research.apply_vocabulary_substitutions("Grew customers", []),
-            "Grew customers")
+            "Grew customers",
+        )
 
     def test_skips_malformed_pair_without_raising(self):
         subs = [
@@ -217,7 +230,9 @@ class TestApplyVocabularySubstitutions(unittest.TestCase):
 
     def test_regex_metacharacters_in_term_are_treated_literally(self):
         subs = [{"generic_term": "C++", "company_term": "Cpp"}]
-        result = company_research.apply_vocabulary_substitutions("Shipped C++ tooling", subs)
+        result = company_research.apply_vocabulary_substitutions(
+            "Shipped C++ tooling", subs
+        )
         self.assertEqual(result, "Shipped Cpp tooling")
 
 
@@ -229,30 +244,42 @@ class TestApplyVocabularySubstitutionsToResume(unittest.TestCase):
         return {
             "SUMMARY": "Strategist who grows customers",
             "EXPERIENCE": [
-                {"company": "Acme", "achievements": [
-                    "Grew customers by 30%",
-                    "Launched a loyalty program",
-                ]},
+                {
+                    "company": "Acme",
+                    "achievements": [
+                        "Grew customers by 30%",
+                        "Launched a loyalty program",
+                    ],
+                },
                 {"company": "Globex", "achievements": ["Retained customers at 94%"]},
             ],
         }
 
     def test_substitutes_in_every_role_s_achievements(self):
         result = company_research.apply_vocabulary_substitutions_to_resume(
-            self._resume(), self.SUBS)
-        self.assertEqual(result["EXPERIENCE"][0]["achievements"][0], "Grew guests by 30%")
-        self.assertEqual(result["EXPERIENCE"][1]["achievements"][0], "Retained guests at 94%")
+            self._resume(), self.SUBS
+        )
+        self.assertEqual(
+            result["EXPERIENCE"][0]["achievements"][0], "Grew guests by 30%"
+        )
+        self.assertEqual(
+            result["EXPERIENCE"][1]["achievements"][0], "Retained guests at 94%"
+        )
 
     def test_leaves_untargeted_bullets_byte_identical(self):
         result = company_research.apply_vocabulary_substitutions_to_resume(
-            self._resume(), self.SUBS)
-        self.assertEqual(result["EXPERIENCE"][0]["achievements"][1], "Launched a loyalty program")
+            self._resume(), self.SUBS
+        )
+        self.assertEqual(
+            result["EXPERIENCE"][0]["achievements"][1], "Launched a loyalty program"
+        )
 
     def test_does_not_touch_the_summary(self):
         # The Summary is model-written with the vocabulary already in context;
         # this deterministic pass is bullets-only by design.
         result = company_research.apply_vocabulary_substitutions_to_resume(
-            self._resume(), self.SUBS)
+            self._resume(), self.SUBS
+        )
         self.assertEqual(result["SUMMARY"], "Strategist who grows customers")
 
     def test_empty_substitutions_returns_resume_unchanged(self):
@@ -261,12 +288,18 @@ class TestApplyVocabularySubstitutionsToResume(unittest.TestCase):
         self.assertEqual(result, self._resume())
 
     def test_tolerates_missing_or_malformed_experience(self):
-        for resume in ({}, {"EXPERIENCE": None}, {"EXPERIENCE": ["not a dict"]},
-                       {"EXPERIENCE": [{"company": "Acme"}]},
-                       {"EXPERIENCE": [{"achievements": "not a list"}]},
-                       {"EXPERIENCE": [{"achievements": [None, 42]}]}):
+        for resume in (
+            {},
+            {"EXPERIENCE": None},
+            {"EXPERIENCE": ["not a dict"]},
+            {"EXPERIENCE": [{"company": "Acme"}]},
+            {"EXPERIENCE": [{"achievements": "not a list"}]},
+            {"EXPERIENCE": [{"achievements": [None, 42]}]},
+        ):
             with self.subTest(resume=resume):
-                company_research.apply_vocabulary_substitutions_to_resume(resume, self.SUBS)
+                company_research.apply_vocabulary_substitutions_to_resume(
+                    resume, self.SUBS
+                )
 
 
 class TestResearchCompanyViaSearch(unittest.TestCase):
@@ -296,7 +329,10 @@ class TestResearchCompanyViaSearch(unittest.TestCase):
 
     @patch("company_research.GeminiClient.generate")
     def test_returns_none_on_low_confidence(self, mock_generate):
-        mock_generate.return_value = ("CONFIDENCE: low\nNot sure which Acme this is.", {})
+        mock_generate.return_value = (
+            "CONFIDENCE: low\nNot sure which Acme this is.",
+            {},
+        )
         self.assertIsNone(company_research.research_company_via_search("Acme Corp"))
 
     @patch("company_research.GeminiClient.generate")
@@ -321,7 +357,9 @@ class TestResearchCompanyViaSearch(unittest.TestCase):
     @patch("company_research.GeminiClient.generate")
     def test_includes_context_hint_in_the_prompt(self, mock_generate):
         mock_generate.return_value = (self.HIGH, {})
-        company_research.research_company_via_search("Acme Corp", "Senior CRM Manager, retail")
+        company_research.research_company_via_search(
+            "Acme Corp", "Senior CRM Manager, retail"
+        )
         _, kwargs = mock_generate.call_args
         self.assertIn("Senior CRM Manager, retail", kwargs.get("contents", ""))
 

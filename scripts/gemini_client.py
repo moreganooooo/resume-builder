@@ -26,25 +26,29 @@ from dotenv import load_dotenv
 # manual export while juggling API keys) silently wins over whatever's
 # actually in .env, since dotenv's default behavior is to never overwrite
 # an existing environment variable.
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+
 def _get_api_key() -> str:
     # Always read current environment variable dynamically
     load_dotenv(profile_paths.env_path(), override=True)
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
+
 def _get_auth_headers() -> dict:
     return {"x-goog-api-key": _get_api_key()}
+
 
 AUTH_HEADERS = None
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-RETRYABLE          = {429, 500, 502, 503, 504}
-SERVER_ERRORS      = {500, 502, 503, 504}
+RETRYABLE = {429, 500, 502, 503, 504}
+SERVER_ERRORS = {500, 502, 503, 504}
 HIGH_DEMAND_STATUS = 503
-BASE_BACKOFF_SECS  = 8
-MAX_BACKOFF_SECS   = 90
+BASE_BACKOFF_SECS = 8
+MAX_BACKOFF_SECS = 90
 
 # Fallback model used when primary fails repeatedly
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
@@ -64,7 +68,7 @@ MODEL_FALLBACKS = {
 
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
-EMBED_DIM   = 768   # gemini-embedding-2 native dimension
+EMBED_DIM = 768  # gemini-embedding-2 native dimension
 
 
 # Gemini reports a refusal as a `finishReason` on an otherwise-successful
@@ -126,7 +130,9 @@ class GeminiClient:
         if not base_model.startswith("models/"):
             base_model = f"models/{base_model}"
 
-        key = hashlib.sha256(f"{base_model}:{system_instruction}".encode("utf-8")).hexdigest()
+        key = hashlib.sha256(
+            f"{base_model}:{system_instruction}".encode("utf-8")
+        ).hexdigest()
         now = time.time()
 
         if key in cls._cache_map:
@@ -137,14 +143,14 @@ class GeminiClient:
         cache_url = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
         payload = {
             "model": base_model,
-            "systemInstruction": {
-                "parts": [{"text": system_instruction}]
-            },
-            "ttl": "1200s"  # 20 minutes
+            "systemInstruction": {"parts": [{"text": system_instruction}]},
+            "ttl": "1200s",  # 20 minutes
         }
         try:
             req_headers = {**_get_auth_headers(), "Content-Type": "application/json"}
-            resp = requests.post(cache_url, json=payload, headers=req_headers, timeout=30)
+            resp = requests.post(
+                cache_url, json=payload, headers=req_headers, timeout=30
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 cache_name = data.get("name")
@@ -152,25 +158,41 @@ class GeminiClient:
                 expiry = now + 1150  # Default fallback expiry
                 if expire_str:
                     try:
-                        m = re.match(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})", expire_str)
+                        m = re.match(
+                            r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})",
+                            expire_str,
+                        )
                         if m:
                             from datetime import datetime, timezone
+
                             dt = datetime(
-                                int(m.group(1)), int(m.group(2)), int(m.group(3)),
-                                int(m.group(4)), int(m.group(5)), int(m.group(6)),
-                                tzinfo=timezone.utc
+                                int(m.group(1)),
+                                int(m.group(2)),
+                                int(m.group(3)),
+                                int(m.group(4)),
+                                int(m.group(5)),
+                                int(m.group(6)),
+                                tzinfo=timezone.utc,
                             )
                             expiry = dt.timestamp()
                     except Exception:
                         pass
                 cls._cache_map[key] = {"cache_name": cache_name, "expiry": expiry}
-                cli_art.console.print(f"    {theme.colorize_icon('success')} Explicit Context Cache created: [dim]{cache_name}[/dim] (size: {len(system_instruction)} chars)", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('success')} Explicit Context Cache created: [dim]{cache_name}[/dim] (size: {len(system_instruction)} chars)",
+                    soft_wrap=True,
+                )
                 return cache_name
             else:
-                cli_art.console.print(f"    {cli_art.WARNING} Context cache creation failed (HTTP {resp.status_code}): {resp.text[:200]}", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Context cache creation failed (HTTP {resp.status_code}): {resp.text[:200]}",
+                    soft_wrap=True,
+                )
                 return None
         except Exception as e:
-            cli_art.console.print(f"    {cli_art.WARNING} Context cache exception: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"    {cli_art.WARNING} Context cache exception: {e}", soft_wrap=True
+            )
             return None
 
     # Was 90 -- verified live (2026-07-16) that large-context calls to
@@ -216,7 +238,9 @@ class GeminiClient:
                 if "$ref" in node:
                     key = node["$ref"].rsplit("/", 1)[-1]
                     if key in seen:
-                        raise ValueError(f"Circular $ref detected resolving schema: {node['$ref']}")
+                        raise ValueError(
+                            f"Circular $ref detected resolving schema: {node['$ref']}"
+                        )
                     if key not in defs:
                         raise ValueError(f"Unresolvable $ref: {node['$ref']}")
                     return _resolve(copy.deepcopy(defs[key]), seen | {key})
@@ -229,7 +253,15 @@ class GeminiClient:
 
     @staticmethod
     def sanitize_schema(schema: dict) -> dict:
-        UNSUPPORTED = {"title", "description", "$defs", "$schema", "default", "examples", "additionalProperties"}
+        UNSUPPORTED = {
+            "title",
+            "description",
+            "$defs",
+            "$schema",
+            "default",
+            "examples",
+            "additionalProperties",
+        }
         if not isinstance(schema, dict):
             return schema
         cleaned = {}
@@ -243,7 +275,9 @@ class GeminiClient:
                 # "title" from properties while "required" still listed it,
                 # producing "property is not defined" from the API. Each
                 # property's own schema is still sanitized normally.
-                cleaned[k] = {name: GeminiClient.sanitize_schema(prop) for name, prop in v.items()}
+                cleaned[k] = {
+                    name: GeminiClient.sanitize_schema(prop) for name, prop in v.items()
+                }
                 continue
             if k in UNSUPPORTED:
                 continue
@@ -286,9 +320,13 @@ class GeminiClient:
     def parse_json(text: str) -> dict:
         if not text:
             return {}
-        cleaned = re.sub(r"<think>.*?(?:</think>|<\/think>)", "", text, flags=re.DOTALL).strip()
+        cleaned = re.sub(
+            r"<think>.*?(?:</think>|<\/think>)", "", text, flags=re.DOTALL
+        ).strip()
         if not cleaned:
-            raise ValueError("parse_json: string was empty after stripping thinking tokens.")
+            raise ValueError(
+                "parse_json: string was empty after stripping thinking tokens."
+            )
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"```\s*$", "", cleaned.strip(), flags=re.MULTILINE)
         try:
@@ -296,8 +334,11 @@ class GeminiClient:
         except json.JSONDecodeError:
             salvaged = GeminiClient._salvage_fields(cleaned)
             if salvaged:
-                cli_art.console.print(f"    {cli_art.WARNING} parse_json() salvaged {len(salvaged)} field(s) from unterminated "
-                      "JSON -- the response was truncated or malformed; treat this result as partial.", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} parse_json() salvaged {len(salvaged)} field(s) from unterminated "
+                    "JSON -- the response was truncated or malformed; treat this result as partial.",
+                    soft_wrap=True,
+                )
             return salvaged
 
     @staticmethod
@@ -328,7 +369,9 @@ class GeminiClient:
         # text with citations, not a schema-constrained object. Caught here
         # rather than surfacing as a confusing 400 from the API itself.
         if tools and response_schema is not None:
-            raise ValueError("generate(): tools (e.g. search grounding) and response_schema cannot be combined in one call.")
+            raise ValueError(
+                "generate(): tools (e.g. search grounding) and response_schema cannot be combined in one call."
+            )
 
         failure_streak = 0
 
@@ -337,7 +380,10 @@ class GeminiClient:
                 elapsed = time.time() - GeminiClient._last_gemma_call_ts
                 if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
                     wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
-                    cli_art.console.print(f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...", soft_wrap=True)
+                    cli_art.console.print(
+                        f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...",
+                        soft_wrap=True,
+                    )
                     time.sleep(wait)
                 GeminiClient._last_gemma_call_ts = time.time()
 
@@ -372,7 +418,9 @@ class GeminiClient:
                 # part before the real answer, which breaks parts[0]-based extraction.
                 if hasattr(response_schema, "model_json_schema"):
                     raw_schema = response_schema.model_json_schema()
-                elif hasattr(response_schema, "schema") and callable(response_schema.schema):
+                elif hasattr(response_schema, "schema") and callable(
+                    response_schema.schema
+                ):
                     raw_schema = response_schema.schema()
                 elif isinstance(response_schema, dict):
                     raw_schema = response_schema
@@ -380,7 +428,10 @@ class GeminiClient:
                     try:
                         raw_schema = json.loads(response_schema)
                     except json.JSONDecodeError:
-                        cli_art.console.print(f"{cli_art.ERROR} response_schema string is not valid JSON.", soft_wrap=True)
+                        cli_art.console.print(
+                            f"{cli_art.ERROR} response_schema string is not valid JSON.",
+                            soft_wrap=True,
+                        )
                 if raw_schema and (extra_schema_properties or extra_required):
                     # Callers that need profile-specific enum fields not knowable
                     # at Pydantic class-definition time (e.g. orchestrator.py's
@@ -394,8 +445,13 @@ class GeminiClient:
                     # since a Pydantic-sourced dict could in principle be reused
                     # across calls.
                     raw_schema = dict(raw_schema)
-                    raw_schema["properties"] = {**raw_schema.get("properties", {}), **(extra_schema_properties or {})}
-                    raw_schema["required"] = list(raw_schema.get("required", [])) + list(extra_required or [])
+                    raw_schema["properties"] = {
+                        **raw_schema.get("properties", {}),
+                        **(extra_schema_properties or {}),
+                    }
+                    raw_schema["required"] = list(
+                        raw_schema.get("required", [])
+                    ) + list(extra_required or [])
                 if raw_schema:
                     generation_config["responseSchema"] = GeminiClient.sanitize_schema(
                         GeminiClient.resolve_refs(raw_schema)
@@ -409,7 +465,9 @@ class GeminiClient:
             # Attempt to use or create explicit context cache for Gemini requests
             cache_name = None
             if "gemini" in model.lower():
-                cache_name = GeminiClient._get_or_create_cache(model, system_instruction)
+                cache_name = GeminiClient._get_or_create_cache(
+                    model, system_instruction
+                )
 
             body = {
                 "contents": [{"role": "user", "parts": [{"text": contents}]}],
@@ -425,9 +483,18 @@ class GeminiClient:
                 body["tools"] = tools
 
             try:
-                resp = requests.post(url, json=body, headers=_get_auth_headers(), timeout=GeminiClient._timeout)
+                resp = requests.post(
+                    url,
+                    json=body,
+                    headers=_get_auth_headers(),
+                    timeout=GeminiClient._timeout,
+                )
                 # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
-                if resp.status_code == 400 and cache_name and "cache" in resp.text.lower():
+                if (
+                    resp.status_code == 400
+                    and cache_name
+                    and "cache" in resp.text.lower()
+                ):
                     # Evict from class map
                     cls_key = None
                     for k, entry in GeminiClient._cache_map.items():
@@ -436,22 +503,40 @@ class GeminiClient:
                             break
                     if cls_key:
                         GeminiClient._cache_map.pop(cls_key, None)
-                    cli_art.console.print(f"    {theme.colorize_icon('warning')} Context cache expired or evicted. Self-healing fallback to inline systemInstruction...", soft_wrap=True)
+                    cli_art.console.print(
+                        f"    {theme.colorize_icon('warning')} Context cache expired or evicted. Self-healing fallback to inline systemInstruction...",
+                        soft_wrap=True,
+                    )
                     # Retry this attempt with inline systemInstruction directly
                     body.pop("cachedContent", None)
-                    body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-                    resp = requests.post(url, json=body, headers=_get_auth_headers(), timeout=GeminiClient._timeout)
+                    body["systemInstruction"] = {
+                        "parts": [{"text": system_instruction}]
+                    }
+                    resp = requests.post(
+                        url,
+                        json=body,
+                        headers=_get_auth_headers(),
+                        timeout=GeminiClient._timeout,
+                    )
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
-                    cli_art.console.print(f"    {cli_art.WARNING} Transport failures — falling back to {fallback_model}...", soft_wrap=True)
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Transport failures — falling back to {fallback_model}...",
+                        soft_wrap=True,
+                    )
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
-                cli_art.console.print(f"    {cli_art.WARNING} Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
-                      f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...", soft_wrap=True)
+                sleep_dur = min(
+                    BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+                ) + random.uniform(1, 4)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
+                    f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...",
+                    soft_wrap=True,
+                )
                 time.sleep(sleep_dur)
                 continue
 
@@ -461,22 +546,36 @@ class GeminiClient:
                 failure_streak += 1
 
             if resp.status_code == HIGH_DEMAND_STATUS:
-                cli_art.console.print(f"    {cli_art.WARNING} Model high demand (503). Treating as transient.", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Model high demand (503). Treating as transient.",
+                    soft_wrap=True,
+                )
 
             if resp.status_code in RETRYABLE:
                 if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
                     fallback_model = MODEL_FALLBACKS[model]
-                    cli_art.console.print(f"    {cli_art.WARNING} Server failures — falling back to {fallback_model}...", soft_wrap=True)
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Server failures — falling back to {fallback_model}...",
+                        soft_wrap=True,
+                    )
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = min(BASE_BACKOFF_SECS * (2 ** attempt), MAX_BACKOFF_SECS) + random.uniform(1, 4)
-                cli_art.console.print(f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...", soft_wrap=True)
+                sleep_dur = min(
+                    BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+                ) + random.uniform(1, 4)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...",
+                    soft_wrap=True,
+                )
                 time.sleep(sleep_dur)
                 continue
 
             if resp.status_code in (400, 404):
-                cli_art.console.print(f"    {cli_art.WARNING} Gemini API permanent error {resp.status_code}: {resp.reason}. Not retrying.", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Gemini API permanent error {resp.status_code}: {resp.reason}. Not retrying.",
+                    soft_wrap=True,
+                )
                 try:
                     cli_art.print_literal(json.dumps(resp.json(), indent=2)[:800])
                 except Exception:
@@ -486,15 +585,20 @@ class GeminiClient:
             try:
                 resp.raise_for_status()
             except requests.exceptions.HTTPError as e:
-                cli_art.console.print(f"    {cli_art.WARNING} HTTP error {resp.status_code}: {e}. Not retrying.", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} HTTP error {resp.status_code}: {e}. Not retrying.",
+                    soft_wrap=True,
+                )
                 return None, {}
 
             try:
                 data = resp.json()
             except Exception as e:
                 cli_art.friendly_warning(
-                    e, "reading the AI's response",
-                    "treating this request as if it came back empty")
+                    e,
+                    "reading the AI's response",
+                    "treating this request as if it came back empty",
+                )
                 return None, {}
 
             candidates = data.get("candidates", [])
@@ -518,7 +622,7 @@ class GeminiClient:
                 usage["truncated"] = True
 
             content = candidates[0].get("content", {})
-            parts   = content.get("parts", [])
+            parts = content.get("parts", [])
             # Skip thinking parts (part.get("thought") is True) -- Gemma without
             # a schema puts its reasoning in parts[0] and the real answer later;
             # concatenate only the non-thought parts to get the actual response.
@@ -528,7 +632,10 @@ class GeminiClient:
             return text, usage
 
         GeminiClient._consecutive_full_failures += 1
-        if GeminiClient._consecutive_full_failures >= GeminiClient.SUSTAINED_FAILURE_THRESHOLD:
+        if (
+            GeminiClient._consecutive_full_failures
+            >= GeminiClient.SUSTAINED_FAILURE_THRESHOLD
+        ):
             failures = GeminiClient._consecutive_full_failures
             GeminiClient._consecutive_full_failures = 0
             raise SustainedFailureError(
@@ -552,9 +659,13 @@ class GeminiClient:
             "outputDimensionality": EMBED_DIM,
         }
         try:
-            resp = requests.post(url, json=payload, headers=_get_auth_headers(), timeout=30)
+            resp = requests.post(
+                url, json=payload, headers=_get_auth_headers(), timeout=30
+            )
             resp.raise_for_status()
             return resp.json().get("embedding", {}).get("values")
         except Exception as e:
-            cli_art.console.print(f"    {cli_art.WARNING} Embed error: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"    {cli_art.WARNING} Embed error: {e}", soft_wrap=True
+            )
             return None

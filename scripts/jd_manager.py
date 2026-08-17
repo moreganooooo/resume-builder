@@ -89,13 +89,18 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
     """Syncs a loaded JD dict into profiles/<profile>/data.db via db.upsert_job."""
     try:
         import db
+
         job_id = data.get("source_job_id") or data.get("id") or compute_job_key(jd_path)
         eval_data = data.get("_evaluation") or {}
         app_data = data.get("_application") or {}
-        
+
         status = "pending"
         raw_status = (app_data.get("status") or "").lower()
-        if "completed" in jd_path or "completed" in raw_status or "tailored" in raw_status:
+        if (
+            "completed" in jd_path
+            or "completed" in raw_status
+            or "tailored" in raw_status
+        ):
             status = "completed"
         elif "expired" in jd_path or "expired" in raw_status:
             status = "expired"
@@ -109,7 +114,9 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
         job_record = {
             "id": job_id,
             "title": data.get("job_title") or data.get("title") or "Untitled Role",
-            "company": data.get("company_name") or data.get("company") or "Unknown Company",
+            "company": data.get("company_name")
+            or data.get("company")
+            or "Unknown Company",
             "location": data.get("location") or "",
             "raw_text": data.get("jd_text") or data.get("raw_text") or json.dumps(data),
             "status": status,
@@ -117,7 +124,7 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
             "recruiter_score": eval_data.get("interview_odds_score"),
             "final_score": eval_data.get("composite_score"),
             "deal_breakers": eval_data.get("hard_blockers") or [],
-            **data
+            **data,
         }
         db.upsert_job(job_record, profile=profile)
     except Exception as e:
@@ -152,14 +159,14 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "archetype": evaluation.get("archetype") or "",
         "fit_subscores": evaluation.get("fit_subscores") or {},
         "interview_odds_subscores": evaluation.get("interview_odds_subscores") or {},
-        "practical_pursue_subscores": evaluation.get("practical_pursue_subscores") or {},
+        "practical_pursue_subscores": evaluation.get("practical_pursue_subscores")
+        or {},
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     _sync_jd_to_db(jd_path, data)
-
 
 
 def read_evaluation(jd_path: str) -> dict | None:
@@ -256,7 +263,6 @@ def read_coverage(jd_path: str) -> dict | None:
     return data.get("_coverage")
 
 
-
 def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     """Persists a liveness result into the JD's own JSON file under a
     _liveness key (result, reason, checked_at), matching _evaluation's
@@ -279,7 +285,6 @@ def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     _sync_jd_to_db(jd_path, data)
-
 
 
 def move_jd_to(jd_path: str, dest_dir: str) -> str:
@@ -319,12 +324,14 @@ def move_jd_to(jd_path: str, dest_dir: str) -> str:
             _sync_jd_to_db(dest, data)
     except Exception:
         pass  # best-effort, same posture as _sync_jd_to_db's own callers;
-              # not every JD file is JSON (plain-text drop-ins exist too)
+        # not every JD file is JSON (plain-text drop-ins exist too)
 
     return dest
 
 
-def save_discovered_at(jd_path: str, when: str | None = None, source: str = "scan") -> None:
+def save_discovered_at(
+    jd_path: str, when: str | None = None, source: str = "scan"
+) -> None:
     """Stamps when this posting first entered the queue, under a
     _discovered_at key (date, source) -- same underscore-prefixed
     persisted-metadata convention as _evaluation/_liveness/_application.
@@ -536,7 +543,9 @@ def compute_posting_age_days(jd_path: str) -> int | None:
 
     if not posted:
         liveness = data.get("_liveness") or {}
-        if liveness.get("reason") == "confirmed to exist by scan" and liveness.get("checked_at"):
+        if liveness.get("reason") == "confirmed to exist by scan" and liveness.get(
+            "checked_at"
+        ):
             posted = _parse_flexible_date(liveness["checked_at"])
 
     if not posted:
@@ -546,10 +555,19 @@ def compute_posting_age_days(jd_path: str) -> int | None:
     return max((now - posted).days, 0)
 
 
-APPLICATION_STATUSES = ["Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"]
+APPLICATION_STATUSES = [
+    "Applied",
+    "Responded",
+    "Interview",
+    "Offer",
+    "Rejected",
+    "Withdrawn",
+]
 
 
-def save_application_status(jd_path: str, status: str, log_followup: bool = False) -> None:
+def save_application_status(
+    jd_path: str, status: str, log_followup: bool = False
+) -> None:
     """Persists real-world application progress into the JD's own JSON
     under an _application key -- the prerequisite the follow-up cadence
     tracker needs (career-ops's classification depends on status
@@ -592,7 +610,6 @@ def save_application_status(jd_path: str, status: str, log_followup: bool = Fals
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     _sync_jd_to_db(jd_path, data)
-
 
 
 def read_application_status(jd_path: str) -> dict | None:
@@ -659,7 +676,9 @@ def split_batch_jds(jd_path: str) -> list:
     new_paths = []
 
     for job in data:
-        job_title, company_name = _meta_from_dict(job) if isinstance(job, dict) else ("", "")
+        job_title, company_name = (
+            _meta_from_dict(job) if isinstance(job, dict) else ("", "")
+        )
         filename = f"{today}_{sanitize_for_filename(company_name)}_{sanitize_for_filename(job_title)}.json"
         dest = os.path.join(JDS_DIR, filename)
 
@@ -677,8 +696,15 @@ def split_batch_jds(jd_path: str) -> list:
 
 
 TRACKER_FIELDNAMES = [
-    "job_key", "job_title", "company_name", "source_file",
-    "status", "date_processed", "output_json", "output_pdf", "error_message",
+    "job_key",
+    "job_title",
+    "company_name",
+    "source_file",
+    "status",
+    "date_processed",
+    "output_json",
+    "output_pdf",
+    "error_message",
 ]
 
 
@@ -702,6 +728,7 @@ class JDTracker:
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             try:
                 import fcntl
+
                 fcntl.flock(f, fcntl.LOCK_EX)
             except (ImportError, OSError):
                 pass
@@ -711,13 +738,16 @@ class JDTracker:
             writer.writerow(row)
             try:
                 import fcntl
+
                 fcntl.flock(f, fcntl.LOCK_UN)
             except (ImportError, OSError):
                 pass
 
     def is_completed(self, job_key: str) -> bool:
-        return any(row["job_key"] == job_key and row["status"] == "completed"
-                   for row in self._read_rows())
+        return any(
+            row["job_key"] == job_key and row["status"] == "completed"
+            for row in self._read_rows()
+        )
 
     def count_completed(self) -> int:
         """Number of 'completed' rows in the ledger. Append-only, so this
@@ -725,33 +755,45 @@ class JDTracker:
         can decrement."""
         return sum(1 for row in self._read_rows() if row.get("status") == "completed")
 
-    def mark_completed(self, job_key, job_title="", company_name="", source_file="",
-                        output_json="", output_pdf="") -> None:
-        self._append_row({
-            "job_key": job_key,
-            "job_title": job_title,
-            "company_name": company_name,
-            "source_file": source_file,
-            "status": "completed",
-            "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
-            "output_json": output_json,
-            "output_pdf": output_pdf,
-            "error_message": "",
-        })
+    def mark_completed(
+        self,
+        job_key,
+        job_title="",
+        company_name="",
+        source_file="",
+        output_json="",
+        output_pdf="",
+    ) -> None:
+        self._append_row(
+            {
+                "job_key": job_key,
+                "job_title": job_title,
+                "company_name": company_name,
+                "source_file": source_file,
+                "status": "completed",
+                "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
+                "output_json": output_json,
+                "output_pdf": output_pdf,
+                "error_message": "",
+            }
+        )
 
-    def mark_failed(self, job_key, job_title="", company_name="", source_file="",
-                     error_message="") -> None:
-        self._append_row({
-            "job_key": job_key,
-            "job_title": job_title,
-            "company_name": company_name,
-            "source_file": source_file,
-            "status": "failed",
-            "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
-            "output_json": "",
-            "output_pdf": "",
-            "error_message": error_message,
-        })
+    def mark_failed(
+        self, job_key, job_title="", company_name="", source_file="", error_message=""
+    ) -> None:
+        self._append_row(
+            {
+                "job_key": job_key,
+                "job_title": job_title,
+                "company_name": company_name,
+                "source_file": source_file,
+                "status": "failed",
+                "date_processed": datetime.datetime.now().isoformat(timespec="seconds"),
+                "output_json": "",
+                "output_pdf": "",
+                "error_message": error_message,
+            }
+        )
 
 
 APPLICATIONS_MD = profile_paths.applications_md_path()
@@ -768,16 +810,25 @@ def _next_application_row_number(path: str) -> int:
         return 1
     with open(path, "r", encoding="utf-8") as f:
         data_rows = [
-            line for line in f
-            if line.startswith("| ") and not line.startswith("| #") and not line.startswith("|---")
+            line
+            for line in f
+            if line.startswith("| ")
+            and not line.startswith("| #")
+            and not line.startswith("|---")
         ]
     return len(data_rows) + 1
 
 
-def append_application_row(company_name: str, job_title: str, has_pdf: bool,
-                            source_url: str = "", path: str = None,
-                            evaluation: dict = None, jd_data: dict = None,
-                            notes: str = "") -> None:
+def append_application_row(
+    company_name: str,
+    job_title: str,
+    has_pdf: bool,
+    source_url: str = "",
+    path: str = None,
+    evaluation: dict = None,
+    jd_data: dict = None,
+    notes: str = "",
+) -> None:
     """Appends one row to data/applications.md, in career-ops's markdown-table
     tracker format (# | Date | Company | Role | Score | Status | PDF | Link |
     Report | Notes). Link is a clickable "[Apply](source_url)" -- this is
@@ -809,7 +860,11 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
     status = (jd_data or {}).get("_application", {}).get("status") or "Tailored"
 
     composite_score = (evaluation or {}).get("composite_score")
-    score_cell = f"{composite_score:.2f}/5" if isinstance(composite_score, (int, float)) else "NA"
+    score_cell = (
+        f"{composite_score:.2f}/5"
+        if isinstance(composite_score, (int, float))
+        else "NA"
+    )
     report_cell = (evaluation or {}).get("recommendation") or "—"
 
     row = (
@@ -819,12 +874,14 @@ def append_application_row(company_name: str, job_title: str, has_pdf: bool,
     with open(path, "a", encoding="utf-8") as f:
         try:
             import fcntl
+
             fcntl.flock(f, fcntl.LOCK_EX)
         except (ImportError, OSError):
             pass
         f.write(row)
         try:
             import fcntl
+
             fcntl.flock(f, fcntl.LOCK_UN)
         except (ImportError, OSError):
             pass
@@ -886,7 +943,10 @@ def build_known_jobs_index() -> dict:
             existing_url, existing_company, existing_title = _read_dedup_fields(path)
             if existing_url and existing_company:
                 url_company_pairs.add((existing_url, existing_company))
-            normalized_pair = (_normalize_for_match(existing_company), _normalize_for_match(existing_title))
+            normalized_pair = (
+                _normalize_for_match(existing_company),
+                _normalize_for_match(existing_title),
+            )
             if normalized_pair[0] and normalized_pair[1]:
                 normalized_pairs.add(normalized_pair)
 
@@ -897,21 +957,35 @@ def build_known_jobs_index() -> dict:
     }
 
 
-def add_to_known_jobs_index(index: dict, job_key: str, source_url: str = None,
-                             company_name: str = None, job_title: str = None) -> None:
+def add_to_known_jobs_index(
+    index: dict,
+    job_key: str,
+    source_url: str = None,
+    company_name: str = None,
+    job_title: str = None,
+) -> None:
     """Updates an index from build_known_jobs_index() in place with a job
     just written during the same run_scan() pass, so later candidates in
     that pass are still deduped against it without a fresh disk walk."""
     index["job_keys"].add(job_key)
     if source_url and company_name:
         index["url_company_pairs"].add((source_url, company_name))
-    normalized_pair = (_normalize_for_match(company_name), _normalize_for_match(job_title))
+    normalized_pair = (
+        _normalize_for_match(company_name),
+        _normalize_for_match(job_title),
+    )
     if normalized_pair[0] and normalized_pair[1]:
         index["normalized_pairs"].add(normalized_pair)
 
 
-def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = None,
-                   company_name: str = None, job_title: str = None, index: dict = None) -> bool:
+def job_key_known(
+    job_key: str,
+    tracker: "JDTracker" = None,
+    source_url: str = None,
+    company_name: str = None,
+    job_title: str = None,
+    index: dict = None,
+) -> bool:
     """True if job_key is already completed in the tracker, or a JD file
     for it already exists in jds/, jds/completed/, jds/archived/, or
     jds/expired/ -- matched by any of: job_key; (when both source_url and
@@ -944,13 +1018,20 @@ def job_key_known(job_key: str, tracker: "JDTracker" = None, source_url: str = N
     if job_key in index["job_keys"]:
         return True
 
-    if source_url and company_name and (source_url, company_name) in index["url_company_pairs"]:
+    if (
+        source_url
+        and company_name
+        and (source_url, company_name) in index["url_company_pairs"]
+    ):
         return True
 
     normalized_company = _normalize_for_match(company_name) if company_name else None
     normalized_title = _normalize_for_match(job_title) if job_title else None
-    if (normalized_company and normalized_title
-            and (normalized_company, normalized_title) in index["normalized_pairs"]):
+    if (
+        normalized_company
+        and normalized_title
+        and (normalized_company, normalized_title) in index["normalized_pairs"]
+    ):
         return True
 
     return False

@@ -9,11 +9,31 @@ access, no LLM calls -- everything here is mechanically checkable.
 import re
 
 _METRIC_PATTERN = re.compile(r"\$?\d[\d,.]*[%MK]?\b", re.IGNORECASE)
-_PRONOUN_PATTERN = re.compile(r"\b(i|me|my|we|our|she|her|hers|he|him|his)\b", re.IGNORECASE)
+_PRONOUN_PATTERN = re.compile(
+    r"\b(i|me|my|we|our|she|her|hers|he|him|his)\b", re.IGNORECASE
+)
 _FIRST_WORD_PATTERN = re.compile(r"[^\w]*(\w+)")
 _TITLE_CASE_MINOR_WORDS = {
-    "a", "an", "and", "as", "at", "but", "by", "for", "in", "nor", "of",
-    "on", "or", "so", "the", "to", "up", "vs", "via", "with",
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "but",
+    "by",
+    "for",
+    "in",
+    "nor",
+    "of",
+    "on",
+    "or",
+    "so",
+    "the",
+    "to",
+    "up",
+    "vs",
+    "via",
+    "with",
 }
 # A number directly preceded by "<letter>-" or "<letter>–" (e.g. the "12"
 # in "K-12" or "K–12") is part of a compound label, not a metric.
@@ -132,7 +152,9 @@ def _check_forbidden_openers(resume_data: dict, style_rules: dict) -> list[str]:
         lowered = bullet.lower()
         for opener in openers:
             if lowered.startswith(opener):
-                violations.append(f"Bullet uses forbidden opener '{opener}': {bullet!r}")
+                violations.append(
+                    f"Bullet uses forbidden opener '{opener}': {bullet!r}"
+                )
     return violations
 
 
@@ -230,7 +252,9 @@ def _check_tagline_length(resume_data: dict, style_rules: dict) -> list[str]:
     max_chars = style_rules.get("tagline", {}).get("max_chars", 56)
     tagline = resume_data.get("TAGLINE", "")
     if len(tagline) > max_chars:
-        return [f"Tagline exceeds {max_chars}-char max ({len(tagline)} chars) and will wrap to a 2nd line: {tagline!r}"]
+        return [
+            f"Tagline exceeds {max_chars}-char max ({len(tagline)} chars) and will wrap to a 2nd line: {tagline!r}"
+        ]
     return []
 
 
@@ -240,11 +264,15 @@ def _check_bullet_lengths(resume_data: dict, style_rules: dict) -> list[str]:
     two_liner_max = limits.get("two_liner_max_chars", 220)
     for bullet in _all_bullets(resume_data):
         if len(bullet) > two_liner_max:
-            violations.append(f"Bullet exceeds {two_liner_max}-char two-liner max ({len(bullet)} chars): {bullet!r}")
+            violations.append(
+                f"Bullet exceeds {two_liner_max}-char two-liner max ({len(bullet)} chars): {bullet!r}"
+            )
     return violations
 
 
-def bullets_with_short_widow(bullets: list[str], style_rules: dict) -> list[tuple[str, int]]:
+def bullets_with_short_widow(
+    bullets: list[str], style_rules: dict
+) -> list[tuple[str, int]]:
     """Returns (bullet, widow_word_count) for every bullet that clears
     one_liner_max_chars but not two_liner_max_chars, and whose implied 2nd
     line -- the text past one_liner_max_chars -- has fewer than
@@ -409,11 +437,17 @@ def _check_pronouns_outside_why(resume_data: dict) -> list[str]:
     checked_fields = {
         "SUMMARY_TEXT": _strip_html(resume_data.get("SUMMARY_TEXT", "")),
     }
-    checked_fields.update({f"SKILLS[{i}]": s for i, s in enumerate(resume_data.get("SKILLS", []))})
-    checked_fields.update({f"BULLET[{i}]": b for i, b in enumerate(_all_bullets(resume_data))})
+    checked_fields.update(
+        {f"SKILLS[{i}]": s for i, s in enumerate(resume_data.get("SKILLS", []))}
+    )
+    checked_fields.update(
+        {f"BULLET[{i}]": b for i, b in enumerate(_all_bullets(resume_data))}
+    )
     for field_name, text in checked_fields.items():
         if _PRONOUN_PATTERN.search(text):
-            violations.append(f"Pronoun found outside the Why section, in {field_name}: {text!r}")
+            violations.append(
+                f"Pronoun found outside the Why section, in {field_name}: {text!r}"
+            )
     return violations
 
 
@@ -432,9 +466,9 @@ def _extract_metric_signatures(text: str) -> list[tuple[str, str]]:
     results = []
     for match in _METRIC_PATTERN.finditer(text):
         start = match.start()
-        if _COMPOUND_LABEL_PREFIX.search(text[max(0, start - 2):start]):
+        if _COMPOUND_LABEL_PREFIX.search(text[max(0, start - 2) : start]):
             continue
-        tail = text[match.end():match.end() + 20]
+        tail = text[match.end() : match.end() + 20]
         suffix_match = _METRIC_UNIT_SUFFIX.match(tail)
         suffix = suffix_match.group(0) if suffix_match else ""
         # Suffix is part of the display number too, so a retry prompt's
@@ -494,7 +528,9 @@ def _check_metric_uniqueness(resume_data: dict) -> list[str]:
                 continue
             seen_in_this_bullet.add(signature)
             if signature in summary_signatures:
-                violations.append(f"Metric '{number}' should appear only once across the resume, but appears in both the Summary and a bullet: {bullet!r}")
+                violations.append(
+                    f"Metric '{number}' should appear only once across the resume, but appears in both the Summary and a bullet: {bullet!r}"
+                )
             elif signature in seen_in_bullets:
                 violations.append(
                     f"Metric '{number}' appears more than once, in both "
@@ -510,9 +546,13 @@ def _check_experience_completeness(resume_data: dict) -> list[str]:
     for i, job in enumerate(resume_data.get("EXPERIENCE", [])):
         missing = [f for f in ("title", "company", "period") if not job.get(f)]
         if missing:
-            violations.append(f"Experience entry {i} is missing required field(s) {missing}: {job!r}")
+            violations.append(
+                f"Experience entry {i} is missing required field(s) {missing}: {job!r}"
+            )
         if not job.get("achievements"):
-            violations.append(f"Experience entry {i} ({job.get('company', 'unknown company')!r}) has no achievement bullets")
+            violations.append(
+                f"Experience entry {i} ({job.get('company', 'unknown company')!r}) has no achievement bullets"
+            )
     return violations
 
 
@@ -557,8 +597,10 @@ def _check_role_roster(resume_data: dict, role_roster: list[str]) -> list[str]:
     if not role_roster:
         return []
 
-    present = [_normalize_company(job.get("company", ""))
-               for job in resume_data.get("EXPERIENCE", [])]
+    present = [
+        _normalize_company(job.get("company", ""))
+        for job in resume_data.get("EXPERIENCE", [])
+    ]
     violations = []
     for company in role_roster:
         needle = _normalize_company(company)
@@ -645,7 +687,9 @@ def _check_bullet_counts(resume_data: dict, role_bullet_minimums: dict) -> list[
     return violations
 
 
-def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules: dict) -> dict:
+def check_keyword_coverage(
+    resume_data: dict, jd_keywords: dict, ats_match_rules: dict
+) -> dict:
     """Deterministic JD-keyword coverage check (B18, phase-9-backlog.md).
     Neither half of this existed before: ats_match.yaml supplied weights
     and thresholds with no extraction/matching logic behind them, and
@@ -663,13 +707,15 @@ def check_keyword_coverage(resume_data: dict, jd_keywords: dict, ats_match_rules
     the candidate genuinely doesn't have is not something the pipeline
     should invent to close the gap, so this is surfaced for a human to
     see, not auto-corrected the way validate()'s violations are."""
-    haystack = " ".join([
-        _strip_html(resume_data.get("SUMMARY_TEXT", "")),
-        _strip_html(resume_data.get("WHY_TEXT", "")),
-        " ".join(resume_data.get("SKILLS", [])),
-        " ".join(_all_bullets(resume_data)),
-        " ".join(job.get("title", "") for job in resume_data.get("EXPERIENCE", [])),
-    ]).lower()
+    haystack = " ".join(
+        [
+            _strip_html(resume_data.get("SUMMARY_TEXT", "")),
+            _strip_html(resume_data.get("WHY_TEXT", "")),
+            " ".join(resume_data.get("SKILLS", [])),
+            " ".join(_all_bullets(resume_data)),
+            " ".join(job.get("title", "") for job in resume_data.get("EXPERIENCE", [])),
+        ]
+    ).lower()
 
     all_keywords = (
         list(jd_keywords.get("tools", []))
@@ -721,6 +767,7 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     # the wrong profile's data is worse than a loud crash (F3).
     import profile_paths
     import yaml
+
     kb_dir = profile_paths.kb_dir()
 
     verified_tools_path = os.path.join(kb_dir, "verified_tools.json")
@@ -728,24 +775,84 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
 
     allowed_terms = {
         # Common general-purpose categories and terms
-        "management", "strategy", "coaching", "ops", "enablement", "onboarding",
-        "copywriting", "writing", "design", "brand", "voice", "tone", "analytics",
-        "reporting", "metrics", "training", "governance", "automation", "campaigns",
-        "process mapping", "diagramming", "templates", "hygiene", "crm", "esp",
-        "lead generation", "prospecting", "b2b", "lifecycle marketing", "customer marketing",
+        "management",
+        "strategy",
+        "coaching",
+        "ops",
+        "enablement",
+        "onboarding",
+        "copywriting",
+        "writing",
+        "design",
+        "brand",
+        "voice",
+        "tone",
+        "analytics",
+        "reporting",
+        "metrics",
+        "training",
+        "governance",
+        "automation",
+        "campaigns",
+        "process mapping",
+        "diagramming",
+        "templates",
+        "hygiene",
+        "crm",
+        "esp",
+        "lead generation",
+        "prospecting",
+        "b2b",
+        "lifecycle marketing",
+        "customer marketing",
         # Lifecycle and campaign marketing core competencies
-        "segmentation", "retention", "drip", "email", "lifecycle", "marketing", "customer",
-        "journey", "funnel", "flow", "flows", "testing", "a/b testing", "optimization",
-        "acquisition", "engagement", "nurture", "newsletters", "trigger", "triggers",
+        "segmentation",
+        "retention",
+        "drip",
+        "email",
+        "lifecycle",
+        "marketing",
+        "customer",
+        "journey",
+        "funnel",
+        "flow",
+        "flows",
+        "testing",
+        "a/b testing",
+        "optimization",
+        "acquisition",
+        "engagement",
+        "nurture",
+        "newsletters",
+        "trigger",
+        "triggers",
         # Design & creative core skills
-        "typography", "layout", "ideation", "visual storytelling", "presentation design",
-        "graphic design", "creative direction", "brand identity", "art direction",
+        "typography",
+        "layout",
+        "ideation",
+        "visual storytelling",
+        "presentation design",
+        "graphic design",
+        "creative direction",
+        "brand identity",
+        "art direction",
         # AI & modern workflow competencies
-        "prompt engineering", "prompting", "ai", "ai-assisted", "ai-accelerated",
-        "workflow automation", "data pipeline design", "content transformation",
+        "prompt engineering",
+        "prompting",
+        "ai",
+        "ai-assisted",
+        "ai-accelerated",
+        "workflow automation",
+        "data pipeline design",
+        "content transformation",
         # Content strategy competencies
-        "content strategy", "content marketing", "derivative content", "content repurposing",
-        "editorial calendar", "integrated marketing", "campaign messaging"
+        "content strategy",
+        "content marketing",
+        "derivative content",
+        "content repurposing",
+        "editorial calendar",
+        "integrated marketing",
+        "campaign messaging",
     }
 
     # 1. Load verified tools
@@ -785,11 +892,18 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
 
     # Standard synonyms
     synonyms = {
-        "sf": "salesforce crm", "sfdc": "salesforce crm", "salesforce": "salesforce crm",
-        "excel": "google sheets / g-connector", "google sheet": "google sheets / g-connector",
-        "sheets": "google sheets / g-connector", "illustrator": "adobe creative suite",
-        "photoshop": "adobe creative suite", "indesign": "adobe creative suite",
-        "html": "html (email)", "css": "html (email)", "persistiq": "persist",
+        "sf": "salesforce crm",
+        "sfdc": "salesforce crm",
+        "salesforce": "salesforce crm",
+        "excel": "google sheets / g-connector",
+        "google sheet": "google sheets / g-connector",
+        "sheets": "google sheets / g-connector",
+        "illustrator": "adobe creative suite",
+        "photoshop": "adobe creative suite",
+        "indesign": "adobe creative suite",
+        "html": "html (email)",
+        "css": "html (email)",
+        "persistiq": "persist",
     }
     for syn in synonyms:
         allowed_terms.add(syn)
@@ -817,11 +931,16 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
                     if part in allowed or allowed in part:
                         matched = True
                         break
-            
+
             # If not matched as a whole phrase, check if each word in it is a common/allowed word
             if not matched:
-                words = [w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2]
-                if words and all(w in allowed_terms or any(w in a or a in w for a in allowed_terms) for w in words):
+                words = [
+                    w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2
+                ]
+                if words and all(
+                    w in allowed_terms or any(w in a or a in w for a in allowed_terms)
+                    for w in words
+                ):
                     matched = True
 
             if not matched:
@@ -845,84 +964,605 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
     If the score is below 70, a validation violation is raised.
     """
     active_verbs = {
-        "accelerated", "accomplished", "achieved", "acquired", "acted", "adapted", "addressed", "administered",
-        "advised", "advocated", "aligned", "allocated", "analyzed", "anchored", "answered", "anticipated",
-        "applied", "appointed", "appraised", "approved", "arbitrated", "architected", "arranged", "articulated",
-        "assembled", "assessed", "assigned", "assisted", "attained", "audited", "authored", "authorized",
-        "automated", "awarded", "balanced", "bargained", "benchmarked", "blended", "blocked", "bolstered",
-        "boosted", "bought", "branded", "bridged", "budgeted", "built", "calculated", "calibrated", "campaigned",
-        "capitalized", "captured", "carried", "cartographed", "carved", "cataloged", "categorized", "caught",
-        "caused", "centralized", "certified", "chaired", "challenged", "championed", "channeled", "charted",
-        "checked", "chose", "chronicled", "circulated", "cited", "clarified", "classified", "cleared",
-        "closed", "co-authored", "coached", "coalesced", "collaborated", "collated", "collected", "combined",
-        "commanded", "commended", "commissioned", "committed", "communicated", "compared", "compiled",
-        "completed", "composed", "compounded", "computed", "conceived", "conceptualized", "conciliated",
-        "conducted", "conferred", "configured", "forecasted", "formulated", "fostered", "founded", "framed",
-        "franchised", "fulfilled", "funded", "gained", "gathered", "generated", "governed", "graded",
-        "graduated", "granted", "grew", "grouped", "guaranteed", "guided", "halved", "handled", "harbored",
-        "harvested", "headed", "heightened", "helped", "heralded", "hired", "hosted", "hypothesized",
-        "identified", "illustrated", "implemented", "imported", "improved", "improvised", "increased",
-        "indexed", "indoctrinated", "induced", "influenced", "informed", "infused", "initiated", "injected",
-        "innovated", "inspected", "inspired", "installed", "instigated", "instituted", "instructed",
-        "insured", "integrated", "intended", "intensified", "interfaced", "interpreted", "intervened",
-        "interviewed", "introduced", "invented", "inventoried", "investigated", "invested", "invigorated",
-        "invited", "involved", "isolated", "issued", "itemized", "joined", "journaled", "judged", "justified",
-        "kept", "keyed", "kindled", "launched", "lectured", "led", "licensed", "lightened", "linked",
-        "liquidated", "listened", "litigated", "lobbied", "located", "logged", "lowered", "maintained",
-        "managed", "mapped", "marketed", "mastered", "maximized", "measured", "mediated", "mentored",
-        "merged", "met", "mined", "minimized", "modeled", "moderated", "modified", "monitored", "motivated",
-        "mounted", "multiplied", "navigated", "negotiated", "nested", "netted", "neutralized", "nominated",
-        "normalized", "noticed", "notified", "nurtured", "objected", "observed", "obtained", "occupied",
-        "offered", "officiated", "offset", "onboarded", "opened", "operated", "orchestrated", "ordered",
-        "organized", "oriented", "originated", "outperformed", "outsourced", "overcame", "overhauled",
-        "oversaw", "owned", "packaged", "paired", "paneled", "parlayed", "participated", "partnered",
-        "passed", "patented", "patrolled", "penned", "perceived", "performed", "persuaded", "phased",
-        "piloted", "pinpointed", "pioneered", "placed", "planned", "played", "policed", "portrayed",
-        "positioned", "posted", "practiced", "predicted", "prepared", "prescribed", "presented", "presided",
-        "prevented", "priced", "prioritized", "processed", "procured", "produced", "profiled", "programmed",
-        "projected", "promoted", "prompted", "proofread", "propagated", "proposed", "prosecuted", "protected",
-        "proved", "provided", "provisioned", "pruned", "publicized", "published", "purchased", "pursued",
-        "quadrupled", "qualified", "quantified", "quelled", "queried", "questioned", "queued", "raised",
-        "ranked", "rated", "reached", "realigned", "reaped", "rebuilt", "recalculated", "recalled", "received",
-        "recognized", "recommend", "recommended", "reconciled", "recorded", "recovered", "recruited",
-        "rectified", "redesigned", "redeveloped", "reduced", "referred", "refinanced", "refined", "reframed",
-        "regulated", "rehabilitated", "reinforced", "reintroduced", "reinvested", "rejuvenated", "related",
-        "released", "relieved", "remedied", "remodeled", "renegotiated", "renovated", "reorganized", "repaired",
-        "repatriated", "replaced", "replied", "reported", "represented", "reproduced", "reprogrammed",
-        "requested", "required", "rescued", "researched", "reserved", "resettled", "resolved", "respected",
-        "responded", "restored", "restructured", "retained", "retrieved", "revamped", "revealed", "reverenced",
-        "reversed", "reviewed", "revised", "revitalized", "revived", "rewarded", "routed", "safeguarded",
-        "salvaged", "saved", "scaled", "scanned", "scheduled", "schooled", "screened", "scrutinized",
-        "secured", "segmented", "selected", "sensed", "separated", "served", "serviced", "settled",
-        "shaded", "shaped", "shared", "shepherded", "shielded", "shipped", "shortened", "showed", "shrank",
-        "sidestepped", "signaled", "simplified", "simulated", "singled", "sketched", "skilled", "slashed",
-        "smoothed", "socialized", "sold", "solicited", "solved", "sorted", "sourced", "sparked", "spearheaded",
-        "specialized", "specified", "spectated", "spent", "spoke", "sponsored", "spread", "stabilized",
-        "staffed", "staged", "standardized", "steered", "stimulated", "stipulated", "stopped", "strategized",
-        "streamlined", "strengthened", "stressed", "structured", "studied", "subdivided", "subcontracted",
-        "submitted", "substantiated", "substituted", "subverted", "succeeded", "suggested", "summarized",
-        "superseded", "supervised", "supplied", "supported", "surpassed", "surveyed", "swept", "symbolized",
-        "synergized", "synthesized", "systematized", "tabulated", "tackled", "tagged", "tailored", "targeted",
-        "taught", "teamed", "telecasted", "tempered", "tended", "terminated", "tested", "testified", "themed",
-        "thickened", "thrived", "tied", "tightened", "tolerated", "tooled", "topographed", "traced", "tracked",
-        "traded", "trained", "transacted", "transcribed", "transferred", "transformed", "translated", "transmitted",
-        "transported", "traversed", "treasured", "treated", "triaged", "triggered", "trimmed", "tripled", "troubleshot",
-        "turned", "tutored", "typeset", "umpired", "uncovered", "underwrote", "unfolded", "unified", "united",
-        "unleashed", "unlocked", "unveiled", "updated", "upgraded", "upholstered", "urged", "ushered", "utilized",
-        "vacated", "validated", "valued", "vanquished", "vectored", "veered", "ventured", "verbalized", "verified",
-        "versed", "vetoed", "vetted", "viewed", "visited", "visualized", "voiced", "volunteered", "voted", "vouched",
-        "waged", "waived", "walked", "wanted", "warned", "warranted", "washed", "watched", "weathered", "weighed",
-        "welcomed", "welded", "whipped", "widened", "will", "winnowed", "wired", "withdrew", "withstood", "won",
-        "worked", "wrote", "yielded", "zoned"
+        "accelerated",
+        "accomplished",
+        "achieved",
+        "acquired",
+        "acted",
+        "adapted",
+        "addressed",
+        "administered",
+        "advised",
+        "advocated",
+        "aligned",
+        "allocated",
+        "analyzed",
+        "anchored",
+        "answered",
+        "anticipated",
+        "applied",
+        "appointed",
+        "appraised",
+        "approved",
+        "arbitrated",
+        "architected",
+        "arranged",
+        "articulated",
+        "assembled",
+        "assessed",
+        "assigned",
+        "assisted",
+        "attained",
+        "audited",
+        "authored",
+        "authorized",
+        "automated",
+        "awarded",
+        "balanced",
+        "bargained",
+        "benchmarked",
+        "blended",
+        "blocked",
+        "bolstered",
+        "boosted",
+        "bought",
+        "branded",
+        "bridged",
+        "budgeted",
+        "built",
+        "calculated",
+        "calibrated",
+        "campaigned",
+        "capitalized",
+        "captured",
+        "carried",
+        "cartographed",
+        "carved",
+        "cataloged",
+        "categorized",
+        "caught",
+        "caused",
+        "centralized",
+        "certified",
+        "chaired",
+        "challenged",
+        "championed",
+        "channeled",
+        "charted",
+        "checked",
+        "chose",
+        "chronicled",
+        "circulated",
+        "cited",
+        "clarified",
+        "classified",
+        "cleared",
+        "closed",
+        "co-authored",
+        "coached",
+        "coalesced",
+        "collaborated",
+        "collated",
+        "collected",
+        "combined",
+        "commanded",
+        "commended",
+        "commissioned",
+        "committed",
+        "communicated",
+        "compared",
+        "compiled",
+        "completed",
+        "composed",
+        "compounded",
+        "computed",
+        "conceived",
+        "conceptualized",
+        "conciliated",
+        "conducted",
+        "conferred",
+        "configured",
+        "forecasted",
+        "formulated",
+        "fostered",
+        "founded",
+        "framed",
+        "franchised",
+        "fulfilled",
+        "funded",
+        "gained",
+        "gathered",
+        "generated",
+        "governed",
+        "graded",
+        "graduated",
+        "granted",
+        "grew",
+        "grouped",
+        "guaranteed",
+        "guided",
+        "halved",
+        "handled",
+        "harbored",
+        "harvested",
+        "headed",
+        "heightened",
+        "helped",
+        "heralded",
+        "hired",
+        "hosted",
+        "hypothesized",
+        "identified",
+        "illustrated",
+        "implemented",
+        "imported",
+        "improved",
+        "improvised",
+        "increased",
+        "indexed",
+        "indoctrinated",
+        "induced",
+        "influenced",
+        "informed",
+        "infused",
+        "initiated",
+        "injected",
+        "innovated",
+        "inspected",
+        "inspired",
+        "installed",
+        "instigated",
+        "instituted",
+        "instructed",
+        "insured",
+        "integrated",
+        "intended",
+        "intensified",
+        "interfaced",
+        "interpreted",
+        "intervened",
+        "interviewed",
+        "introduced",
+        "invented",
+        "inventoried",
+        "investigated",
+        "invested",
+        "invigorated",
+        "invited",
+        "involved",
+        "isolated",
+        "issued",
+        "itemized",
+        "joined",
+        "journaled",
+        "judged",
+        "justified",
+        "kept",
+        "keyed",
+        "kindled",
+        "launched",
+        "lectured",
+        "led",
+        "licensed",
+        "lightened",
+        "linked",
+        "liquidated",
+        "listened",
+        "litigated",
+        "lobbied",
+        "located",
+        "logged",
+        "lowered",
+        "maintained",
+        "managed",
+        "mapped",
+        "marketed",
+        "mastered",
+        "maximized",
+        "measured",
+        "mediated",
+        "mentored",
+        "merged",
+        "met",
+        "mined",
+        "minimized",
+        "modeled",
+        "moderated",
+        "modified",
+        "monitored",
+        "motivated",
+        "mounted",
+        "multiplied",
+        "navigated",
+        "negotiated",
+        "nested",
+        "netted",
+        "neutralized",
+        "nominated",
+        "normalized",
+        "noticed",
+        "notified",
+        "nurtured",
+        "objected",
+        "observed",
+        "obtained",
+        "occupied",
+        "offered",
+        "officiated",
+        "offset",
+        "onboarded",
+        "opened",
+        "operated",
+        "orchestrated",
+        "ordered",
+        "organized",
+        "oriented",
+        "originated",
+        "outperformed",
+        "outsourced",
+        "overcame",
+        "overhauled",
+        "oversaw",
+        "owned",
+        "packaged",
+        "paired",
+        "paneled",
+        "parlayed",
+        "participated",
+        "partnered",
+        "passed",
+        "patented",
+        "patrolled",
+        "penned",
+        "perceived",
+        "performed",
+        "persuaded",
+        "phased",
+        "piloted",
+        "pinpointed",
+        "pioneered",
+        "placed",
+        "planned",
+        "played",
+        "policed",
+        "portrayed",
+        "positioned",
+        "posted",
+        "practiced",
+        "predicted",
+        "prepared",
+        "prescribed",
+        "presented",
+        "presided",
+        "prevented",
+        "priced",
+        "prioritized",
+        "processed",
+        "procured",
+        "produced",
+        "profiled",
+        "programmed",
+        "projected",
+        "promoted",
+        "prompted",
+        "proofread",
+        "propagated",
+        "proposed",
+        "prosecuted",
+        "protected",
+        "proved",
+        "provided",
+        "provisioned",
+        "pruned",
+        "publicized",
+        "published",
+        "purchased",
+        "pursued",
+        "quadrupled",
+        "qualified",
+        "quantified",
+        "quelled",
+        "queried",
+        "questioned",
+        "queued",
+        "raised",
+        "ranked",
+        "rated",
+        "reached",
+        "realigned",
+        "reaped",
+        "rebuilt",
+        "recalculated",
+        "recalled",
+        "received",
+        "recognized",
+        "recommend",
+        "recommended",
+        "reconciled",
+        "recorded",
+        "recovered",
+        "recruited",
+        "rectified",
+        "redesigned",
+        "redeveloped",
+        "reduced",
+        "referred",
+        "refinanced",
+        "refined",
+        "reframed",
+        "regulated",
+        "rehabilitated",
+        "reinforced",
+        "reintroduced",
+        "reinvested",
+        "rejuvenated",
+        "related",
+        "released",
+        "relieved",
+        "remedied",
+        "remodeled",
+        "renegotiated",
+        "renovated",
+        "reorganized",
+        "repaired",
+        "repatriated",
+        "replaced",
+        "replied",
+        "reported",
+        "represented",
+        "reproduced",
+        "reprogrammed",
+        "requested",
+        "required",
+        "rescued",
+        "researched",
+        "reserved",
+        "resettled",
+        "resolved",
+        "respected",
+        "responded",
+        "restored",
+        "restructured",
+        "retained",
+        "retrieved",
+        "revamped",
+        "revealed",
+        "reverenced",
+        "reversed",
+        "reviewed",
+        "revised",
+        "revitalized",
+        "revived",
+        "rewarded",
+        "routed",
+        "safeguarded",
+        "salvaged",
+        "saved",
+        "scaled",
+        "scanned",
+        "scheduled",
+        "schooled",
+        "screened",
+        "scrutinized",
+        "secured",
+        "segmented",
+        "selected",
+        "sensed",
+        "separated",
+        "served",
+        "serviced",
+        "settled",
+        "shaded",
+        "shaped",
+        "shared",
+        "shepherded",
+        "shielded",
+        "shipped",
+        "shortened",
+        "showed",
+        "shrank",
+        "sidestepped",
+        "signaled",
+        "simplified",
+        "simulated",
+        "singled",
+        "sketched",
+        "skilled",
+        "slashed",
+        "smoothed",
+        "socialized",
+        "sold",
+        "solicited",
+        "solved",
+        "sorted",
+        "sourced",
+        "sparked",
+        "spearheaded",
+        "specialized",
+        "specified",
+        "spectated",
+        "spent",
+        "spoke",
+        "sponsored",
+        "spread",
+        "stabilized",
+        "staffed",
+        "staged",
+        "standardized",
+        "steered",
+        "stimulated",
+        "stipulated",
+        "stopped",
+        "strategized",
+        "streamlined",
+        "strengthened",
+        "stressed",
+        "structured",
+        "studied",
+        "subdivided",
+        "subcontracted",
+        "submitted",
+        "substantiated",
+        "substituted",
+        "subverted",
+        "succeeded",
+        "suggested",
+        "summarized",
+        "superseded",
+        "supervised",
+        "supplied",
+        "supported",
+        "surpassed",
+        "surveyed",
+        "swept",
+        "symbolized",
+        "synergized",
+        "synthesized",
+        "systematized",
+        "tabulated",
+        "tackled",
+        "tagged",
+        "tailored",
+        "targeted",
+        "taught",
+        "teamed",
+        "telecasted",
+        "tempered",
+        "tended",
+        "terminated",
+        "tested",
+        "testified",
+        "themed",
+        "thickened",
+        "thrived",
+        "tied",
+        "tightened",
+        "tolerated",
+        "tooled",
+        "topographed",
+        "traced",
+        "tracked",
+        "traded",
+        "trained",
+        "transacted",
+        "transcribed",
+        "transferred",
+        "transformed",
+        "translated",
+        "transmitted",
+        "transported",
+        "traversed",
+        "treasured",
+        "treated",
+        "triaged",
+        "triggered",
+        "trimmed",
+        "tripled",
+        "troubleshot",
+        "turned",
+        "tutored",
+        "typeset",
+        "umpired",
+        "uncovered",
+        "underwrote",
+        "unfolded",
+        "unified",
+        "united",
+        "unleashed",
+        "unlocked",
+        "unveiled",
+        "updated",
+        "upgraded",
+        "upholstered",
+        "urged",
+        "ushered",
+        "utilized",
+        "vacated",
+        "validated",
+        "valued",
+        "vanquished",
+        "vectored",
+        "veered",
+        "ventured",
+        "verbalized",
+        "verified",
+        "versed",
+        "vetoed",
+        "vetted",
+        "viewed",
+        "visited",
+        "visualized",
+        "voiced",
+        "volunteered",
+        "voted",
+        "vouched",
+        "waged",
+        "waived",
+        "walked",
+        "wanted",
+        "warned",
+        "warranted",
+        "washed",
+        "watched",
+        "weathered",
+        "weighed",
+        "welcomed",
+        "welded",
+        "whipped",
+        "widened",
+        "will",
+        "winnowed",
+        "wired",
+        "withdrew",
+        "withstood",
+        "won",
+        "worked",
+        "wrote",
+        "yielded",
+        "zoned",
     }
 
     result_indicators = [
-        "resulting", "driving", "to increase", "to optimize", "to boost", "to reduce", "to scale",
-        "boosting", "reducing", "growing", "capturing", "securing", "generating", "delivering",
-        "optimizing", "expanding", "leading to", "which led to", "to support", "to enable",
-        "to drive", "to facilitate", "thereby", "saving", "exceeding", "surpassing", "achieving",
-        "reclaiming", "attaining", "outperforming", "increasing", "optimising", "capturing",
-        "facilitating", "saving", "trimming", "shaping", "streamlining", "empowering", "enhancing"
+        "resulting",
+        "driving",
+        "to increase",
+        "to optimize",
+        "to boost",
+        "to reduce",
+        "to scale",
+        "boosting",
+        "reducing",
+        "growing",
+        "capturing",
+        "securing",
+        "generating",
+        "delivering",
+        "optimizing",
+        "expanding",
+        "leading to",
+        "which led to",
+        "to support",
+        "to enable",
+        "to drive",
+        "to facilitate",
+        "thereby",
+        "saving",
+        "exceeding",
+        "surpassing",
+        "achieving",
+        "reclaiming",
+        "attaining",
+        "outperforming",
+        "increasing",
+        "optimising",
+        "capturing",
+        "facilitating",
+        "saving",
+        "trimming",
+        "shaping",
+        "streamlining",
+        "empowering",
+        "enhancing",
     ]
 
     # A number is the strongest form of XYZ's "as measured by," but it
@@ -933,19 +1573,41 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
     # clear the 70-point threshold, regardless of how well-written it is
     # (see docs/review/master_audit_document.md F9).
     QUALITATIVE_EVIDENCE_PHRASES = [
-        "promoted to", "promoted from", "recognized by", "recognized for",
-        "selected to", "selected as", "trusted with", "trusted to",
-        "became the go-to", "became a trusted", "praised by", "praised for",
-        "adopted company-wide", "adopted org-wide", "asked to lead",
-        "tapped to lead", "handpicked", "entrusted with", "earned the trust of",
-        "rebuilt trust with", "restored confidence", "chosen to lead",
-        "recommended by", "nominated for", "named as", "appointed to",
+        "promoted to",
+        "promoted from",
+        "recognized by",
+        "recognized for",
+        "selected to",
+        "selected as",
+        "trusted with",
+        "trusted to",
+        "became the go-to",
+        "became a trusted",
+        "praised by",
+        "praised for",
+        "adopted company-wide",
+        "adopted org-wide",
+        "asked to lead",
+        "tapped to lead",
+        "handpicked",
+        "entrusted with",
+        "earned the trust of",
+        "rebuilt trust with",
+        "restored confidence",
+        "chosen to lead",
+        "recommended by",
+        "nominated for",
+        "named as",
+        "appointed to",
     ]
 
     violations = []
     for job in resume_data.get("EXPERIENCE", []):
         company = job.get("company", "unknown company")
-        if "career break" in company.lower() or "professional development" in company.lower():
+        if (
+            "career break" in company.lower()
+            or "professional development" in company.lower()
+        ):
             continue
         for bullet in job.get("achievements", []):
             score = 100
@@ -969,10 +1631,14 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
             )
             if not metrics and not has_qualitative_evidence:
                 score -= 40
-                reasons.append("no quantified metric or qualitative evidence of impact found")
+                reasons.append(
+                    "no quantified metric or qualitative evidence of impact found"
+                )
             elif not metrics:
                 score -= 15
-                reasons.append("no quantified metric (qualitative evidence of impact present)")
+                reasons.append(
+                    "no quantified metric (qualitative evidence of impact present)"
+                )
 
             # 3. Outcome / Causal Connector check
             has_outcome = any(indicator in lowered for indicator in result_indicators)
@@ -1015,7 +1681,7 @@ def _check_boilerplate_and_cliches(resume_data: dict) -> list[str]:
         "proven track record of",
     ]
     violations = []
-    
+
     haystacks = (
         [_strip_html(resume_data.get("SUMMARY_TEXT", ""))]
         + resume_data.get("SKILLS", [])

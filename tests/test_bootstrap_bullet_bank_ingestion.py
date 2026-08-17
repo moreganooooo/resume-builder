@@ -6,7 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_bullet_bank  # noqa: E402
@@ -21,20 +23,38 @@ class BootstrapIngestionTestCase(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.bootstrap_dir = os.path.join(self.tmp_dir, "bootstrap")
         bootstrap_bullet_bank.BOOTSTRAP_DIR = self.bootstrap_dir
-        bootstrap_bullet_bank.SOURCE_DOCS_DIR = os.path.join(self.bootstrap_dir, "source_documents")
-        bootstrap_bullet_bank.TIMELINE_PATH = os.path.join(self.bootstrap_dir, "timeline.json")
-        bootstrap_bullet_bank.CHECKPOINT_PATH = os.path.join(self.bootstrap_dir, "checkpoint.json")
-        bootstrap_bullet_bank.DRAFT_CSV_PATH = os.path.join(self.bootstrap_dir, "bullet-bank-draft.csv")
-        bootstrap_bullet_bank.REVIEW_CSV_PATH = os.path.join(self.bootstrap_dir, "review-needed.csv")
-        bootstrap_bullet_bank.CERTIFICATIONS_PATH = os.path.join(self.bootstrap_dir, "certifications.json")
-        bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH = os.path.join(self.tmp_dir, "bullet-bank-clean.csv")
+        bootstrap_bullet_bank.SOURCE_DOCS_DIR = os.path.join(
+            self.bootstrap_dir, "source_documents"
+        )
+        bootstrap_bullet_bank.TIMELINE_PATH = os.path.join(
+            self.bootstrap_dir, "timeline.json"
+        )
+        bootstrap_bullet_bank.CHECKPOINT_PATH = os.path.join(
+            self.bootstrap_dir, "checkpoint.json"
+        )
+        bootstrap_bullet_bank.DRAFT_CSV_PATH = os.path.join(
+            self.bootstrap_dir, "bullet-bank-draft.csv"
+        )
+        bootstrap_bullet_bank.REVIEW_CSV_PATH = os.path.join(
+            self.bootstrap_dir, "review-needed.csv"
+        )
+        bootstrap_bullet_bank.CERTIFICATIONS_PATH = os.path.join(
+            self.bootstrap_dir, "certifications.json"
+        )
+        bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH = os.path.join(
+            self.tmp_dir, "bullet-bank-clean.csv"
+        )
         os.makedirs(bootstrap_bullet_bank.SOURCE_DOCS_DIR, exist_ok=True)
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def _touch(self, filename: str) -> None:
-        with open(os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename),
+            "w",
+            encoding="utf-8",
+        ) as f:
             f.write("placeholder")
 
 
@@ -47,24 +67,44 @@ class TestRunIngestionAppendsToExistingBank(BootstrapIngestionTestCase):
     # from files processed in *this* call, never touch what's already there.
 
     def _seed_existing_bank(self, n_rows: int) -> None:
-        with open(bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH, "w", encoding="utf-8") as f:
+        with open(
+            bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH, "w", encoding="utf-8"
+        ) as f:
             f.write("Role / Company,Tags,Bullet Point\n")
             for i in range(n_rows):
                 f.write(f"Acme,[content],- Existing bullet {i}\n")
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_new_document_is_appended_without_touching_existing_rows(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._seed_existing_bank(50)  # a large, established bank
         self._touch("New_Resume.docx")
         mock_extract_resume.return_value = bootstrap_extractors.ResumeExtraction(
             experience=[
                 bootstrap_extractors.WorkExperienceEntry(
-                    company="Acme Corp", title="Manager", start_date="2019", end_date="2022",
+                    company="Acme Corp",
+                    title="Manager",
+                    start_date="2019",
+                    end_date="2022",
                     achievements=["Grew email list by 40%"],
                 )
             ],
@@ -73,7 +113,9 @@ class TestRunIngestionAppendsToExistingBank(BootstrapIngestionTestCase):
 
         summary = bootstrap_bullet_bank.run_ingestion()
 
-        self.assertEqual(summary["extracted"], 1)  # only the new document's row, not all 51
+        self.assertEqual(
+            summary["extracted"], 1
+        )  # only the new document's row, not all 51
         with open(bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH, encoding="utf-8") as f:
             rows = list(__import__("csv").DictReader(f))
         self.assertEqual(len(rows), 51)  # 50 existing + 1 new
@@ -103,18 +145,36 @@ class TestRunIngestionAppendsToExistingBank(BootstrapIngestionTestCase):
 
 class TestRunIngestionResumeOnly(BootstrapIngestionTestCase):
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_resume_achievements_land_directly_in_clean_csv(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._touch("My_Resume.docx")
         mock_extract_resume.return_value = bootstrap_extractors.ResumeExtraction(
             experience=[
                 bootstrap_extractors.WorkExperienceEntry(
-                    company="Acme Corp", title="Manager", start_date="2019", end_date="2022",
+                    company="Acme Corp",
+                    title="Manager",
+                    start_date="2019",
+                    end_date="2022",
                     achievements=["Grew email list by 40%"],
                 )
             ],
@@ -136,17 +196,34 @@ class TestRunIngestionAchievementNotes(BootstrapIngestionTestCase):
 
     @patch("bootstrap_bullet_bank.bootstrap_timeline.match_to_timeline")
     @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="achievement_notes")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="some notes")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="text")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="achievement_notes",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="some notes",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="text",
+    )
     def test_low_confidence_achievement_goes_to_review(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_achievements, mock_match,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_achievements,
+        mock_match,
     ):
         self._touch("notes.txt")
         mock_extract_achievements.return_value = [
             bootstrap_extractors.RawAchievement(
-                raw_text="Did something notable", company_hint=None, date_hint=None,
-                title_hint=None, confidence="low",
+                raw_text="Did something notable",
+                company_hint=None,
+                date_hint=None,
+                title_hint=None,
+                confidence="low",
             )
         ]
         mock_match.return_value = ("Misc. / Unassigned", "low")
@@ -162,15 +239,30 @@ class TestRunIngestionAchievementNotes(BootstrapIngestionTestCase):
 class TestRunIngestionCertificate(BootstrapIngestionTestCase):
 
     @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_certificate")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="certificate")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="AWS cert text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="text")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="certificate",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="AWS cert text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="text",
+    )
     def test_certificate_goes_to_certifications_json_not_bullets(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_cert,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_cert,
     ):
         self._touch("aws_cert.txt")
         mock_extract_cert.return_value = bootstrap_extractors.Certificate(
-            name="AWS Certified Solutions Architect", issuer="AWS", date="2023",
+            name="AWS Certified Solutions Architect",
+            issuer="AWS",
+            date="2023",
         )
 
         summary = bootstrap_bullet_bank.run_ingestion()
@@ -184,18 +276,36 @@ class TestRunIngestionCertificate(BootstrapIngestionTestCase):
 
 class TestRunIngestionCheckpointResume(BootstrapIngestionTestCase):
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_already_done_file_is_not_reprocessed(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._touch("My_Resume.docx")
         mock_extract_resume.return_value = bootstrap_extractors.ResumeExtraction(
             experience=[
                 bootstrap_extractors.WorkExperienceEntry(
-                    company="Acme Corp", title="Manager", start_date="2019", end_date="2022",
+                    company="Acme Corp",
+                    title="Manager",
+                    start_date="2019",
+                    end_date="2022",
                     achievements=["Grew email list by 40%"],
                 )
             ],
@@ -206,7 +316,11 @@ class TestRunIngestionCheckpointResume(BootstrapIngestionTestCase):
         self.assertEqual(mock_extract_resume.call_count, 1)
 
         bootstrap_bullet_bank.run_ingestion()
-        self.assertEqual(mock_extract_resume.call_count, 1, "second run should skip the already-done file")
+        self.assertEqual(
+            mock_extract_resume.call_count,
+            1,
+            "second run should skip the already-done file",
+        )
 
 
 class TestRunIngestionUnsupportedFile(BootstrapIngestionTestCase):
@@ -224,12 +338,27 @@ class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
     # skipped), a nonzero summary["failed"], and a retry that actually
     # re-attempts the call once the key is fixed.
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_api_failure_checkpoints_failed_not_done(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._touch("My_Resume.docx")
         mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError(
@@ -246,15 +375,32 @@ class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
         self.assertIn("reason", checkpoint["My_Resume.docx"])
         self.assertNotEqual(checkpoint["My_Resume.docx"]["status"], "done")
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_retry_after_failure_actually_reattempts_the_call(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._touch("My_Resume.docx")
-        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError("simulated 403")
+        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError(
+            "simulated 403"
+        )
 
         summary_1 = bootstrap_bullet_bank.run_ingestion()
         self.assertEqual(summary_1["failed"], 1)
@@ -265,7 +411,10 @@ class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
         mock_extract_resume.return_value = bootstrap_extractors.ResumeExtraction(
             experience=[
                 bootstrap_extractors.WorkExperienceEntry(
-                    company="Acme Corp", title="Manager", start_date="2019", end_date="2022",
+                    company="Acme Corp",
+                    title="Manager",
+                    start_date="2019",
+                    end_date="2022",
                     achievements=["Grew email list by 40%"],
                 )
             ],
@@ -277,21 +426,42 @@ class TestRunIngestionAPIFailure(BootstrapIngestionTestCase):
         # A "done"-marked file is skipped and never re-invokes the mock (see
         # TestRunIngestionCheckpointResume) -- a "failed"-marked one must
         # NOT be skipped the same way, or fixing the key would never help.
-        self.assertEqual(mock_extract_resume.call_count, 2, "a 'failed' checkpoint entry must be retried, not skipped")
+        self.assertEqual(
+            mock_extract_resume.call_count,
+            2,
+            "a 'failed' checkpoint entry must be retried, not skipped",
+        )
         self.assertEqual(summary_2["extracted"], 1)
         self.assertEqual(summary_2["failed"], 0)
         checkpoint = bootstrap_bullet_bank._load_checkpoint()
         self.assertEqual(checkpoint["My_Resume.docx"]["status"], "done")
 
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.classify_document_type", return_value="resume")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_local_text", return_value="fake resume text")
-    @patch("bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind", return_value="docx")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_resume_timeline_and_achievements"
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="resume",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="fake resume text",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="docx",
+    )
     def test_summary_print_mentions_failure_count(
-        self, mock_detect, mock_extract_text, mock_classify, mock_extract_resume,
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_resume,
     ):
         self._touch("My_Resume.docx")
-        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError("simulated 403")
+        mock_extract_resume.side_effect = bootstrap_extractors.IngestionAPIError(
+            "simulated 403"
+        )
         summary = bootstrap_bullet_bank.run_ingestion()
 
         with patch("cli_art.console.print") as mock_print:

@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import sync_dashboard_theme  # noqa: E402
@@ -30,7 +32,9 @@ class TestBuildGoThemeSource(unittest.TestCase):
         # The whole point of this generator -- the committed file must
         # already equal what this produces, or doctor's drift check
         # would fail on a clean checkout.
-        with open(sync_dashboard_theme.DASHBOARD_THEME_PATH, "r", encoding="utf-8") as f:
+        with open(
+            sync_dashboard_theme.DASHBOARD_THEME_PATH, "r", encoding="utf-8"
+        ) as f:
             actual = f.read()
         self.assertEqual(actual, sync_dashboard_theme.build_go_theme_source())
 
@@ -39,7 +43,9 @@ class TestSync(unittest.TestCase):
 
     def setUp(self):
         self.tmp_path = os.path.join(os.path.dirname(__file__), "_tmp_resumebuilder.go")
-        self._patcher = patch("sync_dashboard_theme.DASHBOARD_THEME_PATH", self.tmp_path)
+        self._patcher = patch(
+            "sync_dashboard_theme.DASHBOARD_THEME_PATH", self.tmp_path
+        )
         self._patcher.start()
 
     def tearDown(self):

@@ -16,7 +16,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import db  # noqa: E402
@@ -42,7 +44,9 @@ class TestMoveJdTo(unittest.TestCase):
         patcher = patch("profile_paths.profile_root", return_value=self._db_tmpdir)
         self._profile_root_patch = patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(lambda: __import__("shutil").rmtree(self._db_tmpdir, ignore_errors=True))
+        self.addCleanup(
+            lambda: __import__("shutil").rmtree(self._db_tmpdir, ignore_errors=True)
+        )
 
     def test_moves_into_destination_keeping_its_basename(self):
         with tempfile.TemporaryDirectory() as d:
@@ -68,7 +72,9 @@ class TestMoveJdTo(unittest.TestCase):
 
             self.assertNotEqual(result, existing)
             with open(existing, encoding="utf-8") as f:
-                self.assertEqual(json.load(f)["marker"], "FIRST", "existing JD was clobbered")
+                self.assertEqual(
+                    json.load(f)["marker"], "FIRST", "existing JD was clobbered"
+                )
             with open(result, encoding="utf-8") as f:
                 self.assertEqual(json.load(f)["marker"], "SECOND")
 
@@ -78,14 +84,18 @@ class TestMoveJdTo(unittest.TestCase):
             os.makedirs(dest_dir)
             _write_jd(os.path.join(dest_dir, "job.json"))
             _write_jd(os.path.join(dest_dir, "job_1.json"))
-            result = jd_manager.move_jd_to(_write_jd(os.path.join(d, "job.json")), dest_dir)
+            result = jd_manager.move_jd_to(
+                _write_jd(os.path.join(d, "job.json")), dest_dir
+            )
             self.assertEqual(os.path.basename(result), "job_2.json")
             self.assertEqual(len(os.listdir(dest_dir)), 3)
 
     def test_creates_the_destination_directory_if_absent(self):
         with tempfile.TemporaryDirectory() as d:
             dest_dir = os.path.join(d, "does", "not", "exist")
-            result = jd_manager.move_jd_to(_write_jd(os.path.join(d, "job.json")), dest_dir)
+            result = jd_manager.move_jd_to(
+                _write_jd(os.path.join(d, "job.json")), dest_dir
+            )
             self.assertTrue(os.path.exists(result))
 
     def test_moving_to_completed_updates_data_db_status_immediately(self):
@@ -98,7 +108,9 @@ class TestMoveJdTo(unittest.TestCase):
             jd_manager.move_jd_to(src, dest_dir)
 
             rows = db.get_jobs_by_status("completed", profile="irrelevant")
-            matches = [r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"]
+            matches = [
+                r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"
+            ]
             self.assertEqual(len(matches), 1)
 
     def test_moving_to_archived_updates_data_db_status_immediately(self):
@@ -110,7 +122,9 @@ class TestMoveJdTo(unittest.TestCase):
                 jd_manager.archive_jd(src)
 
             rows = db.get_jobs_by_status("archived", profile="irrelevant")
-            matches = [r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"]
+            matches = [
+                r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"
+            ]
             self.assertEqual(len(matches), 1)
 
 
@@ -132,16 +146,22 @@ class TestDiscoveredAt(unittest.TestCase):
             p = _write_jd(os.path.join(d, "job.json"))
             jd_manager.save_discovered_at(p, when="2026-01-01T00:00:00", source="scan")
             jd_manager.save_discovered_at(p, when="2026-06-01T00:00:00", source="scan")
-            self.assertEqual(jd_manager.read_discovered_at(p)["date"], "2026-01-01T00:00:00")
+            self.assertEqual(
+                jd_manager.read_discovered_at(p)["date"], "2026-01-01T00:00:00"
+            )
 
     def test_read_returns_none_when_never_stamped(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertIsNone(jd_manager.read_discovered_at(_write_jd(os.path.join(d, "j.json"))))
+            self.assertIsNone(
+                jd_manager.read_discovered_at(_write_jd(os.path.join(d, "j.json")))
+            )
 
     def test_age_falls_back_to_discovery_date(self):
         with tempfile.TemporaryDirectory() as d:
             p = _write_jd(os.path.join(d, "job.json"))
-            ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(timespec="seconds")
+            ten_days_ago = (
+                datetime.datetime.now() - datetime.timedelta(days=10)
+            ).isoformat(timespec="seconds")
             self.assertIsNone(jd_manager.compute_posting_age_days(p))
             jd_manager.save_discovered_at(p, when=ten_days_ago)
             self.assertEqual(jd_manager.compute_posting_age_days(p), 10)
@@ -151,8 +171,12 @@ class TestDiscoveredAt(unittest.TestCase):
         lower bound -- the posting may have been open well before a scan
         first saw it -- so it must never displace source truth."""
         with tempfile.TemporaryDirectory() as d:
-            posted = (datetime.datetime.now() - datetime.timedelta(days=40)).isoformat(timespec="seconds")
-            discovered = (datetime.datetime.now() - datetime.timedelta(days=2)).isoformat(timespec="seconds")
+            posted = (datetime.datetime.now() - datetime.timedelta(days=40)).isoformat(
+                timespec="seconds"
+            )
+            discovered = (
+                datetime.datetime.now() - datetime.timedelta(days=2)
+            ).isoformat(timespec="seconds")
             p = _write_jd(os.path.join(d, "job.json"), posted_at=posted)
             jd_manager.save_discovered_at(p, when=discovered)
             self.assertEqual(jd_manager.compute_posting_age_days(p), 40)
@@ -161,13 +185,24 @@ class TestDiscoveredAt(unittest.TestCase):
 class TestBackfillDiscoveryDates(unittest.TestCase):
 
     def _row(self, path):
-        return {"path": path, "company": "Acme", "title": "Analyst",
-                "status": "Pending", "evaluation": {}, "liveness": None, "application": None}
+        return {
+            "path": path,
+            "company": "Acme",
+            "title": "Analyst",
+            "status": "Pending",
+            "evaluation": {},
+            "liveness": None,
+            "application": None,
+        }
 
     def test_dry_run_reports_candidates_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as d:
             p = _write_jd(os.path.join(d, "job.json"))
-            with patch.object(stale_sweep.picker, "list_all_evaluated_jds", return_value=[self._row(p)]):
+            with patch.object(
+                stale_sweep.picker,
+                "list_all_evaluated_jds",
+                return_value=[self._row(p)],
+            ):
                 result = stale_sweep.backfill_discovery_dates(dry_run=True)
             self.assertEqual(result["candidate_count"], 1)
             self.assertEqual(result["stamped_count"], 0)
@@ -176,7 +211,11 @@ class TestBackfillDiscoveryDates(unittest.TestCase):
     def test_stamps_undated_postings_from_file_mtime(self):
         with tempfile.TemporaryDirectory() as d:
             p = _write_jd(os.path.join(d, "job.json"))
-            with patch.object(stale_sweep.picker, "list_all_evaluated_jds", return_value=[self._row(p)]):
+            with patch.object(
+                stale_sweep.picker,
+                "list_all_evaluated_jds",
+                return_value=[self._row(p)],
+            ):
                 result = stale_sweep.backfill_discovery_dates(dry_run=False)
             self.assertEqual(result["stamped_count"], 1)
             stamp = jd_manager.read_discovered_at(p)
@@ -188,9 +227,15 @@ class TestBackfillDiscoveryDates(unittest.TestCase):
         """Re-dating something that already resolves an age would make it
         younger than it is and let it escape the sweep permanently."""
         with tempfile.TemporaryDirectory() as d:
-            posted = (datetime.datetime.now() - datetime.timedelta(days=50)).isoformat(timespec="seconds")
+            posted = (datetime.datetime.now() - datetime.timedelta(days=50)).isoformat(
+                timespec="seconds"
+            )
             p = _write_jd(os.path.join(d, "job.json"), posted_at=posted)
-            with patch.object(stale_sweep.picker, "list_all_evaluated_jds", return_value=[self._row(p)]):
+            with patch.object(
+                stale_sweep.picker,
+                "list_all_evaluated_jds",
+                return_value=[self._row(p)],
+            ):
                 result = stale_sweep.backfill_discovery_dates(dry_run=False)
             self.assertEqual(result["candidate_count"], 0)
             self.assertIsNone(jd_manager.read_discovered_at(p))

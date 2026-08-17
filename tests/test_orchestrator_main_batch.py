@@ -6,7 +6,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -34,7 +36,9 @@ class TestMainBatchMode(unittest.TestCase):
         # data/applications.md on every test run -- this file was the
         # undetected source of dozens of stray "unknown/unknown" rows.
         self._real_applications_md = orchestrator.jd_manager.APPLICATIONS_MD
-        orchestrator.jd_manager.APPLICATIONS_MD = os.path.join(self.tmp_dir, "applications.md")
+        orchestrator.jd_manager.APPLICATIONS_MD = os.path.join(
+            self.tmp_dir, "applications.md"
+        )
 
         # run_pipeline() now takes a pre-run KB snapshot (B13); without this,
         # every test below (main() -> run_pipeline(), never mocked) would
@@ -62,9 +66,17 @@ class TestMainBatchMode(unittest.TestCase):
     ):
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
+        def build_side_effect(
+            jd_path, master_resume, output_filename=None, job_key=None, interactive=None
+        ):
             if jd_path == self.good_path:
-                return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+                return {
+                    "_output_paths": {
+                        "json": "j.json",
+                        "html": "h.html",
+                        "pdf": "p.pdf",
+                    }
+                }
             return {}
 
         mock_build.side_effect = build_side_effect
@@ -91,14 +103,22 @@ class TestMainBatchMode(unittest.TestCase):
     ):
         evaluated_path = os.path.join(self.tmp_dir, "evaluated.json")
         with open(evaluated_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "company_name": "Acme",
-                "job_title": "Content Strategist",
-                "_evaluation": {"composite_score": 4.8, "recommendation": "Strong pursue"},
-            }, f)
+            json.dump(
+                {
+                    "company_name": "Acme",
+                    "job_title": "Content Strategist",
+                    "_evaluation": {
+                        "composite_score": 4.8,
+                        "recommendation": "Strong pursue",
+                    },
+                },
+                f,
+            )
 
         mock_get_pending.return_value = [evaluated_path]
-        mock_build.return_value = {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+        mock_build.return_value = {
+            "_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}
+        }
 
         with patch.object(sys, "argv", ["orchestrator.py"]):
             orchestrator.main()
@@ -120,7 +140,9 @@ class TestMainBatchMode(unittest.TestCase):
         # was ever written. "p.pdf" here is exactly that: a path that was
         # never created. has_pdf must now actually stat the file.
         mock_get_pending.return_value = [self.good_path]
-        mock_build.return_value = {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+        mock_build.return_value = {
+            "_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}
+        }
 
         with patch.object(sys, "argv", ["orchestrator.py"]):
             orchestrator.main()
@@ -171,15 +193,21 @@ class TestMainBatchMode(unittest.TestCase):
         mock_compute_key.side_effect = compute_key_side_effect
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
-            return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+        def build_side_effect(
+            jd_path, master_resume, output_filename=None, job_key=None, interactive=None
+        ):
+            return {
+                "_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}
+            }
 
         mock_build.side_effect = build_side_effect
         mock_tracker = mock_tracker_cls.return_value
 
         stdout = io.StringIO()
-        with patch.object(sys, "argv", ["orchestrator.py"]), \
-                contextlib.redirect_stdout(stdout):
+        with (
+            patch.object(sys, "argv", ["orchestrator.py"]),
+            contextlib.redirect_stdout(stdout),
+        ):
             orchestrator.main()
 
         # There's no real job_key for good_path (compute_job_key raised before
@@ -218,9 +246,17 @@ class TestMainBatchMode(unittest.TestCase):
         # (not just a falsy return value); good_path still succeeds.
         mock_get_pending.return_value = [self.good_path, self.bad_path]
 
-        def build_side_effect(jd_path, master_resume, output_filename=None, job_key=None, interactive=None):
+        def build_side_effect(
+            jd_path, master_resume, output_filename=None, job_key=None, interactive=None
+        ):
             if jd_path == self.good_path:
-                return {"_output_paths": {"json": "j.json", "html": "h.html", "pdf": "p.pdf"}}
+                return {
+                    "_output_paths": {
+                        "json": "j.json",
+                        "html": "h.html",
+                        "pdf": "p.pdf",
+                    }
+                }
             raise RuntimeError("boom")
 
         mock_build.side_effect = build_side_effect
@@ -280,7 +316,9 @@ class TestResumeEnginePathsAreProfileScoped(unittest.TestCase):
 
     def test_kb_dir_is_profile_scoped(self):
         engine = orchestrator.ResumeEngine()
-        self.assertTrue(engine.kb_dir.endswith(os.path.join("profiles", "morgan", "knowledge_base")))
+        self.assertTrue(
+            engine.kb_dir.endswith(os.path.join("profiles", "morgan", "knowledge_base"))
+        )
 
     def test_engine_dir_stays_shared(self):
         engine = orchestrator.ResumeEngine()

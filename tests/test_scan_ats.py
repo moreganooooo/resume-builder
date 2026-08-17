@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import scan_ats  # noqa: E402
@@ -12,55 +14,107 @@ import scan_ats  # noqa: E402
 class TestResolveProviderId(unittest.TestCase):
 
     def test_explicit_provider_wins(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"provider": "remoteok", "careers_url": "https://boards.greenhouse.io/x"}), "remoteok")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {
+                    "provider": "remoteok",
+                    "careers_url": "https://boards.greenhouse.io/x",
+                }
+            ),
+            "remoteok",
+        )
 
     def test_greenhouse_pattern_match(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://boards.greenhouse.io/acme"}), "greenhouse")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {"careers_url": "https://boards.greenhouse.io/acme"}
+            ),
+            "greenhouse",
+        )
 
     def test_ashby_pattern_match(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://jobs.ashbyhq.com/acme"}), "ashby")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {"careers_url": "https://jobs.ashbyhq.com/acme"}
+            ),
+            "ashby",
+        )
 
     def test_lever_pattern_match_from_api_field(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"api": "https://api.lever.co/v0/postings/acme"}), "lever")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {"api": "https://api.lever.co/v0/postings/acme"}
+            ),
+            "lever",
+        )
 
     def test_workday_pattern_match(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://acme.wd1.myworkdayjobs.com/External"}), "workday")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {"careers_url": "https://acme.wd1.myworkdayjobs.com/External"}
+            ),
+            "workday",
+        )
 
     def test_no_match_returns_empty_string(self):
-        self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://acme.com/careers"}), "")
+        self.assertEqual(
+            scan_ats._resolve_provider_id({"careers_url": "https://acme.com/careers"}),
+            "",
+        )
 
     def test_scan_method_websearch_with_no_provider_field_does_not_resolve(self):
         # scan_method: websearch entries are handled by the sweep path
         # (search_queries.yml / fetch_ats_jobs' second loop), not routed
         # to an ATS provider directly.
-        self.assertEqual(scan_ats._resolve_provider_id({"careers_url": "https://acme.com/careers", "scan_method": "websearch"}), "")
+        self.assertEqual(
+            scan_ats._resolve_provider_id(
+                {"careers_url": "https://acme.com/careers", "scan_method": "websearch"}
+            ),
+            "",
+        )
 
 
 class TestClassifyAts(unittest.TestCase):
 
     def test_workday_classifies_enterprise_high(self):
-        result = scan_ats.classify_ats("https://acme.wd1.myworkdayjobs.com/External/job/123")
-        self.assertEqual(result, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+        result = scan_ats.classify_ats(
+            "https://acme.wd1.myworkdayjobs.com/External/job/123"
+        )
+        self.assertEqual(
+            result, {"provider_id": "workday", "weight_tier": "enterprise_high"}
+        )
 
     def test_taleo_classifies_enterprise_high(self):
-        result = scan_ats.classify_ats("https://acme.taleo.net/careersection/2/jobdetail.ftl")
-        self.assertEqual(result, {"provider_id": "taleo", "weight_tier": "enterprise_high"})
+        result = scan_ats.classify_ats(
+            "https://acme.taleo.net/careersection/2/jobdetail.ftl"
+        )
+        self.assertEqual(
+            result, {"provider_id": "taleo", "weight_tier": "enterprise_high"}
+        )
 
     def test_rippling_classifies_ai_prescreened(self):
         result = scan_ats.classify_ats("https://ats.rippling.com/acme/jobs/abc123")
-        self.assertEqual(result, {"provider_id": "rippling", "weight_tier": "ai_prescreened"})
+        self.assertEqual(
+            result, {"provider_id": "rippling", "weight_tier": "ai_prescreened"}
+        )
 
     def test_greenhouse_classifies_startup_zero(self):
         result = scan_ats.classify_ats("https://boards.greenhouse.io/acme/jobs/123")
-        self.assertEqual(result, {"provider_id": "greenhouse", "weight_tier": "startup_zero"})
+        self.assertEqual(
+            result, {"provider_id": "greenhouse", "weight_tier": "startup_zero"}
+        )
 
     def test_lever_classifies_startup_zero(self):
         result = scan_ats.classify_ats("https://jobs.lever.co/acme/abc")
-        self.assertEqual(result, {"provider_id": "lever", "weight_tier": "startup_zero"})
+        self.assertEqual(
+            result, {"provider_id": "lever", "weight_tier": "startup_zero"}
+        )
 
     def test_ashby_classifies_evidence_based(self):
         result = scan_ats.classify_ats("https://jobs.ashbyhq.com/acme/abc")
-        self.assertEqual(result, {"provider_id": "ashby", "weight_tier": "evidence_based"})
+        self.assertEqual(
+            result, {"provider_id": "ashby", "weight_tier": "evidence_based"}
+        )
 
     def test_recruitee_classifies_unknown_tier(self):
         result = scan_ats.classify_ats("https://acme.recruitee.com/o/role")
@@ -79,14 +133,33 @@ class TestFetchAtsJobs(unittest.TestCase):
     @patch("scan_boards._run_node_provider")
     @patch("scan_ats._load_search_queries", return_value=[])
     @patch("scan_ats._load_tracked_companies")
-    def test_skips_disabled_and_unresolvable_companies(self, mock_companies, mock_queries, mock_run, mock_fetch_text):
+    def test_skips_disabled_and_unresolvable_companies(
+        self, mock_companies, mock_queries, mock_run, mock_fetch_text
+    ):
         mock_companies.return_value = [
-            {"name": "Acme", "careers_url": "https://boards.greenhouse.io/acme", "enabled": True},
-            {"name": "Disabled Co", "careers_url": "https://boards.greenhouse.io/disabled", "enabled": False},
-            {"name": "No Provider Co", "careers_url": "https://acme.com/careers", "enabled": True},
+            {
+                "name": "Acme",
+                "careers_url": "https://boards.greenhouse.io/acme",
+                "enabled": True,
+            },
+            {
+                "name": "Disabled Co",
+                "careers_url": "https://boards.greenhouse.io/disabled",
+                "enabled": False,
+            },
+            {
+                "name": "No Provider Co",
+                "careers_url": "https://acme.com/careers",
+                "enabled": True,
+            },
         ]
         mock_run.return_value = [
-            {"title": "Marketing Coordinator", "url": "https://x.com/1", "location": "Remote", "company": "Acme"},
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://x.com/1",
+                "location": "Remote",
+                "company": "Acme",
+            },
         ]
         jobs = scan_ats.fetch_ats_jobs()
         self.assertEqual(len(jobs), 1)
@@ -99,31 +172,50 @@ class TestFetchAtsJobs(unittest.TestCase):
     @patch("scan_boards._run_node_provider")
     @patch("scan_ats._load_tracked_companies", return_value=[])
     @patch("scan_ats._load_search_queries")
-    def test_sweep_query_renamed_to_scan_query_for_websearch_provider(self, mock_queries, mock_companies, mock_run, mock_fetch_text):
+    def test_sweep_query_renamed_to_scan_query_for_websearch_provider(
+        self, mock_queries, mock_companies, mock_run, mock_fetch_text
+    ):
         mock_queries.return_value = [
-            {"name": "Greenhouse Sweep", "query": "site:boards.greenhouse.io marketing remote", "enabled": True},
+            {
+                "name": "Greenhouse Sweep",
+                "query": "site:boards.greenhouse.io marketing remote",
+                "enabled": True,
+            },
             {"name": "Disabled Sweep", "query": "irrelevant", "enabled": False},
         ]
         mock_run.return_value = []
         scan_ats.fetch_ats_jobs()
-        mock_run.assert_called_once_with("websearch", {
-            "name": "Greenhouse Sweep", "query": "site:boards.greenhouse.io marketing remote",
-            "enabled": True, "scan_query": "site:boards.greenhouse.io marketing remote",
-            "_isSweep": True,
-        })
+        mock_run.assert_called_once_with(
+            "websearch",
+            {
+                "name": "Greenhouse Sweep",
+                "query": "site:boards.greenhouse.io marketing remote",
+                "enabled": True,
+                "scan_query": "site:boards.greenhouse.io marketing remote",
+                "_isSweep": True,
+            },
+        )
 
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_boards._run_node_provider")
     @patch("scan_ats._load_tracked_companies", return_value=[])
     @patch("scan_ats._load_search_queries")
-    def test_sweep_entries_are_marked_isSweep_so_websearch_prefers_the_real_company(self, mock_queries, mock_companies, mock_run, mock_fetch_text):
+    def test_sweep_entries_are_marked_isSweep_so_websearch_prefers_the_real_company(
+        self, mock_queries, mock_companies, mock_run, mock_fetch_text
+    ):
         # Regression: without _isSweep, websearch.mjs falls back to the
         # sweep query's own descriptive name (e.g. "Greenhouse —
         # Marketing & Enablement remote") as the "company" on every
         # result -- confirmed live 2026-07-27, this produced duplicate
         # JD files whenever the same real posting matched two different
         # sweep queries, each stamping a different fake company name.
-        mock_queries.return_value = [{"name": "Greenhouse Sweep", "query": "site:boards.greenhouse.io remote", "enabled": True}]
+        mock_queries.return_value = [
+            {
+                "name": "Greenhouse Sweep",
+                "query": "site:boards.greenhouse.io remote",
+                "enabled": True,
+            }
+        ]
         mock_run.return_value = []
         scan_ats.fetch_ats_jobs()
         called_entry = mock_run.call_args.args[1]
@@ -133,7 +225,9 @@ class TestFetchAtsJobs(unittest.TestCase):
     @patch("scan_boards._run_node_provider")
     @patch("scan_ats._load_search_queries", return_value=[])
     @patch("scan_ats._load_tracked_companies")
-    def test_skips_entries_pinned_to_an_aggregator_provider(self, mock_companies, mock_queries, mock_run, mock_fetch_text):
+    def test_skips_entries_pinned_to_an_aggregator_provider(
+        self, mock_companies, mock_queries, mock_run, mock_fetch_text
+    ):
         # Regression: tracked_companies.yml has entries like
         # {"provider": "jobspresso", "search_term": "marketing"} --
         # career-ops's own design, but scan_boards.py's "boards" source
@@ -145,11 +239,25 @@ class TestFetchAtsJobs(unittest.TestCase):
         # and produces real duplicate JD files -- confirmed live
         # 2026-07-27 (31 duplicate-URL groups, 62 files).
         mock_companies.return_value = [
-            {"name": "Jobspresso — Marketing", "provider": "jobspresso", "search_term": "marketing", "enabled": True},
-            {"name": "Acme", "careers_url": "https://boards.greenhouse.io/acme", "enabled": True},
+            {
+                "name": "Jobspresso — Marketing",
+                "provider": "jobspresso",
+                "search_term": "marketing",
+                "enabled": True,
+            },
+            {
+                "name": "Acme",
+                "careers_url": "https://boards.greenhouse.io/acme",
+                "enabled": True,
+            },
         ]
         mock_run.return_value = [
-            {"title": "Marketing Coordinator", "url": "https://x.com/1", "location": "Remote", "company": "Acme"},
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://x.com/1",
+                "location": "Remote",
+                "company": "Acme",
+            },
         ]
         jobs = scan_ats.fetch_ats_jobs()
         self.assertEqual(len(jobs), 1)
@@ -159,12 +267,23 @@ class TestFetchAtsJobs(unittest.TestCase):
     @patch("scan_boards._run_node_provider")
     @patch("scan_ats._load_search_queries", return_value=[])
     @patch("scan_ats._load_tracked_companies")
-    def test_title_and_location_filters_still_apply(self, mock_companies, mock_queries, mock_run, mock_fetch_text):
+    def test_title_and_location_filters_still_apply(
+        self, mock_companies, mock_queries, mock_run, mock_fetch_text
+    ):
         mock_companies.return_value = [
-            {"name": "Acme", "careers_url": "https://boards.greenhouse.io/acme", "enabled": True},
+            {
+                "name": "Acme",
+                "careers_url": "https://boards.greenhouse.io/acme",
+                "enabled": True,
+            },
         ]
         mock_run.return_value = [
-            {"title": "Warehouse Associate", "url": "https://x.com/1", "location": "Remote", "company": "Acme"},
+            {
+                "title": "Warehouse Associate",
+                "url": "https://x.com/1",
+                "location": "Remote",
+                "company": "Acme",
+            },
         ]
         self.assertEqual(scan_ats.fetch_ats_jobs(), [])
 
@@ -181,8 +300,12 @@ class TestWebsearchPacing(unittest.TestCase):
     @patch("scan_boards._run_node_provider", return_value=[])
     @patch("scan_ats._load_tracked_companies", return_value=[])
     @patch("scan_ats._load_search_queries")
-    def test_no_sleep_before_the_first_websearch_call(self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep):
-        mock_queries.return_value = [{"name": "Only Query", "query": "q", "enabled": True}]
+    def test_no_sleep_before_the_first_websearch_call(
+        self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep
+    ):
+        mock_queries.return_value = [
+            {"name": "Only Query", "query": "q", "enabled": True}
+        ]
         scan_ats.fetch_ats_jobs()
         mock_sleep.assert_not_called()
 
@@ -191,7 +314,9 @@ class TestWebsearchPacing(unittest.TestCase):
     @patch("scan_boards._run_node_provider", return_value=[])
     @patch("scan_ats._load_tracked_companies", return_value=[])
     @patch("scan_ats._load_search_queries")
-    def test_sleeps_between_multiple_websearch_calls(self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep):
+    def test_sleeps_between_multiple_websearch_calls(
+        self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_sleep
+    ):
         mock_queries.return_value = [
             {"name": "Query One", "query": "q1", "enabled": True},
             {"name": "Query Two", "query": "q2", "enabled": True},
@@ -210,7 +335,13 @@ class TestWebsearchPacing(unittest.TestCase):
     @patch("scan_ats._load_tracked_companies", return_value=[])
     @patch("scan_ats._load_search_queries")
     def test_does_not_sleep_the_full_gap_when_the_call_itself_already_took_a_while(
-        self, mock_queries, mock_companies, mock_run, mock_fetch_text, mock_monotonic, mock_sleep,
+        self,
+        mock_queries,
+        mock_companies,
+        mock_run,
+        mock_fetch_text,
+        mock_monotonic,
+        mock_sleep,
     ):
         # Measures from the previous call's *start*, not a blind fixed
         # sleep -- if the call itself already consumed the whole gap

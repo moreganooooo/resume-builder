@@ -4,7 +4,9 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import doctor  # noqa: E402
@@ -70,6 +72,7 @@ class TestCheckPythonPackages(unittest.TestCase):
         def side_effect(name):
             if name == "yaml":
                 raise ImportError("no module named yaml")
+
         mock_import.side_effect = side_effect
         result = doctor.check_python_packages()
         self.assertFalse(result["passed"])
@@ -255,6 +258,7 @@ class TestCheckDashboardThemeSync(unittest.TestCase):
 
     def test_fails_when_file_is_out_of_sync(self):
         import sync_dashboard_theme
+
         tmp_path = os.path.join(os.path.dirname(__file__), "_tmp_out_of_sync.go")
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write("package theme\n// stale content\n")
@@ -268,6 +272,7 @@ class TestCheckDashboardThemeSync(unittest.TestCase):
 
     def test_fails_when_file_is_missing(self):
         import sync_dashboard_theme
+
         missing_path = os.path.join(os.path.dirname(__file__), "_tmp_does_not_exist.go")
         with patch("sync_dashboard_theme.DASHBOARD_THEME_PATH", missing_path):
             result = doctor.check_dashboard_theme_sync()
@@ -279,15 +284,19 @@ class TestCheckKbAllowlist(unittest.TestCase):
 
     def setUp(self):
         import orchestrator
+
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_kb_allowlist")
         os.makedirs(self.tmp_dir, exist_ok=True)
-        self._kb_patcher = patch("doctor.profile_paths.kb_dir", return_value=self.tmp_dir)
+        self._kb_patcher = patch(
+            "doctor.profile_paths.kb_dir", return_value=self.tmp_dir
+        )
         self._kb_patcher.start()
         self._real_allowlist = orchestrator.KB_ALLOWLIST
         orchestrator.KB_ALLOWLIST = ["bullet-bank.md", "profile.yml"]
 
     def tearDown(self):
         import orchestrator
+
         orchestrator.KB_ALLOWLIST = self._real_allowlist
         self._kb_patcher.stop()
         for name in os.listdir(self.tmp_dir):
@@ -367,6 +376,7 @@ class TestCheckDataDb(unittest.TestCase):
     def test_passes_when_db_is_reachable_and_queryable(self):
         import shutil
         import tempfile
+
         tmpdir = tempfile.mkdtemp()
         try:
             with patch("profile_paths.profile_root", return_value=tmpdir):
@@ -378,6 +388,7 @@ class TestCheckDataDb(unittest.TestCase):
 
     def test_fails_with_actionable_fix_when_db_open_raises(self):
         import db
+
         with patch.object(db, "get_db", side_effect=OSError("disk full")):
             result = doctor.check_data_db()
         self.assertFalse(result["passed"])
@@ -390,14 +401,18 @@ class TestRunTestSuite(unittest.TestCase):
 
     @patch("doctor.subprocess.run")
     def test_passed_true_on_zero_returncode(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stderr="Ran 5 tests in 0.01s\n\nOK\n")
+        mock_run.return_value = MagicMock(
+            returncode=0, stderr="Ran 5 tests in 0.01s\n\nOK\n"
+        )
         passed, summary = doctor.run_test_suite()
         self.assertTrue(passed)
         self.assertIn("OK", summary)
 
     @patch("doctor.subprocess.run")
     def test_passed_false_on_nonzero_returncode(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stderr="Ran 5 tests in 0.01s\n\nFAILED (failures=1)\n")
+        mock_run.return_value = MagicMock(
+            returncode=1, stderr="Ran 5 tests in 0.01s\n\nFAILED (failures=1)\n"
+        )
         passed, summary = doctor.run_test_suite()
         self.assertFalse(passed)
         self.assertIn("FAILED", summary)

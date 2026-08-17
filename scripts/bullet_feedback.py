@@ -44,13 +44,28 @@ KEEPERS_AUDITED = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
 # already present in triage_needs_review.py's KEEP_FIELDS allowlist for the
 # eventual copy into bullet-bank-keepers.csv, just never populated before.
 FIELDNAMES = [
-    "cluster_id", "cluster_size", "is_representative", "next_action",
-    "Bullet Point", "Role / Company", "Tags",
-    "accuracy_score", "believability_score", "clarity_score", "ats_value",
-    "manager_test", "weaknesses",
-    "hidden_gem_score", "hidden_gem_flag", "hidden_gem_reason",
-    "final_bullet", "rewrite_status", "rewrite_attempts",
-    "rewrite_reasoning", "context_gaps", "rewrite_date",
+    "cluster_id",
+    "cluster_size",
+    "is_representative",
+    "next_action",
+    "Bullet Point",
+    "Role / Company",
+    "Tags",
+    "accuracy_score",
+    "believability_score",
+    "clarity_score",
+    "ats_value",
+    "manager_test",
+    "weaknesses",
+    "hidden_gem_score",
+    "hidden_gem_flag",
+    "hidden_gem_reason",
+    "final_bullet",
+    "rewrite_status",
+    "rewrite_attempts",
+    "rewrite_reasoning",
+    "context_gaps",
+    "rewrite_date",
 ]
 
 if SCRIPT_DIR not in sys.path:
@@ -132,22 +147,22 @@ def queue_accepted_rewrite(
         return False
 
     row = {
-        "Bullet Point":        original_bullet,
-        "Role / Company":      company,
-        "Tags":                tags,
-        "accuracy_score":      critique.get("accuracy_score", ""),
+        "Bullet Point": original_bullet,
+        "Role / Company": company,
+        "Tags": tags,
+        "accuracy_score": critique.get("accuracy_score", ""),
         "believability_score": critique.get("believability_score", ""),
-        "clarity_score":       critique.get("clarity_score", ""),
-        "ats_value":           critique.get("ats_value", ""),
-        "manager_test":        critique.get("manager_test", ""),
-        "weaknesses":          critique.get("weaknesses", ""),
-        "hidden_gem_score":    critique.get("hidden_gem_score", ""),
-        "hidden_gem_flag":     critique.get("hidden_gem_flag", ""),
-        "hidden_gem_reason":   critique.get("hidden_gem_reason", ""),
-        "final_bullet":        final_text,
-        "rewrite_status":      "",  # blank so triage_needs_review.py routes it fresh
-        "rewrite_attempts":    1,
-        "rewrite_date":        str(date.today()),
+        "clarity_score": critique.get("clarity_score", ""),
+        "ats_value": critique.get("ats_value", ""),
+        "manager_test": critique.get("manager_test", ""),
+        "weaknesses": critique.get("weaknesses", ""),
+        "hidden_gem_score": critique.get("hidden_gem_score", ""),
+        "hidden_gem_flag": critique.get("hidden_gem_flag", ""),
+        "hidden_gem_reason": critique.get("hidden_gem_reason", ""),
+        "final_bullet": final_text,
+        "rewrite_status": "",  # blank so triage_needs_review.py routes it fresh
+        "rewrite_attempts": 1,
+        "rewrite_date": str(date.today()),
     }
 
     file_exists = os.path.exists(path)

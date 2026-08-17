@@ -5,7 +5,9 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -15,10 +17,15 @@ import polish  # noqa: E402
 class TestDetectDocType(unittest.TestCase):
 
     def test_resume_suffix(self):
-        self.assertEqual(polish.detect_doc_type("output/json/Foo_Bar_Resume.json"), "resume")
+        self.assertEqual(
+            polish.detect_doc_type("output/json/Foo_Bar_Resume.json"), "resume"
+        )
 
     def test_coverletter_suffix(self):
-        self.assertEqual(polish.detect_doc_type("output/json/Foo_Bar_CoverLetter.json"), "coverletter")
+        self.assertEqual(
+            polish.detect_doc_type("output/json/Foo_Bar_CoverLetter.json"),
+            "coverletter",
+        )
 
     def test_unrecognized_suffix_returns_none(self):
         self.assertIsNone(polish.detect_doc_type("output/json/Foo_Bar.json"))
@@ -28,13 +35,15 @@ class TestStemFromJsonPath(unittest.TestCase):
 
     def test_resume_stem(self):
         stem = polish.stem_from_json_path(
-            "output/json/MorganEscott_Title_Company_Resume.json", "resume",
+            "output/json/MorganEscott_Title_Company_Resume.json",
+            "resume",
         )
         self.assertEqual(stem, "MorganEscott_Title_Company")
 
     def test_coverletter_stem(self):
         stem = polish.stem_from_json_path(
-            "output/json/MorganEscott_Title_Company_CoverLetter.json", "coverletter",
+            "output/json/MorganEscott_Title_Company_CoverLetter.json",
+            "coverletter",
         )
         self.assertEqual(stem, "MorganEscott_Title_Company")
 
@@ -43,7 +52,9 @@ class TestDiffDocuments(unittest.TestCase):
 
     def test_identical_documents_produce_no_diff(self):
         doc = {"TAGLINE": "SAME", "SKILLS": ["Python"]}
-        self.assertEqual(polish.diff_documents(doc, dict(doc), ["TAGLINE", "SKILLS"]), [])
+        self.assertEqual(
+            polish.diff_documents(doc, dict(doc), ["TAGLINE", "SKILLS"]), []
+        )
 
     # Each changed field now renders as a three-line block -- a label
     # heading, then the removed and added values on their own icon-marked
@@ -123,25 +134,32 @@ class TestGenerateCandidate(unittest.TestCase):
     def test_unparseable_response_returns_none(self, mock_generate):
         mock_generate.return_value = ("not valid json", {})
         result = polish.generate_candidate(
-            {"TAGLINE": "OLD"}, "make it punchier", "resume", self.engine,
+            {"TAGLINE": "OLD"},
+            "make it punchier",
+            "resume",
+            self.engine,
         )
         self.assertIsNone(result)
 
     @patch("polish.GeminiClient.generate")
-    def test_resume_path_normalizes_and_reattaches_recommendation_actions(self, mock_generate):
-        gemini_json = json.dumps({
-            "TAGLINE": "new tagline",
-            "SECTION_SUMMARY": "Professional Summary",
-            "SUMMARY_TEXT": "<strong>Summary.</strong>",
-            "SECTION_EXPERIENCE": "Work Experience",
-            "EXPERIENCE": [],
-            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
-            "EDU_ACHIEVEMENT_KEY_2": "generalist",
-            "SECTION_SKILLS": "Skills",
-            "SKILLS": ["Python"],
-            "SECTION_WHY": "",
-            "WHY_TEXT": "",
-        })
+    def test_resume_path_normalizes_and_reattaches_recommendation_actions(
+        self, mock_generate
+    ):
+        gemini_json = json.dumps(
+            {
+                "TAGLINE": "new tagline",
+                "SECTION_SUMMARY": "Professional Summary",
+                "SUMMARY_TEXT": "<strong>Summary.</strong>",
+                "SECTION_EXPERIENCE": "Work Experience",
+                "EXPERIENCE": [],
+                "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+                "EDU_ACHIEVEMENT_KEY_2": "generalist",
+                "SECTION_SKILLS": "Skills",
+                "SKILLS": ["Python"],
+                "SECTION_WHY": "",
+                "WHY_TEXT": "",
+            }
+        )
         mock_generate.return_value = (gemini_json, {})
 
         original_doc = {
@@ -149,43 +167,69 @@ class TestGenerateCandidate(unittest.TestCase):
             "_recommendation_actions": {"applied": ["x"], "skipped": []},
         }
         candidate = polish.generate_candidate(
-            original_doc, "punch up the tagline", "resume", self.engine,
+            original_doc,
+            "punch up the tagline",
+            "resume",
+            self.engine,
         )
 
         self.assertIsNotNone(candidate)
         # normalize_resume.normalize() upper-cases TAGLINE
         self.assertEqual(candidate["TAGLINE"], "NEW TAGLINE")
         # non-schema tracking key must survive the round trip unchanged
-        self.assertEqual(candidate["_recommendation_actions"], {"applied": ["x"], "skipped": []})
+        self.assertEqual(
+            candidate["_recommendation_actions"], {"applied": ["x"], "skipped": []}
+        )
         # normalize() injects fixed_content.CONTACT_INFO
         self.assertEqual(candidate["NAME"], "Morgan Escott")
 
     @patch("polish.GeminiClient.generate")
-    def test_resume_path_with_no_recommendation_actions_does_not_add_one(self, mock_generate):
-        gemini_json = json.dumps({
-            "TAGLINE": "TAG", "SECTION_SUMMARY": "Professional Summary",
-            "SUMMARY_TEXT": "s", "SECTION_EXPERIENCE": "Work Experience",
-            "EXPERIENCE": [], "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
-            "EDU_ACHIEVEMENT_KEY_2": "generalist", "SECTION_SKILLS": "Skills",
-            "SKILLS": [], "SECTION_WHY": "", "WHY_TEXT": "",
-        })
+    def test_resume_path_with_no_recommendation_actions_does_not_add_one(
+        self, mock_generate
+    ):
+        gemini_json = json.dumps(
+            {
+                "TAGLINE": "TAG",
+                "SECTION_SUMMARY": "Professional Summary",
+                "SUMMARY_TEXT": "s",
+                "SECTION_EXPERIENCE": "Work Experience",
+                "EXPERIENCE": [],
+                "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+                "EDU_ACHIEVEMENT_KEY_2": "generalist",
+                "SECTION_SKILLS": "Skills",
+                "SKILLS": [],
+                "SECTION_WHY": "",
+                "WHY_TEXT": "",
+            }
+        )
         mock_generate.return_value = (gemini_json, {})
-        candidate = polish.generate_candidate({"TAGLINE": "TAG"}, "noop", "resume", self.engine)
+        candidate = polish.generate_candidate(
+            {"TAGLINE": "TAG"}, "noop", "resume", self.engine
+        )
         self.assertNotIn("_recommendation_actions", candidate)
 
     @patch("polish.GeminiClient.generate")
     def test_coverletter_path_does_not_run_resume_normalization(self, mock_generate):
-        gemini_json = json.dumps({
-            "company_name": "Acme",
-            "greeting": "Dear Hiring Team,",
-            "body_paragraphs": ["Paragraph one.", "Paragraph two."],
-            "sign_off": "Sincerely,",
-        })
+        gemini_json = json.dumps(
+            {
+                "company_name": "Acme",
+                "greeting": "Dear Hiring Team,",
+                "body_paragraphs": ["Paragraph one.", "Paragraph two."],
+                "sign_off": "Sincerely,",
+            }
+        )
         mock_generate.return_value = (gemini_json, {})
 
         candidate = polish.generate_candidate(
-            {"company_name": "Acme", "greeting": "Hi,", "body_paragraphs": [], "sign_off": ""},
-            "make the greeting more formal", "coverletter", self.engine,
+            {
+                "company_name": "Acme",
+                "greeting": "Hi,",
+                "body_paragraphs": [],
+                "sign_off": "",
+            },
+            "make the greeting more formal",
+            "coverletter",
+            self.engine,
         )
         self.assertEqual(candidate["greeting"], "Dear Hiring Team,")
         self.assertNotIn("NAME", candidate)
@@ -196,8 +240,12 @@ class TestSaveAndRender(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_save")
         os.makedirs(self.tmp_dir, exist_ok=True)
-        self.resume_json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_Resume.json")
-        self.coverletter_json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_CoverLetter.json")
+        self.resume_json_path = os.path.join(
+            self.tmp_dir, "MorganEscott_Title_Company_Resume.json"
+        )
+        self.coverletter_json_path = os.path.join(
+            self.tmp_dir, "MorganEscott_Title_Company_CoverLetter.json"
+        )
 
         self._real_html_dir = polish.OUTPUT_HTML_DIR
         self._real_pdf_dir = polish.OUTPUT_PDF_DIR
@@ -219,13 +267,25 @@ class TestSaveAndRender(unittest.TestCase):
     def test_resume_paths_and_success(self, mock_render, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+        result = polish.save_and_render(
+            {"TAGLINE": "X"}, "resume", self.resume_json_path
+        )
 
         self.assertTrue(os.path.exists(self.resume_json_path))
-        expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_Resume.html")
-        expected_pdf = os.path.join(polish.OUTPUT_PDF_DIR, "MorganEscott_Title_Company_Resume.pdf")
+        expected_html = os.path.join(
+            polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_Resume.html"
+        )
+        expected_pdf = os.path.join(
+            polish.OUTPUT_PDF_DIR, "MorganEscott_Title_Company_Resume.pdf"
+        )
         self.assertEqual(
-            result, {"json": self.resume_json_path, "html": expected_html, "pdf": expected_pdf, "backup": None},
+            result,
+            {
+                "json": self.resume_json_path,
+                "html": expected_html,
+                "pdf": expected_pdf,
+                "backup": None,
+            },
         )
         mock_render.assert_called_once_with({"TAGLINE": "X"}, expected_html)
 
@@ -236,7 +296,9 @@ class TestSaveAndRender(unittest.TestCase):
         # back up, so this must not fabricate a backup path or file.
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+        result = polish.save_and_render(
+            {"TAGLINE": "X"}, "resume", self.resume_json_path
+        )
 
         self.assertIsNone(result["backup"])
         self.assertFalse(os.path.exists(polish.backup_path_for(self.resume_json_path)))
@@ -251,7 +313,9 @@ class TestSaveAndRender(unittest.TestCase):
         with open(self.resume_json_path, "w", encoding="utf-8") as f:
             json.dump({"TAGLINE": "OLD"}, f)
 
-        result = polish.save_and_render({"TAGLINE": "NEW"}, "resume", self.resume_json_path)
+        result = polish.save_and_render(
+            {"TAGLINE": "NEW"}, "resume", self.resume_json_path
+        )
 
         expected_backup = polish.backup_path_for(self.resume_json_path)
         self.assertEqual(result["backup"], expected_backup)
@@ -263,7 +327,9 @@ class TestSaveAndRender(unittest.TestCase):
 
     @patch("polish.subprocess.run")
     @patch("polish.render_html")
-    def test_backup_holds_only_the_immediately_prior_version(self, mock_render, mock_run):
+    def test_backup_holds_only_the_immediately_prior_version(
+        self, mock_render, mock_run
+    ):
         # "One backup per document" means each save replaces the previous
         # backup rather than accumulating a numbered history -- confirms
         # the oldest content (round 1) is gone once round 3 has happened.
@@ -281,10 +347,14 @@ class TestSaveAndRender(unittest.TestCase):
 
     @patch("polish.subprocess.run")
     @patch("polish.render_html")
-    def test_pdf_failure_returns_none_pdf_but_keeps_json_and_html(self, mock_render, mock_run):
+    def test_pdf_failure_returns_none_pdf_but_keeps_json_and_html(
+        self, mock_render, mock_run
+    ):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
 
-        result = polish.save_and_render({"TAGLINE": "X"}, "resume", self.resume_json_path)
+        result = polish.save_and_render(
+            {"TAGLINE": "X"}, "resume", self.resume_json_path
+        )
 
         self.assertTrue(os.path.exists(self.resume_json_path))
         self.assertIsNone(result["pdf"])
@@ -295,10 +365,14 @@ class TestSaveAndRender(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         result = polish.save_and_render(
-            {"greeting": "Hi,"}, "coverletter", self.coverletter_json_path,
+            {"greeting": "Hi,"},
+            "coverletter",
+            self.coverletter_json_path,
         )
 
-        expected_html = os.path.join(polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_CoverLetter.html")
+        expected_html = os.path.join(
+            polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_CoverLetter.html"
+        )
         mock_render.assert_called_once_with({"greeting": "Hi,"}, expected_html)
         self.assertEqual(result["html"], expected_html)
 
@@ -379,7 +453,9 @@ class TestRunPolishSession(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_session")
         os.makedirs(self.tmp_dir, exist_ok=True)
-        self.json_path = os.path.join(self.tmp_dir, "MorganEscott_Title_Company_Resume.json")
+        self.json_path = os.path.join(
+            self.tmp_dir, "MorganEscott_Title_Company_Resume.json"
+        )
         with open(self.json_path, "w") as f:
             json.dump({"TAGLINE": "OLD"}, f)
 
@@ -417,7 +493,9 @@ class TestRunPolishSession(unittest.TestCase):
 
     @patch("polish.questionary.text")
     @patch("polish.generate_candidate")
-    def test_unparseable_candidate_reprompts_without_saving(self, mock_generate, mock_text):
+    def test_unparseable_candidate_reprompts_without_saving(
+        self, mock_generate, mock_text
+    ):
         mock_text.return_value.ask.side_effect = ["do a thing", "done"]
         mock_generate.return_value = None
         with patch("polish.save_and_render") as mock_save:
@@ -436,7 +514,9 @@ class TestRunPolishSession(unittest.TestCase):
     @patch("polish.questionary.select")
     @patch("polish.questionary.text")
     @patch("polish.generate_candidate")
-    def test_reject_keeps_state_and_does_not_save(self, mock_generate, mock_text, mock_select):
+    def test_reject_keeps_state_and_does_not_save(
+        self, mock_generate, mock_text, mock_select
+    ):
         mock_text.return_value.ask.side_effect = ["make it punchier", "done"]
         mock_generate.return_value = {"TAGLINE": "NEW"}
         mock_select.return_value.ask.return_value = "reject"

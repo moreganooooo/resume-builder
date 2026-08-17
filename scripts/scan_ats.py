@@ -156,11 +156,17 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
 
     raw_description = raw.get("description") or ""
-    description = scan_boards._html_to_text(raw_description) if raw_description else scan_boards._fetch_posting_text(url, provider_id)
+    description = (
+        scan_boards._html_to_text(raw_description)
+        if raw_description
+        else scan_boards._fetch_posting_text(url, provider_id)
+    )
 
     job = {
         "job_title": title,
-        "company_name": html.unescape((raw.get("company") or entry_name or provider_id).strip()),
+        "company_name": html.unescape(
+            (raw.get("company") or entry_name or provider_id).strip()
+        ),
         "source_platform": provider_id,
         "source_job_id": None,
         "source_url": url,
@@ -207,7 +213,7 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
 
     for company in companies:
         if activity is not None:
-            company_name = company.get('name') or '?'
+            company_name = company.get("name") or "?"
             message = f"Checking {cli_art.format_board_name(company_name)}"
             activity.step("discovery", "ATS", message, preserve_markup=True)
         provider_id = _resolve_provider_id(company)
@@ -215,7 +221,9 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
             continue
 
         raw_jobs = scan_boards._run_node_provider(provider_id, company)
-        logging.info(f"scan_ats: {company.get('name')} ({provider_id}) returned {len(raw_jobs)} raw listing(s).")
+        logging.info(
+            f"scan_ats: {company.get('name')} ({provider_id}) returned {len(raw_jobs)} raw listing(s)."
+        )
         for raw in raw_jobs:
             job = _normalize_raw_job(raw, provider_id, company.get("name"))
             if job:
@@ -232,13 +240,15 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
         # *start*, not a blind fixed sleep, so a slow call (network latency
         # already eating into the gap) doesn't also pay a full extra second.
         if last_websearch_call_at is not None:
-            remaining = _WEBSEARCH_MIN_GAP_SECONDS - (time.monotonic() - last_websearch_call_at)
+            remaining = _WEBSEARCH_MIN_GAP_SECONDS - (
+                time.monotonic() - last_websearch_call_at
+            )
             if remaining > 0:
                 time.sleep(remaining)
         last_websearch_call_at = time.monotonic()
 
         if activity is not None:
-            query_name = query.get('name') or 'websearch sweep'
+            query_name = query.get("name") or "websearch sweep"
             message = f"Checking {cli_art.format_board_name(query_name)}"
             activity.step("discovery", "ATS", message, preserve_markup=True)
         # _isSweep tells websearch.mjs to prefer the company it extracts
@@ -251,9 +261,16 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
         # fake company names, defeating dedup's source_url+company_name
         # match. career-ops's own scan.mjs always sets this for
         # search_queries entries; ported that here.
-        entry = {**query, "name": query.get("name", "websearch"), "scan_query": query.get("query", ""), "_isSweep": True}
+        entry = {
+            **query,
+            "name": query.get("name", "websearch"),
+            "scan_query": query.get("query", ""),
+            "_isSweep": True,
+        }
         raw_jobs = scan_boards._run_node_provider("websearch", entry)
-        logging.info(f"scan_ats: sweep '{query.get('name')}' returned {len(raw_jobs)} raw listing(s).")
+        logging.info(
+            f"scan_ats: sweep '{query.get('name')}' returned {len(raw_jobs)} raw listing(s)."
+        )
         for raw in raw_jobs:
             job = _normalize_raw_job(raw, "websearch", raw.get("company"))
             if job:

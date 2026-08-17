@@ -10,7 +10,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import db  # noqa: E402
@@ -27,9 +29,12 @@ class TestDbSchema(unittest.TestCase):
 
     def test_get_db_creates_all_three_tables(self):
         conn = db.get_db("isolated")
-        tables = {row[0] for row in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()}
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
         conn.close()
         self.assertTrue({"jobs", "bullet_bank", "application_log"}.issubset(tables))
 
@@ -43,10 +48,16 @@ class TestDbSchema(unittest.TestCase):
 
     def test_upsert_job_round_trips_a_record(self):
         conn = db.get_db("isolated")
-        db.upsert_job({
-            "id": "job_001", "title": "Marketing Manager", "company": "Acme",
-            "status": "pending", "jd_text": "sample text",
-        }, conn=conn)
+        db.upsert_job(
+            {
+                "id": "job_001",
+                "title": "Marketing Manager",
+                "company": "Acme",
+                "status": "pending",
+                "jd_text": "sample text",
+            },
+            conn=conn,
+        )
         rows = db.get_jobs_by_status("pending", conn=conn)
         conn.close()
         self.assertEqual(len(rows), 1)
@@ -55,8 +66,26 @@ class TestDbSchema(unittest.TestCase):
 
     def test_upsert_job_on_conflict_updates_existing_row_not_duplicates(self):
         conn = db.get_db("isolated")
-        db.upsert_job({"id": "job_001", "title": "A", "company": "Acme", "status": "pending", "jd_text": "x"}, conn=conn)
-        db.upsert_job({"id": "job_001", "title": "B", "company": "Acme", "status": "pending", "jd_text": "x"}, conn=conn)
+        db.upsert_job(
+            {
+                "id": "job_001",
+                "title": "A",
+                "company": "Acme",
+                "status": "pending",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "job_001",
+                "title": "B",
+                "company": "Acme",
+                "status": "pending",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
         rows = db.get_jobs_by_status("pending", conn=conn)
         conn.close()
         self.assertEqual(len(rows), 1)
@@ -67,18 +96,55 @@ class TestDbSchema(unittest.TestCase):
         status the app actually uses must be insertable without raising
         sqlite3.IntegrityError."""
         conn = db.get_db("isolated")
-        statuses = ["pending", "evaluating", "completed", "applied", "interview",
-                    "offer", "responded", "rejected", "discarded", "expired",
-                    "archived", "skip"]
+        statuses = [
+            "pending",
+            "evaluating",
+            "completed",
+            "applied",
+            "interview",
+            "offer",
+            "responded",
+            "rejected",
+            "discarded",
+            "expired",
+            "archived",
+            "skip",
+        ]
         for i, status in enumerate(statuses):
-            db.upsert_job({"id": f"job_{i}", "title": "T", "company": "C",
-                            "status": status, "jd_text": "x"}, conn=conn)
+            db.upsert_job(
+                {
+                    "id": f"job_{i}",
+                    "title": "T",
+                    "company": "C",
+                    "status": status,
+                    "jd_text": "x",
+                },
+                conn=conn,
+            )
         conn.close()  # would raise IntegrityError on commit if any status were rejected
 
     def test_update_job_status_only_touches_the_targeted_row(self):
         conn = db.get_db("isolated")
-        db.upsert_job({"id": "job_a", "title": "A", "company": "Acme", "status": "pending", "jd_text": "x"}, conn=conn)
-        db.upsert_job({"id": "job_b", "title": "B", "company": "Acme", "status": "pending", "jd_text": "x"}, conn=conn)
+        db.upsert_job(
+            {
+                "id": "job_a",
+                "title": "A",
+                "company": "Acme",
+                "status": "pending",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "job_b",
+                "title": "B",
+                "company": "Acme",
+                "status": "pending",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
 
         db.update_job_status("job_a", "completed", conn=conn)
 
@@ -104,8 +170,16 @@ class TestDbSchema(unittest.TestCase):
         via .stignore) never reach a second machine until checkpointed
         into data.db itself."""
         conn = db.get_db("isolated")
-        db.upsert_job({"id": "job_001", "title": "T", "company": "C",
-                        "status": "pending", "jd_text": "x"}, conn=conn)
+        db.upsert_job(
+            {
+                "id": "job_001",
+                "title": "T",
+                "company": "C",
+                "status": "pending",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
         conn.close()
 
         db.checkpoint("isolated")

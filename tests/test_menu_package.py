@@ -3,7 +3,12 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+    ),
+)
 
 import menu
 
@@ -23,7 +28,9 @@ class TestMenuPackage(unittest.TestCase):
 
         res = menu._handle_package_flow()
         self.assertTrue(res)
-        mock_build.assert_called_once_with(jd_path="jds/test_job.json", interactive=True)
+        mock_build.assert_called_once_with(
+            jd_path="jds/test_job.json", interactive=True
+        )
 
     @patch("picker.browse_and_select_jds")
     def test_handle_package_flow_declined(self, mock_picker):

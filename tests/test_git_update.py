@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import git_update  # noqa: E402
@@ -30,7 +32,10 @@ class TestGitCommand(unittest.TestCase):
         self.assertEqual(stdout, "clean")
         self.assertEqual(stderr, "")
 
-    @patch("git_update.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="git", timeout=10))
+    @patch(
+        "git_update.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="git", timeout=10),
+    )
     def test_returns_failure_tuple_on_timeout(self, mock_run):
         returncode, stdout, stderr = git_update._git_command(["fetch"])
         self.assertEqual(returncode, 1)

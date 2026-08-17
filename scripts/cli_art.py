@@ -38,9 +38,13 @@ from rich.theme import Theme as RichTheme
 # substring anywhere in this app's output stays on-palette.
 console = Console(theme=RichTheme({"repr.str": theme.SUCCESS}))
 
-SUCCESS = f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}]"
+SUCCESS = (
+    f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}]"
+)
 ERROR = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}]"
-WARNING = f"[bold {theme.WARNING}]{theme.colorize_icon('warning')}[/bold {theme.WARNING}]"
+WARNING = (
+    f"[bold {theme.WARNING}]{theme.colorize_icon('warning')}[/bold {theme.WARNING}]"
+)
 HINT = f"[bold {theme.INFO}]{theme.colorize_icon('hint')}[/bold {theme.INFO}]"
 
 # Re-exported so menu.py/picker.py's existing `cli_art.QUESTIONARY_STYLE`
@@ -55,8 +59,12 @@ def scrub_pii(text: str) -> str:
     """Redacts candidate emails and phone numbers from tracebacks and log messages."""
     if not text:
         return ""
-    clean = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[REDACTED_EMAIL]', str(text))
-    clean = re.sub(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b', '[REDACTED_PHONE]', clean)
+    clean = re.sub(r"[\w\.-]+@[\w\.-]+\.\w+", "[REDACTED_EMAIL]", str(text))
+    clean = re.sub(
+        r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
+        "[REDACTED_PHONE]",
+        clean,
+    )
     return clean
 
 
@@ -68,14 +76,18 @@ def display_error(message: str) -> None:
     than raising or rendering it literally, so caller-supplied text must
     never reach console.print unescaped."""
     body = f"[bold {theme.ERROR}]{theme.colorize_icon('error')}[/bold {theme.ERROR}] {_escape_markup(scrub_pii(message))}"
-    console.print(Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2)))
+    console.print(
+        Panel(body, border_style=theme.ERROR, box=box.ROUNDED, padding=(0, 2))
+    )
 
 
 def display_success(message: str) -> None:
     """Stays lightweight (no border) -- this is the common case and a
     bordered panel for every success would get old fast. message is
     escaped -- see display_error()'s docstring."""
-    console.print(f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}")
+    console.print(
+        f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}"
+    )
 
 
 def print_literal(message: str = "") -> None:
@@ -83,6 +95,7 @@ def print_literal(message: str = "") -> None:
     callers that previously relied on `console.print(..., markup=False)`.
     Keeps `soft_wrap=True` to match previous call sites."""
     console.print(message, markup=False, soft_wrap=True)
+
 
 # Raw block-letter lines, no markup -- color now comes from the diagonal
 # gradient applied per-character in display_main_banner(), not a blanket
@@ -100,7 +113,8 @@ MAIN_BANNER_LINES = [
     "██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝",
     "██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗",
     "██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║",
-    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",]
+    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
+]
 
 SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
 
@@ -123,16 +137,25 @@ def _sparkle_field(rows: int, width: int) -> list:
         return [""] * rows
     lines = []
     for _ in range(rows):
-        row = [random.choice(_SPARKLE_GLYPHS) if random.random() < _SPARKLE_DENSITY else " " for _ in range(width)]
+        row = [
+            (
+                random.choice(_SPARKLE_GLYPHS)
+                if random.random() < _SPARKLE_DENSITY
+                else " "
+            )
+            for _ in range(width)
+        ]
         lines.append("".join(row))
     return lines
 
 
 def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
     """Linearly interpolates between two '#rrggbb' colors at t in [0, 1]."""
-    start_rgb = tuple(int(start_hex[i:i + 2], 16) for i in (1, 3, 5))
-    end_rgb = tuple(int(end_hex[i:i + 2], 16) for i in (1, 3, 5))
-    mixed = tuple(round(start_rgb[c] + (end_rgb[c] - start_rgb[c]) * t) for c in range(3))
+    start_rgb = tuple(int(start_hex[i : i + 2], 16) for i in (1, 3, 5))
+    end_rgb = tuple(int(end_hex[i : i + 2], 16) for i in (1, 3, 5))
+    mixed = tuple(
+        round(start_rgb[c] + (end_rgb[c] - start_rgb[c]) * t) for c in range(3)
+    )
     return f"#{mixed[0]:02x}{mixed[1]:02x}{mixed[2]:02x}"
 
 
@@ -147,7 +170,12 @@ def _gradient_grid(lines: list, start_hex: str, end_hex: str) -> list:
 
     grid = []
     for row, line in enumerate(lines):
-        grid.append([_lerp_hex(start_hex, end_hex, (row + col) / denom) for col in range(len(line))])
+        grid.append(
+            [
+                _lerp_hex(start_hex, end_hex, (row + col) / denom)
+                for col in range(len(line))
+            ]
+        )
     return grid
 
 
@@ -235,7 +263,11 @@ def display_main_banner(reveal: bool = True) -> None:
         body.append(stats_line, style=theme.INFO)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
-    if not reveal or not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
+    if (
+        not reveal
+        or not console.is_terminal
+        or os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
+    ):
         console.print(render_frame(None))
         return
 
@@ -253,7 +285,7 @@ TIPS = [
     "Did you know? Logging into LinkedIn or JobRight in Google Chrome lets our scanner fetch session cookies automatically on macOS — no manual copy-pasting required!",
     "Running low on time? Try 'Express Setup (Auto-pilot)' — it ingests your source files, constructs your bullet bank, and builds a customized resume in a single click!",
     "Have a specific edit in mind? Use 'Polish Resume or Cover Letter' to conversationally ask the AI for exact visual, wording, or structure tweaks.",
-    "Landed an interview? Update your status in the Applications Tracker to unlock achievements and watch your funnel conversion rate rise!"
+    "Landed an interview? Update your status in the Applications Tracker to unlock achievements and watch your funnel conversion rate rise!",
 ]
 
 
@@ -262,10 +294,14 @@ def display_tip() -> None:
     callout rather than blending into the stats line above it."""
     console.print()  # Blank line before tip for separation
     tip = random.choice(TIPS)
-    console.print(Panel(
-        f"{theme.colorize_icon('hint')}  Did you know? {tip}",
-        border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2),
-    ))
+    console.print(
+        Panel(
+            f"{theme.colorize_icon('hint')}  Did you know? {tip}",
+            border_style=theme.BRAND_ACCENT,
+            box=box.ROUNDED,
+            padding=(0, 2),
+        )
+    )
 
 
 def display_exit_footer() -> None:
@@ -286,7 +322,11 @@ def display_breadcrumb() -> None:
     """Replaces a full banner repaint on menu loop-back -- one line, not
     another full-width panel every time an action finishes."""
     console.print()  # Blank line before breadcrumb for separation
-    console.rule(f"[bold {theme.BRAND}]›[/bold {theme.BRAND}] resume-builder", style="dim", align="left")
+    console.rule(
+        f"[bold {theme.BRAND}]›[/bold {theme.BRAND}] resume-builder",
+        style="dim",
+        align="left",
+    )
 
 
 def display_whats_next_panel() -> None:
@@ -304,7 +344,15 @@ def display_bootstrap_intro(doc_count: int) -> None:
         f"Two of these steps make real API calls and can take a few "
         f"minutes — I'll let you know before each one."
     )
-    console.print(Panel(body, title="New User Bootstrap", border_style=theme.SUCCESS, box=box.ROUNDED, padding=(1, 2)))
+    console.print(
+        Panel(
+            body,
+            title="New User Bootstrap",
+            border_style=theme.SUCCESS,
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
 
 
 # Same four tiers as orchestrator.FitEvaluationSchema's `recommendation`
@@ -402,7 +450,9 @@ def _fit_odds_cell(score: float | None) -> str:
     return f"[{color}]{theme.ICONS[icon_name]} {score:.1f}[/{color}]"
 
 
-def render_fit_table(results: list, start_index: int = 1, title: str | None = None) -> None:
+def render_fit_table(
+    results: list, start_index: int = 1, title: str | None = None
+) -> None:
     """Renders batch_evaluate.evaluate_all_pending()'s result list -- or a
     page-sized slice of it -- as a Rich Table, colored by recommendation
     tier (modeled on job_automater's display_job_table(), cli.py:73-142).
@@ -435,7 +485,12 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     three layers in full for anyone who wants that."""
     narrow = console.width < _NARROW_TERMINAL_COLUMNS
     show_score_detail = console.width >= _FIT_SCORE_DETAIL_COLUMNS
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
+    table = Table(
+        box=box.SIMPLE_HEAD,
+        show_header=True,
+        header_style=TABLE_HEADER_STYLE,
+        expand=True,
+    )
     table.add_column("#", justify="right", style="dim", width=4, no_wrap=True)
     table.add_column("Score", justify="right", width=7, no_wrap=True)
     if show_score_detail:
@@ -446,7 +501,9 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
     # one, a column with only min_width auto-grows on its longest cell,
     # and it was winning that fight against Score/Recommendation's own
     # fixed widths on ordinary terminals, cutting the score value itself.
-    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
+    table.add_column(
+        "Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis"
+    )
     table.add_column("Title", ratio=1, min_width=25, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     if not narrow:
@@ -478,12 +535,19 @@ def render_fit_table(results: list, start_index: int = 1, title: str | None = No
             row.append(_short_why(r.get("why")))
         table.add_row(*row)
 
-    legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items())
+    legend = "  ".join(
+        f"[{color}]■[/{color}] {tier}" for tier, color in _RECOMMENDATION_COLORS.items()
+    )
     console.print()
-    console.print(Panel(
-        table, title=title or f"{len(results)} JD(s) evaluated", subtitle=legend,
-        border_style=theme.BRAND, box=box.ROUNDED,
-    ))
+    console.print(
+        Panel(
+            table,
+            title=title or f"{len(results)} JD(s) evaluated",
+            subtitle=legend,
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+        )
+    )
     console.print()
 
 
@@ -492,11 +556,19 @@ def _liveness_cell(liveness: dict | None) -> str:
         return "-"
     date = liveness["checked_at"][:10]
     result = liveness.get("result", "")
-    color = {"active": theme.SUCCESS, "likely_active": theme.SUCCESS, "expired": theme.ERROR}.get(result, theme.WARNING)
+    color = {
+        "active": theme.SUCCESS,
+        "likely_active": theme.SUCCESS,
+        "expired": theme.ERROR,
+    }.get(result, theme.WARNING)
     return f"[{color}]{result or '?'}[/{color}] ({date})"
 
 
-_FOLLOWUP_COLORS = {"overdue": theme.ERROR, "cold": theme.MUTED, "waiting": theme.SUCCESS}
+_FOLLOWUP_COLORS = {
+    "overdue": theme.ERROR,
+    "cold": theme.MUTED,
+    "waiting": theme.SUCCESS,
+}
 
 
 def _followup_cell(application: dict | None) -> str:
@@ -524,7 +596,9 @@ _FIT_SCORE_DETAIL_COLUMNS = 130
 _PIPELINE_SCORE_DETAIL_COLUMNS = 150
 
 
-def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
+def render_pipeline_table(
+    rows: list, start_index: int = 1, title: str | None = None
+) -> None:
     """Renders picker.list_all_evaluated_jds()'s row list -- or a
     page-sized slice of it -- as a bordered table (the "blue box" browse
     view). start_index numbers the "#" column from an arbitrary offset
@@ -550,7 +624,12 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
     concern."""
     narrow = console.width < _NARROW_TERMINAL_COLUMNS
     show_score_detail = console.width >= _PIPELINE_SCORE_DETAIL_COLUMNS
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE, expand=True)
+    table = Table(
+        box=box.SIMPLE_HEAD,
+        show_header=True,
+        header_style=TABLE_HEADER_STYLE,
+        expand=True,
+    )
     table.add_column("#", justify="right", style="dim", width=3, no_wrap=True)
     table.add_column("Score", justify="right", width=6, no_wrap=True)
     if show_score_detail:
@@ -558,7 +637,9 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
         table.add_column("Odds", justify="right", width=6, no_wrap=True)
     table.add_column("Recommendation", min_width=9, no_wrap=True, overflow="ellipsis")
     # See render_fit_table's own comment on why Company needs a max_width.
-    table.add_column("Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis")
+    table.add_column(
+        "Company", min_width=10, max_width=22, no_wrap=True, overflow="ellipsis"
+    )
     table.add_column("Title", ratio=1, min_width=25, no_wrap=True, overflow="ellipsis")
     table.add_column("Posted", justify="right", width=8, no_wrap=True)
     table.add_column("Status", width=10, no_wrap=True, overflow="ellipsis")
@@ -571,7 +652,9 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
 
     for i, r in enumerate(rows, start_index):
         evaluation = r["evaluation"]
-        color = _RECOMMENDATION_COLORS.get(evaluation.get("recommendation"), theme.MUTED)
+        color = _RECOMMENDATION_COLORS.get(
+            evaluation.get("recommendation"), theme.MUTED
+        )
         cells = [
             str(i),
             f"[{color}]{evaluation.get('composite_score', 0):.2f}/5[/{color}]",
@@ -591,13 +674,19 @@ def render_pipeline_table(rows: list, start_index: int = 1, title: str | None = 
 
     subtitle = (
         "[dim]Last Liveness/Follow-up hidden below ~110 columns -- widen your terminal to see them[/dim]"
-        if narrow else None
+        if narrow
+        else None
     )
     console.print()
-    console.print(Panel(
-        table, title=title or f"{len(rows)} evaluated JD(s)", subtitle=subtitle,
-        border_style=theme.BRAND, box=box.ROUNDED,
-    ))
+    console.print(
+        Panel(
+            table,
+            title=title or f"{len(rows)} evaluated JD(s)",
+            subtitle=subtitle,
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+        )
+    )
     console.print()
 
 
@@ -621,7 +710,16 @@ def render_picker_header(title: str, columns: list, legend: str | None = None) -
     for label, width, justify in columns:
         cell = label.rjust(width) if justify == "right" else label.ljust(width)
         header.append(cell + "  ", style=TABLE_HEADER_STYLE)
-    console.print(Panel(header, title=title, subtitle=legend, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+    console.print(
+        Panel(
+            header,
+            title=title,
+            subtitle=legend,
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
 
 
 def render_picker_instructions() -> None:
@@ -638,10 +736,14 @@ def render_picker_instructions() -> None:
         f"[bold {theme.BRAND_ACCENT}]ENTER[/bold {theme.BRAND_ACCENT}] confirm & continue    "
         f"[dim]↑↓ move  •  / filter[/dim]"
     )
-    console.print(Panel(body, border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2)))
+    console.print(
+        Panel(body, border_style=theme.BRAND_ACCENT, box=box.ROUNDED, padding=(0, 2))
+    )
 
 
-def render_polish_table(rows: list, start_index: int = 1, title: str | None = None) -> None:
+def render_polish_table(
+    rows: list, start_index: int = 1, title: str | None = None
+) -> None:
     """Renders polish.pick_polish_target()'s candidate list -- or a
     page-sized slice of it -- as a bordered table (the same "blue box"
     style as render_pipeline_table()/render_fit_table(), for visual
@@ -650,40 +752,70 @@ def render_polish_table(rows: list, start_index: int = 1, title: str | None = No
     detection stays in polish.py to avoid a cli_art<->polish import
     cycle. start_index/title behave exactly like
     render_pipeline_table()'s."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("#", justify="right", style="dim")
     table.add_column("Type")
     table.add_column("Filename")
     table.add_column("Modified", justify="right")
 
     for i, r in enumerate(rows, start_index):
-        modified = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(r["path"])))
+        modified = time.strftime(
+            "%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(r["path"]))
+        )
         table.add_row(str(i), r["label"], os.path.basename(r["path"]), modified)
 
-    console.print(Panel(
-        table, title=title or f"{len(rows)} document(s)", border_style=theme.BRAND, box=box.ROUNDED,
-    ))
+    console.print(
+        Panel(
+            table,
+            title=title or f"{len(rows)} document(s)",
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+        )
+    )
 
 
 # (subscore dict key, display label) grouped by layer, so the
 # comparison table can show a section header per layer instead of one
 # flat list of 18 dimensions with no indication of what they mean.
 _FIT_DIMENSION_GROUPS = [
-    ("Fit", "fit_subscores", {
-        "functional_alignment": "Functional", "north_star_alignment": "North Star",
-        "level_plausibility": "Level Fit", "work_style_sustainability": "Sustainability",
-        "tools_process_overlap": "Tools",
-    }),
-    ("Interview odds", "interview_odds_subscores", {
-        "title_continuity": "Title Continuity", "evidence_match": "Evidence Match",
-        "domain_credibility": "Domain Cred.", "recruiter_legibility": "Recruiter Legibility",
-        "narrative_burden": "Narrative Burden", "funnel_friction": "Funnel Friction",
-    }),
-    ("Practical pursue", "practical_pursue_subscores", {
-        "remote_quality": "Remote", "compensation_viability": "Comp", "growth_value": "Growth",
-        "time_to_offer": "Speed", "company_reputation": "Reputation",
-        "cultural_signals": "Culture", "posting_legitimacy_score": "Legitimacy",
-    }),
+    (
+        "Fit",
+        "fit_subscores",
+        {
+            "functional_alignment": "Functional",
+            "north_star_alignment": "North Star",
+            "level_plausibility": "Level Fit",
+            "work_style_sustainability": "Sustainability",
+            "tools_process_overlap": "Tools",
+        },
+    ),
+    (
+        "Interview odds",
+        "interview_odds_subscores",
+        {
+            "title_continuity": "Title Continuity",
+            "evidence_match": "Evidence Match",
+            "domain_credibility": "Domain Cred.",
+            "recruiter_legibility": "Recruiter Legibility",
+            "narrative_burden": "Narrative Burden",
+            "funnel_friction": "Funnel Friction",
+        },
+    ),
+    (
+        "Practical pursue",
+        "practical_pursue_subscores",
+        {
+            "remote_quality": "Remote",
+            "compensation_viability": "Comp",
+            "growth_value": "Growth",
+            "time_to_offer": "Speed",
+            "company_reputation": "Reputation",
+            "cultural_signals": "Culture",
+            "posting_legitimacy_score": "Legitimacy",
+        },
+    ),
 ]
 
 
@@ -693,7 +825,9 @@ def render_comparison_table(rows: list) -> None:
     dimension grouped under its layer (fit / interview odds / practical
     pursue), so a strength/weakness pattern is visible at a glance rather
     than needing to hold several single-JD views in your head."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("")
     for r in rows:
         table.add_column(f"{r['company'] or '?'}\n{r['title'] or '?'}")
@@ -702,30 +836,52 @@ def render_comparison_table(rows: list) -> None:
         table.add_row(label, *[str(v) for v in values])
 
     _row("Score", [f"{r['evaluation'].get('composite_score', 0):.2f}/5" for r in rows])
-    _row("Recommendation", [
-        f"[{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
-        f"{r['evaluation'].get('recommendation')}[/{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
-        for r in rows
-    ])
+    _row(
+        "Recommendation",
+        [
+            f"[{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
+            f"{r['evaluation'].get('recommendation')}[/{_RECOMMENDATION_COLORS.get(r['evaluation'].get('recommendation'), 'white')}]"
+            for r in rows
+        ],
+    )
     _row("Archetype", [r["evaluation"].get("archetype") or "-" for r in rows])
-    _row("Posted", [_posting_age_cell(r["evaluation"].get("posting_age_days")) for r in rows])
+    _row(
+        "Posted",
+        [_posting_age_cell(r["evaluation"].get("posting_age_days")) for r in rows],
+    )
 
     for group_label, subscores_key, labels in _FIT_DIMENSION_GROUPS:
         table.add_section()
         _row(f"[bold]{group_label}[/bold]", ["" for _ in rows])
         for dim, label in labels.items():
-            _row(label, [r["evaluation"].get(subscores_key, {}).get(dim, "-") for r in rows])
+            _row(
+                label,
+                [r["evaluation"].get(subscores_key, {}).get(dim, "-") for r in rows],
+            )
 
-    console.print(Panel(
-        table, title=f"Comparing {len(rows)} JD(s)", border_style=theme.BRAND, box=box.ROUNDED,
-    ))
+    console.print(
+        Panel(
+            table,
+            title=f"Comparing {len(rows)} JD(s)",
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+        )
+    )
 
 
-_STAGE_STATUS_COLORS = {"Up to date": theme.SUCCESS, "Stale": theme.WARNING, "In progress": theme.INFO}
+_STAGE_STATUS_COLORS = {
+    "Up to date": theme.SUCCESS,
+    "Stale": theme.WARNING,
+    "In progress": theme.INFO,
+}
 
 
-def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: str = "Bullet Bank Pipeline Status",
-                              show_numbers: bool = True) -> None:
+def render_bullet_bank_status(
+    stage_rows: list,
+    maintenance_rows: list,
+    title: str = "Bullet Bank Pipeline Status",
+    show_numbers: bool = True,
+) -> None:
     """stage_rows: (number, label, status, detail) tuples, in pipeline
     order. maintenance_rows: (label, detail) tuples for the non-sequential
     triage/retire scripts. title is overridable so bootstrap_menu.py can
@@ -743,7 +899,9 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
     sidesteps both: row order already carries the sequence, and the Status
     column already says where you are. Callers still pass the number in
     each tuple -- it's simply not rendered."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     if show_numbers:
         table.add_column("#", justify="right", style="dim")
     table.add_column("Stage")
@@ -751,10 +909,16 @@ def render_bullet_bank_status(stage_rows: list, maintenance_rows: list, title: s
 
     for number, label, status, detail in stage_rows:
         color = _STAGE_STATUS_COLORS.get(status)
-        status_text = f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
+        status_text = (
+            f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
+        )
         if detail:
             status_text += f" ({detail})"
-        row = (label, status_text) if not show_numbers else (str(number), label, status_text)
+        row = (
+            (label, status_text)
+            if not show_numbers
+            else (str(number), label, status_text)
+        )
         table.add_row(*row)
 
     for label, detail in maintenance_rows:
@@ -784,7 +948,9 @@ def render_scan_report(source_results: list, total_written: int) -> None:
     most-frequent-first) -- e.g. workday HTTP 404s x44 renders as one row
     here, not 44 raw WARNING:root: lines the way the old plain-logging
     version did."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("Source")
     table.add_column("Fetched", justify="right")
     table.add_column("New", justify="right")
@@ -803,26 +969,39 @@ def render_scan_report(source_results: list, total_written: int) -> None:
         issue_count = sum(w["count"] for w in r.get("warnings", []))
         issue_style = theme.WARNING if issue_count else "dim"
         table.add_row(
-            r["source"], str(r["fetched"]),
-            f"[{new_style}]{new_count}[/{new_style}]", str(r["skipped"]),
+            r["source"],
+            str(r["fetched"]),
+            f"[{new_style}]{new_count}[/{new_style}]",
+            str(r["skipped"]),
             f"[{dropped_style}]{dropped}[/{dropped_style}]",
             f"[{issue_style}]{issue_count}[/{issue_style}]",
         )
 
     console.print()
-    console.print(Panel(
-        table, title="Scan Results", border_style=theme.BRAND, box=box.ROUNDED,
-        subtitle=f"{total_written} new JD(s) written to jds/",
-    ))
+    console.print(
+        Panel(
+            table,
+            title="Scan Results",
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+            subtitle=f"{total_written} new JD(s) written to jds/",
+        )
+    )
     console.print()
 
     for r in source_results:
         if not r.get("new_jobs"):
             continue
         console.print()
-        console.rule(f"[bold {theme.BRAND}]{r['source']}[/bold {theme.BRAND}] — {len(r['new_jobs'])} new", style="dim", align="left")
+        console.rule(
+            f"[bold {theme.BRAND}]{r['source']}[/bold {theme.BRAND}] — {len(r['new_jobs'])} new",
+            style="dim",
+            align="left",
+        )
         for job in r["new_jobs"]:
-            console.print(f"  {theme.colorize_icon('success')} [bold]{job['company']}[/bold] — {job['title']}")
+            console.print(
+                f"  {theme.colorize_icon('success')} [bold]{job['company']}[/bold] — {job['title']}"
+            )
 
     _render_scan_warnings(source_results)
 
@@ -845,22 +1024,41 @@ def _render_scan_warnings(source_results: list) -> None:
     """One grouped table across every source with issues -- see
     render_scan_report()'s docstring for why grouping matters here."""
     rows = [
-        (r["source"], w["provider_id"] or "-", _WARNING_KIND_LABELS.get(w["kind"], w["kind"]), w["reason"], w["count"])
-        for r in source_results for w in r.get("warnings", [])
+        (
+            r["source"],
+            w["provider_id"] or "-",
+            _WARNING_KIND_LABELS.get(w["kind"], w["kind"]),
+            w["reason"],
+            w["count"],
+        )
+        for r in source_results
+        for w in r.get("warnings", [])
     ]
     if not rows:
         return
 
     console.print()
-    console.rule(f"[bold {theme.WARNING}]{theme.colorize_icon('warning')} Issues[/bold {theme.WARNING}]", style="dim", align="left")
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    console.rule(
+        f"[bold {theme.WARNING}]{theme.colorize_icon('warning')} Issues[/bold {theme.WARNING}]",
+        style="dim",
+        align="left",
+    )
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("Source")
     table.add_column("Provider")
     table.add_column("Stage")
     table.add_column("Reason")
     table.add_column("Count", justify="right")
     for source, provider_id, stage, reason, count in rows:
-        table.add_row(source, provider_id, stage, reason, f"[{theme.WARNING}]{count}[/{theme.WARNING}]")
+        table.add_row(
+            source,
+            provider_id,
+            stage,
+            reason,
+            f"[{theme.WARNING}]{count}[/{theme.WARNING}]",
+        )
     console.print(table)
 
 
@@ -870,19 +1068,40 @@ def _render_scan_warnings(source_results: list) -> None:
 # there's exactly one place to update instead of two copies drifting apart.
 HELP_ENTRIES = [
     ("resume", "launch the interactive menu"),
-    ("resume bootstrap", "new-user setup: ingest documents, draft your profile, build the bullet bank"),
-    ("resume activate", "cd into the project and activate the venv (stays active in this shell)"),
+    (
+        "resume bootstrap",
+        "new-user setup: ingest documents, draft your profile, build the bullet bank",
+    ),
+    (
+        "resume activate",
+        "cd into the project and activate the venv (stays active in this shell)",
+    ),
     ("resume cd", "just cd into the project"),
     ("resume run", "tailor+render every pending JD in jds/ (batch mode)"),
     ("resume run jds/x.txt", "tailor+render one specific JD file"),
     ("resume run --pick", "interactively select which pending JD(s) to tailor"),
     ("resume coverletter jds/x.txt", "generate + render a cover letter for one JD"),
-    ("resume coverletter --pick", "interactively select which pending JD(s) to generate a cover letter for"),
-    ("resume evaluate jds/x.txt", "score a JD's fit (go/no-go) without building a resume"),
+    (
+        "resume coverletter --pick",
+        "interactively select which pending JD(s) to generate a cover letter for",
+    ),
+    (
+        "resume evaluate jds/x.txt",
+        "score a JD's fit (go/no-go) without building a resume",
+    ),
     ("resume evaluate", "score every pending JD at once"),
-    ("resume scan", "pull new postings into jds/ (verifies each is actually live via headless browser by default)"),
-    ("resume scan --source jobright", "pull from just one source (jobright, linkedin, boards, ats)"),
-    ("resume scan --no-verify", "skip the liveness check on new postings (faster, but stale listings may slip through)"),
+    (
+        "resume scan",
+        "pull new postings into jds/ (verifies each is actually live via headless browser by default)",
+    ),
+    (
+        "resume scan --source jobright",
+        "pull from just one source (jobright, linkedin, boards, ats)",
+    ),
+    (
+        "resume scan --no-verify",
+        "skip the liveness check on new postings (faster, but stale listings may slip through)",
+    ),
     ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
     ("resume polish", "interactively polish an already-generated resume/cover letter"),
     ("resume test", "run the full test suite (compact: dots + summary)"),
@@ -896,17 +1115,39 @@ HELP_ENTRIES = [
 def display_playbook() -> None:
     """Renders the simple, compassionate 3-Step Job Search Playbook for ADHD job-seekers."""
     content = Text()
-    content.append("🎯 STEP 1: Find & Pick High-Fit Roles\n", style=f"bold {theme.BRAND}")
-    content.append("   • Run 'Find Jobs' -> 'Scan for New Jobs' (or paste a job link directly).\n", style=theme.MUTED)
-    content.append("   • The AI scores fit automatically so you never waste energy on low-odds roles.\n\n", style=theme.MUTED)
+    content.append(
+        "🎯 STEP 1: Find & Pick High-Fit Roles\n", style=f"bold {theme.BRAND}"
+    )
+    content.append(
+        "   • Run 'Find Jobs' -> 'Scan for New Jobs' (or paste a job link directly).\n",
+        style=theme.MUTED,
+    )
+    content.append(
+        "   • The AI scores fit automatically so you never waste energy on low-odds roles.\n\n",
+        style=theme.MUTED,
+    )
 
     content.append("🚀 STEP 2: 1-Click Tailor & Build\n", style=f"bold {theme.SUCCESS}")
-    content.append("   • Select 'Build Documents' -> 'Build Full Application Package'.\n", style=theme.MUTED)
-    content.append("   • Generates an ATS-optimized PDF resume and tailored cover letter in seconds.\n\n", style=theme.MUTED)
+    content.append(
+        "   • Select 'Build Documents' -> 'Build Full Application Package'.\n",
+        style=theme.MUTED,
+    )
+    content.append(
+        "   • Generates an ATS-optimized PDF resume and tailored cover letter in seconds.\n\n",
+        style=theme.MUTED,
+    )
 
-    content.append("💼 STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}")
-    content.append("   • Open 'Track & Follow Up' -> 'Career Dashboard' to review and submit.\n", style=theme.MUTED)
-    content.append("   • Keep track of applications, interview dates, and reminders without stress.\n", style=theme.MUTED)
+    content.append(
+        "💼 STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}"
+    )
+    content.append(
+        "   • Open 'Track & Follow Up' -> 'Career Dashboard' to review and submit.\n",
+        style=theme.MUTED,
+    )
+    content.append(
+        "   • Keep track of applications, interview dates, and reminders without stress.\n",
+        style=theme.MUTED,
+    )
 
     panel = Panel(
         content,
@@ -923,13 +1164,21 @@ def display_playbook() -> None:
 
 def display_help() -> None:
     display_playbook()
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("Command")
     table.add_column("What it does")
     for command, description in HELP_ENTRIES:
         table.add_row(command, description)
-    console.print(Panel(table, title="resume-builder shortcuts", border_style=theme.BRAND, box=box.ROUNDED))
-
+    console.print(
+        Panel(
+            table,
+            title="resume-builder shortcuts",
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+        )
+    )
 
 
 def display_applications_tracker(content: str) -> None:
@@ -946,20 +1195,28 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
     was skipped/declined. Ends with a plain-English "N passed, M problems
     found" line and a one-line suggested fix per failing check, so nothing
     requires opening a JSON blob to act on."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("Check")
     table.add_column("Status")
     table.add_column("Detail")
 
     failed = []
     for c in checks:
-        icon = f"[{theme.SUCCESS}]{theme.colorize_icon('success')}[/{theme.SUCCESS}]" if c["passed"] else f"[{theme.ERROR}]{theme.colorize_icon('error')}[/{theme.ERROR}]"
+        icon = (
+            f"[{theme.SUCCESS}]{theme.colorize_icon('success')}[/{theme.SUCCESS}]"
+            if c["passed"]
+            else f"[{theme.ERROR}]{theme.colorize_icon('error')}[/{theme.ERROR}]"
+        )
         table.add_row(c["name"], icon, c["detail"])
         if not c["passed"]:
             failed.append(c)
 
     console.print()
-    console.print(Panel(table, title="Doctor Checks", border_style=theme.BRAND, box=box.ROUNDED))
+    console.print(
+        Panel(table, title="Doctor Checks", border_style=theme.BRAND, box=box.ROUNDED)
+    )
     console.print()
 
     if test_result is not None:
@@ -968,25 +1225,31 @@ def render_doctor_report(checks: list, test_result: tuple | None = None) -> None
         console.print(f"\n{icon} Test suite: {test_summary}")
 
     if failed:
-        console.print(f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]")
+        console.print(
+            f"\n[bold {theme.ERROR}]{len(failed)} problem(s) found:[/bold {theme.ERROR}]"
+        )
         for c in failed:
             console.print(f"  {theme.colorize_icon('warning')} {c['name']}: {c['fix']}")
     else:
         console.print(f"\n{SUCCESS} All checks passed.")
+
 
 def cli_info(message: str) -> None:
     """Print an informational message with hint icon. message is
     escaped -- see display_error()'s docstring."""
     console.print(f"{HINT} {_escape_markup(message)}", soft_wrap=True)
 
+
 def cli_warning(message: str) -> None:
     """Print a warning message with warning icon. message is escaped --
     see display_error()'s docstring."""
     console.print(f"{WARNING} {_escape_markup(message)}", soft_wrap=True)
 
+
 def cli_error(message: str) -> None:
     """Print an error message using display_error for consistency."""
     display_error(message)
+
 
 def cli_success(message: str) -> None:
     """Print a success message with success icon. message is escaped --
@@ -1025,9 +1288,13 @@ VERBOSE = 2
 
 _VERBOSITY_ENV = "RESUME_BUILDER_VERBOSITY"
 _LEVEL_BY_NAME = {
-    "quiet": QUIET, "0": QUIET,
-    "normal": NORMAL, "1": NORMAL,
-    "verbose": VERBOSE, "2": VERBOSE, "debug": VERBOSE,
+    "quiet": QUIET,
+    "0": QUIET,
+    "normal": NORMAL,
+    "1": NORMAL,
+    "verbose": VERBOSE,
+    "2": VERBOSE,
+    "debug": VERBOSE,
 }
 # None means "not yet resolved"; resolution is lazy so importing cli_art
 # never reads the environment at import time (tests set the env var after
@@ -1100,16 +1367,36 @@ def detail(message: str, level: int = VERBOSE, **print_kwargs) -> None:
 # (plain-English explanation, concrete fix)
 # Substring matching is lowercased on both sides.
 _ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
-    (FileNotFoundError, "", "A file this step needed isn't there.",
-     "Run `resume doctor` -- it checks for every file the pipeline expects."),
-    (PermissionError, "", "This machine wouldn't let the app read or write that file.",
-     "Check the file isn't open in another program, then try again."),
-    (json.JSONDecodeError, "", "A saved data file is corrupted and couldn't be read.",
-     "Delete the file named below and let it rebuild, or restore it from a backup."),
-    (UnicodeDecodeError, "", "A file contains characters that couldn't be read as text.",
-     "Re-save the file as UTF-8 and try again."),
-    (TimeoutError, "", "The request took too long and gave up.",
-     "Check your internet connection and try again -- this is usually temporary."),
+    (
+        FileNotFoundError,
+        "",
+        "A file this step needed isn't there.",
+        "Run `resume doctor` -- it checks for every file the pipeline expects.",
+    ),
+    (
+        PermissionError,
+        "",
+        "This machine wouldn't let the app read or write that file.",
+        "Check the file isn't open in another program, then try again.",
+    ),
+    (
+        json.JSONDecodeError,
+        "",
+        "A saved data file is corrupted and couldn't be read.",
+        "Delete the file named below and let it rebuild, or restore it from a backup.",
+    ),
+    (
+        UnicodeDecodeError,
+        "",
+        "A file contains characters that couldn't be read as text.",
+        "Re-save the file as UTF-8 and try again.",
+    ),
+    (
+        TimeoutError,
+        "",
+        "The request took too long and gave up.",
+        "Check your internet connection and try again -- this is usually temporary.",
+    ),
     # --- Below: signatures taken from the real failure text, produced by
     # --- actually triggering each one rather than guessing at wording.
     # --- The substrings are the stable part of each message; the variable
@@ -1119,32 +1406,50 @@ _ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
     # Real text: "browserType.launch: Executable doesn't exist at
     # /.../chrome-headless-shell" followed by an ASCII box telling you to
     # run `npx playwright install`.
-    (Exception, "executable doesn't exist",
-     "The headless browser that turns your resume into a PDF isn't installed.",
-     "Run `npm install && npx playwright install chromium` in the project folder."),
+    (
+        Exception,
+        "executable doesn't exist",
+        "The headless browser that turns your resume into a PDF isn't installed.",
+        "Run `npm install && npx playwright install chromium` in the project folder.",
+    ),
     # The macOS 12 trap this project is pinned around (see CLAUDE.md):
     # Playwright >= 1.62 dropped macOS 12, so an unpinned upgrade makes
     # every render die here. Worth its own message because the fix is the
     # opposite of the obvious one -- downgrade, don't reinstall.
-    (Exception, "does not support chromium on mac",
-     "The installed Playwright version is too new for this machine's macOS.",
-     "Pin playwright to exactly 1.61.1 in package.json (not ^1.61.1), then re-run `npm install`."),
-    (Exception, "cannot find module",
-     "A required Node package isn't installed.",
-     "Run `npm install` in the project folder."),
-    (Exception, "command not found: node",
-     "Node.js isn't installed, or isn't on this shell's PATH.",
-     "Install Node, then run `resume doctor` to confirm it's visible."),
+    (
+        Exception,
+        "does not support chromium on mac",
+        "The installed Playwright version is too new for this machine's macOS.",
+        "Pin playwright to exactly 1.61.1 in package.json (not ^1.61.1), then re-run `npm install`.",
+    ),
+    (
+        Exception,
+        "cannot find module",
+        "A required Node package isn't installed.",
+        "Run `npm install` in the project folder.",
+    ),
+    (
+        Exception,
+        "command not found: node",
+        "Node.js isn't installed, or isn't on this shell's PATH.",
+        "Install Node, then run `resume doctor` to confirm it's visible.",
+    ),
     # The Go toolchain is the one dependency the rest of this project does
     # NOT need -- only the dashboard and the new-user setup wizard shell out
     # to it. So "go: command not found" is both likely on a fresh machine
     # and completely opaque if shown raw.
-    (Exception, "command not found: go",
-     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
-     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
-    (Exception, "go: no such file or directory",
-     "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
-     "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it."),
+    (
+        Exception,
+        "command not found: go",
+        "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+        "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it.",
+    ),
+    (
+        Exception,
+        "go: no such file or directory",
+        "The setup wizard and dashboard need the Go toolchain, which isn't installed.",
+        "Install Go (https://go.dev/dl/), then try again -- nothing else in this app needs it.",
+    ),
     # pandas CSV failures. Real text, in order:
     #   ParserError:    "Error tokenizing data. C error: Expected 2 fields
     #                    in line 3, saw 5"
@@ -1153,20 +1458,31 @@ _ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
     #   EmptyDataError: "No columns to parse from file"
     # Both ParserError and EmptyDataError subclass ValueError, so they're
     # matched on message text rather than type.
-    (Exception, "eof inside string",
-     "A saved spreadsheet has a quote that's opened but never closed, so the rest of the file can't be read.",
-     "Open the file listed below in a spreadsheet app, fix the stray quote mark, and save it again as CSV."),
-    (Exception, "error tokenizing data",
-     "A saved spreadsheet has a row with the wrong number of columns.",
-     "Open the file listed below in a spreadsheet app -- the error names the bad row -- then save it again as CSV."),
-    (Exception, "no columns to parse",
-     "A saved spreadsheet is completely empty.",
-     "Restore it from a backup, or re-run the bullet-bank setup step to rebuild it."),
+    (
+        Exception,
+        "eof inside string",
+        "A saved spreadsheet has a quote that's opened but never closed, so the rest of the file can't be read.",
+        "Open the file listed below in a spreadsheet app, fix the stray quote mark, and save it again as CSV.",
+    ),
+    (
+        Exception,
+        "error tokenizing data",
+        "A saved spreadsheet has a row with the wrong number of columns.",
+        "Open the file listed below in a spreadsheet app -- the error names the bad row -- then save it again as CSV.",
+    ),
+    (
+        Exception,
+        "no columns to parse",
+        "A saved spreadsheet is completely empty.",
+        "Restore it from a backup, or re-run the bullet-bank setup step to rebuild it.",
+    ),
     # gemini_client.SustainedFailureError's own message text.
-    (Exception, "sustained quota issue",
-     "Gemini refused several requests in a row, which usually means the API key is out of quota.",
-     "Swap GEMINI_API_KEY in your profile's .env for one with quota left, or wait for the window to reset."),
-
+    (
+        Exception,
+        "sustained quota issue",
+        "Gemini refused several requests in a row, which usually means the API key is out of quota.",
+        "Swap GEMINI_API_KEY in your profile's .env for one with quota left, or wait for the window to reset.",
+    ),
     # --- GENERIC NETWORK / API SIGNATURES MUST STAY LAST ---------------
     # First match wins, so broad needles have to sit below narrow ones.
     # This is not theoretical: "sustained quota issue" above contains the
@@ -1176,20 +1492,48 @@ _ERROR_SIGNATURES: list[tuple[type, str, str, str]] = [
     # API key. Anything added below this line is a fallback, not a
     # signature; add new specific cases ABOVE this comment.
     # tests/test_cli_art_errors.py pins the two collisions that matter.
-    (Exception, "api key", "The Gemini API key is missing or wasn't accepted.",
-     "Add a valid GEMINI_API_KEY to your profile's .env file, then run `resume doctor`."),
-    (Exception, "quota", "You've hit the Gemini API's usage limit for now.",
-     "Wait for the quota to reset, or switch to a different model tier."),
-    (Exception, "rate limit", "Requests are going out faster than the API allows.",
-     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
-    (Exception, "429", "Requests are going out faster than the API allows.",
-     "Wait a minute and run it again -- an interrupted run resumes from its checkpoint."),
-    (Exception, "connection", "Couldn't reach the service over the network.",
-     "Check your internet connection, then try again."),
-    (Exception, "timed out", "The request took too long and gave up.",
-     "Check your internet connection and try again -- this is usually temporary."),
-    (Exception, "ssl", "A secure connection to the service couldn't be established.",
-     "Check whether a VPN or corporate proxy is intercepting traffic."),
+    (
+        Exception,
+        "api key",
+        "The Gemini API key is missing or wasn't accepted.",
+        "Add a valid GEMINI_API_KEY to your profile's .env file, then run `resume doctor`.",
+    ),
+    (
+        Exception,
+        "quota",
+        "You've hit the Gemini API's usage limit for now.",
+        "Wait for the quota to reset, or switch to a different model tier.",
+    ),
+    (
+        Exception,
+        "rate limit",
+        "Requests are going out faster than the API allows.",
+        "Wait a minute and run it again -- an interrupted run resumes from its checkpoint.",
+    ),
+    (
+        Exception,
+        "429",
+        "Requests are going out faster than the API allows.",
+        "Wait a minute and run it again -- an interrupted run resumes from its checkpoint.",
+    ),
+    (
+        Exception,
+        "connection",
+        "Couldn't reach the service over the network.",
+        "Check your internet connection, then try again.",
+    ),
+    (
+        Exception,
+        "timed out",
+        "The request took too long and gave up.",
+        "Check your internet connection and try again -- this is usually temporary.",
+    ),
+    (
+        Exception,
+        "ssl",
+        "A secure connection to the service couldn't be established.",
+        "Check whether a VPN or corporate proxy is intercepting traffic.",
+    ),
 ]
 
 _GENERIC_EXPLANATION = (
@@ -1243,14 +1587,18 @@ def describe_stderr(text: str) -> tuple[str, str | None]:
     return _classify(text, None)
 
 
-def friendly_subprocess_error(stderr: str, context: str, fix: str | None = None) -> None:
+def friendly_subprocess_error(
+    stderr: str, context: str, fix: str | None = None
+) -> None:
     """Report a failed subprocess in plain language, raw output demoted.
 
     The `returncode != 0` counterpart to friendly_error()."""
     explanation, suggested_fix = describe_stderr(stderr)
     display_error(f"Couldn't finish {context}. {explanation}")
     if fix or suggested_fix:
-        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+        console.print(
+            f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True
+        )
     raw = (stderr or "").strip()
     if raw:
         # markup=False and MUTED for the same reasons friendly_error()
@@ -1259,7 +1607,9 @@ def friendly_subprocess_error(stderr: str, context: str, fix: str | None = None)
         # with the plain sentence above it.
         for line in raw.splitlines():
             if line.strip():
-                console.print(f"   {line}", style=theme.MUTED, markup=False, soft_wrap=True)
+                console.print(
+                    f"   {line}", style=theme.MUTED, markup=False, soft_wrap=True
+                )
 
 
 def friendly_error(exc: BaseException, context: str, fix: str | None = None) -> None:
@@ -1271,13 +1621,19 @@ def friendly_error(exc: BaseException, context: str, fix: str | None = None) -> 
     explanation, suggested_fix = describe_error(exc, context)
     display_error(f"Couldn't finish {context}. {explanation}")
     if fix or suggested_fix:
-        console.print(f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True)
+        console.print(
+            f"   {theme.colorize_icon('hint')} {fix or suggested_fix}", soft_wrap=True
+        )
     raw = str(exc).strip()
     if raw:
         # markup=False: exception text routinely contains square brackets
         # (list reprs, log prefixes) that Rich would try to parse as tags.
-        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
-                      markup=False, soft_wrap=True)
+        console.print(
+            f"   {type(exc).__name__}: {raw}",
+            style=theme.MUTED,
+            markup=False,
+            soft_wrap=True,
+        )
 
 
 def friendly_warning(exc: BaseException, context: str, consequence: str) -> None:
@@ -1291,8 +1647,12 @@ def friendly_warning(exc: BaseException, context: str, consequence: str) -> None
     cli_warning(f"Couldn't finish {context} -- {consequence}")
     raw = str(exc).strip()
     if raw and at_level(NORMAL):
-        console.print(f"   {type(exc).__name__}: {raw}", style=theme.MUTED,
-                      markup=False, soft_wrap=True)
+        console.print(
+            f"   {type(exc).__name__}: {raw}",
+            style=theme.MUTED,
+            markup=False,
+            soft_wrap=True,
+        )
 
 
 # =====================================================================
@@ -1305,9 +1665,11 @@ def friendly_warning(exc: BaseException, context: str, consequence: str) -> None
 # QUESTIONARY_STYLE, which was previously repeated at 18 call sites.
 # =====================================================================
 
+
 def select(message: str, choices, **kwargs):
     """questionary.select() with this app's style applied, or upgraded to Charm."""
     import sys
+
     if "unittest" in sys.modules:
         kwargs.setdefault("style", QUESTIONARY_STYLE)
         return questionary.select(message, choices=choices, **kwargs).ask()
@@ -1321,6 +1683,7 @@ def confirm(message: str, default: bool = False, **kwargs) -> bool:
     can treat the answer as a plain bool without re-introducing the
     Ctrl-C-fallthrough bug class documented in menu.py:151-217."""
     import sys
+
     if "unittest" in sys.modules:
         kwargs.setdefault("style", QUESTIONARY_STYLE)
         answer = questionary.confirm(message, default=default, **kwargs).ask()
@@ -1338,6 +1701,7 @@ def text(message: str, **kwargs):
 def checkbox(message: str, choices, **kwargs):
     """questionary.checkbox() with this app's style applied, or upgraded to Charm."""
     import sys
+
     if "unittest" in sys.modules:
         kwargs.setdefault("style", QUESTIONARY_STYLE)
         return questionary.checkbox(message, choices=choices, **kwargs).ask()
@@ -1353,8 +1717,7 @@ def confirm_destructive(action: str, target: str, default: bool = False) -> bool
     "Mark as rejected"); `target` names the specific thing. Defaults to
     No, because the whole point is that a stray Enter shouldn't be
     destructive."""
-    console.print(
-        f"{WARNING} [bold]{action}[/bold] {target}?", soft_wrap=True)
+    console.print(f"{WARNING} [bold]{action}[/bold] {target}?", soft_wrap=True)
     return confirm("   Are you sure?", default=default)
 
 
@@ -1430,7 +1793,8 @@ class ScanActivity:
     def __enter__(self) -> "ScanActivity":
         self._progress.__enter__()
         self._task_id = self._progress.add_task(
-            f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]", total=None,
+            f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]",
+            total=None,
         )
         return self
 
@@ -1447,7 +1811,9 @@ class ScanActivity:
         self._eta_done = 0
         self._eta_start = time.time()
 
-    def step(self, icon_name: str, source: str, message: str, preserve_markup: bool = False) -> None:
+    def step(
+        self, icon_name: str, source: str, message: str, preserve_markup: bool = False
+    ) -> None:
         """Print one permanent themed line: icon, source label,
         message, plus a running ETA suffix once start_source() has
         been called and at least one prior step() has run.
@@ -1464,7 +1830,8 @@ class ScanActivity:
         icon = theme.colorize_icon(icon_name)
         message_part = message if preserve_markup else _escape_markup(message)
         self._progress.console.print(
-            f"  {icon} [bold]{_escape_markup(source)}[/bold] {message_part}{eta}", soft_wrap=True,
+            f"  {icon} [bold]{_escape_markup(source)}[/bold] {message_part}{eta}",
+            soft_wrap=True,
         )
 
     def tally(self, **counts: int) -> None:
@@ -1477,7 +1844,9 @@ class ScanActivity:
         self._counts.update(counts)
         description = f"[bold {theme.BRAND}]Scanning[/bold {theme.BRAND}]"
         if self._counts:
-            parts = " · ".join(f"{key.capitalize()} {value}" for key, value in self._counts.items())
+            parts = " · ".join(
+                f"{key.capitalize()} {value}" for key, value in self._counts.items()
+            )
             description += f" · {parts}"
         self._progress.update(self._task_id, description=description)
 
@@ -1510,12 +1879,14 @@ def new_scan_activity(**kwargs) -> ScanActivity:
     return ScanActivity(**kwargs)
 
 
-def format_job_found_message(job_title: str, company_name: str, separator: str = "@") -> str:
+def format_job_found_message(
+    job_title: str, company_name: str, separator: str = "@"
+) -> str:
     """Format a styled job discovery message with Rich markup:
     - Role title: colored in SUCCESS (mint-green)
     - Separator and company: gray/muted
     - Format: Found "Job Title" @ Company"""
-    return f"[dim]Found[/dim] \"[{theme.SUCCESS}]{_escape_markup(job_title)}[/{theme.SUCCESS}]\" {separator} [dim]{_escape_markup(company_name)}[/dim]"
+    return f'[dim]Found[/dim] "[{theme.SUCCESS}]{_escape_markup(job_title)}[/{theme.SUCCESS}]" {separator} [dim]{_escape_markup(company_name)}[/dim]'
 
 
 def format_board_name(board_name: str) -> str:
@@ -1538,7 +1909,9 @@ def render_rewrite_queue_table(rows: list, title: str) -> None:
     Table cells parse markup exactly like console.print does -- a
     bullet or provider-id containing a stray "[" would otherwise be
     silently dropped the same way a plain console.print call would."""
-    table = Table(box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE)
+    table = Table(
+        box=box.SIMPLE_HEAD, show_header=True, header_style=TABLE_HEADER_STYLE
+    )
     table.add_column("#", justify="right")
     table.add_column("Source")
     table.add_column("Composite", justify="right")
@@ -1552,7 +1925,15 @@ def render_rewrite_queue_table(rows: list, title: str) -> None:
             str(row["manager_test"]),
             f"{_escape_markup(row['bullet'])}...",
         )
-    console.print(Panel(table, title=title, border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+    console.print(
+        Panel(
+            table,
+            title=title,
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
 
 
 def render_triage_summary_table(counts: dict) -> None:
@@ -1562,12 +1943,28 @@ def render_triage_summary_table(counts: dict) -> None:
     table = Table(box=box.SIMPLE_HEAD, show_header=False)
     table.add_column("Outcome")
     table.add_column("Count", justify="right")
-    table.add_row(f"[{theme.SUCCESS}]KEEP[/{theme.SUCCESS}]", str(counts.get("keep", 0)))
-    table.add_row(f"[{theme.WARNING}]REWRITE[/{theme.WARNING}]", str(counts.get("rewrite", 0)))
-    table.add_row(f"[{theme.ERROR}]RETIRE[/{theme.ERROR}]", str(counts.get("retire", 0)))
-    table.add_row("DUPLICATE (already in keeper bank, skipped)", str(counts.get("duplicate", 0)))
+    table.add_row(
+        f"[{theme.SUCCESS}]KEEP[/{theme.SUCCESS}]", str(counts.get("keep", 0))
+    )
+    table.add_row(
+        f"[{theme.WARNING}]REWRITE[/{theme.WARNING}]", str(counts.get("rewrite", 0))
+    )
+    table.add_row(
+        f"[{theme.ERROR}]RETIRE[/{theme.ERROR}]", str(counts.get("retire", 0))
+    )
+    table.add_row(
+        "DUPLICATE (already in keeper bank, skipped)", str(counts.get("duplicate", 0))
+    )
     table.add_row("Leftover (needs human)", str(counts.get("leftover", 0)))
-    console.print(Panel(table, title="Triage Results", border_style=theme.BRAND, box=box.ROUNDED, padding=(0, 1)))
+    console.print(
+        Panel(
+            table,
+            title="Triage Results",
+            border_style=theme.BRAND,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+    )
 
 
 def display_compact_banner(action_title: str) -> None:
@@ -1576,19 +1973,23 @@ def display_compact_banner(action_title: str) -> None:
     """
     panel_content = Text()
     panel_content.append("✦ ", style=theme.BRAND_ACCENT)
-    panel_content.append(make_gradient_text("💎 RESUME BUILDER ", theme.BRAND, theme.BRAND_ACCENT))
+    panel_content.append(
+        make_gradient_text("💎 RESUME BUILDER ", theme.BRAND, theme.BRAND_ACCENT)
+    )
     panel_content.append("│ ", style=theme.MUTED)
-    panel_content.append(make_gradient_text(action_title.upper(), theme.INFO, theme.SUCCESS))
+    panel_content.append(
+        make_gradient_text(action_title.upper(), theme.INFO, theme.SUCCESS)
+    )
     panel_content.append(" │ ", style=theme.MUTED)
     panel_content.append("Active Script Execution Mode", style=theme.MUTED)
     panel_content.append(" ✦", style=theme.BRAND_ACCENT)
-    
+
     panel = Panel(
         panel_content,
         border_style=theme.BRAND,
         box=box.ROUNDED,
         padding=(0, 2),
-        width=console.width
+        width=console.width,
     )
     console.print(panel)
     console.print()
@@ -1604,33 +2005,33 @@ def thinking_status(message: str):
     # Catppuccin Peach, Pink, Mauve, Lavender, Blue, Sky tokens from theme.py
     colors = theme.THINKING_GRADIENT_COLORS
     stop_event = threading.Event()
-    
+
     status = console.status(
         f"[bold {theme.BRAND}]Thinking[/bold {theme.BRAND}] · {message}",
         spinner="dots",
-        spinner_style=f"bold {theme.BRAND_ACCENT}"
+        spinner_style=f"bold {theme.BRAND_ACCENT}",
     )
-    
+
     def update_gradient():
         idx = 0
         while not stop_event.is_set():
             color = colors[idx % len(colors)]
             c2 = colors[(idx + 1) % len(colors)]
             c3 = colors[(idx + 2) % len(colors)]
-            
+
             sparkles_left = f"[{color}]✦[/] [{c2}]✧[/] [{c3}]✦[/]"
             sparkles_right = f"[{c3}]✦[/] [{c2}]✧[/] [{color}]✦[/]"
-            
+
             # Shifting wave text
             text = f"{sparkles_left} [bold {color}]Thinking[/] · [{theme.INFO}]{message}[/] {sparkles_right}"
             status.update(text, spinner="dots", spinner_style=f"bold {color}")
             idx += 1
             time.sleep(0.12)
-            
+
     status.start()
     t = threading.Thread(target=update_gradient, daemon=True)
     t.start()
-    
+
     @contextlib.contextmanager
     def _runner():
         try:
@@ -1639,7 +2040,7 @@ def thinking_status(message: str):
             stop_event.set()
             t.join(timeout=0.2)
             status.stop()
-            
+
     return _runner()
 
 
@@ -1650,10 +2051,10 @@ def display_footer_commands() -> None:
     columns, rows = shutil.get_terminal_size()
     # Save current cursor position
     sys.stdout.write("\x1b[s")
-    
+
     # Move cursor to the very bottom row (row = rows)
     sys.stdout.write(f"\x1b[{rows};1H")
-    
+
     # Format a beautiful styled commands footer
     footer_text = Text()
     footer_text.append("✦ ", style=theme.BRAND_ACCENT)
@@ -1666,12 +2067,12 @@ def display_footer_commands() -> None:
     footer_text.append("CTRL+C", style=f"bold {theme.ERROR}")
     footer_text.append(" cancel / exit ", style=theme.MUTED)
     footer_text.append(" ✦", style=theme.BRAND_ACCENT)
-    
+
     # Clear line first
     sys.stdout.write("\x1b[2K")
     # Draw footer text
     console.print(footer_text, end="")
-    
+
     # Restore saved cursor position
     sys.stdout.write("\x1b[u")
     sys.stdout.flush()
@@ -1686,7 +2087,7 @@ def display_execution_footer() -> None:
     sys.stdout.write(f"\x1b[{rows};1H")
     # Clear line first
     sys.stdout.write("\x1b[2K")
-    
+
     footer_text = Text()
     footer_text.append("✦ ", style=theme.BRAND_ACCENT)
     footer_text.append("CTRL+C", style=f"bold {theme.ERROR}")
@@ -1694,7 +2095,7 @@ def display_execution_footer() -> None:
     footer_text.append("│  ", style=theme.MUTED)
     footer_text.append("Please wait for execution to complete...", style=theme.MUTED)
     footer_text.append(" ✦", style=theme.BRAND_ACCENT)
-    
+
     # Draw footer text
     console.print(footer_text, end="")
     # Restore cursor position
@@ -1702,17 +2103,27 @@ def display_execution_footer() -> None:
     sys.stdout.flush()
 
 
-def make_gradient_text(text: str, start_color: str, end_color: str, bold: bool = True) -> Text:
+def make_gradient_text(
+    text: str, start_color: str, end_color: str, bold: bool = True
+) -> Text:
     """Creates a beautifully-blended linear gradient text using TrueColor RGB hex codes."""
-    r1, g1, b1 = int(start_color[1:3], 16), int(start_color[3:5], 16), int(start_color[5:7], 16)
-    r2, g2, b2 = int(end_color[1:3], 16), int(end_color[3:5], 16), int(end_color[5:7], 16)
-    
+    r1, g1, b1 = (
+        int(start_color[1:3], 16),
+        int(start_color[3:5], 16),
+        int(start_color[5:7], 16),
+    )
+    r2, g2, b2 = (
+        int(end_color[1:3], 16),
+        int(end_color[3:5], 16),
+        int(end_color[5:7], 16),
+    )
+
     gradient_text = Text()
     n = len(text)
     if n <= 1:
         gradient_text.append(text, style=f"{'bold ' if bold else ''}{start_color}")
         return gradient_text
-        
+
     for i, char in enumerate(text):
         t = i / (n - 1)
         r = int(r1 + (r2 - r1) * t)
@@ -1720,7 +2131,7 @@ def make_gradient_text(text: str, start_color: str, end_color: str, bold: bool =
         b = int(b1 + (b2 - b1) * t)
         hex_color = f"#{r:02x}{g:02x}{b:02x}"
         gradient_text.append(char, style=f"{'bold ' if bold else ''}{hex_color}")
-        
+
     return gradient_text
 
 
@@ -1730,48 +2141,61 @@ def display_success_celebration(title: str, subtitle: str) -> None:
     """
     import random
     import time
-    
+
     panel_content = Text()
-    panel_content.append("\n🎉 ✦ ─── HECK YEAH! ─── ✦ 🎉\n\n", style=f"bold {theme.BRAND_ACCENT}")
+    panel_content.append(
+        "\n🎉 ✦ ─── HECK YEAH! ─── ✦ 🎉\n\n", style=f"bold {theme.BRAND_ACCENT}"
+    )
     panel_content.append(title.upper(), style=f"bold {theme.SUCCESS}")
     panel_content.append("\n\n", style="default")
     panel_content.append(subtitle, style=f"italic {theme.INFO}")
-    panel_content.append("\n\n💡 Remember: Every tailored resume brings you one step closer to your dream gig!", style=theme.MUTED)
-    panel_content.append("\nGo crush this application! 🚀\n", style=f"bold {theme.BRAND}")
-    
-    grad_title = make_gradient_text("🌟 ACHIEVEMENT UNLOCKED 🌟", theme.BRAND_ACCENT, theme.BRAND)
-    
+    panel_content.append(
+        "\n\n💡 Remember: Every tailored resume brings you one step closer to your dream gig!",
+        style=theme.MUTED,
+    )
+    panel_content.append(
+        "\nGo crush this application! 🚀\n", style=f"bold {theme.BRAND}"
+    )
+
+    grad_title = make_gradient_text(
+        "🌟 ACHIEVEMENT UNLOCKED 🌟", theme.BRAND_ACCENT, theme.BRAND
+    )
+
     panel = Panel(
         panel_content,
         border_style=theme.BRAND_ACCENT,
         box=box.DOUBLE,
         padding=(1, 4),
         title=grad_title,
-        title_align="center"
+        title_align="center",
     )
-    
+
     sparkles = ["✨", "✦", "✧", "⭐", "🎉", "🔥", "💫", "💎"]
     sys.stdout.write("\x1b[?25l")  # Hide cursor
     sys.stdout.flush()
-    
+
     try:
         for frame in range(12):
             sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
             sys.stdout.flush()
-            
+
             console.print()
             sparkle_row_1 = "   " + " ".join(random.choices(sparkles, k=8))
-            console.print(make_gradient_text(sparkle_row_1, theme.BRAND_ACCENT, theme.BRAND))
+            console.print(
+                make_gradient_text(sparkle_row_1, theme.BRAND_ACCENT, theme.BRAND)
+            )
             console.print()
             console.print(panel)
             console.print()
             sparkle_row_2 = "   " + " ".join(random.choices(sparkles, k=8))
-            console.print(make_gradient_text(sparkle_row_2, theme.BRAND, theme.BRAND_ACCENT))
+            console.print(
+                make_gradient_text(sparkle_row_2, theme.BRAND, theme.BRAND_ACCENT)
+            )
             time.sleep(0.1)
     finally:
         sys.stdout.write("\x1b[?25h")  # Restore cursor
         sys.stdout.flush()
-        
+
     sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
     sys.stdout.flush()
     console.print()
@@ -1821,7 +2245,9 @@ def render_application_package_hud(package_result: dict) -> None:
         hud_content.append("   • DOCX: ", style=f"bold {theme.SUCCESS}")
         hud_content.append(f"{res_docx}\n", style=theme.SUCCESS)
 
-    hud_content.append("\n✉️  Cover Letter Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}")
+    hud_content.append(
+        "\n✉️  Cover Letter Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}"
+    )
     cl_pdf = output_paths.get("coverletter_pdf")
     cl_docx = output_paths.get("coverletter_docx")
     if cl_pdf:
@@ -1831,7 +2257,10 @@ def render_application_package_hud(package_result: dict) -> None:
         hud_content.append("   • DOCX: ", style=f"bold {theme.SUCCESS}")
         hud_content.append(f"{cl_docx}\n", style=theme.SUCCESS)
 
-    hud_content.append(f"\n{theme.colorize_icon('success')} Application package logged to SQLite tracker & marked complete.\n", style=theme.MUTED)
+    hud_content.append(
+        f"\n{theme.colorize_icon('success')} Application package logged to SQLite tracker & marked complete.\n",
+        style=theme.MUTED,
+    )
 
     panel = Panel(
         hud_content,
@@ -1866,7 +2295,9 @@ def sparkle_banner(title: str, subtitle: str = "") -> None:
     console.print()
 
 
-def render_sparkle_celebration(title: str, message: str, tips: list[str] = None) -> None:
+def render_sparkle_celebration(
+    title: str, message: str, tips: list[str] = None
+) -> None:
     """Renders a high-dopamine, ADHD-friendly completion screen celebrating user progress."""
     content = Text()
     content.append("✨ ", style=theme.BRAND_ACCENT)
@@ -1875,7 +2306,9 @@ def render_sparkle_celebration(title: str, message: str, tips: list[str] = None)
     content.append(f"{message}\n")
 
     if tips:
-        content.append(f"\n[{theme.BRAND_ACCENT}]What to do next:[/{theme.BRAND_ACCENT}]\n")
+        content.append(
+            f"\n[{theme.BRAND_ACCENT}]What to do next:[/{theme.BRAND_ACCENT}]\n"
+        )
         for tip in tips:
             content.append(f"  • {tip}\n", style=theme.MUTED)
 
@@ -1890,4 +2323,3 @@ def render_sparkle_celebration(title: str, message: str, tips: list[str] = None)
     console.print()
     console.print(panel)
     console.print()
-

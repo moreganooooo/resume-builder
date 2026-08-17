@@ -35,10 +35,12 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
     sync automatically, only by convention."""
     if skip_confirm:
         return True
-    return bool(questionary.confirm(
-        f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask())
+    return bool(
+        questionary.confirm(
+            f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+    )
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -121,7 +123,9 @@ _NAV_NEXT = "__browse_next_page__"
 _NAV_DONE = "__browse_done__"
 
 
-def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: int = _PAGE_SIZE) -> set:
+def _paginated_checkbox(
+    count: int, render_page, choices_for_page, page_size: int = _PAGE_SIZE
+) -> set:
     """Shared pagination engine behind every large multi-select JD picker
     in this program (the interactive menu's Browse & Manage Jobs /
     Customize Resume for Specific Role(s) / Write Cover Letter for
@@ -165,19 +169,45 @@ def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: in
         choices = list(real_choices)
         choices.append(questionary.Separator())
         if page > 0:
-            choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['prev']} Previous page")], value=_NAV_PREV,
-            ))
+            choices.append(
+                questionary.Choice(
+                    title=[
+                        (
+                            f"fg:{theme.BRAND_ACCENT} bold",
+                            f"{theme.ICONS['prev']} Previous page",
+                        )
+                    ],
+                    value=_NAV_PREV,
+                )
+            )
         if page < total_pages - 1:
-            choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['next']} Next page")], value=_NAV_NEXT,
-            ))
-        choices.append(questionary.Choice(
-            title=[(f"fg:{theme.SUCCESS} bold", f"{theme.ICONS['success']} Done -- confirm {len(selected)} selected")], value=_NAV_DONE,
-        ))
+            choices.append(
+                questionary.Choice(
+                    title=[
+                        (
+                            f"fg:{theme.BRAND_ACCENT} bold",
+                            f"{theme.ICONS['next']} Next page",
+                        )
+                    ],
+                    value=_NAV_NEXT,
+                )
+            )
+        choices.append(
+            questionary.Choice(
+                title=[
+                    (
+                        f"fg:{theme.SUCCESS} bold",
+                        f"{theme.ICONS['success']} Done -- confirm {len(selected)} selected",
+                    )
+                ],
+                value=_NAV_DONE,
+            )
+        )
 
         header = f"{len(selected)} selected so far -- pick this page's role(s):"
-        result = questionary.checkbox(header, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask()
+        result = questionary.checkbox(
+            header, choices=choices, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
         if result is None:
             return set()
 
@@ -202,7 +232,11 @@ def _paginated_checkbox(count: int, render_page, choices_for_page, page_size: in
 
 
 def pick_and_process(
-    pending_paths: list, process_one, action_verb: str, skip_confirm: bool = False, page_size: int = _PAGE_SIZE,
+    pending_paths: list,
+    process_one,
+    action_verb: str,
+    skip_confirm: bool = False,
+    page_size: int = _PAGE_SIZE,
 ) -> tuple:
     """
     Shared flow: confirm gate -> batch_evaluate.evaluate_all_pending() ->
@@ -237,13 +271,19 @@ def pick_and_process(
         progress_filled = min(current_page, total_pages)
         progress_bar = "█" * progress_filled + "░" * (total_pages - progress_filled)
         company_budget, title_budget = _company_title_budget(cli_art.console.width)
-        legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in theme.RECOMMENDATION_COLORS.items())
+        legend = "  ".join(
+            f"[{color}]■[/{color}] {tier}"
+            for tier, color in theme.RECOMMENDATION_COLORS.items()
+        )
         cli_art.render_picker_header(
             title=f"Page {current_page}/{total_pages} [{progress_bar}] -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
             columns=[
-                ("#", _IDX_W, "right"), ("Score", _SCORE_W, "right"),
-                ("Recommendation", _REC_W, "left"), ("Company", company_budget, "left"),
-                ("Title", title_budget, "left"), ("Posted", _POSTED_W, "right"),
+                ("#", _IDX_W, "right"),
+                ("Score", _SCORE_W, "right"),
+                ("Recommendation", _REC_W, "left"),
+                ("Company", company_budget, "left"),
+                ("Title", title_budget, "left"),
+                ("Posted", _POSTED_W, "right"),
             ],
             legend=legend,
         )
@@ -255,17 +295,36 @@ def pick_and_process(
             if r["error"]:
                 continue
             style = _RECOMMENDATION_STYLES.get(r["recommendation"], "")
-            posted = f"{r['posting_age_days']}d" if r.get("posting_age_days") is not None else "-"
+            posted = (
+                f"{r['posting_age_days']}d"
+                if r.get("posting_age_days") is not None
+                else "-"
+            )
             row = _format_row(
-                [i, f"{r['composite_score']:.2f}/5", r["recommendation"] or "", r["company_name"] or "", r["job_title"] or "", posted],
+                [
+                    i,
+                    f"{r['composite_score']:.2f}/5",
+                    r["recommendation"] or "",
+                    r["company_name"] or "",
+                    r["job_title"] or "",
+                    posted,
+                ],
                 [_IDX_W, _SCORE_W, _REC_W, company_budget, title_budget, _POSTED_W],
                 ["right", "right", "left", "left", "left", "right"],
                 ["", style, style, "", "", ""],
             )
-            choices.append(questionary.Choice(title=row, value=r["source_file"], checked=r["source_file"] in selected))
+            choices.append(
+                questionary.Choice(
+                    title=row,
+                    value=r["source_file"],
+                    checked=r["source_file"] in selected,
+                )
+            )
         return choices
 
-    selected = _paginated_checkbox(len(results), render_page, choices_for_page, page_size=page_size)
+    selected = _paginated_checkbox(
+        len(results), render_page, choices_for_page, page_size=page_size
+    )
     if not selected:
         cli_art.console.print("No jobs selected, nothing to do.")
         return (0, 0)
@@ -317,19 +376,26 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     jd_data = json.load(_f)
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 jd_data = {}
-            rows.append({
-                "path": path, "status": "Pending", "evaluation": evaluation,
-                "liveness": jd_manager.read_liveness(path),
-                "application": jd_manager.read_application_status(path),
-                "title": title, "company": company,
-                "description": jd_data.get("description", "") or "",
-                "source_platform": jd_data.get("source_platform", "") or "",
-                "source_url": jd_data.get("source_url") or jd_data.get("application_url", "") or "",
-                "company_website": jd_data.get("company_website", "") or "",
-                "skills": jd_data.get("skills") or [],
-                "research": jd_manager.read_research(path),
-                "coverage": jd_manager.read_coverage(path),
-            })
+            rows.append(
+                {
+                    "path": path,
+                    "status": "Pending",
+                    "evaluation": evaluation,
+                    "liveness": jd_manager.read_liveness(path),
+                    "application": jd_manager.read_application_status(path),
+                    "title": title,
+                    "company": company,
+                    "description": jd_data.get("description", "") or "",
+                    "source_platform": jd_data.get("source_platform", "") or "",
+                    "source_url": jd_data.get("source_url")
+                    or jd_data.get("application_url", "")
+                    or "",
+                    "company_website": jd_data.get("company_website", "") or "",
+                    "skills": jd_data.get("skills") or [],
+                    "research": jd_manager.read_research(path),
+                    "coverage": jd_manager.read_coverage(path),
+                }
+            )
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
             evaluation = jd_manager.read_evaluation(path)
@@ -341,24 +407,33 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     jd_data = json.load(_f)
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 jd_data = {}
-            rows.append({
-                "path": path, "status": "Completed", "evaluation": evaluation,
-                "liveness": jd_manager.read_liveness(path),
-                "application": jd_manager.read_application_status(path),
-                "title": title, "company": company,
-                "description": jd_data.get("description", "") or "",
-                "source_platform": jd_data.get("source_platform", "") or "",
-                "source_url": jd_data.get("source_url") or jd_data.get("application_url", "") or "",
-                "company_website": jd_data.get("company_website", "") or "",
-                "skills": jd_data.get("skills") or [],
-                "research": jd_manager.read_research(path),
-                "coverage": jd_manager.read_coverage(path),
-            })
+            rows.append(
+                {
+                    "path": path,
+                    "status": "Completed",
+                    "evaluation": evaluation,
+                    "liveness": jd_manager.read_liveness(path),
+                    "application": jd_manager.read_application_status(path),
+                    "title": title,
+                    "company": company,
+                    "description": jd_data.get("description", "") or "",
+                    "source_platform": jd_data.get("source_platform", "") or "",
+                    "source_url": jd_data.get("source_url")
+                    or jd_data.get("application_url", "")
+                    or "",
+                    "company_website": jd_data.get("company_website", "") or "",
+                    "skills": jd_data.get("skills") or [],
+                    "research": jd_manager.read_research(path),
+                    "coverage": jd_manager.read_coverage(path),
+                }
+            )
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
 
 
-def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_SIZE) -> list:
+def browse_and_select_jds(
+    statuses: list | None = None, page_size: int = _PAGE_SIZE
+) -> list:
     """The shared browse-and-act entry point: paginated blue-box table +
     checkbox (via _paginated_checkbox()) over every evaluated JD (pending
     or completed, or just one status if statuses is passed) so one or
@@ -373,32 +448,42 @@ def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_S
     rows = list_all_evaluated_jds(statuses=statuses)
     if not rows:
         if statuses == ["Pending"]:
-            hint = "Nothing to browse -- no evaluated Pending JDs.\nHint: run \"Evaluate ALL Pending Roles\" first, then they'll appear here."
+            hint = 'Nothing to browse -- no evaluated Pending JDs.\nHint: run "Evaluate ALL Pending Roles" first, then they\'ll appear here.'
         elif statuses == ["Completed"]:
             hint = "Nothing to browse -- no Completed JDs yet.\nHint: tailor a resume for a role first, then it'll appear here."
         else:
-            hint = "Nothing to browse -- no evaluated JDs yet.\nHint: run \"Evaluate ALL Pending Roles\" first, then they'll appear here."
+            hint = 'Nothing to browse -- no evaluated JDs yet.\nHint: run "Evaluate ALL Pending Roles" first, then they\'ll appear here.'
         cli_art.console.print(hint)
         return []
 
     total_pages = (len(rows) + page_size - 1) // page_size
 
     def render_page(start, end):
-        company_budget, title_budget = _company_title_budget(cli_art.console.width, extra_fixed=_STATUS_W + 2)
-        legend = "  ".join(f"[{color}]■[/{color}] {tier}" for tier, color in theme.RECOMMENDATION_COLORS.items())
+        company_budget, title_budget = _company_title_budget(
+            cli_art.console.width, extra_fixed=_STATUS_W + 2
+        )
+        legend = "  ".join(
+            f"[{color}]■[/{color}] {tier}"
+            for tier, color in theme.RECOMMENDATION_COLORS.items()
+        )
         cli_art.render_picker_header(
             title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(rows)} evaluated JD(s)",
             columns=[
-                ("#", _IDX_W, "right"), ("Score", _SCORE_W, "right"),
-                ("Recommendation", _REC_W, "left"), ("Company", company_budget, "left"),
-                ("Title", title_budget, "left"), ("Posted", _POSTED_W, "right"),
+                ("#", _IDX_W, "right"),
+                ("Score", _SCORE_W, "right"),
+                ("Recommendation", _REC_W, "left"),
+                ("Company", company_budget, "left"),
+                ("Title", title_budget, "left"),
+                ("Posted", _POSTED_W, "right"),
                 ("Status", _STATUS_W, "left"),
             ],
             legend=legend,
         )
 
     def choices_for_page(start, end, selected):
-        company_budget, title_budget = _company_title_budget(cli_art.console.width, extra_fixed=_STATUS_W + 2)
+        company_budget, title_budget = _company_title_budget(
+            cli_art.console.width, extra_fixed=_STATUS_W + 2
+        )
         choices = []
         for i, r in enumerate(rows[start:end], start=start + 1):
             evaluation = r["evaluation"]
@@ -406,64 +491,89 @@ def browse_and_select_jds(statuses: list | None = None, page_size: int = _PAGE_S
             posted = evaluation.get("posting_age_days")
             row = _format_row(
                 [
-                    i, f"{evaluation.get('composite_score', 0):.2f}/5", evaluation.get("recommendation") or "",
-                    r["company"] or "?", r["title"] or os.path.basename(r["path"]),
-                    f"{posted}d" if posted is not None else "-", r["status"],
+                    i,
+                    f"{evaluation.get('composite_score', 0):.2f}/5",
+                    evaluation.get("recommendation") or "",
+                    r["company"] or "?",
+                    r["title"] or os.path.basename(r["path"]),
+                    f"{posted}d" if posted is not None else "-",
+                    r["status"],
                 ],
-                [_IDX_W, _SCORE_W, _REC_W, company_budget, title_budget, _POSTED_W, _STATUS_W],
+                [
+                    _IDX_W,
+                    _SCORE_W,
+                    _REC_W,
+                    company_budget,
+                    title_budget,
+                    _POSTED_W,
+                    _STATUS_W,
+                ],
                 ["right", "right", "left", "left", "left", "right", "left"],
                 ["", style, style, "", "", "", ""],
             )
-            choices.append(questionary.Choice(title=row, value=r["path"], checked=r["path"] in selected))
+            choices.append(
+                questionary.Choice(
+                    title=row, value=r["path"], checked=r["path"] in selected
+                )
+            )
         return choices
 
-    selected = _paginated_checkbox(len(rows), render_page, choices_for_page, page_size=page_size)
+    selected = _paginated_checkbox(
+        len(rows), render_page, choices_for_page, page_size=page_size
+    )
     if not selected:
         return []
     return [r for r in rows if r["path"] in selected]
 
 
-def interactive_file_picker(prompt: str, start_dir: str = None, allowed_extensions: list = None) -> str:
+def interactive_file_picker(
+    prompt: str, start_dir: str = None, allowed_extensions: list = None
+) -> str:
     """A gorgeous, interactive TUI file picker that lets users navigate folders
     and pick files without tedious path-typing.
     """
     import sys
+
     if not start_dir:
         start_dir = os.path.expanduser("~/Downloads")
         if not os.path.exists(start_dir):
             start_dir = os.getcwd()
-            
+
     current_dir = os.path.abspath(start_dir)
-    
+
     while True:
         # Clear screen
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
-        
+
         cli_art.display_compact_banner("Interactive File Picker")
-        cli_art.console.print(f"✦ [{theme.BRAND}]Current Directory:[/{theme.BRAND}] {current_dir}\n")
-        
+        cli_art.console.print(
+            f"✦ [{theme.BRAND}]Current Directory:[/{theme.BRAND}] {current_dir}\n"
+        )
+
         choices = []
         # Parent directory choice
         parent_dir = os.path.dirname(current_dir)
         if parent_dir != current_dir:
             choices.append(questionary.Choice("📁 .. (Go Up)", value=".."))
-            
+
         try:
             items = sorted(os.listdir(current_dir))
         except Exception as e:
-            cli_art.console.print(f"[{theme.ERROR}]Error listing directory: {e}[/{theme.ERROR}]")
+            cli_art.console.print(
+                f"[{theme.ERROR}]Error listing directory: {e}[/{theme.ERROR}]"
+            )
             questionary.press_any_key_to_continue().ask()
             # fallback to parent directory
             current_dir = parent_dir
             continue
-            
+
         folders = []
         files = []
-        
+
         for item in items:
             if item.startswith("."):
-                continue # Skip hidden files
+                continue  # Skip hidden files
             full_path = os.path.join(current_dir, item)
             if os.path.isdir(full_path):
                 folders.append(item)
@@ -474,32 +584,31 @@ def interactive_file_picker(prompt: str, start_dir: str = None, allowed_extensio
                         files.append(item)
                 else:
                     files.append(item)
-                    
+
         # Add folders to choices
         for f in sorted(folders, key=lambda s: s.lower()):
-            choices.append(questionary.Choice(f"📁 {f}/", value=os.path.join(current_dir, f)))
-            
+            choices.append(
+                questionary.Choice(f"📁 {f}/", value=os.path.join(current_dir, f))
+            )
+
         # Add files to choices
         for f in sorted(files, key=lambda s: s.lower()):
-            choices.append(questionary.Choice(f"📄 {f}", value=os.path.join(current_dir, f)))
-            
+            choices.append(
+                questionary.Choice(f"📄 {f}", value=os.path.join(current_dir, f))
+            )
+
         choices.append(questionary.Choice("❌ [Cancel]", value="__cancel__"))
-        
+
         selected = questionary.select(
-            prompt,
-            choices=choices,
-            style=cli_art.QUESTIONARY_STYLE
+            prompt, choices=choices, style=cli_art.QUESTIONARY_STYLE
         ).ask()
-        
+
         if not selected or selected == "__cancel__":
             return ""
-            
+
         if selected == "..":
             current_dir = parent_dir
         elif os.path.isdir(selected):
             current_dir = selected
         else:
             return selected
-
-
-

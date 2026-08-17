@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import maintenance  # noqa: E402
@@ -15,7 +17,9 @@ class TestRecordAndGetLastRun(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_maintenance_log")
         os.makedirs(self.tmp_dir, exist_ok=True)
         self.log_path = os.path.join(self.tmp_dir, "maintenance_log.json")
-        self._patcher = patch("maintenance.profile_paths.maintenance_log_path", return_value=self.log_path)
+        self._patcher = patch(
+            "maintenance.profile_paths.maintenance_log_path", return_value=self.log_path
+        )
         self._patcher.start()
 
     def tearDown(self):
@@ -50,7 +54,9 @@ class TestRecordAndGetLastRun(unittest.TestCase):
         with open(self.log_path, "w", encoding="utf-8") as f:
             f.write("not valid json{{{")
         self.assertIsNone(maintenance.get_last_run("doctor"))
-        maintenance.record_run("doctor")  # should not raise, overwrites the corrupt file
+        maintenance.record_run(
+            "doctor"
+        )  # should not raise, overwrites the corrupt file
         self.assertIsNotNone(maintenance.get_last_run("doctor"))
 
 

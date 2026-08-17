@@ -5,7 +5,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import dashboard_actions  # noqa: E402
@@ -16,7 +18,13 @@ class TestLiveness(unittest.TestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.liveness.verify_jd_paths")
     def test_success_refreshes_export_and_returns_zero(self, mock_verify, mock_export):
-        mock_verify.return_value = {"active": 1, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0}
+        mock_verify.return_value = {
+            "active": 1,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "moved": 0,
+        }
         code = dashboard_actions._liveness("jds/morgan/a.json", "/tmp/jobs.json")
         mock_verify.assert_called_once_with(["jds/morgan/a.json"])
         mock_export.assert_called_once_with("/tmp/jobs.json")
@@ -24,7 +32,9 @@ class TestLiveness(unittest.TestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.liveness.verify_jd_paths")
-    def test_error_result_returns_nonzero_without_refreshing(self, mock_verify, mock_export):
+    def test_error_result_returns_nonzero_without_refreshing(
+        self, mock_verify, mock_export
+    ):
         mock_verify.return_value = {"error": True}
         code = dashboard_actions._liveness("jds/morgan/a.json", "/tmp/jobs.json")
         self.assertEqual(code, 1)
@@ -44,7 +54,9 @@ class TestTailor(unittest.TestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.orchestrator.run_pipeline")
-    def test_zero_completed_returns_nonzero_without_refreshing(self, mock_run, mock_export):
+    def test_zero_completed_returns_nonzero_without_refreshing(
+        self, mock_run, mock_export
+    ):
         mock_run.return_value = (0, 1)
         code = dashboard_actions._tailor("jds/morgan/a.json", "/tmp/jobs.json")
         self.assertEqual(code, 1)
@@ -55,8 +67,12 @@ class TestStatus(unittest.TestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.save_application_status")
-    def test_valid_status_refreshes_export_and_returns_zero(self, mock_save, mock_export):
-        code = dashboard_actions._status("jds/morgan/a.json", "Applied", "/tmp/jobs.json")
+    def test_valid_status_refreshes_export_and_returns_zero(
+        self, mock_save, mock_export
+    ):
+        code = dashboard_actions._status(
+            "jds/morgan/a.json", "Applied", "/tmp/jobs.json"
+        )
         mock_save.assert_called_once_with("jds/morgan/a.json", "Applied")
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)
@@ -64,7 +80,9 @@ class TestStatus(unittest.TestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.save_application_status")
     def test_invalid_status_rejected_without_saving(self, mock_save, mock_export):
-        code = dashboard_actions._status("jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json")
+        code = dashboard_actions._status(
+            "jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json"
+        )
         self.assertEqual(code, 1)
         mock_save.assert_not_called()
         mock_export.assert_not_called()
@@ -83,7 +101,9 @@ class TestArchive(unittest.TestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.archive_jd")
-    def test_failure_returns_nonzero_without_refreshing(self, mock_archive, mock_export):
+    def test_failure_returns_nonzero_without_refreshing(
+        self, mock_archive, mock_export
+    ):
         mock_archive.side_effect = Exception("OS Error")
         code = dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
         self.assertEqual(code, 1)
@@ -115,7 +135,9 @@ class TestUserErrorContract(unittest.TestCase):
 
     def test_invalid_status_puts_marker_on_the_last_line(self):
         err = self._capture_stderr(
-            lambda: dashboard_actions._status("jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json")
+            lambda: dashboard_actions._status(
+                "jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json"
+            )
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
         # The raw developer-facing detail is still emitted, just earlier --
@@ -148,9 +170,13 @@ class TestUserErrorContract(unittest.TestCase):
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 
     @patch("dashboard_actions.main")
-    def test_uncaught_exception_is_translated_not_leaked_as_a_traceback(self, mock_main):
+    def test_uncaught_exception_is_translated_not_leaked_as_a_traceback(
+        self, mock_main
+    ):
         mock_main.side_effect = FileNotFoundError("/gone/master.json")
-        err = self._capture_stderr(lambda: self.assertEqual(dashboard_actions._run(), 1))
+        err = self._capture_stderr(
+            lambda: self.assertEqual(dashboard_actions._run(), 1)
+        )
         # Traceback still present as detail...
         self.assertIn("Traceback", err)
         # ...but a plain sentence is what jobs.go will actually surface,

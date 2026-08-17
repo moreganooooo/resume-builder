@@ -4,32 +4,38 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
 
 
 def _pass_critique_json():
-    return json.dumps({
-        "manager_test": "PASS",
-        "believability_score": 95,
-        "hidden_gem_score": 10,
-        "hidden_gem_flag": False,
-        "hidden_gem_reason": "",
-        "weaknesses": "",
-    })
+    return json.dumps(
+        {
+            "manager_test": "PASS",
+            "believability_score": 95,
+            "hidden_gem_score": 10,
+            "hidden_gem_flag": False,
+            "hidden_gem_reason": "",
+            "weaknesses": "",
+        }
+    )
 
 
 def _fail_critique_json():
-    return json.dumps({
-        "manager_test": "FAIL",
-        "believability_score": 50,
-        "hidden_gem_score": 0,
-        "hidden_gem_flag": False,
-        "hidden_gem_reason": "",
-        "weaknesses": "too vague",
-    })
+    return json.dumps(
+        {
+            "manager_test": "FAIL",
+            "believability_score": 50,
+            "hidden_gem_score": 0,
+            "hidden_gem_flag": False,
+            "hidden_gem_reason": "",
+            "weaknesses": "too vague",
+        }
+    )
 
 
 class TestAuditResume(unittest.TestCase):
@@ -38,7 +44,11 @@ class TestAuditResume(unittest.TestCase):
         self.engine = orchestrator.ResumeEngine()
         self.bullet_tuples = [
             ("Grew revenue 20% via new outbound program.", "CompanyA", "sales"),
-            ("Led a team of 5 engineers to ship a new platform.", "CompanyB", "leadership"),
+            (
+                "Led a team of 5 engineers to ship a new platform.",
+                "CompanyB",
+                "leadership",
+            ),
         ]
         self.static_prefix = "STATIC PREFIX FOR TEST"
 
@@ -91,7 +101,9 @@ class TestAuditResume(unittest.TestCase):
 
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_bullet_with_missing_critique_data_is_not_dropped_by_sort(self, mock_generate):
+    def test_bullet_with_missing_critique_data_is_not_dropped_by_sort(
+        self, mock_generate
+    ):
         """Bug 2 regression: a bullet whose critique call fails (empty
         response, exception, or malformed JSON -> critique_data=None) must
         still appear in the final refined_bullets list after the end-of-run
@@ -99,7 +111,11 @@ class TestAuditResume(unittest.TestCase):
         rather than silently vanish because it was never added to a
         critique-only pairs list."""
         three_bullets = self.bullet_tuples + [
-            ("Cut onboarding time in half through process redesign.", "CompanyC", "ops"),
+            (
+                "Cut onboarding time in half through process redesign.",
+                "CompanyC",
+                "ops",
+            ),
         ]
         call_count = {"n": 0}
 
@@ -132,7 +148,9 @@ class TestAuditResume(unittest.TestCase):
             orchestrator._bullet_sort_key(fail_result),
         )
 
-    def test_bullet_sort_key_ranks_higher_believability_first_within_same_pass_status(self):
+    def test_bullet_sort_key_ranks_higher_believability_first_within_same_pass_status(
+        self,
+    ):
         higher = {"manager_test": "PASS", "believability_score": 90}
         lower = {"manager_test": "PASS", "believability_score": 40}
         self.assertLess(
@@ -151,7 +169,9 @@ class TestAuditResumeRewritePath(unittest.TestCase):
     @patch("orchestrator.bullet_feedback.queue_accepted_rewrite", return_value=False)
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_gemma_rewrite_gets_slim_prompt_flash_lite_gets_full(self, mock_generate, mock_queue):
+    def test_gemma_rewrite_gets_slim_prompt_flash_lite_gets_full(
+        self, mock_generate, mock_queue
+    ):
         # A FAIL critique triggers the rewrite loop. Two empty Gemma
         # responses exhaust MAX_REWRITE_PARSE_FAILURES and hand off to
         # flash-lite (mirrors rewrite_bullets.py's process_bullet()), which
@@ -160,11 +180,14 @@ class TestAuditResumeRewritePath(unittest.TestCase):
         # cap -- and (2) the model_fallback/max_output_tokens guards match
         # rewrite_bullets.py exactly.
         mock_generate.side_effect = [
-            (_fail_critique_json(), {}),                                      # critique -> FAIL
-            ("", {}),                                                         # rewrite attempt 0 (gemma) -> empty
-            ("", {}),                                                         # rewrite attempt 1 (gemma) -> empty, triggers fallback
-            (json.dumps({"rewritten_bullet": "Directed 5 initiatives."}), {}),  # rewrite attempt 2 (flash-lite)
-            (_pass_critique_json(), {}),                                      # rescore -> PASS, accepted
+            (_fail_critique_json(), {}),  # critique -> FAIL
+            ("", {}),  # rewrite attempt 0 (gemma) -> empty
+            ("", {}),  # rewrite attempt 1 (gemma) -> empty, triggers fallback
+            (
+                json.dumps({"rewritten_bullet": "Directed 5 initiatives."}),
+                {},
+            ),  # rewrite attempt 2 (flash-lite)
+            (_pass_critique_json(), {}),  # rescore -> PASS, accepted
         ]
 
         self.engine.audit_and_refine_bullets(self.bullet_tuples, self.static_prefix)
@@ -180,7 +203,10 @@ class TestAuditResumeRewritePath(unittest.TestCase):
             len(flash_call.kwargs["system_instruction"]),
         )
         self.assertFalse(gemma_call.kwargs["model_fallback"])
-        self.assertEqual(gemma_call.kwargs["max_output_tokens"], orchestrator.REWRITE_MAX_OUTPUT_TOKENS)
+        self.assertEqual(
+            gemma_call.kwargs["max_output_tokens"],
+            orchestrator.REWRITE_MAX_OUTPUT_TOKENS,
+        )
 
 
 if __name__ == "__main__":

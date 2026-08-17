@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import dashboard  # noqa: E402
@@ -41,7 +43,9 @@ class TestRun(unittest.TestCase):
     @patch("dashboard.subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
-    def test_launches_go_run_with_the_profile_data_dir(self, mock_go, mock_exists, mock_subproc, mock_list):
+    def test_launches_go_run_with_the_profile_data_dir(
+        self, mock_go, mock_exists, mock_subproc, mock_list
+    ):
         mock_subproc.return_value = MagicMock(returncode=0)
         success, message = dashboard.run("morgan")
         self.assertTrue(success)
@@ -53,7 +57,9 @@ class TestRun(unittest.TestCase):
         self.assertEqual(args[3], "-path")
         self.assertEqual(args[4], expected_data_dir)
         self.assertEqual(args[5], "-jobs-path")
-        self.assertTrue(args[6])  # a real temp path was generated; cleanup itself is TestRunCleansUpJobsExport's job
+        self.assertTrue(
+            args[6]
+        )  # a real temp path was generated; cleanup itself is TestRunCleansUpJobsExport's job
         self.assertEqual(args[7], "-python-path")
         self.assertEqual(args[8], dashboard.sys.executable)
         self.assertEqual(args[9], "-project-root")
@@ -64,7 +70,9 @@ class TestRun(unittest.TestCase):
     @patch("dashboard.subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
-    def test_returns_false_when_dashboard_process_exits_nonzero(self, mock_go, mock_exists, mock_subproc, mock_list):
+    def test_returns_false_when_dashboard_process_exits_nonzero(
+        self, mock_go, mock_exists, mock_subproc, mock_list
+    ):
         mock_subproc.return_value = MagicMock(returncode=1)
         success, message = dashboard.run("morgan")
         self.assertFalse(success)
@@ -90,8 +98,17 @@ class TestWriteJobsExport(unittest.TestCase):
 
     @patch("dashboard.picker.list_all_evaluated_jds")
     def test_writes_valid_json_matching_picker_rows(self, mock_list):
-        rows = [{"path": "jds/morgan/a.json", "status": "Pending", "title": "T", "company": "C",
-                 "evaluation": {"composite_score": 4.5}, "liveness": None, "application": None}]
+        rows = [
+            {
+                "path": "jds/morgan/a.json",
+                "status": "Pending",
+                "title": "T",
+                "company": "C",
+                "evaluation": {"composite_score": 4.5},
+                "liveness": None,
+                "application": None,
+            }
+        ]
         mock_list.return_value = rows
 
         path = dashboard._write_jobs_export()
@@ -104,7 +121,9 @@ class TestWriteJobsExport(unittest.TestCase):
 
     @patch("dashboard.profile_paths.set_active_profile")
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    def test_sets_active_profile_when_explicit_profile_given(self, mock_list, mock_set_active):
+    def test_sets_active_profile_when_explicit_profile_given(
+        self, mock_list, mock_set_active
+    ):
         path = dashboard._write_jobs_export("dominick")
         try:
             mock_set_active.assert_called_once_with("dominick")
@@ -113,7 +132,9 @@ class TestWriteJobsExport(unittest.TestCase):
 
     @patch("dashboard.profile_paths.set_active_profile")
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    def test_does_not_touch_active_profile_when_none_given(self, mock_list, mock_set_active):
+    def test_does_not_touch_active_profile_when_none_given(
+        self, mock_list, mock_set_active
+    ):
         path = dashboard._write_jobs_export()
         try:
             mock_set_active.assert_not_called()
@@ -127,7 +148,9 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
     @patch("dashboard.subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
-    def test_temp_file_removed_after_successful_run(self, mock_go, mock_exists, mock_subproc, mock_list):
+    def test_temp_file_removed_after_successful_run(
+        self, mock_go, mock_exists, mock_subproc, mock_list
+    ):
         mock_subproc.return_value = MagicMock(returncode=0)
         dashboard.run("morgan")
         jobs_path = mock_subproc.call_args[0][0][6]
@@ -141,7 +164,9 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
     @patch("dashboard.subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
-    def test_temp_file_removed_even_when_process_fails(self, mock_go, mock_exists, mock_subproc, mock_list):
+    def test_temp_file_removed_even_when_process_fails(
+        self, mock_go, mock_exists, mock_subproc, mock_list
+    ):
         mock_subproc.return_value = MagicMock(returncode=1)
         dashboard.run("morgan")
         jobs_path = mock_subproc.call_args[0][0][6]

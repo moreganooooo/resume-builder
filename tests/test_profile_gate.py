@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cli  # noqa: E402
@@ -26,7 +28,9 @@ class TestCliProfileFlag(unittest.TestCase):
     def test_profile_flag_sets_env_var_before_subcommand_runs(self):
         runner = CliRunner()
         with patch("cli.tailor.callback"):
-            runner.invoke(cli.cli, ["--profile", "morgan", "tailor", "jds/dummy_jd.txt"])
+            runner.invoke(
+                cli.cli, ["--profile", "morgan", "tailor", "jds/dummy_jd.txt"]
+            )
         self.assertEqual(os.environ.get("RESUME_PROFILE"), "morgan")
 
     def test_no_profile_flag_leaves_env_var_untouched(self):
@@ -46,7 +50,10 @@ class TestMenuProfileGate(unittest.TestCase):
         os.environ.pop("RESUME_GUEST_MODE", None)
 
     def tearDown(self):
-        for var, orig in (("RESUME_PROFILE", self._orig_profile), ("RESUME_GUEST_MODE", self._orig_guest)):
+        for var, orig in (
+            ("RESUME_PROFILE", self._orig_profile),
+            ("RESUME_GUEST_MODE", self._orig_guest),
+        ):
             if orig is None:
                 os.environ.pop(var, None)
             else:
@@ -55,8 +62,10 @@ class TestMenuProfileGate(unittest.TestCase):
     def test_ctrl_c_on_profile_prompt_returns_false_without_new_user_flow(self):
         # Regression: .ask() returns None on Ctrl-C/Esc; this used to fall
         # through uncaught into the "I'm new here" branch below.
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap") as mock_bootstrap:
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap") as mock_bootstrap,
+        ):
             mock_select.return_value.ask.return_value = None
             result = menu._confirm_active_profile()
         self.assertFalse(result)
@@ -67,8 +76,10 @@ class TestMenuProfileGate(unittest.TestCase):
     def test_ctrl_c_on_new_user_prompt_returns_false_without_guest_mode(self):
         # Regression: cancelling the second prompt used to fall through
         # uncaught into "Look around the main menu first" (guest mode).
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap") as mock_bootstrap:
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap") as mock_bootstrap,
+        ):
             mock_select.return_value.ask.side_effect = ["I'm new here", None]
             result = menu._confirm_active_profile()
         self.assertFalse(result)
@@ -89,9 +100,14 @@ class TestMenuProfileGate(unittest.TestCase):
         self.assertIsNone(os.environ.get("RESUME_GUEST_MODE"))
 
     def test_im_new_here_then_start_setup_calls_bootstrap(self):
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap") as mock_bootstrap:
-            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap") as mock_bootstrap,
+        ):
+            mock_select.return_value.ask.side_effect = [
+                "I'm new here",
+                "Start new user setup now",
+            ]
             menu._confirm_active_profile()
         mock_bootstrap.assert_called_once()
 
@@ -110,27 +126,46 @@ class TestMenuProfileGate(unittest.TestCase):
             seen_guest_mode.append(os.environ.get("RESUME_GUEST_MODE"))
             return True
 
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap", side_effect=_record_and_return):
-            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap", side_effect=_record_and_return),
+        ):
+            mock_select.return_value.ask.side_effect = [
+                "I'm new here",
+                "Start new user setup now",
+            ]
             menu._confirm_active_profile()
         self.assertEqual(seen_guest_mode, ["1"])
 
-    def test_im_new_here_then_start_setup_clears_guest_mode_after_real_profile_created(self):
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap") as mock_bootstrap:
+    def test_im_new_here_then_start_setup_clears_guest_mode_after_real_profile_created(
+        self,
+    ):
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap") as mock_bootstrap,
+        ):
+
             def _create_profile(*args, **kwargs):
                 os.environ["RESUME_PROFILE"] = "dominick"
+
             mock_bootstrap.side_effect = _create_profile
-            mock_select.return_value.ask.side_effect = ["I'm new here", "Start new user setup now"]
+            mock_select.return_value.ask.side_effect = [
+                "I'm new here",
+                "Start new user setup now",
+            ]
             menu._confirm_active_profile()
         self.assertEqual(os.environ.get("RESUME_PROFILE"), "dominick")
         self.assertIsNone(os.environ.get("RESUME_GUEST_MODE"))
 
     def test_im_new_here_then_look_around_sets_guest_mode(self):
-        with patch("questionary.select") as mock_select, \
-             patch("menu._handle_bootstrap") as mock_bootstrap:
-            mock_select.return_value.ask.side_effect = ["I'm new here", "Look around the main menu first"]
+        with (
+            patch("questionary.select") as mock_select,
+            patch("menu._handle_bootstrap") as mock_bootstrap,
+        ):
+            mock_select.return_value.ask.side_effect = [
+                "I'm new here",
+                "Look around the main menu first",
+            ]
             menu._confirm_active_profile()
         mock_bootstrap.assert_not_called()
         self.assertEqual(os.environ.get("RESUME_GUEST_MODE"), "1")
@@ -150,17 +185,21 @@ class TestGuestModeBlocksRealActions(unittest.TestCase):
             os.environ["RESUME_GUEST_MODE"] = self._orig_guest
 
     def test_non_bootstrap_choice_is_blocked_in_guest_mode(self):
-        with patch("menu.questionary.select") as mock_select, \
-             patch("menu._run_with_chain") as mock_run, \
-             patch("menu._confirm_active_profile"):
+        with (
+            patch("menu.questionary.select") as mock_select,
+            patch("menu._run_with_chain") as mock_run,
+            patch("menu._confirm_active_profile"),
+        ):
             mock_select.return_value.ask.side_effect = ["evaluate_all", "exit"]
             menu.run_interactive_menu()
         mock_run.assert_not_called()
 
     def test_bootstrap_choice_is_allowed_in_guest_mode(self):
-        with patch("menu.questionary.select") as mock_select, \
-             patch("menu._run_with_chain") as mock_run, \
-             patch("menu._confirm_active_profile"):
+        with (
+            patch("menu.questionary.select") as mock_select,
+            patch("menu._run_with_chain") as mock_run,
+            patch("menu._confirm_active_profile"),
+        ):
             mock_select.return_value.ask.side_effect = ["bootstrap", "exit"]
             menu.run_interactive_menu()
         mock_run.assert_called_once_with("bootstrap", unittest.mock.ANY)
@@ -169,10 +208,12 @@ class TestGuestModeBlocksRealActions(unittest.TestCase):
 class TestRunInteractiveMenuExitsOnProfileGateCancel(unittest.TestCase):
 
     def test_ctrl_c_at_profile_gate_exits_before_the_main_menu_loop(self):
-        with patch("menu._confirm_active_profile", return_value=False), \
-             patch("menu._confirm_icon_set") as mock_icon_set, \
-             patch("menu.questionary.select") as mock_select, \
-             patch("menu.cli_art.display_exit_footer") as mock_footer:
+        with (
+            patch("menu._confirm_active_profile", return_value=False),
+            patch("menu._confirm_icon_set") as mock_icon_set,
+            patch("menu.questionary.select") as mock_select,
+            patch("menu.cli_art.display_exit_footer") as mock_footer,
+        ):
             menu.run_interactive_menu()
         mock_footer.assert_called_once()
         mock_icon_set.assert_not_called()

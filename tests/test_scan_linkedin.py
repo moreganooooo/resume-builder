@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import scan_linkedin  # noqa: E402
@@ -27,22 +29,32 @@ class TestFetchPersonalizedExtrasPacing(unittest.TestCase):
     def test_sleeps_after_a_successful_request(self, mock_session_cls, mock_sleep):
         mock_session_cls.return_value.get.return_value = self._mock_response()
 
-        scan_linkedin._fetch_personalized_extras("https://linkedin.com/jobs/view/1", "cookie-value")
+        scan_linkedin._fetch_personalized_extras(
+            "https://linkedin.com/jobs/view/1", "cookie-value"
+        )
 
-        mock_sleep.assert_called_once_with(scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS)
+        mock_sleep.assert_called_once_with(
+            scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS
+        )
 
     @patch("scan_linkedin.time.sleep")
     @patch("scan_linkedin.requests.Session")
     def test_sleeps_even_when_the_request_raises(self, mock_session_cls, mock_sleep):
         mock_session_cls.return_value.get.side_effect = Exception("timeout")
 
-        scan_linkedin._fetch_personalized_extras("https://linkedin.com/jobs/view/1", "cookie-value")
+        scan_linkedin._fetch_personalized_extras(
+            "https://linkedin.com/jobs/view/1", "cookie-value"
+        )
 
-        mock_sleep.assert_called_once_with(scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS)
+        mock_sleep.assert_called_once_with(
+            scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS
+        )
 
     @patch("scan_linkedin.time.sleep")
     @patch("scan_linkedin.requests.Session")
-    def test_does_not_sleep_or_hit_the_network_without_a_job_url(self, mock_session_cls, mock_sleep):
+    def test_does_not_sleep_or_hit_the_network_without_a_job_url(
+        self, mock_session_cls, mock_sleep
+    ):
         scan_linkedin._fetch_personalized_extras("", "cookie-value")
 
         mock_session_cls.assert_not_called()
@@ -50,7 +62,9 @@ class TestFetchPersonalizedExtrasPacing(unittest.TestCase):
 
     @patch("scan_linkedin.time.sleep")
     @patch("scan_linkedin.requests.Session")
-    def test_does_not_sleep_or_hit_the_network_without_a_cookie(self, mock_session_cls, mock_sleep):
+    def test_does_not_sleep_or_hit_the_network_without_a_cookie(
+        self, mock_session_cls, mock_sleep
+    ):
         scan_linkedin._fetch_personalized_extras("https://linkedin.com/jobs/view/1", "")
 
         mock_session_cls.assert_not_called()
@@ -59,20 +73,34 @@ class TestFetchPersonalizedExtrasPacing(unittest.TestCase):
     @patch("scan_linkedin.time.sleep")
     @patch("scan_linkedin.requests.Session")
     def test_still_sleeps_on_a_non_200_response(self, mock_session_cls, mock_sleep):
-        mock_session_cls.return_value.get.return_value = self._mock_response(status_code=999)
+        mock_session_cls.return_value.get.return_value = self._mock_response(
+            status_code=999
+        )
 
-        scan_linkedin._fetch_personalized_extras("https://linkedin.com/jobs/view/1", "cookie-value")
+        scan_linkedin._fetch_personalized_extras(
+            "https://linkedin.com/jobs/view/1", "cookie-value"
+        )
 
-        mock_sleep.assert_called_once_with(scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS)
+        mock_sleep.assert_called_once_with(
+            scan_linkedin._PERSONALIZED_EXTRAS_DELAY_SECONDS
+        )
 
 
 class TestFetchLinkedinJobsActivity(unittest.TestCase):
 
-    @patch("scan_linkedin._fetch_personalized_extras", return_value={"is_top_applicant": False, "backup_description": None})
+    @patch(
+        "scan_linkedin._fetch_personalized_extras",
+        return_value={"is_top_applicant": False, "backup_description": None},
+    )
     @patch("scan_linkedin.get_li_at_cookie", return_value="fake-li-at")
-    @patch("scan_linkedin.profile_paths.profile_yaml", return_value={"target_roles": {"primary": ["Data Engineer"]}})
+    @patch(
+        "scan_linkedin.profile_paths.profile_yaml",
+        return_value={"target_roles": {"primary": ["Data Engineer"]}},
+    )
     @patch("scan_linkedin.LinkedinScraper")
-    def test_steps_through_activity_on_each_result(self, mock_scraper_cls, mock_profile, mock_cookie, mock_extras):
+    def test_steps_through_activity_on_each_result(
+        self, mock_scraper_cls, mock_profile, mock_cookie, mock_extras
+    ):
         mock_scraper = mock_scraper_cls.return_value
         registered = {}
 
@@ -82,10 +110,22 @@ class TestFetchLinkedinJobsActivity(unittest.TestCase):
         mock_scraper.on.side_effect = fake_on
 
         def fake_run(queries):
-            data = MagicMock(title="Data Engineer", company="Acme", link="https://linkedin.com/jobs/view/1",
-                              apply_link=None, place="Remote", date=None, date_text=None,
-                              employment_type=None, seniority_level=None, description="desc",
-                              description_html=None, skills=None, job_id="1", company_link=None)
+            data = MagicMock(
+                title="Data Engineer",
+                company="Acme",
+                link="https://linkedin.com/jobs/view/1",
+                apply_link=None,
+                place="Remote",
+                date=None,
+                date_text=None,
+                employment_type=None,
+                seniority_level=None,
+                description="desc",
+                description_html=None,
+                skills=None,
+                job_id="1",
+                company_link=None,
+            )
             registered[scan_linkedin.Events.DATA](data)
 
         mock_scraper.run.side_effect = fake_run
@@ -95,9 +135,10 @@ class TestFetchLinkedinJobsActivity(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         activity.step.assert_called_with(
-            "success", "LinkedIn",
+            "success",
+            "LinkedIn",
             '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
-            preserve_markup=True
+            preserve_markup=True,
         )
 
 

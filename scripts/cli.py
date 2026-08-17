@@ -43,7 +43,10 @@ def _read_version() -> str:
     PackageNotFoundError. Also avoids tomllib, which isn't available on
     the 3.10 floor this project still supports."""
     import re
-    pyproject_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyproject.toml")
+
+    pyproject_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyproject.toml"
+    )
     try:
         with open(pyproject_path, "r", encoding="utf-8") as f:
             match = re.search(r'^version\s*=\s*"([^"]+)"', f.read(), re.MULTILINE)
@@ -79,13 +82,21 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
 
 @click.group(invoke_without_command=True)
 @click.version_option(version=_read_version(), prog_name="resume-builder")
-@click.option("--profile", default=None, help="Override RESUME_PROFILE for this invocation only.")
-@click.option("--verbose", is_flag=True, default=False, help="Show debug-level log output (e.g. best-effort SQLite sync failures) that's normally suppressed.")
+@click.option(
+    "--profile", default=None, help="Override RESUME_PROFILE for this invocation only."
+)
+@click.option(
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Show debug-level log output (e.g. best-effort SQLite sync failures) that's normally suppressed.",
+)
 @click.pass_context
 def cli(ctx, profile, verbose):
     """resume-builder: tailor and render resumes per job description."""
     if verbose:
         import logging
+
         logging.basicConfig(level=logging.DEBUG)
     if profile:
         profile_paths.set_active_profile(profile)
@@ -109,7 +120,9 @@ def tailor(jd_file, master, output):
     """Tailor + render a resume for a single JD file."""
     cli_art.display_banner(f"Tailoring: {jd_file}")
     completed, failed = orchestrator.run_pipeline(
-        jd_path=jd_file, master_resume_path=master, output_filename=output,
+        jd_path=jd_file,
+        master_resume_path=master,
+        output_filename=output,
     )
     if failed and not completed:
         raise SystemExit(1)
@@ -118,8 +131,15 @@ def tailor(jd_file, master, output):
 
 @cli.command(name="run")
 @click.option("--master", default=None, help="Path to master resume JSON (optional)")
-@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to tailor")
-@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick")
+@click.option(
+    "--pick",
+    is_flag=True,
+    default=False,
+    help="Interactively select which pending JD(s) to tailor",
+)
+@click.option(
+    "--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick"
+)
 def run_batch(master, pick, yes):
     """Batch-process every pending JD in jds/."""
     if not pick:
@@ -132,30 +152,53 @@ def run_batch(master, pick, yes):
         completed = 0
         failed = 0
         with cli_art.new_progress() as progress:
-            task = progress.add_task(f"[bold {theme.BRAND}]Processing JDs...", total=len(pending))
+            task = progress.add_task(
+                f"[bold {theme.BRAND}]Processing JDs...", total=len(pending)
+            )
             for i, jd_path in enumerate(pending, 1):
                 company, title = jd_manager.extract_job_meta(jd_path)
-                progress.update(task, description=f"[{i}/{len(pending)}] {company} — {title}")
-                c, f = orchestrator.run_pipeline(jd_path=jd_path, master_resume_path=master)
+                progress.update(
+                    task, description=f"[{i}/{len(pending)}] {company} — {title}"
+                )
+                c, f = orchestrator.run_pipeline(
+                    jd_path=jd_path, master_resume_path=master
+                )
                 completed += c
                 failed += f
                 progress.advance(task)
 
-        cli_art.display_success(f"Batch complete: {completed} tailored, {failed} failed")
+        cli_art.display_success(
+            f"Batch complete: {completed} tailored, {failed} failed"
+        )
         return
 
     def _process_one(path):
-        completed, failed = orchestrator.run_pipeline(jd_path=path, master_resume_path=master)
+        completed, failed = orchestrator.run_pipeline(
+            jd_path=path, master_resume_path=master
+        )
         return completed > 0
 
-    picker.pick_and_process(jd_manager.get_pending_jds(), _process_one, "tailor", skip_confirm=yes)
+    picker.pick_and_process(
+        jd_manager.get_pending_jds(), _process_one, "tailor", skip_confirm=yes
+    )
 
 
 @cli.command()
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
-@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to generate a cover letter for")
-@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick")
-@click.option("--referral", default=None, help="Referral contact for this specific application (e.g. \"Jane Doe, former coworker\") -- named in the letter's opening paragraph. Not valid with --pick, since one referral can't apply to multiple JDs.")
+@click.option(
+    "--pick",
+    is_flag=True,
+    default=False,
+    help="Interactively select which pending JD(s) to generate a cover letter for",
+)
+@click.option(
+    "--yes", is_flag=True, default=False, help="Skip the confirmation prompt for --pick"
+)
+@click.option(
+    "--referral",
+    default=None,
+    help="Referral contact for this specific application (e.g. \"Jane Doe, former coworker\") -- named in the letter's opening paragraph. Not valid with --pick, since one referral can't apply to multiple JDs.",
+)
 def coverletter(jd_file, pick, yes, referral):
     """Generate + render a cover letter for a single JD file."""
     if pick and jd_file:
@@ -165,7 +208,9 @@ def coverletter(jd_file, pick, yes, referral):
         cli_art.display_error("Pass a JD file, or use --pick to select interactively.")
         raise SystemExit(1)
     if pick and referral:
-        cli_art.display_error("--referral isn't valid with --pick -- one referral can't apply to multiple JDs.")
+        cli_art.display_error(
+            "--referral isn't valid with --pick -- one referral can't apply to multiple JDs."
+        )
         raise SystemExit(1)
 
     engine = orchestrator.ResumeEngine()
@@ -174,12 +219,16 @@ def coverletter(jd_file, pick, yes, referral):
         jd_manager.save_referral(jd_file, referral)
 
     if pick:
+
         def _process_one(path):
             cli_art.display_banner(f"Cover letter: {path}")
             return bool(engine.build_tailored_coverletter(path))
 
         picker.pick_and_process(
-            jd_manager.get_pending_jds(), _process_one, "generate a cover letter for", skip_confirm=yes,
+            jd_manager.get_pending_jds(),
+            _process_one,
+            "generate a cover letter for",
+            skip_confirm=yes,
         )
         return
 
@@ -193,14 +242,44 @@ def coverletter(jd_file, pick, yes, referral):
 @cli.command(name="package")
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
 @click.option("--master", default=None, help="Path to master resume JSON (optional)")
-@click.option("--output", default=None, help="Output JSON filename (single-JD mode only)")
-@click.option("--referral", default=None, help="Referral contact for this specific application (e.g. \"Jane Doe, VP Product\")")
-@click.option("--force", is_flag=True, default=False, help="Proceed even if fit score recommends 'Skip'")
-@click.option("--skip-liveness", is_flag=True, default=False, help="Skip the posting URL liveness check")
-@click.option("--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check")
-@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to package")
-@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt for --pick or batch mode")
-def package_cmd(jd_file, master, output, referral, force, skip_liveness, skip_fit, pick, yes):
+@click.option(
+    "--output", default=None, help="Output JSON filename (single-JD mode only)"
+)
+@click.option(
+    "--referral",
+    default=None,
+    help='Referral contact for this specific application (e.g. "Jane Doe, VP Product")',
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Proceed even if fit score recommends 'Skip'",
+)
+@click.option(
+    "--skip-liveness",
+    is_flag=True,
+    default=False,
+    help="Skip the posting URL liveness check",
+)
+@click.option(
+    "--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check"
+)
+@click.option(
+    "--pick",
+    is_flag=True,
+    default=False,
+    help="Interactively select which pending JD(s) to package",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    default=False,
+    help="Skip confirmation prompt for --pick or batch mode",
+)
+def package_cmd(
+    jd_file, master, output, referral, force, skip_liveness, skip_fit, pick, yes
+):
     """Build a complete application package (Resume + Cover Letter + DOCX/PDF) with liveness and fit gates."""
     if pick and jd_file:
         cli_art.display_error("Pass a JD file OR --pick, not both.")
@@ -209,7 +288,9 @@ def package_cmd(jd_file, master, output, referral, force, skip_liveness, skip_fi
         cli_art.display_error("--referral requires a specific JD file.")
         raise SystemExit(1)
     if pick and referral:
-        cli_art.display_error("--referral isn't valid with --pick -- one referral can't apply to multiple JDs.")
+        cli_art.display_error(
+            "--referral isn't valid with --pick -- one referral can't apply to multiple JDs."
+        )
         raise SystemExit(1)
 
     if pick:
@@ -231,7 +312,10 @@ def package_cmd(jd_file, master, output, referral, force, skip_liveness, skip_fi
             return False
 
         picker.pick_and_process(
-            jd_manager.get_pending_jds(), _process_one, "build a full application package for", skip_confirm=yes,
+            jd_manager.get_pending_jds(),
+            _process_one,
+            "build a full application package for",
+            skip_confirm=yes,
         )
         return
 
@@ -275,12 +359,33 @@ def package_cmd(jd_file, master, output, referral, force, skip_liveness, skip_fi
 @cli.command(name="build")
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
 @click.option("--master", default=None, help="Path to master resume JSON (optional)")
-@click.option("--output", default=None, help="Output JSON filename (single-JD mode only)")
-@click.option("--referral", default=None, help="Referral contact for this specific application")
-@click.option("--force", is_flag=True, default=False, help="Proceed even if fit score recommends 'Skip'")
-@click.option("--skip-liveness", is_flag=True, default=False, help="Skip the posting URL liveness check")
-@click.option("--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check")
-@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to package")
+@click.option(
+    "--output", default=None, help="Output JSON filename (single-JD mode only)"
+)
+@click.option(
+    "--referral", default=None, help="Referral contact for this specific application"
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Proceed even if fit score recommends 'Skip'",
+)
+@click.option(
+    "--skip-liveness",
+    is_flag=True,
+    default=False,
+    help="Skip the posting URL liveness check",
+)
+@click.option(
+    "--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check"
+)
+@click.option(
+    "--pick",
+    is_flag=True,
+    default=False,
+    help="Interactively select which pending JD(s) to package",
+)
 @click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @click.pass_context
 def build_cmd(ctx, **kwargs):
@@ -290,9 +395,18 @@ def build_cmd(ctx, **kwargs):
 
 @cli.command()
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
-@click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for batch mode")
-@click.option("--refresh", is_flag=True, default=False,
-              help="Re-evaluate every pending JD in batch mode, even ones already scored")
+@click.option(
+    "--yes",
+    is_flag=True,
+    default=False,
+    help="Skip the confirmation prompt for batch mode",
+)
+@click.option(
+    "--refresh",
+    is_flag=True,
+    default=False,
+    help="Re-evaluate every pending JD in batch mode, even ones already scored",
+)
 def evaluate(jd_file, yes, refresh):
     """Score a JD's fit (go/no-go) without building a resume. Omit JD_FILE to evaluate every pending JD."""
     if jd_file is None:
@@ -320,7 +434,10 @@ def evaluate(jd_file, yes, refresh):
             # Print plain text so tests that assert on the raw substring
             # (e.g. "1 already-evaluated JD(s) will be skipped") match.
             from rich.text import Text
-            msg = Text(f"{len(already_evaluated)} already-evaluated JD(s) will be skipped")
+
+            msg = Text(
+                f"{len(already_evaluated)} already-evaluated JD(s) will be skipped"
+            )
             cli_art.console.print(msg)
 
         cli_art.display_banner(f"Evaluating {len(to_evaluate)} pending JD(s)")
@@ -340,23 +457,43 @@ def evaluate(jd_file, yes, refresh):
 
     if result.get("recommendation") == "Skip":
         archived_path = jd_manager.archive_jd(jd_file)
-        cli_art.console.print(f"[dim]Archived to {archived_path} (Skip recommendation).[/dim]")
+        cli_art.console.print(
+            f"[dim]Archived to {archived_path} (Skip recommendation).[/dim]"
+        )
 
-    cli_art.console.print(f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}")
-    cli_art.console.print(f"[bold]Composite score:[/bold] {result['composite_score']}/5")
-    cli_art.console.print(f"[bold]Fit:[/bold] {result.get('fit_score')}/5  "
-                           f"[bold]Interview odds:[/bold] {result.get('interview_odds_score')}/5  "
-                           f"[bold]Practical pursue:[/bold] {result.get('practical_pursue_score')}/5")
-    cli_art.console.print(f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n")
+    cli_art.console.print(
+        f"\n[bold]Archetype:[/bold] {result.get('archetype', 'unknown')}"
+    )
+    cli_art.console.print(
+        f"[bold]Composite score:[/bold] {result['composite_score']}/5"
+    )
+    cli_art.console.print(
+        f"[bold]Fit:[/bold] {result.get('fit_score')}/5  "
+        f"[bold]Interview odds:[/bold] {result.get('interview_odds_score')}/5  "
+        f"[bold]Practical pursue:[/bold] {result.get('practical_pursue_score')}/5"
+    )
+    cli_art.console.print(
+        f"[bold]Recommendation:[/bold] {result.get('recommendation', 'unknown')}\n"
+    )
 
     for label, scores, weights in (
         ("Fit", result.get("fit_subscores", {}), orchestrator.FIT_SUBSCORE_WEIGHTS),
-        ("Interview odds", result.get("interview_odds_subscores", {}), orchestrator.INTERVIEW_ODDS_WEIGHTS),
-        ("Practical pursue", result.get("practical_pursue_subscores", {}), orchestrator.PRACTICAL_PURSUE_WEIGHTS),
+        (
+            "Interview odds",
+            result.get("interview_odds_subscores", {}),
+            orchestrator.INTERVIEW_ODDS_WEIGHTS,
+        ),
+        (
+            "Practical pursue",
+            result.get("practical_pursue_subscores", {}),
+            orchestrator.PRACTICAL_PURSUE_WEIGHTS,
+        ),
     ):
         cli_art.console.print(f"  [bold]{label}[/bold]")
         for dim, weight in weights.items():
-            cli_art.console.print(f"    {dim:<26} {scores.get(dim, '-')}/5  (weight {weight:.0%})")
+            cli_art.console.print(
+                f"    {dim:<26} {scores.get(dim, '-')}/5  (weight {weight:.0%})"
+            )
 
     blockers = result.get("hard_blockers") or []
     if blockers:
@@ -369,12 +506,21 @@ def evaluate(jd_file, yes, refresh):
 
 
 @cli.command(name="scan")
-@click.option("--source", "sources", multiple=True, default=None,
-              help="Source to scan (jobright, linkedin, boards -- public job boards like RemoteOK/TheMuse, "
-                   "ats -- direct-to-ATS like Greenhouse/Ashby/Lever). Repeatable. Default: all configured sources.")
-@click.option("--no-verify", is_flag=True, default=False,
-              help="Skip the real-browser liveness check on newly-found postings (faster, but a posting an "
-                   "API/RSS feed still lists as open despite already being taken down may slip through).")
+@click.option(
+    "--source",
+    "sources",
+    multiple=True,
+    default=None,
+    help="Source to scan (jobright, linkedin, boards -- public job boards like RemoteOK/TheMuse, "
+    "ats -- direct-to-ATS like Greenhouse/Ashby/Lever). Repeatable. Default: all configured sources.",
+)
+@click.option(
+    "--no-verify",
+    is_flag=True,
+    default=False,
+    help="Skip the real-browser liveness check on newly-found postings (faster, but a posting an "
+    "API/RSS feed still lists as open despite already being taken down may slip through).",
+)
 def scan_cmd(sources, no_verify):
     """Scan configured sources and write new postings into jds/."""
     cli_art.display_banner("Scanning for new postings")
@@ -383,8 +529,12 @@ def scan_cmd(sources, no_verify):
 
 
 @cli.command(name="liveness")
-@click.option("--refresh", is_flag=True, default=False,
-              help="Re-check every pending JD's liveness, even ones checked within the recency window")
+@click.option(
+    "--refresh",
+    is_flag=True,
+    default=False,
+    help="Re-check every pending JD's liveness, even ones checked within the recency window",
+)
 def liveness_cmd(refresh):
     """Check every pending JD's source_url, moving expired ones to jds/expired/."""
     cli_art.display_banner("Checking posting liveness")
@@ -425,7 +575,12 @@ def help_cmd():
 
 
 @cli.command(name="doctor")
-@click.option("--skip-tests", is_flag=True, default=False, help="Skip the test-suite run (just the fast checks).")
+@click.option(
+    "--skip-tests",
+    is_flag=True,
+    default=False,
+    help="Skip the test-suite run (just the fast checks).",
+)
 def doctor_cmd(skip_tests):
     """Checks dependencies, assets, and config, then runs the test suite -- a plain-English summary with a suggested fix per problem found."""
     cli_art.display_banner("Running doctor checks")
@@ -497,11 +652,17 @@ def quickstart_cmd():
     remaining = [c for c in checks if not c["passed"]]
     if remaining:
         cli_art.console.print()
-        cli_art.console.print(f"[bold {theme.WARNING}]Still needs attention:[/bold {theme.WARNING}]")
+        cli_art.console.print(
+            f"[bold {theme.WARNING}]Still needs attention:[/bold {theme.WARNING}]"
+        )
         for c in remaining:
-            cli_art.console.print(f"  • [bold]{c['name']}[/bold]: {c['fix'] or c['detail']}")
+            cli_art.console.print(
+                f"  • [bold]{c['name']}[/bold]: {c['fix'] or c['detail']}"
+            )
     else:
-        cli_art.display_success("Everything checks out -- try `resume sample` to build a test resume, or `resume run` for a real one.")
+        cli_art.display_success(
+            "Everything checks out -- try `resume sample` to build a test resume, or `resume run` for a real one."
+        )
 
     maintenance.record_run("doctor")
 

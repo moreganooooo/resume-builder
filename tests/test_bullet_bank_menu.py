@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 import questionary
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bullet_bank_menu  # noqa: E402
@@ -33,7 +35,11 @@ class TestStageStatusMtime(unittest.TestCase):
 
     def test_missing_output_is_never_run(self):
         input_path = self._touch("input.csv")
-        stage = {"inputs": [input_path], "output": os.path.join(self.tmp_dir, "missing.csv"), "status_mode": "mtime"}
+        stage = {
+            "inputs": [input_path],
+            "output": os.path.join(self.tmp_dir, "missing.csv"),
+            "status_mode": "mtime",
+        }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
 
@@ -56,7 +62,8 @@ class TestStageStatusMtime(unittest.TestCase):
         output_path = self._touch("output.csv")
         stage = {
             "inputs": [os.path.join(self.tmp_dir, "does_not_exist.csv")],
-            "output": output_path, "status_mode": "mtime",
+            "output": output_path,
+            "status_mode": "mtime",
         }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Up to date")
@@ -80,37 +87,63 @@ class TestStageStatusColumns(unittest.TestCase):
             writer.writerows(rows)
 
     def test_missing_file_is_never_run(self):
-        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        stage = {
+            "output": self.csv_path,
+            "status_mode": "columns",
+            "status_columns": ["hidden_gem_score"],
+        }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
 
     def test_missing_column_entirely_is_stale(self):
         self._write_csv([{"Bullet Point": "x"}], ["Bullet Point"])
-        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        stage = {
+            "output": self.csv_path,
+            "status_mode": "columns",
+            "status_columns": ["hidden_gem_score"],
+        }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Stale")
 
     def test_blank_value_in_column_is_stale(self):
         self._write_csv(
-            [{"Bullet Point": "a", "hidden_gem_score": "90"}, {"Bullet Point": "b", "hidden_gem_score": ""}],
+            [
+                {"Bullet Point": "a", "hidden_gem_score": "90"},
+                {"Bullet Point": "b", "hidden_gem_score": ""},
+            ],
             ["Bullet Point", "hidden_gem_score"],
         )
-        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        stage = {
+            "output": self.csv_path,
+            "status_mode": "columns",
+            "status_columns": ["hidden_gem_score"],
+        }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Stale")
 
     def test_fully_populated_column_is_up_to_date(self):
         self._write_csv(
-            [{"Bullet Point": "a", "hidden_gem_score": "90"}, {"Bullet Point": "b", "hidden_gem_score": "10"}],
+            [
+                {"Bullet Point": "a", "hidden_gem_score": "90"},
+                {"Bullet Point": "b", "hidden_gem_score": "10"},
+            ],
             ["Bullet Point", "hidden_gem_score"],
         )
-        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        stage = {
+            "output": self.csv_path,
+            "status_mode": "columns",
+            "status_columns": ["hidden_gem_score"],
+        }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Up to date")
 
     def test_empty_csv_is_never_run(self):
         self._write_csv([], ["Bullet Point", "hidden_gem_score"])
-        stage = {"output": self.csv_path, "status_mode": "columns", "status_columns": ["hidden_gem_score"]}
+        stage = {
+            "output": self.csv_path,
+            "status_mode": "columns",
+            "status_columns": ["hidden_gem_score"],
+        }
         status, _ = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
 
@@ -128,6 +161,7 @@ class TestStageStatusChecksCheckpoint(unittest.TestCase):
 
     def _write_checkpoint(self, next_index, total):
         import numpy as np
+
         np.savez(
             self.checkpoint_path,
             vectors=np.zeros((next_index, 4), dtype=np.float32),
@@ -139,7 +173,8 @@ class TestStageStatusChecksCheckpoint(unittest.TestCase):
         self._write_checkpoint(next_index=1035, total=1431)
         stage = {
             "output": os.path.join(self.tmp_dir, "missing.csv"),
-            "inputs": [], "status_mode": "mtime",
+            "inputs": [],
+            "status_mode": "mtime",
             "checkpoint": self.checkpoint_path,
         }
         status, detail = bullet_bank_menu._stage_status(stage)
@@ -149,7 +184,8 @@ class TestStageStatusChecksCheckpoint(unittest.TestCase):
     def test_missing_output_without_checkpoint_key_is_unaffected(self):
         stage = {
             "output": os.path.join(self.tmp_dir, "missing.csv"),
-            "inputs": [], "status_mode": "mtime",
+            "inputs": [],
+            "status_mode": "mtime",
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
@@ -158,7 +194,8 @@ class TestStageStatusChecksCheckpoint(unittest.TestCase):
     def test_missing_output_with_checkpoint_key_but_no_file_is_unaffected(self):
         stage = {
             "output": os.path.join(self.tmp_dir, "missing.csv"),
-            "inputs": [], "status_mode": "mtime",
+            "inputs": [],
+            "status_mode": "mtime",
             "checkpoint": os.path.join(self.tmp_dir, "no_such_checkpoint.npz"),
         }
         status, detail = bullet_bank_menu._stage_status(stage)
@@ -176,24 +213,30 @@ class TestStageStatusProgress(unittest.TestCase):
 
     def test_missing_output_when_done_equals_total_is_never_run(self):
         stage = {
-            "status_mode": "progress", "progress_fn": lambda: (10, 10),
-            "output": "/does/not/exist.csv", "inputs": [],
+            "status_mode": "progress",
+            "progress_fn": lambda: (10, 10),
+            "output": "/does/not/exist.csv",
+            "inputs": [],
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
 
     def test_none_progress_falls_through_unaffected(self):
         stage = {
-            "status_mode": "progress", "progress_fn": lambda: None,
-            "output": "/does/not/exist.csv", "inputs": [],
+            "status_mode": "progress",
+            "progress_fn": lambda: None,
+            "output": "/does/not/exist.csv",
+            "inputs": [],
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
 
     def test_zero_total_falls_through_unaffected(self):
         stage = {
-            "status_mode": "progress", "progress_fn": lambda: (0, 0),
-            "output": "/does/not/exist.csv", "inputs": [],
+            "status_mode": "progress",
+            "progress_fn": lambda: (0, 0),
+            "output": "/does/not/exist.csv",
+            "inputs": [],
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Never run")
@@ -231,8 +274,10 @@ class TestStageStatusProgressCompleteWithNewerInput(unittest.TestCase):
         output_path = self._touch("output.csv", mtime_offset=0)
         input_path = self._touch("input.csv", mtime_offset=10)  # newer than output
         stage = {
-            "status_mode": "progress", "progress_fn": lambda: (10, 10),
-            "output": output_path, "inputs": [input_path],
+            "status_mode": "progress",
+            "progress_fn": lambda: (10, 10),
+            "output": output_path,
+            "inputs": [input_path],
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Up to date")
@@ -242,8 +287,10 @@ class TestStageStatusProgressCompleteWithNewerInput(unittest.TestCase):
         output_path = self._touch("output.csv", mtime_offset=0)
         input_path = self._touch("input.csv", mtime_offset=10)
         stage = {
-            "status_mode": "progress", "progress_fn": lambda: (0, 0),
-            "output": output_path, "inputs": [input_path],
+            "status_mode": "progress",
+            "progress_fn": lambda: (0, 0),
+            "output": output_path,
+            "inputs": [input_path],
         }
         status, detail = bullet_bank_menu._stage_status(stage)
         self.assertEqual(status, "Up to date")
@@ -268,13 +315,25 @@ class TestAuditProgress(unittest.TestCase):
             writer.writerows(rows)
 
     def test_missing_raw_csv_returns_none(self):
-        with patch.object(bullet_bank_menu, "RAW_CSV", os.path.join(self.tmp_dir, "missing.csv")):
+        with patch.object(
+            bullet_bank_menu, "RAW_CSV", os.path.join(self.tmp_dir, "missing.csv")
+        ):
             self.assertIsNone(bullet_bank_menu._audit_progress())
 
     def test_no_output_yet_is_zero_done(self):
-        self._write_csv(self.raw_path, [{"Bullet Point": "a"}, {"Bullet Point": "b"}], ["Bullet Point"])
-        with patch.object(bullet_bank_menu, "RAW_CSV", self.raw_path), \
-             patch.object(bullet_bank_menu, "AUDITED_CSV", os.path.join(self.tmp_dir, "missing.csv")):
+        self._write_csv(
+            self.raw_path,
+            [{"Bullet Point": "a"}, {"Bullet Point": "b"}],
+            ["Bullet Point"],
+        )
+        with (
+            patch.object(bullet_bank_menu, "RAW_CSV", self.raw_path),
+            patch.object(
+                bullet_bank_menu,
+                "AUDITED_CSV",
+                os.path.join(self.tmp_dir, "missing.csv"),
+            ),
+        ):
             self.assertEqual(bullet_bank_menu._audit_progress(), (0, 2))
 
     def test_partial_output_counts_scored_rows(self):
@@ -286,8 +345,10 @@ class TestAuditProgress(unittest.TestCase):
             ["Bullet Point"],
         )
         self._write_csv(self.audited_path, [{"Bullet Point": "a"}], ["Bullet Point"])
-        with patch.object(bullet_bank_menu, "RAW_CSV", self.raw_path), \
-             patch.object(bullet_bank_menu, "AUDITED_CSV", self.audited_path):
+        with (
+            patch.object(bullet_bank_menu, "RAW_CSV", self.raw_path),
+            patch.object(bullet_bank_menu, "AUDITED_CSV", self.audited_path),
+        ):
             self.assertEqual(bullet_bank_menu._audit_progress(), (1, 3))
 
 
@@ -311,18 +372,42 @@ class TestRewriteProgress(unittest.TestCase):
             writer.writerows(rows)
 
     def test_missing_cluster_map_returns_none(self):
-        with patch.object(bullet_bank_menu, "CLUSTER_MAP_CSV", os.path.join(self.tmp_dir, "missing.csv")):
+        with patch.object(
+            bullet_bank_menu,
+            "CLUSTER_MAP_CSV",
+            os.path.join(self.tmp_dir, "missing.csv"),
+        ):
             self.assertIsNone(bullet_bank_menu._rewrite_progress())
 
     def test_partial_completion_counts_done_bullets(self):
         self._write_csv(
             self.cluster_map_path,
             [
-                {"Bullet Point": "a", "is_representative": "True", "next_action": "REWRITE"},
-                {"Bullet Point": "b", "is_representative": "True", "next_action": "REWRITE"},
-                {"Bullet Point": "c", "is_representative": "True", "next_action": "REVIEW"},
-                {"Bullet Point": "d", "is_representative": "True", "next_action": "KEEP"},
-                {"Bullet Point": "e", "is_representative": "False", "next_action": "REWRITE"},
+                {
+                    "Bullet Point": "a",
+                    "is_representative": "True",
+                    "next_action": "REWRITE",
+                },
+                {
+                    "Bullet Point": "b",
+                    "is_representative": "True",
+                    "next_action": "REWRITE",
+                },
+                {
+                    "Bullet Point": "c",
+                    "is_representative": "True",
+                    "next_action": "REVIEW",
+                },
+                {
+                    "Bullet Point": "d",
+                    "is_representative": "True",
+                    "next_action": "KEEP",
+                },
+                {
+                    "Bullet Point": "e",
+                    "is_representative": "False",
+                    "next_action": "REWRITE",
+                },
             ],
             ["Bullet Point", "is_representative", "next_action"],
         )
@@ -332,13 +417,23 @@ class TestRewriteProgress(unittest.TestCase):
         # total must be 3, not 5.
         self._write_csv(
             self.cluster_map_out_path,
-            [{"Bullet Point": "a", "rewrite_status": "KEEP", "final_bullet": "Rewritten a"}],
+            [
+                {
+                    "Bullet Point": "a",
+                    "rewrite_status": "KEEP",
+                    "final_bullet": "Rewritten a",
+                }
+            ],
             ["Bullet Point", "rewrite_status", "final_bullet"],
         )
         self._write_csv(self.keepers_path, [{"Bullet Point": "c"}], ["Bullet Point"])
-        with patch.object(bullet_bank_menu, "CLUSTER_MAP_CSV", self.cluster_map_path), \
-             patch.object(bullet_bank_menu, "CLUSTER_MAP_OUT_CSV", self.cluster_map_out_path), \
-             patch.object(bullet_bank_menu, "KEEPERS_CSV", self.keepers_path):
+        with (
+            patch.object(bullet_bank_menu, "CLUSTER_MAP_CSV", self.cluster_map_path),
+            patch.object(
+                bullet_bank_menu, "CLUSTER_MAP_OUT_CSV", self.cluster_map_out_path
+            ),
+            patch.object(bullet_bank_menu, "KEEPERS_CSV", self.keepers_path),
+        ):
             self.assertEqual(bullet_bank_menu._rewrite_progress(), (2, 3))
 
     def test_no_target_rows_returns_zero_zero(self):
@@ -347,9 +442,19 @@ class TestRewriteProgress(unittest.TestCase):
             [{"Bullet Point": "a", "is_representative": "True", "next_action": "KEEP"}],
             ["Bullet Point", "is_representative", "next_action"],
         )
-        with patch.object(bullet_bank_menu, "CLUSTER_MAP_CSV", self.cluster_map_path), \
-             patch.object(bullet_bank_menu, "CLUSTER_MAP_OUT_CSV", os.path.join(self.tmp_dir, "missing.csv")), \
-             patch.object(bullet_bank_menu, "KEEPERS_CSV", os.path.join(self.tmp_dir, "missing2.csv")):
+        with (
+            patch.object(bullet_bank_menu, "CLUSTER_MAP_CSV", self.cluster_map_path),
+            patch.object(
+                bullet_bank_menu,
+                "CLUSTER_MAP_OUT_CSV",
+                os.path.join(self.tmp_dir, "missing.csv"),
+            ),
+            patch.object(
+                bullet_bank_menu,
+                "KEEPERS_CSV",
+                os.path.join(self.tmp_dir, "missing2.csv"),
+            ),
+        ):
             self.assertEqual(bullet_bank_menu._rewrite_progress(), (0, 0))
 
 
@@ -371,21 +476,32 @@ class TestAuditKeepersProgress(unittest.TestCase):
             writer.writerows(rows)
 
     def test_missing_file_returns_none(self):
-        with patch.object(bullet_bank_menu, "KEEPERS_AUDITED_CSV", os.path.join(self.tmp_dir, "missing.csv")):
+        with patch.object(
+            bullet_bank_menu,
+            "KEEPERS_AUDITED_CSV",
+            os.path.join(self.tmp_dir, "missing.csv"),
+        ):
             self.assertIsNone(bullet_bank_menu._audit_keepers_progress())
 
     def test_blank_audit_status_counts_as_pending(self):
         self._write_csv(
             self.keepers_audited_path,
-            [{"Bullet Point": "a", "audit_status": "CLEAN"}, {"Bullet Point": "b", "audit_status": ""}],
+            [
+                {"Bullet Point": "a", "audit_status": "CLEAN"},
+                {"Bullet Point": "b", "audit_status": ""},
+            ],
             ["Bullet Point", "audit_status"],
         )
-        with patch.object(bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path):
+        with patch.object(
+            bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path
+        ):
             self.assertEqual(bullet_bank_menu._audit_keepers_progress(), (1, 2))
 
     def test_empty_csv_returns_zero_zero(self):
         self._write_csv(self.keepers_audited_path, [], ["Bullet Point", "audit_status"])
-        with patch.object(bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path):
+        with patch.object(
+            bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path
+        ):
             self.assertEqual(bullet_bank_menu._audit_keepers_progress(), (0, 0))
 
 
@@ -403,6 +519,7 @@ class TestEmbedProgress(unittest.TestCase):
 
     def _write_checkpoint(self, next_index):
         import numpy as np
+
         np.savez(self.checkpoint_path, next_index=np.array(next_index))
 
     def _write_csv(self, path, rows, fieldnames):
@@ -412,29 +529,51 @@ class TestEmbedProgress(unittest.TestCase):
             writer.writerows(rows)
 
     def test_no_checkpoint_returns_none(self):
-        with patch.object(bullet_bank_menu, "EMBED_CHECKPOINT_PATH", os.path.join(self.tmp_dir, "missing.npz")):
+        with patch.object(
+            bullet_bank_menu,
+            "EMBED_CHECKPOINT_PATH",
+            os.path.join(self.tmp_dir, "missing.npz"),
+        ):
             self.assertIsNone(bullet_bank_menu._embed_progress())
 
     def test_checkpoint_with_keepers_audited_reports_progress(self):
         self._write_checkpoint(next_index=40)
         self._write_csv(
-            self.keepers_audited_path, [{"Bullet Point": str(i)} for i in range(100)], ["Bullet Point"],
+            self.keepers_audited_path,
+            [{"Bullet Point": str(i)} for i in range(100)],
+            ["Bullet Point"],
         )
-        with patch.object(bullet_bank_menu, "EMBED_CHECKPOINT_PATH", self.checkpoint_path), \
-             patch.object(bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path):
+        with (
+            patch.object(
+                bullet_bank_menu, "EMBED_CHECKPOINT_PATH", self.checkpoint_path
+            ),
+            patch.object(
+                bullet_bank_menu, "KEEPERS_AUDITED_CSV", self.keepers_audited_path
+            ),
+        ):
             self.assertEqual(bullet_bank_menu._embed_progress(), (40, 100))
 
     def test_checkpoint_without_keepers_audited_uses_done_as_total(self):
         self._write_checkpoint(next_index=40)
-        with patch.object(bullet_bank_menu, "EMBED_CHECKPOINT_PATH", self.checkpoint_path), \
-             patch.object(bullet_bank_menu, "KEEPERS_AUDITED_CSV", os.path.join(self.tmp_dir, "missing.csv")):
+        with (
+            patch.object(
+                bullet_bank_menu, "EMBED_CHECKPOINT_PATH", self.checkpoint_path
+            ),
+            patch.object(
+                bullet_bank_menu,
+                "KEEPERS_AUDITED_CSV",
+                os.path.join(self.tmp_dir, "missing.csv"),
+            ),
+        ):
             self.assertEqual(bullet_bank_menu._embed_progress(), (40, 40))
 
 
 class TestClusterStageHasCheckpointKey(unittest.TestCase):
 
     def test_cluster_stage_has_checkpoint_key(self):
-        cluster_stage = next(s for s in bullet_bank_menu.STAGES if s["key"] == "cluster")
+        cluster_stage = next(
+            s for s in bullet_bank_menu.STAGES if s["key"] == "cluster"
+        )
         self.assertIn("checkpoint", cluster_stage)
         self.assertTrue(cluster_stage["checkpoint"].endswith("_cluster.checkpoint.npz"))
 
@@ -442,20 +581,27 @@ class TestClusterStageHasCheckpointKey(unittest.TestCase):
 class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
 
     def test_six_stages_in_pipeline_order(self):
-        self.assertEqual([s["key"] for s in bullet_bank_menu.STAGES],
-                          ["audit", "cluster", "rewrite", "audit_keepers", "score_gems", "embed"])
-        self.assertEqual([s["number"] for s in bullet_bank_menu.STAGES], [1, 2, 3, 4, 5, 6])
+        self.assertEqual(
+            [s["key"] for s in bullet_bank_menu.STAGES],
+            ["audit", "cluster", "rewrite", "audit_keepers", "score_gems", "embed"],
+        )
+        self.assertEqual(
+            [s["number"] for s in bullet_bank_menu.STAGES], [1, 2, 3, 4, 5, 6]
+        )
 
     def test_all_stages_cost_api(self):
         self.assertTrue(all(s["api_cost"] for s in bullet_bank_menu.STAGES))
 
     def test_three_maintenance_scripts(self):
         self.assertEqual(
-            [m["key"] for m in bullet_bank_menu.MAINTENANCE], ["triage", "retire", "auto_rewrite"],
+            [m["key"] for m in bullet_bank_menu.MAINTENANCE],
+            ["triage", "retire", "auto_rewrite"],
         )
 
     def test_auto_rewrite_costs_api_and_passes_the_flag(self):
-        auto_rewrite = next(m for m in bullet_bank_menu.MAINTENANCE if m["key"] == "auto_rewrite")
+        auto_rewrite = next(
+            m for m in bullet_bank_menu.MAINTENANCE if m["key"] == "auto_rewrite"
+        )
         self.assertTrue(auto_rewrite["api_cost"])
         self.assertEqual(auto_rewrite["args"], ["--auto-rewrite"])
         self.assertEqual(auto_rewrite["script"], "audit_keepers.py")
@@ -475,7 +621,11 @@ class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
 class TestBuildChoicesOrdering(unittest.TestCase):
 
     def _choices_only(self):
-        return [c for c in bullet_bank_menu._build_choices() if isinstance(c, questionary.Choice)]
+        return [
+            c
+            for c in bullet_bank_menu._build_choices()
+            if isinstance(c, questionary.Choice)
+        ]
 
     def _rendered_text(self, choice):
         if isinstance(choice.title, list):
@@ -501,7 +651,9 @@ class TestBuildChoicesOrdering(unittest.TestCase):
 
     def test_ongoing_maintenance_section_has_its_own_labeled_separator(self):
         separators = [
-            c.line for c in bullet_bank_menu._build_choices() if isinstance(c, questionary.Separator)
+            c.line
+            for c in bullet_bank_menu._build_choices()
+            if isinstance(c, questionary.Separator)
         ]
         self.assertTrue(any(s and "Ongoing Maintenance" in s for s in separators))
 
@@ -540,12 +692,18 @@ class TestMaintenanceStatus(unittest.TestCase):
 
     def test_triage_missing_file_is_empty(self):
         entry = {"key": "triage", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing to triage")
+        self.assertEqual(
+            bullet_bank_menu._maintenance_status(entry), "empty -- nothing to triage"
+        )
 
     def test_triage_reports_row_count(self):
-        self._write_csv([{"Bullet Point": "a"}, {"Bullet Point": "b"}], ["Bullet Point"])
+        self._write_csv(
+            [{"Bullet Point": "a"}, {"Bullet Point": "b"}], ["Bullet Point"]
+        )
         entry = {"key": "triage", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 row(s) waiting")
+        self.assertEqual(
+            bullet_bank_menu._maintenance_status(entry), "2 row(s) waiting"
+        )
 
     def test_retire_missing_file_is_none_pending(self):
         entry = {"key": "retire", "watched_file": self.csv_path}
@@ -553,11 +711,18 @@ class TestMaintenanceStatus(unittest.TestCase):
 
     def test_retire_counts_only_non_representative_rows(self):
         self._write_csv(
-            [{"is_representative": "True"}, {"is_representative": "False"}, {"is_representative": "False"}],
+            [
+                {"is_representative": "True"},
+                {"is_representative": "False"},
+                {"is_representative": "False"},
+            ],
             ["is_representative"],
         )
         entry = {"key": "retire", "watched_file": self.csv_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 bullet(s) pending retirement")
+        self.assertEqual(
+            bullet_bank_menu._maintenance_status(entry),
+            "2 bullet(s) pending retirement",
+        )
 
     def test_retire_none_pending_when_all_representative(self):
         self._write_csv([{"is_representative": "True"}], ["is_representative"])
@@ -567,7 +732,9 @@ class TestMaintenanceStatus(unittest.TestCase):
     def test_auto_rewrite_missing_file_is_empty(self):
         with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
             entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+            self.assertEqual(
+                bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued"
+            )
 
     def test_auto_rewrite_reports_live_manual_and_needs_rewrite_count(self):
         # Regression: this used to read audit-rewrite-queue.csv's row count
@@ -587,7 +754,10 @@ class TestMaintenanceStatus(unittest.TestCase):
         )
         with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
             entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "2 bullet(s) queued for auto-rewrite")
+            self.assertEqual(
+                bullet_bank_menu._maintenance_status(entry),
+                "2 bullet(s) queued for auto-rewrite",
+            )
 
     def test_auto_rewrite_all_clean_is_empty(self):
         self._write_csv(
@@ -596,13 +766,17 @@ class TestMaintenanceStatus(unittest.TestCase):
         )
         with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
             entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+            self.assertEqual(
+                bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued"
+            )
 
     def test_auto_rewrite_empty_csv_is_empty(self):
         self._write_csv([], ["Bullet Point", "audit_status"])
         with patch("bullet_bank_menu.KEEPERS_AUDITED_CSV", self.csv_path):
             entry = {"key": "auto_rewrite", "watched_file": self.csv_path}
-            self.assertEqual(bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued")
+            self.assertEqual(
+                bullet_bank_menu._maintenance_status(entry), "empty -- nothing queued"
+            )
 
 
 class TestHandleChoice(unittest.TestCase):
@@ -616,7 +790,9 @@ class TestHandleChoice(unittest.TestCase):
     @patch("bullet_bank_menu.cli_art.display_error")
     @patch("bullet_bank_menu.subprocess.run")
     @patch("bullet_bank_menu._confirm", return_value=True)
-    def test_confirmed_api_stage_runs_subprocess(self, mock_confirm, mock_run, mock_error):
+    def test_confirmed_api_stage_runs_subprocess(
+        self, mock_confirm, mock_run, mock_error
+    ):
         mock_run.return_value.returncode = 0
         bullet_bank_menu._handle_choice("audit")
         mock_run.assert_called_once()
@@ -633,7 +809,9 @@ class TestHandleChoice(unittest.TestCase):
     @patch("bullet_bank_menu.cli_art.display_error")
     @patch("bullet_bank_menu.subprocess.run")
     @patch("bullet_bank_menu._confirm")
-    def test_maintenance_entry_skips_confirmation(self, mock_confirm, mock_run, mock_error):
+    def test_maintenance_entry_skips_confirmation(
+        self, mock_confirm, mock_run, mock_error
+    ):
         mock_run.return_value.returncode = 0
         bullet_bank_menu._handle_choice("triage")
         mock_confirm.assert_not_called()
@@ -642,7 +820,9 @@ class TestHandleChoice(unittest.TestCase):
     @patch("bullet_bank_menu.cli_art.display_error")
     @patch("bullet_bank_menu.subprocess.run")
     @patch("bullet_bank_menu._confirm", return_value=True)
-    def test_auto_rewrite_passes_the_flag_to_the_subprocess(self, mock_confirm, mock_run, mock_error):
+    def test_auto_rewrite_passes_the_flag_to_the_subprocess(
+        self, mock_confirm, mock_run, mock_error
+    ):
         mock_run.return_value.returncode = 0
         bullet_bank_menu._handle_choice("auto_rewrite")
         called_args = mock_run.call_args[0][0]
@@ -651,11 +831,15 @@ class TestHandleChoice(unittest.TestCase):
     @patch("bullet_bank_menu.cli_art.display_error")
     @patch("bullet_bank_menu.subprocess.run")
     @patch("bullet_bank_menu._confirm", return_value=True)
-    def test_entry_without_args_passes_no_extra_argv(self, mock_confirm, mock_run, mock_error):
+    def test_entry_without_args_passes_no_extra_argv(
+        self, mock_confirm, mock_run, mock_error
+    ):
         mock_run.return_value.returncode = 0
         bullet_bank_menu._handle_choice("audit")
         called_args = mock_run.call_args[0][0]
-        self.assertEqual(len(called_args), 2)  # [sys.executable, script_path], no extra flags
+        self.assertEqual(
+            len(called_args), 2
+        )  # [sys.executable, script_path], no extra flags
 
 
 class TestRunBulletBankMenu(unittest.TestCase):
@@ -670,7 +854,9 @@ class TestRunBulletBankMenu(unittest.TestCase):
 
     @patch("bullet_bank_menu.cli_art.render_bullet_bank_status")
     @patch("bullet_bank_menu.questionary.select")
-    def test_cancelled_prompt_returns_without_handling_a_choice(self, mock_select, mock_render):
+    def test_cancelled_prompt_returns_without_handling_a_choice(
+        self, mock_select, mock_render
+    ):
         mock_select.return_value.ask.return_value = None
         with patch("bullet_bank_menu._handle_choice") as mock_handle:
             bullet_bank_menu.run_bullet_bank_menu()

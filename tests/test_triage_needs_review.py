@@ -4,7 +4,9 @@ import sys
 import tempfile
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import triage_needs_review  # noqa: E402
@@ -26,11 +28,19 @@ class TriageTestCase(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def _write_needs_review(self, rows):
-        fieldnames = ["Bullet Point", "Role / Company", "Tags", "manager_test",
-                      "believability_score", "rewrite_attempts", "rewrite_status"]
+        fieldnames = [
+            "Bullet Point",
+            "Role / Company",
+            "Tags",
+            "manager_test",
+            "believability_score",
+            "rewrite_attempts",
+            "rewrite_status",
+        ]
         with open(self.needs_review, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -41,11 +51,22 @@ class TriageTestCase(unittest.TestCase):
     # 2-column stand-in is precisely why the column-shift bug shipped -- it
     # can't diverge from KEEP_FIELDS, so it could never reproduce a divergence.
     REAL_KEEPERS_HEADER = [
-        "Bullet Point", "Role / Company", "Tags",
-        "accuracy_score", "believability_score", "clarity_score",
-        "ats_value", "manager_test", "weaknesses",
-        "source", "rewrite_attempts", "rewrite_reasoning",
-        "context_gaps", "rewrite_date", "source_cluster_id", "audit_status",
+        "Bullet Point",
+        "Role / Company",
+        "Tags",
+        "accuracy_score",
+        "believability_score",
+        "clarity_score",
+        "ats_value",
+        "manager_test",
+        "weaknesses",
+        "source",
+        "rewrite_attempts",
+        "rewrite_reasoning",
+        "context_gaps",
+        "rewrite_date",
+        "source_cluster_id",
+        "audit_status",
     ]
 
     def _write_existing_keepers(self, bullets, header=None):
@@ -62,9 +83,15 @@ class TriageTestCase(unittest.TestCase):
             return list(csv.DictReader(f))
 
     def _keep_row(self, bullet, company="Acme"):
-        return {"Bullet Point": bullet, "Role / Company": company, "Tags": "[content]",
-                "manager_test": "PASS", "believability_score": "90",
-                "rewrite_attempts": "0", "rewrite_status": ""}
+        return {
+            "Bullet Point": bullet,
+            "Role / Company": company,
+            "Tags": "[content]",
+            "manager_test": "PASS",
+            "believability_score": "90",
+            "rewrite_attempts": "0",
+            "rewrite_status": "",
+        }
 
 
 class TestDuplicateSkipping(TriageTestCase):
@@ -77,7 +104,9 @@ class TestDuplicateSkipping(TriageTestCase):
 
     def test_bullet_already_in_keepers_is_not_reappended(self):
         self._write_existing_keepers(["Built a complete brand identity from scratch"])
-        self._write_needs_review([self._keep_row("Built a complete brand identity from scratch")])
+        self._write_needs_review(
+            [self._keep_row("Built a complete brand identity from scratch")]
+        )
 
         triage_needs_review.main()
 
@@ -87,10 +116,12 @@ class TestDuplicateSkipping(TriageTestCase):
         self.assertFalse(os.path.exists(self.needs_review))
 
     def test_two_identical_rows_in_the_same_batch_only_add_one(self):
-        self._write_needs_review([
-            self._keep_row("A brand new achievement."),
-            self._keep_row("A brand new achievement."),
-        ])
+        self._write_needs_review(
+            [
+                self._keep_row("A brand new achievement."),
+                self._keep_row("A brand new achievement."),
+            ]
+        )
 
         triage_needs_review.main()
 
@@ -106,7 +137,9 @@ class TestDuplicateSkipping(TriageTestCase):
         rows = self._read_keepers()
         self.assertEqual(len(rows), 2)
         bullets = {r["Bullet Point"] for r in rows}
-        self.assertEqual(bullets, {"An existing bullet.", "A genuinely different bullet."})
+        self.assertEqual(
+            bullets, {"An existing bullet.", "A genuinely different bullet."}
+        )
 
     def test_no_existing_keepers_file_is_not_treated_as_duplicate(self):
         # First-ever triage run for a profile: bullet-bank-keepers.csv
@@ -132,6 +165,7 @@ class TestHeaderAwareAppend(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def _write_header(self, header, rows=()):
@@ -148,8 +182,14 @@ class TestHeaderAwareAppend(unittest.TestCase):
         self._write_header(TriageTestCase.REAL_KEEPERS_HEADER)
         triage_needs_review.append_rows(
             self.path,
-            [{"Bullet Point": "A bullet.", "Role / Company": "Acme",
-              "accuracy_score": "77", "rewrite_status": "KEEPER"}],
+            [
+                {
+                    "Bullet Point": "A bullet.",
+                    "Role / Company": "Acme",
+                    "accuracy_score": "77",
+                    "rewrite_status": "KEEPER",
+                }
+            ],
             triage_needs_review.KEEP_FIELDS,
         )
         row = self._read()[0]
@@ -163,8 +203,14 @@ class TestHeaderAwareAppend(unittest.TestCase):
         self._write_header(TriageTestCase.REAL_KEEPERS_HEADER)
         triage_needs_review.append_rows(
             self.path,
-            [{"Bullet Point": "B.", "Role / Company": "Acme",
-              "hidden_gem_score": "9", "weaknesses": "none"}],
+            [
+                {
+                    "Bullet Point": "B.",
+                    "Role / Company": "Acme",
+                    "hidden_gem_score": "9",
+                    "weaknesses": "none",
+                }
+            ],
             triage_needs_review.KEEP_FIELDS,
         )
         row = self._read()[0]
@@ -192,7 +238,13 @@ class TestHeaderAwareAppend(unittest.TestCase):
     def test_existing_rows_are_preserved(self):
         self._write_header(
             TriageTestCase.REAL_KEEPERS_HEADER,
-            [{"Bullet Point": "Original.", "Role / Company": "Acme", "source": "manual"}],
+            [
+                {
+                    "Bullet Point": "Original.",
+                    "Role / Company": "Acme",
+                    "source": "manual",
+                }
+            ],
         )
         triage_needs_review.append_rows(
             self.path,

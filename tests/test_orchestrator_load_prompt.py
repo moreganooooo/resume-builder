@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -26,7 +28,9 @@ class TestLoadPromptFailsLoudly(unittest.TestCase):
 
     def test_load_yaml_raises_instead_of_silent_empty_dict(self):
         with self.assertRaises(FileNotFoundError):
-            self.engine.load_yaml(self.engine.rules_dir, "this_file_does_not_exist.yaml")
+            self.engine.load_yaml(
+                self.engine.rules_dir, "this_file_does_not_exist.yaml"
+            )
 
     def test_load_yaml_still_loads_a_real_file(self):
         data = self.engine.load_yaml(self.engine.rules_dir, "style_rules.yaml")

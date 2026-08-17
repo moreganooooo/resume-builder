@@ -15,7 +15,9 @@ def _load(filename):
 class TestSpecificityYamlIsEducationOnly(unittest.TestCase):
 
     def test_competencies_score_file_no_longer_exists(self):
-        self.assertFalse(os.path.exists(os.path.join(SCORING_DIR, "competencies_score.yaml")))
+        self.assertFalse(
+            os.path.exists(os.path.join(SCORING_DIR, "competencies_score.yaml"))
+        )
 
     def test_specificity_yaml_has_no_project_criteria(self):
         data = _load("specificity.yaml")
@@ -31,7 +33,9 @@ class TestSpecificityYamlIsEducationOnly(unittest.TestCase):
         self.assertNotIn("named_system_or_stack", data.get("bonuses", {}))
 
     def test_education_score_file_no_longer_exists(self):
-        self.assertFalse(os.path.exists(os.path.join(SCORING_DIR, "education_score.yaml")))
+        self.assertFalse(
+            os.path.exists(os.path.join(SCORING_DIR, "education_score.yaml"))
+        )
 
 
 class TestFlagsBlocksParseAsLists(unittest.TestCase):
@@ -58,7 +62,9 @@ class TestFlagsBlocksParseAsLists(unittest.TestCase):
             for flag in flags:
                 if not isinstance(flag, str) or not flag.strip() or " " in flag.strip():
                     offenders.append(f"{filename}: bad entry {flag!r}")
-        self.assertEqual(offenders, [], f"flags blocks that don't parse as a flag list: {offenders}")
+        self.assertEqual(
+            offenders, [], f"flags blocks that don't parse as a flag list: {offenders}"
+        )
 
     def test_the_two_live_rubrics_expose_their_real_flag_vocabulary(self):
         # These two are what orchestrator.py actually attaches to the critique
