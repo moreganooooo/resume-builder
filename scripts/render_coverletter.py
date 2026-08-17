@@ -14,8 +14,8 @@ import json
 import os
 from html import escape
 
-import profile_paths
 import cli_art
+import profile_paths
 import theme
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))

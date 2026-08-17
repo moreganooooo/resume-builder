@@ -9,7 +9,6 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import bullet_feedback  # noqa: E402
 
-
 PASSING_CRITIQUE = {
     "accuracy_score": 95, "believability_score": 90, "clarity_score": 92, "ats_value": 88,
     "manager_test": "PASS", "weaknesses": "None.",

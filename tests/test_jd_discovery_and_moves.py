@@ -19,10 +19,10 @@ from unittest.mock import patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-import jd_manager  # noqa: E402
-import stale_sweep  # noqa: E402
-import profile_paths  # noqa: E402
 import db  # noqa: E402
+import jd_manager  # noqa: E402
+import profile_paths  # noqa: E402
+import stale_sweep  # noqa: E402
 
 
 def _write_jd(path: str, **fields) -> str:

@@ -2,10 +2,11 @@ import json
 import os
 import shutil
 import sys
-import numpy as np
-import pandas as pd
 import unittest
 from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pandas as pd
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)

@@ -23,9 +23,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 SAMPLE_JD_PATH = os.path.join(PROJECT_ROOT, "fixtures", "sample_jd.txt")
 
+import cli_art
 import jd_manager
 import orchestrator
-import cli_art
 import theme
 
 

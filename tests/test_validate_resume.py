@@ -820,8 +820,8 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
         kb_dir() is now actually used by patching it to a fixture
         directory for a *different* profile and confirming that fixture's
         verified_tools.json is what gets read, not morgan's real one."""
-        import os
         import json
+        import os
         import tempfile
         from unittest.mock import patch
 

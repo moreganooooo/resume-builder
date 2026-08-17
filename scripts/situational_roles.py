@@ -18,9 +18,8 @@ Company" column exactly.
 import os
 import re
 
-import yaml
-
 import profile_paths
+import yaml
 
 
 def load_situational_roles(profile: str = None) -> dict:

@@ -1,8 +1,8 @@
 import os
 import sys
 import unittest
-from urllib.parse import urlparse
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)

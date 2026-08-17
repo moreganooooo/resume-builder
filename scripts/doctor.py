@@ -284,8 +284,9 @@ def check_kb_allowlist() -> dict:
     conflict-copy naming, never ingested by the builder (again because
     KB_ALLOWLIST is explicit), but a sign of an unresolved multi-computer
     sync collision worth a human's attention."""
-    import orchestrator
     import time
+
+    import orchestrator
 
     kb_dir = profile_paths.kb_dir()
     missing = [f for f in orchestrator.KB_ALLOWLIST if not os.path.exists(os.path.join(kb_dir, f))]

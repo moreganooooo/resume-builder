@@ -22,7 +22,6 @@ import re
 
 import requests
 from bs4 import BeautifulSoup
-
 from gemini_client import GeminiClient
 
 CANDIDATE_PATHS = ["/about", "/about-us", "/mission", "/values", "/culture", "/team", "/careers", "/jobs"]

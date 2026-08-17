@@ -43,13 +43,18 @@ SCREENSHOT_METRICS_PATH = os.path.join(KB_DIR, "extracted-screenshot-metrics.csv
 RECRUITER_PATTERNS_PATH = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 CV_DRAFT_CHECKPOINT_PATH = os.path.join(KB_DIR, "bootstrap", "cv_draft_checkpoint.json")
 
-import pandas as pd
-
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import cli_art  # noqa: E402
+import pandas as pd
 import theme  # noqa: E402
-from rewrite_bullets import RulesBundle, KnowledgeBase, build_system_prompts, process_bullet, RULES_DIR  # noqa: E402
+from rewrite_bullets import (  # noqa: E402
+    RULES_DIR,
+    KnowledgeBase,
+    RulesBundle,
+    build_system_prompts,
+    process_bullet,
+)
 
 
 def _load_checkpoint() -> dict:

@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 from typing import Any, Dict, List, Optional
+
 import profile_paths
 
 

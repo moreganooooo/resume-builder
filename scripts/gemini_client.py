@@ -13,12 +13,11 @@ import random
 import re
 import time
 
-import requests
-from dotenv import load_dotenv
-
-import profile_paths
 import cli_art
+import profile_paths
+import requests
 import theme
+from dotenv import load_dotenv
 
 # Resolved via profile_paths.env_path() -- each profile carries its own
 # .env (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING), not one shared project-

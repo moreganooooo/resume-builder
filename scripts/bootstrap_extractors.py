@@ -64,9 +64,9 @@ def _extract_pptx_text(path: str) -> str:
 
 
 def _extract_odt_text(path: str) -> str:
-    from odf.opendocument import load
-    from odf import text as odf_text
     from odf import teletype
+    from odf import text as odf_text
+    from odf.opendocument import load
     doc = load(path)
     paragraphs = doc.getElementsByType(odf_text.P)
     return "\n".join(teletype.extractText(p) for p in paragraphs)
@@ -111,8 +111,8 @@ from pydantic import BaseModel, Field
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from gemini_client import GeminiClient  # noqa: E402
 import cli_art
+from gemini_client import GeminiClient  # noqa: E402
 
 EXTRACTION_MODEL = "gemini-3.1-flash-lite"
 UPLOAD_MODEL = "gemma-4-31b-it"
