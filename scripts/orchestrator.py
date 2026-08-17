@@ -36,6 +36,8 @@ load_dotenv(profile_paths.env_path(), override=True)
 
 from render_html import render_html
 from render_coverletter import render_coverletter
+from render_coverletter_docx import render_coverletter_docx
+from render_resume_docx import render_resume_docx
 import normalize_resume
 import validate_resume
 import validate_pdf_text
@@ -1166,6 +1168,7 @@ class ResumeEngine:
         self.output_json_dir = os.path.join(profile_paths.output_dir(), "json")
         self.output_html_dir = os.path.join(profile_paths.output_dir(), "html")
         self.output_pdf_dir  = os.path.join(profile_paths.output_dir(), "pdf")
+        self.output_docx_dir = os.path.join(profile_paths.output_dir(), "docx")
         self.jds_dir         = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
@@ -2856,6 +2859,13 @@ class ResumeEngine:
             return {}
         cli_art.print_subprocess_output(pdf_result.stdout)
 
+        docx_out = os.path.join(self.output_docx_dir, f"{stem}_CoverLetter.docx")
+        try:
+            render_coverletter_docx(letter_data, docx_out)
+        except Exception as e:
+            cli_art.friendly_error(e, "creating the DOCX for this cover letter")
+            return {}
+
         cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data, jd_keywords=jd_keywords)
         if cl_text_warnings:
             cli_art.detail(f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found {len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse from the file, not just the pre-render JSON):", level=cli_art.NORMAL)
@@ -3778,6 +3788,13 @@ class ResumeEngine:
                 cli_art.console.print(msg)
         else:
             cli_art.console.print(f"  {theme.colorize_icon('success')} PDF text-layer check: 0 issues.", soft_wrap=True)
+
+        docx_out = os.path.join(self.output_docx_dir, f"{stem}_Resume.docx")
+        try:
+            render_resume_docx(resume_data, docx_out)
+        except Exception as e:
+            cli_art.friendly_error(e, "creating the DOCX for this resume")
+            return {}
 
         # B18 (phase-9-backlog.md): reported before the pipeline claims
         # success, per the backlog item's own wording -- not gated. See
