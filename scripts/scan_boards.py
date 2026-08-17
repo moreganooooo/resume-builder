@@ -47,12 +47,11 @@ import os
 import re
 import subprocess
 
+import cli_art
+import profile_paths
 import requests
 import yaml
 from bs4 import BeautifulSoup
-
-import profile_paths
-import cli_art
 
 # board-scanners/ (repo root) holds only the shared engine code (the Node
 # provider modules + the run_provider.mjs shim) -- generic across every

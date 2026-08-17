@@ -15,17 +15,16 @@ import json
 import logging
 import os
 
-import questionary
-
-from atomic_write import atomic_write
 import cli_art
 import jd_manager
 import liveness
+import questionary
 import scan_ats
 import scan_boards
 import scan_jobright
 import scan_linkedin
 import theme
+from atomic_write import atomic_write
 
 
 class _ScanWarningCollector(logging.Handler):

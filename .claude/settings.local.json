@@ -105,7 +105,8 @@
       "Bash(rtk grep *)",
       "Bash(sed -i '102,105d' internal/theme/icons.go)",
       "Bash(sed -i '101r /tmp/fix_icons.txt' internal/theme/icons.go)",
-      "Bash(rtk wc *)"
+      "Bash(rtk wc *)",
+      "Bash(isort *)"
     ]
   },
   "hooks": {

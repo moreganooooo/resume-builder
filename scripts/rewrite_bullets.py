@@ -102,8 +102,8 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                   # resume-builder/
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
-import profile_paths  # noqa: E402
 import cli_art
+import profile_paths  # noqa: E402
 import theme  # noqa: E402
 
 KB_DIR       = profile_paths.kb_dir()

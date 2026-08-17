@@ -9,27 +9,29 @@ import click
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import batch_evaluate
+import bootstrap_menu
+import build_sample
+
 # No `import questionary` here: this module's own prompts now go through
 # cli_art.select()/confirm()/checkbox(), which own the shared style. Tests
 # that need to intercept a prompt patch cli_art.questionary.* -- the module
 # where the call actually happens -- rather than reaching it through a
 # re-export here, which worked only because module objects are singletons.
 import cli_art
-import orchestrator
-import jd_manager
-import profile_paths
-import batch_evaluate
-import picker
-import menu
-import scan as scan_module
-import liveness as liveness_module
-import polish as polish_module
 import doctor
+import jd_manager
+import liveness as liveness_module
 import maintenance
-import dashboard as dashboard_module
-import build_sample
+import menu
+import orchestrator
+import picker
+import polish as polish_module
+import profile_paths
+import scan as scan_module
 import theme
-import bootstrap_menu
+
+import dashboard as dashboard_module
 
 
 def _read_version() -> str:

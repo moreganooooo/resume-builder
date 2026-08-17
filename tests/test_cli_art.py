@@ -6,9 +6,8 @@ from unittest.mock import patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from rich.console import Console
-
 import cli_art  # noqa: E402
+from rich.console import Console
 
 
 def _rendered(fn, *args, **kwargs):

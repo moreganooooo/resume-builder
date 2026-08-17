@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-import orchestrator  # noqa: E402
 import jd_manager  # noqa: E402
+import orchestrator  # noqa: E402
 
 # Captured before any test's setUp() patches orchestrator.os.path.exists (B17
 # tests below) -- os.path is one shared module process-wide, so a patch on

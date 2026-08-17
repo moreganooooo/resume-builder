@@ -5,14 +5,13 @@ checkbox picker -> process each selection" flow. Used by resume run
 tailor-pick/coverletter-pick items -- one implementation instead of four.
 """
 
-import os
 import json
+import os
 
-import questionary
-
-import cli_art
 import batch_evaluate
+import cli_art
 import jd_manager
+import questionary
 import theme
 
 # Sourced from theme.py so picker.py's checkbox list and cli_art.py's fit

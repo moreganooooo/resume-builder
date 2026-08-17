@@ -172,8 +172,8 @@ def create_new_profile(name: str) -> str:
 import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
 import bootstrap_timeline  # noqa: E402
-import tag_bullet_bank  # noqa: E402
 import cli_art
+import tag_bullet_bank  # noqa: E402
 import theme  # noqa: E402
 
 DRAFT_CSV_FIELDS = ["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"]

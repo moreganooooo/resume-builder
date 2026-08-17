@@ -8,6 +8,7 @@ job posting embeddings using numpy and gemini-embedding-2 vectors.
 import json
 import os
 import sys
+
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -15,8 +16,8 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import profile_paths
-from gemini_client import GeminiClient
 from bullet_bank_hash import bullets_sha
+from gemini_client import GeminiClient
 
 
 def cosine_similarity_matrix(query_vec: np.ndarray, matrix: np.ndarray) -> np.ndarray:

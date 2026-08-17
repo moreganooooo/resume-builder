@@ -110,6 +110,7 @@ def _check_keyword_coverage_pdf(extracted: str, jd_keywords: dict, resume_data: 
         return []
 
     import validate_resume
+
     # We pass empty rules dict to check_keyword_coverage since we only want the matched list
     json_coverage = validate_resume.check_keyword_coverage(resume_data, jd_keywords, {})
     matched_in_json = json_coverage.get("matched", [])

@@ -20,11 +20,10 @@ import os
 import subprocess
 import sys
 
+import cli_art
 import numpy as np
 import pandas as pd
 import questionary
-
-import cli_art
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)

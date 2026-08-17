@@ -9,7 +9,11 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import gemini_client
-from gemini_client import GeminiClient, MODEL_FALLBACKS, SustainedFailureError  # noqa: E402
+from gemini_client import (  # noqa: E402
+    MODEL_FALLBACKS,
+    GeminiClient,
+    SustainedFailureError,
+)
 
 
 def _success_response():
