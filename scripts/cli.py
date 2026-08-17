@@ -190,6 +190,104 @@ def coverletter(jd_file, pick, yes, referral):
     menu.offer_next_steps("coverletter", jd_file=jd_file, from_cli=True)
 
 
+@cli.command(name="package")
+@click.argument("jd_file", required=False, type=click.Path(exists=True))
+@click.option("--master", default=None, help="Path to master resume JSON (optional)")
+@click.option("--output", default=None, help="Output JSON filename (single-JD mode only)")
+@click.option("--referral", default=None, help="Referral contact for this specific application (e.g. \"Jane Doe, VP Product\")")
+@click.option("--force", is_flag=True, default=False, help="Proceed even if fit score recommends 'Skip'")
+@click.option("--skip-liveness", is_flag=True, default=False, help="Skip the posting URL liveness check")
+@click.option("--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check")
+@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to package")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt for --pick or batch mode")
+def package_cmd(jd_file, master, output, referral, force, skip_liveness, skip_fit, pick, yes):
+    """Build a complete application package (Resume + Cover Letter + DOCX/PDF) with liveness and fit gates."""
+    if pick and jd_file:
+        cli_art.display_error("Pass a JD file OR --pick, not both.")
+        raise SystemExit(1)
+    if not pick and not jd_file and referral:
+        cli_art.display_error("--referral requires a specific JD file.")
+        raise SystemExit(1)
+    if pick and referral:
+        cli_art.display_error("--referral isn't valid with --pick -- one referral can't apply to multiple JDs.")
+        raise SystemExit(1)
+
+    if pick:
+        engine = orchestrator.ResumeEngine()
+
+        def _process_one(path):
+            cli_art.display_banner(f"Packaging: {path}")
+            res = engine.build_application_package(
+                jd_path=path,
+                master_resume=None,
+                force=force,
+                skip_liveness=skip_liveness,
+                skip_fit=skip_fit,
+                interactive=True,
+            )
+            if res and res.get("status") == "completed":
+                cli_art.render_application_package_hud(res)
+                return True
+            return False
+
+        picker.pick_and_process(
+            jd_manager.get_pending_jds(), _process_one, "build a full application package for", skip_confirm=yes,
+        )
+        return
+
+    if jd_file:
+        cli_art.display_banner(f"Packaging: {jd_file}")
+        completed, failed = orchestrator.run_application_package(
+            jd_path=jd_file,
+            master_resume_path=master,
+            output_filename=output,
+            referral=referral,
+            force=force,
+            skip_liveness=skip_liveness,
+            skip_fit=skip_fit,
+        )
+        if failed and not completed:
+            raise SystemExit(1)
+        menu.offer_next_steps("package", jd_file=jd_file, from_cli=True)
+        return
+
+    # Batch run for all pending JDs
+    cli_art.display_banner("Batch Application Package: all pending JDs")
+    pending = jd_manager.get_pending_jds()
+    if not pending:
+        cli_art.console.print("Nothing to process -- no pending JDs.")
+        return
+
+    if not _should_proceed(len(pending), yes):
+        cli_art.console.print("Batch packaging canceled.")
+        return
+
+    completed, failed = orchestrator.run_application_package(
+        jd_path=None,
+        master_resume_path=master,
+        force=force,
+        skip_liveness=skip_liveness,
+        skip_fit=skip_fit,
+    )
+    cli_art.display_success(f"Batch complete: {completed} packaged, {failed} failed")
+
+
+@cli.command(name="build")
+@click.argument("jd_file", required=False, type=click.Path(exists=True))
+@click.option("--master", default=None, help="Path to master resume JSON (optional)")
+@click.option("--output", default=None, help="Output JSON filename (single-JD mode only)")
+@click.option("--referral", default=None, help="Referral contact for this specific application")
+@click.option("--force", is_flag=True, default=False, help="Proceed even if fit score recommends 'Skip'")
+@click.option("--skip-liveness", is_flag=True, default=False, help="Skip the posting URL liveness check")
+@click.option("--skip-fit", is_flag=True, default=False, help="Skip the fit evaluation check")
+@click.option("--pick", is_flag=True, default=False, help="Interactively select which pending JD(s) to package")
+@click.option("--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@click.pass_context
+def build_cmd(ctx, **kwargs):
+    """Alias for 'package': build a full application package for a job."""
+    ctx.invoke(package_cmd, **kwargs)
+
+
 @cli.command()
 @click.argument("jd_file", required=False, type=click.Path(exists=True))
 @click.option("--yes", is_flag=True, default=False, help="Skip the confirmation prompt for batch mode")
