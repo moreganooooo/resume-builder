@@ -6,26 +6,31 @@ import json
 import os
 import random
 import re
-import time
-import sys
 import shutil
+import sys
+import time
 
+import charm_prompt
+import followup
+import jd_manager
 import questionary
+import theme
 from rich import box
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.markup import escape as _escape_markup
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
-
-import followup
-import jd_manager
-import theme
-import charm_prompt
 
 # Overrides Rich's automatic quoted-text highlighting (its default
 # "repr.str" is a dim ANSI green, distinct from -- and clashing with --
@@ -1593,9 +1598,9 @@ def thinking_status(message: str):
     """Shifting Gradient-Wave loader for Gemini 'Thinking' state.
     Cycles Peach, Pink, Mauve, and Blue dynamically with sparkling flourishes.
     """
-    import threading
     import contextlib
-    
+    import threading
+
     # Catppuccin Peach, Pink, Mauve, Lavender, Blue, Sky tokens from theme.py
     colors = theme.THINKING_GRADIENT_COLORS
     stop_event = threading.Event()
@@ -1723,8 +1728,8 @@ def display_success_celebration(title: str, subtitle: str) -> None:
     """Prints a magnificent, high-energy celebratory card to keep job seekers motivated
     and deliver that essential hit of career dopamine! Incorporates twinkling terminal animations!
     """
-    import time
     import random
+    import time
     
     panel_content = Text()
     panel_content.append("\n🎉 ✦ ─── HECK YEAH! ─── ✦ 🎉\n\n", style=f"bold {theme.BRAND_ACCENT}")

@@ -111,9 +111,8 @@ import sys
 import time
 from datetime import datetime
 
-import pandas as pd
-
 import cli_art
+import pandas as pd
 import theme
 
 # ---------------------------------------------------------------------------
@@ -132,22 +131,22 @@ SCORING_DIR  = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
 # Import shared logic from rewrite_bullets.py — no duplication.
 from rewrite_bullets import (
-    RulesBundle,
-    KnowledgeBase,
-    build_system_prompts,
-    score_bullet,
-    process_bullet,
-    decide_action,
-    is_keeper,
-    best_version,
-    append_keeper,
-    ensure_writable_dtypes,
-    SCORE_COLS,
-    NUMERIC_SCORE_COLS,
-    STRING_SCORE_COLS,
     KEEPER_COLS,
-    SLEEP_BETWEEN_BULLETS,
+    NUMERIC_SCORE_COLS,
     REWRITE_FALLBACK_MODEL,
+    SCORE_COLS,
+    SLEEP_BETWEEN_BULLETS,
+    STRING_SCORE_COLS,
+    KnowledgeBase,
+    RulesBundle,
+    append_keeper,
+    best_version,
+    build_system_prompts,
+    decide_action,
+    ensure_writable_dtypes,
+    is_keeper,
+    process_bullet,
+    score_bullet,
 )
 
 # ---------------------------------------------------------------------------

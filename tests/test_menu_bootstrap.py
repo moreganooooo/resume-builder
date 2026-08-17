@@ -2,7 +2,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -61,7 +61,9 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         import profile_paths
+
         # Iterate sync_roots() rather than removing profiles/<name>/ alone.
         # create_new_profile() seeds all four, so removing one left
         # jds/, output/ and data/ test_guest_trigger_profile_xyz/ orphaned in

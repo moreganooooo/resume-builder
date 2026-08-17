@@ -22,9 +22,9 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import cli_art
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
-import cli_art
 
 KB_DIR = profile_paths.kb_dir()
 

@@ -11,8 +11,9 @@ import argparse
 import os
 import re
 import sys
-import yaml
 from pathlib import Path
+
+import yaml
 
 # Secure sibling imports
 SCRIPT_DIR = Path(__file__).resolve().parent

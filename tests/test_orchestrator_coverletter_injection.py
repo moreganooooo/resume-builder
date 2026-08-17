@@ -30,9 +30,9 @@ from unittest.mock import MagicMock, patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
+import jd_manager  # noqa: E402
 import orchestrator  # noqa: E402
 import validate_coverletter  # noqa: E402
-import jd_manager  # noqa: E402
 
 # Verbatim (source retyped) from docs/review/phase-8-trust-secrets.md's
 # proven live payload.

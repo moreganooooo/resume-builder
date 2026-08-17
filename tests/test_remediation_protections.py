@@ -14,7 +14,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
@@ -23,7 +23,7 @@ if SCRIPTS_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from scripts import cli_art, render_typst, db, vector_store, jd_manager
+from scripts import cli_art, db, jd_manager, render_typst, vector_store
 
 
 class TestRemediationProtections(unittest.TestCase):

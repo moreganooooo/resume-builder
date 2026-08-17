@@ -14,17 +14,20 @@ import os
 import shutil
 import subprocess
 
-import questionary
-
 import cli_art
 import normalize_resume
 import profile_paths
+import questionary
 import theme
 import validate_coverletter
 import validate_resume
 from gemini_client import GeminiClient
 from orchestrator import (
-    BUILDER_MODEL, CoverLetterSchema, PDF_GENERATION_TIMEOUT_SECONDS, ResumeEngine, TemplateSchema,
+    BUILDER_MODEL,
+    PDF_GENERATION_TIMEOUT_SECONDS,
+    CoverLetterSchema,
+    ResumeEngine,
+    TemplateSchema,
 )
 from render_coverletter import render_coverletter
 from render_html import render_html

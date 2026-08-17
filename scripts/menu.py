@@ -20,29 +20,30 @@ import shutil
 import subprocess
 import sys
 
-import questionary
-
+import batch_evaluate
 import bootstrap_bullet_bank
 import bootstrap_menu
 import build_sample
 import bullet_bank_menu
 import charm_prompt
 import cli_art
-import dashboard as dashboard_module
 import doctor
 import followup
 import git_update
+import jd_manager
+import liveness as liveness_module
 import maintenance
 import orchestrator
-import jd_manager
-import batch_evaluate
 import picker
-import stale_sweep
-import scan as scan_module
-import liveness as liveness_module
 import polish as polish_module
-import theme
+import questionary
+import scan as scan_module
 import skills_menu
+import stale_sweep
+import theme
+
+import dashboard as dashboard_module
+
 
 def _icon_title(icon_name: str, label: str) -> list:
     """Build a questionary Choice title as [icon_tuple, text_tuple] so the
@@ -375,8 +376,8 @@ def _print_source_docs_instructions(source_docs_dir: str) -> None:
     degrades to plain unstyled text everywhere else -- either way the raw
     path/URL stays visible in the message itself, never hidden behind an
     opaque label."""
-    from rich.panel import Panel
     from rich import box
+    from rich.panel import Panel
 
     content = (
         f"Go to your source folder ([link=file://{source_docs_dir}]{source_docs_dir}[/link]) "
@@ -425,8 +426,9 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
 
 def _handle_bootstrap() -> bool:
-    import profile_paths
     import shutil
+
+    import profile_paths
 
     is_existing = _profile_is_set_up()
 
@@ -589,10 +591,11 @@ def _handle_scan() -> bool:
 
 def _handle_add_manual_jd() -> bool:
     """Manually add a job description by pasting the details/text directly."""
-    import profile_paths
-    import jd_manager
-    import uuid
     import datetime
+    import uuid
+
+    import jd_manager
+    import profile_paths
     from atomic_write import atomic_write
 
     cli_art.console.print()
@@ -1065,6 +1068,7 @@ def _handle_run_doctor() -> None:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+
     import profile_paths
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
@@ -1267,8 +1271,8 @@ def _handle_settings_upkeep() -> bool:
 
 
 def _handle_manage_scraping():
-    import yaml
     import profile_paths
+    import yaml
     
     use_alt = _should_use_alt_screen()
     profile = profile_paths.active_profile()
@@ -1315,8 +1319,8 @@ def _handle_manage_scraping():
 
 
 def _handle_toggle_boards(filters_path):
-    import yaml
     import scan_boards
+    import yaml
     
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
@@ -1416,8 +1420,9 @@ def _handle_delete_custom_board(filters_path):
 
 
 def _handle_edit_linkedin_queries(profile_path):
-    import yaml
     import time
+
+    import yaml
     
     with open(profile_path, "r", encoding="utf-8") as f:
         profile_data = yaml.safe_load(f) or {}
@@ -1477,8 +1482,9 @@ def _handle_edit_linkedin_queries(profile_path):
 
 
 def _handle_edit_title_filters(filters_path):
-    import yaml
     import time
+
+    import yaml
     
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
@@ -1570,6 +1576,7 @@ def _handle_edit_title_filters(filters_path):
 
 def _handle_manage_profiles():
     import shutil
+
     import profile_paths
     use_alt = _should_use_alt_screen()
     while True:
@@ -1765,6 +1772,7 @@ def _prompt_for_update() -> None:
             cli_art.console.print(message)
         else:
             import time
+
             from rich.live import Live
 
             with Live(message, console=cli_art.console, transient=True):

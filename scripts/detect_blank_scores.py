@@ -22,11 +22,11 @@ import json
 import os
 from pathlib import Path
 
-import pandas as pd
-from rich.markup import escape
-import profile_paths
 import cli_art
+import pandas as pd
+import profile_paths
 import theme
+from rich.markup import escape
 
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION

@@ -46,11 +46,10 @@ import logging
 import os
 import time
 
-import yaml
-
+import cli_art
 import profile_paths
 import scan_boards
-import cli_art
+import yaml
 
 # Brave Search's free tier is 1 req/sec (see providers/websearch.mjs's own
 # module docstring) -- the sweep loop below is the only place this repo

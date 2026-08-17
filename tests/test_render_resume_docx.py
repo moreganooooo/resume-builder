@@ -6,7 +6,6 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 from docx import Document  # noqa: E402
-
 from render_resume_docx import render_resume_docx  # noqa: E402
 
 

@@ -19,9 +19,13 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-from bootstrap_extractors import EXTRACTION_MODEL, RawAchievement, WorkExperienceEntry  # noqa: E402
-from gemini_client import GeminiClient  # noqa: E402
 import cli_art
+from bootstrap_extractors import (  # noqa: E402
+    EXTRACTION_MODEL,
+    RawAchievement,
+    WorkExperienceEntry,
+)
+from gemini_client import GeminiClient  # noqa: E402
 
 
 class TimelineEntry(BaseModel):

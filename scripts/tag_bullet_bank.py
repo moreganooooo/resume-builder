@@ -39,9 +39,9 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import cli_art
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
-import cli_art
 
 
 def tag_keywords() -> dict:

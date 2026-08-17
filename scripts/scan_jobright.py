@@ -13,9 +13,8 @@ import logging
 import os
 import time
 
-import requests
-
 import cli_art
+import requests
 
 JOBRIGHT_API_BASE_URL = "https://jobright.ai/swan/recommend/list/jobs"
 JOBRIGHT_HEADERS = {

@@ -48,9 +48,9 @@ load_dotenv(profile_paths.env_path())
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from gemini_client import GeminiClient  # noqa: E402
 import cli_art
 import theme
+from gemini_client import GeminiClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # CONFIG

@@ -10,8 +10,8 @@ class TestBootstrapDependenciesImportable(unittest.TestCase):
         from pptx import Presentation  # noqa: F401
 
     def test_odfpy_importable(self):
+        from odf import teletype, text  # noqa: F401
         from odf.opendocument import load  # noqa: F401
-        from odf import text, teletype  # noqa: F401
 
     def test_openpyxl_importable(self):
         import openpyxl  # noqa: F401

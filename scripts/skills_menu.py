@@ -7,11 +7,11 @@ verified_tools.json in their active profile's knowledge base.
 import json
 import os
 import sys
-import questionary
 
-import profile_paths
-import theme
 import cli_art
+import profile_paths
+import questionary
+import theme
 from atomic_write import atomic_write
 
 

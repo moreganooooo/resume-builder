@@ -22,7 +22,6 @@ sys.path.insert(0, SCRIPTS_DIR)
 import cli_art  # noqa: E402
 from gemini_client import SustainedFailureError  # noqa: E402
 
-
 # Verbatim captured output, one entry per real failure mode.
 PLAYWRIGHT_MISSING_BROWSER = (
     "browserType.launch: Executable doesn't exist at /Users/x/Library/Caches/"

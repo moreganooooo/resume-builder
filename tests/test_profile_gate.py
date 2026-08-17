@@ -6,11 +6,10 @@ from unittest.mock import patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from click.testing import CliRunner  # noqa: E402
-
 import cli  # noqa: E402
 import menu  # noqa: E402
 import profile_paths  # noqa: E402
+from click.testing import CliRunner  # noqa: E402
 
 
 class TestCliProfileFlag(unittest.TestCase):

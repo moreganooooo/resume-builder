@@ -8,8 +8,8 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import importlib
 
-import theme  # noqa: E402
 import orchestrator  # noqa: E402
+import theme  # noqa: E402
 
 
 class TestIconSwitch(unittest.TestCase):

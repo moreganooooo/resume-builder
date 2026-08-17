@@ -32,9 +32,8 @@ import os
 import shutil
 import subprocess
 
-import questionary
-
 import cli_art
+import questionary
 
 _CANCEL_EXIT_CODE = 130
 

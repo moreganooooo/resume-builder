@@ -6,7 +6,7 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
-from render_html import render_html, build_why_html  # noqa: E402
+from render_html import build_why_html, render_html  # noqa: E402
 
 
 def _minimal_resume_data(**overrides):

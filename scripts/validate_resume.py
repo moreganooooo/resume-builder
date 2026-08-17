@@ -706,10 +706,9 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     Checks if any skills or tools mentioned in the SKILLS section of the resume are
     not present in the verified tools list or master profile configuration.
     """
-    import os
     import json
+    import os
     import re
-    import yaml
 
     # Locate knowledge base for the active profile. Previously this called
     # profile_paths.get_kb_dir() -- a function that has never existed
@@ -721,6 +720,7 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     # base. Let failures genuinely propagate now -- validating against
     # the wrong profile's data is worse than a loud crash (F3).
     import profile_paths
+    import yaml
     kb_dir = profile_paths.kb_dir()
 
     verified_tools_path = os.path.join(kb_dir, "verified_tools.json")

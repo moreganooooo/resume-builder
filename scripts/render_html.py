@@ -7,16 +7,15 @@ Usage (standalone):
 Called programmatically by orchestrator.py's build_tailored_resume() Step 7.
 """
 
-import os
-import json
 import argparse
+import json
+import os
 import re as _re
 from html import escape
 from pathlib import Path
 
 import cli_art
 import theme
-
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)

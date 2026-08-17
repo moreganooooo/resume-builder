@@ -7,7 +7,7 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_timeline  # noqa: E402
-from bootstrap_extractors import WorkExperienceEntry, RawAchievement  # noqa: E402
+from bootstrap_extractors import RawAchievement, WorkExperienceEntry  # noqa: E402
 
 
 class TestBuildTimelineNoConflict(unittest.TestCase):

@@ -15,12 +15,11 @@ than reimplementing them.
 
 import os
 
-import questionary
-
 import bootstrap_bullet_bank
 import bootstrap_profile
 import bullet_bank_menu
 import cli_art
+import questionary
 import theme
 
 
@@ -207,8 +206,8 @@ def _run_express_setup(interactive: bool = True) -> bool:
             return False
 
     scroll_region_modified = False
-    import sys
     import shutil
+    import sys
     sys.stdout.write("\x1b[2J\x1b[H")
     sys.stdout.flush()
     cli_art.display_compact_banner("ONBOARDING | EXPRESS AUTO-PILOT")
@@ -286,6 +285,7 @@ def run_bootstrap_menu() -> bool:
     next" chain prompt back in menu.py), False if the user backed out
     without doing anything."""
     import sys
+
     import menu
     use_alt = menu._should_use_alt_screen()
     did_something = False
