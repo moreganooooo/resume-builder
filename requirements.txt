@@ -17,6 +17,6 @@ python-docx
 python-pptx
 Pillow==10.4.0
 pdfminer.six
-pypdf==6.15.0
+pypdf==5.9.0
 odfpy
 openpyxl
