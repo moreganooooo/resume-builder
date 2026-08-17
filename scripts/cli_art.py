@@ -128,7 +128,7 @@ def _lerp_hex(start_hex: str, end_hex: str, t: float) -> str:
     start_rgb = tuple(int(start_hex[i:i + 2], 16) for i in (1, 3, 5))
     end_rgb = tuple(int(end_hex[i:i + 2], 16) for i in (1, 3, 5))
     mixed = tuple(round(start_rgb[c] + (end_rgb[c] - start_rgb[c]) * t) for c in range(3))
-    return "#{:02x}{:02x}{:02x}".format(*mixed)
+    return f"#{mixed[0]:02x}{mixed[1]:02x}{mixed[2]:02x}"
 
 
 def _gradient_grid(lines: list, start_hex: str, end_hex: str) -> list:

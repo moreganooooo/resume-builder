@@ -158,7 +158,7 @@ def get_li_at_cookie() -> str:
                 text=True,
                 timeout=240
             )
-            if result.return_code == 0 and result.stdout:
+            if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split("\n")
                 for line in lines:
                     if line.startswith("{") and line.endswith("}"):
