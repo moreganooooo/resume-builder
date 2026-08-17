@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -20,7 +22,13 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
     def test_includes_role_rules_header(self):
         profile_data = {
             "roles": [
-                {"name": "Acme Corp", "min_bullets": 2, "target_bullets": 3, "page": 1, "flex_priority": 1},
+                {
+                    "name": "Acme Corp",
+                    "min_bullets": 2,
+                    "target_bullets": 3,
+                    "page": 1,
+                    "flex_priority": 1,
+                },
             ],
         }
         block = self.engine.build_role_rules_block(profile_data)
@@ -31,15 +39,24 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
     def test_must_fit_page_1_role_is_called_out(self):
         profile_data = {
             "roles": [
-                {"name": "Acme Corp", "min_bullets": 2, "target_bullets": 3, "page": 1,
-                 "flex_priority": 1, "must_fit_page_1": True},
+                {
+                    "name": "Acme Corp",
+                    "min_bullets": 2,
+                    "target_bullets": 3,
+                    "page": 1,
+                    "flex_priority": 1,
+                    "must_fit_page_1": True,
+                },
             ],
         }
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("must fit entirely on page 1: Acme Corp", block)
 
     def test_protected_bullets_included(self):
-        profile_data = {"roles": [], "protected_bullets": ["Owned the whole thing end to end"]}
+        profile_data = {
+            "roles": [],
+            "protected_bullets": ["Owned the whole thing end to end"],
+        }
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("Protected Bullets", block)
         self.assertIn("Owned the whole thing end to end", block)
@@ -48,8 +65,12 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         profile_data = {
             "roles": [],
             "fixed_credentials": {
-                "certifications": [{"name": "Widget Cert", "issuer": "Widget Co", "year": 2020}],
-                "education": [{"institution": "State U", "credential": "BA", "bullet_count": 2}],
+                "certifications": [
+                    {"name": "Widget Cert", "issuer": "Widget Co", "year": 2020}
+                ],
+                "education": [
+                    {"institution": "State U", "credential": "BA", "bullet_count": 2}
+                ],
             },
         }
         block = self.engine.build_role_rules_block(profile_data)

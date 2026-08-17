@@ -62,10 +62,10 @@ class TestRemediationProtections(unittest.TestCase):
                     "title": "Software Engineer",
                     "company": "Acme",
                     "status": "interview",
-                    "jd_text": "Sample text"
+                    "jd_text": "Sample text",
                 }
                 db.upsert_job(job_payload, profile="test_profile")
-                
+
                 jobs = db.get_jobs_by_status("interview", profile="test_profile")
                 self.assertEqual(len(jobs), 1)
                 self.assertEqual(jobs[0]["title"], "Software Engineer")
@@ -76,18 +76,21 @@ class TestRemediationProtections(unittest.TestCase):
             meta_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.meta")
             csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
             npy_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.npy")
-            
+
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"bullets_sha": "old_hash"}, f)
-            
+
             with open(csv_path, "w", encoding="utf-8") as f:
                 f.write("Bullet Point\nTest Bullet 1\n")
 
             import numpy as np
+
             np.save(npy_path, np.zeros((1, 768)))
-            
-            with patch("embed_bullet_bank.main") as mock_reembed, \
-                 patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir):
+
+            with (
+                patch("embed_bullet_bank.main") as mock_reembed,
+                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
+            ):
                 result = vector_store.search_bullet_bank("dummy_query", top_k=5)
                 # When sha is stale, embed_bullet_bank.main should be triggered
                 self.assertTrue(mock_reembed.called)
@@ -110,10 +113,13 @@ class TestRemediationProtections(unittest.TestCase):
                 f.write("Bullet Point\nBullet One\nBullet Two\n")  # 2 rows
 
             import numpy as np
+
             np.save(npy_path, np.zeros((1, 768)))  # only 1 embedding row -- mismatch
 
-            with patch("embed_bullet_bank.main") as mock_reembed, \
-                 patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir):
+            with (
+                patch("embed_bullet_bank.main") as mock_reembed,
+                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
+            ):
                 vector_store.search_bullet_bank("dummy_query", top_k=5)
                 self.assertTrue(mock_reembed.called)
 
@@ -128,7 +134,7 @@ class TestRemediationProtections(unittest.TestCase):
             row_data["company_name"] = "Acme"
             row_data["job_title"] = "Lead Dev"
             tracker._append_row(row_data)
-            
+
             with open(tmp_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 self.assertIn("Acme", content)

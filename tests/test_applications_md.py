@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
@@ -24,11 +26,18 @@ class TestAppendApplicationRow(unittest.TestCase):
         jd_manager.append_application_row("Acme", "Role", True, path=self.path)
         with open(self.path, "r", encoding="utf-8") as f:
             content = f.read()
-        self.assertIn("| # | Date | Company | Role | Score | Status | PDF | Link | Report | Notes |", content)
+        self.assertIn(
+            "| # | Date | Company | Role | Score | Status | PDF | Link | Report | Notes |",
+            content,
+        )
 
     def test_row_includes_a_clickable_link_when_source_url_given(self):
         jd_manager.append_application_row(
-            "Acme", "Content Strategist", True, source_url="https://example.com/job/1", path=self.path,
+            "Acme",
+            "Content Strategist",
+            True,
+            source_url="https://example.com/job/1",
+            path=self.path,
         )
         with open(self.path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -52,7 +61,11 @@ class TestAppendApplicationRow(unittest.TestCase):
         jd_manager.append_application_row("Acme", "Role A", True, path=self.path)
         jd_manager.append_application_row("Acme", "Role B", True, path=self.path)
         with open(self.path, "r", encoding="utf-8") as f:
-            lines = [line for line in f if line.startswith("| ") and not line.startswith("| #")]
+            lines = [
+                line
+                for line in f
+                if line.startswith("| ") and not line.startswith("| #")
+            ]
         self.assertTrue(lines[0].startswith("| 1 |"))
         self.assertTrue(lines[1].startswith("| 2 |"))
 
@@ -65,7 +78,10 @@ class TestAppendApplicationRow(unittest.TestCase):
 
     def test_row_uses_score_and_recommendation_from_evaluation(self):
         jd_manager.append_application_row(
-            "Acme", "Role", True, path=self.path,
+            "Acme",
+            "Role",
+            True,
+            path=self.path,
             evaluation={"composite_score": 4.8, "recommendation": "Strong pursue"},
         )
         with open(self.path, "r", encoding="utf-8") as f:
@@ -75,7 +91,11 @@ class TestAppendApplicationRow(unittest.TestCase):
 
     def test_row_handles_evaluation_missing_score_or_recommendation(self):
         jd_manager.append_application_row(
-            "Acme", "Role", True, path=self.path, evaluation={"hard_blockers": ["No visa sponsorship"]},
+            "Acme",
+            "Role",
+            True,
+            path=self.path,
+            evaluation={"hard_blockers": ["No visa sponsorship"]},
         )
         with open(self.path, "r", encoding="utf-8") as f:
             data_row = f.readlines()[-1]

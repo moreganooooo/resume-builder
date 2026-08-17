@@ -65,7 +65,7 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 # PATHS
 # ---------------------------------------------------------------------------
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
@@ -76,33 +76,41 @@ import theme
 from atomic_write import atomic_write  # noqa: E402
 from bullet_bank_hash import bullets_sha  # noqa: E402
 
-KB_DIR       = profile_paths.kb_dir()
+KB_DIR = profile_paths.kb_dir()
 
 load_dotenv(profile_paths.env_path(), override=True)
 
-RAW_CSV                 = os.path.join(KB_DIR, "bullet-bank-clean.csv")
-AUDITED_CSV             = os.path.join(KB_DIR, "bullet-bank-audited.csv")
-CLUSTER_MAP_CSV         = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
-CLUSTER_MAP             = os.path.join(KB_DIR, "cluster-map.json")
-REWRITE_QUEUE           = os.path.join(KB_DIR, "rewrite-queue.csv")
-VECTOR_CACHE            = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.npy")
-VECTOR_CACHE_META       = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.meta")
-CLUSTER_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz")
+RAW_CSV = os.path.join(KB_DIR, "bullet-bank-clean.csv")
+AUDITED_CSV = os.path.join(KB_DIR, "bullet-bank-audited.csv")
+CLUSTER_MAP_CSV = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
+CLUSTER_MAP = os.path.join(KB_DIR, "cluster-map.json")
+REWRITE_QUEUE = os.path.join(KB_DIR, "rewrite-queue.csv")
+VECTOR_CACHE = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.npy")
+VECTOR_CACHE_META = os.path.join(KB_DIR, "bullet_vectors_ge2_d768_cluster.meta")
+CLUSTER_CHECKPOINT_PATH = os.path.join(
+    KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz"
+)
 
 AUDIT_SCORE_COLS = [
-    "accuracy_score", "believability_score", "clarity_score",
-    "ats_value", "manager_test", "weaknesses",
+    "accuracy_score",
+    "believability_score",
+    "clarity_score",
+    "ats_value",
+    "manager_test",
+    "weaknesses",
 ]
 
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-SIMILARITY_THRESHOLD = 0.92   # cosine >= this => same cluster
-EMBED_MODEL          = "gemini-embedding-2"
-EMBED_DIM            = 768    # gemini-embedding-2 native dimension
-BATCH_SIZE           = 20     # batchEmbedContents supports up to ~20 requests per call
-EMBED_SLEEP          = 20     # seconds between batch calls -- matches embed_bullet_bank.py's proven interval
-MAX_RETRIES          = 4
+SIMILARITY_THRESHOLD = 0.92  # cosine >= this => same cluster
+EMBED_MODEL = "gemini-embedding-2"
+EMBED_DIM = 768  # gemini-embedding-2 native dimension
+BATCH_SIZE = 20  # batchEmbedContents supports up to ~20 requests per call
+EMBED_SLEEP = (
+    20  # seconds between batch calls -- matches embed_bullet_bank.py's proven interval
+)
+MAX_RETRIES = 4
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -111,6 +119,7 @@ AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 # ---------------------------------------------------------------------------
 # EMBEDDING
 # ---------------------------------------------------------------------------
+
 
 def embed_batch(texts: list) -> list:
     url = f"{BASE_URL}/{EMBED_MODEL}:batchEmbedContents"
@@ -128,8 +137,10 @@ def embed_batch(texts: list) -> list:
     for attempt in range(MAX_RETRIES):
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:
-            wait = 10 * (2 ** attempt)
-            cli_art.cli_warning(f"Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...")
+            wait = 10 * (2**attempt)
+            cli_art.cli_warning(
+                f"Rate limited. Waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})..."
+            )
             time.sleep(wait)
             continue
         resp.raise_for_status()
@@ -165,17 +176,23 @@ def load_checkpoint(expected_sha: str, expected_total: int) -> tuple:
         saved_sha = str(data["bullets_sha"]) if "bullets_sha" in data else None
         saved_total = int(data["total"]) if "total" in data else None
         if saved_sha != expected_sha or saved_total != expected_total:
-            cli_art.cli_warning("Bullet bank changed since this checkpoint was saved -- discarding stale progress and starting over.")
+            cli_art.cli_warning(
+                "Bullet bank changed since this checkpoint was saved -- discarding stale progress and starting over."
+            )
             os.remove(CLUSTER_CHECKPOINT_PATH)
             return [], 0
         vectors = list(data["vectors"])
         next_index = int(data["next_index"])
-        cli_art.cli_info(f"Resuming from checkpoint: {next_index} bullets already embedded.")
+        cli_art.cli_info(
+            f"Resuming from checkpoint: {next_index} bullets already embedded."
+        )
         return vectors, next_index
     return [], 0
 
 
-def save_checkpoint(vectors: list, next_index: int, total: int, bullets_sha_value: str) -> None:
+def save_checkpoint(
+    vectors: list, next_index: int, total: int, bullets_sha_value: str
+) -> None:
     np.savez(
         CLUSTER_CHECKPOINT_PATH,
         vectors=np.array(vectors, dtype=np.float32),
@@ -202,17 +219,28 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
         if os.path.exists(VECTOR_CACHE_META):
             with open(VECTOR_CACHE_META, "r", encoding="utf-8") as f:
                 cache_meta = json.load(f)
-        if cached.shape == (len(bullets), EMBED_DIM) and cache_meta.get("bullets_sha") == current_sha:
-            cli_art.cli_info(f"Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}")
+        if (
+            cached.shape == (len(bullets), EMBED_DIM)
+            and cache_meta.get("bullets_sha") == current_sha
+        ):
+            cli_art.cli_info(
+                f"Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}"
+            )
             return cached
         elif cached.shape != (len(bullets), EMBED_DIM):
-            cli_art.cli_warning(f"Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding...")
+            cli_art.cli_warning(
+                f"Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding..."
+            )
         else:
-            cli_art.cli_warning("Cache is stale (bullet bank content changed since it was built). Re-embedding...")
+            cli_art.cli_warning(
+                "Cache is stale (bullet bank content changed since it was built). Re-embedding..."
+            )
 
     total = len(bullets)
     vectors, start_index = load_checkpoint(current_sha, total)
-    cli_art.cli_info(f"Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})...")
+    cli_art.cli_info(
+        f"Embedding {total} bullets via {EMBED_MODEL} (batches of {BATCH_SIZE}, starting at {start_index})..."
+    )
 
     for batch_start in range(start_index, total, BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE, total)
@@ -227,7 +255,9 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
     matrix = np.array(vectors, dtype=np.float32)
     np.save(VECTOR_CACHE, matrix)
     with atomic_write(VECTOR_CACHE_META) as f:
-        json.dump({"rows": total, "dim": EMBED_DIM, "bullets_sha": current_sha}, f, indent=2)
+        json.dump(
+            {"rows": total, "dim": EMBED_DIM, "bullets_sha": current_sha}, f, indent=2
+        )
     cli_art.cli_success(f"Saved {total} vectors to {VECTOR_CACHE}")
     if os.path.exists(CLUSTER_CHECKPOINT_PATH):
         os.remove(CLUSTER_CHECKPOINT_PATH)
@@ -237,6 +267,7 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # CLUSTERING
 # ---------------------------------------------------------------------------
+
 
 def cosine_similarity_matrix(matrix: np.ndarray) -> np.ndarray:
     """Returns an (N, N) cosine similarity matrix."""
@@ -298,7 +329,9 @@ def _cluster_content_hash(member_texts: list[str]) -> str:
     (see audit_keepers.py's _normalize_cluster_id(), which already treats
     a non-numeric cluster_id as valid -- this hash needs no changes there)."""
     normalized = sorted(normalize_bullet_text(t) for t in member_texts)
-    digest = hashlib.sha1("\n".join(normalized).encode("utf-8")).hexdigest()
+    digest = hashlib.sha1(
+        "\n".join(normalized).encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
     return digest[:12]
 
 
@@ -311,7 +344,9 @@ def stable_cluster_ids(raw_ids: list, bullets: list[str]) -> list[str]:
     groups: dict = {}
     for raw_id, bullet in zip(raw_ids, bullets):
         groups.setdefault(raw_id, []).append(bullet)
-    raw_to_stable = {raw_id: _cluster_content_hash(members) for raw_id, members in groups.items()}
+    raw_to_stable = {
+        raw_id: _cluster_content_hash(members) for raw_id, members in groups.items()
+    }
     return [raw_to_stable[raw_id] for raw_id in raw_ids]
 
 
@@ -354,12 +389,15 @@ def elect_representative(group: pd.DataFrame, bullet_col: str) -> int:
 
     if len(candidates) == 1:
         return candidates[0]
-    return min(candidates, key=lambda idx: normalize_bullet_text(group.at[idx, bullet_col]))
+    return min(
+        candidates, key=lambda idx: normalize_bullet_text(group.at[idx, bullet_col])
+    )
 
 
 # ---------------------------------------------------------------------------
 # AUDIT SCORE JOIN + NEXT-ACTION DECISION
 # ---------------------------------------------------------------------------
+
 
 def normalize_bullet_text(text: str) -> str:
     """Canonical join key: strip + lowercase so whitespace/casing don't break the match."""
@@ -407,7 +445,11 @@ def decide_action(row) -> str:
     believability = believability if not pd.isna(believability) else 0
     accuracy = accuracy if not pd.isna(accuracy) else 0
 
-    if manager_test == "FAIL" or believability < 80 or (has_weaknesses and accuracy < 85):
+    if (
+        manager_test == "FAIL"
+        or believability < 80
+        or (has_weaknesses and accuracy < 85)
+    ):
         return "REWRITE"
     if has_weaknesses and accuracy >= 85:
         return "REVIEW"
@@ -418,6 +460,7 @@ def decide_action(row) -> str:
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def main():
     cli_art.console.print()
     cli_art.console.rule("CLUSTER BULLET BANK", style="dim")
@@ -427,8 +470,12 @@ def main():
         return
 
     if not os.path.exists(AUDITED_CSV):
-        cli_art.console.print(f"  {cli_art.ERROR} {AUDITED_CSV} not found.", soft_wrap=True)
-        cli_art.cli_warning("Run audit_bullet_bank.py first to score every bullet -- this script needs those scores to assign next_action.")
+        cli_art.console.print(
+            f"  {cli_art.ERROR} {AUDITED_CSV} not found.", soft_wrap=True
+        )
+        cli_art.cli_warning(
+            "Run audit_bullet_bank.py first to score every bullet -- this script needs those scores to assign next_action."
+        )
         return
 
     df = pd.read_csv(RAW_CSV)
@@ -441,13 +488,15 @@ def main():
     matrix = load_or_build_vectors(bullets)
 
     # --- CLUSTER ---
-    cli_art.cli_info(f"Computing cosine similarity matrix ({len(bullets)}x{len(bullets)})...")
+    cli_art.cli_info(
+        f"Computing cosine similarity matrix ({len(bullets)}x{len(bullets)})..."
+    )
     sim_matrix = cosine_similarity_matrix(matrix)
     cli_art.cli_info(f"Clustering at threshold={SIMILARITY_THRESHOLD}...")
     raw_cluster_ids = single_linkage_cluster(sim_matrix, SIMILARITY_THRESHOLD)
     cluster_ids = stable_cluster_ids(raw_cluster_ids, bullets)
 
-    df["cluster_id"]   = cluster_ids
+    df["cluster_id"] = cluster_ids
     df["cluster_size"] = df["cluster_id"].map(df["cluster_id"].value_counts())
 
     # --- JOIN AUDIT SCORES ---
@@ -460,14 +509,20 @@ def main():
     df["_join_key"] = df[bullet_col].map(normalize_bullet_text)
     df = df.merge(
         audited[["_join_key"] + score_cols_present],
-        on="_join_key", how="left",
+        on="_join_key",
+        how="left",
     )
     df = df.drop(columns=["_join_key"])
-    df["manager_test_normalized"] = df.get("manager_test").map(normalize_manager_test) \
-        if "manager_test" in df.columns else ""
+    df["manager_test_normalized"] = (
+        df.get("manager_test").map(normalize_manager_test)
+        if "manager_test" in df.columns
+        else ""
+    )
     n_pass = (df["manager_test_normalized"] == "PASS").sum()
     n_fail = (df["manager_test_normalized"] == "FAIL").sum()
-    cli_art.cli_info(f"Audit join: manager_test normalized: {n_pass} PASS / {n_fail} FAIL")
+    cli_art.cli_info(
+        f"Audit join: manager_test normalized: {n_pass} PASS / {n_fail} FAIL"
+    )
 
     # --- ELECT REPRESENTATIVES ---
     rep_indices = set()
@@ -482,14 +537,25 @@ def main():
     df = df.drop(columns=["manager_test_normalized"])
 
     # --- STATS ---
-    n_clusters   = df["cluster_id"].nunique()
+    n_clusters = df["cluster_id"].nunique()
     n_singletons = (df["cluster_size"] == 1).sum()
-    n_dupes      = len(df) - df["is_representative"].sum()
-    cli_art.cli_info(f"Clusters: {n_clusters}  |  Singletons: {n_singletons}  |  Non-representative: {n_dupes}")
-    cli_art.detail(f"next_action breakdown:\n{df['next_action'].value_counts().to_string()}", level=cli_art.NORMAL)
+    n_dupes = len(df) - df["is_representative"].sum()
+    cli_art.cli_info(
+        f"Clusters: {n_clusters}  |  Singletons: {n_singletons}  |  Non-representative: {n_dupes}"
+    )
+    cli_art.detail(
+        f"next_action breakdown:\n{df['next_action'].value_counts().to_string()}",
+        level=cli_art.NORMAL,
+    )
 
     # --- WRITE CLUSTER MAP CSV (rewrite_bullets.py's CLUSTER_MAP_IN) ---
-    front_cols = ["cluster_id", "cluster_size", "is_representative", "next_action", bullet_col]
+    front_cols = [
+        "cluster_id",
+        "cluster_size",
+        "is_representative",
+        "next_action",
+        bullet_col,
+    ]
     other_cols = [c for c in df.columns if c not in front_cols]
     df = df[front_cols + other_cols]
     df.to_csv(CLUSTER_MAP_CSV, index=False)
@@ -498,13 +564,13 @@ def main():
     # --- WRITE CLUSTER MAP JSON (human-readable summary) ---
     cluster_map = {}
     for cid, group in df.groupby("cluster_id"):
-        rep_row   = group[group["is_representative"]].iloc[0]
-        rep_text  = rep_row[bullet_col]
-        members   = group[bullet_col].tolist()
+        rep_row = group[group["is_representative"]].iloc[0]
+        rep_text = rep_row[bullet_col]
+        members = group[bullet_col].tolist()
         cluster_map[str(cid)] = {
-            "size":            len(members),
-            "representative":  rep_text,
-            "members":         members,
+            "size": len(members),
+            "representative": rep_text,
+            "members": members,
         }
     with atomic_write(CLUSTER_MAP, encoding="utf-8") as f:
         json.dump(cluster_map, f, indent=2, ensure_ascii=False)
@@ -514,12 +580,12 @@ def main():
     non_rep = df[~df["is_representative"]].copy()
     # Add queue metadata columns if not already present
     for col, default in [
-        ("rewrite_status",   ""),
+        ("rewrite_status", ""),
         ("rewrite_attempts", 0),
-        ("rewrite_reasoning",""),
-        ("context_gaps",     ""),
-        ("rewrite_date",     ""),
-        ("final_bullet",     ""),
+        ("rewrite_reasoning", ""),
+        ("context_gaps", ""),
+        ("rewrite_date", ""),
+        ("final_bullet", ""),
     ]:
         if col not in non_rep.columns:
             non_rep[col] = default
@@ -531,9 +597,13 @@ def main():
         if len(new_rows) > 0:
             combined = pd.concat([existing, new_rows], ignore_index=True)
             combined.to_csv(REWRITE_QUEUE, index=False)
-            cli_art.cli_success(f"Appended {len(new_rows)} new rows to existing {REWRITE_QUEUE} ({len(combined)} total)")
+            cli_art.cli_success(
+                f"Appended {len(new_rows)} new rows to existing {REWRITE_QUEUE} ({len(combined)} total)"
+            )
         else:
-            cli_art.cli_info(f"No new rows to append -- {REWRITE_QUEUE} already up to date.")
+            cli_art.cli_info(
+                f"No new rows to append -- {REWRITE_QUEUE} already up to date."
+            )
     else:
         non_rep.to_csv(REWRITE_QUEUE, index=False)
         cli_art.cli_success(f"Wrote {len(non_rep)} rows to {REWRITE_QUEUE}")

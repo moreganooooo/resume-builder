@@ -23,8 +23,12 @@ import profile_paths
 from docx import Document
 
 
-def _build_recipient_lines(company_name: str, contact_name: str = "", contact_title: str = "",
-                            location: str = "") -> list[str]:
+def _build_recipient_lines(
+    company_name: str,
+    contact_name: str = "",
+    contact_title: str = "",
+    location: str = "",
+) -> list[str]:
     """Same recipient-line logic as render_coverletter.py's
     build_recipient_block_html(), minus the HTML wrapping."""
     lines = []
@@ -53,13 +57,15 @@ def render_coverletter_docx(cover_letter_data: dict, output_path: str) -> str:
     # --- Header ---
     doc.add_heading(contact["NAME"], level=0)
     header_parts = [
-        p for p in (
+        p
+        for p in (
             cover_letter_data.get("tagline", ""),
             contact.get("PHONE", ""),
             contact.get("EMAIL", ""),
             contact.get("LINKEDIN_DISPLAY", ""),
             contact.get("LOCATION", ""),
-        ) if p
+        )
+        if p
     ]
     if header_parts:
         doc.add_paragraph(" | ".join(header_parts))
@@ -98,7 +104,9 @@ def render_coverletter_docx(cover_letter_data: dict, output_path: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Render a cover letter JSON file to .docx")
+    parser = argparse.ArgumentParser(
+        description="Render a cover letter JSON file to .docx"
+    )
     parser.add_argument("input_json")
     parser.add_argument("output_docx")
     args = parser.parse_args()

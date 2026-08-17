@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cli_art  # noqa: E402
@@ -98,7 +100,11 @@ class TestRevealBanner(unittest.TestCase):
 
         try:
             with patch("cli_art.time.sleep"):
-                cli_art._reveal_banner(["AB", "CD"], [["#000000", "#111111"], ["#222222", "#ffffff"]], render_frame)
+                cli_art._reveal_banner(
+                    ["AB", "CD"],
+                    [["#000000", "#111111"], ["#222222", "#ffffff"]],
+                    render_frame,
+                )
         finally:
             cli_art.console = original
 
@@ -109,7 +115,9 @@ class TestDisplayMainBanner(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
     @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json", "c.json"])
-    def test_runs_without_error_in_non_terminal_mode(self, mock_pending, mock_completed):
+    def test_runs_without_error_in_non_terminal_mode(
+        self, mock_pending, mock_completed
+    ):
         console = Console(record=True, width=100, force_terminal=False)
         original = cli_art.console
         cli_art.console = console
@@ -148,7 +156,9 @@ class TestDisplayStatsLine(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)
     @patch("cli_art.jd_manager.get_pending_jds", return_value=["c.json"])
-    def test_prints_real_pending_and_tailored_counts(self, mock_pending, mock_completed):
+    def test_prints_real_pending_and_tailored_counts(
+        self, mock_pending, mock_completed
+    ):
         console = Console(record=True, width=100)
         original = cli_art.console
         cli_art.console = console
@@ -173,7 +183,10 @@ class TestDisplayTip(unittest.TestCase):
             cli_art.console = original
         output = console.export_text()
         clean_output = "".join(c for c in output if c.isalnum()).lower()
-        matched = any("".join(c for c in tip if c.isalnum()).lower() in clean_output for tip in cli_art.TIPS)
+        matched = any(
+            "".join(c for c in tip if c.isalnum()).lower() in clean_output
+            for tip in cli_art.TIPS
+        )
         self.assertTrue(matched)
 
 
@@ -184,7 +197,9 @@ class TestShortWhy(unittest.TestCase):
         self.assertEqual(cli_art._short_why(None), "-")
 
     def test_short_text_returned_as_is(self):
-        self.assertEqual(cli_art._short_why("Strong tools match."), "Strong tools match")
+        self.assertEqual(
+            cli_art._short_why("Strong tools match."), "Strong tools match"
+        )
 
     def test_takes_only_the_first_sentence(self):
         why = "Strong tools match. Also remote-friendly. A third sentence that shouldn't show."
@@ -201,10 +216,21 @@ class TestRenderFitTable(unittest.TestCase):
 
     def test_shows_count_title_and_recommendation_legend(self):
         results = [
-            {"error": False, "composite_score": 4.5, "recommendation": "Strong pursue",
-             "company_name": "Acme", "job_title": "Writer", "why": "Great fit on tools and seniority."},
-            {"error": True, "composite_score": None, "recommendation": None,
-             "company_name": "Bad Co", "job_title": "Unknown"},
+            {
+                "error": False,
+                "composite_score": 4.5,
+                "recommendation": "Strong pursue",
+                "company_name": "Acme",
+                "job_title": "Writer",
+                "why": "Great fit on tools and seniority.",
+            },
+            {
+                "error": True,
+                "composite_score": None,
+                "recommendation": None,
+                "company_name": "Bad Co",
+                "job_title": "Unknown",
+            },
         ]
         console = Console(record=True, width=120)
         original = cli_art.console
@@ -234,12 +260,28 @@ class TestRenderPipelineTable(unittest.TestCase):
 
     def test_shows_count_status_and_liveness_columns(self):
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
-             "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"}},
-            {"path": "jds/b.json", "status": "Completed", "company": "Beta", "title": "PM",
-             "evaluation": {"composite_score": 3.0, "recommendation": "Selective pursue"},
-             "liveness": None},
+            {
+                "path": "jds/a.json",
+                "status": "Pending",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+                "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"},
+            },
+            {
+                "path": "jds/b.json",
+                "status": "Completed",
+                "company": "Beta",
+                "title": "PM",
+                "evaluation": {
+                    "composite_score": 3.0,
+                    "recommendation": "Selective pursue",
+                },
+                "liveness": None,
+            },
         ]
         # Wide enough (>= B22's ~110-column threshold) that Last
         # Liveness/Follow-up stay in the table.
@@ -255,9 +297,17 @@ class TestRenderPipelineTable(unittest.TestCase):
         # least-essential-at-a-glance columns disappear entirely below the
         # narrow threshold, and headers never truncate.
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
-             "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"}},
+            {
+                "path": "jds/a.json",
+                "status": "Pending",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+                "liveness": {"result": "active", "checked_at": "2026-07-21T10:00:00"},
+            },
         ]
         output = self._rendered_at_width(80, rows)
         # The hint subtitle legitimately names both dropped columns, so
@@ -270,23 +320,48 @@ class TestRenderPipelineTable(unittest.TestCase):
 
     def test_headers_are_never_truncated_at_80_or_100_columns(self):
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+            {
+                "path": "jds/a.json",
+                "status": "Pending",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+            },
         ]
         for width in (80, 100):
             output = self._rendered_at_width(width, rows)
-            self.assertIn("Recommendation", output, f"header truncated at width={width}")
+            self.assertIn(
+                "Recommendation", output, f"header truncated at width={width}"
+            )
             self.assertIn("Company", output, f"header truncated at width={width}")
             self.assertIn("Status", output, f"header truncated at width={width}")
 
     def test_shows_followup_status_and_urgency(self):
         import datetime
-        overdue_at = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(timespec="seconds")
+
+        overdue_at = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(
+            timespec="seconds"
+        )
         rows = [
-            {"path": "jds/a.json", "status": "Completed", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
-             "liveness": None,
-             "application": {"status": "Applied", "status_changed_at": overdue_at, "follow_up_count": 0}},
+            {
+                "path": "jds/a.json",
+                "status": "Completed",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+                "liveness": None,
+                "application": {
+                    "status": "Applied",
+                    "status_changed_at": overdue_at,
+                    "follow_up_count": 0,
+                },
+            },
         ]
         output = self._rendered_at_width(140, rows)
         self.assertIn("Applied", output)
@@ -294,18 +369,36 @@ class TestRenderPipelineTable(unittest.TestCase):
 
     def test_start_index_numbers_the_hash_column_from_an_offset(self):
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+            {
+                "path": "jds/a.json",
+                "status": "Pending",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+            },
         ]
         output = _rendered(cli_art.render_pipeline_table, rows, start_index=51)
         self.assertIn("51", output)
 
     def test_title_override_replaces_the_default_count_title(self):
         rows = [
-            {"path": "jds/a.json", "status": "Pending", "company": "Acme", "title": "Writer",
-             "evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"}},
+            {
+                "path": "jds/a.json",
+                "status": "Pending",
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                },
+            },
         ]
-        output = _rendered(cli_art.render_pipeline_table, rows, title="Page 2/3 -- rows 51-52 of 120")
+        output = _rendered(
+            cli_art.render_pipeline_table, rows, title="Page 2/3 -- rows 51-52 of 120"
+        )
         self.assertIn("Page 2/3 -- rows 51-52 of 120", output)
         self.assertNotIn("1 evaluated JD(s)", output)
 
@@ -314,18 +407,36 @@ class TestRenderComparisonTable(unittest.TestCase):
 
     def test_shows_one_column_per_jd_and_dimension_rows(self):
         rows = [
-            {"company": "Acme", "title": "Writer", "evaluation": {
-                "composite_score": 4.5, "recommendation": "Strong pursue", "archetype": "Content Lead",
-                "fit_subscores": {"functional_alignment": 5, "north_star_alignment": 4},
-                "interview_odds_subscores": {"title_continuity": 4},
-                "practical_pursue_subscores": {"remote_quality": 4},
-            }},
-            {"company": "Beta", "title": "PM", "evaluation": {
-                "composite_score": 3.0, "recommendation": "Selective pursue", "archetype": "Ops Generalist",
-                "fit_subscores": {"functional_alignment": 3, "north_star_alignment": 2},
-                "interview_odds_subscores": {"title_continuity": 2},
-                "practical_pursue_subscores": {"remote_quality": 2},
-            }},
+            {
+                "company": "Acme",
+                "title": "Writer",
+                "evaluation": {
+                    "composite_score": 4.5,
+                    "recommendation": "Strong pursue",
+                    "archetype": "Content Lead",
+                    "fit_subscores": {
+                        "functional_alignment": 5,
+                        "north_star_alignment": 4,
+                    },
+                    "interview_odds_subscores": {"title_continuity": 4},
+                    "practical_pursue_subscores": {"remote_quality": 4},
+                },
+            },
+            {
+                "company": "Beta",
+                "title": "PM",
+                "evaluation": {
+                    "composite_score": 3.0,
+                    "recommendation": "Selective pursue",
+                    "archetype": "Ops Generalist",
+                    "fit_subscores": {
+                        "functional_alignment": 3,
+                        "north_star_alignment": 2,
+                    },
+                    "interview_odds_subscores": {"title_continuity": 2},
+                    "practical_pursue_subscores": {"remote_quality": 2},
+                },
+            },
         ]
         output = _rendered(cli_art.render_comparison_table, rows)
         self.assertIn("Comparing 2 JD(s)", output)
@@ -340,7 +451,12 @@ class TestRenderDoctorReport(unittest.TestCase):
     def test_all_passed_shows_success_summary_no_fixes(self):
         checks = [
             {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""},
-            {"name": "Node.js", "passed": True, "detail": "/usr/local/bin/node", "fix": ""},
+            {
+                "name": "Node.js",
+                "passed": True,
+                "detail": "/usr/local/bin/node",
+                "fix": "",
+            },
         ]
         output = _rendered(cli_art.render_doctor_report, checks)
         self.assertIn("All checks passed", output)
@@ -349,20 +465,33 @@ class TestRenderDoctorReport(unittest.TestCase):
     def test_failures_show_count_and_one_line_fix_each(self):
         checks = [
             {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""},
-            {"name": "Node.js", "passed": False, "detail": "not found on PATH", "fix": "Install Node.js"},
+            {
+                "name": "Node.js",
+                "passed": False,
+                "detail": "not found on PATH",
+                "fix": "Install Node.js",
+            },
         ]
         output = _rendered(cli_art.render_doctor_report, checks)
         self.assertIn("1 problem(s) found", output)
         self.assertIn("Install Node.js", output)
 
     def test_test_result_summary_included_when_provided(self):
-        checks = [{"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}]
-        output = _rendered(cli_art.render_doctor_report, checks, test_result=(True, "Ran 5 tests in 0.01s\nOK"))
+        checks = [
+            {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}
+        ]
+        output = _rendered(
+            cli_art.render_doctor_report,
+            checks,
+            test_result=(True, "Ran 5 tests in 0.01s\nOK"),
+        )
         self.assertIn("Test suite", output)
         self.assertIn("Ran 5 tests", output)
 
     def test_no_test_result_line_when_none(self):
-        checks = [{"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}]
+        checks = [
+            {"name": "Python version", "passed": True, "detail": "3.13.0", "fix": ""}
+        ]
         output = _rendered(cli_art.render_doctor_report, checks, None)
         self.assertNotIn("Test suite", output)
 
@@ -388,7 +517,12 @@ class TestRenderBulletBankStatus(unittest.TestCase):
 
     def test_shows_stage_numbers_labels_status_and_maintenance_rows(self):
         stage_rows = [
-            (1, "Audit Bullet Bank (Score Quality)", "Up to date", "as of 2026-07-15 10:00"),
+            (
+                1,
+                "Audit Bullet Bank (Score Quality)",
+                "Up to date",
+                "as of 2026-07-15 10:00",
+            ),
             (2, "Cluster & Classify Bullets", "Stale", ""),
             (3, "Rewrite Weak Bullets", "Never run", ""),
         ]
@@ -425,7 +559,9 @@ class TestScanActivity(unittest.TestCase):
         activity = cli_art.new_scan_activity()
         with activity:
             with patch("cli_art.console.print") as mock_print:
-                activity.step("success", "JobRight", "Found Senior Data Engineer @ Acme")
+                activity.step(
+                    "success", "JobRight", "Found Senior Data Engineer @ Acme"
+                )
         mock_print.assert_called_once_with(
             f"  {cli_art.theme.colorize_icon('success')} [bold]JobRight[/bold] "
             "Found Senior Data Engineer @ Acme",
@@ -456,7 +592,9 @@ class TestScanActivity(unittest.TestCase):
         activity = cli_art.new_scan_activity()
         with activity:
             activity.tally(fetched=12, written=9, skipped=3, errors=0)
-            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+            task = next(
+                t for t in activity._progress.tasks if t.id == activity._task_id
+            )
         self.assertIn("Fetched 12", task.description)
         self.assertIn("Written 9", task.description)
         self.assertIn("Skipped 3", task.description)
@@ -467,7 +605,9 @@ class TestScanActivity(unittest.TestCase):
         with activity:
             activity.tally(fetched=5)
             activity.tally(written=2)
-            task = next(t for t in activity._progress.tasks if t.id == activity._task_id)
+            task = next(
+                t for t in activity._progress.tasks if t.id == activity._task_id
+            )
         self.assertIn("Fetched 5", task.description)
         self.assertIn("Written 2", task.description)
 
@@ -475,7 +615,9 @@ class TestScanActivity(unittest.TestCase):
 class TestMarkupEscaping(unittest.TestCase):
 
     def test_cli_warning_does_not_swallow_bracketed_dynamic_text(self):
-        output = _rendered(cli_art.cli_warning, "[NEEDS_REWRITE] Led team to grow revenue")
+        output = _rendered(
+            cli_art.cli_warning, "[NEEDS_REWRITE] Led team to grow revenue"
+        )
         self.assertIn("[NEEDS_REWRITE]", output)
 
     def test_cli_error_does_not_swallow_bracketed_dynamic_text(self):
@@ -506,7 +648,13 @@ class TestRenderRewriteQueueTable(unittest.TestCase):
 
     def test_renders_rank_source_composite_manager_test_and_bullet(self):
         rows = [
-            {"rank": 1, "source": "keeper_audit", "composite": 42.0, "manager_test": "FAIL", "bullet": "Led [Series B] growth"},
+            {
+                "rank": 1,
+                "source": "keeper_audit",
+                "composite": 42.0,
+                "manager_test": "FAIL",
+                "bullet": "Led [Series B] growth",
+            },
         ]
         output = _rendered(cli_art.render_rewrite_queue_table, rows, "Top 10 Worst")
         self.assertIn("keeper_audit", output)
@@ -518,9 +666,16 @@ class TestRenderRewriteQueueTable(unittest.TestCase):
 class TestRenderTriageSummaryTable(unittest.TestCase):
 
     def test_renders_all_five_counts(self):
-        output = _rendered(cli_art.render_triage_summary_table, {
-            "keep": 3, "rewrite": 1, "retire": 0, "duplicate": 2, "leftover": 5,
-        })
+        output = _rendered(
+            cli_art.render_triage_summary_table,
+            {
+                "keep": 3,
+                "rewrite": 1,
+                "retire": 0,
+                "duplicate": 2,
+                "leftover": 5,
+            },
+        )
         self.assertIn("3", output)
         self.assertIn("KEEP", output)
         self.assertIn("REWRITE", output)
@@ -533,6 +688,7 @@ class TestThinkingStatus(unittest.TestCase):
 
     def test_thinking_status_runs_and_cleans_up(self):
         import time
+
         with cli_art.thinking_status("Analyzing job posting..."):
             time.sleep(0.05)
         # Successfully entered and exited context manager without error
@@ -542,6 +698,7 @@ class TestThemeTokens(unittest.TestCase):
 
     def test_catppuccin_thinking_tokens_defined_in_theme(self):
         import theme
+
         self.assertTrue(hasattr(theme, "PEACH"))
         self.assertTrue(hasattr(theme, "PINK"))
         self.assertTrue(hasattr(theme, "MAUVE"))
@@ -561,7 +718,12 @@ class TestSparkleBannerAndCelebration(unittest.TestCase):
         self.assertIn("✦", output)
 
     def test_render_sparkle_celebration_renders(self):
-        output = _rendered(cli_art.render_sparkle_celebration, "Resume Tailored Successfully!", "Your new application is ready.", ["Review in dashboard", "Apply to job"])
+        output = _rendered(
+            cli_art.render_sparkle_celebration,
+            "Resume Tailored Successfully!",
+            "Your new application is ready.",
+            ["Review in dashboard", "Apply to job"],
+        )
         self.assertIn("Resume Tailored Successfully!", output)
         self.assertIn("What to do next:", output)
         self.assertIn("Review in dashboard", output)
@@ -570,4 +732,3 @@ class TestSparkleBannerAndCelebration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

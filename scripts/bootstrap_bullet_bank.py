@@ -144,9 +144,13 @@ def create_new_profile(name: str) -> str:
 
     profile_root = os.path.join(profile_paths.PROFILES_DIR, name)
     if os.path.isdir(profile_root):
-        raise FileExistsError(f"profiles/{name}/ already exists -- refusing to overwrite it.")
+        raise FileExistsError(
+            f"profiles/{name}/ already exists -- refusing to overwrite it."
+        )
 
-    os.makedirs(os.path.join(profile_root, "knowledge_base", "bootstrap", "source_documents"))
+    os.makedirs(
+        os.path.join(profile_root, "knowledge_base", "bootstrap", "source_documents")
+    )
     os.makedirs(os.path.join(profile_root, "board_scanner"))
 
     with open(os.path.join(profile_root, "fixed_content.py"), "w") as f:
@@ -155,13 +159,19 @@ def create_new_profile(name: str) -> str:
     with open(os.path.join(profile_root, "situational_roles.yaml"), "w") as f:
         f.write(_SITUATIONAL_ROLES_SCAFFOLD)
 
-    with open(os.path.join(profile_root, "board_scanner", "tracked_companies.yml"), "w") as f:
+    with open(
+        os.path.join(profile_root, "board_scanner", "tracked_companies.yml"), "w"
+    ) as f:
         f.write(_TRACKED_COMPANIES_SCAFFOLD)
 
-    with open(os.path.join(profile_root, "board_scanner", "search_queries.yml"), "w") as f:
+    with open(
+        os.path.join(profile_root, "board_scanner", "search_queries.yml"), "w"
+    ) as f:
         f.write(_SEARCH_QUERIES_SCAFFOLD)
 
-    with open(os.path.join(profile_root, "board_scanner", "scan_filters.yml"), "w") as f:
+    with open(
+        os.path.join(profile_root, "board_scanner", "scan_filters.yml"), "w"
+    ) as f:
         f.write(_SCAN_FILTERS_SCAFFOLD)
 
     profile_paths.write_sync_ignore_files(name)
@@ -176,7 +186,13 @@ import cli_art
 import tag_bullet_bank  # noqa: E402
 import theme  # noqa: E402
 
-DRAFT_CSV_FIELDS = ["Role / Company", "Tags", "Bullet Point", "source_file", "source_type"]
+DRAFT_CSV_FIELDS = [
+    "Role / Company",
+    "Tags",
+    "Bullet Point",
+    "source_file",
+    "source_type",
+]
 
 
 def _load_checkpoint() -> dict:
@@ -195,7 +211,9 @@ def _save_checkpoint(state: dict) -> None:
 def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
     kind = bootstrap_extractors.detect_file_kind(path)
     if kind == "unsupported":
-        cli_art.print_literal(f"  Skipping {cli_art._escape_markup(filename)}: unsupported file type.")
+        cli_art.print_literal(
+            f"  Skipping {cli_art._escape_markup(filename)}: unsupported file type."
+        )
         return {"status": "error", "doc_type": "other"}
 
     if kind == "doc":
@@ -207,8 +225,14 @@ def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
             return {"status": "error", "doc_type": "other"}
         path, kind = converted, "pdf"
 
-    text = None if kind in ("pdf", "image") else bootstrap_extractors.extract_local_text(path, kind)
-    doc_type = bootstrap_extractors.classify_document_type(filename, text, dry_run=dry_run)
+    text = (
+        None
+        if kind in ("pdf", "image")
+        else bootstrap_extractors.extract_local_text(path, kind)
+    )
+    doc_type = bootstrap_extractors.classify_document_type(
+        filename, text, dry_run=dry_run
+    )
 
     if doc_type == "certificate":
         cert = (
@@ -216,27 +240,45 @@ def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
             if text is None
             else bootstrap_extractors.extract_certificate(text=text, dry_run=dry_run)
         )
-        return {"status": "done", "doc_type": doc_type, "certificate": cert.model_dump() if cert else None}
+        return {
+            "status": "done",
+            "doc_type": doc_type,
+            "certificate": cert.model_dump() if cert else None,
+        }
 
     if doc_type in ("resume", "linkedin_export"):
         resume_extraction = (
-            bootstrap_extractors.extract_resume_timeline_and_achievements(upload_path=path, dry_run=dry_run)
+            bootstrap_extractors.extract_resume_timeline_and_achievements(
+                upload_path=path, dry_run=dry_run
+            )
             if text is None
-            else bootstrap_extractors.extract_resume_timeline_and_achievements(text=text, dry_run=dry_run)
+            else bootstrap_extractors.extract_resume_timeline_and_achievements(
+                text=text, dry_run=dry_run
+            )
         )
         return {
             "status": "done",
             "doc_type": doc_type,
             "work_experience": [e.model_dump() for e in resume_extraction.experience],
-            "certificates_found": [c.model_dump() for c in resume_extraction.certifications],
+            "certificates_found": [
+                c.model_dump() for c in resume_extraction.certifications
+            ],
         }
 
     achievements = (
-        bootstrap_extractors.extract_achievements(doc_type, upload_path=path, dry_run=dry_run)
+        bootstrap_extractors.extract_achievements(
+            doc_type, upload_path=path, dry_run=dry_run
+        )
         if text is None
-        else bootstrap_extractors.extract_achievements(doc_type, text=text, dry_run=dry_run)
+        else bootstrap_extractors.extract_achievements(
+            doc_type, text=text, dry_run=dry_run
+        )
     )
-    return {"status": "done", "doc_type": doc_type, "achievements": [a.model_dump() for a in achievements]}
+    return {
+        "status": "done",
+        "doc_type": doc_type,
+        "achievements": [a.model_dump() for a in achievements],
+    }
 
 
 def _write_timeline(timeline: list) -> None:
@@ -251,10 +293,15 @@ def _write_draft_csv(matched_rows: list) -> None:
         writer = csv.DictWriter(f, fieldnames=DRAFT_CSV_FIELDS)
         writer.writeheader()
         for company, bullet, filename, doc_type, _confidence in matched_rows:
-            writer.writerow({
-                "Role / Company": company, "Tags": "", "Bullet Point": f"- {bullet}",
-                "source_file": filename, "source_type": doc_type,
-            })
+            writer.writerow(
+                {
+                    "Role / Company": company,
+                    "Tags": "",
+                    "Bullet Point": f"- {bullet}",
+                    "source_file": filename,
+                    "source_type": doc_type,
+                }
+            )
 
 
 def _write_review_csv(review_rows: list) -> None:
@@ -267,10 +314,15 @@ def _write_review_csv(review_rows: list) -> None:
         writer = csv.DictWriter(f, fieldnames=DRAFT_CSV_FIELDS)
         writer.writeheader()
         for company, bullet, filename, doc_type, _confidence in review_rows:
-            writer.writerow({
-                "Role / Company": company, "Tags": "", "Bullet Point": f"- {bullet}",
-                "source_file": filename, "source_type": doc_type,
-            })
+            writer.writerow(
+                {
+                    "Role / Company": company,
+                    "Tags": "",
+                    "Bullet Point": f"- {bullet}",
+                    "source_file": filename,
+                    "source_type": doc_type,
+                }
+            )
 
 
 def _write_certifications(certificates: list) -> None:
@@ -287,7 +339,8 @@ def _existing_clean_bank_row_count() -> int:
             return sum(1 for _ in csv.DictReader(f))
     except Exception as e:
         cli_art.friendly_warning(
-            e, "reading your existing bullet bank",
+            e,
+            "reading your existing bullet bank",
             "showing 0 existing rows below, even though the file may not actually be empty",
         )
         return 0
@@ -318,11 +371,15 @@ def _write_bullet_bank_clean(matched_rows: list, overwrite: bool = False) -> Non
     for company, bullet, _filename, _doc_type, _confidence in matched_rows:
         bullet_text = f"- {bullet}"
         tag_str, _needs_review = tag_bullet_bank.assign_tags(bullet_text)
-        new_rows.append({"Role / Company": company, "Tags": tag_str, "Bullet Point": bullet_text})
+        new_rows.append(
+            {"Role / Company": company, "Tags": tag_str, "Bullet Point": bullet_text}
+        )
 
     os.makedirs(os.path.dirname(BULLET_BANK_CLEAN_PATH), exist_ok=True)
     with atomic_write(BULLET_BANK_CLEAN_PATH, newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
+        writer = csv.DictWriter(
+            f, fieldnames=["Role / Company", "Tags", "Bullet Point"]
+        )
         writer.writeheader()
         writer.writerows(existing_rows)
         writer.writerows(new_rows)
@@ -369,10 +426,13 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
 
     os.makedirs(SOURCE_DOCS_DIR, exist_ok=True)
     checkpoint = _load_checkpoint()
-    already_done_before = {f for f, r in checkpoint.items() if r.get("status") == "done"}
+    already_done_before = {
+        f for f, r in checkpoint.items() if r.get("status") == "done"
+    }
 
     filenames = sorted(
-        f for f in os.listdir(SOURCE_DOCS_DIR)
+        f
+        for f in os.listdir(SOURCE_DOCS_DIR)
         if os.path.isfile(os.path.join(SOURCE_DOCS_DIR, f))
     )
 
@@ -391,7 +451,11 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
             # "done", so the next run_ingestion() call retries this file
             # instead of skipping it.
             cli_art.friendly_error(e, f"processing {filename}")
-            checkpoint[filename] = {"status": "failed", "doc_type": "other", "reason": str(e)}
+            checkpoint[filename] = {
+                "status": "failed",
+                "doc_type": "other",
+                "reason": str(e),
+            }
             failures += 1
         except Exception as e:
             cli_art.friendly_error(e, f"processing {filename}")
@@ -408,27 +472,38 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
             continue
         doc_type = result["doc_type"]
         if doc_type in ("resume", "linkedin_export"):
-            entries = [bootstrap_extractors.WorkExperienceEntry(**e) for e in result.get("work_experience", [])]
+            entries = [
+                bootstrap_extractors.WorkExperienceEntry(**e)
+                for e in result.get("work_experience", [])
+            ]
             by_source.setdefault(doc_type, []).extend(entries)
             for entry in entries:
                 for bullet in entry.achievements:
-                    already_attributed_rows.append((entry.company, bullet, filename, doc_type))
+                    already_attributed_rows.append(
+                        (entry.company, bullet, filename, doc_type)
+                    )
             certificates.extend(result.get("certificates_found", []))
         elif doc_type == "certificate":
             if result.get("certificate"):
                 certificates.append(result["certificate"])
         else:
             for a in result.get("achievements", []):
-                pending_achievements.append((bootstrap_extractors.RawAchievement(**a), filename, doc_type))
+                pending_achievements.append(
+                    (bootstrap_extractors.RawAchievement(**a), filename, doc_type)
+                )
 
     timeline = bootstrap_timeline.build_timeline(by_source)
 
-    matched_rows = [(company, bullet, filename, doc_type, "high")
-                     for company, bullet, filename, doc_type in already_attributed_rows]
+    matched_rows = [
+        (company, bullet, filename, doc_type, "high")
+        for company, bullet, filename, doc_type in already_attributed_rows
+    ]
     review_rows = []
 
     for achievement, filename, doc_type in pending_achievements:
-        company, confidence = bootstrap_timeline.match_to_timeline(achievement, timeline, dry_run=dry_run)
+        company, confidence = bootstrap_timeline.match_to_timeline(
+            achievement, timeline, dry_run=dry_run
+        )
         row = (company, achievement.raw_text, filename, doc_type, confidence)
         matched_rows.append(row)
         if confidence == "low":
@@ -448,10 +523,16 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
         # rows extracted from files processed in *this* call get written;
         # everything from a previously-"done" file is already on disk
         # and must not be touched.
-        rows_written = [row for row in matched_rows if row[2] not in already_done_before]
+        rows_written = [
+            row for row in matched_rows if row[2] not in already_done_before
+        ]
         _write_bullet_bank_clean(rows_written, overwrite=False)
 
-    new_review_rows = [row for row in review_rows if row[2] not in already_done_before] if not force else review_rows
+    new_review_rows = (
+        [row for row in review_rows if row[2] not in already_done_before]
+        if not force
+        else review_rows
+    )
 
     return {
         "extracted": len(rows_written),
@@ -473,8 +554,9 @@ def print_ingestion_summary(summary: dict) -> None:
         cli_art.console.print(
             f"{theme.colorize_icon('warning')}  {summary['failed']} document(s) failed to process "
             "(API error -- see above for details). They'll be retried automatically next time you run "
-            "ingestion; they were not counted as done."
-        , soft_wrap=True)
+            "ingestion; they were not counted as done.",
+            soft_wrap=True,
+        )
 
 
 import argparse
@@ -495,25 +577,25 @@ PIPELINE_STAGES = [
 # -- the two stages that make a real API call per bullet.
 _CONFIRMATION_GATES = {
     0: "Ready to run the quality-audit stage? This calls the API once per "
-       "bullet and may take a while.",
+    "bullet and may take a while.",
     2: "Ready to run the rewrite stage? This is the other API-heavy step "
-       "and may take a while.",
+    "and may take a while.",
 }
 
 _STAGE_HINTS = {
     0: f"{theme.colorize_icon('hint')} Quality check time — every bullet gets scored the way a "
-       "skeptical hiring manager would read it. This is the first API-heavy step.",
+    "skeptical hiring manager would read it. This is the first API-heavy step.",
     1: f"{theme.colorize_icon('hint')} Grouping near-duplicate bullets and keeping only the "
-       "strongest version of each.",
+    "strongest version of each.",
     2: f"{theme.colorize_icon('hint')} Rewriting anything that didn't pass the quality check — "
-       "the other API-heavy step.",
+    "the other API-heavy step.",
     3: f"{theme.colorize_icon('hint')} Quick re-check on the rewritten bullets to make sure they "
-       "actually improved.",
+    "actually improved.",
     4: f"{theme.colorize_icon('hint')} Flagging standout 'hidden gem' bullets — the ones a "
-       "hiring manager would specifically remember.",
+    "hiring manager would specifically remember.",
     5: f"{theme.colorize_icon('hint')} Last step — converting everything into a format the "
-       "system can use to intelligently match bullets to a job description "
-       "later.",
+    "system can use to intelligently match bullets to a job description "
+    "later.",
 }
 
 
@@ -533,30 +615,52 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
     simply re-running this function later resumes correctly."""
     for i, script_name in enumerate(PIPELINE_STAGES):
         if i in _CONFIRMATION_GATES and not skip_confirm:
-            proceed = questionary.confirm(_CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE).ask()
+            proceed = questionary.confirm(
+                _CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE
+            ).ask()
             if not proceed:
-                cli_art.print_literal("Stopped. Re-run this same command later to continue from here.")
+                cli_art.print_literal(
+                    "Stopped. Re-run this same command later to continue from here."
+                )
                 return False
 
         cli_art.print_literal(f"\n{_STAGE_HINTS[i]}")
-        cli_art.print_literal(f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {cli_art._escape_markup(script_name)}...")
+        cli_art.print_literal(
+            f"Stage {i + 1} of {len(PIPELINE_STAGES)}: running {cli_art._escape_markup(script_name)}..."
+        )
         if not run_stage(script_name):
-            cli_art.print_literal(f"\nStage {i + 1} ({cli_art._escape_markup(script_name)}) failed. Re-run this same command to resume from here.")
+            cli_art.print_literal(
+                f"\nStage {i + 1} ({cli_art._escape_markup(script_name)}) failed. Re-run this same command to resume from here."
+            )
             return False
 
-    cli_art.print_literal(f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready.")
+    cli_art.print_literal(
+        f"\n{theme.colorize_icon('success')} All done! Your bullet bank is ready."
+    )
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--yes", action="store_true", help="Skip confirmation gates and run the full pipeline unattended.")
-    parser.add_argument("--dry-run", action="store_true", help="Print prompts instead of calling the API, and skip the real six-stage pipeline entirely.")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
-        "--scope", choices=["bullets", "profile", "both"], default="both",
-        help="\"Update My Knowledge\" only: which downstream steps to run after "
-             "ingesting new source_documents/ content. Phase 0 (ingestion) always "
-             "runs regardless of scope, since it's what processes the new files.",
+        "--yes",
+        action="store_true",
+        help="Skip confirmation gates and run the full pipeline unattended.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print prompts instead of calling the API, and skip the real six-stage pipeline entirely.",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=["bullets", "profile", "both"],
+        default="both",
+        help='"Update My Knowledge" only: which downstream steps to run after '
+        "ingesting new source_documents/ content. Phase 0 (ingestion) always "
+        "runs regardless of scope, since it's what processes the new files.",
     )
     parser.add_argument(
         "--force-overwrite-clean-bank",

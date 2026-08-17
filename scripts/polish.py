@@ -75,8 +75,11 @@ for _group_label, _subscores_key, _dim_labels in cli_art._FIT_DIMENSION_GROUPS:
     _SCHEMA_KEY_LABELS.update(_dim_labels)
 
 _EXPERIENCE_FIELD_LABELS = {
-    "title": "Title", "company": "Company", "period": "Period",
-    "location": "Location", "career_note": "Career Note",
+    "title": "Title",
+    "company": "Company",
+    "period": "Period",
+    "location": "Location",
+    "career_note": "Career Note",
 }
 
 
@@ -134,14 +137,20 @@ def _diff_experience(old_jobs: list, new_jobs: list) -> list[str]:
         role_label = f"Experience #{i + 1}"
         for field, field_label in _EXPERIENCE_FIELD_LABELS.items():
             if old_job.get(field) != new_job.get(field):
-                lines.extend(_render_field_diff(
-                    f"{role_label} — {field_label}", old_job.get(field), new_job.get(field),
-                ))
-        lines.extend(_diff_list(
-            f"{role_label} — Achievement",
-            old_job.get("achievements", []),
-            new_job.get("achievements", []),
-        ))
+                lines.extend(
+                    _render_field_diff(
+                        f"{role_label} — {field_label}",
+                        old_job.get(field),
+                        new_job.get(field),
+                    )
+                )
+        lines.extend(
+            _diff_list(
+                f"{role_label} — Achievement",
+                old_job.get("achievements", []),
+                new_job.get("achievements", []),
+            )
+        )
     return lines
 
 
@@ -161,7 +170,11 @@ def diff_documents(old: dict, new: dict, keys: list[str]) -> list[str]:
         if old_val == new_val:
             continue
         label = _label_for_key(key)
-        if key == "EXPERIENCE" and isinstance(old_val, list) and isinstance(new_val, list):
+        if (
+            key == "EXPERIENCE"
+            and isinstance(old_val, list)
+            and isinstance(new_val, list)
+        ):
             lines.extend(_diff_experience(old_val, new_val))
         elif isinstance(old_val, list) and isinstance(new_val, list):
             lines.extend(_diff_list(label, old_val, new_val))
@@ -170,7 +183,9 @@ def diff_documents(old: dict, new: dict, keys: list[str]) -> list[str]:
     return lines
 
 
-def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: ResumeEngine) -> dict | None:
+def generate_candidate(
+    doc: dict, instruction: str, doc_type: str, engine: ResumeEngine
+) -> dict | None:
     """Sends the current document's schema-relevant fields plus one
     instruction to Gemini and returns the complete updated document, or
     None if the response was unparseable. Resume responses are re-run
@@ -195,7 +210,9 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
         # rubric at all -- believability.yaml and ai_risk.yaml are the
         # smallest useful attachment (metric-credibility and AI-pattern
         # checks apply to cover-letter prose just as much as to a resume).
-        believability_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "believability.yaml"))
+        believability_rules = json.dumps(
+            engine.load_yaml(engine.scoring_dir, "believability.yaml")
+        )
         ai_risk_rules = json.dumps(engine.load_yaml(engine.scoring_dir, "ai_risk.yaml"))
         system_instruction += (
             f"\n\nBELIEVABILITY SCORING RUBRIC:\n{believability_rules}"
@@ -229,7 +246,9 @@ def generate_candidate(doc: dict, instruction: str, doc_type: str, engine: Resum
         violations = validate_coverletter.validate(candidate, style_rules)
 
     if violations:
-        cli_art.console.print(f"{cli_art.WARNING} Validator found {len(violations)} issue(s) in this edit:")
+        cli_art.console.print(
+            f"{cli_art.WARNING} Validator found {len(violations)} issue(s) in this edit:"
+        )
         for v in violations:
             cli_art.console.print(f"  - {v}")
 
@@ -289,7 +308,9 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     try:
         result = subprocess.run(
             ["node", pdf_script, html_path, pdf_path, "--format=letter"],
-            capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+            capture_output=True,
+            text=True,
+            timeout=PDF_GENERATION_TIMEOUT_SECONDS,
             env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
         )
     except subprocess.TimeoutExpired:
@@ -297,16 +318,33 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
             f"{cli_art.WARNING} PDF generation timed out after {PDF_GENERATION_TIMEOUT_SECONDS}s "
             "(JSON/HTML were still saved)."
         )
-        return {"json": json_path, "html": html_path, "pdf": None, "backup": backup_path}
+        return {
+            "json": json_path,
+            "html": html_path,
+            "pdf": None,
+            "backup": backup_path,
+        }
     if result.returncode != 0:
         cli_art.friendly_subprocess_error(result.stderr, "creating the polished PDF")
         # Stated after the error, not inside it: the failure is the headline,
         # but a user who just spent Gemini calls on this needs to know their
         # edits survived and only the render step is missing.
-        cli_art.cli_info("Your polished JSON and HTML were still saved -- only the PDF is missing.")
-        return {"json": json_path, "html": html_path, "pdf": None, "backup": backup_path}
+        cli_art.cli_info(
+            "Your polished JSON and HTML were still saved -- only the PDF is missing."
+        )
+        return {
+            "json": json_path,
+            "html": html_path,
+            "pdf": None,
+            "backup": backup_path,
+        }
 
-    return {"json": json_path, "html": html_path, "pdf": pdf_path, "backup": backup_path}
+    return {
+        "json": json_path,
+        "html": html_path,
+        "pdf": pdf_path,
+        "backup": backup_path,
+    }
 
 
 _POLISH_PAGE_SIZE = 50
@@ -328,7 +366,8 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
     user cancels)."""
     paths = sorted(
         glob.glob(os.path.join(OUTPUT_JSON_DIR, "*.json")),
-        key=os.path.getmtime, reverse=True,
+        key=os.path.getmtime,
+        reverse=True,
     )
     paths = [p for p in paths if detect_doc_type(p) is not None]
     if not paths:
@@ -342,34 +381,67 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
         end = min(start + page_size, len(paths))
         page_paths = paths[start:end]
         page_rows = [
-            {"path": p, "label": "Resume" if detect_doc_type(p) == "resume" else "Cover Letter"}
+            {
+                "path": p,
+                "label": "Resume" if detect_doc_type(p) == "resume" else "Cover Letter",
+            }
             for p in page_paths
         ]
 
         cli_art.render_polish_table(
-            page_rows, start_index=start + 1,
+            page_rows,
+            start_index=start + 1,
             title=f"Page {page + 1}/{total_pages} -- rows {start + 1}-{end} of {len(paths)} document(s)",
         )
 
         choices = [
-            questionary.Choice(title=f"{i:>4}  [{r['label']}] {os.path.basename(r['path'])}", value=r["path"])
+            questionary.Choice(
+                title=f"{i:>4}  [{r['label']}] {os.path.basename(r['path'])}",
+                value=r["path"],
+            )
             for i, r in enumerate(page_rows, start=start + 1)
         ]
         choices.append(questionary.Separator())
         if page > 0:
-            choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['prev']} Previous page")], value=_POLISH_NAV_PREV,
-            ))
+            choices.append(
+                questionary.Choice(
+                    title=[
+                        (
+                            f"fg:{theme.BRAND_ACCENT} bold",
+                            f"{theme.ICONS['prev']} Previous page",
+                        )
+                    ],
+                    value=_POLISH_NAV_PREV,
+                )
+            )
         if page < total_pages - 1:
-            choices.append(questionary.Choice(
-                title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['next']} Next page")], value=_POLISH_NAV_NEXT,
-            ))
-        choices.append(questionary.Choice(
-            title=[(f"fg:{theme.BRAND_ACCENT} bold", f"{theme.ICONS['back']} Back to Main Menu")], value=_POLISH_NAV_BACK,
-        ))
+            choices.append(
+                questionary.Choice(
+                    title=[
+                        (
+                            f"fg:{theme.BRAND_ACCENT} bold",
+                            f"{theme.ICONS['next']} Next page",
+                        )
+                    ],
+                    value=_POLISH_NAV_NEXT,
+                )
+            )
+        choices.append(
+            questionary.Choice(
+                title=[
+                    (
+                        f"fg:{theme.BRAND_ACCENT} bold",
+                        f"{theme.ICONS['back']} Back to Main Menu",
+                    )
+                ],
+                value=_POLISH_NAV_BACK,
+            )
+        )
 
         result = questionary.select(
-            "Which document do you want to polish?", choices=choices, style=cli_art.QUESTIONARY_STYLE,
+            "Which document do you want to polish?",
+            choices=choices,
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if result is None or result == _POLISH_NAV_BACK:
             return None
@@ -406,11 +478,15 @@ def run_polish_session(json_path: str) -> None:
     engine = ResumeEngine()
     fields = RESUME_FIELDS if doc_type == "resume" else COVERLETTER_FIELDS
 
-    cli_art.console.print(f"\nPolishing {os.path.basename(json_path)}. Type 'done' to finish.\n")
+    cli_art.console.print(
+        f"\nPolishing {os.path.basename(json_path)}. Type 'done' to finish.\n"
+    )
 
     while True:
         try:
-            instruction = questionary.text("polish>", style=cli_art.QUESTIONARY_STYLE).ask()
+            instruction = questionary.text(
+                "polish>", style=cli_art.QUESTIONARY_STYLE
+            ).ask()
         except (KeyboardInterrupt, EOFError):
             instruction = None
 
@@ -419,7 +495,9 @@ def run_polish_session(json_path: str) -> None:
 
         candidate = generate_candidate(doc, instruction, doc_type, engine)
         if candidate is None:
-            cli_art.console.print(f"{cli_art.WARNING} No parseable response -- try rephrasing.")
+            cli_art.console.print(
+                f"{cli_art.WARNING} No parseable response -- try rephrasing."
+            )
             continue
 
         diff_lines = diff_documents(doc, candidate, fields)

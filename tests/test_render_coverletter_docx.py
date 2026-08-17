@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 from docx import Document  # noqa: E402
@@ -27,7 +29,9 @@ def _minimal_letter_data(**overrides):
 class TestRenderCoverletterDocx(unittest.TestCase):
 
     def setUp(self):
-        self.out_path = os.path.join(os.path.dirname(__file__), "_tmp_coverletter_docx_test.docx")
+        self.out_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_coverletter_docx_test.docx"
+        )
 
     def tearDown(self):
         if os.path.exists(self.out_path):
@@ -57,7 +61,9 @@ class TestRenderCoverletterDocx(unittest.TestCase):
 
     def test_recipient_block_uses_attn_line_when_contact_name_present(self):
         render_coverletter_docx(
-            _minimal_letter_data(contact_name="Maggie Smith", contact_title="HR Manager"),
+            _minimal_letter_data(
+                contact_name="Maggie Smith", contact_title="HR Manager"
+            ),
             self.out_path,
         )
         doc = Document(self.out_path)
@@ -65,7 +71,9 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         self.assertIn("Attn: Maggie Smith, HR Manager", texts)
 
     def test_recipient_block_includes_location_when_present(self):
-        render_coverletter_docx(_minimal_letter_data(company_location="Austin, TX"), self.out_path)
+        render_coverletter_docx(
+            _minimal_letter_data(company_location="Austin, TX"), self.out_path
+        )
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
         self.assertIn("Austin, TX", texts)
@@ -93,7 +101,9 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         self.assertEqual(result, self.out_path)
 
     def test_creates_parent_directory_if_missing(self):
-        nested_path = os.path.join(os.path.dirname(__file__), "_tmp_docx_subdir", "letter.docx")
+        nested_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_docx_subdir", "letter.docx"
+        )
         try:
             render_coverletter_docx(_minimal_letter_data(), nested_path)
             self.assertTrue(os.path.exists(nested_path))

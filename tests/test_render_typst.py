@@ -4,7 +4,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import render_typst  # noqa: E402
@@ -32,7 +34,9 @@ class TestEscapeTypst(unittest.TestCase):
         self.assertEqual(render_typst._escape_typst(None), "")
 
     def test_plain_text_with_no_special_chars_is_unchanged(self):
-        self.assertEqual(render_typst._escape_typst("Marketing Manager"), "Marketing Manager")
+        self.assertEqual(
+            render_typst._escape_typst("Marketing Manager"), "Marketing Manager"
+        )
 
     def test_bold_conversion_happens_before_escaping_so_asterisks_survive(self):
         # ** -> * conversion must not itself get escaped afterward.
@@ -47,13 +51,17 @@ class TestGenerateTypstMarkup(unittest.TestCase):
             "NAME": "Jane Doe",
             "SUMMARY_TEXT": "Growth marketer [B2B] focused on $1M+ pipelines.",
             "SKILLS": ["SQL", "A/B_Testing"],
-            "EXPERIENCE": [{
-                "title": "Marketing Manager",
-                "company": "Acme_Corp",
-                "period": "2020-2023",
-                "location": "Remote",
-                "achievements": ["Grew pipeline by $500K [enterprise segment] #1 team"],
-            }],
+            "EXPERIENCE": [
+                {
+                    "title": "Marketing Manager",
+                    "company": "Acme_Corp",
+                    "period": "2020-2023",
+                    "location": "Remote",
+                    "achievements": [
+                        "Grew pipeline by $500K [enterprise segment] #1 team"
+                    ],
+                }
+            ],
             "EDUCATION": [{"degree": "B.A.", "institution": "State U", "year": "2015"}],
         }
         markup = render_typst.generate_typst_markup(data)
@@ -69,10 +77,15 @@ class TestGenerateTypstMarkup(unittest.TestCase):
         self.assertNotIn("== Education", markup)
 
     def test_contact_line_joins_only_present_fields(self):
-        markup = render_typst.generate_typst_markup({
-            "NAME": "Jane Doe", "EMAIL": "jane@example.com", "PHONE": "",
-            "LOCATION": "Austin, TX", "LINKEDIN": "",
-        })
+        markup = render_typst.generate_typst_markup(
+            {
+                "NAME": "Jane Doe",
+                "EMAIL": "jane@example.com",
+                "PHONE": "",
+                "LOCATION": "Austin, TX",
+                "LINKEDIN": "",
+            }
+        )
         # @ is one of the six escaped Typst symbols, so it's escaped here too.
         self.assertIn("jane\\@example.com | Austin, TX", markup)
 

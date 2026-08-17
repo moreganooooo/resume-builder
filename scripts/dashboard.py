@@ -62,19 +62,22 @@ def compile_dashboard_if_needed() -> str:
     to the compiled binary. If compilation fails or Go is missing, returns
     None so execution can fall back to 'go run .'."""
     import sys
+
     if "unittest" in sys.modules:
         return None
     if not go_available():
         return None
-    
+
     bin_dir = os.path.join(DASHBOARD_DIR, "bin")
     bin_path = os.path.join(bin_dir, "dashboard")
-    
+
     if os.path.exists(bin_path):
         return bin_path
-        
+
     os.makedirs(bin_dir, exist_ok=True)
-    cli_art.cli_info("Pre-compiling the Career Dashboard for instant launches (only runs once)...")
+    cli_art.cli_info(
+        "Pre-compiling the Career Dashboard for instant launches (only runs once)..."
+    )
     try:
         subprocess.run(
             ["go", "build", "-o", bin_path, "."],
@@ -82,10 +85,14 @@ def compile_dashboard_if_needed() -> str:
             check=True,
             capture_output=True,
         )
-        cli_art.cli_info("Pre-compilation complete! Subsequent launches will start instantly.")
+        cli_art.cli_info(
+            "Pre-compilation complete! Subsequent launches will start instantly."
+        )
         return bin_path
     except Exception as err:
-        cli_art.cli_info(f"Dashboard compilation fallback: using slower launch (error: {err})")
+        cli_art.cli_info(
+            f"Dashboard compilation fallback: using slower launch (error: {err})"
+        )
         return None
 
 
@@ -107,18 +114,21 @@ def run(profile: str = None) -> tuple[bool, str]:
         return False, (
             f"No applications logged yet for this profile ({data_dir} has no "
             "applications.md) -- log at least one application status via "
-            "\"Browse & Manage Jobs\" first, then the dashboard has something "
+            '"Browse & Manage Jobs" first, then the dashboard has something '
             "to show."
         )
 
     # Compile the dashboard if needed to prevent slow 'go run .' compiling loops!
     # Bypass compilation check inside tests to respect existing mocks & assertions!
     import sys
+
     is_test = "unittest" in sys.modules
     bin_path = None if is_test else compile_dashboard_if_needed()
-    
+
     if not bin_path:
-        cli_art.cli_info("Starting the dashboard... (the first launch compiles it, so it takes a few seconds)")
+        cli_art.cli_info(
+            "Starting the dashboard... (the first launch compiles it, so it takes a few seconds)"
+        )
     else:
         cli_art.cli_info("Launching dashboard...")
 
@@ -127,18 +137,28 @@ def run(profile: str = None) -> tuple[bool, str]:
         if bin_path and os.path.exists(bin_path):
             cmd = [
                 bin_path,
-                "-path", data_dir,
-                "-jobs-path", jobs_path,
-                "-python-path", sys.executable,
-                "-project-root", profile_paths.PROJECT_ROOT,
+                "-path",
+                data_dir,
+                "-jobs-path",
+                jobs_path,
+                "-python-path",
+                sys.executable,
+                "-project-root",
+                profile_paths.PROJECT_ROOT,
             ]
         else:
             cmd = [
-                "go", "run", ".",
-                "-path", data_dir,
-                "-jobs-path", jobs_path,
-                "-python-path", sys.executable,
-                "-project-root", profile_paths.PROJECT_ROOT,
+                "go",
+                "run",
+                ".",
+                "-path",
+                data_dir,
+                "-jobs-path",
+                jobs_path,
+                "-python-path",
+                sys.executable,
+                "-project-root",
+                profile_paths.PROJECT_ROOT,
             ]
         result = subprocess.run(cmd, cwd=DASHBOARD_DIR)
     finally:

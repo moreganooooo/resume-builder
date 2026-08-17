@@ -74,7 +74,9 @@ def _year_in_range(year: int, start_date: str | None, end_date: str | None) -> b
     return start_year <= year <= end_year
 
 
-def build_timeline(by_source: dict[str, list[WorkExperienceEntry]]) -> list[TimelineEntry]:
+def build_timeline(
+    by_source: dict[str, list[WorkExperienceEntry]],
+) -> list[TimelineEntry]:
     """
     Merges WorkExperienceEntry lists from the resume/LinkedIn documents
     (by_source keyed "linkedin_export"/"resume") into one canonical
@@ -89,20 +91,28 @@ def build_timeline(by_source: dict[str, list[WorkExperienceEntry]]) -> list[Time
 
     for e in primary:
         by_key[_normalize_company_name(e.company)] = TimelineEntry(
-            company=e.company, title=e.title, start_date=e.start_date, end_date=e.end_date,
+            company=e.company,
+            title=e.title,
+            start_date=e.start_date,
+            end_date=e.end_date,
         )
 
     for e in secondary:
         key = _normalize_company_name(e.company)
         if key not in by_key:
             by_key[key] = TimelineEntry(
-                company=e.company, title=e.title, start_date=e.start_date, end_date=e.end_date,
+                company=e.company,
+                title=e.title,
+                start_date=e.start_date,
+                end_date=e.end_date,
             )
             continue
         existing = by_key[key]
         if existing.start_date == e.start_date and existing.end_date == e.end_date:
             continue
-        if _ranges_roughly_overlap(existing.start_date, existing.end_date, e.start_date, e.end_date):
+        if _ranges_roughly_overlap(
+            existing.start_date, existing.end_date, e.start_date, e.end_date
+        ):
             continue
         by_key[key] = TimelineEntry(
             company=existing.company,
@@ -158,7 +168,9 @@ def _llm_match(raw_text: str, timeline: list[TimelineEntry]) -> str | None:
 
 
 def match_to_timeline(
-    achievement: RawAchievement, timeline: list[TimelineEntry], dry_run: bool = False,
+    achievement: RawAchievement,
+    timeline: list[TimelineEntry],
+    dry_run: bool = False,
 ) -> tuple[str, str]:
     """Returns (company, confidence). confidence is 'high'/'medium' for a
     real match, 'low' for the Misc./Unassigned fallback."""
@@ -171,7 +183,9 @@ def match_to_timeline(
     if achievement.date_hint:
         year = _extract_year(achievement.date_hint)
         if year is not None:
-            matches = [e for e in timeline if _year_in_range(year, e.start_date, e.end_date)]
+            matches = [
+                e for e in timeline if _year_in_range(year, e.start_date, e.end_date)
+            ]
             if len(matches) == 1:
                 return matches[0].company, "medium"
 
@@ -182,7 +196,9 @@ def match_to_timeline(
             return matches[0].company, "medium"
 
     if dry_run:
-        cli_art.print_literal(f"[DRY RUN] would ask the LLM to match: {cli_art._escape_markup(achievement.raw_text[:60])!r}")
+        cli_art.print_literal(
+            f"[DRY RUN] would ask the LLM to match: {cli_art._escape_markup(achievement.raw_text[:60])!r}"
+        )
         return "Misc. / Unassigned", "low"
 
     if timeline:

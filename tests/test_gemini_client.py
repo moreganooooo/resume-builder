@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import gemini_client
@@ -20,8 +22,14 @@ def _success_response():
     resp = MagicMock()
     resp.status_code = 200
     resp.json.return_value = {
-        "candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}],
-        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 2, "totalTokenCount": 12},
+        "candidates": [
+            {"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 2,
+            "totalTokenCount": 12,
+        },
     }
     return resp
 
@@ -117,34 +125,46 @@ class TestSustainedFailureDetection(unittest.TestCase):
         mock_post.return_value = self._rate_limited_response()
 
         gemini_client.GeminiClient.generate(
-            model="gemini-3.1-flash-lite", system_instruction="sys",
-            contents="do the thing", max_retries=2,
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=2,
         )
         with self.assertRaises(gemini_client.SustainedFailureError):
             gemini_client.GeminiClient.generate(
-                model="gemini-3.1-flash-lite", system_instruction="sys",
-                contents="do the thing", max_retries=2,
+                model="gemini-3.1-flash-lite",
+                system_instruction="sys",
+                contents="do the thing",
+                max_retries=2,
             )
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
     def test_success_between_exhaustions_resets_the_counter(self, mock_post):
         mock_post.side_effect = [
-            self._rate_limited_response(), self._rate_limited_response(),  # exhaustion 1 (max_retries=2)
-            _success_response(),                                          # success -- resets counter
-            self._rate_limited_response(), self._rate_limited_response(),  # exhaustion again -- only #1 now
+            self._rate_limited_response(),
+            self._rate_limited_response(),  # exhaustion 1 (max_retries=2)
+            _success_response(),  # success -- resets counter
+            self._rate_limited_response(),
+            self._rate_limited_response(),  # exhaustion again -- only #1 now
         ]
         gemini_client.GeminiClient.generate(
-            model="gemini-3.1-flash-lite", system_instruction="sys",
-            contents="do the thing", max_retries=2,
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=2,
         )
         gemini_client.GeminiClient.generate(
-            model="gemini-3.1-flash-lite", system_instruction="sys",
-            contents="do the thing", max_retries=2,
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=2,
         )
         text, usage = gemini_client.GeminiClient.generate(
-            model="gemini-3.1-flash-lite", system_instruction="sys",
-            contents="do the thing", max_retries=2,
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+            max_retries=2,
         )
         self.assertIsNone(text)
         self.assertEqual(gemini_client.GeminiClient._consecutive_full_failures, 1)
@@ -212,25 +232,37 @@ class TestGemmaPacing(unittest.TestCase):
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.time.time")
     @patch("gemini_client.requests.post")
-    def test_waits_out_the_remainder_when_last_gemma_call_was_recent(self, mock_post, mock_time, mock_sleep):
+    def test_waits_out_the_remainder_when_last_gemma_call_was_recent(
+        self, mock_post, mock_time, mock_sleep
+    ):
         mock_post.return_value = _success_response()
         gemini_client.GeminiClient._last_gemma_call_ts = 1000.0
         mock_time.return_value = 1010.0  # only 10s since the last Gemma call
 
-        gemini_client.GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(
+            model="gemma-4-31b-it", system_instruction="sys", contents="do the thing"
+        )
 
         mock_sleep.assert_called_once()
-        self.assertAlmostEqual(mock_sleep.call_args.args[0], 55.0)  # 65s cap - 10s elapsed
+        self.assertAlmostEqual(
+            mock_sleep.call_args.args[0], 55.0
+        )  # 65s cap - 10s elapsed
 
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.time.time")
     @patch("gemini_client.requests.post")
-    def test_no_wait_once_the_interval_has_already_elapsed(self, mock_post, mock_time, mock_sleep):
+    def test_no_wait_once_the_interval_has_already_elapsed(
+        self, mock_post, mock_time, mock_sleep
+    ):
         mock_post.return_value = _success_response()
         gemini_client.GeminiClient._last_gemma_call_ts = 1000.0
-        mock_time.return_value = 1070.0  # 70s since the last Gemma call -- past the 65s floor
+        mock_time.return_value = (
+            1070.0  # 70s since the last Gemma call -- past the 65s floor
+        )
 
-        gemini_client.GeminiClient.generate(model="gemma-4-31b-it", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(
+            model="gemma-4-31b-it", system_instruction="sys", contents="do the thing"
+        )
 
         mock_sleep.assert_not_called()
 
@@ -238,9 +270,15 @@ class TestGemmaPacing(unittest.TestCase):
     @patch("gemini_client.requests.post")
     def test_flash_lite_calls_are_never_paced(self, mock_post, mock_sleep):
         mock_post.return_value = _success_response()
-        gemini_client.GeminiClient._last_gemma_call_ts = 0.0  # as if a Gemma call just happened at epoch 0
+        gemini_client.GeminiClient._last_gemma_call_ts = (
+            0.0  # as if a Gemma call just happened at epoch 0
+        )
 
-        gemini_client.GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="do the thing")
+        gemini_client.GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+        )
 
         mock_sleep.assert_not_called()
 
@@ -259,7 +297,9 @@ class TestExtraSchemaProperties(unittest.TestCase):
     """
 
     @patch("gemini_client.requests.post")
-    def test_extra_properties_and_required_merge_into_a_dict_response_schema(self, mock_post):
+    def test_extra_properties_and_required_merge_into_a_dict_response_schema(
+        self, mock_post
+    ):
         mock_post.return_value = _success_response()
 
         GeminiClient.generate(
@@ -271,14 +311,23 @@ class TestExtraSchemaProperties(unittest.TestCase):
                 "properties": {"TAGLINE": {"type": "string"}},
                 "required": ["TAGLINE"],
             },
-            extra_schema_properties={"EDU_ACHIEVEMENT_KEY_1": {"type": "string", "enum": ["a", "b"]}},
+            extra_schema_properties={
+                "EDU_ACHIEVEMENT_KEY_1": {"type": "string", "enum": ["a", "b"]}
+            },
             extra_required=["EDU_ACHIEVEMENT_KEY_1"],
         )
 
-        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"]["responseSchema"]
+        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"][
+            "responseSchema"
+        ]
         self.assertEqual(sent_schema["properties"]["TAGLINE"], {"type": "string"})
-        self.assertEqual(sent_schema["properties"]["EDU_ACHIEVEMENT_KEY_1"], {"type": "string", "enum": ["a", "b"]})
-        self.assertEqual(set(sent_schema["required"]), {"TAGLINE", "EDU_ACHIEVEMENT_KEY_1"})
+        self.assertEqual(
+            sent_schema["properties"]["EDU_ACHIEVEMENT_KEY_1"],
+            {"type": "string", "enum": ["a", "b"]},
+        )
+        self.assertEqual(
+            set(sent_schema["required"]), {"TAGLINE", "EDU_ACHIEVEMENT_KEY_1"}
+        )
 
     @patch("gemini_client.requests.post")
     def test_no_extra_kwargs_leaves_the_schema_unchanged(self, mock_post):
@@ -288,10 +337,16 @@ class TestExtraSchemaProperties(unittest.TestCase):
             model="gemini-3.1-flash-lite",
             system_instruction="sys",
             contents="content",
-            response_schema={"type": "object", "properties": {"TAGLINE": {"type": "string"}}, "required": ["TAGLINE"]},
+            response_schema={
+                "type": "object",
+                "properties": {"TAGLINE": {"type": "string"}},
+                "required": ["TAGLINE"],
+            },
         )
 
-        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"]["responseSchema"]
+        sent_schema = mock_post.call_args.kwargs["json"]["generationConfig"][
+            "responseSchema"
+        ]
         self.assertEqual(list(sent_schema["properties"].keys()), ["TAGLINE"])
         self.assertEqual(sent_schema["required"], ["TAGLINE"])
 
@@ -321,7 +376,9 @@ class TestToolsParameter(unittest.TestCase):
     def test_no_tools_key_when_tools_not_passed(self, mock_post):
         mock_post.return_value = _success_response()
 
-        GeminiClient.generate(model="gemini-3.1-flash-lite", system_instruction="sys", contents="content")
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite", system_instruction="sys", contents="content"
+        )
 
         sent_body = mock_post.call_args.kwargs["json"]
         self.assertNotIn("tools", sent_body)

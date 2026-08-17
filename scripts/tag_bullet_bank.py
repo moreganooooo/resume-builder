@@ -124,13 +124,19 @@ def assign_tags(text: str) -> tuple:
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("input_csv")
-    ap.add_argument("-o", "--output", default=None, help="Output path (default: <input>-tagged.csv)")
+    ap.add_argument(
+        "-o", "--output", default=None, help="Output path (default: <input>-tagged.csv)"
+    )
     args = ap.parse_args()
 
     out_path = args.output or args.input_csv.replace(".csv", "-tagged.csv")
-    review_path = os.path.join(os.path.dirname(out_path) or ".", "tag-review-needed.csv")
+    review_path = os.path.join(
+        os.path.dirname(out_path) or ".", "tag-review-needed.csv"
+    )
 
     with open(args.input_csv, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
@@ -148,11 +154,13 @@ def main():
         if tag_str == fallback:
             fell_back += 1
         if tied:
-            review_rows.append({
-                "Role / Company": r["Role / Company"],
-                "Tags": tag_str,
-                "Bullet Point": r["Bullet Point"],
-            })
+            review_rows.append(
+                {
+                    "Role / Company": r["Role / Company"],
+                    "Tags": tag_str,
+                    "Bullet Point": r["Bullet Point"],
+                }
+            )
 
     with atomic_write(out_path, newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["Role / Company", "Tags", "Bullet Point"])
@@ -176,9 +184,13 @@ def main():
 
     cli_art.cli_info(f"{args.input_csv}: {len(rows)} rows")
     cli_art.cli_info(f"Already tagged (left alone): {skipped_existing}")
-    cli_art.cli_success(f"Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})")
+    cli_art.cli_success(
+        f"Newly tagged: {tagged}  (of which {fell_back} fell back to {fallback})"
+    )
     if review_rows:
-        cli_art.cli_warning(f"Weak match, no unique keyword hit (flagged for review): {len(review_rows)}")
+        cli_art.cli_warning(
+            f"Weak match, no unique keyword hit (flagged for review): {len(review_rows)}"
+        )
     cli_art.cli_success(f"Wrote: {out_path}")
     if review_rows:
         cli_art.cli_success(f"Wrote: {review_path}")

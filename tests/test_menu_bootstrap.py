@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import menu  # noqa: E402
@@ -29,7 +31,9 @@ class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
     @patch("menu.subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=True)
     @patch("menu._profile_is_set_up", return_value=True)
-    def test_delegates_to_bootstrap_menu_and_returns_its_result(self, mock_is_set_up, mock_run_menu, mock_subprocess):
+    def test_delegates_to_bootstrap_menu_and_returns_its_result(
+        self, mock_is_set_up, mock_run_menu, mock_subprocess
+    ):
         os.environ.pop("RESUME_GUEST_MODE", None)
         result = menu._handle_bootstrap()
         mock_run_menu.assert_called_once()
@@ -39,7 +43,9 @@ class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
     @patch("menu.subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu._profile_is_set_up", return_value=True)
-    def test_returns_false_when_submenu_reports_nothing_happened(self, mock_is_set_up, mock_run_menu, mock_subprocess):
+    def test_returns_false_when_submenu_reports_nothing_happened(
+        self, mock_is_set_up, mock_run_menu, mock_subprocess
+    ):
         os.environ.pop("RESUME_GUEST_MODE", None)
         result = menu._handle_bootstrap()
         self.assertFalse(result)
@@ -70,7 +76,10 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         # the repo -- each with a stray .stignore -- since 2026-07-22.
         for _label, path in profile_paths.sync_roots(self.test_profile_name):
             shutil.rmtree(path, ignore_errors=True)
-        for var, orig in (("RESUME_PROFILE", self._orig_profile), ("RESUME_GUEST_MODE", self._orig_guest)):
+        for var, orig in (
+            ("RESUME_PROFILE", self._orig_profile),
+            ("RESUME_GUEST_MODE", self._orig_guest),
+        ):
             if orig is None:
                 os.environ.pop(var, None)
             else:
@@ -79,11 +88,14 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         # RESUME_PROFILE ends up restored to, so jd_manager isn't left
         # pointed at the now-deleted test profile for later tests.
         import profile_paths as pp
+
         pp.set_active_profile(self._orig_profile or "morgan")
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.subprocess.run")
-    def test_guest_mode_triggers_wizard_even_though_morgan_profile_exists(self, mock_subprocess_run, mock_run_menu):
+    def test_guest_mode_triggers_wizard_even_though_morgan_profile_exists(
+        self, mock_subprocess_run, mock_run_menu
+    ):
         # Deliberately does NOT mock bootstrap_bullet_bank.create_new_profile
         # -- letting this run for real is a more honest test of the actual
         # bug (does a real profile directory get created, not just a mocked
@@ -91,7 +103,9 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         # once a profile is active is covered by test_bootstrap_menu.py.
         os.environ["RESUME_GUEST_MODE"] = "1"
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout=json.dumps({"profile_name": self.test_profile_name}), stderr="",
+            returncode=0,
+            stdout=json.dumps({"profile_name": self.test_profile_name}),
+            stderr="",
         )
 
         menu._handle_bootstrap()
@@ -99,20 +113,27 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         mock_subprocess_run.assert_called_once()
         self.assertEqual(os.environ.get("RESUME_PROFILE"), self.test_profile_name)
         import profile_paths
+
         self.assertTrue(os.path.isdir(profile_paths.kb_dir(self.test_profile_name)))
         # All four sync roots, not just profiles/. Nothing verified this
         # before, which is the same gap that let the teardown leak three of
         # them: if create_new_profile() ever stopped seeding one, no test
         # would notice and that data would silently fall out of Syncthing.
         for label, path in profile_paths.sync_roots(self.test_profile_name):
-            self.assertTrue(os.path.isdir(path), f"sync root {label!r} was not created: {path}")
+            self.assertTrue(
+                os.path.isdir(path), f"sync root {label!r} was not created: {path}"
+            )
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.bootstrap_bullet_bank.create_new_profile")
     @patch("menu.subprocess.run")
     @patch("menu._profile_is_set_up", return_value=True)
     def test_no_guest_mode_and_existing_profile_skips_the_wizard(
-        self, mock_is_set_up, mock_subprocess_run, mock_create_profile, mock_run_menu,
+        self,
+        mock_is_set_up,
+        mock_subprocess_run,
+        mock_create_profile,
+        mock_run_menu,
     ):
         # RESUME_GUEST_MODE unset, profile already set up -> should NOT
         # shell out to the Go wizard (this is the normal, unchanged

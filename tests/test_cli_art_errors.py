@@ -16,7 +16,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cli_art  # noqa: E402
@@ -36,7 +38,9 @@ PLAYWRIGHT_MISSING_BROWSER = (
 PLAYWRIGHT_MAC12 = "Error: Playwright does not support chromium on mac12"
 NODE_MODULE_MISSING = "Error: Cannot find module 'playwright'"
 CSV_RAGGED_ROW = "Error tokenizing data. C error: Expected 2 fields in line 3, saw 5"
-CSV_UNCLOSED_QUOTE = "Error tokenizing data. C error: EOF inside string starting at row 1"
+CSV_UNCLOSED_QUOTE = (
+    "Error tokenizing data. C error: EOF inside string starting at row 1"
+)
 CSV_EMPTY = "No columns to parse from file"
 
 
@@ -59,7 +63,8 @@ class TestSignatureOrdering(unittest.TestCase):
     def test_generic_quota_entry_still_matches_an_ordinary_quota_error(self):
         # The narrow entry above must not have disabled the broad one.
         explanation, fix = cli_art.describe_error(
-            RuntimeError("Resource has been exhausted: quota exceeded"), "scoring bullets"
+            RuntimeError("Resource has been exhausted: quota exceeded"),
+            "scoring bullets",
         )
         self.assertIn("usage limit", explanation)
         self.assertIn("Wait for the quota to reset", fix)
@@ -129,14 +134,18 @@ class TestCsvCorruption(unittest.TestCase):
                 f.write('Bullet Point,Tags\n"one",a\n"two",a,b,c,d\n')
             with self.assertRaises(Exception) as ctx:
                 pd.read_csv(ragged)
-            explanation, _ = cli_art.describe_error(ctx.exception, "reading your bullet bank")
+            explanation, _ = cli_art.describe_error(
+                ctx.exception, "reading your bullet bank"
+            )
             self.assertIn("wrong number of columns", explanation)
 
             empty = os.path.join(d, "empty.csv")
             open(empty, "w", encoding="utf-8").close()
             with self.assertRaises(Exception) as ctx:
                 pd.read_csv(empty)
-            explanation, _ = cli_art.describe_error(ctx.exception, "reading your bullet bank")
+            explanation, _ = cli_art.describe_error(
+                ctx.exception, "reading your bullet bank"
+            )
             self.assertIn("completely empty", explanation)
 
 

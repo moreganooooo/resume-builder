@@ -76,7 +76,9 @@ def _liveness(jd_path: str, jobs_path: str) -> int:
     result = liveness.verify_jd_paths([jd_path])
     if result.get("error"):
         # Raw detail first, plain sentence last -- see the contract above.
-        print(f"liveness check failed for {jd_path}: {result['error']}", file=sys.stderr)
+        print(
+            f"liveness check failed for {jd_path}: {result['error']}", file=sys.stderr
+        )
         _user_error(
             "Couldn't check whether this posting is still live. "
             "The job board may be unreachable right now -- try again in a moment."
@@ -108,7 +110,9 @@ def _status(jd_path: str, new_status: str, jobs_path: str) -> int:
         # This one is a programming error on the Go side, not something the
         # user did -- but it still reaches their screen, so it still gets a
         # sentence rather than a schema dump.
-        _user_error(f"\"{new_status}\" isn't a status this app recognizes, so nothing was changed.")
+        _user_error(
+            f'"{new_status}" isn\'t a status this app recognizes, so nothing was changed.'
+        )
         return 1
     jd_manager.save_application_status(jd_path, new_status)
     dashboard._export_jobs_to(jobs_path)

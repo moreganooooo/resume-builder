@@ -3,7 +3,9 @@ import shutil
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_bullet_bank  # noqa: E402
@@ -30,8 +32,16 @@ class TestCreateNewProfile(unittest.TestCase):
     def test_creates_profile_directory_structure(self):
         result = bootstrap_bullet_bank.create_new_profile(self.test_profile)
         self.assertEqual(result, self.profile_path)
-        self.assertTrue(os.path.isdir(os.path.join(self.profile_path, "knowledge_base")))
-        self.assertTrue(os.path.isdir(os.path.join(self.profile_path, "knowledge_base", "bootstrap", "source_documents")))
+        self.assertTrue(
+            os.path.isdir(os.path.join(self.profile_path, "knowledge_base"))
+        )
+        self.assertTrue(
+            os.path.isdir(
+                os.path.join(
+                    self.profile_path, "knowledge_base", "bootstrap", "source_documents"
+                )
+            )
+        )
 
     def test_scaffolds_empty_fixed_content_py(self):
         bootstrap_bullet_bank.create_new_profile(self.test_profile)
@@ -100,7 +110,10 @@ class TestCreateNewProfile(unittest.TestCase):
             self.assertEqual(summary, fixed_content.BACKGROUND_IDENTITY)
 
             # extract_cv_section() does direct attribute access on this too.
-            self.assertEqual(orchestrator.extract_cv_section("some cv text", "Some Company"), "some cv text")
+            self.assertEqual(
+                orchestrator.extract_cv_section("some cv text", "Some Company"),
+                "some cv text",
+            )
         finally:
             if orig_profile is None:
                 os.environ.pop("RESUME_PROFILE", None)

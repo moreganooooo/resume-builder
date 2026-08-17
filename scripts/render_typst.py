@@ -49,39 +49,41 @@ def generate_typst_markup(data: Dict[str, Any]) -> str:
     markup = [
         '#set page(paper: "us-letter", margin: (x: 0.5in, y: 0.5in))',
         '#set text(font: "DM Sans", size: 9.5pt, fill: rgb("#1e293b"))',
-        '#set par(justify: true, leading: 0.52em)',
+        "#set par(justify: true, leading: 0.52em)",
         "",
         f'= text(size: 18pt, weight: "bold", fill: rgb("#0f172a"))[{name}]',
     ]
 
     if tagline:
-        markup.append(f'#text(size: 10.5pt, weight: "medium", fill: rgb("#3b82f6"))[{tagline}]')
+        markup.append(
+            f'#text(size: 10.5pt, weight: "medium", fill: rgb("#3b82f6"))[{tagline}]'
+        )
 
     if contact_line:
         markup.append(f'#text(size: 8.5pt, fill: rgb("#64748b"))[{contact_line}]')
 
-    markup.append('#v(2pt)')
+    markup.append("#v(2pt)")
     markup.append('#line(length: 100%, stroke: 0.5pt + rgb("#cbd5e1"))')
-    markup.append('#v(4pt)')
+    markup.append("#v(4pt)")
 
     # Summary
     if summary:
-        markup.append('== Executive Summary')
+        markup.append("== Executive Summary")
         markup.append(summary)
-        markup.append('#v(4pt)')
+        markup.append("#v(4pt)")
 
     # Skills
     skills = data.get("SKILLS", [])
     if skills:
-        markup.append('== Technical & Core Competencies')
+        markup.append("== Technical & Core Competencies")
         skill_items = " • ".join([_escape_typst(s) for s in skills])
         markup.append(skill_items)
-        markup.append('#v(4pt)')
+        markup.append("#v(4pt)")
 
     # Experience
     experience = data.get("EXPERIENCE", [])
     if experience:
-        markup.append('== Professional Experience')
+        markup.append("== Professional Experience")
         for job in experience:
             title = _escape_typst(job.get("title", ""))
             company = _escape_typst(job.get("company", ""))
@@ -95,18 +97,18 @@ def generate_typst_markup(data: Dict[str, Any]) -> str:
             achievements = job.get("achievements", [])
             for bullet in achievements:
                 clean_b = _escape_typst(bullet)
-                markup.append(f'- {clean_b}')
-            markup.append('#v(3pt)')
+                markup.append(f"- {clean_b}")
+            markup.append("#v(3pt)")
 
     # Education & Certifications
     education = data.get("EDUCATION", [])
     if education:
-        markup.append('== Education')
+        markup.append("== Education")
         for ed in education:
             degree = _escape_typst(ed.get("degree", ""))
             inst = _escape_typst(ed.get("institution", ""))
             year = _escape_typst(ed.get("year", ""))
-            markup.append(f'*{degree}* — {inst} #h(1fr) {year}')
+            markup.append(f"*{degree}* — {inst} #h(1fr) {year}")
 
     return "\n".join(markup)
 
@@ -126,7 +128,9 @@ def render_typst(json_path: str, pdf_path: str) -> bool:
 
         # Check for typst CLI binary
         if shutil.which("typst") is not None:
-            result = subprocess.run(["typst", "compile", typ_path, pdf_path], capture_output=True, text=True)
+            result = subprocess.run(
+                ["typst", "compile", typ_path, pdf_path], capture_output=True, text=True
+            )
             if result.returncode == 0:
                 print(f"✓ Typst PDF generated: {pdf_path}")
                 return True

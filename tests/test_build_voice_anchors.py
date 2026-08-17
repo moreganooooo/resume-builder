@@ -3,7 +3,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import build_voice_anchors  # noqa: E402
@@ -12,25 +14,45 @@ import build_voice_anchors  # noqa: E402
 class TestBuildVoiceAnchors(unittest.TestCase):
 
     def setUp(self):
-        self.tmp_csv = os.path.join(os.path.dirname(__file__), "_tmp_application_answers_index.csv")
+        self.tmp_csv = os.path.join(
+            os.path.dirname(__file__), "_tmp_application_answers_index.csv"
+        )
         with open(self.tmp_csv, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=[
-                "Filename", "Prompt / Topic", "Themes & Highlights",
-                "Reusability Tags", "Answer Length", "Strong For", "Quote Worth Pulling",
-            ])
+            w = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "Filename",
+                    "Prompt / Topic",
+                    "Themes & Highlights",
+                    "Reusability Tags",
+                    "Answer Length",
+                    "Strong For",
+                    "Quote Worth Pulling",
+                ],
+            )
             w.writeheader()
-            w.writerow({
-                "Filename": "x.pdf", "Prompt / Topic": "Why a good fit",
-                "Themes & Highlights": "Systems + storytelling.",
-                "Reusability Tags": "CRM", "Answer Length": "", "Strong For": "",
-                "Quote Worth Pulling": "I love building systems that work quietly in the background.",
-            })
-            w.writerow({
-                "Filename": "x.pdf", "Prompt / Topic": "Prioritizing tasks",
-                "Themes & Highlights": "Calm execution under pressure.",
-                "Reusability Tags": "Ops", "Answer Length": "", "Strong For": "",
-                "Quote Worth Pulling": "",
-            })
+            w.writerow(
+                {
+                    "Filename": "x.pdf",
+                    "Prompt / Topic": "Why a good fit",
+                    "Themes & Highlights": "Systems + storytelling.",
+                    "Reusability Tags": "CRM",
+                    "Answer Length": "",
+                    "Strong For": "",
+                    "Quote Worth Pulling": "I love building systems that work quietly in the background.",
+                }
+            )
+            w.writerow(
+                {
+                    "Filename": "x.pdf",
+                    "Prompt / Topic": "Prioritizing tasks",
+                    "Themes & Highlights": "Calm execution under pressure.",
+                    "Reusability Tags": "Ops",
+                    "Answer Length": "",
+                    "Strong For": "",
+                    "Quote Worth Pulling": "",
+                }
+            )
 
     def tearDown(self):
         if os.path.exists(self.tmp_csv):
@@ -39,7 +61,9 @@ class TestBuildVoiceAnchors(unittest.TestCase):
     def test_quote_line_included_when_present(self):
         content = build_voice_anchors.build_voice_anchors(self.tmp_csv)
         self.assertIn("### Why a good fit", content)
-        self.assertIn("> I love building systems that work quietly in the background.", content)
+        self.assertIn(
+            "> I love building systems that work quietly in the background.", content
+        )
 
     def test_third_person_paraphrase_is_dropped(self):
         # "Themes & Highlights" is written for a human skimming the index,

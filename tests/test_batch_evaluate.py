@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import batch_evaluate  # noqa: E402
@@ -58,20 +60,31 @@ class TestEvaluateAllPendingPersistsEvaluations(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
-    def test_successful_evaluation_gets_persisted(self, mock_engine_cls, mock_key, mock_meta, mock_save):
+    def test_successful_evaluation_gets_persisted(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+            "composite_score": 4.0,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
-        mock_save.assert_called_once_with("jds/a.json", {
-            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
-        })
+        mock_save.assert_called_once_with(
+            "jds/a.json",
+            {
+                "composite_score": 4.0,
+                "recommendation": "Strong pursue",
+                "hard_blockers": [],
+            },
+        )
 
     @patch("batch_evaluate.jd_manager.save_evaluation")
     @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
-    def test_errored_evaluation_is_not_persisted(self, mock_engine_cls, mock_key, mock_meta, mock_save):
+    def test_errored_evaluation_is_not_persisted(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {}
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_save.assert_not_called()
@@ -84,9 +97,13 @@ class TestEvaluateAllPendingAutoArchivesSkip(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
-    def test_skip_recommendation_gets_archived(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+    def test_skip_recommendation_gets_archived(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive
+    ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 1.5, "recommendation": "Skip", "hard_blockers": [],
+            "composite_score": 1.5,
+            "recommendation": "Skip",
+            "hard_blockers": [],
         }
         results = batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_archive.assert_called_once_with("jds/a.json")
@@ -97,9 +114,13 @@ class TestEvaluateAllPendingAutoArchivesSkip(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
-    def test_non_skip_recommendation_is_not_archived(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+    def test_non_skip_recommendation_is_not_archived(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive
+    ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 4.5, "recommendation": "Strong pursue", "hard_blockers": [],
+            "composite_score": 4.5,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
         }
         results = batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_archive.assert_not_called()
@@ -110,11 +131,15 @@ class TestEvaluateAllPendingAutoArchivesSkip(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
-    def test_job_key_computed_before_the_file_is_moved(self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive):
+    def test_job_key_computed_before_the_file_is_moved(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_archive
+    ):
         # compute_job_key(path) reads the file at `path` -- must be
         # called before archive_jd() moves it out from under it.
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 1.5, "recommendation": "Skip", "hard_blockers": [],
+            "composite_score": 1.5,
+            "recommendation": "Skip",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_key.assert_called_once_with("jds/a.json")
@@ -128,10 +153,17 @@ class TestEvaluateAllPendingPacesCalls(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
     def test_sleeps_between_calls_but_not_before_the_first(
-        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_sleep,
+        self,
+        mock_engine_cls,
+        mock_key,
+        mock_meta,
+        mock_save,
+        mock_sleep,
     ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+            "composite_score": 4.0,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(["jds/a.json", "jds/b.json", "jds/c.json"])
         self.assertEqual(mock_sleep.call_count, 2)
@@ -142,10 +174,17 @@ class TestEvaluateAllPendingPacesCalls(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
     def test_never_sleeps_for_a_single_jd(
-        self, mock_engine_cls, mock_key, mock_meta, mock_save, mock_sleep,
+        self,
+        mock_engine_cls,
+        mock_key,
+        mock_meta,
+        mock_save,
+        mock_sleep,
     ):
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 4.0, "recommendation": "Strong pursue", "hard_blockers": [],
+            "composite_score": 4.0,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(["jds/a.json"])
         mock_sleep.assert_not_called()
@@ -160,17 +199,30 @@ class TestEvaluateAllPendingSkipsAlreadyEvaluated(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.read_evaluation")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
     def test_skips_already_evaluated_jds_by_default(
-        self, mock_engine_cls, mock_read_eval, mock_key, mock_meta, mock_save, mock_sleep,
+        self,
+        mock_engine_cls,
+        mock_read_eval,
+        mock_key,
+        mock_meta,
+        mock_save,
+        mock_sleep,
     ):
         mock_read_eval.side_effect = lambda path: {
-            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/scored.json": {
+                "composite_score": 4.0,
+                "recommendation": "Strong pursue",
+            },
             "jds/unscored.json": None,
         }[path]
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 3.0, "recommendation": "Selective pursue", "hard_blockers": [],
+            "composite_score": 3.0,
+            "recommendation": "Selective pursue",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(["jds/scored.json", "jds/unscored.json"])
-        mock_engine_cls.return_value.evaluate_fit.assert_called_once_with("jds/unscored.json")
+        mock_engine_cls.return_value.evaluate_fit.assert_called_once_with(
+            "jds/unscored.json"
+        )
 
     @patch("batch_evaluate.time.sleep")
     @patch("batch_evaluate.jd_manager.save_evaluation")
@@ -179,17 +231,29 @@ class TestEvaluateAllPendingSkipsAlreadyEvaluated(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.read_evaluation")
     @patch("batch_evaluate.orchestrator.ResumeEngine")
     def test_skip_evaluated_false_reevaluates_everything(
-        self, mock_engine_cls, mock_read_eval, mock_key, mock_meta, mock_save, mock_sleep,
+        self,
+        mock_engine_cls,
+        mock_read_eval,
+        mock_key,
+        mock_meta,
+        mock_save,
+        mock_sleep,
     ):
         mock_read_eval.side_effect = lambda path: {
-            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/scored.json": {
+                "composite_score": 4.0,
+                "recommendation": "Strong pursue",
+            },
             "jds/unscored.json": None,
         }[path]
         mock_engine_cls.return_value.evaluate_fit.return_value = {
-            "composite_score": 3.0, "recommendation": "Selective pursue", "hard_blockers": [],
+            "composite_score": 3.0,
+            "recommendation": "Selective pursue",
+            "hard_blockers": [],
         }
         batch_evaluate.evaluate_all_pending(
-            ["jds/scored.json", "jds/unscored.json"], skip_evaluated=False,
+            ["jds/scored.json", "jds/unscored.json"],
+            skip_evaluated=False,
         )
         self.assertEqual(mock_engine_cls.return_value.evaluate_fit.call_count, 2)
 
@@ -199,15 +263,22 @@ class TestSplitEvaluated(unittest.TestCase):
     @patch("batch_evaluate.jd_manager.read_evaluation")
     def test_splits_into_already_evaluated_and_unevaluated(self, mock_read_eval):
         mock_read_eval.side_effect = lambda path: {
-            "jds/scored.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
+            "jds/scored.json": {
+                "composite_score": 4.0,
+                "recommendation": "Strong pursue",
+            },
             "jds/unscored.json": None,
         }[path]
-        already, unevaluated = batch_evaluate.split_evaluated(["jds/scored.json", "jds/unscored.json"])
+        already, unevaluated = batch_evaluate.split_evaluated(
+            ["jds/scored.json", "jds/unscored.json"]
+        )
         self.assertEqual(already, ["jds/scored.json"])
         self.assertEqual(unevaluated, ["jds/unscored.json"])
 
     @patch("batch_evaluate.jd_manager.read_evaluation", return_value=None)
     def test_all_unevaluated(self, mock_read_eval):
-        already, unevaluated = batch_evaluate.split_evaluated(["jds/a.json", "jds/b.json"])
+        already, unevaluated = batch_evaluate.split_evaluated(
+            ["jds/a.json", "jds/b.json"]
+        )
         self.assertEqual(already, [])
         self.assertEqual(unevaluated, ["jds/a.json", "jds/b.json"])

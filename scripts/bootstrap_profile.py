@@ -116,15 +116,22 @@ def _resolve_text_or_upload(path: str) -> tuple:
     return bootstrap_extractors.extract_local_text(path, kind), None
 
 
-def _guess_contact_info(checkpoint: dict, dry_run: bool = False) -> bootstrap_extractors.ContactInfo:
+def _guess_contact_info(
+    checkpoint: dict, dry_run: bool = False
+) -> bootstrap_extractors.ContactInfo:
     for filename, result in sorted(checkpoint.items()):
-        if result.get("status") != "done" or result.get("doc_type") not in ("resume", "linkedin_export"):
+        if result.get("status") != "done" or result.get("doc_type") not in (
+            "resume",
+            "linkedin_export",
+        ):
             continue
         path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
         text, upload_path = _resolve_text_or_upload(path)
         if text is None and upload_path is None:
             continue
-        info = bootstrap_extractors.extract_contact_info(text=text, upload_path=upload_path, dry_run=dry_run)
+        info = bootstrap_extractors.extract_contact_info(
+            text=text, upload_path=upload_path, dry_run=dry_run
+        )
         if any(v for v in info.model_dump().values()):
             return info
     return bootstrap_extractors.ContactInfo()
@@ -142,29 +149,58 @@ def _guess_primary_roles(timeline: list) -> list:
 def _guess_recommendations(checkpoint: dict, dry_run: bool = False) -> list:
     quotes = []
     for filename, result in sorted(checkpoint.items()):
-        if result.get("status") != "done" or result.get("doc_type") != "recommendation_letter":
+        if (
+            result.get("status") != "done"
+            or result.get("doc_type") != "recommendation_letter"
+        ):
             continue
         path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
         text, upload_path = _resolve_text_or_upload(path)
         if text is None and upload_path is None:
             continue
-        quote = bootstrap_extractors.extract_recommendation_quote(text=text, upload_path=upload_path, dry_run=dry_run)
+        quote = bootstrap_extractors.extract_recommendation_quote(
+            text=text, upload_path=upload_path, dry_run=dry_run
+        )
         if quote is not None:
             quotes.append(quote)
     return quotes
 
 
 def _confirm_text(label: str, guessed) -> str:
-    return questionary.text(label, default=guessed or "", style=cli_art.QUESTIONARY_STYLE).ask() or ""
+    return (
+        questionary.text(
+            label, default=guessed or "", style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+        or ""
+    )
 
 
 def _confirm_roles(label: str, guessed: list) -> list:
     if not guessed:
-        extra = questionary.text(f"{label} (comma-separated, optional)", default="", style=cli_art.QUESTIONARY_STYLE).ask() or ""
+        extra = (
+            questionary.text(
+                f"{label} (comma-separated, optional)",
+                default="",
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
+            or ""
+        )
         return [r.strip() for r in extra.split(",") if r.strip()]
     choices = [questionary.Choice(title=r, value=r, checked=True) for r in guessed]
-    kept = questionary.checkbox(label, choices=choices, style=cli_art.QUESTIONARY_STYLE).ask() or []
-    extra = questionary.text(f"Add any more {label.lower()} (comma-separated, optional)", default="", style=cli_art.QUESTIONARY_STYLE).ask() or ""
+    kept = (
+        questionary.checkbox(
+            label, choices=choices, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+        or []
+    )
+    extra = (
+        questionary.text(
+            f"Add any more {label.lower()} (comma-separated, optional)",
+            default="",
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+        or ""
+    )
     kept.extend(r.strip() for r in extra.split(",") if r.strip())
     return kept
 
@@ -186,10 +222,15 @@ def collect_identity(dry_run: bool = False) -> dict:
         cli_art.cli_info(f"Primary target roles: {', '.join(primary_guess)}")
         cli_art.console.print()
         return {
-            "full_name": guessed.full_name or "", "email": guessed.email or "",
-            "phone": guessed.phone or "", "location": guessed.location or "",
-            "linkedin_url": guessed.linkedin_url or "", "portfolio_url": guessed.portfolio_url or "",
-            "extra_link": "", "primary_roles": primary_guess, "secondary_roles": [],
+            "full_name": guessed.full_name or "",
+            "email": guessed.email or "",
+            "phone": guessed.phone or "",
+            "location": guessed.location or "",
+            "linkedin_url": guessed.linkedin_url or "",
+            "portfolio_url": guessed.portfolio_url or "",
+            "extra_link": "",
+            "primary_roles": primary_guess,
+            "secondary_roles": [],
             "remote_preference": False,
         }
 
@@ -198,26 +239,41 @@ def collect_identity(dry_run: bool = False) -> dict:
     phone = _confirm_text("Phone:", guessed.phone)
     location = _confirm_text("Location (city, state):", guessed.location)
     linkedin_url = _confirm_text("LinkedIn URL:", guessed.linkedin_url)
-    portfolio_url = _confirm_text("Portfolio URL (optional, press Enter to skip):", guessed.portfolio_url)
-    extra_link = _confirm_text("Any other portfolio/work-sample link? (optional, press Enter to skip):", None)
+    portfolio_url = _confirm_text(
+        "Portfolio URL (optional, press Enter to skip):", guessed.portfolio_url
+    )
+    extra_link = _confirm_text(
+        "Any other portfolio/work-sample link? (optional, press Enter to skip):", None
+    )
 
     primary_roles = _confirm_roles("Primary target roles:", primary_guess)
 
     achievements_text = _achievements_summary_text()
     secondary_guess = (
-        bootstrap_extractors.suggest_secondary_roles(primary_roles, achievements_text, dry_run=dry_run)
-        if primary_roles else []
+        bootstrap_extractors.suggest_secondary_roles(
+            primary_roles, achievements_text, dry_run=dry_run
+        )
+        if primary_roles
+        else []
     )
     secondary_roles = _confirm_roles("Secondary target roles:", secondary_guess)
 
     remote_preference = questionary.confirm(
-        "Are you remote-only?", default=True, style=cli_art.QUESTIONARY_STYLE,
+        "Are you remote-only?",
+        default=True,
+        style=cli_art.QUESTIONARY_STYLE,
     ).ask()
 
     return {
-        "full_name": full_name, "email": email, "phone": phone, "location": location,
-        "linkedin_url": linkedin_url, "portfolio_url": portfolio_url, "extra_link": extra_link,
-        "primary_roles": primary_roles, "secondary_roles": secondary_roles,
+        "full_name": full_name,
+        "email": email,
+        "phone": phone,
+        "location": location,
+        "linkedin_url": linkedin_url,
+        "portfolio_url": portfolio_url,
+        "extra_link": extra_link,
+        "primary_roles": primary_roles,
+        "secondary_roles": secondary_roles,
         "remote_preference": bool(remote_preference),
     }
 
@@ -235,8 +291,8 @@ def _yaml_tags(taxonomy) -> str:
             "  # bootstrap. Each bullet in your bullet bank gets auto-tagged with\n"
             "  # one of these (tag_bullet_bank.py), and the audit/rewrite steps use\n"
             "  # persona_description + keywords to pull in the right context per\n"
-            "  # bullet. Add/edit any time -- an empty keywords: list means \"matches\n"
-            "  # everything\" (the catch-all tag), not \"matches nothing.\"\n"
+            '  # bullet. Add/edit any time -- an empty keywords: list means "matches\n'
+            '  # everything" (the catch-all tag), not "matches nothing."\n'
             "  []"
         )
     lines = []
@@ -364,7 +420,12 @@ cv:
 """
 
 
-def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_search_queries: list = None) -> bool:
+def write_profile_yml(
+    identity: dict,
+    recommendations: list,
+    taxonomy,
+    linkedin_search_queries: list = None,
+) -> bool:
     """Writes profile.yml. Unlike write_cv_md()/write_background_guide()/
     write_voice_anchors(), this has no accept/regenerate/skip preview loop
     -- it's a deterministic template fill, not an LLM draft. That's fine
@@ -385,12 +446,18 @@ def write_profile_yml(identity: dict, recommendations: list, taxonomy, linkedin_
             return False
 
     content = _PROFILE_YML_TEMPLATE.format(
-        full_name=identity["full_name"], email=identity["email"], phone=identity["phone"],
-        location=identity["location"], linkedin_url=identity["linkedin_url"],
-        portfolio_url=identity["portfolio_url"], extra_link=identity["extra_link"],
+        full_name=identity["full_name"],
+        email=identity["email"],
+        phone=identity["phone"],
+        location=identity["location"],
+        linkedin_url=identity["linkedin_url"],
+        portfolio_url=identity["portfolio_url"],
+        extra_link=identity["extra_link"],
         primary_roles_yaml=_yaml_string_list(identity["primary_roles"]),
         secondary_roles_yaml=_yaml_string_list(identity["secondary_roles"]),
-        linkedin_search_queries_yaml=_yaml_string_list(linkedin_search_queries or [], indent="  "),
+        linkedin_search_queries_yaml=_yaml_string_list(
+            linkedin_search_queries or [], indent="  "
+        ),
         tags_yaml=_yaml_tags(taxonomy),
         key_recommendations_yaml=_yaml_key_recommendations(recommendations),
         location_flexibility="Remote only" if identity.get("remote_preference") else "",
@@ -434,7 +501,11 @@ seniority_boost: []
 
 
 def write_portals_yml(identity: dict) -> None:
-    always_allow = ["Remote", "Work from home", "Fully Remote"] if identity.get("remote_preference") else ["Remote", "Hybrid"]
+    always_allow = (
+        ["Remote", "Work from home", "Fully Remote"]
+        if identity.get("remote_preference")
+        else ["Remote", "Hybrid"]
+    )
     title_seed = identity["primary_roles"] + identity["secondary_roles"]
     content = _PORTALS_YML_TEMPLATE.format(
         always_allow_yaml=_yaml_string_list(always_allow),
@@ -493,7 +564,9 @@ def seed_scan_filters_from_target_roles(identity: dict) -> bool:
     location_filter = existing.get("location_filter") or {}
     content = _SCAN_FILTERS_SEED_TEMPLATE.format(
         positive_yaml=_yaml_string_list(title_seed),
-        always_allow_yaml=_yaml_string_list(location_filter.get("always_allow") or ["Remote"]),
+        always_allow_yaml=_yaml_string_list(
+            location_filter.get("always_allow") or ["Remote"]
+        ),
         block_yaml=_yaml_string_list(location_filter.get("block") or []),
     )
     with atomic_write(path, encoding="utf-8") as f:
@@ -504,16 +577,27 @@ def seed_scan_filters_from_target_roles(identity: dict) -> bool:
 def write_verified_ledger(dry_run: bool = False) -> None:
     achievements_text = _achievements_summary_text_by_employer()
     extraction = (
-        bootstrap_extractors.extract_ledger_entries_chunked(achievements_text, dry_run=dry_run)
-        if achievements_text else bootstrap_extractors.LedgerExtraction()
+        bootstrap_extractors.extract_ledger_entries_chunked(
+            achievements_text, dry_run=dry_run
+        )
+        if achievements_text
+        else bootstrap_extractors.LedgerExtraction()
     )
 
     os.makedirs(os.path.dirname(VERIFIED_METRICS_PATH), exist_ok=True)
 
     metrics_json = {
-        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.metrics)},
+        "_meta": {
+            "source": "bootstrap ingestion",
+            "total_entries": len(extraction.metrics),
+        },
         "metrics": [
-            {"id": f"metric_{i + 1:03d}", "label": m.label, "value": m.value, "employer": m.employer}
+            {
+                "id": f"metric_{i + 1:03d}",
+                "label": m.label,
+                "value": m.value,
+                "employer": m.employer,
+            }
             for i, m in enumerate(extraction.metrics)
         ],
     }
@@ -521,7 +605,10 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         json.dump(metrics_json, f, indent=2)
 
     tools_json = {
-        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.tools)},
+        "_meta": {
+            "source": "bootstrap ingestion",
+            "total_entries": len(extraction.tools),
+        },
         "tools": [
             {"id": f"tool_{i + 1:03d}", "name": t.name, "employer": t.employer}
             for i, t in enumerate(extraction.tools)
@@ -531,7 +618,10 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         json.dump(tools_json, f, indent=2)
 
     projects_json = {
-        "_meta": {"source": "bootstrap ingestion", "total_entries": len(extraction.projects)},
+        "_meta": {
+            "source": "bootstrap ingestion",
+            "total_entries": len(extraction.projects),
+        },
         "projects": [
             {"id": f"proj_{i + 1:03d}", "name": p.name, "employer": p.employer}
             for i, p in enumerate(extraction.projects)
@@ -541,8 +631,11 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         json.dump(projects_json, f, indent=2)
 
     empty_facts = {
-        "_meta": {"source": "", "total_entries": 0,
-                  "note": "Add facts here as you cross-reference multiple sources over time."},
+        "_meta": {
+            "source": "",
+            "total_entries": 0,
+            "note": "Add facts here as you cross-reference multiple sources over time.",
+        },
         "facts": [],
     }
     with atomic_write(VERIFIED_FACTS_PATH, encoding="utf-8") as f:
@@ -554,35 +647,73 @@ def write_verified_ledger(dry_run: bool = False) -> None:
             "description": "Relationship graph connecting metrics, facts, projects, tools. Build this up as your evidence grows.",
             "node_types": ["metric", "fact", "project", "tool"],
         },
-        "nodes": [], "edges": [],
+        "nodes": [],
+        "edges": [],
     }
     with atomic_write(EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
         json.dump(empty_graph, f, indent=2)
 
     with atomic_write(VERIFIED_CLAIMS_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "Claim / Finding", "Verification Status", "Source File", "Evidence / Detail",
-            "Metric(s)", "Confidence", "Use in Resume?", "Use in Portfolio?", "Next Follow-Up",
-        ])
+        writer.writerow(
+            [
+                "Claim / Finding",
+                "Verification Status",
+                "Source File",
+                "Evidence / Detail",
+                "Metric(s)",
+                "Confidence",
+                "Use in Resume?",
+                "Use in Portfolio?",
+                "Next Follow-Up",
+            ]
+        )
 
     with atomic_write(EVIDENCE_GUIDE_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "Evidence Cluster", "Finding", "Source File(s)", "Best Detail / Quote", "Best Metric",
-            "What This Proves About You", "Where to Use It", "Confidence", "Source URL / Notes",
-        ])
+        writer.writerow(
+            [
+                "Evidence Cluster",
+                "Finding",
+                "Source File(s)",
+                "Best Detail / Quote",
+                "Best Metric",
+                "What This Proves About You",
+                "Where to Use It",
+                "Confidence",
+                "Source URL / Notes",
+            ]
+        )
 
     with atomic_write(SCREENSHOT_METRICS_PATH, newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            "Source Batch", "Campaign / Screenshot Title", "Screenshot File(s)", "Contacted",
-            "Reached", "Reached %", "Opened", "Open %", "Replied", "Reply %", "Clicked %",
-            "Bounced", "Bounce %", "Opted Out", "Opt-Out %", "Best Detail / Notes", "Confidence", "Reviewed",
-        ])
+        writer.writerow(
+            [
+                "Source Batch",
+                "Campaign / Screenshot Title",
+                "Screenshot File(s)",
+                "Contacted",
+                "Reached",
+                "Reached %",
+                "Opened",
+                "Open %",
+                "Replied",
+                "Reply %",
+                "Clicked %",
+                "Bounced",
+                "Bounce %",
+                "Opted Out",
+                "Opt-Out %",
+                "Best Detail / Notes",
+                "Confidence",
+                "Reviewed",
+            ]
+        )
 
     empty_recruiter_patterns = {
-        "_meta": {"note": "Builds up over real recruiter feedback and application outcomes."},
+        "_meta": {
+            "note": "Builds up over real recruiter feedback and application outcomes."
+        },
         "patterns": [],
     }
     with atomic_write(RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
@@ -606,14 +737,26 @@ def _build_cv_draft_rows() -> list:
     for entry in ordered:
         company = entry["company"]
         seen_companies.add(company)
-        result.append({
-            "company": company, "title": entry.get("title") or "",
-            "start_date": entry.get("start_date") or "", "end_date": entry.get("end_date") or "",
-            "bullets": by_company.get(company, []),
-        })
+        result.append(
+            {
+                "company": company,
+                "title": entry.get("title") or "",
+                "start_date": entry.get("start_date") or "",
+                "end_date": entry.get("end_date") or "",
+                "bullets": by_company.get(company, []),
+            }
+        )
     for company, bullets in by_company.items():
         if company not in seen_companies and company != "Misc. / Unassigned":
-            result.append({"company": company, "title": "", "start_date": "", "end_date": "", "bullets": bullets})
+            result.append(
+                {
+                    "company": company,
+                    "title": "",
+                    "start_date": "",
+                    "end_date": "",
+                    "bullets": bullets,
+                }
+            )
     return result
 
 
@@ -640,8 +783,14 @@ def _cv_draft_checkpoint_key(role_company: str, bullet: str) -> str:
 
 
 def _polish_bullet(
-    bullet: str, role_company: str, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str,
-    dry_run: bool = False, checkpoint: dict = None,
+    bullet: str,
+    role_company: str,
+    kb,
+    rewrite_system: str,
+    rewrite_system_gemma: str,
+    score_system: str,
+    dry_run: bool = False,
+    checkpoint: dict = None,
 ) -> dict:
     """Returns {"final_bullet": ..., "rewrite_status": "KEEP"|"MANUAL"}.
     Reuses a prior run's result from checkpoint (keyed by company+bullet
@@ -654,8 +803,17 @@ def _polish_bullet(
     if key in checkpoint:
         return checkpoint[key]
 
-    row = pd.Series({"Bullet Point": bullet, "Tags": "", "Role / Company": role_company, "weaknesses": ""})
-    result = process_bullet(row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
+    row = pd.Series(
+        {
+            "Bullet Point": bullet,
+            "Tags": "",
+            "Role / Company": role_company,
+            "weaknesses": "",
+        }
+    )
+    result = process_bullet(
+        row, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run
+    )
     polished = {
         "final_bullet": result.get("final_bullet", bullet),
         "rewrite_status": result.get("rewrite_status", "MANUAL"),
@@ -672,26 +830,58 @@ def _polish_bullet(
     return polished
 
 
-def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewrite_system_gemma: str, score_system: str, dry_run: bool) -> str:
+def _assemble_cv_draft(
+    identity: dict,
+    rows: list,
+    kb,
+    rewrite_system: str,
+    rewrite_system_gemma: str,
+    score_system: str,
+    dry_run: bool,
+) -> str:
     total = sum(len(role["bullets"]) for role in rows)
     cli_art.cli_info(f"Polishing {total} bullet(s) for your cv.md draft...")
 
     checkpoint = _load_cv_draft_checkpoint()
-    already_done = sum(1 for role in rows for bullet in role["bullets"]
-                        if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint)
+    already_done = sum(
+        1
+        for role in rows
+        for bullet in role["bullets"]
+        if _cv_draft_checkpoint_key(role["company"], bullet) in checkpoint
+    )
     if already_done:
-        cli_art.console.print(f"   {theme.colorize_icon('resume')} Resuming: {already_done}/{total} already polished in a prior run.", soft_wrap=True)
+        cli_art.console.print(
+            f"   {theme.colorize_icon('resume')} Resuming: {already_done}/{total} already polished in a prior run.",
+            soft_wrap=True,
+        )
 
     lines = [f"# {identity['full_name']}", ""]
-    contact_parts = [p for p in (identity.get("email"), identity.get("phone"), identity.get("location"), identity.get("linkedin_url")) if p]
+    contact_parts = [
+        p
+        for p in (
+            identity.get("email"),
+            identity.get("phone"),
+            identity.get("location"),
+            identity.get("linkedin_url"),
+        )
+        if p
+    ]
     if contact_parts:
         lines.append(" | ".join(contact_parts))
         lines.append("")
 
     i = 0
     for role in rows:
-        header = f"## {role['title']} — {role['company']}" if role["title"] else f"## {role['company']}"
-        date_range = f" ({role['start_date']} - {role['end_date']})" if role["start_date"] else ""
+        header = (
+            f"## {role['title']} — {role['company']}"
+            if role["title"]
+            else f"## {role['company']}"
+        )
+        date_range = (
+            f" ({role['start_date']} - {role['end_date']})"
+            if role["start_date"]
+            else ""
+        )
         lines.append(header + date_range)
         for bullet in role["bullets"]:
             i += 1
@@ -699,13 +889,24 @@ def _assemble_cv_draft(identity: dict, rows: list, kb, rewrite_system: str, rewr
             cli_art.cli_info(f"[{i}/{total}] {bullet[:60]}...")
             cli_art.detail(f"Company: {role['company']}", level=cli_art.NORMAL)
             polished = _polish_bullet(
-                bullet, role["company"], kb, rewrite_system, rewrite_system_gemma, score_system, dry_run, checkpoint,
+                bullet,
+                role["company"],
+                kb,
+                rewrite_system,
+                rewrite_system_gemma,
+                score_system,
+                dry_run,
+                checkpoint,
             )
-            status_icon = theme.colorize_icon('success') if polished["rewrite_status"] == "KEEP" else theme.colorize_icon('warning')
-            if polished['rewrite_status'] == 'KEEP':
-                cli_art.cli_success(polished['rewrite_status'])
+            status_icon = (
+                theme.colorize_icon("success")
+                if polished["rewrite_status"] == "KEEP"
+                else theme.colorize_icon("warning")
+            )
+            if polished["rewrite_status"] == "KEEP":
+                cli_art.cli_success(polished["rewrite_status"])
             else:
-                cli_art.cli_warning(polished['rewrite_status'])
+                cli_art.cli_warning(polished["rewrite_status"])
             cli_art.console.print()
             lines.append(f"- {polished['final_bullet']}")
         lines.append("")
@@ -720,14 +921,26 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
     rewrite_system, rewrite_system_gemma, score_system = build_system_prompts(rules, kb)
 
     if dry_run:
-        cli_art.cli_info("[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip.")
-        content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
+        cli_art.cli_info(
+            "[DRY RUN] would draft cv.md and preview it for accept/regenerate/skip."
+        )
+        content = _assemble_cv_draft(
+            identity,
+            rows,
+            kb,
+            rewrite_system,
+            rewrite_system_gemma,
+            score_system,
+            dry_run,
+        )
         os.makedirs(os.path.dirname(CV_MD_PATH), exist_ok=True)
         with atomic_write(CV_MD_PATH, encoding="utf-8") as f:
             f.write(content)
         return
 
-    content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
+    content = _assemble_cv_draft(
+        identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run
+    )
     choice = "skip"
     while True:
         cli_art.console.print("\n--- Draft cv.md ---\n")
@@ -738,7 +951,9 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
                 questionary.Choice(title="Regenerate", value="regenerate"),
-                questionary.Choice(title="Skip -- I'll write my own later", value="skip"),
+                questionary.Choice(
+                    title="Skip -- I'll write my own later", value="skip"
+                ),
             ],
             style=cli_art.QUESTIONARY_STYLE,
         ).ask()
@@ -746,7 +961,15 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
             # A real regenerate request -- start every bullet over rather
             # than replaying cached results from the draft just rejected.
             _clear_cv_draft_checkpoint()
-            content = _assemble_cv_draft(identity, rows, kb, rewrite_system, rewrite_system_gemma, score_system, dry_run)
+            content = _assemble_cv_draft(
+                identity,
+                rows,
+                kb,
+                rewrite_system,
+                rewrite_system_gemma,
+                score_system,
+                dry_run,
+            )
             continue
         break
 
@@ -760,7 +983,12 @@ def _gather_background_source_texts(checkpoint: dict) -> list:
     for filename, result in sorted(checkpoint.items()):
         if result.get("status") != "done":
             continue
-        if result.get("doc_type") not in ("resume", "linkedin_export", "recommendation_letter", "achievement_notes"):
+        if result.get("doc_type") not in (
+            "resume",
+            "linkedin_export",
+            "recommendation_letter",
+            "achievement_notes",
+        ):
             continue
         path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
         text, _upload_path = _resolve_text_or_upload(path)
@@ -773,25 +1001,37 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
     source_texts = _gather_background_source_texts(checkpoint)
 
     if dry_run:
-        cli_art.cli_info("[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip.")
-        draft = bootstrap_extractors.draft_background_guide(source_texts, dry_run=dry_run)
+        cli_art.cli_info(
+            "[DRY RUN] would draft user-background-guide.md and preview it for accept/regenerate/skip."
+        )
+        draft = bootstrap_extractors.draft_background_guide(
+            source_texts, dry_run=dry_run
+        )
         os.makedirs(os.path.dirname(BACKGROUND_GUIDE_PATH), exist_ok=True)
         with atomic_write(BACKGROUND_GUIDE_PATH, encoding="utf-8") as f:
             f.write(draft)
         return
 
-    draft = bootstrap_extractors.draft_background_guide(source_texts) if source_texts else ""
+    draft = (
+        bootstrap_extractors.draft_background_guide(source_texts)
+        if source_texts
+        else ""
+    )
     choice = "skip"
     while True:
         cli_art.console.print("\n--- Draft background guide ---\n")
-        cli_art.console.print(draft or "(nothing drafted -- no usable source text found)")
+        cli_art.console.print(
+            draft or "(nothing drafted -- no usable source text found)"
+        )
         cli_art.console.print("\n--- End draft ---\n")
         choice = questionary.select(
             "What would you like to do with this draft?",
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
                 questionary.Choice(title="Regenerate", value="regenerate"),
-                questionary.Choice(title="Skip -- I'll write my own later", value="skip"),
+                questionary.Choice(
+                    title="Skip -- I'll write my own later", value="skip"
+                ),
             ],
             style=cli_art.QUESTIONARY_STYLE,
         ).ask()
@@ -817,7 +1057,13 @@ def _gather_voice_anchor_source_texts(checkpoint: dict) -> list:
     for filename, result in sorted(checkpoint.items()):
         if result.get("status") != "done":
             continue
-        if result.get("doc_type") not in ("resume", "linkedin_export", "recommendation_letter", "achievement_notes", "other"):
+        if result.get("doc_type") not in (
+            "resume",
+            "linkedin_export",
+            "recommendation_letter",
+            "achievement_notes",
+            "other",
+        ):
             continue
         path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
         text, _upload_path = _resolve_text_or_upload(path)
@@ -836,25 +1082,34 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
     source_texts = _gather_voice_anchor_source_texts(checkpoint)
 
     if dry_run:
-        cli_art.cli_info("[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip.")
+        cli_art.cli_info(
+            "[DRY RUN] would draft voice-anchors.md and preview it for accept/regenerate/skip."
+        )
         draft = bootstrap_extractors.draft_voice_anchors(source_texts, dry_run=dry_run)
         os.makedirs(os.path.dirname(VOICE_ANCHORS_PATH), exist_ok=True)
         with atomic_write(VOICE_ANCHORS_PATH, encoding="utf-8") as f:
             f.write(draft)
         return
 
-    draft = bootstrap_extractors.draft_voice_anchors(source_texts) if source_texts else ""
+    draft = (
+        bootstrap_extractors.draft_voice_anchors(source_texts) if source_texts else ""
+    )
     choice = "skip"
     while True:
         cli_art.console.print("\n--- Draft voice anchors ---\n")
-        cli_art.console.print(draft or "(nothing drafted -- no usable writing-sample text found; this is optional, skip freely)")
+        cli_art.console.print(
+            draft
+            or "(nothing drafted -- no usable writing-sample text found; this is optional, skip freely)"
+        )
         cli_art.console.print("\n--- End draft ---\n")
         choice = questionary.select(
             "What would you like to do with this draft?",
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
                 questionary.Choice(title="Regenerate", value="regenerate"),
-                questionary.Choice(title="Skip -- optional, I'll add my own later", value="skip"),
+                questionary.Choice(
+                    title="Skip -- optional, I'll add my own later", value="skip"
+                ),
             ],
             style=cli_art.QUESTIONARY_STYLE,
         ).ask()
@@ -868,8 +1123,13 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
         f.write(draft if choice == "accept" else "")
 
 
-def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions: str, env_file: str,
-                                  shell_default: str = None) -> bool:
+def _collect_secret_now_or_later(
+    var_name: str,
+    prompt_label: str,
+    instructions: str,
+    env_file: str,
+    shell_default: str = None,
+) -> bool:
     """Walks the user through one .env var: shows instructions, offers to
     enter it right now (written straight to this profile's own .env via
     python-dotenv's set_key(), which creates the file if it doesn't exist
@@ -892,31 +1152,45 @@ def _collect_secret_now_or_later(var_name: str, prompt_label: str, instructions:
         )
         use_shell_value = questionary.confirm(
             f"Use the {prompt_label} already in your shell for this profile too?",
-            default=True, style=cli_art.QUESTIONARY_STYLE,
+            default=True,
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if use_shell_value:
             os.makedirs(os.path.dirname(env_file), exist_ok=True)
             set_key(env_file, var_name, shell_default)
             cli_art.cli_success(f"Saved {var_name} to {env_file}.")
             return True
-        cli_art.cli_info("Okay -- you'll be asked for a value for this profile instead.")
+        cli_art.cli_info(
+            "Okay -- you'll be asked for a value for this profile instead."
+        )
 
     set_now = questionary.confirm(
-        f"Enter your {prompt_label} now?", default=True, style=cli_art.QUESTIONARY_STYLE,
+        f"Enter your {prompt_label} now?",
+        default=True,
+        style=cli_art.QUESTIONARY_STYLE,
     ).ask()
     if not set_now:
-        cli_art.cli_info(f"No problem -- add it later by editing {env_file} (create it if it doesn't exist) and adding a line:")
+        cli_art.cli_info(
+            f"No problem -- add it later by editing {env_file} (create it if it doesn't exist) and adding a line:"
+        )
         cli_art.console.print(f"    {var_name}=your-value-here")
         return False
 
-    value = questionary.password(f"Paste your {prompt_label}:", style=cli_art.QUESTIONARY_STYLE).ask()
+    value = questionary.password(
+        f"Paste your {prompt_label}:", style=cli_art.QUESTIONARY_STYLE
+    ).ask()
     if not value or not value.strip():
-        cli_art.cli_info("No value entered -- add it later the same way (see instructions above).")
+        cli_art.cli_info(
+            "No value entered -- add it later the same way (see instructions above)."
+        )
         return False
 
     os.makedirs(os.path.dirname(env_file), exist_ok=True)
     set_key(env_file, var_name, value.strip())
-    cli_art.console.print(f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.", soft_wrap=True)
+    cli_art.console.print(
+        f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.",
+        soft_wrap=True,
+    )
     return True
 
 
@@ -928,7 +1202,9 @@ def collect_secrets(dry_run: bool = False) -> dict:
     people sharing this checkout never share credentials. Returns
     {"gemini_key_set": bool, "jobright_cookie_set": bool}."""
     if dry_run:
-        cli_art.cli_info("[DRY RUN] would walk through .env setup (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING).")
+        cli_art.cli_info(
+            "[DRY RUN] would walk through .env setup (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING)."
+        )
         return {"gemini_key_set": False, "jobright_cookie_set": False}
 
     env_file = profile_paths.env_path()
@@ -945,7 +1221,9 @@ def collect_secrets(dry_run: bool = False) -> dict:
     # This can run again on a profile that's already configured (bootstrap
     # is re-runnable to ingest more documents later, not strictly one-time)
     # -- skip re-prompting for a var this profile's own .env already has.
-    already_configured = bool(profile_env.get("GEMINI_API_KEY") or profile_env.get("GOOGLE_API_KEY"))
+    already_configured = bool(
+        profile_env.get("GEMINI_API_KEY") or profile_env.get("GOOGLE_API_KEY")
+    )
     if already_configured:
         gemini_set = True
     else:
@@ -958,7 +1236,8 @@ def collect_secrets(dry_run: bool = False) -> dict:
             "API key (a free tier is available -- get one from Google AI Studio if "
             "you don't already have one).",
             env_file,
-            shell_default=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"),
+            shell_default=os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY"),
         )
 
     jobright_set = bool(profile_env.get("JOBRIGHT_COOKIE_STRING"))
@@ -967,7 +1246,8 @@ def collect_secrets(dry_run: bool = False) -> dict:
             "\nOptional: set up JobRight scanning now? (only needed for "
             "`resume scan --source jobright` -- skip this if you'll only use "
             "LinkedIn scanning, or aren't scanning for jobs yet)",
-            default=False, style=cli_art.QUESTIONARY_STYLE,
+            default=False,
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if wants_jobright:
             jobright_set = _collect_secret_now_or_later(
@@ -985,11 +1265,17 @@ def collect_secrets(dry_run: bool = False) -> dict:
                 shell_default=os.environ.get("JOBRIGHT_COOKIE_STRING"),
             )
         else:
-            cli_art.cli_info(f"Skipped -- add it later by editing {env_file} (create it if it doesn't exist) and adding a line:")
-            cli_art.console.print("    JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ...")
+            cli_art.cli_info(
+                f"Skipped -- add it later by editing {env_file} (create it if it doesn't exist) and adding a line:"
+            )
+            cli_art.console.print(
+                "    JOBRIGHT_COOKIE_STRING=g_state=...; SESSION_ID=...; ..."
+            )
 
     if not already_configured or not jobright_set:
-        cli_art.cli_info("Note: LinkedIn scanning needs no .env value at all -- it reads your live, already-logged-in Chrome session automatically, every time.")
+        cli_art.cli_info(
+            "Note: LinkedIn scanning needs no .env value at all -- it reads your live, already-logged-in Chrome session automatically, every time."
+        )
 
     return {"gemini_key_set": gemini_set, "jobright_cookie_set": jobright_set}
 
@@ -1008,28 +1294,36 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     cli_art.cli_info("")
     cli_art.console.rule("LinkedIn search terms", style="dim")
     cli_art.console.print()
-    cli_art.cli_info("LinkedIn scanning needs no cookie or login setup -- it reads your live, already-logged-in Chrome session automatically. It does need to know what to search for, though.")
+    cli_art.cli_info(
+        "LinkedIn scanning needs no cookie or login setup -- it reads your live, already-logged-in Chrome session automatically. It does need to know what to search for, though."
+    )
     cli_art.console.print()
     if primary_roles:
-        cli_art.cli_info(f"Without anything set here, it'll search for each of your primary target roles one at a time: {', '.join(primary_roles)}.")
+        cli_art.cli_info(
+            f"Without anything set here, it'll search for each of your primary target roles one at a time: {', '.join(primary_roles)}."
+        )
         cli_art.console.print()
 
     wants_custom = questionary.confirm(
         "Set up your own custom search terms now instead? (optional, and not permanent -- "
         "you can always add/edit these later)",
-        default=False, style=cli_art.QUESTIONARY_STYLE,
+        default=False,
+        style=cli_art.QUESTIONARY_STYLE,
     ).ask()
     if not wants_custom:
         cli_art.cli_info(
-            f"Using your target roles as-is for now. To fine-tune later, edit {PROFILE_YML_PATH}'s linkedin_search_queries: field (boolean strings like \"Email OR Campaign\")."
+            f'Using your target roles as-is for now. To fine-tune later, edit {PROFILE_YML_PATH}\'s linkedin_search_queries: field (boolean strings like "Email OR Campaign").'
         )
         return []
 
-    cli_art.cli_info("Enter one search term per line (e.g. \"Email OR Campaign\"). Leave blank when done.")
+    cli_art.cli_info(
+        'Enter one search term per line (e.g. "Email OR Campaign"). Leave blank when done.'
+    )
     queries = []
     while True:
         q = questionary.text(
-            f"Search term {len(queries) + 1} (blank to finish):", style=cli_art.QUESTIONARY_STYLE,
+            f"Search term {len(queries) + 1} (blank to finish):",
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if not q or not q.strip():
             break
@@ -1042,11 +1336,16 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
 def run_profile_setup(dry_run: bool = False) -> dict:
     checkpoint = _load_checkpoint()
     identity = collect_identity(dry_run=dry_run)
-    linkedin_search_queries = collect_linkedin_search_queries(identity["primary_roles"], dry_run=dry_run)
+    linkedin_search_queries = collect_linkedin_search_queries(
+        identity["primary_roles"], dry_run=dry_run
+    )
     recommendations = _guess_recommendations(checkpoint, dry_run=dry_run)
     achievements_text = _achievements_summary_text()
     taxonomy = bootstrap_extractors.generate_tag_taxonomy(
-        identity["primary_roles"], identity["secondary_roles"], achievements_text, dry_run=dry_run,
+        identity["primary_roles"],
+        identity["secondary_roles"],
+        achievements_text,
+        dry_run=dry_run,
     )
     write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
     write_portals_yml(identity)

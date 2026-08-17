@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_extractors  # noqa: E402
@@ -12,11 +14,15 @@ import bootstrap_extractors  # noqa: E402
 class TestClassifyDocumentType(unittest.TestCase):
 
     def test_linkedin_filename_heuristic(self):
-        result = bootstrap_extractors.classify_document_type("LinkedIn_Export.pdf", None)
+        result = bootstrap_extractors.classify_document_type(
+            "LinkedIn_Export.pdf", None
+        )
         self.assertEqual(result, "linkedin_export")
 
     def test_resume_filename_heuristic(self):
-        result = bootstrap_extractors.classify_document_type("My_Resume_2024.docx", "some text")
+        result = bootstrap_extractors.classify_document_type(
+            "My_Resume_2024.docx", "some text"
+        )
         self.assertEqual(result, "resume")
 
     def test_cv_filename_heuristic(self):
@@ -24,11 +30,15 @@ class TestClassifyDocumentType(unittest.TestCase):
         self.assertEqual(result, "resume")
 
     def test_certificate_filename_heuristic(self):
-        result = bootstrap_extractors.classify_document_type("AWS_Certificate.pdf", None)
+        result = bootstrap_extractors.classify_document_type(
+            "AWS_Certificate.pdf", None
+        )
         self.assertEqual(result, "certificate")
 
     def test_recommendation_filename_heuristic(self):
-        result = bootstrap_extractors.classify_document_type("Recommendation_Letter_Jane.pdf", None)
+        result = bootstrap_extractors.classify_document_type(
+            "Recommendation_Letter_Jane.pdf", None
+        )
         self.assertEqual(result, "recommendation_letter")
 
     def test_no_text_and_ambiguous_filename_defaults_to_achievement_notes(self):
@@ -38,7 +48,9 @@ class TestClassifyDocumentType(unittest.TestCase):
     @patch("bootstrap_extractors.GeminiClient.generate")
     def test_ambiguous_filename_with_text_calls_llm(self, mock_generate):
         mock_generate.return_value = ('{"doc_type": "recommendation_letter"}', {})
-        result = bootstrap_extractors.classify_document_type("document3.txt", "To whom it may concern...")
+        result = bootstrap_extractors.classify_document_type(
+            "document3.txt", "To whom it may concern..."
+        )
         self.assertEqual(result, "recommendation_letter")
         mock_generate.assert_called_once()
 
@@ -58,7 +70,9 @@ class TestClassifyDocumentType(unittest.TestCase):
         # {}, indistinguishable from a genuinely ambiguous document.
         mock_generate.return_value = (None, {})
         with self.assertRaises(bootstrap_extractors.IngestionAPIError):
-            bootstrap_extractors.classify_document_type("document3.txt", "some ambiguous text")
+            bootstrap_extractors.classify_document_type(
+                "document3.txt", "some ambiguous text"
+            )
 
 
 class TestExtractAchievements(unittest.TestCase):
@@ -72,7 +86,8 @@ class TestExtractAchievements(unittest.TestCase):
             {},
         )
         result = bootstrap_extractors.extract_achievements(
-            "achievement_notes", text="I led an onboarding redesign at Acme Corp in 2021."
+            "achievement_notes",
+            text="I led an onboarding redesign at Acme Corp in 2021.",
         )
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].raw_text, "Led onboarding redesign")
@@ -110,7 +125,9 @@ class TestExtractAchievements(unittest.TestCase):
         # list, indistinguishable from "this document genuinely had none."
         mock_generate.return_value = (None, {})
         with self.assertRaises(bootstrap_extractors.IngestionAPIError):
-            bootstrap_extractors.extract_achievements("achievement_notes", text="some notes")
+            bootstrap_extractors.extract_achievements(
+                "achievement_notes", text="some notes"
+            )
 
 
 class TestExtractCertificate(unittest.TestCase):
@@ -121,21 +138,30 @@ class TestExtractCertificate(unittest.TestCase):
             '{"name": "AWS Certified Solutions Architect", "issuer": "Amazon Web Services", "date": "2023"}',
             {},
         )
-        cert = bootstrap_extractors.extract_certificate(text="AWS Certified Solutions Architect, issued 2023")
+        cert = bootstrap_extractors.extract_certificate(
+            text="AWS Certified Solutions Architect, issued 2023"
+        )
         self.assertEqual(cert.name, "AWS Certified Solutions Architect")
         self.assertEqual(cert.issuer, "Amazon Web Services")
 
     @patch("bootstrap_extractors.GeminiClient.generate")
     def test_returns_none_when_no_name_found(self, mock_generate):
-        mock_generate.return_value = ('{"name": null, "issuer": null, "date": null}', {})
-        cert = bootstrap_extractors.extract_certificate(text="not actually a certificate")
+        mock_generate.return_value = (
+            '{"name": null, "issuer": null, "date": null}',
+            {},
+        )
+        cert = bootstrap_extractors.extract_certificate(
+            text="not actually a certificate"
+        )
         self.assertIsNone(cert)
 
     @patch("bootstrap_extractors.GeminiClient.generate")
     def test_failed_api_call_raises_instead_of_returning_none(self, mock_generate):
         mock_generate.return_value = (None, {})
         with self.assertRaises(bootstrap_extractors.IngestionAPIError):
-            bootstrap_extractors.extract_certificate(text="AWS Certified Solutions Architect, issued 2023")
+            bootstrap_extractors.extract_certificate(
+                text="AWS Certified Solutions Architect, issued 2023"
+            )
 
 
 class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
@@ -149,10 +175,15 @@ class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
             '"certifications": []}',
             {},
         )
-        result = bootstrap_extractors.extract_resume_timeline_and_achievements(text="fake resume text")
+        result = bootstrap_extractors.extract_resume_timeline_and_achievements(
+            text="fake resume text"
+        )
         self.assertEqual(len(result.experience), 1)
         self.assertEqual(result.experience[0].company, "Acme Corp")
-        self.assertEqual(result.experience[0].achievements, ["Grew email list by 40%", "Launched rebrand"])
+        self.assertEqual(
+            result.experience[0].achievements,
+            ["Grew email list by 40%", "Launched rebrand"],
+        )
         self.assertEqual(result.certifications, [])
 
     @patch("bootstrap_extractors.GeminiClient.generate")
@@ -162,7 +193,9 @@ class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
             '[{"name": "PMP", "issuer": "PMI", "date": "2020"}]}',
             {},
         )
-        result = bootstrap_extractors.extract_resume_timeline_and_achievements(text="fake resume text")
+        result = bootstrap_extractors.extract_resume_timeline_and_achievements(
+            text="fake resume text"
+        )
         self.assertEqual(len(result.certifications), 1)
         self.assertEqual(result.certifications[0].name, "PMP")
 
@@ -183,7 +216,9 @@ class TestExtractResumeTimelineAndAchievements(unittest.TestCase):
         # ResumeExtraction (work_experience: []) instead of a real failure.
         mock_generate.return_value = (None, {})
         with self.assertRaises(bootstrap_extractors.IngestionAPIError):
-            bootstrap_extractors.extract_resume_timeline_and_achievements(text="fake resume text")
+            bootstrap_extractors.extract_resume_timeline_and_achievements(
+                text="fake resume text"
+            )
 
 
 class TestGenerateFromUpload(unittest.TestCase):
@@ -193,7 +228,9 @@ class TestGenerateFromUpload(unittest.TestCase):
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
         mock_client.files.upload.return_value = "uploaded-file-handle"
-        mock_client.models.generate_content.return_value = MagicMock(text='{"achievements": []}')
+        mock_client.models.generate_content.return_value = MagicMock(
+            text='{"achievements": []}'
+        )
 
         result = bootstrap_extractors._generate_from_upload(
             "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList

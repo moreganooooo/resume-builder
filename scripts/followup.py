@@ -35,7 +35,9 @@ def compute_urgency(application: dict | None) -> str | None:
     if not anchor:
         return None
     try:
-        days_since_status_change = (datetime.datetime.now() - datetime.datetime.fromisoformat(anchor)).days
+        days_since_status_change = (
+            datetime.datetime.now() - datetime.datetime.fromisoformat(anchor)
+        ).days
     except ValueError:
         return None
 
@@ -44,23 +46,41 @@ def compute_urgency(application: dict | None) -> str | None:
     days_since_last_followup = None
     if last_followup_at:
         try:
-            days_since_last_followup = (datetime.datetime.now() - datetime.datetime.fromisoformat(last_followup_at)).days
+            days_since_last_followup = (
+                datetime.datetime.now()
+                - datetime.datetime.fromisoformat(last_followup_at)
+            ).days
         except ValueError:
             days_since_last_followup = None
 
     if status == "Applied":
         if follow_up_count >= CADENCE["applied_max_followups"]:
             return "cold"
-        if follow_up_count == 0 and days_since_status_change >= CADENCE["applied_first"]:
+        if (
+            follow_up_count == 0
+            and days_since_status_change >= CADENCE["applied_first"]
+        ):
             return "overdue"
-        if follow_up_count > 0 and days_since_last_followup is not None and days_since_last_followup >= CADENCE["applied_subsequent"]:
+        if (
+            follow_up_count > 0
+            and days_since_last_followup is not None
+            and days_since_last_followup >= CADENCE["applied_subsequent"]
+        ):
             return "overdue"
         return "waiting"
 
     if status == "Responded":
-        return "overdue" if days_since_status_change >= CADENCE["responded_subsequent"] else "waiting"
+        return (
+            "overdue"
+            if days_since_status_change >= CADENCE["responded_subsequent"]
+            else "waiting"
+        )
 
     if status == "Interview":
-        return "overdue" if days_since_status_change >= CADENCE["interview_thankyou"] else "waiting"
+        return (
+            "overdue"
+            if days_since_status_change >= CADENCE["interview_thankyou"]
+            else "waiting"
+        )
 
     return None

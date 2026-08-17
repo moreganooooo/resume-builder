@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -18,10 +20,14 @@ class TestLayerScores(unittest.TestCase):
         self.assertEqual(orchestrator.compute_fit_score(PERFECT_FIT), 5.0)
 
     def test_perfect_interview_odds_subscores_score_5(self):
-        self.assertEqual(orchestrator.compute_interview_odds_score(PERFECT_INTERVIEW_ODDS), 5.0)
+        self.assertEqual(
+            orchestrator.compute_interview_odds_score(PERFECT_INTERVIEW_ODDS), 5.0
+        )
 
     def test_perfect_practical_pursue_subscores_score_5(self):
-        self.assertEqual(orchestrator.compute_practical_pursue_score(PERFECT_PRACTICAL), 5.0)
+        self.assertEqual(
+            orchestrator.compute_practical_pursue_score(PERFECT_PRACTICAL), 5.0
+        )
 
     def test_missing_dimension_defaults_to_zero(self):
         self.assertEqual(orchestrator.compute_fit_score({}), 0.0)
@@ -44,12 +50,16 @@ class TestFitCompositeScoreStalePostingPenalty(unittest.TestCase):
     def test_one_day_over_threshold(self):
         over = orchestrator.STALE_POSTING_THRESHOLD_DAYS + 1
         expected = round(5.0 - orchestrator.STALE_POSTING_PENALTY_PER_DAY, 2)
-        self.assertEqual(orchestrator.fit_composite_score(5.0, 5.0, 5.0, over), expected)
+        self.assertEqual(
+            orchestrator.fit_composite_score(5.0, 5.0, 5.0, over), expected
+        )
 
     def test_penalty_grows_linearly_past_the_threshold(self):
         over = orchestrator.STALE_POSTING_THRESHOLD_DAYS + 7
         expected = round(5.0 - 7 * orchestrator.STALE_POSTING_PENALTY_PER_DAY, 2)
-        self.assertEqual(orchestrator.fit_composite_score(5.0, 5.0, 5.0, over), expected)
+        self.assertEqual(
+            orchestrator.fit_composite_score(5.0, 5.0, 5.0, over), expected
+        )
 
     def test_age_can_overturn_quality_within_three_weeks(self):
         """The property the curve exists for, and the one the previous
@@ -65,7 +75,8 @@ class TestFitCompositeScoreStalePostingPenalty(unittest.TestCase):
         fresh_mediocre = orchestrator.fit_composite_score(3.4, 3.4, 3.4, 0)
         stale_strong = orchestrator.fit_composite_score(4.5, 4.0, 4.0, 21)
         self.assertLess(
-            stale_strong, fresh_mediocre,
+            stale_strong,
+            fresh_mediocre,
             "a 3-week-old strong posting still outranks a fresh mediocre one -- "
             "the staleness penalty is too weak or its cap is too low to matter",
         )

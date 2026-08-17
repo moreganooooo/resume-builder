@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
@@ -16,8 +18,10 @@ class TestCoverLetterSchemaNewFields(unittest.TestCase):
 
     def test_contact_fields_default_to_empty_string(self):
         model = orchestrator.CoverLetterSchema(
-            company_name="Acme", greeting="Dear Acme Corp Hiring Team,",
-            body_paragraphs=["p1", "p2"], sign_off="Sincerely,",
+            company_name="Acme",
+            greeting="Dear Acme Corp Hiring Team,",
+            body_paragraphs=["p1", "p2"],
+            sign_off="Sincerely,",
         )
         self.assertEqual(model.contact_name, "")
         self.assertEqual(model.contact_title, "")
@@ -27,15 +31,20 @@ class TestResolveCompanyLocation(unittest.TestCase):
 
     def test_prefers_research_hq_location(self):
         result = orchestrator._resolve_company_location(
-            {"company_hq_location": "Austin, TX"}, {"location": "Remote"})
+            {"company_hq_location": "Austin, TX"}, {"location": "Remote"}
+        )
         self.assertEqual(result, "Austin, TX")
 
     def test_falls_back_to_jd_location_when_research_has_none(self):
-        result = orchestrator._resolve_company_location({"company_hq_location": ""}, {"location": "Remote"})
+        result = orchestrator._resolve_company_location(
+            {"company_hq_location": ""}, {"location": "Remote"}
+        )
         self.assertEqual(result, "Remote")
 
     def test_falls_back_to_jd_location_when_research_is_none(self):
-        result = orchestrator._resolve_company_location(None, {"location": "Buffalo, NY"})
+        result = orchestrator._resolve_company_location(
+            None, {"location": "Buffalo, NY"}
+        )
         self.assertEqual(result, "Buffalo, NY")
 
     def test_returns_empty_string_when_nothing_known(self):
@@ -52,14 +61,18 @@ class TestReadMatchingResumeTagline(unittest.TestCase):
     def setUp(self):
         self.resume_dir = os.path.join(profile_paths.output_dir(), "json")
         os.makedirs(self.resume_dir, exist_ok=True)
-        self.resume_path = os.path.join(self.resume_dir, "_tmp_enrichment_stem_Resume.json")
+        self.resume_path = os.path.join(
+            self.resume_dir, "_tmp_enrichment_stem_Resume.json"
+        )
 
     def tearDown(self):
         if os.path.exists(self.resume_path):
             os.remove(self.resume_path)
 
     def test_returns_empty_string_when_no_matching_resume_exists(self):
-        self.assertEqual(orchestrator._read_matching_resume_tagline("_tmp_enrichment_stem"), "")
+        self.assertEqual(
+            orchestrator._read_matching_resume_tagline("_tmp_enrichment_stem"), ""
+        )
 
     def test_returns_tagline_from_matching_resume_json(self):
         with open(self.resume_path, "w", encoding="utf-8") as f:
@@ -72,7 +85,9 @@ class TestReadMatchingResumeTagline(unittest.TestCase):
     def test_returns_empty_string_on_malformed_json(self):
         with open(self.resume_path, "w", encoding="utf-8") as f:
             f.write("{not valid json")
-        self.assertEqual(orchestrator._read_matching_resume_tagline("_tmp_enrichment_stem"), "")
+        self.assertEqual(
+            orchestrator._read_matching_resume_tagline("_tmp_enrichment_stem"), ""
+        )
 
 
 class TestCoverLetterEnrichmentWiring(unittest.TestCase):
@@ -81,7 +96,9 @@ class TestCoverLetterEnrichmentWiring(unittest.TestCase):
 
     def setUp(self):
         self.engine = orchestrator.ResumeEngine()
-        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_enrichment.json")
+        self.jd_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_jd_enrichment.json"
+        )
         self.jd_json = {
             "job_title": "Content Strategist",
             "company_name": "Acme Corp",
@@ -92,13 +109,19 @@ class TestCoverLetterEnrichmentWiring(unittest.TestCase):
             json.dump(self.jd_json, f)
 
         self.stem = orchestrator._build_output_stem(self.jd_path)
-        self.resume_json_path = os.path.join(self.engine.output_json_dir, f"{self.stem}_Resume.json")
+        self.resume_json_path = os.path.join(
+            self.engine.output_json_dir, f"{self.stem}_Resume.json"
+        )
         os.makedirs(self.engine.output_json_dir, exist_ok=True)
         with open(self.resume_json_path, "w", encoding="utf-8") as f:
             json.dump({"TAGLINE": "CONTENT STRATEGIST | SEO | LIFECYCLE MARKETING"}, f)
 
-        self.json_out = os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
-        self.html_out = os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
+        self.json_out = os.path.join(
+            self.engine.output_json_dir, f"{self.stem}_CoverLetter.json"
+        )
+        self.html_out = os.path.join(
+            self.engine.output_html_dir, f"{self.stem}_CoverLetter.html"
+        )
 
     def tearDown(self):
         for path in (self.jd_path, self.resume_json_path, self.json_out, self.html_out):
@@ -106,45 +129,74 @@ class TestCoverLetterEnrichmentWiring(unittest.TestCase):
                 os.remove(path)
 
     def _clean_letter_json(self):
-        return json.dumps({
-            "company_name": "Acme Corp",
-            "greeting": "Dear Acme Corp Hiring Team,",
-            "contact_name": "",
-            "contact_title": "",
-            "body_paragraphs": [
-                "I'm excited to apply for this role at Acme Corp.",
-                "My background lines up well with what you need.",
-            ],
-            "sign_off": "Sincerely,",
-        })
+        return json.dumps(
+            {
+                "company_name": "Acme Corp",
+                "greeting": "Dear Acme Corp Hiring Team,",
+                "contact_name": "",
+                "contact_title": "",
+                "body_paragraphs": [
+                    "I'm excited to apply for this role at Acme Corp.",
+                    "My background lines up well with what you need.",
+                ],
+                "sign_off": "Sincerely,",
+            }
+        )
 
     def _run_build(self):
-        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
-             patch("orchestrator.render_coverletter"), \
-             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+        with (
+            patch(
+                "orchestrator.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
+            patch("orchestrator.render_coverletter"),
+            patch(
+                "orchestrator.validate_pdf_text.validate_coverletter_pdf_text",
+                return_value=[],
+            ),
+        ):
             return self.engine.build_tailored_coverletter(self.jd_path)
 
-    @patch.object(orchestrator.ResumeEngine, "research_company",
-                   return_value={"company_hq_location": "Austin, TX", "company_facts": [], "notable_highlights": []})
+    @patch.object(
+        orchestrator.ResumeEngine,
+        "research_company",
+        return_value={
+            "company_hq_location": "Austin, TX",
+            "company_facts": [],
+            "notable_highlights": [],
+        },
+    )
     @patch("orchestrator.GeminiClient.generate")
-    def test_tagline_and_research_location_land_in_saved_letter(self, mock_generate, mock_research):
+    def test_tagline_and_research_location_land_in_saved_letter(
+        self, mock_generate, mock_research
+    ):
         mock_generate.return_value = (self._clean_letter_json(), {})
         result = self._run_build()
-        self.assertEqual(result["tagline"], "CONTENT STRATEGIST | SEO | LIFECYCLE MARKETING")
+        self.assertEqual(
+            result["tagline"], "CONTENT STRATEGIST | SEO | LIFECYCLE MARKETING"
+        )
         self.assertEqual(result["company_location"], "Austin, TX")
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_falls_back_to_jd_location_when_research_has_none(self, mock_generate, mock_research):
+    def test_falls_back_to_jd_location_when_research_has_none(
+        self, mock_generate, mock_research
+    ):
         mock_generate.return_value = (self._clean_letter_json(), {})
         result = self._run_build()
         self.assertEqual(result["company_location"], "Remote")
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_contact_fallback_fills_from_scraped_jd_contacts(self, mock_generate, mock_research):
+    def test_contact_fallback_fills_from_scraped_jd_contacts(
+        self, mock_generate, mock_research
+    ):
         self.jd_json["social_connections"] = [
-            {"fullName": "Maggie Smith", "jobTitle": "HR Manager", "companyName": "Acme Corp"},
+            {
+                "fullName": "Maggie Smith",
+                "jobTitle": "HR Manager",
+                "companyName": "Acme Corp",
+            },
         ]
         with open(self.jd_path, "w", encoding="utf-8") as f:
             json.dump(self.jd_json, f)
@@ -164,15 +216,22 @@ class TestReferralInjection(unittest.TestCase):
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_referral.json")
         with open(self.jd_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "job_title": "Content Strategist",
-                "company_name": "Acme Corp",
-                "description": "We are hiring a Content Strategist.",
-            }, f)
+            json.dump(
+                {
+                    "job_title": "Content Strategist",
+                    "company_name": "Acme Corp",
+                    "description": "We are hiring a Content Strategist.",
+                },
+                f,
+            )
 
         self.stem = orchestrator._build_output_stem(self.jd_path)
-        self.json_out = os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
-        self.html_out = os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
+        self.json_out = os.path.join(
+            self.engine.output_json_dir, f"{self.stem}_CoverLetter.json"
+        )
+        self.html_out = os.path.join(
+            self.engine.output_html_dir, f"{self.stem}_CoverLetter.html"
+        )
 
     def tearDown(self):
         for path in (self.jd_path, self.json_out, self.html_out):
@@ -180,27 +239,39 @@ class TestReferralInjection(unittest.TestCase):
                 os.remove(path)
 
     def _clean_letter_json(self):
-        return json.dumps({
-            "company_name": "Acme Corp",
-            "greeting": "Dear Acme Corp Hiring Team,",
-            "contact_name": "",
-            "contact_title": "",
-            "body_paragraphs": [
-                "When Acme Corp scaling its Content Strategist function, Jane Doe suggested I reach out.",
-                "My background lines up well with what you need.",
-            ],
-            "sign_off": "Sincerely,",
-        })
+        return json.dumps(
+            {
+                "company_name": "Acme Corp",
+                "greeting": "Dear Acme Corp Hiring Team,",
+                "contact_name": "",
+                "contact_title": "",
+                "body_paragraphs": [
+                    "When Acme Corp scaling its Content Strategist function, Jane Doe suggested I reach out.",
+                    "My background lines up well with what you need.",
+                ],
+                "sign_off": "Sincerely,",
+            }
+        )
 
     def _run_build(self):
-        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
-             patch("orchestrator.render_coverletter"), \
-             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+        with (
+            patch(
+                "orchestrator.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
+            patch("orchestrator.render_coverletter"),
+            patch(
+                "orchestrator.validate_pdf_text.validate_coverletter_pdf_text",
+                return_value=[],
+            ),
+        ):
             return self.engine.build_tailored_coverletter(self.jd_path)
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_referral_block_present_in_system_instruction_when_saved(self, mock_generate, mock_research):
+    def test_referral_block_present_in_system_instruction_when_saved(
+        self, mock_generate, mock_research
+    ):
         jd_manager.save_referral(self.jd_path, "Jane Doe, former coworker")
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
@@ -208,12 +279,16 @@ class TestReferralInjection(unittest.TestCase):
         # B, Feature #12), build_tailored_coverletter() makes an earlier
         # GeminiClient.generate() call to extract them first, so the letter
         # generation call is the *last* call, not the first.
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         # The prompt template's own instructions always mention the
         # "=== REFERRAL ===" marker by name (explaining the convention), so
         # check for the actual injected content instead of the marker text.
         self.assertIn("Jane Doe, former coworker", system_instruction)
-        self.assertIn("The candidate has a referral for this specific role", system_instruction)
+        self.assertIn(
+            "The candidate has a referral for this specific role", system_instruction
+        )
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
@@ -224,8 +299,12 @@ class TestReferralInjection(unittest.TestCase):
         # B, Feature #12), build_tailored_coverletter() makes an earlier
         # GeminiClient.generate() call to extract them first, so the letter
         # generation call is the *last* call, not the first.
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
-        self.assertNotIn("The candidate has a referral for this specific role", system_instruction)
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
+        self.assertNotIn(
+            "The candidate has a referral for this specific role", system_instruction
+        )
 
 
 class TestBuildKeywordBlock(unittest.TestCase):
@@ -243,7 +322,9 @@ class TestBuildKeywordBlock(unittest.TestCase):
             "core_functions": ["J", "K"],
         }
         block = orchestrator._build_keyword_block(keywords, None)
-        terms_line = next(line for line in block.splitlines() if line.startswith("Top terms"))
+        terms_line = next(
+            line for line in block.splitlines() if line.startswith("Top terms")
+        )
         kept = [t.strip() for t in terms_line.split(":", 1)[1].split(",")]
         self.assertEqual(kept, ["A", "B", "C", "D", "E", "F", "G", "H"])
 
@@ -253,7 +334,8 @@ class TestBuildKeywordBlock(unittest.TestCase):
 
     def test_enterprise_high_tier_gets_critical_wording(self):
         block = orchestrator._build_keyword_block(
-            {"tools": ["Figma"]}, {"weight_tier": "enterprise_high"})
+            {"tools": ["Figma"]}, {"weight_tier": "enterprise_high"}
+        )
         self.assertIn("critical", block)
 
 
@@ -263,7 +345,9 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
 
     def setUp(self):
         self.engine = orchestrator.ResumeEngine()
-        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_ats_classification.json")
+        self.jd_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_jd_ats_classification.json"
+        )
         self.job_key = None
         self.stem = None
 
@@ -277,10 +361,18 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
                 os.remove(checkpoint_path)
 
     def json_out_path(self):
-        return os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json") if self.stem else None
+        return (
+            os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
+            if self.stem
+            else None
+        )
 
     def html_out_path(self):
-        return os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html") if self.stem else None
+        return (
+            os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
+            if self.stem
+            else None
+        )
 
     def _write_jd(self, source_url=""):
         jd_json = {
@@ -335,30 +427,46 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
             "prior roles where the stakes and the audience looked different but the underlying "
             "discipline was the same."
         )
-        return json.dumps({
-            "company_name": "Acme Corp",
-            "greeting": "Dear Acme Corp Hiring Team,",
-            "contact_name": "",
-            "contact_title": "",
-            "body_paragraphs": [p1, p2],
-            "sign_off": "Sincerely,",
-        })
+        return json.dumps(
+            {
+                "company_name": "Acme Corp",
+                "greeting": "Dear Acme Corp Hiring Team,",
+                "contact_name": "",
+                "contact_title": "",
+                "body_paragraphs": [p1, p2],
+                "sign_off": "Sincerely,",
+            }
+        )
 
     def _run_build(self):
-        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
-             patch("orchestrator.render_coverletter"), \
-             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+        with (
+            patch(
+                "orchestrator.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
+            patch("orchestrator.render_coverletter"),
+            patch(
+                "orchestrator.validate_pdf_text.validate_coverletter_pdf_text",
+                return_value=[],
+            ),
+        ):
             return self.engine.build_tailored_coverletter(self.jd_path)
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_workday_source_url_classified_enterprise_high_and_persisted(self, mock_generate, mock_research):
+    def test_workday_source_url_classified_enterprise_high_and_persisted(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="https://acme.wd1.myworkdayjobs.com/External/job/123")
-        self._seed_checkpoint_keywords({"tools": ["Salesforce"], "hard_skills": [], "core_functions": []})
+        self._seed_checkpoint_keywords(
+            {"tools": ["Salesforce"], "hard_skills": [], "core_functions": []}
+        )
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
 
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         self.assertIn("=== KEYWORDS ===", system_instruction)
         self.assertIn("Salesforce", system_instruction)
         self.assertIn("critical", system_instruction)
@@ -370,59 +478,90 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_greenhouse_source_url_gets_light_touch_wording(self, mock_generate, mock_research):
+    def test_greenhouse_source_url_gets_light_touch_wording(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="https://boards.greenhouse.io/acme/jobs/123")
-        self._seed_checkpoint_keywords({"tools": ["Figma"], "hard_skills": [], "core_functions": []})
+        self._seed_checkpoint_keywords(
+            {"tools": ["Figma"], "hard_skills": [], "core_functions": []}
+        )
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
 
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         self.assertIn("light touch", system_instruction)
         self.assertIn("human reads this first", system_instruction)
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_no_source_url_leaves_classification_unset_and_uses_unknown_tier_wording(self, mock_generate, mock_research):
+    def test_no_source_url_leaves_classification_unset_and_uses_unknown_tier_wording(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="")
-        self._seed_checkpoint_keywords({"tools": ["Figma"], "hard_skills": [], "core_functions": []})
+        self._seed_checkpoint_keywords(
+            {"tools": ["Figma"], "hard_skills": [], "core_functions": []}
+        )
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
 
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         self.assertIn("helpful context", system_instruction)
         self.assertIsNone(jd_manager.read_ats_classification(self.jd_path))
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_cached_classification_is_reused_without_reclassifying(self, mock_generate, mock_research):
+    def test_cached_classification_is_reused_without_reclassifying(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="https://boards.greenhouse.io/acme/jobs/123")
         # save_ats_classification() rewrites the JD file, which changes
         # compute_job_key()'s content hash (jd_manager.py has no
         # source_job_id here) -- seed the checkpoint AFTER that rewrite so
         # it's keyed under the job_key build_tailored_coverletter() will
         # actually recompute from the final file bytes.
-        jd_manager.save_ats_classification(self.jd_path, {"provider_id": "ashby", "weight_tier": "evidence_based"})
-        self._seed_checkpoint_keywords({"tools": ["Figma"], "hard_skills": [], "core_functions": []})
+        jd_manager.save_ats_classification(
+            self.jd_path, {"provider_id": "ashby", "weight_tier": "evidence_based"}
+        )
+        self._seed_checkpoint_keywords(
+            {"tools": ["Figma"], "hard_skills": [], "core_functions": []}
+        )
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
 
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         # Cached "ashby/evidence_based" wins over what the greenhouse
         # source_url would otherwise classify to -- proves the cache is
         # actually read, not silently recomputed every build.
         self.assertIn("real evidence", system_instruction)
-        self.assertEqual(jd_manager.read_ats_classification(self.jd_path)["provider_id"], "ashby")
+        self.assertEqual(
+            jd_manager.read_ats_classification(self.jd_path)["provider_id"], "ashby"
+        )
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_no_checkpoint_keywords_triggers_on_demand_extraction(self, mock_generate, mock_research):
+    def test_no_checkpoint_keywords_triggers_on_demand_extraction(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="")
-        keyword_json = json.dumps({"tools": ["Figma"], "hard_skills": [], "core_functions": []})
-        mock_generate.side_effect = [(keyword_json, {}), (self._clean_letter_json(), {})]
+        keyword_json = json.dumps(
+            {"tools": ["Figma"], "hard_skills": [], "core_functions": []}
+        )
+        mock_generate.side_effect = [
+            (keyword_json, {}),
+            (self._clean_letter_json(), {}),
+        ]
         self._run_build()
 
         self.assertEqual(mock_generate.call_count, 2)
-        letter_system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        letter_system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         self.assertIn("Figma", letter_system_instruction)
         # Extraction is in-memory only for a standalone cover-letter run --
         # no checkpoint should exist afterward.
@@ -430,12 +569,16 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_no_keywords_available_produces_no_keywords_block(self, mock_generate, mock_research):
+    def test_no_keywords_available_produces_no_keywords_block(
+        self, mock_generate, mock_research
+    ):
         self._write_jd(source_url="")
         mock_generate.side_effect = [("", {}), (self._clean_letter_json(), {})]
         self._run_build()
 
-        system_instruction = mock_generate.call_args_list[-1].kwargs["system_instruction"]
+        system_instruction = mock_generate.call_args_list[-1].kwargs[
+            "system_instruction"
+        ]
         # The prompt template's own instructions always mention the
         # "=== KEYWORDS ===" marker by name (explaining the convention, same
         # as REFERRAL's), so check for the actual injected content instead.

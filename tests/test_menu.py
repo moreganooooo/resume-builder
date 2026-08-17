@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import menu  # noqa: E402
@@ -32,13 +34,22 @@ class TestChoicesAndHandlers(unittest.TestCase):
         # this excludes it explicitly rather than filtering "isinstance
         # Choice" (a no-op against Separator).
         values = [
-            c.value for c in menu._build_choices()
+            c.value
+            for c in menu._build_choices()
             if not isinstance(c, questionary.Separator)
         ]
         self.assertEqual(
             values,
-            ["bootstrap", "find_jobs", "build_documents", "bullet_bank",
-             "track_followup", "settings_upkeep", "help", "exit"],
+            [
+                "bootstrap",
+                "find_jobs",
+                "build_documents",
+                "bullet_bank",
+                "track_followup",
+                "settings_upkeep",
+                "help",
+                "exit",
+            ],
         )
 
     def test_tailor_pick_and_coverletter_pick_are_registered(self):
@@ -65,19 +76,30 @@ class TestChoicesAndHandlers(unittest.TestCase):
             + [c.value for c in menu._build_track_followup_choices()]
             + [c.value for c in menu._build_settings_upkeep_choices()]
         )
-        for retired in ("evaluate_one", "tailor_one", "coverletter_one", "view_applications"):
+        for retired in (
+            "evaluate_one",
+            "tailor_one",
+            "coverletter_one",
+            "view_applications",
+        ):
             self.assertNotIn(retired, all_values)
             self.assertNotIn(retired, menu._HANDLERS)
 
     def test_find_jobs_submenu_has_the_renamed_labels(self):
-        labels = {c.value: _title_text(c.title) for c in menu._build_find_jobs_choices()}
+        labels = {
+            c.value: _title_text(c.title) for c in menu._build_find_jobs_choices()
+        }
         self.assertIn("Scan for New Jobs", labels["scan"])
         self.assertIn("Check Job Posting Liveness", labels["liveness"])
         self.assertIn("Evaluate Pending Roles", labels["evaluate_all"])
 
     def test_build_documents_submenu_has_the_renamed_labels(self):
-        labels = {c.value: _title_text(c.title) for c in menu._build_build_documents_choices()}
-        self.assertIn("Customize Resume for All Pending Roles (Batch Run)", labels["tailor_all"])
+        labels = {
+            c.value: _title_text(c.title) for c in menu._build_build_documents_choices()
+        }
+        self.assertIn(
+            "Customize Resume for All Pending Roles (Batch Run)", labels["tailor_all"]
+        )
         self.assertIn("Polish a Resume or Cover Letter With Gemini", labels["polish"])
 
     def test_browse_jobs_entry_is_registered(self):
@@ -130,7 +152,9 @@ class TestChoicesAndHandlers(unittest.TestCase):
             unicode_title = _title_text(
                 next(c for c in menu._build_choices() if c.value == "bullet_bank").title
             )
-            self.assertIn(theme._UNICODE_ICONS["bullet_bank"], unicode_title)  # theme.py's unicode bullet_bank glyph
+            self.assertIn(
+                theme._UNICODE_ICONS["bullet_bank"], unicode_title
+            )  # theme.py's unicode bullet_bank glyph
 
             self.assertNotEqual(nerd_title, unicode_title)
         finally:
@@ -214,17 +238,39 @@ class TestHandleLiveness(unittest.TestCase):
 
     @patch("menu.liveness_module.run_liveness_check")
     def test_returns_true_when_something_checked(self, mock_check):
-        mock_check.return_value = {"active": 1, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": 2, "moved": 0}
+        mock_check.return_value = {
+            "active": 1,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "skipped": 2,
+            "moved": 0,
+        }
         self.assertTrue(menu._handle_liveness())
 
     @patch("menu.liveness_module.run_liveness_check")
     def test_returns_false_when_nothing_checked(self, mock_check):
-        mock_check.return_value = {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": 5, "moved": 0}
+        mock_check.return_value = {
+            "active": 0,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "skipped": 5,
+            "moved": 0,
+        }
         self.assertFalse(menu._handle_liveness())
 
     @patch("menu.liveness_module.run_liveness_check")
     def test_returns_false_on_error(self, mock_check):
-        mock_check.return_value = {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": 0, "moved": 0, "error": True}
+        mock_check.return_value = {
+            "active": 0,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "skipped": 0,
+            "moved": 0,
+            "error": True,
+        }
         self.assertFalse(menu._handle_liveness())
 
 
@@ -245,16 +291,26 @@ class TestHandleEvaluateAll(unittest.TestCase):
     @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[{"error": False}])
     @patch("menu.picker.should_proceed", return_value=True)
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
-    def test_returns_true_when_results_returned(self, mock_pending, mock_proceed, mock_eval, mock_table):
+    def test_returns_true_when_results_returned(
+        self, mock_pending, mock_proceed, mock_eval, mock_table
+    ):
         self.assertTrue(menu._handle_evaluate_all())
 
     @patch("menu.cli_art.render_fit_table")
     @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[])
     @patch("menu.picker.should_proceed", return_value=True)
-    @patch("menu.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], ["jds/b.json"]))
+    @patch(
+        "menu.batch_evaluate.split_evaluated",
+        return_value=(["jds/a.json"], ["jds/b.json"]),
+    )
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"])
     def test_confirms_against_and_evaluates_only_unscored(
-        self, mock_pending, mock_split, mock_proceed, mock_eval, mock_table,
+        self,
+        mock_pending,
+        mock_split,
+        mock_proceed,
+        mock_eval,
+        mock_table,
     ):
         menu._handle_evaluate_all()
         mock_proceed.assert_called_once_with(1, skip_confirm=False)
@@ -262,7 +318,9 @@ class TestHandleEvaluateAll(unittest.TestCase):
 
     @patch("menu.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
-    def test_nothing_new_to_evaluate_returns_false_without_confirming(self, mock_pending, mock_split):
+    def test_nothing_new_to_evaluate_returns_false_without_confirming(
+        self, mock_pending, mock_split
+    ):
         with patch("menu.picker.should_proceed") as mock_proceed:
             self.assertFalse(menu._handle_evaluate_all())
         mock_proceed.assert_not_called()
@@ -284,20 +342,36 @@ class TestHandleTailorAll(unittest.TestCase):
     @patch("menu.orchestrator.run_pipeline", return_value=(2, 0))
     @patch("menu.picker.should_proceed", return_value=True)
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
-    def test_returns_true_when_completed_gt_zero(self, mock_pending, mock_proceed, mock_run):
+    def test_returns_true_when_completed_gt_zero(
+        self, mock_pending, mock_proceed, mock_run
+    ):
         self.assertTrue(menu._handle_tailor_all())
 
     @patch("menu.orchestrator.run_pipeline", return_value=(0, 1))
     @patch("menu.picker.should_proceed", return_value=True)
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
-    def test_returns_false_when_completed_zero(self, mock_pending, mock_proceed, mock_run):
+    def test_returns_false_when_completed_zero(
+        self, mock_pending, mock_proceed, mock_run
+    ):
         self.assertFalse(menu._handle_tailor_all())
 
 
-def _row(path="jds/a.json", status="Pending", company="Acme", title="Writer", **eval_kwargs):
-    evaluation = {"composite_score": 4.0, "recommendation": "Strong pursue", **eval_kwargs}
-    return {"path": path, "status": status, "company": company, "title": title,
-            "evaluation": evaluation, "liveness": None}
+def _row(
+    path="jds/a.json", status="Pending", company="Acme", title="Writer", **eval_kwargs
+):
+    evaluation = {
+        "composite_score": 4.0,
+        "recommendation": "Strong pursue",
+        **eval_kwargs,
+    }
+    return {
+        "path": path,
+        "status": status,
+        "company": company,
+        "title": title,
+        "evaluation": evaluation,
+        "liveness": None,
+    }
 
 
 class TestHandleBrowseJobs(unittest.TestCase):
@@ -320,7 +394,9 @@ class TestHandleTailorPick(unittest.TestCase):
 
     @patch("menu.orchestrator.run_pipeline")
     @patch("menu.picker.browse_and_select_jds")
-    def test_scopes_picker_to_pending_and_tailors_each_selection(self, mock_browse, mock_run):
+    def test_scopes_picker_to_pending_and_tailors_each_selection(
+        self, mock_browse, mock_run
+    ):
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         mock_browse.return_value = rows
         mock_run.side_effect = [(1, 0), (0, 1)]
@@ -343,13 +419,23 @@ class TestHandleCoverletterPick(unittest.TestCase):
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.picker.browse_and_select_jds")
-    def test_scopes_picker_to_completed_and_writes_each_cover_letter(self, mock_browse, mock_engine_cls):
-        rows = [_row(path="jds/a.json", status="Completed"), _row(path="jds/b.json", status="Completed")]
+    def test_scopes_picker_to_completed_and_writes_each_cover_letter(
+        self, mock_browse, mock_engine_cls
+    ):
+        rows = [
+            _row(path="jds/a.json", status="Completed"),
+            _row(path="jds/b.json", status="Completed"),
+        ]
         mock_browse.return_value = rows
-        mock_engine_cls.return_value.build_tailored_coverletter.side_effect = [True, False]
+        mock_engine_cls.return_value.build_tailored_coverletter.side_effect = [
+            True,
+            False,
+        ]
         self.assertTrue(menu._handle_coverletter_pick())
         mock_browse.assert_called_once_with(statuses=["Completed"])
-        self.assertEqual(mock_engine_cls.return_value.build_tailored_coverletter.call_count, 2)
+        self.assertEqual(
+            mock_engine_cls.return_value.build_tailored_coverletter.call_count, 2
+        )
 
 
 class TestBrowseSingleAction(unittest.TestCase):
@@ -366,7 +452,9 @@ class TestBrowseSingleAction(unittest.TestCase):
 
     @patch("menu._print_evaluation_detail")
     @patch("menu.questionary.select")
-    def test_view_details_loops_back_to_the_action_menu(self, mock_select, mock_print_detail):
+    def test_view_details_loops_back_to_the_action_menu(
+        self, mock_select, mock_print_detail
+    ):
         mock_select.return_value.ask.side_effect = ["details", "back"]
         self.assertFalse(menu._browse_single_action(_row()))
         mock_print_detail.assert_called_once()
@@ -401,18 +489,26 @@ class TestBrowseSingleAction(unittest.TestCase):
     @patch("menu._prompt_for_referral_if_unset")
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.questionary.select")
-    def test_coverletter_action_on_completed_jd(self, mock_select, mock_engine_cls, mock_prompt_referral):
+    def test_coverletter_action_on_completed_jd(
+        self, mock_select, mock_engine_cls, mock_prompt_referral
+    ):
         mock_select.return_value.ask.return_value = "coverletter"
-        mock_engine_cls.return_value.build_tailored_coverletter.return_value = {"company_name": "Acme"}
+        mock_engine_cls.return_value.build_tailored_coverletter.return_value = {
+            "company_name": "Acme"
+        }
         row = _row(status="Completed", path="jds/a.json")
         self.assertTrue(menu._browse_single_action(row))
-        mock_engine_cls.return_value.build_tailored_coverletter.assert_called_once_with("jds/a.json")
+        mock_engine_cls.return_value.build_tailored_coverletter.assert_called_once_with(
+            "jds/a.json"
+        )
         mock_prompt_referral.assert_called_once_with("jds/a.json")
 
     @patch("menu.cli_art.confirm_destructive", return_value=True)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_archive_action_moves_the_file_and_returns_true(self, mock_select, mock_archive, mock_confirm):
+    def test_archive_action_moves_the_file_and_returns_true(
+        self, mock_select, mock_archive, mock_confirm
+    ):
         mock_select.return_value.ask.return_value = "archive"
         row = _row(path="jds/a.json")
         self.assertTrue(menu._browse_single_action(row))
@@ -422,7 +518,9 @@ class TestBrowseSingleAction(unittest.TestCase):
     @patch("menu.cli_art.confirm_destructive", return_value=False)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_declining_archive_confirmation_does_not_archive(self, mock_select, mock_archive, mock_confirm):
+    def test_declining_archive_confirmation_does_not_archive(
+        self, mock_select, mock_archive, mock_confirm
+    ):
         mock_select.return_value.ask.side_effect = ["archive", "back"]
         row = _row(path="jds/a.json")
         self.assertFalse(menu._browse_single_action(row))
@@ -472,7 +570,9 @@ class TestBrowseSingleAction(unittest.TestCase):
 
     @patch("menu.followup.compute_urgency", return_value="overdue")
     @patch("menu.questionary.select")
-    def test_draft_followup_not_offered_without_an_application(self, mock_select, mock_urgency):
+    def test_draft_followup_not_offered_without_an_application(
+        self, mock_select, mock_urgency
+    ):
         mock_select.return_value.ask.return_value = "back"
         row = _row(status="Completed")
         row["application"] = None
@@ -514,7 +614,9 @@ class TestBrowseSingleAction(unittest.TestCase):
     @patch("menu._handle_draft_followup")
     @patch("menu.followup.compute_urgency", return_value="overdue")
     @patch("menu.questionary.select")
-    def test_draft_followup_action_loops_back(self, mock_select, mock_urgency, mock_handler):
+    def test_draft_followup_action_loops_back(
+        self, mock_select, mock_urgency, mock_handler
+    ):
         row = _row(status="Completed")
         row["application"] = {"status": "Applied"}
         mock_select.return_value.ask.side_effect = ["draft_followup", "back"]
@@ -558,7 +660,9 @@ class TestHandleLogFollowup(unittest.TestCase):
 
         mock_save.assert_called_once_with("jds/a.json", "Applied", log_followup=True)
 
-    @patch("menu.jd_manager.read_application_status", return_value={"status": "Applied"})
+    @patch(
+        "menu.jd_manager.read_application_status", return_value={"status": "Applied"}
+    )
     @patch("menu.jd_manager.save_application_status")
     def test_defaults_to_applied_when_no_prior_status(self, mock_save, mock_read):
         row = _row(path="jds/a.json")
@@ -569,10 +673,15 @@ class TestHandleLogFollowup(unittest.TestCase):
 
 class TestPromptForReferralIfUnset(unittest.TestCase):
 
-    @patch("menu.jd_manager.read_referral", return_value={"text": "Jane Doe", "saved_at": "2026-08-17T00:00:00"})
+    @patch(
+        "menu.jd_manager.read_referral",
+        return_value={"text": "Jane Doe", "saved_at": "2026-08-17T00:00:00"},
+    )
     @patch("menu.questionary.text")
     @patch("menu.jd_manager.save_referral")
-    def test_skips_prompt_when_referral_already_saved(self, mock_save, mock_text, mock_read):
+    def test_skips_prompt_when_referral_already_saved(
+        self, mock_save, mock_text, mock_read
+    ):
         menu._prompt_for_referral_if_unset("jds/a.json")
         mock_text.assert_not_called()
         mock_save.assert_not_called()
@@ -607,6 +716,7 @@ class TestHandleDraftOutreach(unittest.TestCase):
 
     def _write_jd(self, name, data):
         import json as json_module
+
         path = os.path.join(self.tmp_dir, name)
         with open(path, "w", encoding="utf-8") as f:
             json_module.dump(data, f)
@@ -622,9 +732,18 @@ class TestHandleDraftOutreach(unittest.TestCase):
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
-    def test_single_contact_drafts_without_a_selection_prompt(self, mock_find, mock_engine_cls):
-        path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
-        contact = {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""}
+    def test_single_contact_drafts_without_a_selection_prompt(
+        self, mock_find, mock_engine_cls
+    ):
+        path = self._write_jd(
+            "a.json", {"social_connections": [{"fullName": "Jen Dudik"}]}
+        )
+        contact = {
+            "name": "Jen Dudik",
+            "title": "Director",
+            "connection_type": "JobRight match",
+            "linkedin_url": "",
+        }
         mock_find.return_value = [contact]
         mock_engine_cls.return_value.draft_outreach_message.return_value = "Hi Jen, ..."
 
@@ -632,31 +751,56 @@ class TestHandleDraftOutreach(unittest.TestCase):
             menu._handle_draft_outreach(_row(path=path))
             mock_select.assert_not_called()
 
-        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(path, contact)
+        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(
+            path, contact
+        )
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
     def test_multiple_contacts_prompts_for_a_choice(self, mock_find, mock_engine_cls):
         path = self._write_jd("a.json", {"social_connections": []})
         contacts = [
-            {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""},
-            {"name": "Alex Chen", "title": "PM", "connection_type": "Personal company connection", "linkedin_url": ""},
+            {
+                "name": "Jen Dudik",
+                "title": "Director",
+                "connection_type": "JobRight match",
+                "linkedin_url": "",
+            },
+            {
+                "name": "Alex Chen",
+                "title": "PM",
+                "connection_type": "Personal company connection",
+                "linkedin_url": "",
+            },
         ]
         mock_find.return_value = contacts
-        mock_engine_cls.return_value.draft_outreach_message.return_value = "Hi Alex, ..."
+        mock_engine_cls.return_value.draft_outreach_message.return_value = (
+            "Hi Alex, ..."
+        )
 
         with patch("menu.questionary.select") as mock_select:
             mock_select.return_value.ask.return_value = 1
             menu._handle_draft_outreach(_row(path=path))
 
-        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(path, contacts[1])
+        mock_engine_cls.return_value.draft_outreach_message.assert_called_once_with(
+            path, contacts[1]
+        )
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
     @patch("menu.cli_art.display_error")
     def test_shows_error_when_draft_fails(self, mock_error, mock_find, mock_engine_cls):
-        path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
-        mock_find.return_value = [{"name": "Jen Dudik", "title": "", "connection_type": "JobRight match", "linkedin_url": ""}]
+        path = self._write_jd(
+            "a.json", {"social_connections": [{"fullName": "Jen Dudik"}]}
+        )
+        mock_find.return_value = [
+            {
+                "name": "Jen Dudik",
+                "title": "",
+                "connection_type": "JobRight match",
+                "linkedin_url": "",
+            }
+        ]
         mock_engine_cls.return_value.draft_outreach_message.return_value = None
 
         menu._handle_draft_outreach(_row(path=path))
@@ -677,6 +821,7 @@ class TestHandleDraftFollowup(unittest.TestCase):
 
     def _write_jd(self, name, data):
         import json as json_module
+
         path = os.path.join(self.tmp_dir, name)
         with open(path, "w", encoding="utf-8") as f:
             json_module.dump(data, f)
@@ -685,10 +830,14 @@ class TestHandleDraftFollowup(unittest.TestCase):
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
     @patch("menu.charm_prompt.confirm")
-    def test_no_contacts_drafts_a_generic_message_without_a_prompt(self, mock_confirm, mock_find, mock_engine_cls):
+    def test_no_contacts_drafts_a_generic_message_without_a_prompt(
+        self, mock_confirm, mock_find, mock_engine_cls
+    ):
         path = self._write_jd("a.json", {"company_name": "Acme"})
         mock_confirm.return_value = False
-        mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
+        mock_engine_cls.return_value.draft_followup_message.return_value = (
+            "Hi there, ..."
+        )
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
 
@@ -696,14 +845,25 @@ class TestHandleDraftFollowup(unittest.TestCase):
             menu._handle_draft_followup(row)
             mock_select.assert_not_called()
 
-        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(path, 0, None)
+        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(
+            path, 0, None
+        )
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
     @patch("menu.charm_prompt.confirm")
-    def test_single_contact_drafts_without_a_selection_prompt(self, mock_confirm, mock_find, mock_engine_cls):
-        path = self._write_jd("a.json", {"social_connections": [{"fullName": "Jen Dudik"}]})
-        contact = {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""}
+    def test_single_contact_drafts_without_a_selection_prompt(
+        self, mock_confirm, mock_find, mock_engine_cls
+    ):
+        path = self._write_jd(
+            "a.json", {"social_connections": [{"fullName": "Jen Dudik"}]}
+        )
+        contact = {
+            "name": "Jen Dudik",
+            "title": "Director",
+            "connection_type": "JobRight match",
+            "linkedin_url": "",
+        }
         mock_find.return_value = [contact]
         mock_confirm.return_value = False
         mock_engine_cls.return_value.draft_followup_message.return_value = "Hi Jen, ..."
@@ -714,20 +874,36 @@ class TestHandleDraftFollowup(unittest.TestCase):
             menu._handle_draft_followup(row)
             mock_select.assert_not_called()
 
-        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(path, 1, contact)
+        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(
+            path, 1, contact
+        )
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts")
     @patch("menu.charm_prompt.confirm")
-    def test_multiple_contacts_prompts_and_allows_generic_address(self, mock_confirm, mock_find, mock_engine_cls):
+    def test_multiple_contacts_prompts_and_allows_generic_address(
+        self, mock_confirm, mock_find, mock_engine_cls
+    ):
         path = self._write_jd("a.json", {"social_connections": []})
         contacts = [
-            {"name": "Jen Dudik", "title": "Director", "connection_type": "JobRight match", "linkedin_url": ""},
-            {"name": "Alex Chen", "title": "PM", "connection_type": "Personal company connection", "linkedin_url": ""},
+            {
+                "name": "Jen Dudik",
+                "title": "Director",
+                "connection_type": "JobRight match",
+                "linkedin_url": "",
+            },
+            {
+                "name": "Alex Chen",
+                "title": "PM",
+                "connection_type": "Personal company connection",
+                "linkedin_url": "",
+            },
         ]
         mock_find.return_value = contacts
         mock_confirm.return_value = False
-        mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
+        mock_engine_cls.return_value.draft_followup_message.return_value = (
+            "Hi there, ..."
+        )
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
 
@@ -735,7 +911,9 @@ class TestHandleDraftFollowup(unittest.TestCase):
             mock_select.return_value.ask.return_value = -1
             menu._handle_draft_followup(row)
 
-        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(path, 0, None)
+        mock_engine_cls.return_value.draft_followup_message.assert_called_once_with(
+            path, 0, None
+        )
 
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
@@ -754,10 +932,14 @@ class TestHandleDraftFollowup(unittest.TestCase):
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
     @patch("menu.charm_prompt.confirm")
-    def test_confirming_sent_logs_the_followup(self, mock_confirm, mock_find, mock_engine_cls, mock_log):
+    def test_confirming_sent_logs_the_followup(
+        self, mock_confirm, mock_find, mock_engine_cls, mock_log
+    ):
         path = self._write_jd("a.json", {})
         mock_confirm.return_value = True
-        mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
+        mock_engine_cls.return_value.draft_followup_message.return_value = (
+            "Hi there, ..."
+        )
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
 
@@ -769,10 +951,14 @@ class TestHandleDraftFollowup(unittest.TestCase):
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.orchestrator.find_jd_contacts", return_value=[])
     @patch("menu.charm_prompt.confirm")
-    def test_declining_sent_does_not_log_the_followup(self, mock_confirm, mock_find, mock_engine_cls, mock_log):
+    def test_declining_sent_does_not_log_the_followup(
+        self, mock_confirm, mock_find, mock_engine_cls, mock_log
+    ):
         path = self._write_jd("a.json", {})
         mock_confirm.return_value = False
-        mock_engine_cls.return_value.draft_followup_message.return_value = "Hi there, ..."
+        mock_engine_cls.return_value.draft_followup_message.return_value = (
+            "Hi there, ..."
+        )
         row = _row(path=path)
         row["application"] = {"status": "Applied", "follow_up_count": 0}
 
@@ -790,7 +976,9 @@ class TestBrowseBulkAction(unittest.TestCase):
 
     @patch("menu.cli_art.render_comparison_table")
     @patch("menu.questionary.select")
-    def test_compare_action_renders_the_comparison_table(self, mock_select, mock_render):
+    def test_compare_action_renders_the_comparison_table(
+        self, mock_select, mock_render
+    ):
         mock_select.return_value.ask.return_value = "compare"
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         self.assertTrue(menu._browse_bulk_action(rows))
@@ -800,7 +988,10 @@ class TestBrowseBulkAction(unittest.TestCase):
     @patch("menu.questionary.select")
     def test_tailor_action_skips_completed_rows(self, mock_select, mock_run):
         mock_select.return_value.ask.return_value = "tailor"
-        rows = [_row(path="jds/a.json", status="Pending"), _row(path="jds/b.json", status="Completed")]
+        rows = [
+            _row(path="jds/a.json", status="Pending"),
+            _row(path="jds/b.json", status="Completed"),
+        ]
         self.assertTrue(menu._browse_bulk_action(rows))
         mock_run.assert_called_once_with(jd_path="jds/a.json")
 
@@ -813,7 +1004,9 @@ class TestBrowseBulkAction(unittest.TestCase):
         self.assertNotIn("tailor", [c.value for c in choices])
 
     @patch("menu.questionary.select")
-    def test_coverletter_option_present_only_when_all_selected_are_completed(self, mock_select):
+    def test_coverletter_option_present_only_when_all_selected_are_completed(
+        self, mock_select
+    ):
         mock_select.return_value.ask.return_value = "back"
         rows = [_row(status="Pending"), _row(status="Completed")]
         menu._browse_bulk_action(rows)
@@ -823,7 +1016,9 @@ class TestBrowseBulkAction(unittest.TestCase):
     @patch("menu.cli_art.confirm_destructive", return_value=True)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_archive_action_archives_every_selected_row(self, mock_select, mock_archive, mock_confirm):
+    def test_archive_action_archives_every_selected_row(
+        self, mock_select, mock_archive, mock_confirm
+    ):
         mock_select.return_value.ask.return_value = "archive"
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         self.assertTrue(menu._browse_bulk_action(rows))
@@ -832,7 +1027,9 @@ class TestBrowseBulkAction(unittest.TestCase):
     @patch("menu.cli_art.confirm_destructive", return_value=False)
     @patch("menu.jd_manager.archive_jd")
     @patch("menu.questionary.select")
-    def test_declining_archive_confirmation_archives_nothing(self, mock_select, mock_archive, mock_confirm):
+    def test_declining_archive_confirmation_archives_nothing(
+        self, mock_select, mock_archive, mock_confirm
+    ):
         mock_select.return_value.ask.return_value = "archive"
         rows = [_row(path="jds/a.json"), _row(path="jds/b.json")]
         self.assertFalse(menu._browse_bulk_action(rows))
@@ -873,9 +1070,14 @@ class TestHandleRunDoctor(unittest.TestCase):
     @patch("menu.maintenance.record_run")
     @patch("menu.cli_art.render_doctor_report")
     @patch("menu.doctor.run_test_suite", return_value=(True, "OK"))
-    @patch("menu.doctor.run_checks", return_value=[{"name": "x", "passed": True, "detail": "", "fix": ""}])
+    @patch(
+        "menu.doctor.run_checks",
+        return_value=[{"name": "x", "passed": True, "detail": "", "fix": ""}],
+    )
     @patch("menu.charm_prompt.confirm")
-    def test_runs_test_suite_when_confirmed(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
+    def test_runs_test_suite_when_confirmed(
+        self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record
+    ):
         mock_confirm.return_value = True
         menu._handle_run_doctor()
         mock_tests.assert_called_once()
@@ -887,7 +1089,9 @@ class TestHandleRunDoctor(unittest.TestCase):
     @patch("menu.doctor.run_test_suite")
     @patch("menu.doctor.run_checks", return_value=[])
     @patch("menu.charm_prompt.confirm")
-    def test_skips_test_suite_when_declined(self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record):
+    def test_skips_test_suite_when_declined(
+        self, mock_confirm, mock_checks, mock_tests, mock_render, mock_record
+    ):
         mock_confirm.return_value = False
         menu._handle_run_doctor()
         mock_tests.assert_not_called()
@@ -932,7 +1136,9 @@ class TestHandleSettingsUpkeep(unittest.TestCase):
     @patch("menu._handle_run_doctor")
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
-    def test_doctor_choice_loops_back_to_the_submenu(self, mock_select, mock_last_run, mock_run_doctor):
+    def test_doctor_choice_loops_back_to_the_submenu(
+        self, mock_select, mock_last_run, mock_run_doctor
+    ):
         mock_select.return_value.ask.side_effect = ["doctor", "back"]
         self.assertFalse(menu._handle_settings_upkeep())
         mock_run_doctor.assert_called_once()
@@ -941,7 +1147,9 @@ class TestHandleSettingsUpkeep(unittest.TestCase):
     @patch("menu._handle_check_updates")
     @patch("menu.maintenance.get_last_run", return_value=None)
     @patch("menu.questionary.select")
-    def test_check_updates_choice_loops_back_to_the_submenu(self, mock_select, mock_last_run, mock_check_updates):
+    def test_check_updates_choice_loops_back_to_the_submenu(
+        self, mock_select, mock_last_run, mock_check_updates
+    ):
         mock_select.return_value.ask.side_effect = ["check_updates", "back"]
         self.assertFalse(menu._handle_settings_upkeep())
         mock_check_updates.assert_called_once()
@@ -956,7 +1164,9 @@ class TestPromptForUpdate(unittest.TestCase):
         menu._prompt_for_update()
         mock_check.assert_not_called()
 
-    @patch("menu.git_update.check_for_updates", return_value=(False, "Already up to date"))
+    @patch(
+        "menu.git_update.check_for_updates", return_value=(False, "Already up to date")
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     def test_says_nothing_when_already_up_to_date(self, mock_dirty, mock_check):
         with patch("menu.cli_art.console.print") as mock_print:
@@ -964,20 +1174,30 @@ class TestPromptForUpdate(unittest.TestCase):
             mock_print.assert_not_called()
 
     @patch("menu.git_update.pull_updates")
-    @patch("menu.git_update.check_for_updates", return_value=(True, "2 new commit(s) available"))
+    @patch(
+        "menu.git_update.check_for_updates",
+        return_value=(True, "2 new commit(s) available"),
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     @patch("menu.charm_prompt.confirm")
-    def test_pulls_when_confirmed(self, mock_confirm, mock_dirty, mock_check, mock_pull):
+    def test_pulls_when_confirmed(
+        self, mock_confirm, mock_dirty, mock_check, mock_pull
+    ):
         mock_confirm.return_value = True
         mock_pull.return_value = (True, "Updated")
         menu._prompt_for_update()
         mock_pull.assert_called_once()
 
     @patch("menu.git_update.pull_updates")
-    @patch("menu.git_update.check_for_updates", return_value=(True, "2 new commit(s) available"))
+    @patch(
+        "menu.git_update.check_for_updates",
+        return_value=(True, "2 new commit(s) available"),
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     @patch("menu.charm_prompt.confirm")
-    def test_does_not_pull_when_declined(self, mock_confirm, mock_dirty, mock_check, mock_pull):
+    def test_does_not_pull_when_declined(
+        self, mock_confirm, mock_dirty, mock_check, mock_pull
+    ):
         mock_confirm.return_value = False
         menu._prompt_for_update()
         mock_pull.assert_not_called()
@@ -991,32 +1211,51 @@ class TestHandleCheckUpdates(unittest.TestCase):
         self.assertFalse(menu._handle_check_updates())
         mock_check.assert_not_called()
 
-    @patch("menu.git_update.check_for_updates", return_value=(False, "Already up to date"))
+    @patch(
+        "menu.git_update.check_for_updates", return_value=(False, "Already up to date")
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     def test_returns_false_when_already_up_to_date(self, mock_dirty, mock_check):
         self.assertFalse(menu._handle_check_updates())
 
     @patch("menu.git_update.pull_updates", return_value=(True, "Updated"))
-    @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
+    @patch(
+        "menu.git_update.check_for_updates",
+        return_value=(True, "1 new commit(s) available"),
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     @patch("menu.charm_prompt.confirm")
-    def test_returns_true_on_confirmed_successful_pull(self, mock_confirm, mock_dirty, mock_check, mock_pull):
+    def test_returns_true_on_confirmed_successful_pull(
+        self, mock_confirm, mock_dirty, mock_check, mock_pull
+    ):
         mock_confirm.return_value = True
         self.assertTrue(menu._handle_check_updates())
 
-    @patch("menu.git_update.pull_updates", return_value=(False, "Pull failed: conflict"))
-    @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
+    @patch(
+        "menu.git_update.pull_updates", return_value=(False, "Pull failed: conflict")
+    )
+    @patch(
+        "menu.git_update.check_for_updates",
+        return_value=(True, "1 new commit(s) available"),
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     @patch("menu.charm_prompt.confirm")
-    def test_returns_false_on_failed_pull(self, mock_confirm, mock_dirty, mock_check, mock_pull):
+    def test_returns_false_on_failed_pull(
+        self, mock_confirm, mock_dirty, mock_check, mock_pull
+    ):
         mock_confirm.return_value = True
         self.assertFalse(menu._handle_check_updates())
 
     @patch("menu.git_update.pull_updates")
-    @patch("menu.git_update.check_for_updates", return_value=(True, "1 new commit(s) available"))
+    @patch(
+        "menu.git_update.check_for_updates",
+        return_value=(True, "1 new commit(s) available"),
+    )
     @patch("menu.git_update.has_uncommitted_changes", return_value=False)
     @patch("menu.charm_prompt.confirm")
-    def test_does_not_pull_when_declined(self, mock_confirm, mock_dirty, mock_check, mock_pull):
+    def test_does_not_pull_when_declined(
+        self, mock_confirm, mock_dirty, mock_check, mock_pull
+    ):
         mock_confirm.return_value = False
         menu._handle_check_updates()
         mock_pull.assert_not_called()
@@ -1036,10 +1275,15 @@ class TestChainContent(unittest.TestCase):
         # Not "Check Liveness" -- scan.run_scan() already verifies
         # liveness by default on exactly the postings it just found.
         self.assertEqual(menu._CHAIN["scan"], [("Evaluate All JDs", "evaluate_all")])
-        self.assertEqual(menu._CHAIN["liveness"], [("Evaluate All JDs", "evaluate_all")])
+        self.assertEqual(
+            menu._CHAIN["liveness"], [("Evaluate All JDs", "evaluate_all")]
+        )
         self.assertEqual(
             menu._CHAIN["evaluate_all"],
-            [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
+            [
+                ("Customize Resume", "tailor_all"),
+                ("Browse & Manage Jobs", "browse_jobs"),
+            ],
         )
         self.assertEqual(
             menu._CHAIN["tailor_all"],
@@ -1057,8 +1301,10 @@ class TestRunWithChain(unittest.TestCase):
 
     @patch("menu.questionary.select")
     def test_no_op_handler_skips_the_prompt(self, mock_select):
-        with patch.dict(menu._HANDLERS, {"fake": lambda: False}, clear=False), \
-             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+        with (
+            patch.dict(menu._HANDLERS, {"fake": lambda: False}, clear=False),
+            patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False),
+        ):
             menu._run_with_chain("fake", {})
         mock_select.assert_not_called()
 
@@ -1068,25 +1314,38 @@ class TestRunWithChain(unittest.TestCase):
             menu._run_with_chain("fake", {})
         mock_select.assert_not_called()
 
-    @patch("menu.cli_art.console")  # is_terminal must read truthy for the prompt to show at all
+    @patch(
+        "menu.cli_art.console"
+    )  # is_terminal must read truthy for the prompt to show at all
     @patch("menu.questionary.select")
     def test_chain_prompt_appends_back_to_menu_choice(self, mock_select, mock_console):
         mock_select.return_value.ask.return_value = "__back__"
-        with patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False), \
-             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+        with (
+            patch.dict(menu._HANDLERS, {"fake": lambda: True}, clear=False),
+            patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False),
+        ):
             menu._run_with_chain("fake", {})
         choices = mock_select.call_args.kwargs["choices"]
         # "somewhere" has no _CHAIN_ICONS entry -> falls back to plain
         # label; "__back__" always gets the utility icon.
-        self.assertEqual([c.title for c in choices], ["Next", menu._icon_title("utility", "Back to Menu")])
+        self.assertEqual(
+            [c.title for c in choices],
+            ["Next", menu._icon_title("utility", "Back to Menu")],
+        )
         self.assertEqual([c.value for c in choices], ["somewhere", "__back__"])
 
     @patch("menu.questionary.select")
     def test_back_to_menu_stops_recursion(self, mock_select):
         calls = []
         mock_select.return_value.ask.return_value = "__back__"
-        with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
-             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+        with (
+            patch.dict(
+                menu._HANDLERS,
+                {"fake": lambda: calls.append("fake") or True},
+                clear=False,
+            ),
+            patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False),
+        ):
             menu._run_with_chain("fake", {})
         self.assertEqual(calls, ["fake"])
 
@@ -1094,24 +1353,35 @@ class TestRunWithChain(unittest.TestCase):
     def test_cancelled_prompt_stops_recursion(self, mock_select):
         calls = []
         mock_select.return_value.ask.return_value = None
-        with patch.dict(menu._HANDLERS, {"fake": lambda: calls.append("fake") or True}, clear=False), \
-             patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False):
+        with (
+            patch.dict(
+                menu._HANDLERS,
+                {"fake": lambda: calls.append("fake") or True},
+                clear=False,
+            ),
+            patch.dict(menu._CHAIN, {"fake": [("Next", "somewhere")]}, clear=False),
+        ):
             menu._run_with_chain("fake", {})
         self.assertEqual(calls, ["fake"])
 
-    @patch("menu.cli_art.console")  # is_terminal must read truthy for the prompt to show at all
+    @patch(
+        "menu.cli_art.console"
+    )  # is_terminal must read truthy for the prompt to show at all
     @patch("menu.questionary.select")
     def test_picking_a_next_step_recurses_into_it(self, mock_select, mock_console):
         calls = []
         mock_select.return_value.ask.return_value = "second"
-        with patch.dict(
-            menu._HANDLERS,
-            {
-                "first": lambda: calls.append("first") or True,
-                "second": lambda: calls.append("second") or False,
-            },
-            clear=False,
-        ), patch.dict(menu._CHAIN, {"first": [("Do Second", "second")]}, clear=False):
+        with (
+            patch.dict(
+                menu._HANDLERS,
+                {
+                    "first": lambda: calls.append("first") or True,
+                    "second": lambda: calls.append("second") or False,
+                },
+                clear=False,
+            ),
+            patch.dict(menu._CHAIN, {"first": [("Do Second", "second")]}, clear=False),
+        ):
             menu._run_with_chain("first", {})
         self.assertEqual(calls, ["first", "second"])
 
@@ -1121,8 +1391,10 @@ class TestSessionSummary(unittest.TestCase):
     @patch("menu.questionary.select")
     def test_successful_action_increments_its_labeled_count(self, mock_select):
         session_stats = {}
-        with patch.dict(menu._HANDLERS, {"tailor_all": lambda: True}, clear=False), \
-             patch.dict(menu._CHAIN, {}, clear=True):
+        with (
+            patch.dict(menu._HANDLERS, {"tailor_all": lambda: True}, clear=False),
+            patch.dict(menu._CHAIN, {}, clear=True),
+        ):
             menu._run_with_chain("tailor_all", session_stats)
         self.assertEqual(session_stats, {"resumes tailored": 1})
 
@@ -1144,7 +1416,9 @@ class TestSessionSummary(unittest.TestCase):
         self.assertEqual(menu._session_summary({}), "No actions taken this session.")
 
     def test_summary_joins_multiple_labels(self):
-        summary = menu._session_summary({"resumes tailored": 3, "cover letters written": 2})
+        summary = menu._session_summary(
+            {"resumes tailored": 3, "cover letters written": 2}
+        )
         self.assertIn("3 resumes tailored", summary)
         self.assertIn("2 cover letters written", summary)
         self.assertIn("Nice work.", summary)
@@ -1187,7 +1461,9 @@ class TestAltScreenMode(unittest.TestCase):
     @patch("sys.stdout.isatty")
     @patch("sys.stdout.write")
     @patch("sys.stdout.flush")
-    def test_alternate_screen_non_interactive(self, mock_flush, mock_write, mock_isatty):
+    def test_alternate_screen_non_interactive(
+        self, mock_flush, mock_write, mock_isatty
+    ):
         mock_isatty.return_value = False
         with menu._alternate_screen():
             pass
