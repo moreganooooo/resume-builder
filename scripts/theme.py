@@ -51,6 +51,13 @@ MUTED = "#A3A3A3"  # lightened neutral gray -- #888888 only cleared 4.63:1 on Ba
 # reusing two of the six above. See sync_dashboard_theme.py.
 PEACH = "#FF985A"  # Charmtone Tang
 PINK = "#FF84FF"  # Charmtone Blush
+MAUVE = "#cba6f7"  # Catppuccin Mauve
+LAVENDER = "#b4befe"  # Catppuccin Lavender
+BLUE = "#89b4fa"  # Catppuccin Blue
+SKY = "#89dceb"  # Catppuccin Sky
+
+THINKING_GRADIENT_COLORS = [PEACH, PINK, MAUVE, LAVENDER, BLUE, SKY]
+
 
 # Values match orchestrator.FitEvaluationSchema's `recommendation` Literal
 # exactly: "Strong pursue", "Selective pursue", "Low-priority pursue", "Skip".

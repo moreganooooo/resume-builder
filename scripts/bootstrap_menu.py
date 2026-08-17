@@ -254,8 +254,8 @@ def _build_choices(include_express: bool = False) -> list:
     choices = []
     if include_express:
         choices.append(questionary.Choice(
-            title=[("class:text", "⚡ Express Setup (Auto-pilot)  "),
-                   ("class:description", "(run all 8 steps end-to-end unattended)")],
+            title=[("class:text", "⚡ Express Auto-Pilot (Recommended - ~60s)  "),
+                   ("class:description", "(run all 8 onboarding steps end-to-end unattended)")],
             value="express",
         ))
     
