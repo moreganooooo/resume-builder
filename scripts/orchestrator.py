@@ -44,6 +44,7 @@ import validate_pdf_text
 import validate_coverletter
 import jd_manager
 import scan_ats
+import liveness
 import bullet_feedback
 import kb_snapshot
 from bullet_bank_hash import bullets_sha
@@ -2875,7 +2876,7 @@ class ResumeEngine:
             for w in cl_text_warnings:
                 cli_art.detail(f"    - {cli_art._escape_markup(str(w))}", level=cli_art.NORMAL)
 
-        letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out}
+        letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out, "docx": docx_out}
         cli_art.detail(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {cli_art._escape_markup(pdf_out)}", level=cli_art.NORMAL)
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
         return letter_data
@@ -3830,11 +3831,176 @@ class ResumeEngine:
 
         cli_art.console.print(f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}", soft_wrap=True)
         jd_manager.delete_checkpoint(job_key)
-        resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out}
+        resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out, "docx": docx_out}
         resume_data["_page_count"] = page_count
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
 
         return resume_data
+
+    def build_application_package(
+        self,
+        jd_path: str,
+        master_resume: dict = None,
+        output_filename: str = None,
+        referral: str = None,
+        force: bool = False,
+        skip_liveness: bool = False,
+        skip_fit: bool = False,
+        interactive: bool = False,
+    ) -> dict:
+        """
+        Builds a complete, 4-artifact application package (Resume PDF/DOCX +
+        Cover Letter PDF/DOCX) for a single JD with fail-fast liveness and fit gates.
+
+        1. Liveness Gate: If source_url exists and not skip_liveness, verifies URL.
+           If expired, moves JD to jds/expired/ and returns {"status": "expired", "reason": ...}.
+        2. Fit & Capability Gate: Unless skip_fit, checks evaluation. If "Skip" and not force,
+           moves JD to jds/archived/ and returns {"status": "skipped", "evaluation": ...}.
+        3. Referral & ATS Classification: Saves referral if given, extracts metadata & ATS tier.
+        4. Resume Generation: Builds tailored resume (PDF, DOCX, HTML, JSON).
+        5. Cover Letter Generation: Builds tailored cover letter (PDF, DOCX, HTML, JSON).
+        6. Persistence & Tracking: Moves JD to jds/completed/, records in tracker & DB.
+        7. Returns comprehensive package dict with status 'completed' and output_paths.
+        """
+        if not os.path.exists(jd_path):
+            cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
+            return {"status": "error", "message": f"JD file not found: {jd_path}"}
+
+        try:
+            job_key = jd_manager.compute_job_key(jd_path)
+        except Exception as e:
+            cli_art.console.print(f"  {theme.colorize_icon('error')} Could not compute job key for {jd_path}: {e}", soft_wrap=True)
+            return {"status": "error", "message": str(e)}
+
+        job_title, company_name = jd_manager.extract_job_meta(jd_path)
+        source_url = jd_manager.extract_source_url(jd_path)
+
+        # Stage 1: Liveness Gate
+        if source_url and not skip_liveness:
+            cli_art.detail(f"  Checking posting liveness for {company_name}...", level=cli_art.NORMAL)
+            try:
+                liveness_res = liveness.verify_jd_paths([jd_path])
+                if liveness_res.get("expired", 0) > 0:
+                    cli_art.console.print(f"  {theme.colorize_icon('error')} Posting expired or taken down. Moved to jds/expired/.", soft_wrap=True)
+                    return {
+                        "status": "expired",
+                        "job_key": job_key,
+                        "company_name": company_name,
+                        "job_title": job_title,
+                        "source_url": source_url,
+                        "reason": "Posting URL returned 404 or expired status.",
+                    }
+            except Exception as e:
+                cli_art.console.print(f"  {theme.colorize_icon('warning')} Liveness check encountered an issue: {e}. Proceeding...", soft_wrap=True)
+
+        # Stage 2: Fit & Capability Gate
+        evaluation = jd_manager.read_evaluation(jd_path)
+        if not evaluation and not skip_fit:
+            cli_art.detail(f"  Evaluating candidate-role fit for {company_name}...", level=cli_art.NORMAL)
+            try:
+                evaluation = self.evaluate_fit(jd_path)
+                if evaluation:
+                    jd_manager.save_evaluation(jd_path, evaluation)
+            except Exception as e:
+                cli_art.console.print(f"  {theme.colorize_icon('warning')} Fit evaluation skipped due to error: {e}", soft_wrap=True)
+
+        if evaluation and evaluation.get("recommendation") == "Skip" and not force:
+            archived_path = jd_manager.archive_jd(jd_path)
+            cli_art.console.print(f"  {theme.colorize_icon('warning')} Fit score recommended 'Skip' ({evaluation.get('composite_score', '-')}/5). Moved to {archived_path}.", soft_wrap=True)
+            return {
+                "status": "skipped",
+                "job_key": job_key,
+                "company_name": company_name,
+                "job_title": job_title,
+                "source_url": source_url,
+                "evaluation": evaluation,
+            }
+
+        # Stage 3: Referral & ATS Classification
+        if referral:
+            jd_manager.save_referral(jd_path, referral)
+
+        ats_classification = jd_manager.read_ats_classification(jd_path)
+        if not ats_classification and source_url:
+            ats_classification = scan_ats.classify_ats(source_url)
+            if ats_classification:
+                jd_manager.save_ats_classification(jd_path, ats_classification)
+
+        # Stage 4: Tailored Resume
+        cli_art.console.rule(f"[bold {theme.BRAND}]Generating Tailored Resume[/bold {theme.BRAND}]", style="dim")
+        resume_result = self.build_tailored_resume(
+            jd_path=jd_path,
+            master_resume=master_resume if master_resume is not None else {},
+            output_filename=output_filename,
+            job_key=job_key,
+            interactive=interactive,
+        )
+        if not resume_result:
+            cli_art.console.print(f"  {theme.colorize_icon('error')} Resume generation failed for {jd_path}.", soft_wrap=True)
+            return {"status": "error", "message": "Resume generation failed"}
+
+        # Stage 5: Tailored Cover Letter
+        cli_art.console.rule(f"[bold {theme.BRAND}]Generating Tailored Cover Letter[/bold {theme.BRAND}]", style="dim")
+        cl_result = self.build_tailored_coverletter(jd_path)
+        if not cl_result:
+            cli_art.console.print(f"  {theme.colorize_icon('error')} Cover letter generation failed for {jd_path}.", soft_wrap=True)
+            return {"status": "error", "message": "Cover letter generation failed", "resume": resume_result}
+
+        # Stage 6: Move to completed and record tracking
+        output_paths = {
+            "resume_pdf": resume_result.get("_output_paths", {}).get("pdf", ""),
+            "resume_docx": resume_result.get("_output_paths", {}).get("docx", ""),
+            "resume_json": resume_result.get("_output_paths", {}).get("json", ""),
+            "resume_html": resume_result.get("_output_paths", {}).get("html", ""),
+            "coverletter_pdf": cl_result.get("_output_paths", {}).get("pdf", ""),
+            "coverletter_docx": cl_result.get("_output_paths", {}).get("docx", ""),
+            "coverletter_json": cl_result.get("_output_paths", {}).get("json", ""),
+            "coverletter_html": cl_result.get("_output_paths", {}).get("html", ""),
+        }
+
+        # Handle file movement to jds/completed/
+        if os.path.exists(jd_path):
+            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
+            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(jd_path))
+            try:
+                shutil.move(jd_path, dest)
+            except Exception:
+                pass
+
+        tracker = jd_manager.JDTracker()
+        tracker.mark_completed(
+            job_key=job_key,
+            job_title=job_title,
+            company_name=company_name,
+            source_file=os.path.basename(jd_path),
+            output_json=output_paths.get("resume_json", ""),
+            output_pdf=output_paths.get("resume_pdf", ""),
+        )
+        jd_manager.append_application_row(
+            company_name=company_name,
+            job_title=job_title,
+            has_pdf=bool(os.path.exists(output_paths.get("resume_pdf", ""))),
+            source_url=source_url,
+            evaluation=evaluation,
+        )
+        try:
+            import db
+            db.checkpoint()
+        except Exception:
+            pass
+
+        return {
+            "status": "completed",
+            "job_key": job_key,
+            "company_name": company_name,
+            "job_title": job_title,
+            "source_url": source_url,
+            "evaluation": evaluation,
+            "ats_classification": ats_classification,
+            "resume": resume_result,
+            "coverletter": cl_result,
+            "output_paths": output_paths,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -3974,6 +4140,74 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     except Exception:
         pass  # best-effort (F6) -- a checkpoint failure shouldn't fail a
               # batch run that otherwise completed successfully
+
+    return completed_count, failed_count
+
+
+def run_application_package(
+    jd_path=None,
+    master_resume_path=None,
+    output_filename=None,
+    referral=None,
+    force=False,
+    skip_liveness=False,
+    skip_fit=False,
+):
+    """
+    Runs the full 4-artifact application package pipeline for a single JD or all pending JDs.
+    Returns (completed_count, failed_count).
+    """
+    kb_snapshot.snapshot_kb()
+
+    master_resume = {}
+    if master_resume_path:
+        try:
+            with open(master_resume_path, "r", encoding="utf-8") as f:
+                master_resume = json.load(f)
+            cli_art.print_literal(f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}")
+        except Exception as e:
+            cli_art.console.print(f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.", soft_wrap=True)
+
+    engine = ResumeEngine()
+
+    if jd_path:
+        jd_paths = [jd_path]
+    else:
+        jd_paths = jd_manager.get_pending_jds()
+        if not jd_paths:
+            cli_art.print_literal("\nNo pending JDs found in jds/. Nothing to do.")
+            return 0, 0
+
+    completed_count = 0
+    failed_count = 0
+
+    for path in jd_paths:
+        try:
+            result = engine.build_application_package(
+                jd_path=path,
+                master_resume=master_resume,
+                output_filename=output_filename if jd_path else None,
+                referral=referral if jd_path else None,
+                force=force,
+                skip_liveness=skip_liveness,
+                skip_fit=skip_fit,
+                interactive=jd_path is not None,
+            )
+            if result and result.get("status") == "completed":
+                completed_count += 1
+                if hasattr(cli_art, "render_application_package_hud"):
+                    cli_art.render_application_package_hud(result)
+            elif result and result.get("status") in ("expired", "skipped"):
+                pass
+            else:
+                failed_count += 1
+        except SustainedFailureError:
+            cli_art.console.print(f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping package batch.", soft_wrap=True)
+            failed_count += 1
+            break
+        except Exception as e:
+            cli_art.console.print(f"  {theme.colorize_icon('error')} Unhandled exception packaging {path}: {e}", soft_wrap=True)
+            failed_count += 1
 
     return completed_count, failed_count
 
