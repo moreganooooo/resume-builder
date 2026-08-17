@@ -15,7 +15,7 @@ browser_cookie3
 questionary
 python-docx
 python-pptx
-Pillow==12.3.0
+Pillow==11.3.0
 pdfminer.six
 pypdf==6.15.0
 odfpy
