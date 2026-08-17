@@ -41,3 +41,40 @@ resume = "scripts.cli:cli"
 
 [tool.setuptools]
 packages = ["scripts"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["scripts"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["dashboard"]
+
+[tool.pydocstyle]
+match_dir = "scripts"
+ignore = ["D100", "D104"]
+
+[tool.coverage.run]
+source = ["scripts", "tests"]
+omit = ["*/site-packages/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 60
+precision = 2
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "$version"
+
+[tool.codespell]
+skip = "*.json,*.csv,*.db,*.pyc,*.pycache,node_modules"
+ignore-words-list = "datas,nd,sav"
