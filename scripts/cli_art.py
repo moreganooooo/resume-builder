@@ -1742,3 +1742,70 @@ def display_success_celebration(title: str, subtitle: str) -> None:
     console.print()
     console.print(panel)
     console.print()
+
+
+def render_application_package_hud(package_result: dict) -> None:
+    """Renders a consolidated, rich summary HUD of the generated application package."""
+    if not isinstance(package_result, dict):
+        return
+
+    company_name = package_result.get("company_name") or "Unknown Company"
+    job_title = package_result.get("job_title") or "Unknown Role"
+    evaluation = package_result.get("evaluation") or {}
+    ats_info = package_result.get("ats_classification") or {}
+    output_paths = package_result.get("output_paths") or {}
+
+    composite_score = evaluation.get("composite_score", "-")
+    rec = evaluation.get("recommendation", "N/A")
+    ats_provider = ats_info.get("provider_id", "Standard ATS")
+    ats_tier = ats_info.get("weight_tier", "")
+
+    hud_content = Text()
+    hud_content.append("🏢 Company:  ", style="bold")
+    hud_content.append(f"{company_name}\n", style=f"bold {theme.BRAND}")
+    hud_content.append("💼 Role:     ", style="bold")
+    hud_content.append(f"{job_title}\n", style="bold")
+
+    if composite_score != "-" or rec != "N/A":
+        hud_content.append("🎯 Fit:      ", style="bold")
+        score_str = f"{composite_score}/5.0" if composite_score != "-" else ""
+        hud_content.append(f"{score_str} ({rec})\n", style=f"bold {theme.SUCCESS}")
+
+    if ats_provider or ats_tier:
+        tier_str = f" ({ats_tier})" if ats_tier else ""
+        hud_content.append("🤖 ATS:      ", style="bold")
+        hud_content.append(f"{ats_provider}{tier_str}\n", style=f"{theme.MUTED}")
+
+    hud_content.append("\n📄 Resume Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}")
+    res_pdf = output_paths.get("resume_pdf")
+    res_docx = output_paths.get("resume_docx")
+    if res_pdf:
+        hud_content.append("   • PDF:  ", style=f"bold {theme.SUCCESS}")
+        hud_content.append(f"{res_pdf}\n", style=theme.SUCCESS)
+    if res_docx:
+        hud_content.append("   • DOCX: ", style=f"bold {theme.SUCCESS}")
+        hud_content.append(f"{res_docx}\n", style=theme.SUCCESS)
+
+    hud_content.append("\n✉️  Cover Letter Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}")
+    cl_pdf = output_paths.get("coverletter_pdf")
+    cl_docx = output_paths.get("coverletter_docx")
+    if cl_pdf:
+        hud_content.append("   • PDF:  ", style=f"bold {theme.SUCCESS}")
+        hud_content.append(f"{cl_pdf}\n", style=theme.SUCCESS)
+    if cl_docx:
+        hud_content.append("   • DOCX: ", style=f"bold {theme.SUCCESS}")
+        hud_content.append(f"{cl_docx}\n", style=theme.SUCCESS)
+
+    hud_content.append(f"\n{theme.colorize_icon('success')} Application package logged to SQLite tracker & marked complete.\n", style=theme.MUTED)
+
+    panel = Panel(
+        hud_content,
+        title=f"[bold {theme.BRAND}]🚀 APPLICATION PACKAGE COMPLETE[/bold {theme.BRAND}]",
+        title_align="left",
+        border_style=theme.BRAND_ACCENT,
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print()
+    console.print(panel)
+    console.print()
