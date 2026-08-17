@@ -27,7 +27,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
@@ -63,17 +65,19 @@ POISONED_PARAGRAPH = (
 
 
 def _poisoned_letter_json():
-    return json.dumps({
-        "company_name": "TESTONLY Zebulon Injection Testco",
-        "greeting": "Dear Hiring Team,",
-        "body_paragraphs": [
-            POISONED_PARAGRAPH,
-            "In my most recent role, I built lifecycle email campaigns that "
-            "grew engagement, which maps closely to this role's focus on "
-            "activation-ready content.",
-        ],
-        "sign_off": "Sincerely,",
-    })
+    return json.dumps(
+        {
+            "company_name": "TESTONLY Zebulon Injection Testco",
+            "greeting": "Dear Hiring Team,",
+            "body_paragraphs": [
+                POISONED_PARAGRAPH,
+                "In my most recent role, I built lifecycle email campaigns that "
+                "grew engagement, which maps closely to this role's focus on "
+                "activation-ready content.",
+            ],
+            "sign_off": "Sincerely,",
+        }
+    )
 
 
 def _clean_letter_json():
@@ -83,27 +87,29 @@ def _clean_letter_json():
     # check (see #4) -- a short fixture here would trigger a second,
     # unrelated word-count violation and change call counts these tests
     # aren't about.
-    return json.dumps({
-        "company_name": "TESTONLY Zebulon Injection Testco",
-        "greeting": "Dear Hiring Team,",
-        "body_paragraphs": [
-            "With TESTONLY Zebulon Injection Testco scaling its Content Strategist initiatives, my background in journalism and marketing content strategy positions me well to drive immediate value. "
-            "Translating complex concepts into clear, activation-ready narratives that speak directly to an audience has been central to my work for over eight years across multiple industries. "
-            "Fast-moving cross-functional launches demand rigor, empathy, and operational precision. "
-            "That is why I ground every campaign in clear audience segments, timelines, and measurable success metrics that align directly with executive goals and broader company roadmaps.",
-            "In my most recent role at Treering, lifecycle email campaigns grew engagement by double digits across several critical user segments. "
-            "This work maps directly to your focus on activation-ready content and cross-functional collaboration with product and sales teams. "
-            "Partnering closely with engineering to instrument tracking for every campaign touchpoint allowed us to prioritize messaging sequences most likely to move a cold lead toward a signed contract. "
-            "Iterating weekly rather than quarterly keeps campaigns sharp, relevant, and evidence-based. "
-            "Documenting what works ensures each subsequent launch starts from proof rather than intuition, creating institutional knowledge that compounds across every sprint and quarterly milestone for the wider growth team.",
-            "Beyond the metrics, collaborative workflows define my approach to content operations and cross-functional project management. "
-            "Regular alignment with design and revenue teams keeps messaging consistent across every prospect touchpoint, eliminating friction before launch. "
-            "Thriving in fast-paced environments where priorities shift quickly, I build repeatable systems, templates, and clear documentation that let a small team punch above its weight. "
-            "I welcome the opportunity to bring that disciplined energy to your team and contribute from day one, helping drive sustainable growth across the entire organization. "
-            "Thank you for your time and consideration, and I look forward to discussing how my experience can support your upcoming product launches and ongoing strategic initiatives.",
-        ],
-        "sign_off": "Sincerely,",
-    })
+    return json.dumps(
+        {
+            "company_name": "TESTONLY Zebulon Injection Testco",
+            "greeting": "Dear Hiring Team,",
+            "body_paragraphs": [
+                "With TESTONLY Zebulon Injection Testco scaling its Content Strategist initiatives, my background in journalism and marketing content strategy positions me well to drive immediate value. "
+                "Translating complex concepts into clear, activation-ready narratives that speak directly to an audience has been central to my work for over eight years across multiple industries. "
+                "Fast-moving cross-functional launches demand rigor, empathy, and operational precision. "
+                "That is why I ground every campaign in clear audience segments, timelines, and measurable success metrics that align directly with executive goals and broader company roadmaps.",
+                "In my most recent role at Treering, lifecycle email campaigns grew engagement by double digits across several critical user segments. "
+                "This work maps directly to your focus on activation-ready content and cross-functional collaboration with product and sales teams. "
+                "Partnering closely with engineering to instrument tracking for every campaign touchpoint allowed us to prioritize messaging sequences most likely to move a cold lead toward a signed contract. "
+                "Iterating weekly rather than quarterly keeps campaigns sharp, relevant, and evidence-based. "
+                "Documenting what works ensures each subsequent launch starts from proof rather than intuition, creating institutional knowledge that compounds across every sprint and quarterly milestone for the wider growth team.",
+                "Beyond the metrics, collaborative workflows define my approach to content operations and cross-functional project management. "
+                "Regular alignment with design and revenue teams keeps messaging consistent across every prospect touchpoint, eliminating friction before launch. "
+                "Thriving in fast-paced environments where priorities shift quickly, I build repeatable systems, templates, and clear documentation that let a small team punch above its weight. "
+                "I welcome the opportunity to bring that disciplined energy to your team and contribute from day one, helping drive sustainable growth across the entire organization. "
+                "Thank you for your time and consideration, and I look forward to discussing how my experience can support your upcoming product launches and ongoing strategic initiatives.",
+            ],
+            "sign_off": "Sincerely,",
+        }
+    )
 
 
 class TestKBTraceabilityAgainstRealPayload(unittest.TestCase):
@@ -119,7 +125,9 @@ class TestKBTraceabilityAgainstRealPayload(unittest.TestCase):
         style_rules = self.engine.load_yaml(self.engine.rules_dir, "style_rules.yaml")
         letter_data = json.loads(_poisoned_letter_json())
 
-        violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=kb_corpus)
+        violations = validate_coverletter.validate(
+            letter_data, style_rules, kb_corpus=kb_corpus
+        )
 
         self.assertTrue(
             any("92%" in v for v in violations),
@@ -135,7 +143,9 @@ class TestKBTraceabilityAgainstRealPayload(unittest.TestCase):
         style_rules = self.engine.load_yaml(self.engine.rules_dir, "style_rules.yaml")
         letter_data = json.loads(_clean_letter_json())
 
-        violations = validate_coverletter.validate(letter_data, style_rules, kb_corpus=kb_corpus)
+        violations = validate_coverletter.validate(
+            letter_data, style_rules, kb_corpus=kb_corpus
+        )
         self.assertEqual(violations, [])
 
 
@@ -159,8 +169,12 @@ class TestJobDescriptionDelimiting(unittest.TestCase):
             json.dump(jd_json, f)
 
         stem = orchestrator._build_output_stem(self.jd_path)
-        self.json_out = os.path.join(self.engine.output_json_dir, f"{stem}_CoverLetter.json")
-        self.html_out = os.path.join(self.engine.output_html_dir, f"{stem}_CoverLetter.html")
+        self.json_out = os.path.join(
+            self.engine.output_json_dir, f"{stem}_CoverLetter.json"
+        )
+        self.html_out = os.path.join(
+            self.engine.output_html_dir, f"{stem}_CoverLetter.html"
+        )
 
     def tearDown(self):
         if os.path.exists(self.jd_path):
@@ -171,12 +185,22 @@ class TestJobDescriptionDelimiting(unittest.TestCase):
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_real_closing_marker_comes_after_the_entire_forged_payload(self, mock_generate, mock_research):
+    def test_real_closing_marker_comes_after_the_entire_forged_payload(
+        self, mock_generate, mock_research
+    ):
         mock_generate.return_value = (_clean_letter_json(), {})
 
-        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
-             patch("orchestrator.render_coverletter"), \
-             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+        with (
+            patch(
+                "orchestrator.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
+            patch("orchestrator.render_coverletter"),
+            patch(
+                "orchestrator.validate_pdf_text.validate_coverletter_pdf_text",
+                return_value=[],
+            ),
+        ):
             self.engine.build_tailored_coverletter(self.jd_path)
 
         contents = mock_generate.call_args_list[0].kwargs["contents"]
@@ -190,7 +214,9 @@ class TestJobDescriptionDelimiting(unittest.TestCase):
         # not after it.
         self.assertTrue(contents.rstrip().endswith(real_closing))
         self.assertIn(forged_resume_json, contents)
-        self.assertLess(contents.index(forged_resume_json), contents.rindex(real_closing))
+        self.assertLess(
+            contents.index(forged_resume_json), contents.rindex(real_closing)
+        )
 
 
 class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
@@ -200,7 +226,9 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
 
     def setUp(self):
         self.engine = orchestrator.ResumeEngine()
-        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_injection_e2e.json")
+        self.jd_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_jd_injection_e2e.json"
+        )
         jd_json = {
             "job_title": "Content Strategist",
             "company_name": "TESTONLY Zebulon Injection Testco",
@@ -213,10 +241,16 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
             json.dump(jd_json, f)
 
         self.job_key = jd_manager.compute_job_key(self.jd_path)
-        jd_manager.save_checkpoint(self.job_key, {"jd_keywords": {"hard_skills": ["messaging"]}})
+        jd_manager.save_checkpoint(
+            self.job_key, {"jd_keywords": {"hard_skills": ["messaging"]}}
+        )
         stem = orchestrator._build_output_stem(self.jd_path)
-        self.json_out = os.path.join(self.engine.output_json_dir, f"{stem}_CoverLetter.json")
-        self.html_out = os.path.join(self.engine.output_html_dir, f"{stem}_CoverLetter.html")
+        self.json_out = os.path.join(
+            self.engine.output_json_dir, f"{stem}_CoverLetter.json"
+        )
+        self.html_out = os.path.join(
+            self.engine.output_html_dir, f"{stem}_CoverLetter.html"
+        )
 
     def tearDown(self):
         if os.path.exists(self.jd_path):
@@ -231,7 +265,9 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
 
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_fabricated_content_is_gone_from_the_final_letter(self, mock_generate, mock_research):
+    def test_fabricated_content_is_gone_from_the_final_letter(
+        self, mock_generate, mock_research
+    ):
         # First call: the model, poisoned by the JD's injected override,
         # produces the fabricated paragraph exactly as phase-8 captured it.
         # Second call: the fix-retry, which never re-sends jd_text (only
@@ -243,18 +279,34 @@ class TestFullInjectionFlowThroughCoverLetterPath(unittest.TestCase):
             (_clean_letter_json(), {}),
         ]
 
-        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
-             patch("orchestrator.render_coverletter"), \
-             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+        with (
+            patch(
+                "orchestrator.subprocess.run",
+                return_value=MagicMock(returncode=0, stdout="", stderr=""),
+            ),
+            patch("orchestrator.render_coverletter"),
+            patch(
+                "orchestrator.validate_pdf_text.validate_coverletter_pdf_text",
+                return_value=[],
+            ),
+        ):
             result = self.engine.build_tailored_coverletter(self.jd_path)
 
         # The KB-traceability check must have found a problem with the
         # first response for the fix-retry to have fired at all.
-        self.assertEqual(mock_generate.call_count, 2, "Expected the validator to trigger the one automatic retry")
+        self.assertEqual(
+            mock_generate.call_count,
+            2,
+            "Expected the validator to trigger the one automatic retry",
+        )
 
         body_text = " ".join(result.get("body_paragraphs", []))
         for tell in ("Rust", "Stripe", "92%", "p99", "2019-2024", "ZZINJECTEDZZ"):
-            self.assertNotIn(tell, body_text, f"Fabricated tell {tell!r} leaked into the final cover letter")
+            self.assertNotIn(
+                tell,
+                body_text,
+                f"Fabricated tell {tell!r} leaked into the final cover letter",
+            )
 
 
 if __name__ == "__main__":

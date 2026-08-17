@@ -63,14 +63,27 @@ BOARD_SCANNERS_DIR = os.path.join(profile_paths.PROJECT_ROOT, "board-scanners")
 RUN_PROVIDER_SCRIPT = os.path.join(BOARD_SCANNERS_DIR, "run_provider.mjs")
 
 BOARD_PROVIDERS = [
-    "remoteok", "remotive", "himalayas", "jobicy", "weworkremotely",
-    "workingnomads", "fourdayweek", "nodesk", "authenticjobs", "crunchboard",
-    "jobspresso", "realworkfromanywhere", "powertofly", "themuse", "hackernews",
+    "remoteok",
+    "remotive",
+    "himalayas",
+    "jobicy",
+    "weworkremotely",
+    "workingnomads",
+    "fourdayweek",
+    "nodesk",
+    "authenticjobs",
+    "crunchboard",
+    "jobspresso",
+    "realworkfromanywhere",
+    "powertofly",
+    "themuse",
+    "hackernews",
     # Same mechanism as everything above -- just needs an API key in the
     # active profile's .env (ADZUNA_APP_ID/ADZUNA_APP_KEY;
     # USAJOBS_API_KEY/USAJOBS_EMAIL) or they return nothing (the
     # provider's own .mjs throws, _run_node_provider logs it and moves on).
-    "adzuna", "usajobs",
+    "adzuna",
+    "usajobs",
 ]
 
 NODE_TIMEOUT_SECONDS = 30
@@ -91,6 +104,7 @@ _SUBPROCESS_ENV_STRIP = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "JOBRIGHT_COOKIE_ST
 def _child_env() -> dict:
     return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
 
+
 # Keyed by profile name (not a single cached value) -- this gets called
 # once per raw listing inside fetch_board_jobs()'s loop, so it's worth
 # caching for real, but a stale single-value cache would silently keep
@@ -104,7 +118,9 @@ _filters_cache = {}
 def _load_filters() -> dict:
     profile = profile_paths.active_profile()
     if profile not in _filters_cache:
-        path = os.path.join(profile_paths.board_scanner_dir(profile), "scan_filters.yml")
+        path = os.path.join(
+            profile_paths.board_scanner_dir(profile), "scan_filters.yml"
+        )
         with open(path, "r", encoding="utf-8") as f:
             _filters_cache[profile] = yaml.safe_load(f)
     return _filters_cache[profile]
@@ -141,13 +157,24 @@ def _passes_location_filter(location: str) -> bool:
     return True
 
 
-def _scan_warning(msg: str, *, kind: str, provider_id: str, reason: str, url: str = "") -> None:
+def _scan_warning(
+    msg: str, *, kind: str, provider_id: str, reason: str, url: str = ""
+) -> None:
     """logging.warning() with structured `extra` fields scan.py's
     _ScanWarningCollector reads to render a grouped, themed summary
     instead of a raw wall of WARNING:root: lines -- the plain message is
     still there for anyone watching logs directly (e.g. `resume test -vv`
     or a bare terminal without the themed report)."""
-    logging.warning(msg, extra={"scan_warning": True, "kind": kind, "provider_id": provider_id, "reason": reason, "url": url})
+    logging.warning(
+        msg,
+        extra={
+            "scan_warning": True,
+            "kind": kind,
+            "provider_id": provider_id,
+            "reason": reason,
+            "url": url,
+        },
+    )
 
 
 def _parse_error_envelope(stdout: str) -> dict | None:
@@ -191,8 +218,10 @@ def _flag_thin_description(job: dict, provider_id: str, source_url: str) -> None
     job["_scan"] = {"thin_description": True, "description_chars": chars}
     _scan_warning(
         f"scan_boards: {provider_id} posting has a thin/empty description ({chars} chars) -- {source_url}",
-        kind="thin_description", provider_id=provider_id,
-        reason=f"{chars} chars" if chars else "empty", url=source_url,
+        kind="thin_description",
+        provider_id=provider_id,
+        reason=f"{chars} chars" if chars else "empty",
+        url=source_url,
     )
 
 
@@ -200,13 +229,18 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
     try:
         result = subprocess.run(
             ["node", RUN_PROVIDER_SCRIPT, provider_id, json.dumps(entry)],
-            capture_output=True, text=True, timeout=NODE_TIMEOUT_SECONDS,
+            capture_output=True,
+            text=True,
+            timeout=NODE_TIMEOUT_SECONDS,
             env=_child_env(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        _scan_warning(f"scan_boards: {provider_id} failed to run -- {e}",
-                      kind="network" if isinstance(e, subprocess.TimeoutExpired) else "config",
-                      provider_id=provider_id, reason=type(e).__name__)
+        _scan_warning(
+            f"scan_boards: {provider_id} failed to run -- {e}",
+            kind="network" if isinstance(e, subprocess.TimeoutExpired) else "config",
+            provider_id=provider_id,
+            reason=type(e).__name__,
+        )
         return []
 
     if result.returncode != 0:
@@ -215,16 +249,28 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
             kind, reason = envelope["kind"], envelope.get("message", "unknown error")
         else:
             kind = "provider_failed"
-            reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else f"exit {result.returncode}"
-        _scan_warning(f"scan_boards: {provider_id} -- {result.stderr.strip()}",
-                      kind=kind, provider_id=provider_id, reason=reason)
+            reason = (
+                result.stderr.strip().splitlines()[-1]
+                if result.stderr.strip()
+                else f"exit {result.returncode}"
+            )
+        _scan_warning(
+            f"scan_boards: {provider_id} -- {result.stderr.strip()}",
+            kind=kind,
+            provider_id=provider_id,
+            reason=reason,
+        )
         return []
 
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as e:
-        _scan_warning(f"scan_boards: {provider_id} returned invalid JSON -- {e}",
-                      kind="provider_failed", provider_id=provider_id, reason="invalid JSON output")
+        _scan_warning(
+            f"scan_boards: {provider_id} returned invalid JSON -- {e}",
+            kind="provider_failed",
+            provider_id=provider_id,
+            reason="invalid JSON output",
+        )
         return []
 
 
@@ -266,21 +312,29 @@ def _fetch_posting_text(url: str, provider_id: str = "") -> str:
     (see _scan_warning) -- doesn't affect the fetch itself."""
     try:
         response = requests.get(
-            url, timeout=POSTING_FETCH_TIMEOUT_SECONDS,
+            url,
+            timeout=POSTING_FETCH_TIMEOUT_SECONDS,
             headers={"User-Agent": "Mozilla/5.0 (compatible; resume-builder/1.0)"},
         )
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         status_code = getattr(getattr(e, "response", None), "status_code", None)
         reason = f"HTTP {status_code}" if status_code else type(e).__name__
-        _scan_warning(f"scan_boards: couldn't fetch posting text from {url} -- {e}",
-                      kind="posting_text_failed", provider_id=provider_id, reason=reason, url=url)
+        _scan_warning(
+            f"scan_boards: couldn't fetch posting text from {url} -- {e}",
+            kind="posting_text_failed",
+            provider_id=provider_id,
+            reason=reason,
+            url=url,
+        )
         return ""
 
     return _html_to_text(response.text)
 
 
-def fetch_board_jobs(sources: list = None, search_term: str = None, activity=None) -> list:
+def fetch_board_jobs(
+    sources: list = None, search_term: str = None, activity=None
+) -> list:
     """Runs each requested board provider (default: all of BOARD_PROVIDERS)
     concurrently, applies the title/location prefilter, fetches each surviving posting's
     full text, and returns a list of job dicts. Runs non-blocking asynchronous sweeps
@@ -311,10 +365,14 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
         try:
             raw_jobs = _run_node_provider(provider_id, entry)
         except Exception as e:
-            logging.error(f"scan_boards: Exception running node provider {provider_id}: {e}")
+            logging.error(
+                f"scan_boards: Exception running node provider {provider_id}: {e}"
+            )
             return []
 
-        logging.info(f"scan_boards: {provider_id} returned {len(raw_jobs)} raw listing(s).")
+        logging.info(
+            f"scan_boards: {provider_id} returned {len(raw_jobs)} raw listing(s)."
+        )
         provider_jobs = []
 
         for raw in raw_jobs:
@@ -330,11 +388,17 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
                 continue
 
             raw_description = raw.get("description") or ""
-            description = _html_to_text(raw_description) if raw_description else _fetch_posting_text(url, provider_id)
+            description = (
+                _html_to_text(raw_description)
+                if raw_description
+                else _fetch_posting_text(url, provider_id)
+            )
 
             job = {
                 "job_title": title,
-                "company_name": html.unescape((raw.get("company") or provider_id).strip()),
+                "company_name": html.unescape(
+                    (raw.get("company") or provider_id).strip()
+                ),
                 "source_platform": provider_id,
                 "source_job_id": None,
                 "source_url": url,
@@ -365,17 +429,20 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
                     result_jobs = future.result()
                     jobs.extend(result_jobs)
                 except Exception as e:
-                    logging.error(f"scan_boards: Future task failed for provider {provider_id}: {e}")
+                    logging.error(
+                        f"scan_boards: Future task failed for provider {provider_id}: {e}"
+                    )
 
     # Fetch custom RSS feeds concurrently!
     custom_feeds = filters.get("custom_feeds") or []
     if custom_feeds and is_default_run:
+
         def process_feed(feed: dict) -> list:
             feed_name = feed.get("name")
             feed_url = feed.get("url")
             if not feed_name or not feed_url:
                 return []
-            
+
             feed_jobs = []
             try:
                 r = requests.get(feed_url, timeout=10)
@@ -391,10 +458,10 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
                         url = link_el.text.strip()
                         if not _passes_title_filter(title):
                             continue
-                            
+
                         desc_el = item.find("description")
                         desc = _html_to_text(desc_el.text.strip()) if desc_el else ""
-                        
+
                         company = ""
                         author_el = item.find("author")
                         if author_el:
@@ -403,7 +470,7 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
                             dc_creator = item.find("dc:creator")
                             if dc_creator:
                                 company = dc_creator.text.strip()
-                                
+
                         job = {
                             "job_title": title,
                             "company_name": company or feed_name,
@@ -415,16 +482,27 @@ def fetch_board_jobs(sources: list = None, search_term: str = None, activity=Non
                             "description": desc,
                         }
                         feed_jobs.append(job)
-                    logging.info(f"scan_boards: custom feed {feed_name} returned {len(feed_jobs)} job(s).")
+                    logging.info(
+                        f"scan_boards: custom feed {feed_name} returned {len(feed_jobs)} job(s)."
+                    )
             except Exception as e:
-                logging.warning(f"scan_boards: Failed to fetch custom feed {feed_name}: {e}")
+                logging.warning(
+                    f"scan_boards: Failed to fetch custom feed {feed_name}: {e}"
+                )
             return feed_jobs
 
         if activity is not None:
-            activity.step("discovery", "Boards", "Checking custom RSS feeds concurrently", preserve_markup=True)
+            activity.step(
+                "discovery",
+                "Boards",
+                "Checking custom RSS feeds concurrently",
+                preserve_markup=True,
+            )
 
         with ThreadPoolExecutor(max_workers=min(len(custom_feeds), 4)) as executor:
-            feed_futures = [executor.submit(process_feed, feed) for feed in custom_feeds]
+            feed_futures = [
+                executor.submit(process_feed, feed) for feed in custom_feeds
+            ]
             for future in as_completed(feed_futures):
                 try:
                     jobs.extend(future.result())

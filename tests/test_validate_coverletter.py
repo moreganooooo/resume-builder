@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import validate_coverletter  # noqa: E402
@@ -78,7 +80,9 @@ class TestValidateCoverLetter(unittest.TestCase):
 
     def test_flags_third_person_slip(self):
         letter = _valid_letter()
-        letter["body_paragraphs"][0] = "Morgan has years of experience in content strategy."
+        letter["body_paragraphs"][
+            0
+        ] = "Morgan has years of experience in content strategy."
         violations = validate_coverletter.validate(letter, STYLE_RULES)
         self.assertTrue(any("Third-person self-reference" in v for v in violations))
 
@@ -97,7 +101,7 @@ class TestValidateCoverLetter(unittest.TestCase):
             violations = validate_coverletter.validate(letter, STYLE_RULES)
             self.assertTrue(
                 any("clichéd/passive opener" in v for v in violations),
-                f"Failed to flag clichéd opener: {cliche!r}"
+                f"Failed to flag clichéd opener: {cliche!r}",
             )
 
     def test_flags_too_few_words(self):
@@ -117,7 +121,9 @@ class TestValidateCoverLetter(unittest.TestCase):
 
     def test_does_not_flag_word_count_within_range(self):
         violations = validate_coverletter.validate(_valid_letter(), STYLE_RULES)
-        self.assertFalse(any("words across body paragraphs" in v for v in violations), violations)
+        self.assertFalse(
+            any("words across body paragraphs" in v for v in violations), violations
+        )
 
     def test_allows_legitimate_third_party_pronoun(self):
         # Known trade-off, not a bug: "her"/"she" is a blunt heuristic (see
@@ -159,25 +165,33 @@ class TestKBTraceability(unittest.TestCase):
             " This technical foundation, combined with my background in "
             "journalism, let me cut p99 latency 92% on a payments ledger."
         )
-        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        violations = validate_coverletter.validate(
+            letter, STYLE_RULES, kb_corpus=self.KB_CORPUS
+        )
         self.assertTrue(any("92%" in v for v in violations), violations)
 
     def test_flags_fabricated_year_range_not_in_kb_corpus(self):
         letter = _valid_letter()
         letter["body_paragraphs"][0] += " I led this effort from (2019-2024)."
-        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        violations = validate_coverletter.validate(
+            letter, STYLE_RULES, kb_corpus=self.KB_CORPUS
+        )
         self.assertTrue(any("2019-2024" in v for v in violations), violations)
 
     def test_does_not_flag_a_metric_present_in_kb_corpus(self):
         letter = _valid_letter()
         letter["body_paragraphs"][0] += " I grew engagement 18% in that role."
-        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        violations = validate_coverletter.validate(
+            letter, STYLE_RULES, kb_corpus=self.KB_CORPUS
+        )
         self.assertEqual(violations, [])
 
     def test_does_not_flag_years_experience_claim_present_in_kb_corpus(self):
         letter = _valid_letter()
         letter["body_paragraphs"][0] += " I bring 8 years of B2B marketing experience."
-        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        violations = validate_coverletter.validate(
+            letter, STYLE_RULES, kb_corpus=self.KB_CORPUS
+        )
         self.assertEqual(violations, [])
 
     def test_ignores_ordinary_small_numbers_with_no_distinctive_suffix(self):
@@ -186,5 +200,7 @@ class TestKBTraceability(unittest.TestCase):
         # ranges count as checkable claims.
         letter = _valid_letter()
         letter["body_paragraphs"][0] += " I've held 3 roles in this space."
-        violations = validate_coverletter.validate(letter, STYLE_RULES, kb_corpus=self.KB_CORPUS)
+        violations = validate_coverletter.validate(
+            letter, STYLE_RULES, kb_corpus=self.KB_CORPUS
+        )
         self.assertEqual(violations, [])

@@ -30,18 +30,26 @@ from pdfminer.high_level import extract_text
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 _TYPOGRAPHIC_SUBSTITUTIONS = {
-    "‘": "'", "’": "'",   # curly single quotes
-    "“": '"', "”": '"',  # curly double quotes
-    "–": "-", "—": "-",  # en dash, em dash
-    " ": " ",                 # non-breaking space
+    "‘": "'",
+    "’": "'",  # curly single quotes
+    "“": '"',
+    "”": '"',  # curly double quotes
+    "–": "-",
+    "—": "-",  # en dash, em dash
+    " ": " ",  # non-breaking space
 }
 
 
 # Expanded during normalization so a ligature never *also* reads as dropped
 # content -- the corruption itself is reported separately by _check_ligatures().
 _LIGATURE_EXPANSIONS = {
-    "\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl", "\ufb03": "ffi",
-    "\ufb04": "ffl", "\ufb05": "st", "\ufb06": "st",
+    "\ufb00": "ff",
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+    "\ufb05": "st",
+    "\ufb06": "st",
 }
 _LIGATURE_TOKEN = re.compile("\\S*[\ufb00-\ufb06]\\S*")
 
@@ -103,7 +111,9 @@ def _all_bullets(resume_data: dict) -> list[str]:
     return bullets
 
 
-def _check_keyword_coverage_pdf(extracted: str, jd_keywords: dict, resume_data: dict) -> list[str]:
+def _check_keyword_coverage_pdf(
+    extracted: str, jd_keywords: dict, resume_data: dict
+) -> list[str]:
     """Verify that any keyword matched in the resume data JSON also survives
     intact in the extracted PDF text layer."""
     if not jd_keywords:
@@ -128,7 +138,9 @@ def _check_keyword_coverage_pdf(extracted: str, jd_keywords: dict, resume_data: 
     return warnings
 
 
-def _check_coverletter_keyword_coverage_pdf(extracted: str, jd_keywords: dict, letter_data: dict) -> list[str]:
+def _check_coverletter_keyword_coverage_pdf(
+    extracted: str, jd_keywords: dict, letter_data: dict
+) -> list[str]:
     """Verify that any keyword found in the cover letter JSON also survives
     intact in the extracted cover letter PDF text layer."""
     if not jd_keywords:
@@ -157,7 +169,9 @@ def _check_coverletter_keyword_coverage_pdf(extracted: str, jd_keywords: dict, l
     return warnings
 
 
-def validate_pdf_text(pdf_path: str, resume_data: dict, jd_keywords: dict = None) -> tuple[list[str], list[str]]:
+def validate_pdf_text(
+    pdf_path: str, resume_data: dict, jd_keywords: dict = None
+) -> tuple[list[str], list[str]]:
     """
     Extracts text from the rendered PDF and checks that the tagline, summary,
     why-section text, every bullet, and every skills line from the source
@@ -197,28 +211,40 @@ def validate_pdf_text(pdf_path: str, resume_data: dict, jd_keywords: dict = None
 
     summary_text = resume_data.get("SUMMARY_TEXT") or ""
     if summary_text and _normalize(summary_text) not in extracted:
-        advisories.append(f"Summary not found intact in PDF text layer: {summary_text[:80]}")
+        advisories.append(
+            f"Summary not found intact in PDF text layer: {summary_text[:80]}"
+        )
 
     why_text = resume_data.get("WHY_TEXT") or ""
     if why_text and _normalize(why_text) not in extracted:
-        advisories.append(f"Why-section text not found intact in PDF text layer: {why_text[:80]}")
+        advisories.append(
+            f"Why-section text not found intact in PDF text layer: {why_text[:80]}"
+        )
 
     for bullet in _all_bullets(resume_data):
         if _normalize(bullet) not in extracted:
-            advisories.append(f"Bullet not found intact in PDF text layer: {bullet[:80]}")
+            advisories.append(
+                f"Bullet not found intact in PDF text layer: {bullet[:80]}"
+            )
 
     for skill_line in resume_data.get("SKILLS", []) or []:
         if _normalize(skill_line) not in extracted:
-            advisories.append(f"Skills line not found intact in PDF text layer: {skill_line[:80]}")
+            advisories.append(
+                f"Skills line not found intact in PDF text layer: {skill_line[:80]}"
+            )
 
     # Verify matched keywords are not corrupted in PDF text layer
     if jd_keywords:
-        advisories.extend(_check_keyword_coverage_pdf(extracted, jd_keywords, resume_data))
+        advisories.extend(
+            _check_keyword_coverage_pdf(extracted, jd_keywords, resume_data)
+        )
 
     return [], advisories
 
 
-def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict, jd_keywords: dict = None) -> list[str]:
+def validate_coverletter_pdf_text(
+    pdf_path: str, letter_data: dict, jd_keywords: dict = None
+) -> list[str]:
     """
     Same check, cover-letter shaped: body paragraphs and the greeting instead
     of EXPERIENCE bullets and SKILLS lines.
@@ -240,7 +266,9 @@ def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict, jd_keywords:
 
     for para in letter_data.get("body_paragraphs", []) or []:
         if _normalize(para) not in extracted:
-            warnings.append(f"Paragraph not found intact in PDF text layer: {para[:80]}")
+            warnings.append(
+                f"Paragraph not found intact in PDF text layer: {para[:80]}"
+            )
 
     greeting = letter_data.get("greeting") or ""
     if greeting and _normalize(greeting) not in extracted:
@@ -248,6 +276,8 @@ def validate_coverletter_pdf_text(pdf_path: str, letter_data: dict, jd_keywords:
 
     # Verify placed cover letter keywords are not corrupted in PDF text layer
     if jd_keywords:
-        warnings.extend(_check_coverletter_keyword_coverage_pdf(extracted, jd_keywords, letter_data))
+        warnings.extend(
+            _check_coverletter_keyword_coverage_pdf(extracted, jd_keywords, letter_data)
+        )
 
     return warnings

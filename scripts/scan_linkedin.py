@@ -53,12 +53,16 @@ def check_li_cookie_live(cookie_val: str) -> bool:
     try:
         session = requests.Session()
         session.cookies.set("li_at", cookie_val, domain=".linkedin.com")
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "accept-language": "en-US,en;q=0.9",
-        })
-        response = session.get("https://www.linkedin.com/feed/", allow_redirects=False, timeout=5)
+        session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "accept-language": "en-US,en;q=0.9",
+            }
+        )
+        response = session.get(
+            "https://www.linkedin.com/feed/", allow_redirects=False, timeout=5
+        )
         return response.status_code == 200
     except Exception:
         return False
@@ -87,12 +91,16 @@ def get_li_at_cookie() -> str:
                 if check_li_cookie_live(cached_cookie):
                     return cached_cookie
                 else:
-                    cli_art.console.print(f"[{theme.BRAND_ACCENT}]⚠ Saved LinkedIn session has expired. Let's re-authenticate![/{theme.BRAND_ACCENT}]")
+                    cli_art.console.print(
+                        f"[{theme.BRAND_ACCENT}]⚠ Saved LinkedIn session has expired. Let's re-authenticate![/{theme.BRAND_ACCENT}]"
+                    )
         except Exception:
             pass
 
     cli_art.console.print()
-    cli_art.console.print(f"[{theme.BRAND}]✦  LINKEDIN COOKIE EXTRACTION  ✦[/{theme.BRAND}]")
+    cli_art.console.print(
+        f"[{theme.BRAND}]✦  LINKEDIN COOKIE EXTRACTION  ✦[/{theme.BRAND}]"
+    )
     cli_art.console.print(
         "To fetch deep details (like applicant stats and full descriptions), we need an active LinkedIn session.\n"
         "We can extract it from Chrome, manually paste it, or use Playwright to launch a secure visual login window."
@@ -107,7 +115,7 @@ def get_li_at_cookie() -> str:
                 "Extract automatically from Google Chrome (triggers macOS Keychain prompt)",
                 "Paste 'li_at' cookie value (or a Chrome DevTools curl command) manually",
             ],
-            style=cli_art.QUESTIONARY_STYLE
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
     except Exception:
         choice = "(Recommended) Log in securely via a visual browser window (automatic capture)"
@@ -120,13 +128,19 @@ def get_li_at_cookie() -> str:
     if "Paste" in choice:
         cookie_val = questionary.text(
             "Paste cookie value (or curl command with 'li_at=...'):",
-            style=cli_art.QUESTIONARY_STYLE
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if not cookie_val:
             return ""
         cookie_val = cookie_val.strip()
-        if "curl" in cookie_val or "Cookie:" in cookie_val or "cookie:" in cookie_val or "li_at=" in cookie_val:
+        if (
+            "curl" in cookie_val
+            or "Cookie:" in cookie_val
+            or "cookie:" in cookie_val
+            or "li_at=" in cookie_val
+        ):
             import re
+
             match = re.search(r"li_at=([^;\"\s]+)", cookie_val)
             if match:
                 cookie_val = match.group(1)
@@ -145,7 +159,9 @@ def get_li_at_cookie() -> str:
 
     elif "visual browser window" in choice:
         cli_art.console.print()
-        cli_art.console.print(f"[{theme.BRAND}]✦ LAUNCHING SECURE LOGIN WINDOW ✦[/{theme.BRAND}]")
+        cli_art.console.print(
+            f"[{theme.BRAND}]✦ LAUNCHING SECURE LOGIN WINDOW ✦[/{theme.BRAND}]"
+        )
         cli_art.console.print(
             "A Chromium browser window will now open.\n"
             "Please [bold]log in[/bold] to LinkedIn, complete any verification (such as 2FA or CAPTCHAs),\n"
@@ -154,13 +170,12 @@ def get_li_at_cookie() -> str:
         )
         cli_art.console.print()
 
-        script_path = os.path.join(profile_paths.PROJECT_ROOT, "scripts", "linkedin_login.mjs")
+        script_path = os.path.join(
+            profile_paths.PROJECT_ROOT, "scripts", "linkedin_login.mjs"
+        )
         try:
             result = subprocess.run(
-                ["node", script_path],
-                capture_output=True,
-                text=True,
-                timeout=240
+                ["node", script_path], capture_output=True, text=True, timeout=240
             )
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split("\n")
@@ -170,14 +185,19 @@ def get_li_at_cookie() -> str:
                             data = json.loads(line)
                             if data.get("success"):
                                 cookie_val = data.get("cookie")
-                                cli_art.display_success_celebration("LINKEDIN COOKIE SECURED", "Your session cookie was captured and cached successfully!")
+                                cli_art.display_success_celebration(
+                                    "LINKEDIN COOKIE SECURED",
+                                    "Your session cookie was captured and cached successfully!",
+                                )
                                 break
                             else:
                                 cli_art.cli_error(f"Login failed: {data.get('error')}")
                         except Exception:
                             pass
             else:
-                cli_art.cli_error(f"Login script failed: {result.stderr or 'Closed early'}")
+                cli_art.cli_error(
+                    f"Login script failed: {result.stderr or 'Closed early'}"
+                )
         except subprocess.TimeoutExpired:
             cli_art.cli_error("Login session timed out (4 minutes limit exceeded).")
         except Exception as e:
@@ -193,7 +213,9 @@ def get_li_at_cookie() -> str:
                 logging.debug(f"Failed to cache cookie: {e}")
             return cookie_val
         else:
-            cli_art.cli_error("Captured LinkedIn session is invalid or did not complete login successfully.")
+            cli_art.cli_error(
+                "Captured LinkedIn session is invalid or did not complete login successfully."
+            )
 
     return ""
 
@@ -210,11 +232,13 @@ def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
     try:
         session = requests.Session()
         session.cookies.set("li_at", li_at_cookie, domain=".linkedin.com")
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "accept-language": "en-US,en;q=0.9",
-        })
+        session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "accept-language": "en-US,en;q=0.9",
+            }
+        )
         response = session.get(job_url, timeout=10)
         if response.status_code != 200:
             return extras
@@ -234,7 +258,9 @@ def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
                 extras["backup_description"] = match.group(1).replace("\\n", "\n")
                 break
     except Exception as e:
-        logging.debug(f"  [Enhancer] Failed to fetch personalized extras for {job_url}: {e}")
+        logging.debug(
+            f"  [Enhancer] Failed to fetch personalized extras for {job_url}: {e}"
+        )
     finally:
         # In the finally block (not just after a successful request) since
         # a timeout/exception still means a request hit LinkedIn's server
@@ -316,6 +342,7 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     # our session -- this global must be set before LinkedinScraper() is
     # constructed, matching job_automater's config.py wiring.
     from linkedin_jobs_scraper.config import Config as LinkedInConfig
+
     LinkedInConfig.LI_AT_COOKIE = li_at_cookie
 
     jobs = []
@@ -326,8 +353,8 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
         # line (Events.DATA already fires once per job found) is the only
         # real signal available during the run, so a multi-query/slow-page
         # scan doesn't look hung for minutes with only on_error visible.
-        title = getattr(data, 'title', '?')
-        company = getattr(data, 'company', '?')
+        title = getattr(data, "title", "?")
+        company = getattr(data, "company", "?")
         if activity is not None:
             message = cli_art.format_job_found_message(title, company)
             activity.step("success", "LinkedIn", message, preserve_markup=True)
@@ -352,42 +379,50 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
         final_desc = primary_desc if primary_desc else extras["backup_description"]
 
         place = getattr(data, "place", "") or ""
-        jobs.append({
-            "status": "new",
-            "source_platform": "linkedin",
-            "source_job_id": getattr(data, "job_id", None),
-            "source_url": linkedin_link,
-            "application_type": application_type,
-            "application_url": application_url,
-            "job_title": getattr(data, "title", None),
-            "company_name": getattr(data, "company", None),
-            "company_linkedin_url": getattr(data, "company_link", None),
-            # LinkedIn's job page never exposes the company's own external
-            # domain -- only its own /company/<slug> page. Passing that
-            # through anyway (rather than hardcoding None) at least gives
-            # research_company() something to attempt; it already degrades
-            # gracefully (MIN_USEFUL_CHARS check) on the pages LinkedIn
-            # blocks from anonymous scraping.
-            "company_website": getattr(data, "company_link", None),
-            "location": getattr(data, "place", None),
-            "is_remote": "remote" in place.lower(),
-            "work_model": "Remote" if "remote" in place.lower() else (
-                "Hybrid" if "hybrid" in place.lower() else ("Onsite" if place else None)
-            ),
-            "publish_time": getattr(data, "date", None),
-            "publish_time_desc": getattr(data, "date_text", None),
-            "employment_type": getattr(data, "employment_type", None),
-            "seniority_level": getattr(data, "seniority_level", None),
-            "description": final_desc,
-            "description_html": getattr(data, "description_html", None),
-            "is_top_applicant": extras["is_top_applicant"],
-            "job_summary": None,
-            "skills": getattr(data, "skills", None),
-            "qualifications": None,
-            "core_responsibilities": None,
-            "social_connections": None,
-            "personal_social_connections": None,
-        })
+        jobs.append(
+            {
+                "status": "new",
+                "source_platform": "linkedin",
+                "source_job_id": getattr(data, "job_id", None),
+                "source_url": linkedin_link,
+                "application_type": application_type,
+                "application_url": application_url,
+                "job_title": getattr(data, "title", None),
+                "company_name": getattr(data, "company", None),
+                "company_linkedin_url": getattr(data, "company_link", None),
+                # LinkedIn's job page never exposes the company's own external
+                # domain -- only its own /company/<slug> page. Passing that
+                # through anyway (rather than hardcoding None) at least gives
+                # research_company() something to attempt; it already degrades
+                # gracefully (MIN_USEFUL_CHARS check) on the pages LinkedIn
+                # blocks from anonymous scraping.
+                "company_website": getattr(data, "company_link", None),
+                "location": getattr(data, "place", None),
+                "is_remote": "remote" in place.lower(),
+                "work_model": (
+                    "Remote"
+                    if "remote" in place.lower()
+                    else (
+                        "Hybrid"
+                        if "hybrid" in place.lower()
+                        else ("Onsite" if place else None)
+                    )
+                ),
+                "publish_time": getattr(data, "date", None),
+                "publish_time_desc": getattr(data, "date_text", None),
+                "employment_type": getattr(data, "employment_type", None),
+                "seniority_level": getattr(data, "seniority_level", None),
+                "description": final_desc,
+                "description_html": getattr(data, "description_html", None),
+                "is_top_applicant": extras["is_top_applicant"],
+                "job_summary": None,
+                "skills": getattr(data, "skills", None),
+                "qualifications": None,
+                "core_responsibilities": None,
+                "social_connections": None,
+                "personal_social_connections": None,
+            }
+        )
 
     def on_error(error):
         cli_art.cli_error(f"[LinkedIn ON_ERROR] {error}")

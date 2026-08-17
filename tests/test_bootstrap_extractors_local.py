@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_extractors  # noqa: E402
@@ -19,7 +21,9 @@ class TestDetectFileKind(unittest.TestCase):
     def test_images(self):
         for ext in ("png", "jpg", "jpeg", "heic", "webp"):
             with self.subTest(ext=ext):
-                self.assertEqual(bootstrap_extractors.detect_file_kind(f"screenshot.{ext}"), "image")
+                self.assertEqual(
+                    bootstrap_extractors.detect_file_kind(f"screenshot.{ext}"), "image"
+                )
 
     def test_docx(self):
         self.assertEqual(bootstrap_extractors.detect_file_kind("resume.docx"), "docx")
@@ -34,15 +38,21 @@ class TestDetectFileKind(unittest.TestCase):
         self.assertEqual(bootstrap_extractors.detect_file_kind("deck.pptx"), "pptx")
 
     def test_spreadsheet(self):
-        self.assertEqual(bootstrap_extractors.detect_file_kind("achievements.xlsx"), "spreadsheet")
-        self.assertEqual(bootstrap_extractors.detect_file_kind("achievements.csv"), "spreadsheet")
+        self.assertEqual(
+            bootstrap_extractors.detect_file_kind("achievements.xlsx"), "spreadsheet"
+        )
+        self.assertEqual(
+            bootstrap_extractors.detect_file_kind("achievements.csv"), "spreadsheet"
+        )
 
     def test_text(self):
         self.assertEqual(bootstrap_extractors.detect_file_kind("notes.txt"), "text")
         self.assertEqual(bootstrap_extractors.detect_file_kind("notes.md"), "text")
 
     def test_unsupported(self):
-        self.assertEqual(bootstrap_extractors.detect_file_kind("archive.zip"), "unsupported")
+        self.assertEqual(
+            bootstrap_extractors.detect_file_kind("archive.zip"), "unsupported"
+        )
 
     def test_case_insensitive(self):
         self.assertEqual(bootstrap_extractors.detect_file_kind("RESUME.PDF"), "pdf")
@@ -52,6 +62,7 @@ class TestExtractLocalTextDocx(unittest.TestCase):
 
     def test_round_trip(self):
         import docx
+
         tmp_dir = tempfile.mkdtemp()
         path = os.path.join(tmp_dir, "fixture.docx")
         doc = docx.Document()
@@ -70,6 +81,7 @@ class TestExtractLocalTextPptx(unittest.TestCase):
 
     def test_round_trip(self):
         from pptx import Presentation
+
         tmp_dir = tempfile.mkdtemp()
         path = os.path.join(tmp_dir, "fixture.pptx")
         prs = Presentation()
@@ -89,6 +101,7 @@ class TestExtractLocalTextOdt(unittest.TestCase):
     def test_round_trip(self):
         from odf.opendocument import OpenDocumentText
         from odf.text import P
+
         tmp_dir = tempfile.mkdtemp()
         path = os.path.join(tmp_dir, "fixture.odt")
         doc = OpenDocumentText()
@@ -117,9 +130,12 @@ class TestExtractLocalTextSpreadsheet(unittest.TestCase):
 
     def test_xlsx_round_trip(self):
         import pandas as pd
+
         tmp_dir = tempfile.mkdtemp()
         path = os.path.join(tmp_dir, "fixture.xlsx")
-        pd.DataFrame({"Achievement": ["Cut costs by 20%"], "Year": [2021]}).to_excel(path, index=False)
+        pd.DataFrame({"Achievement": ["Cut costs by 20%"], "Year": [2021]}).to_excel(
+            path, index=False
+        )
 
         text = bootstrap_extractors.extract_local_text(path, "spreadsheet")
 

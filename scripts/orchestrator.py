@@ -84,17 +84,17 @@ from render_resume_docx import render_resume_docx
 # NOTE: orchestrator.py uses raw REST (requests) rather than the google-genai SDK.
 #   This avoids SDK versioning headaches on the free tier and gives full explicit
 #   control over the payload shape and response parsing.
-CRITIQUE_MODEL         = "gemini-3.1-flash-lite"
-REWRITE_MODEL          = "gemma-4-31b-it"
+CRITIQUE_MODEL = "gemini-3.1-flash-lite"
+REWRITE_MODEL = "gemma-4-31b-it"
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
-BUILDER_MODEL          = "gemini-3.1-flash-lite"
-EMBED_MODEL            = "gemini-embedding-2"
-EMBED_DIM              = 768   # gemini-embedding-2 native dimension
+BUILDER_MODEL = "gemini-3.1-flash-lite"
+EMBED_MODEL = "gemini-embedding-2"
+EMBED_DIM = 768  # gemini-embedding-2 native dimension
 
 # When True, Gemma rewrites use a single-key schema {"rewritten_bullet": "..."}
 # instead of the full 3-key schema. Mirrors rewrite_bullets.py's
 # GEMMA_MINIMAL_JSON flag. Dramatically improves Gemma JSON compliance.
-GEMMA_MINIMAL_JSON         = True
+GEMMA_MINIMAL_JSON = True
 MAX_REWRITE_PARSE_FAILURES = 2
 
 # Matches rewrite_bullets.py's REWRITE_MAX_OUTPUT_TOKENS exactly -- bounds
@@ -153,10 +153,12 @@ conservative and explain the limitation in context_gaps.
 # forever with capture_output=True swallowing every hint. 180s is generous
 # for a single-page render but still a real bound.
 PDF_GENERATION_TIMEOUT_SECONDS = 180
-CRITIQUE_SLEEP     = 4    # seconds between critique calls (free-tier: 15 RPM)
-REWRITE_SLEEP      = 4    # seconds before the rewrite call after a FAIL
-RESCORE_SLEEP      = 8    # seconds before the re-score call after a rewrite
-RECOMMENDATION_SLEEP = 8  # seconds between Step 5.5's one-recommendation-at-a-time calls
+CRITIQUE_SLEEP = 4  # seconds between critique calls (free-tier: 15 RPM)
+REWRITE_SLEEP = 4  # seconds before the rewrite call after a FAIL
+RESCORE_SLEEP = 8  # seconds before the re-score call after a rewrite
+RECOMMENDATION_SLEEP = (
+    8  # seconds between Step 5.5's one-recommendation-at-a-time calls
+)
 # Step 3's audit loop makes up to 30 calls (several with large segment
 # bundles, 16k-24k tokens each per the logs), then Step 4 immediately fires
 # one ~105k-token builder call -- cumulative tokens across that window can
@@ -164,12 +166,12 @@ RECOMMENDATION_SLEEP = 8  # seconds between Step 5.5's one-recommendation-at-a-t
 # KB_ALLOWLIST's comment below for where that cap is already documented),
 # producing the timeouts/retries seen in a real run. This pause lets the
 # rolling per-minute window recover before the big call.
-PRE_BUILDER_SLEEP  = 15
-                      # (longer because rescore fires immediately after rewrite)
+PRE_BUILDER_SLEEP = 15
+# (longer because rescore fires immediately after rewrite)
 
 
 # --- PIPELINE CONSTANTS ---
-TOP_K_BULLETS    = 30    # bullets mined from the bank per run
+TOP_K_BULLETS = 30  # bullets mined from the bank per run
 GEM_BOOST_WEIGHT = 0.15  # additive bonus per hidden_gem_score point above 0
 
 # Bullets whose embedding cosine similarity to an already-selected bullet
@@ -190,10 +192,10 @@ DEDUP_SIMILARITY_THRESHOLD = 0.85
 # Hidden Gems always rank above Strong, Strong above Solid, Solid above Needs Work.
 # Bullets without a strength_category column fall to rank 99 (sort last).
 STRENGTH_ORDER = {
-    "Hidden Gem":  0,
-    "Strong":      1,
-    "Solid":       2,
-    "Needs Work":  3,
+    "Hidden Gem": 0,
+    "Strong": 1,
+    "Solid": 2,
+    "Needs Work": 3,
 }
 
 
@@ -201,33 +203,35 @@ STRENGTH_ORDER = {
 # Only files listed here are stitched into the builder's static context.
 # Sorted alphabetically to guarantee byte-for-byte identical prefix across
 # every run -> maximises Google's implicit prompt-prefix caching hit rate.
-KB_ALLOWLIST = sorted([
-    "article-digest.md",
-    "bullet-bank.md",
-    # bullet-bank-keepers-audited.csv intentionally excluded: it's 1.4MB
-    # (~350k tokens), 77% of this entire allowlist, and redundant -- the
-    # JD-relevant bullets it contains are already passed to the builder via
-    # refined_bullets/combined_contents after Step 2-3 mine and audit them.
-    # Including it here blew the builder call past the free-tier's 250k
-    # input-tokens-per-minute cap on every single run.
-    "cv.md",
-    "detective-findings-trimmed.csv",
-    "evidence-guide.csv",
-    "evidence_graph.json",
-    "extracted-screenshot-metrics.csv",
-    "portals.yml",
-    "profile.yml",
-    "recruiter_memory_patterns.json",
-    "summaries-and-skills-clean.csv",
-    "treering-archive-readme.md",
-    "user-background-guide.md",
-    "verified-claims.csv",
-    "verified_facts.json",
-    "verified_metrics.json",
-    "verified_projects.json",
-    "verified_tools.json",
-    "voice-anchors.md",
-])
+KB_ALLOWLIST = sorted(
+    [
+        "article-digest.md",
+        "bullet-bank.md",
+        # bullet-bank-keepers-audited.csv intentionally excluded: it's 1.4MB
+        # (~350k tokens), 77% of this entire allowlist, and redundant -- the
+        # JD-relevant bullets it contains are already passed to the builder via
+        # refined_bullets/combined_contents after Step 2-3 mine and audit them.
+        # Including it here blew the builder call past the free-tier's 250k
+        # input-tokens-per-minute cap on every single run.
+        "cv.md",
+        "detective-findings-trimmed.csv",
+        "evidence-guide.csv",
+        "evidence_graph.json",
+        "extracted-screenshot-metrics.csv",
+        "portals.yml",
+        "profile.yml",
+        "recruiter_memory_patterns.json",
+        "summaries-and-skills-clean.csv",
+        "treering-archive-readme.md",
+        "user-background-guide.md",
+        "verified-claims.csv",
+        "verified_facts.json",
+        "verified_metrics.json",
+        "verified_projects.json",
+        "verified_tools.json",
+        "voice-anchors.md",
+    ]
+)
 
 
 def get_active_kb_files(kb_dir: str) -> list:
@@ -258,43 +262,53 @@ def get_active_kb_files(kb_dir: str) -> list:
 # bundle (verified-claims.csv, extracted-screenshot-metrics.csv, etc.) is
 # per-profile -- see profile.yml's deep_evidence_keywords: -- since it's
 # not every profile that has one company with this much audited archive.
-MAX_CLAIMS_ROWS   = 12
-MAX_GEMMA_FILTER_ROWS = 5   # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
+MAX_CLAIMS_ROWS = 12
+MAX_GEMMA_FILTER_ROWS = 5  # tighter cap for Gemma's slim tier -- see docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md
 
 # profile.yml sections to KEEP in the audit prefix (trimmed for token efficiency).
 AUDIT_PROFILE_KEEP = [
-    "target_roles:", "archetypes:", "narrative:", "superpowers:",
-    "background_context:", "deal_breakers:",
+    "target_roles:",
+    "archetypes:",
+    "narrative:",
+    "superpowers:",
+    "background_context:",
+    "deal_breakers:",
 ]
 AUDIT_PROFILE_STOP = [
-    "industries_of_genuine_fit:", "companies_previously_applied:",
-    "compensation:", "location:", "cv:", "proof_points:",
-    "key_recommendations:", "management_evidence:",
+    "industries_of_genuine_fit:",
+    "companies_previously_applied:",
+    "compensation:",
+    "location:",
+    "cv:",
+    "proof_points:",
+    "key_recommendations:",
+    "management_evidence:",
 ]
 
 
 # ---------------------------------------------------------------------------
 # RETRY / BACKOFF CONSTANTS
 # ---------------------------------------------------------------------------
-RETRYABLE          = {429, 500, 502, 503, 504}
-SERVER_ERRORS      = {500, 502, 503, 504}
+RETRYABLE = {429, 500, 502, 503, 504}
+SERVER_ERRORS = {500, 502, 503, 504}
 HIGH_DEMAND_STATUS = 503
-BASE_BACKOFF_SECS  = 8
-MAX_BACKOFF_SECS   = 90
+BASE_BACKOFF_SECS = 8
+MAX_BACKOFF_SECS = 90
 
 
 # ---------------------------------------------------------------------------
 # GEMINI CLIENT  (raw REST)
 # ---------------------------------------------------------------------------
 
-from gemini_client import (  # replaces the inline class
-    GeminiClient,
+from gemini_client import GeminiClient  # replaces the inline class
+from gemini_client import (
     SustainedFailureError,
 )
 
 # ---------------------------------------------------------------------------
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)
 # ---------------------------------------------------------------------------
+
 
 def is_deep_evidence_bullet(role_company: str, keywords: list) -> bool:
     """Whether role_company matches profile.yml's deep_evidence_keywords --
@@ -344,7 +358,9 @@ def _claim_tag_keywords_map() -> dict:
     return {f"[{t['name']}]": (t.get("keywords") or []) for t in profile_paths.tags()}
 
 
-def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS) -> pd.DataFrame:
+def filter_claims_by_tags(
+    df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS
+) -> pd.DataFrame:
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
@@ -360,9 +376,11 @@ def filter_claims_by_tags(df_claims: pd.DataFrame, tags: str, max_rows: int = MA
         return df_claims.head(max_rows)
     text_cols = [c for c in df_claims.columns if df_claims[c].dtype == object]
     pattern = "|".join(re.escape(k) for k in keywords)
-    mask = df_claims[text_cols].apply(
-        lambda col: col.str.contains(pattern, case=False, na=False)
-    ).any(axis=1)
+    mask = (
+        df_claims[text_cols]
+        .apply(lambda col: col.str.contains(pattern, case=False, na=False))
+        .any(axis=1)
+    )
     filtered = df_claims[mask]
     if len(filtered) < 3:
         filtered = df_claims.head(max_rows)
@@ -389,7 +407,9 @@ def filter_json_entries_by_tags(entries: list, tags: str, max_rows: int) -> list
         return entries[:max_rows]
 
     def _entry_matches(entry: dict) -> bool:
-        haystack = " ".join(str(v) for v in entry.values() if isinstance(v, str)).lower()
+        haystack = " ".join(
+            str(v) for v in entry.values() if isinstance(v, str)
+        ).lower()
         return any(kw in haystack for kw in keywords)
 
     filtered = [e for e in entries if _entry_matches(e)]
@@ -433,6 +453,7 @@ def persona_context(tags: str) -> str:
 # rewrite_bullets.py but didn't, and was never even called.)
 # ---------------------------------------------------------------------------
 
+
 def build_rewrite_prompt(
     bullet: str,
     tags: str,
@@ -453,17 +474,21 @@ def build_rewrite_prompt(
     parts = []
 
     if kb_context:
-        parts.extend([
-            "Use only supported facts from this context:",
-            kb_context,
-            "",
-        ])
+        parts.extend(
+            [
+                "Use only supported facts from this context:",
+                kb_context,
+                "",
+            ]
+        )
 
-    parts.extend([
-        f"Rewrite this bullet for {persona} roles.",
-        f"Known weaknesses to fix: {weakness_text}",
-        f"Bullet to rewrite: {bullet}",
-    ])
+    parts.extend(
+        [
+            f"Rewrite this bullet for {persona} roles.",
+            f"Known weaknesses to fix: {weakness_text}",
+            f"Bullet to rewrite: {bullet}",
+        ]
+    )
 
     if already_written_bullets or other_cv_bullets:
         avoid_parts = []
@@ -471,21 +496,25 @@ def build_rewrite_prompt(
             # Filters out empty or None values
             valid_written = [b for b in already_written_bullets if b]
             if valid_written:
-                avoid_parts.extend([
-                    "",
-                    "=== ALREADY WRITTEN BULLETS FOR THIS SAME ROLE ===",
-                    "You MUST NOT repeat any verbs, phrasing structures, or specific metric claims already used in these bullets. Vary your vocabulary and sentence structure:",
-                    "\n".join(f"- {b}" for b in valid_written),
-                ])
+                avoid_parts.extend(
+                    [
+                        "",
+                        "=== ALREADY WRITTEN BULLETS FOR THIS SAME ROLE ===",
+                        "You MUST NOT repeat any verbs, phrasing structures, or specific metric claims already used in these bullets. Vary your vocabulary and sentence structure:",
+                        "\n".join(f"- {b}" for b in valid_written),
+                    ]
+                )
         if other_cv_bullets:
             valid_other = [b for b in other_cv_bullets if b]
             if valid_other:
-                avoid_parts.extend([
-                    "",
-                    "=== ALREADY WRITTEN BULLETS FOR OTHER ROLES IN THE CV ===",
-                    "Ensure your rewritten bullet does not repeat verbs or duplicate key claims from other parts of the resume:",
-                    "\n".join(f"- {b}" for b in valid_other),
-                ])
+                avoid_parts.extend(
+                    [
+                        "",
+                        "=== ALREADY WRITTEN BULLETS FOR OTHER ROLES IN THE CV ===",
+                        "Ensure your rewritten bullet does not repeat verbs or duplicate key claims from other parts of the resume:",
+                        "\n".join(f"- {b}" for b in valid_other),
+                    ]
+                )
         if avoid_parts:
             parts.extend(avoid_parts)
 
@@ -496,19 +525,26 @@ def build_rewrite_prompt(
             if isinstance(p, dict) and p.get("generic_term") and p.get("company_term")
         ]
         if pairs:
-            parts.extend([
-                "",
-                "=== PREFERRED VOCABULARY ===",
-                "You MUST integrate the following vocabulary substitutions where applicable. "
-                "Integrate them naturally into your sentence, ensuring perfect grammatical alignment, "
-                "correct pluralization/singularization, and smooth flow:",
-                "\n".join(f"- {pair}" for pair in pairs),
-            ])
+            parts.extend(
+                [
+                    "",
+                    "=== PREFERRED VOCABULARY ===",
+                    "You MUST integrate the following vocabulary substitutions where applicable. "
+                    "Integrate them naturally into your sentence, ensuring perfect grammatical alignment, "
+                    "correct pluralization/singularization, and smooth flow:",
+                    "\n".join(f"- {pair}" for pair in pairs),
+                ]
+            )
 
     if minimal_schema:
         parts.extend(["", 'Output JSON: {"rewritten_bullet":""}'])
     else:
-        parts.extend(["", 'Output JSON: {"rewritten_bullet":"","reasoning":"","context_gaps":""}'])
+        parts.extend(
+            [
+                "",
+                'Output JSON: {"rewritten_bullet":"","reasoning":"","context_gaps":""}',
+            ]
+        )
 
     return "\n".join(parts)
 
@@ -519,18 +555,17 @@ def build_rewrite_prompt(
 # not just the Tier 1 static-prefix line.)
 # ---------------------------------------------------------------------------
 
+
 def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
     if not isinstance(usage, dict):
         usage = {}
 
-    prompt_tokens  = usage.get("promptTokenCount", 0)
-    output_tokens  = usage.get("candidatesTokenCount", 0)
-    total_tokens   = usage.get("totalTokenCount", 0)
-    cached_tokens  = usage.get("cachedContentTokenCount", 0)
+    prompt_tokens = usage.get("promptTokenCount", 0)
+    output_tokens = usage.get("candidatesTokenCount", 0)
+    total_tokens = usage.get("totalTokenCount", 0)
+    cached_tokens = usage.get("cachedContentTokenCount", 0)
 
-    token_part = (
-        f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
-    )
+    token_part = f"prompt: {prompt_tokens:,} | output: {output_tokens:,} | total: {total_tokens:,}"
 
     # Cache hit/miss is the ONE piece of engine internals that stays
     # visible at NORMAL. It survives the verbosity cut because it answers
@@ -545,13 +580,19 @@ def _log_cache_stats(usage: dict, kb_context_chars: int, attempt: int) -> None:
         if cached_tokens and cached_tokens > 0:
             cli_art.detail(
                 f"   {theme.colorize_icon('success')} cache hit — {cached_tokens:,} tokens reused",
-                level=cli_art.NORMAL, soft_wrap=True)
+                level=cli_art.NORMAL,
+                soft_wrap=True,
+            )
         else:
             cli_art.detail(
                 f"   {theme.colorize_icon('hint')} cache miss — full prompt sent",
-                level=cli_art.NORMAL, soft_wrap=True)
+                level=cli_art.NORMAL,
+                soft_wrap=True,
+            )
 
-    cli_art.detail(f"   {theme.colorize_icon('hint')} tokens — {token_part}", soft_wrap=True)
+    cli_art.detail(
+        f"   {theme.colorize_icon('hint')} tokens — {token_part}", soft_wrap=True
+    )
 
 
 def _sanitize_none_for_prompt(value):
@@ -576,7 +617,9 @@ def _sanitize_none_for_prompt(value):
     return value
 
 
-def _short_widow_bullets(resume_data: dict, companies: set, style_rules: dict) -> list[str]:
+def _short_widow_bullets(
+    resume_data: dict, companies: set, style_rules: dict
+) -> list[str]:
     """
     Returns bullets (verbatim achievement text) belonging to `companies`
     that wrap to a second line but leave a short widow there. Detection
@@ -593,7 +636,9 @@ def _short_widow_bullets(resume_data: dict, companies: set, style_rules: dict) -
     ]
     return [
         bullet
-        for bullet, _word_count in validate_resume.bullets_with_short_widow(bullets, style_rules)
+        for bullet, _word_count in validate_resume.bullets_with_short_widow(
+            bullets, style_rules
+        )
     ]
 
 
@@ -606,7 +651,11 @@ def _widow_trim_instruction(resume_data: dict, style_rules: dict) -> str:
     hardcoded subset) -- a widow line is a rendering artifact of the
     bullet text and page width, not something specific to any one role.
     """
-    companies = {job.get("company") for job in resume_data.get("EXPERIENCE", []) if job.get("company")}
+    companies = {
+        job.get("company")
+        for job in resume_data.get("EXPERIENCE", [])
+        if job.get("company")
+    }
     widow_bullets = _short_widow_bullets(resume_data, companies, style_rules)
     if not widow_bullets:
         return (
@@ -668,7 +717,8 @@ def _required_role_roster(profile_data: dict) -> list[str]:
     """
     situational = set(situational_roles.load_situational_roles()["roles"].keys())
     return [
-        name for role in (profile_data.get("roles") or [])
+        name
+        for role in (profile_data.get("roles") or [])
         if (name := str(role.get("name", "")).strip()) and name not in situational
     ]
 
@@ -687,7 +737,8 @@ def _required_role_bullet_minimums(profile_data: dict) -> dict[str, int]:
     return {
         name: role["min_bullets"]
         for role in (profile_data.get("roles") or [])
-        if (name := str(role.get("name", "")).strip()) and name not in situational
+        if (name := str(role.get("name", "")).strip())
+        and name not in situational
         and role.get("min_bullets") is not None
     }
 
@@ -697,9 +748,13 @@ def _confirm_continue_without_keywords() -> bool:
     ever reached with interactive=True, so a non-TTY (batch, `resume sample`,
     tests) can never block on it; questionary.confirm().ask() returns None on
     an interrupted/unreadable stdin, and bool(None) already reads as 'no'."""
-    return bool(questionary.confirm(
-        "Build the resume anyway, with no JD keywords?", default=False, style=cli_art.QUESTIONARY_STYLE,
-    ).ask())
+    return bool(
+        questionary.confirm(
+            "Build the resume anyway, with no JD keywords?",
+            default=False,
+            style=cli_art.QUESTIONARY_STYLE,
+        ).ask()
+    )
 
 
 def _trim_profile_yaml(raw: str) -> str:
@@ -742,17 +797,22 @@ def _bullet_removal_trim_instruction(profile_data: dict) -> str:
         )
     flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
     order_text = ", then ".join(
-        f"{r['name']} (can go down to {r['min_bullets']} bullets total)" for r in flex_order
+        f"{r['name']} (can go down to {r['min_bullets']} bullets total)"
+        for r in flex_order
     )
     text = f"Remove the least-relevant bullets, starting with {order_text}"
     if protected:
-        text += ", while protecting these specific bullets from removal: " + "; ".join(protected)
+        text += ", while protecting these specific bullets from removal: " + "; ".join(
+            protected
+        )
     else:
         text += "."
     return text
 
 
-def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job_key: str) -> list[str]:
+def _review_recommendations_interactively(
+    recs: list[str], checkpoint: dict, job_key: str
+) -> list[str]:
     """
     Prompts a y/n approval for each Step 5 critique recommendation before Step
     5.5 is allowed to apply any of them -- so gap-filling content never lands
@@ -764,15 +824,23 @@ def _review_recommendations_interactively(recs: list[str], checkpoint: dict, job
         return approved_recs
 
     cli_art.console.rule("Step 5.5 review", style=theme.BRAND)
-    cli_art.detail("approve which recommendations to attempt (nothing below is applied until you say yes).", level=cli_art.NORMAL)
+    cli_art.detail(
+        "approve which recommendations to attempt (nothing below is applied until you say yes).",
+        level=cli_art.NORMAL,
+    )
     approved_recs = []
     for idx, rec in enumerate(recs, start=1):
         answer = questionary.confirm(
-            f"[{idx}/{len(recs)}] {rec}\n    Apply this?", default=False, style=cli_art.QUESTIONARY_STYLE,
+            f"[{idx}/{len(recs)}] {rec}\n    Apply this?",
+            default=False,
+            style=cli_art.QUESTIONARY_STYLE,
         ).ask()
         if answer is None:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Review interrupted -- treating remaining "
-                  "recommendation(s) as declined.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Review interrupted -- treating remaining "
+                "recommendation(s) as declined.",
+                soft_wrap=True,
+            )
             break
         if answer:
             approved_recs.append(rec)
@@ -794,8 +862,11 @@ def _parse_pdf_result(stdout: str, pdf_path: str) -> tuple:
     try:
         page_count = len(PdfReader(pdf_path).pages)
     except Exception as exc:
-        cli_art.friendly_warning(exc, "reading the rendered PDF's page count",
-                                  "the page count won't be shown for this build")
+        cli_art.friendly_warning(
+            exc,
+            "reading the rendered PDF's page count",
+            "the page count won't be shown for this build",
+        )
         page_count = None
     size_match = re.search(r"Size:\s*([\d.]+\s*\w+)", stdout)
     size_str = size_match.group(1) if size_match else "unknown size"
@@ -853,29 +924,29 @@ from schemas import (  # noqa: E402
 # (never trusted from the model) so a wrong LLM sum can't silently skew
 # the recommendation.
 FIT_SUBSCORE_WEIGHTS = {
-    "functional_alignment":      0.30,
-    "north_star_alignment":      0.25,
-    "level_plausibility":        0.20,
+    "functional_alignment": 0.30,
+    "north_star_alignment": 0.25,
+    "level_plausibility": 0.20,
     "work_style_sustainability": 0.15,
-    "tools_process_overlap":     0.10,
+    "tools_process_overlap": 0.10,
 }
 
 INTERVIEW_ODDS_WEIGHTS = {
-    "title_continuity":     0.25,
-    "evidence_match":       0.25,
-    "domain_credibility":   0.15,
+    "title_continuity": 0.25,
+    "evidence_match": 0.25,
+    "domain_credibility": 0.15,
     "recruiter_legibility": 0.15,
-    "narrative_burden":     0.10,
-    "funnel_friction":      0.10,
+    "narrative_burden": 0.10,
+    "funnel_friction": 0.10,
 }
 
 PRACTICAL_PURSUE_WEIGHTS = {
-    "remote_quality":           0.25,
-    "compensation_viability":   0.15,
-    "growth_value":             0.10,
-    "time_to_offer":            0.15,
-    "company_reputation":       0.10,
-    "cultural_signals":         0.10,
+    "remote_quality": 0.25,
+    "compensation_viability": 0.15,
+    "growth_value": 0.10,
+    "time_to_offer": 0.15,
+    "company_reputation": 0.10,
+    "cultural_signals": 0.10,
     "posting_legitimacy_score": 0.15,
 }
 
@@ -883,8 +954,8 @@ PRACTICAL_PURSUE_WEIGHTS = {
 # constraints matter but shouldn't dominate the decision the way a hard
 # blocker does (that's handled separately, via hard_blockers).
 COMPOSITE_SCORE_WEIGHTS = {
-    "fit_score":              0.40,
-    "interview_odds_score":   0.40,
+    "fit_score": 0.40,
+    "interview_odds_score": 0.40,
     "practical_pursue_score": 0.20,
 }
 
@@ -926,7 +997,9 @@ def _weighted_score(subscores: dict, weights: dict) -> float:
     """1-5 weighted average of a subscore dict against its matching
     weight dict (FIT_SUBSCORE_WEIGHTS / INTERVIEW_ODDS_WEIGHTS /
     PRACTICAL_PURSUE_WEIGHTS)."""
-    return round(sum(subscores.get(dim, 0) * weight for dim, weight in weights.items()), 2)
+    return round(
+        sum(subscores.get(dim, 0) * weight for dim, weight in weights.items()), 2
+    )
 
 
 def compute_fit_score(fit_subscores: dict) -> float:
@@ -941,7 +1014,12 @@ def compute_practical_pursue_score(practical_pursue_subscores: dict) -> float:
     return _weighted_score(practical_pursue_subscores, PRACTICAL_PURSUE_WEIGHTS)
 
 
-def fit_composite_score(fit_score: float, interview_odds_score: float, practical_pursue_score: float, posting_age_days: int = None) -> float:
+def fit_composite_score(
+    fit_score: float,
+    interview_odds_score: float,
+    practical_pursue_score: float,
+    posting_age_days: int = None,
+) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
     COMPOSITE_SCORE_WEIGHTS, minus an age penalty for postings older than
     STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
@@ -955,10 +1033,12 @@ def fit_composite_score(fit_score: float, interview_odds_score: float, practical
     penalty = 0.0
     if posting_age_days is not None and posting_age_days > STALE_POSTING_THRESHOLD_DAYS:
         penalty = min(
-            (posting_age_days - STALE_POSTING_THRESHOLD_DAYS) * STALE_POSTING_PENALTY_PER_DAY,
+            (posting_age_days - STALE_POSTING_THRESHOLD_DAYS)
+            * STALE_POSTING_PENALTY_PER_DAY,
             STALE_POSTING_MAX_PENALTY,
         )
     return round(max(base - penalty, 0.0), 2)
+
 
 def _parse_jd_data(jd_text: str) -> dict:
     """Best-effort parse of a JD file's raw text as JSON; {} if it isn't
@@ -987,29 +1067,35 @@ def find_jd_contacts(jd_data: dict) -> list:
     can see -- so this returns [] for those, not an error."""
     contacts = []
 
-    for entry in (jd_data.get("social_connections") or []):
+    for entry in jd_data.get("social_connections") or []:
         name = entry.get("fullName") or entry.get("firstName") or ""
         if not name:
             continue
-        contacts.append({
-            "name": name, "title": entry.get("jobTitle") or "",
-            "company": entry.get("companyName") or "",
-            "linkedin_url": entry.get("linkedinUrl") or "",
-            "connection_type": "JobRight match",
-        })
+        contacts.append(
+            {
+                "name": name,
+                "title": entry.get("jobTitle") or "",
+                "company": entry.get("companyName") or "",
+                "linkedin_url": entry.get("linkedinUrl") or "",
+                "connection_type": "JobRight match",
+            }
+        )
 
     personal = jd_data.get("personal_social_connections") or {}
     for tie_type in ("company", "school"):
-        for entry in (personal.get(tie_type) or []):
+        for entry in personal.get(tie_type) or []:
             name = entry.get("fullName") or entry.get("firstName") or ""
             if not name:
                 continue
-            contacts.append({
-                "name": name, "title": entry.get("jobTitle") or "",
-                "company": entry.get("companyName") or "",
-                "linkedin_url": entry.get("linkedinUrl") or "",
-                "connection_type": f"Personal {tie_type} connection",
-            })
+            contacts.append(
+                {
+                    "name": name,
+                    "title": entry.get("jobTitle") or "",
+                    "company": entry.get("companyName") or "",
+                    "linkedin_url": entry.get("linkedinUrl") or "",
+                    "connection_type": f"Personal {tie_type} connection",
+                }
+            )
 
     return contacts
 
@@ -1029,7 +1115,11 @@ def _resolve_contact_fallback(letter_data: dict, jd_data: dict) -> None:
     if not contacts:
         return
     chosen = next(
-        (c for c in contacts if any(k in (c.get("title") or "").lower() for k in _CONTACT_TITLE_KEYWORDS)),
+        (
+            c
+            for c in contacts
+            if any(k in (c.get("title") or "").lower() for k in _CONTACT_TITLE_KEYWORDS)
+        ),
         contacts[0],
     )
     letter_data["contact_name"] = chosen.get("name", "")
@@ -1053,7 +1143,9 @@ def _read_matching_resume_tagline(stem: str) -> str:
     the shared stem builder). Returns "" if no resume has been built yet
     for this JD, or if its JSON can't be parsed -- a cover letter can
     always be generated standalone."""
-    resume_path = os.path.join(profile_paths.output_dir(), "json", f"{stem}_Resume.json")
+    resume_path = os.path.join(
+        profile_paths.output_dir(), "json", f"{stem}_Resume.json"
+    )
     if not os.path.exists(resume_path):
         return ""
     try:
@@ -1093,7 +1185,7 @@ def format_company_research_block(research: dict) -> str:
         f"Sentence style: {research.get('sentence_style', '')} | Jargon: {research.get('jargon_density', '')}\n"
         f"Recurring brand words: {', '.join(research.get('recurring_keywords', []))}\n"
         "Company facts (use at most 1-2, never fabricate beyond these):\n"
-        + "\n".join(f"- {fact}" for fact in research.get('company_facts', []))
+        + "\n".join(f"- {fact}" for fact in research.get("company_facts", []))
     )
 
     highlights = research.get("notable_highlights") or []
@@ -1133,7 +1225,9 @@ _ATS_TIER_EMPHASIS = {
 }
 
 
-def _build_keyword_block(jd_keywords: dict | None, ats_classification: dict | None) -> str:
+def _build_keyword_block(
+    jd_keywords: dict | None, ats_classification: dict | None
+) -> str:
     """Formats up to 8 top JD keywords (Feature #12) into a
     '=== KEYWORDS ===' context block build_tailored_coverletter() folds
     into its system-instruction context, with front-loading emphasis
@@ -1162,6 +1256,7 @@ def _build_keyword_block(jd_keywords: dict | None, ats_classification: dict | No
 # BULLET SORTING
 # ---------------------------------------------------------------------------
 
+
 def _bullet_sort_key(bullet_result: dict) -> tuple:
     """PASS before FAIL, then descending believability_score. Ported from the
     retired rank_bullets.md prompt -- this is a deterministic sort over data
@@ -1175,25 +1270,27 @@ def _bullet_sort_key(bullet_result: dict) -> tuple:
 # RESUME ENGINE
 # ---------------------------------------------------------------------------
 
+
 class ResumeEngine:
 
     def __init__(self):
-        self.engine_dir      = os.path.join(PROJECT_ROOT, "resume-engine")
-        self.prompts_dir     = os.path.join(self.engine_dir, "prompts")
-        self.rules_dir       = os.path.join(self.engine_dir, "rules")
-        self.scoring_dir     = os.path.join(self.engine_dir, "scoring")
-        self.kb_dir          = profile_paths.kb_dir()
-        self.templates_dir   = os.path.join(self.engine_dir, "templates")
+        self.engine_dir = os.path.join(PROJECT_ROOT, "resume-engine")
+        self.prompts_dir = os.path.join(self.engine_dir, "prompts")
+        self.rules_dir = os.path.join(self.engine_dir, "rules")
+        self.scoring_dir = os.path.join(self.engine_dir, "scoring")
+        self.kb_dir = profile_paths.kb_dir()
+        self.templates_dir = os.path.join(self.engine_dir, "templates")
         self.output_json_dir = os.path.join(profile_paths.output_dir(), "json")
         self.output_html_dir = os.path.join(profile_paths.output_dir(), "html")
-        self.output_pdf_dir  = os.path.join(profile_paths.output_dir(), "pdf")
+        self.output_pdf_dir = os.path.join(profile_paths.output_dir(), "pdf")
         self.output_docx_dir = os.path.join(profile_paths.output_dir(), "docx")
-        self.jds_dir         = profile_paths.jds_dir()
+        self.jds_dir = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
         self.deep_evidence_keywords = (
-            self.load_yaml(self.kb_dir, "profile.yml").get("deep_evidence_keywords") or []
+            self.load_yaml(self.kb_dir, "profile.yml").get("deep_evidence_keywords")
+            or []
         )
         self.voice_rules = self.load_yaml(self.scoring_dir, "voice_rules.yaml") or {}
 
@@ -1207,7 +1304,6 @@ class ResumeEngine:
         with open(path, "r") as f:
             return f.read()
 
-
     def load_knowledge_base(self):
         """
         Stitches allowlisted and dynamically discovered KB files into a single
@@ -1219,17 +1315,20 @@ class ResumeEngine:
             for filename in get_active_kb_files(self.kb_dir):
                 filepath = os.path.join(self.kb_dir, filename)
                 if not os.path.exists(filepath):
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} KB allowlist entry not found, skipping: {filename}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} KB allowlist entry not found, skipping: {filename}",
+                        soft_wrap=True,
+                    )
                     continue
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
                         master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not load KB file {filename}: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} Could not load KB file {filename}: {e}",
+                        soft_wrap=True,
+                    )
         return master_context
-
-
-
 
     def build_role_rules_block(self, profile_data: dict) -> str:
         """Formats profile.yml's roles/protected_bullets/fixed_credentials/
@@ -1245,7 +1344,13 @@ class ResumeEngine:
         education = credentials.get("education") or []
         voice_example = profile_data.get("voice_calibration_example")
 
-        if not roles and not protected and not certs and not education and not voice_example:
+        if (
+            not roles
+            and not protected
+            and not certs
+            and not education
+            and not voice_example
+        ):
             return ""
 
         lines = ["\n\n=== ROLE RULES ==="]
@@ -1255,11 +1360,15 @@ class ResumeEngine:
             lines.append("| Company | Min | Target | Page |")
             lines.append("| --- | --- | --- | --- |")
             for role in roles:
-                lines.append(f"| {role['name']} | {role['min_bullets']} | {role['target_bullets']} | {role['page']} |")
+                lines.append(
+                    f"| {role['name']} | {role['min_bullets']} | {role['target_bullets']} | {role['page']} |"
+                )
 
             must_fit_page_1 = [r["name"] for r in roles if r.get("must_fit_page_1")]
             if must_fit_page_1:
-                lines.append(f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}.")
+                lines.append(
+                    f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}."
+                )
 
             flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
             lines.append(
@@ -1280,7 +1389,9 @@ class ResumeEngine:
         if education:
             lines.append("\nEducation -- Fixed Order and Bullet Counts:")
             for i, ed in enumerate(education, 1):
-                lines.append(f"{i}. {ed['institution']} -- {ed['credential']}: exactly {ed['bullet_count']} bullet(s)")
+                lines.append(
+                    f"{i}. {ed['institution']} -- {ed['credential']}: exactly {ed['bullet_count']} bullet(s)"
+                )
 
             edu_slots = profile_paths.education_achievement_slots()
             if edu_slots:
@@ -1304,7 +1415,9 @@ class ResumeEngine:
                 )
 
         if voice_example:
-            lines.append(f"\nVoice Calibration Example (this candidate's authentic voice): \"{voice_example}\"")
+            lines.append(
+                f'\nVoice Calibration Example (this candidate\'s authentic voice): "{voice_example}"'
+            )
 
         return "\n".join(lines)
 
@@ -1333,14 +1446,18 @@ class ResumeEngine:
         the class."""
         properties: dict = {}
         required: list = []
-        for i, (institution, options) in enumerate(profile_paths.education_achievement_slots(), 1):
+        for i, (institution, options) in enumerate(
+            profile_paths.education_achievement_slots(), 1
+        ):
             field_name = f"EDU_ACHIEVEMENT_KEY_{i}"
             properties[field_name] = {
                 "type": "string",
                 "enum": list(options.keys()),
                 "description": (
                     f"Pre-approved achievement-bullet choice for {institution} -- "
-                    + "; ".join(f"{key} = {framing}" for key, framing in options.items())
+                    + "; ".join(
+                        f"{key} = {framing}" for key, framing in options.items()
+                    )
                 ),
             }
             required.append(field_name)
@@ -1357,7 +1474,10 @@ class ResumeEngine:
         loop, which reuses this same function across many calls per resume
         build and must not have that cost multiply across them.
         """
-        cli_art.console.print(f"\n{theme.colorize_icon('hint')} Loading knowledge base context (Tier 1)...", soft_wrap=True)
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('hint')} Loading knowledge base context (Tier 1)...",
+            soft_wrap=True,
+        )
         sections = []
 
         profile_path = os.path.join(self.kb_dir, "profile.yml")
@@ -1365,48 +1485,75 @@ class ResumeEngine:
             try:
                 with open(profile_path, "r", encoding="utf-8") as f:
                     raw = f.read()
-                cli_art.detail(f"   {theme.colorize_icon('success')} Loaded profile.yml ({len(raw):,} chars)")
+                cli_art.detail(
+                    f"   {theme.colorize_icon('success')} Loaded profile.yml ({len(raw):,} chars)"
+                )
                 trimmed = _trim_profile_yaml(raw)
                 if trimmed:
-                    cli_art.detail(f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(trimmed):,} chars")
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('hint')} profile.yml trimmed to {len(trimmed):,} chars"
+                    )
                     sections.append(
                         "=== TARGET ROLES & PROFILE (from profile.yml) ===\n"
                         "Use these to understand what roles this bullet needs to appeal to and what to avoid.\n"
                         + trimmed
                     )
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load profile.yml: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load profile.yml: {e}",
+                    soft_wrap=True,
+                )
 
         for fname, header, note in [
-            ("verified_facts.json",
-             "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
-             "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list."),
-            ("verified_tools.json",
-             "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
-             "Never claim proficiency with any tool not present in this list."),
-            ("verified_projects.json",
-             "=== VERIFIED PROJECTS ===",
-             "Use these to add accurate project detail and scope."),
+            (
+                "verified_facts.json",
+                "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
+                "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list.",
+            ),
+            (
+                "verified_tools.json",
+                "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
+                "Never claim proficiency with any tool not present in this list.",
+            ),
+            (
+                "verified_projects.json",
+                "=== VERIFIED PROJECTS ===",
+                "Use these to add accurate project detail and scope.",
+            ),
         ]:
             fpath = os.path.join(self.kb_dir, fname)
             if os.path.exists(fpath):
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
-                        data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
-                    cli_art.detail(f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)")
+                        data = json.dumps(
+                            json.load(f), ensure_ascii=False, separators=(",", ":")
+                        )
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)"
+                    )
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load {fname}: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load {fname}: {e}",
+                        soft_wrap=True,
+                    )
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
             try:
                 with open(voice_anchors_path, "r", encoding="utf-8") as f:
                     data = f.read()
-                cli_art.detail(f"   {theme.colorize_icon('success')} Loaded voice-anchors.md ({len(data):,} chars)")
-                sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
+                cli_art.detail(
+                    f"   {theme.colorize_icon('success')} Loaded voice-anchors.md ({len(data):,} chars)"
+                )
+                sections.append(
+                    f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}"
+                )
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}",
+                    soft_wrap=True,
+                )
 
         if include_evidence_guide:
             evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
@@ -1414,10 +1561,17 @@ class ResumeEngine:
                 try:
                     with open(evidence_guide_path, "r", encoding="utf-8") as f:
                         data = f.read()
-                    cli_art.detail(f"   {theme.colorize_icon('success')} Loaded evidence-guide.csv ({len(data):,} chars)")
-                    sections.append(f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}")
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('success')} Loaded evidence-guide.csv ({len(data):,} chars)"
+                    )
+                    sections.append(
+                        f"=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n{data}"
+                    )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}",
+                        soft_wrap=True,
+                    )
 
         return "\n\n".join(sections)
 
@@ -1433,30 +1587,44 @@ class ResumeEngine:
         sections = []
 
         for fname, header, note in [
-            ("verified_facts.json",
-             "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
-             "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list."),
-            ("verified_tools.json",
-             "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
-             "Never claim proficiency with any tool not present in this list."),
+            (
+                "verified_facts.json",
+                "=== VERIFIED FACTS (high-confidence claims -- use freely) ===",
+                "These are the only facts about this candidate's career that are evidence-backed.\nDo NOT invent facts outside this list.",
+            ),
+            (
+                "verified_tools.json",
+                "=== VERIFIED TOOLS (HF002 guard -- only claim tools listed here) ===",
+                "Never claim proficiency with any tool not present in this list.",
+            ),
         ]:
             fpath = os.path.join(self.kb_dir, fname)
             if os.path.exists(fpath):
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
-                        data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                        data = json.dumps(
+                            json.load(f), ensure_ascii=False, separators=(",", ":")
+                        )
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load {fname}: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load {fname}: {e}",
+                        soft_wrap=True,
+                    )
 
         voice_anchors_path = os.path.join(self.kb_dir, "voice-anchors.md")
         if os.path.exists(voice_anchors_path):
             try:
                 with open(voice_anchors_path, "r", encoding="utf-8") as f:
                     data = f.read()
-                sections.append(f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}")
+                sections.append(
+                    f"=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n{data}"
+                )
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}",
+                    soft_wrap=True,
+                )
 
         return "\n\n".join(sections)
 
@@ -1473,9 +1641,14 @@ class ResumeEngine:
             return ""
         try:
             with open(fpath, "r", encoding="utf-8") as f:
-                data = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                data = json.dumps(
+                    json.load(f), ensure_ascii=False, separators=(",", ":")
+                )
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} recruiter_context_block: could not load recruiter_memory_patterns.json: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} recruiter_context_block: could not load recruiter_memory_patterns.json: {e}",
+                soft_wrap=True,
+            )
             return ""
         if not data:
             return ""
@@ -1492,15 +1665,25 @@ class ResumeEngine:
         This is extracted into a separate testable method so tests can verify
         the final prompt structure without running the full audit loop.
         """
-        critique_prompt     = self.load_prompt("critique_bullet.md")
-        manager_test_rules  = json.dumps(self.load_yaml(self.scoring_dir, "manager_test.yaml"))
-        believability_rules = json.dumps(self.load_yaml(self.scoring_dir, "believability.yaml"))
-        style_rules         = json.dumps(self.load_yaml(self.rules_dir,   "style_rules.yaml"))
-        language_quality    = json.dumps(self.load_yaml(self.rules_dir,   "language_quality.yaml"))
-        verb_taxonomy       = json.dumps(self.load_yaml(self.rules_dir,   "verb_taxonomy.yaml"))
-        verb_intent_mapping = json.dumps(self.load_yaml(self.rules_dir,   "verb_intent_mapping.yaml"))
-        hard_failures       = json.dumps(self.load_yaml(self.rules_dir,   "hard_failures.yaml"))
-        truthfulness_rules  = json.dumps(self.load_yaml(self.rules_dir,   "truthfulness_rules.yaml"))
+        critique_prompt = self.load_prompt("critique_bullet.md")
+        manager_test_rules = json.dumps(
+            self.load_yaml(self.scoring_dir, "manager_test.yaml")
+        )
+        believability_rules = json.dumps(
+            self.load_yaml(self.scoring_dir, "believability.yaml")
+        )
+        style_rules = json.dumps(self.load_yaml(self.rules_dir, "style_rules.yaml"))
+        language_quality = json.dumps(
+            self.load_yaml(self.rules_dir, "language_quality.yaml")
+        )
+        verb_taxonomy = json.dumps(self.load_yaml(self.rules_dir, "verb_taxonomy.yaml"))
+        verb_intent_mapping = json.dumps(
+            self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
+        )
+        hard_failures = json.dumps(self.load_yaml(self.rules_dir, "hard_failures.yaml"))
+        truthfulness_rules = json.dumps(
+            self.load_yaml(self.rules_dir, "truthfulness_rules.yaml")
+        )
 
         critique_system = (
             f"{critique_prompt}"
@@ -1533,12 +1716,18 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load cv.md: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load cv.md: {e}",
+                    soft_wrap=True,
+                )
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
-            label = ("ROLE CONTEXT (cv.md excerpt)"
-                     if cv_section != cv_full else "CAREER OVERVIEW (cv.md)")
+            label = (
+                "ROLE CONTEXT (cv.md excerpt)"
+                if cv_section != cv_full
+                else "CAREER OVERVIEW (cv.md)"
+            )
             sections.append(f"=== {label} ===\n{cv_section}")
 
         bg_summary = build_background_summary(tags)
@@ -1552,7 +1741,10 @@ class ResumeEngine:
                     df_claims = pd.read_csv(claims_path)
                     if "Use in Resume?" in df_claims.columns:
                         df_claims = df_claims[
-                            df_claims["Use in Resume?"].str.strip().str.lower().str.startswith("yes")
+                            df_claims["Use in Resume?"]
+                            .str.strip()
+                            .str.lower()
+                            .str.startswith("yes")
                         ]
                     filtered_claims = filter_claims_by_tags(df_claims, tags)
                     claims_text = get_verified_claims_text(filtered_claims)
@@ -1564,23 +1756,35 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified-claims.csv: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified-claims.csv: {e}",
+                        soft_wrap=True,
+                    )
 
-            screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
+            screenshot_path = os.path.join(
+                self.kb_dir, "extracted-screenshot-metrics.csv"
+            )
             if os.path.exists(screenshot_path):
                 try:
                     df_screens = pd.read_csv(screenshot_path)
                     screenshot_text = df_screens.to_csv(index=False)
                     if screenshot_text:
-                        sections.append(f"=== SCREENSHOT-SOURCED METRICS ===\n{screenshot_text}")
+                        sections.append(
+                            f"=== SCREENSHOT-SOURCED METRICS ===\n{screenshot_text}"
+                        )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load screenshot metrics: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load screenshot metrics: {e}",
+                        soft_wrap=True,
+                    )
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
                 try:
                     with open(metrics_path, "r", encoding="utf-8") as f:
-                        verified_metrics = json.dumps(json.load(f), ensure_ascii=False, separators=(",", ":"))
+                        verified_metrics = json.dumps(
+                            json.load(f), ensure_ascii=False, separators=(",", ":")
+                        )
                     if verified_metrics:
                         sections.append(
                             "=== VERIFIED METRICS (authoritative — use these numbers, not guesses) ===\n"
@@ -1588,7 +1792,10 @@ class ResumeEngine:
                             + verified_metrics
                         )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified_metrics.json: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle: could not load verified_metrics.json: {e}",
+                        soft_wrap=True,
+                    )
 
         return "\n\n".join(sections)
 
@@ -1611,12 +1818,18 @@ class ResumeEngine:
                 with open(cv_path, "r", encoding="utf-8") as f:
                     cv_full = f.read()
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load cv.md: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load cv.md: {e}",
+                    soft_wrap=True,
+                )
 
         cv_section = extract_cv_section(cv_full, company)
         if cv_section:
-            label = ("ROLE CONTEXT (cv.md excerpt)"
-                     if cv_section != cv_full else "CAREER OVERVIEW (cv.md)")
+            label = (
+                "ROLE CONTEXT (cv.md excerpt)"
+                if cv_section != cv_full
+                else "CAREER OVERVIEW (cv.md)"
+            )
             sections.append(f"=== {label} ===\n{cv_section}")
 
         bg_summary = build_background_summary(tags)
@@ -1629,15 +1842,24 @@ class ResumeEngine:
                 try:
                     with open(projects_path, "r", encoding="utf-8") as f:
                         projects_entries = json.load(f).get("projects", [])
-                    filtered_projects = filter_json_entries_by_tags(projects_entries, tags, MAX_GEMMA_FILTER_ROWS)
+                    filtered_projects = filter_json_entries_by_tags(
+                        projects_entries, tags, MAX_GEMMA_FILTER_ROWS
+                    )
                     if filtered_projects:
                         sections.append(
                             "=== VERIFIED PROJECTS (tag-filtered) ===\n"
                             "Use these to add accurate project detail and scope.\n"
-                            + json.dumps(filtered_projects, ensure_ascii=False, separators=(",", ":"))
+                            + json.dumps(
+                                filtered_projects,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            )
                         )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_projects.json: {e}",
+                        soft_wrap=True,
+                    )
 
             claims_path = os.path.join(self.kb_dir, "verified-claims.csv")
             if os.path.exists(claims_path):
@@ -1645,9 +1867,14 @@ class ResumeEngine:
                     df_claims = pd.read_csv(claims_path)
                     if "Use in Resume?" in df_claims.columns:
                         df_claims = df_claims[
-                            df_claims["Use in Resume?"].str.strip().str.lower().str.startswith("yes")
+                            df_claims["Use in Resume?"]
+                            .str.strip()
+                            .str.lower()
+                            .str.startswith("yes")
                         ]
-                    filtered_claims = filter_claims_by_tags(df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+                    filtered_claims = filter_claims_by_tags(
+                        df_claims, tags, max_rows=MAX_GEMMA_FILTER_ROWS
+                    )
                     claims_text = get_verified_claims_text(filtered_claims)
                     if claims_text:
                         sections.append(
@@ -1657,33 +1884,54 @@ class ResumeEngine:
                             + claims_text
                         )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified-claims.csv: {e}",
+                        soft_wrap=True,
+                    )
 
-            screenshot_path = os.path.join(self.kb_dir, "extracted-screenshot-metrics.csv")
+            screenshot_path = os.path.join(
+                self.kb_dir, "extracted-screenshot-metrics.csv"
+            )
             if os.path.exists(screenshot_path):
                 try:
                     df_screens = pd.read_csv(screenshot_path)
-                    filtered_screens = filter_claims_by_tags(df_screens, tags, max_rows=MAX_GEMMA_FILTER_ROWS)
+                    filtered_screens = filter_claims_by_tags(
+                        df_screens, tags, max_rows=MAX_GEMMA_FILTER_ROWS
+                    )
                     screenshot_text = filtered_screens.to_csv(index=False)
                     if screenshot_text:
-                        sections.append(f"=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n{screenshot_text}")
+                        sections.append(
+                            f"=== SCREENSHOT-SOURCED METRICS (tag-filtered) ===\n{screenshot_text}"
+                        )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load screenshot metrics: {e}",
+                        soft_wrap=True,
+                    )
 
             metrics_path = os.path.join(self.kb_dir, "verified_metrics.json")
             if os.path.exists(metrics_path):
                 try:
                     with open(metrics_path, "r", encoding="utf-8") as f:
                         metrics_entries = json.load(f).get("metrics", [])
-                    filtered_metrics = filter_json_entries_by_tags(metrics_entries, tags, MAX_GEMMA_FILTER_ROWS)
+                    filtered_metrics = filter_json_entries_by_tags(
+                        metrics_entries, tags, MAX_GEMMA_FILTER_ROWS
+                    )
                     if filtered_metrics:
                         sections.append(
                             "=== VERIFIED METRICS (authoritative — tag-filtered) ===\n"
                             f"These are the ONLY numeric metrics that may be cited as hard facts in {company} bullets.\n"
-                            + json.dumps(filtered_metrics, ensure_ascii=False, separators=(",", ":"))
+                            + json.dumps(
+                                filtered_metrics,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            )
                         )
                 except Exception as e:
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: could not load verified_metrics.json: {e}",
+                        soft_wrap=True,
+                    )
 
         return "\n\n".join(sections)
 
@@ -1697,8 +1945,12 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._segment_cache:
-            cli_art.detail(f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand.")
-            self._segment_cache[key] = self._build_audit_segment_bundle(company, normalized_tags)
+            cli_art.detail(
+                f"   {theme.colorize_icon('warning')} Cache miss for {key} — building segment on demand."
+            )
+            self._segment_cache[key] = self._build_audit_segment_bundle(
+                company, normalized_tags
+            )
         return self._segment_cache[key]
 
     def audit_segment_bundle_for_gemma(self, company: str, tags: str) -> str:
@@ -1708,16 +1960,21 @@ class ResumeEngine:
         normalized_tags = self._normalize_tags(tags)
         key = (company, normalized_tags)
         if key not in self._gemma_segment_cache:
-            cli_art.detail(f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand.")
-            self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(company, normalized_tags)
+            cli_art.detail(
+                f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand."
+            )
+            self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(
+                company, normalized_tags
+            )
         return self._gemma_segment_cache[key]
 
     @staticmethod
     def _normalize_tags(tags_str: str) -> str:
         """Normalize tag string by sorting individual tags alphabetically.
-        '[email][content]' and '[content][email]' both normalize to '[content][email]'."""
-        tag_list = re.findall(r'\[([^\]]+)\]', tags_str)
-        return ''.join(f'[{tag}]' for tag in sorted(tag_list))
+        '[email][content]' and '[content][email]' both normalize to '[content][email]'.
+        """
+        tag_list = re.findall(r"\[([^\]]+)\]", tags_str)
+        return "".join(f"[{tag}]" for tag in sorted(tag_list))
 
     def warm_segment_cache(self, bullet_tuples: List[Tuple[str, str, str]]) -> None:
         """
@@ -1728,23 +1985,43 @@ class ResumeEngine:
         """
         self._segment_cache = {}
         self._gemma_segment_cache = {}
-        pairs = sorted({(company, self._normalize_tags(tags)) for _, company, tags in bullet_tuples})
-        cli_art.detail(f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos...")
+        pairs = sorted(
+            {
+                (company, self._normalize_tags(tags))
+                for _, company, tags in bullet_tuples
+            }
+        )
+        cli_art.detail(
+            f"\n{theme.colorize_icon('hint')} Warming segment cache for {len(pairs)} unique (company, tags) combos..."
+        )
         cli_art.detail("")
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
             gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
             self._gemma_segment_cache[(company, tags)] = gemma_bundle
-            deep_evidence_flag = " [+claims]" if is_deep_evidence_bullet(company, self.deep_evidence_keywords) else ""
-            cli_art.detail(f"   {theme.colorize_icon('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)")
-        cli_art.detail(f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n")
+            deep_evidence_flag = (
+                " [+claims]"
+                if is_deep_evidence_bullet(company, self.deep_evidence_keywords)
+                else ""
+            )
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} ({company[:30]!r}, {tags[:40]!r}) → {len(bundle):,} chars{deep_evidence_flag} (Gemma: {len(gemma_bundle):,} chars)"
+            )
+        cli_art.detail(
+            f"   {theme.colorize_icon('success')} {len(self._segment_cache)} segment bundles ready.\n"
+        )
 
     @staticmethod
     def critique_composite(scores: dict) -> float:
         numeric = sum(
             pd.to_numeric(scores.get(c, 0), errors="coerce") or 0
-            for c in ("accuracy_score", "believability_score", "clarity_score", "ats_value")
+            for c in (
+                "accuracy_score",
+                "believability_score",
+                "clarity_score",
+                "ats_value",
+            )
         )
         mgr_bonus = 10 if str(scores.get("manager_test", "")).upper() == "PASS" else 0
         return numeric + mgr_bonus
@@ -1763,21 +2040,36 @@ class ResumeEngine:
         Critiques on slim static_prefix (Tier 1+2 cache architecture).
         Rewrites get segment bundle prepended (Gap 3) but critiques do not.
         """
-        cli_art.detail(f"{theme.colorize_icon('hint')} Loading rules bundle...", level=cli_art.NORMAL)
-        cli_art.detail(f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Loading rules bundle...",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets",
+            level=cli_art.NORMAL,
+        )
         cli_art.detail("", level=cli_art.NORMAL)
 
         if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
-            cli_art.detail("  No bullets to audit -- empty or invalid input. Skipping audit loop.", level=cli_art.NORMAL)
+            cli_art.detail(
+                "  No bullets to audit -- empty or invalid input. Skipping audit loop.",
+                level=cli_art.NORMAL,
+            )
             return []
 
         refined_bullets = list(resume_from) if resume_from else []
         if len(refined_bullets) >= len(bullet_tuples):
-            cli_art.detail(f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. Skipping audit loop.", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. Skipping audit loop.",
+                level=cli_art.NORMAL,
+            )
             return refined_bullets
 
         critique_system = self.build_bullet_critique_system()
-        cli_art.detail(f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules",
+            level=cli_art.NORMAL,
+        )
         cli_art.detail("", level=cli_art.NORMAL)
 
         # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
@@ -1785,15 +2077,18 @@ class ResumeEngine:
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
         static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier",
+            level=cli_art.NORMAL,
+        )
 
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
-        verb_taxonomy       = self.load_yaml(self.rules_dir, "verb_taxonomy.yaml")
-        language_quality    = self.load_yaml(self.rules_dir, "language_quality.yaml")
-        hard_failures       = self.load_yaml(self.rules_dir, "hard_failures.yaml")
-        truthfulness_rules  = self.load_yaml(self.rules_dir, "truthfulness_rules.yaml")
-        style_rules         = self.load_yaml(self.rules_dir, "style_rules.yaml")
+        verb_taxonomy = self.load_yaml(self.rules_dir, "verb_taxonomy.yaml")
+        language_quality = self.load_yaml(self.rules_dir, "language_quality.yaml")
+        hard_failures = self.load_yaml(self.rules_dir, "hard_failures.yaml")
+        truthfulness_rules = self.load_yaml(self.rules_dir, "truthfulness_rules.yaml")
+        style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
 
         # Curated subsets mirror rewrite_bullets.py's RulesBundle exactly
         # (2026-07-16) -- this block used to json.dumps() each YAML file's
@@ -1810,43 +2105,49 @@ class ResumeEngine:
         # rewrite_bullets.py.
         verb_taxonomy_curated = {
             "priority_tiers": verb_taxonomy.get("priority_tiers", {}),
-            "avoid":          verb_taxonomy.get("avoid", []),
+            "avoid": verb_taxonomy.get("avoid", []),
         }
         language_quality_curated = {
-            "weak_verbs":           language_quality.get("weak_verbs", {}),
-            "buzzwords":            language_quality.get("buzzwords", {}),
+            "weak_verbs": language_quality.get("weak_verbs", {}),
+            "buzzwords": language_quality.get("buzzwords", {}),
             "ai_language_patterns": language_quality.get("ai_language_patterns", {}),
-            "specificity_checks":   language_quality.get("specificity_checks", {}),
-            "final_principle":      language_quality.get("final_principle", ""),
+            "specificity_checks": language_quality.get("specificity_checks", {}),
+            "final_principle": language_quality.get("final_principle", ""),
         }
 
-        def _rewrite_block(verb_intent_data: dict, style_data: dict, style_heading: str) -> str:
-            return "\n".join([
-                "=== VERB INTENT MAP ===",
-                "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
-                json.dumps(verb_intent_data),
-                "",
-                "=== VERB TAXONOMY (priority tiers) ===",
-                "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
-                json.dumps(verb_taxonomy_curated),
-                "",
-                "=== LANGUAGE QUALITY RULES ===",
-                "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
-                json.dumps(language_quality_curated),
-                "",
-                "=== HARD FAILURE CONDITIONS ===",
-                "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
-                json.dumps(hard_failures),
-                "",
-                "=== TRUTHFULNESS RULES ===",
-                "Apply these four tests before finalising any bullet:",
-                json.dumps(truthfulness_rules),
-                "",
-                style_heading,
-                json.dumps(style_data),
-            ])
+        def _rewrite_block(
+            verb_intent_data: dict, style_data: dict, style_heading: str
+        ) -> str:
+            return "\n".join(
+                [
+                    "=== VERB INTENT MAP ===",
+                    "Before choosing a verb, identify the accomplishment intent and select from the matching preferred_verbs list below.",
+                    json.dumps(verb_intent_data),
+                    "",
+                    "=== VERB TAXONOMY (priority tiers) ===",
+                    "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+                    json.dumps(verb_taxonomy_curated),
+                    "",
+                    "=== LANGUAGE QUALITY RULES ===",
+                    "Flag and replace any weak verbs, buzzwords, or AI-pattern phrases listed below.",
+                    json.dumps(language_quality_curated),
+                    "",
+                    "=== HARD FAILURE CONDITIONS ===",
+                    "Any bullet triggering one of these conditions must be rewritten — do NOT pass it:",
+                    json.dumps(hard_failures),
+                    "",
+                    "=== TRUTHFULNESS RULES ===",
+                    "Apply these four tests before finalising any bullet:",
+                    json.dumps(truthfulness_rules),
+                    "",
+                    style_heading,
+                    json.dumps(style_data),
+                ]
+            )
 
-        rewrite_rules_block = _rewrite_block(verb_intent_mapping, style_rules, "=== STYLE RULES ===")
+        rewrite_rules_block = _rewrite_block(
+            verb_intent_mapping, style_rules, "=== STYLE RULES ==="
+        )
 
         # Gemma-slim variant -- mirrors rewrite_bullets.py's
         # rewrite_rules_block_gemma (2026-07-16): gemma-4-31b-it's 16k TPM
@@ -1873,47 +2174,84 @@ class ResumeEngine:
         gemma_verb_intent = {
             "intent_categories": {
                 intent: {
-                    "signals":         data.get("signals", []),
+                    "signals": data.get("signals", []),
                     "preferred_verbs": data.get("preferred_verbs", {}),
                 }
-                for intent, data in verb_intent_mapping.get("intent_categories", {}).items()
+                for intent, data in verb_intent_mapping.get(
+                    "intent_categories", {}
+                ).items()
             },
-            "selection_rules":   verb_intent_mapping.get("selection_rules", {}),
+            "selection_rules": verb_intent_mapping.get("selection_rules", {}),
             "verb_replacements": verb_intent_mapping.get("verb_replacements", {}),
-            "final_principle":   verb_intent_mapping.get("final_principle", ""),
+            "final_principle": verb_intent_mapping.get("final_principle", ""),
         }
         gemma_style_rules = {
             "philosophy": [
-                p for p in style_rules.get("philosophy", [])
-                if any(kw in _rule_text(p).lower() for kw in ("bullet", "metric", "verb", "cares test", "systems not tasks"))
+                p
+                for p in style_rules.get("philosophy", [])
+                if any(
+                    kw in _rule_text(p).lower()
+                    for kw in (
+                        "bullet",
+                        "metric",
+                        "verb",
+                        "cares test",
+                        "systems not tasks",
+                    )
+                )
             ],
-            "writing_style":      style_rules.get("writing_style", {}),
-            "bullet_structure":   style_rules.get("bullet_structure", {}),
-            "verb_rules":         [r for r in style_rules.get("verb_rules", []) if not _rule_text(r).startswith("Recommended verbs")],
-            "vague_verbs":        style_rules.get("vague_verbs", []),
-            "forbidden_openers":  style_rules.get("forbidden_openers", []),
-            "forbidden_phrases":  style_rules.get("forbidden_phrases", []),
-            "punctuation_rules":  style_rules.get("punctuation_rules", []),
-            "metrics_rules":      style_rules.get("metrics_rules", {}),
+            "writing_style": style_rules.get("writing_style", {}),
+            "bullet_structure": style_rules.get("bullet_structure", {}),
+            "verb_rules": [
+                r
+                for r in style_rules.get("verb_rules", [])
+                if not _rule_text(r).startswith("Recommended verbs")
+            ],
+            "vague_verbs": style_rules.get("vague_verbs", []),
+            "forbidden_openers": style_rules.get("forbidden_openers", []),
+            "forbidden_phrases": style_rules.get("forbidden_phrases", []),
+            "punctuation_rules": style_rules.get("punctuation_rules", []),
+            "metrics_rules": style_rules.get("metrics_rules", {}),
             "tool_mention_rules": style_rules.get("tool_mention_rules", {}),
-            "redundancy_rules":   style_rules.get("redundancy_rules", {}),
+            "redundancy_rules": style_rules.get("redundancy_rules", {}),
         }
         rewrite_rules_block_gemma = _rewrite_block(
-            gemma_verb_intent, gemma_style_rules, "=== STYLE RULES (bullet-level subset) ==="
+            gemma_verb_intent,
+            gemma_style_rules,
+            "=== STYLE RULES (bullet-level subset) ===",
         )
 
         # FIX: use .replace() instead of .format() to avoid ValueError when
         # rules YAML content contains literal curly braces { } (e.g. JSON examples).
-        rewrite_system       = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block)
-        rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace("{rules_block}", rewrite_rules_block_gemma)
+        rewrite_system = REWRITE_SYSTEM_BASE.replace(
+            "{rules_block}", rewrite_rules_block
+        )
+        rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace(
+            "{rules_block}", rewrite_rules_block_gemma
+        )
 
-        cli_art.detail(f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars", level=cli_art.NORMAL)
-        cli_art.detail(f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Gemma rules block (slim): {len(rewrite_rules_block_gemma):,} chars",
+            level=cli_art.NORMAL,
+        )
         cli_art.detail("", level=cli_art.NORMAL)
-        cli_art.detail(f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)", level=cli_art.NORMAL)
-        cli_art.detail(f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')}  Rewrite system prompt: {len(rewrite_system):,} chars (stable across ALL calls)",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars",
+            level=cli_art.NORMAL,
+        )
         cli_art.detail("", level=cli_art.NORMAL)
-        cli_art.detail(f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars",
+            level=cli_art.NORMAL,
+        )
 
         self.warm_segment_cache(bullet_tuples)
 
@@ -1925,7 +2263,10 @@ class ResumeEngine:
 
         start_index = len(refined_bullets)
         if start_index:
-            cli_art.detail(f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} (already refined: {start_index}).", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Resuming audit loop at bullet {start_index + 1}/{len(bullet_tuples)} (already refined: {start_index}).",
+                level=cli_art.NORMAL,
+            )
 
         def _record(refined_bullet: str, critique_data: dict = None) -> None:
             refined_bullets.append(refined_bullet)
@@ -1938,13 +2279,22 @@ class ResumeEngine:
                 continue
 
             bullet_preview = bullet[:60]
-            cli_art.console.rule(f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...", style="dim", align="left")
-            cli_art.detail(f"   Tags: {cli_art._escape_markup(tags)}  |  Company: {cli_art._escape_markup(company)}", level=cli_art.NORMAL)
+            cli_art.console.rule(
+                f"[{i+1}/{len(bullet_tuples)}] {bullet_preview}...",
+                style="dim",
+                align="left",
+            )
+            cli_art.detail(
+                f"   Tags: {cli_art._escape_markup(tags)}  |  Company: {cli_art._escape_markup(company)}",
+                level=cli_art.NORMAL,
+            )
 
             if i > 0:
                 time.sleep(CRITIQUE_SLEEP)
 
-            critique_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{bullet}"
+            critique_contents = (
+                f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{bullet}"
+            )
 
             try:
                 critique_text, usage = GeminiClient.generate(
@@ -1962,54 +2312,79 @@ class ResumeEngine:
 
                 critique_data = GeminiClient.parse_json(critique_text)
 
-                gem_score  = critique_data.get("hidden_gem_score", 0)
-                gem_flag   = critique_data.get("hidden_gem_flag", False)
+                gem_score = critique_data.get("hidden_gem_score", 0)
+                gem_flag = critique_data.get("hidden_gem_flag", False)
                 gem_reason = critique_data.get("hidden_gem_reason", "")
                 if gem_flag:
-                    cli_art.detail(f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}")
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}"
+                    )
                 elif gem_score >= 75:
-                    cli_art.detail(f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}")
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}"
+                    )
 
-                if (critique_data.get("manager_test") == "FAIL" or
-                        critique_data.get("believability_score", 100) < 80):
-                    cli_art.detail(f"   {theme.colorize_icon('hint')}  Rewriting with {REWRITE_MODEL}...")
+                if (
+                    critique_data.get("manager_test") == "FAIL"
+                    or critique_data.get("believability_score", 100) < 80
+                ):
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('hint')}  Rewriting with {REWRITE_MODEL}..."
+                    )
                     time.sleep(REWRITE_SLEEP)
 
-                    segment_bundle       = self.audit_segment_bundle_for(company, tags)
-                    segment_bundle_gemma = self.audit_segment_bundle_for_gemma(company, tags)
+                    segment_bundle = self.audit_segment_bundle_for(company, tags)
+                    segment_bundle_gemma = self.audit_segment_bundle_for_gemma(
+                        company, tags
+                    )
                     if segment_bundle:
-                        cli_art.detail(f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)")
+                        cli_art.detail(
+                            f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)"
+                        )
 
-                    active_rewrite_model   = REWRITE_MODEL
+                    active_rewrite_model = REWRITE_MODEL
                     rewrite_parse_failures = 0
-                    rewritten_bullet       = bullet
+                    rewritten_bullet = bullet
 
                     for rw_attempt in range(MAX_REWRITE_PARSE_FAILURES + 1):
                         is_gemma_attempt = "gemma" in active_rewrite_model.lower()
-                        use_minimal      = GEMMA_MINIMAL_JSON and is_gemma_attempt
-                        runner_schema    = RewriteMinimalSchema if use_minimal else RewriteSchema
-                        active_rewrite_system = rewrite_system_gemma if is_gemma_attempt else rewrite_system
+                        use_minimal = GEMMA_MINIMAL_JSON and is_gemma_attempt
+                        runner_schema = (
+                            RewriteMinimalSchema if use_minimal else RewriteSchema
+                        )
+                        active_rewrite_system = (
+                            rewrite_system_gemma if is_gemma_attempt else rewrite_system
+                        )
 
                         # Tier 1 + Tier 2 -> kb_context. build_rewrite_prompt() appends
                         # the Tier 3 tail (persona + weaknesses + bullet + JSON reminder),
                         # exactly like rewrite_bullets.py's process_bullet() does. Gemma
                         # gets the slim static prefix + slim segment bundle (2026-07-16
                         # fix for its 16k TPM cap); flash-lite keeps the full tier.
-                        active_static_prefix = static_prefix_gemma if is_gemma_attempt else static_prefix
-                        active_segment_bundle = segment_bundle_gemma if is_gemma_attempt else segment_bundle
+                        active_static_prefix = (
+                            static_prefix_gemma if is_gemma_attempt else static_prefix
+                        )
+                        active_segment_bundle = (
+                            segment_bundle_gemma if is_gemma_attempt else segment_bundle
+                        )
                         context_block = (
                             f"{active_static_prefix}\n{active_segment_bundle}"
-                            if active_segment_bundle else active_static_prefix
+                            if active_segment_bundle
+                            else active_static_prefix
                         )
 
                         already_written = [
                             refined_bullets[idx]
-                            for idx, (_, c, _) in enumerate(bullet_tuples[:len(refined_bullets)])
+                            for idx, (_, c, _) in enumerate(
+                                bullet_tuples[: len(refined_bullets)]
+                            )
                             if c == company
                         ]
                         other_cv_bullets = [
                             refined_bullets[idx]
-                            for idx, (_, c, _) in enumerate(bullet_tuples[:len(refined_bullets)])
+                            for idx, (_, c, _) in enumerate(
+                                bullet_tuples[: len(refined_bullets)]
+                            )
                             if c != company
                         ]
 
@@ -2048,17 +2423,21 @@ class ResumeEngine:
                             if not rewrite_text:
                                 raise ValueError("Empty rewrite response")
 
-                            _log_cache_stats(rw_usage, len(context_block), rw_attempt + 1)
+                            _log_cache_stats(
+                                rw_usage, len(context_block), rw_attempt + 1
+                            )
 
                             rw_data = GeminiClient.parse_json(rewrite_text)
-                            candidate_bullet = rw_data.get("rewritten_bullet", "").strip()
+                            candidate_bullet = rw_data.get(
+                                "rewritten_bullet", ""
+                            ).strip()
 
                             if not candidate_bullet:
                                 raise ValueError("Empty rewritten_bullet in response")
 
                             time.sleep(RESCORE_SLEEP)
                             rescore_contents = f"{static_prefix}\n\n--- BULLET TO CRITIQUE ---\n{candidate_bullet}"
-                            rescore_text, _  = GeminiClient.generate(
+                            rescore_text, _ = GeminiClient.generate(
                                 model=CRITIQUE_MODEL,
                                 system_instruction=critique_system,
                                 contents=rescore_contents,
@@ -2066,35 +2445,60 @@ class ResumeEngine:
                                 temperature=0.0,
                                 max_output_tokens=280,
                             )
-                            rescore_data       = GeminiClient.parse_json(rescore_text or "")
-                            original_composite = ResumeEngine.critique_composite(critique_data)
-                            rewrite_composite  = ResumeEngine.critique_composite(rescore_data)
+                            rescore_data = GeminiClient.parse_json(rescore_text or "")
+                            original_composite = ResumeEngine.critique_composite(
+                                critique_data
+                            )
+                            rewrite_composite = ResumeEngine.critique_composite(
+                                rescore_data
+                            )
 
                             if rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
-                                cli_art.detail(f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})")
+                                cli_art.detail(
+                                    f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})"
+                                )
                                 # Use the rescore data for the rewritten bullet
                                 critique_to_record = rescore_data
                                 try:
                                     if bullet_feedback.queue_accepted_rewrite(
-                                        bullet, rewritten_bullet, company, tags, critique_to_record
+                                        bullet,
+                                        rewritten_bullet,
+                                        company,
+                                        tags,
+                                        critique_to_record,
                                     ):
-                                        cli_art.detail(f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)")
+                                        cli_art.detail(
+                                            f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)"
+                                        )
                                 except Exception as feedback_err:
-                                    cli_art.console.print(f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}", soft_wrap=True)
+                                    cli_art.console.print(
+                                        f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}",
+                                        soft_wrap=True,
+                                    )
                             else:
                                 rewritten_bullet = bullet
-                                cli_art.detail(f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})")
+                                cli_art.detail(
+                                    f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})"
+                                )
                                 # Use the original critique data
                                 critique_to_record = critique_data
                             break
 
                         except Exception as rw_err:
                             rewrite_parse_failures += 1
-                            cli_art.console.print(f"   {theme.colorize_icon('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}", soft_wrap=True)
-                            if (rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
-                                    and active_rewrite_model != REWRITE_FALLBACK_MODEL):
-                                cli_art.console.print(f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}", soft_wrap=True)
+                            cli_art.console.print(
+                                f"   {theme.colorize_icon('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}",
+                                soft_wrap=True,
+                            )
+                            if (
+                                rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
+                                and active_rewrite_model != REWRITE_FALLBACK_MODEL
+                            ):
+                                cli_art.console.print(
+                                    f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}",
+                                    soft_wrap=True,
+                                )
                                 active_rewrite_model = REWRITE_FALLBACK_MODEL
                             time.sleep(REWRITE_SLEEP)
 
@@ -2103,11 +2507,17 @@ class ResumeEngine:
                     _record(bullet, critique_data)
 
             except Exception as e:
-                cli_art.console.print(f"   {theme.colorize_icon('warning')}  Critique error on bullet {i+1}: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"   {theme.colorize_icon('warning')}  Critique error on bullet {i+1}: {e}",
+                    soft_wrap=True,
+                )
                 _record(bullet, None)
 
         cli_art.print_literal(f"\n{'='*60}")
-        cli_art.console.print(f"{theme.colorize_icon('success')} Audit complete: {len(refined_bullets)} bullets refined", soft_wrap=True)
+        cli_art.console.print(
+            f"{theme.colorize_icon('success')} Audit complete: {len(refined_bullets)} bullets refined",
+            soft_wrap=True,
+        )
 
         # Sort bullets deterministically by manager_test and believability_score.
         # Only apply sorting to bullets processed in this run (not resumed bullets).
@@ -2115,7 +2525,9 @@ class ResumeEngine:
         # which sorts last) so no bullet is ever dropped by this step.
         if start_index == 0 and refined_bullets:
             paired = list(zip(refined_bullets, bullet_critique_list))
-            sorted_pairs = sorted(paired, key=lambda pair: _bullet_sort_key(pair[1] or {}))
+            sorted_pairs = sorted(
+                paired, key=lambda pair: _bullet_sort_key(pair[1] or {})
+            )
             refined_bullets = [bullet for bullet, critique in sorted_pairs]
 
         return refined_bullets
@@ -2148,30 +2560,45 @@ class ResumeEngine:
         near-identical bullets about the same underlying achievement.
         """
         cli_art.detail("\nMining bullet bank...", level=cli_art.NORMAL)
-        bank_csv  = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
-        emb_npy   = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
-        emb_meta  = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
+        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        emb_meta = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
 
         if not os.path.exists(bank_csv):
-            cli_art.console.print(f"  {cli_art.WARNING} bullet-bank-keepers-audited.csv not found. Skipping mine.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {cli_art.WARNING} bullet-bank-keepers-audited.csv not found. Skipping mine.",
+                soft_wrap=True,
+            )
             return []
         if not os.path.exists(emb_npy):
-            cli_art.console.print(f"  {cli_art.WARNING} bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {cli_art.WARNING} bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.",
+                soft_wrap=True,
+            )
             return []
 
         try:
-            df   = pd.read_csv(bank_csv)
+            df = pd.read_csv(bank_csv)
             embs = np.load(emb_npy)
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not load bullet bank: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not load bullet bank: {e}",
+                soft_wrap=True,
+            )
             return []
 
         if "Bullet Point" not in df.columns:
-            cli_art.console.print(f"  {cli_art.WARNING} 'Bullet Point' column not found in bullet bank CSV.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {cli_art.WARNING} 'Bullet Point' column not found in bullet bank CSV.",
+                soft_wrap=True,
+            )
             return []
 
         if len(df) != len(embs):
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.",
+                soft_wrap=True,
+            )
             return []
 
         # H26/B20 (phase-9-backlog.md): the row-count check above can't catch
@@ -2185,35 +2612,60 @@ class ResumeEngine:
             with open(emb_meta, "r", encoding="utf-8") as f:
                 meta = json.load(f)
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not read {emb_meta}: {e}. Skipping mine.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not read {emb_meta}: {e}. Skipping mine.",
+                soft_wrap=True,
+            )
             return []
         current_sha = bullets_sha(df["Bullet Point"].fillna("").tolist())
         if meta.get("bullets_sha") != current_sha:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} bullet_vectors_ge2_d768.npy is stale (bullet bank content "
-                  "changed since it was built) -- run embed_bullet_bank.py again. Skipping mine.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} bullet_vectors_ge2_d768.npy is stale (bullet bank content "
+                "changed since it was built) -- run embed_bullet_bank.py again. Skipping mine.",
+                soft_wrap=True,
+            )
             return []
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
         if jd_emb is None:
-            cli_art.console.print(f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.", soft_wrap=True)
-            bullets_col  = df["Bullet Point"].fillna("").tolist()
-            company_col  = df["Role / Company"].fillna("").tolist()  if "Role / Company" in df.columns else ["" ] * len(df)
-            tags_col     = df["Tags"].fillna("").tolist()            if "Tags"           in df.columns else ["" ] * len(df)
-            return list(zip(bullets_col[:TOP_K_BULLETS], company_col[:TOP_K_BULLETS], tags_col[:TOP_K_BULLETS]))
+            cli_art.console.print(
+                f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.",
+                soft_wrap=True,
+            )
+            bullets_col = df["Bullet Point"].fillna("").tolist()
+            company_col = (
+                df["Role / Company"].fillna("").tolist()
+                if "Role / Company" in df.columns
+                else [""] * len(df)
+            )
+            tags_col = (
+                df["Tags"].fillna("").tolist()
+                if "Tags" in df.columns
+                else [""] * len(df)
+            )
+            return list(
+                zip(
+                    bullets_col[:TOP_K_BULLETS],
+                    company_col[:TOP_K_BULLETS],
+                    tags_col[:TOP_K_BULLETS],
+                )
+            )
 
-        jd_vec   = np.array(jd_emb, dtype=np.float32)
-        jd_norm  = np.linalg.norm(jd_vec)
+        jd_vec = np.array(jd_emb, dtype=np.float32)
+        jd_norm = np.linalg.norm(jd_vec)
         if jd_norm > 0:
             jd_vec = jd_vec / jd_norm
 
         embs_norm = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
-        sims      = embs_norm @ jd_vec
+        sims = embs_norm @ jd_vec
 
         if "hidden_gem_score" in df.columns:
-            gem_scores = pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0).values
-            boosted    = sims + GEM_BOOST_WEIGHT * gem_scores
+            gem_scores = (
+                pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0).values
+            )
+            boosted = sims + GEM_BOOST_WEIGHT * gem_scores
         else:
-            boosted    = sims
+            boosted = sims
 
         if "strength_category" in df.columns:
             tier_rank = df["strength_category"].map(STRENGTH_ORDER).fillna(99).values
@@ -2243,11 +2695,16 @@ class ResumeEngine:
         def _is_near_duplicate(idx: int) -> bool:
             if not selected_idx:
                 return False
-            return bool((embs_norm[selected_idx] @ embs_norm[idx]).max() >= DEDUP_SIMILARITY_THRESHOLD)
+            return bool(
+                (embs_norm[selected_idx] @ embs_norm[idx]).max()
+                >= DEDUP_SIMILARITY_THRESHOLD
+            )
 
         def _collides(idx: int) -> bool:
             sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
-            return bool(sigs & claimed_signatures) or (verb is not None and verb in claimed_verbs)
+            return bool(sigs & claimed_signatures) or (
+                verb is not None and verb in claimed_verbs
+            )
 
         def _take(idx: int) -> None:
             sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
@@ -2259,11 +2716,16 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            profile_roles = self.load_yaml(self.kb_dir, "profile.yml").get("roles") or []
+            profile_roles = (
+                self.load_yaml(self.kb_dir, "profile.yml").get("roles") or []
+            )
             company_min_bullets = {
                 r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r
             }
-            combined_minimums = {**company_min_bullets, **(extra_company_minimums or {})}
+            combined_minimums = {
+                **company_min_bullets,
+                **(extra_company_minimums or {}),
+            }
 
             def _scarcity(item):
                 # Scarcest role first: whoever has the least room to be picky
@@ -2275,7 +2737,9 @@ class ResumeEngine:
                 return (available - min_count, available)
 
             for company, min_count in sorted(combined_minimums.items(), key=_scarcity):
-                company_ranked = [int(i) for i in ranked_idx if company_values[i] == company]
+                company_ranked = [
+                    int(i) for i in ranked_idx if company_values[i] == company
+                ]
                 taken = 0
                 for i in company_ranked:
                     if taken >= min_count:
@@ -2317,12 +2781,23 @@ class ResumeEngine:
                 continue
             _take(i)
 
-        top_df      = df.iloc[selected_idx]
+        top_df = df.iloc[selected_idx]
         bullets_out = top_df["Bullet Point"].fillna("").tolist()
-        company_out = top_df["Role / Company"].fillna("").tolist() if "Role / Company" in top_df.columns else ["" ] * len(top_df)
-        tags_out    = top_df["Tags"].fillna("").tolist()            if "Tags"           in top_df.columns else ["" ] * len(top_df)
+        company_out = (
+            top_df["Role / Company"].fillna("").tolist()
+            if "Role / Company" in top_df.columns
+            else [""] * len(top_df)
+        )
+        tags_out = (
+            top_df["Tags"].fillna("").tolist()
+            if "Tags" in top_df.columns
+            else [""] * len(top_df)
+        )
 
-        cli_art.detail(f"  Mined {len(bullets_out)} bullets from bank ({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"  Mined {len(bullets_out)} bullets from bank ({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).",
+            level=cli_art.NORMAL,
+        )
         return list(zip(bullets_out, company_out, tags_out))
 
     def build_fit_evaluation_context(self, jd_text: str) -> str:
@@ -2366,7 +2841,10 @@ class ResumeEngine:
                         "instructions are here.\n" + trimmed
                     )
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} evaluate_fit: could not load profile.yml: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} evaluate_fit: could not load profile.yml: {e}",
+                    soft_wrap=True,
+                )
 
         try:
             role_dna = self.load_yaml(self.scoring_dir, "role_dna.yaml")
@@ -2377,25 +2855,36 @@ class ResumeEngine:
                     + json.dumps(role_dna)
                 )
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} evaluate_fit: could not load role_dna.yaml: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} evaluate_fit: could not load role_dna.yaml: {e}",
+                soft_wrap=True,
+            )
 
         if not sections:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} evaluate_fit: no candidate profile "
-                  "or archetype library found -- scoring the JD in isolation.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} evaluate_fit: no candidate profile "
+                "or archetype library found -- scoring the JD in isolation.",
+                soft_wrap=True,
+            )
 
-        sections.append(f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===")
+        sections.append(
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ==="
+        )
         return "\n\n".join(sections)
 
     def evaluate_fit(self, jd_path: str) -> dict:
         """
         Ultra-Premium grounded two-stage fit evaluation check for a JD.
-        Loads profile.yml dynamically to apply custom deal-breaker skips and 
+        Loads profile.yml dynamically to apply custom deal-breaker skips and
         empirical score calibration (piecewise linear interpolation) in Python.
         """
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} JD file not found: {jd_path}",
+                soft_wrap=True,
+            )
             return {}
 
         # Load candidate profile configuration
@@ -2403,7 +2892,10 @@ class ResumeEngine:
         try:
             profile = self.load_yaml(self.kb_dir, "profile.yml") or {}
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not load profile.yml: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not load profile.yml: {e}",
+                soft_wrap=True,
+            )
 
         remote_required = profile.get("location", {}).get("remote_required", False)
 
@@ -2437,13 +2929,21 @@ class ResumeEngine:
             "archetype": capability_data.get("archetype", "Unknown"),
             "hard_blockers": recruiter_data.get("hard_blockers", []),
             "fit_subscores": capability_data.get("fit_subscores", {}),
-            "interview_odds_subscores": recruiter_data.get("interview_odds_subscores", {}),
-            "practical_pursue_subscores": recruiter_data.get("practical_pursue_subscores", {}),
+            "interview_odds_subscores": recruiter_data.get(
+                "interview_odds_subscores", {}
+            ),
+            "practical_pursue_subscores": recruiter_data.get(
+                "practical_pursue_subscores", {}
+            ),
             "recommendation": recruiter_data.get("recommendation", "Selective pursue"),
             "why": recruiter_data.get("why", ""),
             "recruiter_read": recruiter_data.get("recruiter_read", ""),
-            "posting_legitimacy": recruiter_data.get("posting_legitimacy", "Proceed with Caution"),
-            "posting_legitimacy_notes": recruiter_data.get("posting_legitimacy_notes", ""),
+            "posting_legitimacy": recruiter_data.get(
+                "posting_legitimacy", "Proceed with Caution"
+            ),
+            "posting_legitimacy_notes": recruiter_data.get(
+                "posting_legitimacy_notes", ""
+            ),
             # Advanced Metadata injection
             "capability_gaps": capability_data.get("capability_gaps", []),
             "ghost_job_red_flags": recruiter_data.get("ghost_job_red_flags", []),
@@ -2452,16 +2952,26 @@ class ResumeEngine:
 
         # 5. Prestige-Tier Funnel Friction Calibration
         prestige_tier = evaluation["prestige_tier"]
-        funnel_friction_score = evaluation["interview_odds_subscores"].get("funnel_friction", 3)
+        funnel_friction_score = evaluation["interview_odds_subscores"].get(
+            "funnel_friction", 3
+        )
         if prestige_tier == "Tier-1":
-            evaluation["interview_odds_subscores"]["funnel_friction"] = min(funnel_friction_score, 2)
+            evaluation["interview_odds_subscores"]["funnel_friction"] = min(
+                funnel_friction_score, 2
+            )
         elif prestige_tier == "Tier-3":
-            evaluation["interview_odds_subscores"]["funnel_friction"] = min(funnel_friction_score + 1, 5)
+            evaluation["interview_odds_subscores"]["funnel_friction"] = min(
+                funnel_friction_score + 1, 5
+            )
 
         # 6. Compute base weighted subscores
         fit_score = compute_fit_score(evaluation["fit_subscores"])
-        interview_odds_score = compute_interview_odds_score(evaluation["interview_odds_subscores"])
-        practical_pursue_score = compute_practical_pursue_score(evaluation["practical_pursue_subscores"])
+        interview_odds_score = compute_interview_odds_score(
+            evaluation["interview_odds_subscores"]
+        )
+        practical_pursue_score = compute_practical_pursue_score(
+            evaluation["practical_pursue_subscores"]
+        )
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
 
         # 7. Apply Generic, Profile-Driven Hard-Stops & Skip Overrides in Python
@@ -2472,7 +2982,9 @@ class ResumeEngine:
         remote_val = evaluation["practical_pursue_subscores"].get("remote_quality", 5)
         if remote_required and remote_val < 5:
             triggered_by_profile_filters = True
-            msg = f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
+            msg = (
+                f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
+            )
             if msg not in blockers_triggered:
                 blockers_triggered.append(msg)
 
@@ -2484,12 +2996,17 @@ class ResumeEngine:
         # C. Apply Overrides
         if triggered_by_profile_filters:
             evaluation["recommendation"] = "Skip"
-            evaluation["why"] = f"Application skipped due to triggered deal-breakers: {', '.join(blockers_triggered)}"
+            evaluation["why"] = (
+                f"Application skipped due to triggered deal-breakers: {', '.join(blockers_triggered)}"
+            )
             composite = 0.00
             estimated_prob = 0.0
         else:
             composite = fit_composite_score(
-                fit_score, interview_odds_score, practical_pursue_score, posting_age_days,
+                fit_score,
+                interview_odds_score,
+                practical_pursue_score,
+                posting_age_days,
             )
             # D. Empirical Score Calibration Converter
             # Maps 1-5 subscore to calibrated estimated response rate percentage (0.2% - 25.0%)
@@ -2502,7 +3019,7 @@ class ResumeEngine:
             else:
                 for i in range(len(points) - 1):
                     x0, y0 = points[i]
-                    x1, y1 = points[i+1]
+                    x1, y1 = points[i + 1]
                     if x0 <= x <= x1:
                         estimated_prob = round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
                         break
@@ -2527,7 +3044,9 @@ class ResumeEngine:
 
         return evaluation
 
-    def _extract_company_research(self, source_text: str, source_label: str) -> dict | None:
+    def _extract_company_research(
+        self, source_text: str, source_label: str
+    ) -> dict | None:
         """
         The single structured-extraction call behind all three of
         research_company()'s tiers -- each tier's job is only to produce
@@ -2549,7 +3068,10 @@ class ResumeEngine:
         )
         research_data = GeminiClient.parse_json(research_text or "")
         if not research_data:
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: model response couldn't be parsed.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('hint')} Company research skipped: model response couldn't be parsed.",
+                soft_wrap=True,
+            )
             return None
 
         research_data["_research_source"] = source_label
@@ -2580,39 +3102,66 @@ class ResumeEngine:
         # --- Tier 1: the company's own site ---
         company_website = jd_data.get("company_website")
         if not company_website:
-            company_website = company_research.find_company_website(jd_data.get("company_name"))
+            company_website = company_research.find_company_website(
+                jd_data.get("company_name")
+            )
             if company_website:
-                cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website on file -- found one via search: {company_website}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('hint')} No company website on file -- found one via search: {company_website}",
+                    soft_wrap=True,
+                )
 
         if company_website:
             scraped_text = company_research.fetch_company_pages(company_website)
             if len(scraped_text) >= company_research.MIN_USEFUL_CHARS:
                 research_data = self._extract_company_research(scraped_text, "website")
                 if research_data:
-                    cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_website}.", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('success')} Company research complete for {company_website}.",
+                        soft_wrap=True,
+                    )
                 return research_data
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Couldn't find enough usable content on {company_website} -- trying a web search instead.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('hint')} Couldn't find enough usable content on {company_website} -- trying a web search instead.",
+                soft_wrap=True,
+            )
         else:
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} No company website known for this JD -- trying a web search instead.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('hint')} No company website known for this JD -- trying a web search instead.",
+                soft_wrap=True,
+            )
 
         # --- Tier 2: grounded search, trusted only at high confidence ---
         company_name = jd_data.get("company_name")
-        context_hint = ", ".join(str(v) for v in (jd_data.get("job_title"), jd_data.get("industry")) if v)
-        search_text = company_research.research_company_via_search(company_name, context_hint)
+        context_hint = ", ".join(
+            str(v) for v in (jd_data.get("job_title"), jd_data.get("industry")) if v
+        )
+        search_text = company_research.research_company_via_search(
+            company_name, context_hint
+        )
         if search_text:
             research_data = self._extract_company_research(search_text, "search")
             if research_data:
-                cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from a web search).", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from a web search).",
+                    soft_wrap=True,
+                )
             return research_data
 
         # --- Tier 3: the JD's own text ---
         if not jd_text.strip():
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Company research skipped: nothing usable found for this JD.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('hint')} Company research skipped: nothing usable found for this JD.",
+                soft_wrap=True,
+            )
             return None
 
         research_data = self._extract_company_research(jd_text, "jd_text")
         if research_data:
-            cli_art.console.print(f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from the job posting's own text).", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from the job posting's own text).",
+                soft_wrap=True,
+            )
         return research_data
 
     def draft_outreach_message(self, jd_path: str, contact: dict) -> str | None:
@@ -2643,7 +3192,9 @@ class ResumeEngine:
         )
         return text.strip() if text else None
 
-    def draft_followup_message(self, jd_path: str, follow_up_count: int, contact: dict = None) -> str | None:
+    def draft_followup_message(
+        self, jd_path: str, follow_up_count: int, contact: dict = None
+    ) -> str | None:
         """
         Drafts a short, specific follow-up message for an application
         genuinely due for one -- callers gate on
@@ -2715,7 +3266,10 @@ class ResumeEngine:
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} JD file not found: {jd_path}",
+                soft_wrap=True,
+            )
             return {}
 
         jd_data = _parse_jd_data(jd_text)
@@ -2756,7 +3310,8 @@ class ResumeEngine:
             f"1-2 sentences of the opening paragraph (15x hire-rate boost) -- "
             f"weave it into the Hook-First Opening rather than treating it as a "
             f"separate sentence.\n"
-            if referral and referral.get("text") else ""
+            if referral and referral.get("text")
+            else ""
         )
 
         # Feature #1: classify which ATS this posting runs on, cached per-JD
@@ -2785,7 +3340,10 @@ class ResumeEngine:
         )
         letter_data = GeminiClient.parse_json(letter_text or "")
         if not letter_data:
-            cli_art.console.print(f"  {cli_art.ERROR} Cover letter generation returned no parseable result.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {cli_art.ERROR} Cover letter generation returned no parseable result.",
+                soft_wrap=True,
+            )
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
@@ -2798,6 +3356,7 @@ class ResumeEngine:
             try:
                 import numpy as np
                 import pandas as pd
+
                 df = pd.read_csv(bank_csv)
                 keeper_bullets = df["Bullet Point"].fillna("").tolist()
                 keeper_embs = np.load(emb_npy)
@@ -2818,12 +3377,18 @@ class ResumeEngine:
         )
 
         if violations:
-            cli_art.detail(f"  Validator found {len(violations)} issue(s), retrying once:", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Validator found {len(violations)} issue(s), retrying once:",
+                level=cli_art.NORMAL,
+            )
             for v in violations:
-                cli_art.detail(f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL)
+                cli_art.detail(
+                    f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL
+                )
             fix_contents = (
                 f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
-                f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
+                f"=== ISSUES TO FIX (change nothing else) ===\n"
+                + "\n".join(f"- {v}" for v in violations)
             )
             fix_text, _ = GeminiClient.generate(
                 model=BUILDER_MODEL,
@@ -2844,23 +3409,31 @@ class ResumeEngine:
                     voice_rules=self.voice_rules,
                 )
             if violations:
-                cli_art.detail(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:", level=cli_art.NORMAL)
+                cli_art.detail(
+                    f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:",
+                    level=cli_art.NORMAL,
+                )
                 for v in violations:
-                    cli_art.detail(f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL)
+                    cli_art.detail(
+                        f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL
+                    )
 
         _resolve_contact_fallback(letter_data, jd_data)
         letter_data["company_location"] = _resolve_company_location(research, jd_data)
 
-        stem     = _build_output_stem(jd_path)
+        stem = _build_output_stem(jd_path)
         letter_data["tagline"] = _read_matching_resume_tagline(stem)
         json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
         html_out = os.path.join(self.output_html_dir, f"{stem}_CoverLetter.html")
-        pdf_out  = os.path.join(self.output_pdf_dir,  f"{stem}_CoverLetter.pdf")
+        pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_CoverLetter.pdf")
 
         os.makedirs(os.path.dirname(json_out), exist_ok=True)
         with open(json_out, "w", encoding="utf-8") as f:
             json.dump(letter_data, f, indent=2, ensure_ascii=False)
-        cli_art.detail(f"  Cover letter saved to: {cli_art._escape_markup(json_out)}", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"  Cover letter saved to: {cli_art._escape_markup(json_out)}",
+            level=cli_art.NORMAL,
+        )
 
         render_coverletter(letter_data, html_out)
 
@@ -2868,16 +3441,22 @@ class ResumeEngine:
         try:
             pdf_result = subprocess.run(
                 ["node", pdf_script, html_out, pdf_out, "--format=letter"],
-                capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+                capture_output=True,
+                text=True,
+                timeout=PDF_GENERATION_TIMEOUT_SECONDS,
                 env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
             )
         except subprocess.TimeoutExpired:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
-                  f"{PDF_GENERATION_TIMEOUT_SECONDS}s.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
+                f"{PDF_GENERATION_TIMEOUT_SECONDS}s.",
+                soft_wrap=True,
+            )
             return {}
         if pdf_result.returncode != 0:
             cli_art.friendly_subprocess_error(
-                pdf_result.stderr, "creating the PDF for this cover letter")
+                pdf_result.stderr, "creating the PDF for this cover letter"
+            )
             return {}
         cli_art.print_subprocess_output(pdf_result.stdout)
 
@@ -2888,14 +3467,29 @@ class ResumeEngine:
             cli_art.friendly_error(e, "creating the DOCX for this cover letter")
             return {}
 
-        cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(pdf_out, letter_data, jd_keywords=jd_keywords)
+        cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(
+            pdf_out, letter_data, jd_keywords=jd_keywords
+        )
         if cl_text_warnings:
-            cli_art.detail(f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found {len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse from the file, not just the pre-render JSON):", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  {theme.colorize_icon('warning')} Cover-letter PDF text-layer check found {len(cl_text_warnings)} potential issue(s) (what an ATS would actually parse from the file, not just the pre-render JSON):",
+                level=cli_art.NORMAL,
+            )
             for w in cl_text_warnings:
-                cli_art.detail(f"    - {cli_art._escape_markup(str(w))}", level=cli_art.NORMAL)
+                cli_art.detail(
+                    f"    - {cli_art._escape_markup(str(w))}", level=cli_art.NORMAL
+                )
 
-        letter_data["_output_paths"] = {"json": json_out, "html": html_out, "pdf": pdf_out, "docx": docx_out}
-        cli_art.detail(f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {cli_art._escape_markup(pdf_out)}", level=cli_art.NORMAL)
+        letter_data["_output_paths"] = {
+            "json": json_out,
+            "html": html_out,
+            "pdf": pdf_out,
+            "docx": docx_out,
+        }
+        cli_art.detail(
+            f"  {theme.colorize_icon('success')} Cover letter complete! PDF → {cli_art._escape_markup(pdf_out)}",
+            level=cli_art.NORMAL,
+        )
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
         return letter_data
 
@@ -2923,17 +3517,26 @@ class ResumeEngine:
         so Google can cache-hit the KB prefix on every builder call regardless
         of JD changes.
         """
-        cli_art.print_literal(f"\nBuilding tailored resume for: {cli_art._escape_markup(jd_path)}")
+        cli_art.print_literal(
+            f"\nBuilding tailored resume for: {cli_art._escape_markup(jd_path)}"
+        )
 
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} JD file not found: {jd_path}",
+                soft_wrap=True,
+            )
             return {}
 
-        situational_candidates = situational_roles.detect_situational_candidates(jd_text)
+        situational_candidates = situational_roles.detect_situational_candidates(
+            jd_text
+        )
         if situational_candidates:
-            cli_art.print_literal(f"  Situational role candidate(s) cleared the keyword gate: {cli_art._escape_markup(', '.join(situational_candidates))}")
+            cli_art.print_literal(
+                f"  Situational role candidate(s) cleared the keyword gate: {cli_art._escape_markup(', '.join(situational_candidates))}"
+            )
 
         if job_key is None:
             job_key = jd_manager.compute_job_key(jd_path)
@@ -2943,7 +3546,9 @@ class ResumeEngine:
             output_filename = f"{_build_output_stem(jd_path)}_Resume.json"
 
         # --- Step 1: Extract JD keywords ---
-        cli_art.console.rule("Step 1: Extracting JD keywords...", style="dim", align="left")
+        cli_art.console.rule(
+            "Step 1: Extracting JD keywords...", style="dim", align="left"
+        )
         jd_keywords = checkpoint.get("jd_keywords")
         if jd_keywords is not None:
             cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
@@ -2967,27 +3572,43 @@ class ResumeEngine:
                 # tool at the wrong file is an ordinary mistake; it shouldn't
                 # cost that. Interactive callers may override; batch marks the
                 # JD failed and moves to the next one.
-                cli_art.console.print(f"  {theme.colorize_icon('error')} JD keyword extraction returned nothing.", soft_wrap=True)
-                cli_art.print_literal("    This usually means the file isn't a job description "
-                      "(wrong path, an empty export, or a login/error page saved as text).")
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('error')} JD keyword extraction returned nothing.",
+                    soft_wrap=True,
+                )
+                cli_art.print_literal(
+                    "    This usually means the file isn't a job description "
+                    "(wrong path, an empty export, or a login/error page saved as text)."
+                )
                 if not (interactive and _confirm_continue_without_keywords()):
-                    cli_art.print_literal("    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1.")
+                    cli_art.print_literal(
+                        "    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1."
+                    )
                     return None
-                cli_art.print_literal("    Continuing at your request, with empty keywords.")
+                cli_art.print_literal(
+                    "    Continuing at your request, with empty keywords."
+                )
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
-        cli_art.print_literal(f"  Keywords extracted: {_summarize_keywords(jd_keywords)}")
+        cli_art.print_literal(
+            f"  Keywords extracted: {_summarize_keywords(jd_keywords)}"
+        )
         cli_art.print_literal()
 
         # --- Step 2: Mine bullet bank ---
         cli_art.console.rule("Step 2: Mining bullet bank...", style="dim", align="left")
         bullet_tuples = checkpoint.get("bullet_tuples")
         if bullet_tuples is not None:
-            cli_art.print_literal(f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint.")
+            cli_art.print_literal(
+                f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint."
+            )
         else:
             bullet_tuples = self.mine_bullet_bank(
-                jd_text, master_resume,
-                extra_company_minimums=situational_roles.bank_minimums_for(situational_candidates),
+                jd_text,
+                master_resume,
+                extra_company_minimums=situational_roles.bank_minimums_for(
+                    situational_candidates
+                ),
             )
             checkpoint["bullet_tuples"] = bullet_tuples
             jd_manager.save_checkpoint(job_key, checkpoint)
@@ -2995,7 +3616,10 @@ class ResumeEngine:
         # --- Step 2b: Load company research and vocabulary substitutions early ---
         research = jd_manager.read_research(jd_path)
         if research:
-            cli_art.console.print(f"  {theme.colorize_icon('success')} Loaded saved company research from JD.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
+                soft_wrap=True,
+            )
         else:
             jd_data = _parse_jd_data(jd_text)
             research = self.research_company(jd_data, jd_text)
@@ -3034,7 +3658,9 @@ class ResumeEngine:
         # bullet text with no company attribution at all and had to guess
         # which company each bullet belonged to -- a likely contributor to it
         # giving up and emitting empty Experience entries.
-        bullet_companies = [company for (_, company, _) in bullet_tuples[:len(refined_bullets)]]
+        bullet_companies = [
+            company for (_, company, _) in bullet_tuples[: len(refined_bullets)]
+        ]
 
         # --- Step 4: Build resume ---
         cli_art.console.rule("Step 4: Building resume...", style="dim", align="left")
@@ -3055,7 +3681,9 @@ class ResumeEngine:
         # call below (build, fix, trim) -- see
         # build_education_achievement_schema_fields()'s docstring for why
         # these can't just be static fields on TemplateSchema itself.
-        edu_schema_properties, edu_schema_required = self.build_education_achievement_schema_fields()
+        edu_schema_properties, edu_schema_required = (
+            self.build_education_achievement_schema_fields()
+        )
 
         # Loaded unconditionally (not just in the fresh-build branch below)
         # for the same reason build_prompt is: Step 7's trim loop re-validates
@@ -3066,7 +3694,9 @@ class ResumeEngine:
         # Same reason, same place: the post-trim gate runs on the resumed path
         # too, so the roster can't be computed inside the fresh-build branch.
         role_roster = _required_role_roster(self.load_yaml(self.kb_dir, "profile.yml"))
-        role_bullet_minimums = _required_role_bullet_minimums(self.load_yaml(self.kb_dir, "profile.yml"))
+        role_bullet_minimums = _required_role_bullet_minimums(
+            self.load_yaml(self.kb_dir, "profile.yml")
+        )
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
@@ -3077,7 +3707,10 @@ class ResumeEngine:
             jd_data = _parse_jd_data(jd_text)
             research = jd_manager.read_research(jd_path)
             if research:
-                cli_art.console.print(f"  {theme.colorize_icon('success')} Loaded saved company research from JD.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
+                    soft_wrap=True,
+                )
             else:
                 research = self.research_company(jd_data, jd_text)
                 if research:
@@ -3097,7 +3730,9 @@ class ResumeEngine:
                     "should be rare by construction, not a default."
                 )
 
-            role_rules_block = self.build_role_rules_block(self.load_yaml(self.kb_dir, "profile.yml"))
+            role_rules_block = self.build_role_rules_block(
+                self.load_yaml(self.kb_dir, "profile.yml")
+            )
 
             # style_rules.yaml/ai_risk.yaml used to be attached only to the
             # post-build critique call (Step 5) and polish.py's cover-letter
@@ -3144,13 +3779,20 @@ class ResumeEngine:
                 f"=== REFINED BULLETS ===\n{bullets_block}"
             )
 
-            cli_art.detail(f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens")
-            cli_art.detail(f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens")
+            cli_art.detail(
+                f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens"
+            )
+            cli_art.detail(
+                f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens"
+            )
 
             # Step 3's audit loop just made up to 30 calls; give the free
             # tier's rolling per-minute token window a moment to recover
             # before this ~105k-token call (see PRE_BUILDER_SLEEP above).
-            cli_art.detail(f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...",
+                level=cli_art.NORMAL,
+            )
             time.sleep(PRE_BUILDER_SLEEP)
 
             with cli_art.thinking_status("Building custom resume with Gemini..."):
@@ -3166,20 +3808,32 @@ class ResumeEngine:
             _log_cache_stats(usage, 0, 0)
 
             if not resume_text:
-                cli_art.console.print(f"  {cli_art.ERROR} Builder returned empty response.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {cli_art.ERROR} Builder returned empty response.",
+                    soft_wrap=True,
+                )
                 return {}
 
             resume_data = GeminiClient.parse_json(resume_text)
             if not resume_data:
-                cli_art.console.print(f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True)
-                cli_art.console.rule("Raw builder response (truncated)", style="dim", align="left")
+                cli_art.console.print(
+                    f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True
+                )
+                cli_art.console.rule(
+                    "Raw builder response (truncated)", style="dim", align="left"
+                )
                 # Preserve exact text for debugging assertions/tests.
                 cli_art.print_literal(resume_text[:500])
                 return {}
 
             resume_data = normalize_resume.normalize(resume_data)
 
-            violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
+            violations = validate_resume.validate(
+                resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+            )
             max_fix_attempts = 4
             fix_attempt = 0
             # Hill-climb rather than random-walk. Each retry re-generates the
@@ -3196,7 +3850,9 @@ class ResumeEngine:
             while violations and fix_attempt < max_fix_attempts:
                 fix_attempt += 1
                 resume_data, violations = best_resume_data, best_violations
-                cli_art.print_literal(f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:")
+                cli_art.print_literal(
+                    f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:"
+                )
                 for v in violations:
                     cli_art.print_literal(f"    - {v}")
                 fix_contents = (
@@ -3229,7 +3885,8 @@ class ResumeEngine:
                     # violation keeps surviving retries, restate what fixing it
                     # actually requires, here rather than in a huge prompt.
                     missing = [
-                        v.split("'")[1] for v in violations
+                        v.split("'")[1]
+                        for v in violations
                         if v.startswith("Role roster") and "'" in v
                     ]
                     roster_lines = []
@@ -3247,7 +3904,8 @@ class ResumeEngine:
                         "gap in the work history. Add a complete entry for each, with its title,\n"
                         "period and bullets, in correct reverse-chronological position. Keep every\n"
                         "entry that is already present.\n"
-                        + "\n".join(roster_lines) + "\n\n"
+                        + "\n".join(roster_lines)
+                        + "\n\n"
                     )
                 if any(_is_skills_line_violation(v) for v in violations):
                     # Repeated Skills-widow violations across retry attempts
@@ -3272,11 +3930,15 @@ class ResumeEngine:
                     one_liner_max = limits.get("one_liner_max_chars", 108)
                     widow_min_words = limits.get("widow_min_words", 5)
                     exp_bullets = [
-                        b for job in resume_data.get("EXPERIENCE", []) for b in job.get("achievements", [])
+                        b
+                        for job in resume_data.get("EXPERIENCE", [])
+                        for b in job.get("achievements", [])
                     ]
                     widow_details = [
                         f"- {len(b)} chars, {wc}-word widow: {b!r}"
-                        for b, wc in validate_resume.bullets_with_short_widow(exp_bullets, style_rules_for_validation)
+                        for b, wc in validate_resume.bullets_with_short_widow(
+                            exp_bullets, style_rules_for_validation
+                        )
                     ]
                     fix_contents += (
                         f"=== FIXING A BULLET WIDOW ===\n"
@@ -3302,7 +3964,8 @@ class ResumeEngine:
                         f"already appear anywhere in this list.\n\n"
                     )
                 fix_contents += (
-                    f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(f"- {v}" for v in violations)
+                    f"=== ISSUES TO FIX (change nothing else) ===\n"
+                    + "\n".join(f"- {v}" for v in violations)
                 )
                 fix_text, fix_usage = GeminiClient.generate(
                     model=BUILDER_MODEL,
@@ -3322,17 +3985,28 @@ class ResumeEngine:
                     # continuing just moves on to the next outer attempt with the
                     # same (unchanged) violations, rather than giving up after one
                     # network hiccup with attempts still remaining.
-                    cli_art.console.print(f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.",
+                        soft_wrap=True,
+                    )
                     continue
                 resume_data = normalize_resume.normalize(fixed)
-                violations = validate_resume.validate(resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
+                violations = validate_resume.validate(
+                    resume_data,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                )
                 if len(violations) < len(best_violations):
                     best_resume_data, best_violations = resume_data, violations
 
             resume_data, violations = best_resume_data, best_violations
 
             if violations:
-                cli_art.console.print(f"  {theme.colorize_icon('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('error')} Validator still found {len(violations)} issue(s) after {max_fix_attempts} attempts:",
+                    soft_wrap=True,
+                )
                 for v in violations:
                     cli_art.print_literal(f"    - {v}")
                 return {}
@@ -3343,14 +4017,20 @@ class ResumeEngine:
             # branch -- a resumed run enters at the `resume_data is not
             # None` branch above and would otherwise both NameError and
             # silently lose the substitution.
-            checkpoint["vocabulary_substitutions"] = (research or {}).get("vocabulary_substitutions", [])
+            checkpoint["vocabulary_substitutions"] = (research or {}).get(
+                "vocabulary_substitutions", []
+            )
             jd_manager.save_checkpoint(job_key, checkpoint)
 
         # --- Step 5: Post-build holistic critique ---
-        cli_art.console.rule("Step 5: Running holistic resume critique...", style="dim", align="left")
+        cli_art.console.rule(
+            "Step 5: Running holistic resume critique...", style="dim", align="left"
+        )
         critique_data = checkpoint.get("critique_data")
         if critique_data is not None:
-            cli_art.print_literal("  Resuming: using holistic critique from checkpoint.")
+            cli_art.print_literal(
+                "  Resuming: using holistic critique from checkpoint."
+            )
             resume_data["_critique"] = critique_data
         else:
             critique_prompt = self.load_prompt("critique_resume.md")
@@ -3365,23 +4045,59 @@ class ResumeEngine:
             # this call fires once per resume build, not once per bullet, so
             # the extra ~80KB doesn't multiply the way a per-bullet cost would.
             rubric_files = [
-                (self.rules_dir,   "style_rules.yaml",                 "STYLE RULES"),
-                (self.scoring_dir, "professional_identity_score.yaml", "PROFESSIONAL IDENTITY SCORING RUBRIC"),
-                (self.scoring_dir, "resume_cohesion_score.yaml",       "RESUME COHESION SCORING RUBRIC"),
-                (self.scoring_dir, "believability.yaml",               "BELIEVABILITY SCORING RUBRIC"),
-                (self.scoring_dir, "experience_structure_score.yaml",  "EXPERIENCE STRUCTURE SCORING RUBRIC"),
-                (self.scoring_dir, "manager_test.yaml",                "MANAGER TEST SCORING RUBRIC"),
-                (self.scoring_dir, "skills_scoring.yaml",              "SKILLS SCORING RUBRIC"),
-                (self.scoring_dir, "role_dna.yaml",                    "ROLE DNA SCORING RUBRIC"),
-                (self.scoring_dir, "ats_match.yaml",                   "ATS MATCH SCORING RUBRIC"),
-                (self.scoring_dir, "ai_risk.yaml",                     "AI RISK SCORING RUBRIC"),
-                (self.scoring_dir, "evidence_alignment.yaml",          "EVIDENCE ALIGNMENT SCORING RUBRIC"),
-                (self.scoring_dir, "summary_patterns.yaml",            "SUMMARY PATTERNS SCORING RUBRIC"),
-                (self.scoring_dir, "certifications_score.yaml",        "CERTIFICATIONS SCORING RUBRIC"),
-                (self.scoring_dir, "recruiter_score.yaml",             "RECRUITER SCORE SCORING RUBRIC"),
-                (self.scoring_dir, "specificity.yaml",                 "SPECIFICITY SCORING RUBRIC"),
-                (self.scoring_dir, "summary_score.yaml",               "SUMMARY SCORING RUBRIC"),
-                (self.scoring_dir, "top_third_score.yaml",             "TOP-THIRD-OF-PAGE-ONE SCORING RUBRIC"),
+                (self.rules_dir, "style_rules.yaml", "STYLE RULES"),
+                (
+                    self.scoring_dir,
+                    "professional_identity_score.yaml",
+                    "PROFESSIONAL IDENTITY SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "resume_cohesion_score.yaml",
+                    "RESUME COHESION SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "believability.yaml",
+                    "BELIEVABILITY SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "experience_structure_score.yaml",
+                    "EXPERIENCE STRUCTURE SCORING RUBRIC",
+                ),
+                (self.scoring_dir, "manager_test.yaml", "MANAGER TEST SCORING RUBRIC"),
+                (self.scoring_dir, "skills_scoring.yaml", "SKILLS SCORING RUBRIC"),
+                (self.scoring_dir, "role_dna.yaml", "ROLE DNA SCORING RUBRIC"),
+                (self.scoring_dir, "ats_match.yaml", "ATS MATCH SCORING RUBRIC"),
+                (self.scoring_dir, "ai_risk.yaml", "AI RISK SCORING RUBRIC"),
+                (
+                    self.scoring_dir,
+                    "evidence_alignment.yaml",
+                    "EVIDENCE ALIGNMENT SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "summary_patterns.yaml",
+                    "SUMMARY PATTERNS SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "certifications_score.yaml",
+                    "CERTIFICATIONS SCORING RUBRIC",
+                ),
+                (
+                    self.scoring_dir,
+                    "recruiter_score.yaml",
+                    "RECRUITER SCORE SCORING RUBRIC",
+                ),
+                (self.scoring_dir, "specificity.yaml", "SPECIFICITY SCORING RUBRIC"),
+                (self.scoring_dir, "summary_score.yaml", "SUMMARY SCORING RUBRIC"),
+                (
+                    self.scoring_dir,
+                    "top_third_score.yaml",
+                    "TOP-THIRD-OF-PAGE-ONE SCORING RUBRIC",
+                ),
             ]
             rubric_blocks = "".join(
                 f"\n\n{label}:\n{json.dumps(self.load_yaml(dir_path, filename))}"
@@ -3416,23 +4132,38 @@ class ResumeEngine:
                 # shipped unchanged.
                 hard_failures = critique_data.get("hard_failures_triggered", []) or []
                 if hard_failures:
-                    critique_data["recommendations"] = list(critique_data.get("recommendations", []) or []) + [
-                        f"Fix rubric hard failure -- {hf}" for hf in hard_failures
-                    ]
+                    critique_data["recommendations"] = list(
+                        critique_data.get("recommendations", []) or []
+                    ) + [f"Fix rubric hard failure -- {hf}" for hf in hard_failures]
 
-                cli_art.console.rule("Holistic critique scores", style="dim", align="left")
-                cli_art.print_literal(f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}")
-                cli_art.print_literal(f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}")
-                cli_art.print_literal(f"top_third         : {critique_data.get('top_third_score',         '?')}")
-                cli_art.print_literal(f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}")
-                identity_line = critique_data.get('primary_identity', '?')
-                if critique_data.get('secondary_identity'):
+                cli_art.console.rule(
+                    "Holistic critique scores", style="dim", align="left"
+                )
+                cli_art.print_literal(
+                    f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}"
+                )
+                cli_art.print_literal(
+                    f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}"
+                )
+                cli_art.print_literal(
+                    f"top_third         : {critique_data.get('top_third_score',         '?')}"
+                )
+                cli_art.print_literal(
+                    f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}"
+                )
+                identity_line = critique_data.get("primary_identity", "?")
+                if critique_data.get("secondary_identity"):
                     identity_line += f" / {critique_data['secondary_identity']}"
                 cli_art.print_literal(f"identity          : {identity_line}")
-                cli_art.print_literal(f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}")
+                cli_art.print_literal(
+                    f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}"
+                )
                 cli_art.print_literal()
                 if hard_failures:
-                    cli_art.console.print(f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):", soft_wrap=True)
+                    cli_art.console.print(
+                        f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):",
+                        soft_wrap=True,
+                    )
                     for hf in hard_failures:
                         cli_art.print_literal(f"- {hf}")
                     cli_art.print_literal()
@@ -3470,7 +4201,10 @@ class ResumeEngine:
                 checkpoint["critique_data"] = critique_data
                 jd_manager.save_checkpoint(job_key, checkpoint)
             else:
-                cli_art.console.print(f"  {cli_art.WARNING} Holistic critique returned empty.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {cli_art.WARNING} Holistic critique returned empty.",
+                    soft_wrap=True,
+                )
 
         # --- Step 5.5: Apply actionable recommendations, one at a time ---
         # Only recommendations that are concrete edits to this resume's own
@@ -3496,14 +4230,24 @@ class ResumeEngine:
         question_recs = [r for r in recs if str(r).strip().endswith("?")]
         recs = [r for r in recs if not str(r).strip().endswith("?")]
         if question_recs:
-            cli_art.console.print(f"\n  {theme.colorize_icon('hint')} {len(question_recs)} recommendation(s) "
-                  "are questions for you, not edits -- saved for `resume polish`, not applied.", soft_wrap=True)
-        distinctive_moments = (resume_data.get("_critique") or {}).get("distinctive_moments", [])
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('hint')} {len(question_recs)} recommendation(s) "
+                "are questions for you, not edits -- saved for `resume polish`, not applied.",
+                soft_wrap=True,
+            )
+        distinctive_moments = (resume_data.get("_critique") or {}).get(
+            "distinctive_moments", []
+        )
         protected_block = (
-            "=== PROTECTED DISTINCTIVE MOMENTS (preserve verbatim unless THIS "
-            "recommendation specifically targets them) ===\n"
-            + "\n".join(f"- {m}" for m in distinctive_moments) + "\n\n"
-        ) if distinctive_moments else ""
+            (
+                "=== PROTECTED DISTINCTIVE MOMENTS (preserve verbatim unless THIS "
+                "recommendation specifically targets them) ===\n"
+                + "\n".join(f"- {m}" for m in distinctive_moments)
+                + "\n\n"
+            )
+            if distinctive_moments
+            else ""
+        )
 
         if recs and interactive:
             recs = _review_recommendations_interactively(recs, checkpoint, job_key)
@@ -3513,16 +4257,27 @@ class ResumeEngine:
                 # Seeded, not appended later: question_recs must survive even
                 # when they were the *only* recommendations, in which case the
                 # apply loop below never runs.
-                "resume_data": resume_data, "applied": [], "skipped": [],
-                "needs_polish": list(question_recs), "next_index": 0,
+                "resume_data": resume_data,
+                "applied": [],
+                "skipped": [],
+                "needs_polish": list(question_recs),
+                "next_index": 0,
             }
             start_index = state["next_index"]
             if not recs:
                 pass
             elif start_index >= len(recs):
-                cli_art.console.rule("Step 5.5: Resuming: recommendation pass already complete from checkpoint.", style="dim", align="left")
+                cli_art.console.rule(
+                    "Step 5.5: Resuming: recommendation pass already complete from checkpoint.",
+                    style="dim",
+                    align="left",
+                )
             else:
-                cli_art.console.rule(f"Step 5.5: Applying actionable recommendations one at a time ({start_index}/{len(recs)} already done)...", style="dim", align="left")
+                cli_art.console.rule(
+                    f"Step 5.5: Applying actionable recommendations one at a time ({start_index}/{len(recs)} already done)...",
+                    style="dim",
+                    align="left",
+                )
             resume_data = state["resume_data"]
             applied, skipped = state["applied"], state["skipped"]
             needs_polish = state.get("needs_polish", [])
@@ -3531,7 +4286,9 @@ class ResumeEngine:
                 rec = recs[i]
                 if i > 0:
                     time.sleep(RECOMMENDATION_SLEEP)
-                cli_art.print_literal(f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}...")
+                cli_art.print_literal(
+                    f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}..."
+                )
                 rec_contents = (
                     f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                     f"{protected_block}"
@@ -3580,43 +4337,72 @@ class ResumeEngine:
                 _log_cache_stats(rec_usage, 0, 0)
                 rec_result = GeminiClient.parse_json(rec_text or "")
                 if not rec_result:
-                    cli_art.console.print(f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.", soft_wrap=True)
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.",
+                        soft_wrap=True,
+                    )
                 else:
                     this_applied = rec_result.pop("applied_recommendations", [])
                     this_skipped = rec_result.pop("skipped_recommendations", [])
                     this_needs_input = rec_result.pop("needs_personal_input", [])
                     candidate_resume_data = normalize_resume.normalize(rec_result)
-                    rec_violations = validate_resume.validate(candidate_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
+                    rec_violations = validate_resume.validate(
+                        candidate_resume_data,
+                        style_rules_for_validation,
+                        role_roster,
+                        role_bullet_minimums,
+                    )
                     if rec_violations:
-                        cli_art.console.print(f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
-                              f"discarding just this recommendation:", soft_wrap=True)
+                        cli_art.console.print(
+                            f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
+                            f"discarding just this recommendation:",
+                            soft_wrap=True,
+                        )
                         for v in rec_violations:
-                            cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
-                        skipped.append(f"{rec} (attempted, discarded: introduced a validator violation)")
+                            cli_art.print_literal(
+                                f"      - {cli_art._escape_markup(v)}"
+                            )
+                        skipped.append(
+                            f"{rec} (attempted, discarded: introduced a validator violation)"
+                        )
                     elif this_applied:
                         resume_data = candidate_resume_data
                         applied.append(rec)
                         cli_art.print_literal("    Applied.")
                     elif this_needs_input:
                         needs_polish.append(rec)
-                        cli_art.print_literal("    Needs your input -- left unchanged (try `resume polish`).")
+                        cli_art.print_literal(
+                            "    Needs your input -- left unchanged (try `resume polish`)."
+                        )
                     else:
                         skipped.append(rec)
-                        cli_art.print_literal("    Skipped (not a resume-content edit).")
+                        cli_art.print_literal(
+                            "    Skipped (not a resume-content edit)."
+                        )
 
                 checkpoint["recommendation_actions"] = {
-                    "resume_data": resume_data, "applied": applied, "skipped": skipped,
-                    "needs_polish": needs_polish, "next_index": i + 1,
+                    "resume_data": resume_data,
+                    "applied": applied,
+                    "skipped": skipped,
+                    "needs_polish": needs_polish,
+                    "next_index": i + 1,
                 }
                 jd_manager.save_checkpoint(job_key, checkpoint)
 
             checkpoint["recommendation_actions"] = {
-                "resume_data": resume_data, "applied": applied, "skipped": skipped,
-                "needs_polish": needs_polish, "next_index": len(recs),
+                "resume_data": resume_data,
+                "applied": applied,
+                "skipped": skipped,
+                "needs_polish": needs_polish,
+                "next_index": len(recs),
             }
             jd_manager.save_checkpoint(job_key, checkpoint)
 
-            resume_data["_recommendation_actions"] = {"applied": applied, "skipped": skipped, "needs_polish": needs_polish}
+            resume_data["_recommendation_actions"] = {
+                "applied": applied,
+                "skipped": skipped,
+                "needs_polish": needs_polish,
+            }
             if applied:
                 cli_art.print_literal("\n  Applied:")
                 for a in applied:
@@ -3626,7 +4412,9 @@ class ResumeEngine:
                 for s in skipped:
                     cli_art.print_literal(f"    - {cli_art._escape_markup(s)}")
             if needs_polish:
-                cli_art.print_literal("  Needs your input -- good candidates for `resume polish`:")
+                cli_art.print_literal(
+                    "  Needs your input -- good candidates for `resume polish`:"
+                )
                 for n in needs_polish:
                     cli_art.print_literal(f"    - {cli_art._escape_markup(n)}")
 
@@ -3645,26 +4433,35 @@ class ResumeEngine:
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(resume_data, f, indent=2, ensure_ascii=False)
-            cli_art.print_literal(f"\n  Resume saved to: {cli_art._escape_markup(output_path)}")
+            cli_art.print_literal(
+                f"\n  Resume saved to: {cli_art._escape_markup(output_path)}"
+            )
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}",
+                soft_wrap=True,
+            )
 
         # --- Step 7: Render HTML + Generate PDF ---
-        cli_art.console.rule("Step 7: Rendering HTML and generating PDF...", style="dim", align="left")
-        stem       = _build_output_stem(jd_path)
-        html_out   = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
-        pdf_out    = os.path.join(self.output_pdf_dir,  f"{stem}_Resume.pdf")
+        cli_art.console.rule(
+            "Step 7: Rendering HTML and generating PDF...", style="dim", align="left"
+        )
+        stem = _build_output_stem(jd_path)
+        html_out = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
+        pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_Resume.pdf")
         pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
 
         os.makedirs(os.path.dirname(html_out), exist_ok=True)
-        os.makedirs(os.path.dirname(pdf_out),  exist_ok=True)
+        os.makedirs(os.path.dirname(pdf_out), exist_ok=True)
 
         render_html(resume_data, html_out)
 
         trim_instructions = [
             lambda rd: "Trim the Summary to its 5-line limit.",
             lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
-            lambda rd: _bullet_removal_trim_instruction(self.load_yaml(self.kb_dir, "profile.yml")),
+            lambda rd: _bullet_removal_trim_instruction(
+                self.load_yaml(self.kb_dir, "profile.yml")
+            ),
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
@@ -3676,22 +4473,31 @@ class ResumeEngine:
             try:
                 pdf_result = subprocess.run(
                     ["node", pdf_script, html_out, pdf_out, "--format=letter"],
-                    capture_output=True, text=True, timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+                    capture_output=True,
+                    text=True,
+                    timeout=PDF_GENERATION_TIMEOUT_SECONDS,
                     env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
                 )
             except subprocess.TimeoutExpired:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
-                      f"{PDF_GENERATION_TIMEOUT_SECONDS}s.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
+                    f"{PDF_GENERATION_TIMEOUT_SECONDS}s.",
+                    soft_wrap=True,
+                )
                 return {}
             if pdf_result.returncode != 0:
                 cli_art.friendly_subprocess_error(
-                    pdf_result.stderr, "creating the PDF for this resume")
+                    pdf_result.stderr, "creating the PDF for this resume"
+                )
                 return {}
 
             page_count, size_str = _parse_pdf_result(pdf_result.stdout, pdf_out)
             if page_count is None:
-                cli_art.console.print(f"  {theme.colorize_icon('error')} Could not verify PDF page count via pypdf -- "
-                      "treating as a failure rather than silently passing the 2-page rule.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('error')} Could not verify PDF page count via pypdf -- "
+                    "treating as a failure rather than silently passing the 2-page rule.",
+                    soft_wrap=True,
+                )
                 return {}
             is_final = page_count <= 2 or trim_attempt >= max_trim_attempts
             if is_final:
@@ -3702,7 +4508,8 @@ class ResumeEngine:
                 dropped_optional_clients = True
                 fixed_content = profile_paths.fixed_content_module()
                 has_optional_clients = any(
-                    fixed_content.CLIENTS.get(job.get("company"), {}).get("essential") is False
+                    fixed_content.CLIENTS.get(job.get("company"), {}).get("essential")
+                    is False
                     and job.get("clients")
                     for job in resume_data.get("EXPERIENCE", [])
                 )
@@ -3711,8 +4518,12 @@ class ResumeEngine:
                     # client roster (fixed_content.CLIENTS marks it
                     # non-essential) before spending an LLM-driven
                     # trim_instructions attempt.
-                    cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping optional client rosters...")
-                    resume_data = normalize_resume.normalize(resume_data, include_optional_clients=False)
+                    cli_art.print_literal(
+                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping optional client rosters..."
+                    )
+                    resume_data = normalize_resume.normalize(
+                        resume_data, include_optional_clients=False
+                    )
                     render_html(resume_data, html_out)
                     continue
 
@@ -3728,14 +4539,18 @@ class ResumeEngine:
                     # in that response discarded the one edit that actually
                     # freed a page, and Why silently stuck around for every
                     # remaining trim attempt.
-                    cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)...")
+                    cli_art.print_literal(
+                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)..."
+                    )
                     resume_data = dict(resume_data)
                     resume_data["SECTION_WHY"] = ""
                     resume_data["WHY_TEXT"] = ""
                     render_html(resume_data, html_out)
                     continue
 
-            cli_art.print_literal(f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}...")
+            cli_art.print_literal(
+                f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}..."
+            )
             trim_contents = (
                 f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                 f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
@@ -3758,16 +4573,27 @@ class ResumeEngine:
                 # point is reached before trim_attempt is incremented, so it
                 # must be bumped here too or `continue` would spin on the same
                 # index forever.
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
-                      f"keeping prior resume_data and retrying if attempts remain.", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
+                    f"keeping prior resume_data and retrying if attempts remain.",
+                    soft_wrap=True,
+                )
                 trim_attempt += 1
                 continue
 
             trimmed_resume_data = normalize_resume.normalize(trimmed)
-            trim_violations = validate_resume.validate(trimmed_resume_data, style_rules_for_validation, role_roster, role_bullet_minimums)
+            trim_violations = validate_resume.validate(
+                trimmed_resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+            )
             if trim_violations:
-                cli_art.console.print(f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
-                      f"validator violation(s); discarding this trim and keeping the prior resume_data:", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                    f"validator violation(s); discarding this trim and keeping the prior resume_data:",
+                    soft_wrap=True,
+                )
                 for v in trim_violations:
                     cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
                 trim_attempt += 1
@@ -3778,15 +4604,27 @@ class ResumeEngine:
             trim_attempt += 1
 
         if page_count > 2:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.",
+                soft_wrap=True,
+            )
             return {}
 
-        final_companies = {job.get("company") for job in resume_data.get("EXPERIENCE", [])}
-        fired_situational_roles = final_companies & set(situational_roles.load_situational_roles()["roles"].keys())
+        final_companies = {
+            job.get("company") for job in resume_data.get("EXPERIENCE", [])
+        }
+        fired_situational_roles = final_companies & set(
+            situational_roles.load_situational_roles()["roles"].keys()
+        )
         if fired_situational_roles:
-            cli_art.console.print(f"  {theme.colorize_icon('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('hint')} Situational role fired: {', '.join(sorted(fired_situational_roles))}",
+                soft_wrap=True,
+            )
 
-        pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(pdf_out, resume_data, jd_keywords=jd_keywords)
+        pdf_fatal, pdf_text_warnings = validate_pdf_text.validate_pdf_text(
+            pdf_out, resume_data, jd_keywords=jd_keywords
+        )
         if pdf_fatal:
             cli_art.console.print(
                 f"  {theme.colorize_icon('error')} PDF text-layer check could not verify the rendered file "
@@ -3794,6 +4632,7 @@ class ResumeEngine:
                 soft_wrap=True,
             )
             from rich.text import Text
+
             for f in pdf_fatal:
                 # Print raw to stdout so the exact exception text appears
                 # unwrapped and unstyled for tests that assert on the
@@ -3801,15 +4640,22 @@ class ResumeEngine:
                 print(f"    - {f}")
             return {}
         if pdf_text_warnings:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
-                  f"(what an ATS would actually parse from the file, not just the pre-render JSON):", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
+                f"(what an ATS would actually parse from the file, not just the pre-render JSON):",
+                soft_wrap=True,
+            )
             from rich.text import Text
+
             for w in pdf_text_warnings:
                 msg = Text("    - ")
                 msg.append(str(w))
                 cli_art.console.print(msg)
         else:
-            cli_art.console.print(f"  {theme.colorize_icon('success')} PDF text-layer check: 0 issues.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} PDF text-layer check: 0 issues.",
+                soft_wrap=True,
+            )
 
         docx_out = os.path.join(self.output_docx_dir, f"{stem}_Resume.docx")
         try:
@@ -3823,13 +4669,24 @@ class ResumeEngine:
         # validate_resume.check_keyword_coverage()'s docstring for why a
         # missing keyword doesn't block the build.
         ats_match_rules = self.load_yaml(self.scoring_dir, "ats_match.yaml")
-        coverage = validate_resume.check_keyword_coverage(resume_data, jd_keywords, ats_match_rules)
+        coverage = validate_resume.check_keyword_coverage(
+            resume_data, jd_keywords, ats_match_rules
+        )
         jd_manager.save_coverage(jd_path, coverage)
-        coverage_icon = 'success' if coverage["band"] in ("excellent_match", "good_match") else 'warning'
-        cli_art.console.print(f"  {theme.colorize_icon(coverage_icon)} JD-keyword coverage: {coverage['score']}% "
-              f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})", soft_wrap=True)
+        coverage_icon = (
+            "success"
+            if coverage["band"] in ("excellent_match", "good_match")
+            else "warning"
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon(coverage_icon)} JD-keyword coverage: {coverage['score']}% "
+            f"({coverage['band']}, {len(coverage['matched'])}/{len(coverage['matched']) + len(coverage['missing'])})",
+            soft_wrap=True,
+        )
         if coverage["missing"]:
-            cli_art.print_literal(f"    Missing: {cli_art._escape_markup(', '.join(coverage['missing']))}")
+            cli_art.print_literal(
+                f"    Missing: {cli_art._escape_markup(', '.join(coverage['missing']))}"
+            )
 
         # B29 (phase-9-backlog.md): same non-blocking, report-not-gate
         # treatment as the coverage check above, and for the same class of
@@ -3837,19 +4694,32 @@ class ResumeEngine:
         # docstring for the real build failure that made this non-blocking.
         specificity_notes = validate_resume.check_summary_specificity(resume_data)
         for note in specificity_notes:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} {note}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} {note}", soft_wrap=True
+            )
 
         # Belt-and-suspenders on top of the fatal check above: don't claim
         # success or record output paths unless the PDF is actually on disk
         # (ResumeDesignSystem.md's guarantee -- the system must never claim a
         # resume exists when generation failed).
         if not os.path.exists(pdf_out):
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Pipeline did not complete -- expected PDF not found on disk: {pdf_out}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Pipeline did not complete -- expected PDF not found on disk: {pdf_out}",
+                soft_wrap=True,
+            )
             return {}
 
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}",
+            soft_wrap=True,
+        )
         jd_manager.delete_checkpoint(job_key)
-        resume_data["_output_paths"] = {"json": output_path, "html": html_out, "pdf": pdf_out, "docx": docx_out}
+        resume_data["_output_paths"] = {
+            "json": output_path,
+            "html": html_out,
+            "pdf": pdf_out,
+            "docx": docx_out,
+        }
         resume_data["_page_count"] = page_count
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
 
@@ -3881,13 +4751,19 @@ class ResumeEngine:
         7. Returns comprehensive package dict with status 'completed' and output_paths.
         """
         if not os.path.exists(jd_path):
-            cli_art.console.print(f"  {theme.colorize_icon('error')} JD file not found: {jd_path}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} JD file not found: {jd_path}",
+                soft_wrap=True,
+            )
             return {"status": "error", "message": f"JD file not found: {jd_path}"}
 
         try:
             job_key = jd_manager.compute_job_key(jd_path)
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Could not compute job key for {jd_path}: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Could not compute job key for {jd_path}: {e}",
+                soft_wrap=True,
+            )
             return {"status": "error", "message": str(e)}
 
         job_title, company_name = jd_manager.extract_job_meta(jd_path)
@@ -3895,11 +4771,17 @@ class ResumeEngine:
 
         # Stage 1: Liveness Gate
         if source_url and not skip_liveness:
-            cli_art.detail(f"  Checking posting liveness for {company_name}...", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Checking posting liveness for {company_name}...",
+                level=cli_art.NORMAL,
+            )
             try:
                 liveness_res = liveness.verify_jd_paths([jd_path])
                 if liveness_res.get("expired", 0) > 0:
-                    cli_art.console.print(f"  {theme.colorize_icon('error')} Posting expired or taken down. Moved to jds/expired/.", soft_wrap=True)
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('error')} Posting expired or taken down. Moved to jds/expired/.",
+                        soft_wrap=True,
+                    )
                     return {
                         "status": "expired",
                         "job_key": job_key,
@@ -3909,22 +4791,34 @@ class ResumeEngine:
                         "reason": "Posting URL returned 404 or expired status.",
                     }
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} Liveness check encountered an issue: {e}. Proceeding...", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} Liveness check encountered an issue: {e}. Proceeding...",
+                    soft_wrap=True,
+                )
 
         # Stage 2: Fit & Capability Gate
         evaluation = jd_manager.read_evaluation(jd_path)
         if not evaluation and not skip_fit:
-            cli_art.detail(f"  Evaluating candidate-role fit for {company_name}...", level=cli_art.NORMAL)
+            cli_art.detail(
+                f"  Evaluating candidate-role fit for {company_name}...",
+                level=cli_art.NORMAL,
+            )
             try:
                 evaluation = self.evaluate_fit(jd_path)
                 if evaluation:
                     jd_manager.save_evaluation(jd_path, evaluation)
             except Exception as e:
-                cli_art.console.print(f"  {theme.colorize_icon('warning')} Fit evaluation skipped due to error: {e}", soft_wrap=True)
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} Fit evaluation skipped due to error: {e}",
+                    soft_wrap=True,
+                )
 
         if evaluation and evaluation.get("recommendation") == "Skip" and not force:
             archived_path = jd_manager.archive_jd(jd_path)
-            cli_art.console.print(f"  {theme.colorize_icon('warning')} Fit score recommended 'Skip' ({evaluation.get('composite_score', '-')}/5). Moved to {archived_path}.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Fit score recommended 'Skip' ({evaluation.get('composite_score', '-')}/5). Moved to {archived_path}.",
+                soft_wrap=True,
+            )
             return {
                 "status": "skipped",
                 "job_key": job_key,
@@ -3945,7 +4839,10 @@ class ResumeEngine:
                 jd_manager.save_ats_classification(jd_path, ats_classification)
 
         # Stage 4: Tailored Resume
-        cli_art.console.rule(f"[bold {theme.BRAND}]Generating Tailored Resume[/bold {theme.BRAND}]", style="dim")
+        cli_art.console.rule(
+            f"[bold {theme.BRAND}]Generating Tailored Resume[/bold {theme.BRAND}]",
+            style="dim",
+        )
         resume_result = self.build_tailored_resume(
             jd_path=jd_path,
             master_resume=master_resume if master_resume is not None else {},
@@ -3954,15 +4851,28 @@ class ResumeEngine:
             interactive=interactive,
         )
         if not resume_result:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Resume generation failed for {jd_path}.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Resume generation failed for {jd_path}.",
+                soft_wrap=True,
+            )
             return {"status": "error", "message": "Resume generation failed"}
 
         # Stage 5: Tailored Cover Letter
-        cli_art.console.rule(f"[bold {theme.BRAND}]Generating Tailored Cover Letter[/bold {theme.BRAND}]", style="dim")
+        cli_art.console.rule(
+            f"[bold {theme.BRAND}]Generating Tailored Cover Letter[/bold {theme.BRAND}]",
+            style="dim",
+        )
         cl_result = self.build_tailored_coverletter(jd_path)
         if not cl_result:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Cover letter generation failed for {jd_path}.", soft_wrap=True)
-            return {"status": "error", "message": "Cover letter generation failed", "resume": resume_result}
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Cover letter generation failed for {jd_path}.",
+                soft_wrap=True,
+            )
+            return {
+                "status": "error",
+                "message": "Cover letter generation failed",
+                "resume": resume_result,
+            }
 
         # Stage 6: Move to completed and record tracking
         output_paths = {
@@ -4003,6 +4913,7 @@ class ResumeEngine:
         )
         try:
             import db
+
             db.checkpoint()
         except Exception:
             pass
@@ -4025,6 +4936,7 @@ class ResumeEngine:
 # MAIN
 # ---------------------------------------------------------------------------
 
+
 def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     """Runs the tailor+render pipeline.
 
@@ -4039,9 +4951,14 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         try:
             with open(master_resume_path, "r", encoding="utf-8") as f:
                 master_resume = json.load(f)
-            cli_art.print_literal(f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}")
+            cli_art.print_literal(
+                f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}"
+            )
         except Exception as e:
-            cli_art.console.print(f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.", soft_wrap=True)
+            cli_art.console.print(
+                f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.",
+                soft_wrap=True,
+            )
 
     engine = ResumeEngine()
     tracker = jd_manager.JDTracker()
@@ -4062,7 +4979,10 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         try:
             job_key = jd_manager.compute_job_key(path)
         except OSError as e:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Could not read JD file {path}: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Could not read JD file {path}: {e}",
+                soft_wrap=True,
+            )
             tracker.mark_failed(
                 job_key=f"unreadable:{os.path.basename(path)}",
                 source_file=os.path.basename(path),
@@ -4100,14 +5020,22 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             )
             failed_count += 1
             aborted_remaining = len(jd_paths) - (index + 1)
-            cli_art.console.print(f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping the batch.", soft_wrap=True)
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping the batch.",
+                soft_wrap=True,
+            )
             cli_art.print_literal(f"    {cli_art._escape_markup(str(e))}")
             if aborted_remaining:
-                cli_art.print_literal(f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped.")
+                cli_art.print_literal(
+                    f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped."
+                )
             break
         except Exception as e:
             result = None
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Unhandled exception building resume for {path}: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Unhandled exception building resume for {path}: {e}",
+                soft_wrap=True,
+            )
 
         if result:
             output_paths = result.get("_output_paths", {})
@@ -4130,7 +5058,9 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 evaluation=evaluation,
             )
             completed_count += 1
-            cli_art.print_literal(f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}")
+            cli_art.print_literal(
+                f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}"
+            )
         else:
             tracker.mark_failed(
                 job_key=job_key,
@@ -4140,24 +5070,31 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 error_message="Resume build failed. Check output above for details.",
             )
             failed_count += 1
-            cli_art.console.print(f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.", soft_wrap=True)
+            cli_art.console.print(
+                f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.",
+                soft_wrap=True,
+            )
 
     from rich.text import Text
+
     summary = Text("\nBatch summary: ")
     summary.append(str(completed_count))
     summary.append(" completed, ")
     summary.append(str(failed_count))
     summary.append(" failed.")
     if aborted_remaining:
-        summary.append(f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted.")
+        summary.append(
+            f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted."
+        )
     cli_art.console.print(summary, soft_wrap=True)
 
     try:
         import db
+
         db.checkpoint()
     except Exception:
         pass  # best-effort (F6) -- a checkpoint failure shouldn't fail a
-              # batch run that otherwise completed successfully
+        # batch run that otherwise completed successfully
 
     return completed_count, failed_count
 
@@ -4182,9 +5119,14 @@ def run_application_package(
         try:
             with open(master_resume_path, "r", encoding="utf-8") as f:
                 master_resume = json.load(f)
-            cli_art.print_literal(f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}")
+            cli_art.print_literal(
+                f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}"
+            )
         except Exception as e:
-            cli_art.console.print(f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.", soft_wrap=True)
+            cli_art.console.print(
+                f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.",
+                soft_wrap=True,
+            )
 
     engine = ResumeEngine()
 
@@ -4220,11 +5162,17 @@ def run_application_package(
             else:
                 failed_count += 1
         except SustainedFailureError:
-            cli_art.console.print(f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping package batch.", soft_wrap=True)
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('error')} Sustained API failure -- stopping package batch.",
+                soft_wrap=True,
+            )
             failed_count += 1
             break
         except Exception as e:
-            cli_art.console.print(f"  {theme.colorize_icon('error')} Unhandled exception packaging {path}: {e}", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Unhandled exception packaging {path}: {e}",
+                soft_wrap=True,
+            )
             failed_count += 1
 
     return completed_count, failed_count
@@ -4232,25 +5180,34 @@ def run_application_package(
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Resume Builder Orchestrator")
     parser.add_argument(
-        "jd", nargs="?", default=None,
+        "jd",
+        nargs="?",
+        default=None,
         help="Path to a specific JD file. Omit to batch-process everything pending in jds/.",
     )
-    parser.add_argument("--master", default=None, help="Path to master resume JSON (optional)")
-    parser.add_argument("--output", default=None, help="Output JSON filename (single-JD mode only)")
+    parser.add_argument(
+        "--master", default=None, help="Path to master resume JSON (optional)"
+    )
+    parser.add_argument(
+        "--output", default=None, help="Output JSON filename (single-JD mode only)"
+    )
     verbosity_group = parser.add_mutually_exclusive_group()
     verbosity_group.add_argument(
-        "--verbose", action="store_true",
+        "--verbose",
+        action="store_true",
         help="Show implementation detail (cache/tier internals, token counts, model "
-             "IDs, rule filenames) alongside normal step output. Same effect as "
-             "RESUME_BUILDER_VERBOSITY=verbose, but overrides that env var.",
+        "IDs, rule filenames) alongside normal step output. Same effect as "
+        "RESUME_BUILDER_VERBOSITY=verbose, but overrides that env var.",
     )
     verbosity_group.add_argument(
-        "--quiet", action="store_true",
+        "--quiet",
+        action="store_true",
         help="Show only errors, warnings and final results -- no step labels or "
-             "cache hit/miss. Same effect as RESUME_BUILDER_VERBOSITY=quiet, but "
-             "overrides that env var.",
+        "cache hit/miss. Same effect as RESUME_BUILDER_VERBOSITY=quiet, but "
+        "overrides that env var.",
     )
     args = parser.parse_args()
 
@@ -4262,7 +5219,9 @@ def main():
         cli_art.set_verbosity(None)  # let RESUME_BUILDER_VERBOSITY decide
 
     completed_count, failed_count = run_pipeline(
-        jd_path=args.jd, master_resume_path=args.master, output_filename=args.output,
+        jd_path=args.jd,
+        master_resume_path=args.master,
+        output_filename=args.output,
     )
 
     if args.jd and failed_count and not completed_count:

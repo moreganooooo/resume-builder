@@ -25,18 +25,34 @@ MIN_PYTHON = (3, 10)
 # they differ, so this can check every line in requirements.txt for real
 # rather than spot-checking a handful.
 REQUIRED_PACKAGES = {
-    "pandas": "pandas", "numpy": "numpy", "pyyaml": "yaml", "pydantic": "pydantic",
-    "requests": "requests", "python-dotenv": "dotenv", "google-genai": "google.genai",
-    "click": "click", "rich": "rich", "linkedin-jobs-scraper": "linkedin_jobs_scraper",
+    "pandas": "pandas",
+    "numpy": "numpy",
+    "pyyaml": "yaml",
+    "pydantic": "pydantic",
+    "requests": "requests",
+    "python-dotenv": "dotenv",
+    "google-genai": "google.genai",
+    "click": "click",
+    "rich": "rich",
+    "linkedin-jobs-scraper": "linkedin_jobs_scraper",
     "selenium": "selenium",
-    "beautifulsoup4": "bs4", "browser_cookie3": "browser_cookie3", "questionary": "questionary",
-    "python-docx": "docx", "python-pptx": "pptx", "pdfminer.six": "pdfminer", "pypdf": "pypdf",
-    "odfpy": "odf", "openpyxl": "openpyxl",
+    "beautifulsoup4": "bs4",
+    "browser_cookie3": "browser_cookie3",
+    "questionary": "questionary",
+    "python-docx": "docx",
+    "python-pptx": "pptx",
+    "pdfminer.six": "pdfminer",
+    "pypdf": "pypdf",
+    "odfpy": "odf",
+    "openpyxl": "openpyxl",
 }
 
 FONT_FILES = [
-    "DMSans-ExtraBold-static.ttf", "DMSans-Italic-static.ttf", "DMSans-Regular-static.ttf",
-    "dm-serif-display-latin-ext.woff2", "dm-serif-display-latin.woff2",
+    "DMSans-ExtraBold-static.ttf",
+    "DMSans-Italic-static.ttf",
+    "DMSans-Regular-static.ttf",
+    "dm-serif-display-latin-ext.woff2",
+    "dm-serif-display-latin.woff2",
 ]
 
 PLAYWRIGHT_CACHE_DIR = (
@@ -47,13 +63,19 @@ PLAYWRIGHT_CACHE_DIR = (
 
 
 def _check(name: str, passed: bool, detail: str, fix: str = "") -> dict:
-    return {"name": name, "passed": passed, "detail": detail, "fix": fix if not passed else ""}
+    return {
+        "name": name,
+        "passed": passed,
+        "detail": detail,
+        "fix": fix if not passed else "",
+    }
 
 
 def check_python_version() -> dict:
     ok = sys.version_info[:2] >= MIN_PYTHON
     return _check(
-        "Python version", ok,
+        "Python version",
+        ok,
         f"{sys.version.split()[0]} (need >= {'.'.join(map(str, MIN_PYTHON))})",
         "Install Python 3.10+ and rebuild .venv/ (see CLAUDE.md Setup).",
     )
@@ -66,7 +88,9 @@ def check_venv() -> dict:
     ok = exists and has_python
     detail = f".venv/ {'found' if exists else 'missing'}, {'ready to use' if ok else 'not usable'}"
     return _check(
-        ".venv/ exists and is ready", ok, detail,
+        ".venv/ exists and is ready",
+        ok,
+        detail,
         f"Rebuild .venv/: {sys.executable} -m venv .venv && source .venv/bin/activate && "
         "pip install -r requirements.txt.",
     )
@@ -81,7 +105,8 @@ def check_python_packages() -> dict:
             missing.append(pip_name)
     ok = not missing
     return _check(
-        "Python packages (requirements.txt)", ok,
+        "Python packages (requirements.txt)",
+        ok,
         "all installed" if ok else f"missing: {', '.join(missing)}",
         f"pip install {' '.join(missing)}" if missing else "",
     )
@@ -90,7 +115,9 @@ def check_python_packages() -> dict:
 def check_node() -> dict:
     path = shutil.which("node")
     return _check(
-        "Node.js", path is not None, path or "not found on PATH",
+        "Node.js",
+        path is not None,
+        path or "not found on PATH",
         "Install Node.js (https://nodejs.org) -- needed for PDF rendering via Playwright.",
     )
 
@@ -103,9 +130,15 @@ def check_npm() -> dict:
     path = shutil.which("npm")
     has_npx = shutil.which("npx") is not None
     ok = path is not None and has_npx
-    detail = path if ok else f"npm {'found' if path else 'not found'}, npx {'found' if has_npx else 'not found'}"
+    detail = (
+        path
+        if ok
+        else f"npm {'found' if path else 'not found'}, npx {'found' if has_npx else 'not found'}"
+    )
     return _check(
-        "npm/npx", ok, detail,
+        "npm/npx",
+        ok,
+        detail,
         "Reinstall Node.js (https://nodejs.org) -- npm and npx ship with it. Playwright setup "
         "(`npm install` / `npx playwright install chromium`) needs both.",
     )
@@ -114,10 +147,14 @@ def check_npm() -> dict:
 def check_playwright_npm_package() -> dict:
     ok = os.path.isdir(os.path.join(PROJECT_ROOT, "node_modules", "playwright"))
     has_npm = shutil.which("npm") is not None
-    fix = "npm install (package.json already lists playwright as a dependency)." if has_npm \
+    fix = (
+        "npm install (package.json already lists playwright as a dependency)."
+        if has_npm
         else "npm isn't available -- fix the npm/npx check above first, then npm install."
+    )
     return _check(
-        "Playwright npm package", ok,
+        "Playwright npm package",
+        ok,
         "installed" if ok else "node_modules/playwright not found",
         fix,
     )
@@ -126,12 +163,18 @@ def check_playwright_npm_package() -> dict:
 def check_playwright_chromium() -> dict:
     ok = False
     if os.path.isdir(PLAYWRIGHT_CACHE_DIR):
-        ok = any(name.startswith("chromium-") for name in os.listdir(PLAYWRIGHT_CACHE_DIR))
+        ok = any(
+            name.startswith("chromium-") for name in os.listdir(PLAYWRIGHT_CACHE_DIR)
+        )
     has_npx = shutil.which("npx") is not None
-    fix = "npx playwright install chromium" if has_npx \
+    fix = (
+        "npx playwright install chromium"
+        if has_npx
         else "npx isn't available -- fix the npm/npx check above first, then npx playwright install chromium."
+    )
     return _check(
-        "Playwright Chromium browser", ok,
+        "Playwright Chromium browser",
+        ok,
         "found" if ok else f"no chromium-* install found under {PLAYWRIGHT_CACHE_DIR}",
         fix,
     )
@@ -143,14 +186,20 @@ def check_go() -> dict:
     # passed=True.
     path = shutil.which("go")
     return _check(
-        "Go toolchain (optional -- only for `resume dashboard`)", True,
-        f"found: {path}" if path else "not found -- fine unless you use `resume dashboard`",
+        "Go toolchain (optional -- only for `resume dashboard`)",
+        True,
+        (
+            f"found: {path}"
+            if path
+            else "not found -- fine unless you use `resume dashboard`"
+        ),
         "Install Go (https://go.dev, or `brew install go`) to use `resume dashboard`.",
     )
 
 
 def _env_values() -> dict:
     from dotenv import dotenv_values
+
     path = profile_paths.env_path()
     return dotenv_values(path) if os.path.exists(path) else {}
 
@@ -158,10 +207,18 @@ def _env_values() -> dict:
 def check_gemini_api_key() -> dict:
     values = _env_values()
     in_file = bool(values.get("GEMINI_API_KEY"))
-    has_key = in_file or bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-    detail = f"set in {profile_paths.env_path()}" if in_file else ("set in shell environment" if has_key else "not found")
+    has_key = in_file or bool(
+        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    )
+    detail = (
+        f"set in {profile_paths.env_path()}"
+        if in_file
+        else ("set in shell environment" if has_key else "not found")
+    )
     return _check(
-        "GEMINI_API_KEY", has_key, detail,
+        "GEMINI_API_KEY",
+        has_key,
+        detail,
         f"Add GEMINI_API_KEY=... to {profile_paths.env_path()} (or re-run the bootstrap wizard's secrets step).",
     )
 
@@ -170,9 +227,12 @@ def check_jobright_cookie() -> dict:
     # Optional -- only needed for `resume scan --source jobright`, never a
     # hard failure, so this always reports passed=True.
     values = _env_values()
-    has_cookie = bool(values.get("JOBRIGHT_COOKIE_STRING") or os.environ.get("JOBRIGHT_COOKIE_STRING"))
+    has_cookie = bool(
+        values.get("JOBRIGHT_COOKIE_STRING") or os.environ.get("JOBRIGHT_COOKIE_STRING")
+    )
     return _check(
-        "JOBRIGHT_COOKIE_STRING (optional -- only for scan --source jobright)", True,
+        "JOBRIGHT_COOKIE_STRING (optional -- only for scan --source jobright)",
+        True,
         "set" if has_cookie else "not set -- fine unless you use JobRight scanning",
     )
 
@@ -182,7 +242,8 @@ def check_fonts() -> dict:
     missing = [f for f in FONT_FILES if not os.path.exists(os.path.join(fonts_dir, f))]
     ok = not missing
     return _check(
-        "DM Sans static font files", ok,
+        "DM Sans static font files",
+        ok,
         "all present" if ok else f"missing: {', '.join(missing)}",
         f"Restore the missing font file(s) into {fonts_dir}/ (see git history).",
     )
@@ -195,8 +256,13 @@ def check_signature_image() -> dict:
     # passed=True.
     path = profile_paths.signature_path()
     return _check(
-        f"Signature image ({profile_paths.active_profile()}, optional)", True,
-        f"found: {path}" if path else "not set -- cover letters render with no signature image, which is fine",
+        f"Signature image ({profile_paths.active_profile()}, optional)",
+        True,
+        (
+            f"found: {path}"
+            if path
+            else "not set -- cover letters render with no signature image, which is fine"
+        ),
     )
 
 
@@ -212,7 +278,9 @@ def check_dashboard_theme_sync() -> dict:
     path = sync_dashboard_theme.DASHBOARD_THEME_PATH
     if not os.path.exists(path):
         return _check(
-            "Dashboard theme sync (Go)", False, f"{path} not found",
+            "Dashboard theme sync (Go)",
+            False,
+            f"{path} not found",
             "Run `python scripts/sync_dashboard_theme.py` to generate it.",
         )
     expected = sync_dashboard_theme.build_go_theme_source()
@@ -220,8 +288,13 @@ def check_dashboard_theme_sync() -> dict:
         actual = f.read()
     ok = actual == expected
     return _check(
-        "Dashboard theme sync (Go)", ok,
-        "in sync with theme.py" if ok else "out of sync with theme.py's color constants",
+        "Dashboard theme sync (Go)",
+        ok,
+        (
+            "in sync with theme.py"
+            if ok
+            else "out of sync with theme.py's color constants"
+        ),
         "Run `python scripts/sync_dashboard_theme.py` to regenerate it.",
     )
 
@@ -236,16 +309,22 @@ def check_dashboard_color_lint() -> dict:
     this binary is only needed for `resume dashboard`."""
     if not shutil.which("go"):
         return _check(
-            "Dashboard color lint (Go)", True,
+            "Dashboard color lint (Go)",
+            True,
             "skipped -- Go not installed (only needed for `resume dashboard`)",
         )
     result = subprocess.run(
         ["go", "run", "./tools/lint_colors.go"],
         cwd=os.path.join(PROJECT_ROOT, "dashboard"),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     ok = result.returncode == 0
-    detail = "no hard-coded colors found" if ok else "hard-coded/non-token colors found -- see below"
+    detail = (
+        "no hard-coded colors found"
+        if ok
+        else "hard-coded/non-token colors found -- see below"
+    )
     fix = result.stdout.strip() or result.stderr.strip()
     return _check("Dashboard color lint (Go)", ok, detail, fix)
 
@@ -289,7 +368,11 @@ def check_kb_allowlist() -> dict:
     import orchestrator
 
     kb_dir = profile_paths.kb_dir()
-    missing = [f for f in orchestrator.KB_ALLOWLIST if not os.path.exists(os.path.join(kb_dir, f))]
+    missing = [
+        f
+        for f in orchestrator.KB_ALLOWLIST
+        if not os.path.exists(os.path.join(kb_dir, f))
+    ]
 
     now = time.time()
     corrupted = []
@@ -301,16 +384,25 @@ def check_kb_allowlist() -> dict:
         if st.st_size == 0 or st.st_mtime > now + 60:
             corrupted.append(f)
 
-    conflicts = sorted(f for f in os.listdir(kb_dir) if ".sync-conflict-" in f) if os.path.isdir(kb_dir) else []
+    conflicts = (
+        sorted(f for f in os.listdir(kb_dir) if ".sync-conflict-" in f)
+        if os.path.isdir(kb_dir)
+        else []
+    )
 
     # Every file missing and nothing else wrong is "never bootstrapped," not
     # "partially broken" -- collapse it to one actionable line instead of a
     # 19-filename wall doctor used to print, with the real instruction
     # buried at the end of a warning about shrunk context (B32).
-    if len(missing) == len(orchestrator.KB_ALLOWLIST) and not corrupted and not conflicts:
+    if (
+        len(missing) == len(orchestrator.KB_ALLOWLIST)
+        and not corrupted
+        and not conflicts
+    ):
         name = profile_paths.active_profile()
         return _check(
-            f"Knowledge-base allowlist files ({name})", False,
+            f"Knowledge-base allowlist files ({name})",
+            False,
             f"0 of {len(orchestrator.KB_ALLOWLIST)} present -- profile not bootstrapped yet",
             f"Profile `{name}` isn't set up yet -- run `resume` -> New User? Start Here! "
             "(or `resume bootstrap` directly).",
@@ -320,20 +412,27 @@ def check_kb_allowlist() -> dict:
     if missing:
         problems.append(f"missing: {', '.join(missing)}")
     if corrupted:
-        problems.append(f"zero-byte or bad-mtime (likely corrupted): {', '.join(corrupted)}")
+        problems.append(
+            f"zero-byte or bad-mtime (likely corrupted): {', '.join(corrupted)}"
+        )
     if conflicts:
         problems.append(f"Syncthing conflict copies present: {', '.join(conflicts)}")
 
     ok = not problems
     return _check(
-        f"Knowledge-base allowlist files ({profile_paths.active_profile()})", ok,
+        f"Knowledge-base allowlist files ({profile_paths.active_profile()})",
+        ok,
         "all present and healthy" if ok else "; ".join(problems),
-        "" if ok else (
-            f"Missing or corrupted files silently shrink or poison the builder's context -- restore "
-            f"them into {kb_dir}/, or re-run bootstrap/Update My Knowledge if this is a fresh or "
-            "partial profile. For Syncthing conflict copies: they are never auto-ingested, but "
-            "resolve them by hand (compare the two versions, keep the correct one, delete the rest) "
-            "before they're forgotten and pile up."
+        (
+            ""
+            if ok
+            else (
+                f"Missing or corrupted files silently shrink or poison the builder's context -- restore "
+                f"them into {kb_dir}/, or re-run bootstrap/Update My Knowledge if this is a fresh or "
+                "partial profile. For Syncthing conflict copies: they are never auto-ingested, but "
+                "resolve them by hand (compare the two versions, keep the correct one, delete the rest) "
+                "before they're forgotten and pile up."
+            )
         ),
     )
 
@@ -347,6 +446,7 @@ def check_data_db() -> dict:
     surfacing it. This check is the counterpart: a place that actually
     fails loudly if the DB itself can't be opened or queried (F5)."""
     import db
+
     name = profile_paths.active_profile()
     try:
         conn = db.get_db(name)
@@ -356,7 +456,8 @@ def check_data_db() -> dict:
             conn.close()
     except Exception as e:
         return _check(
-            f"SQLite data.db ({name})", False,
+            f"SQLite data.db ({name})",
+            False,
             f"could not open or query: {e}",
             f"Check disk space and file permissions on {db.get_db_path(name)}. If the file is "
             "corrupted, the JSON files in jds/ remain the real source of truth -- data.db can be "
@@ -397,7 +498,9 @@ def run_test_suite() -> tuple:
     output."""
     result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
-        cwd=PROJECT_ROOT, capture_output=True, text=True,
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
     )
     passed = result.returncode == 0
     lines = [line for line in result.stderr.strip().splitlines() if line.strip()]
@@ -411,7 +514,7 @@ def run_test_suite() -> tuple:
 
 if __name__ == "__main__":
     import cli_art
+
     results = run_checks()
     test_passed, test_summary = run_test_suite()
     cli_art.render_doctor_report(results, (test_passed, test_summary))
-

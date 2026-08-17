@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cli  # noqa: E402
@@ -40,8 +42,11 @@ class TestVersionAndVerboseFlags(unittest.TestCase):
 
     def test_verbose_flag_enables_debug_logging(self):
         import logging
-        with patch("logging.basicConfig") as mock_basic_config, \
-             patch("cli.menu.run_interactive_menu"):
+
+        with (
+            patch("logging.basicConfig") as mock_basic_config,
+            patch("cli.menu.run_interactive_menu"),
+        ):
             runner = CliRunner()
             result = runner.invoke(cli.cli, ["--verbose"])
         self.assertEqual(result.exit_code, 0)

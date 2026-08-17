@@ -71,13 +71,25 @@ def _build_choices() -> list:
     (_build_find_jobs_choices() etc.), each following this same
     build-fresh-per-call discipline for the same reason."""
     return [
-        questionary.Choice(title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"),
+        questionary.Choice(
+            title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"
+        ),
         questionary.Separator(" "),
-        questionary.Choice(title=_icon_title("discovery", "Find Jobs"), value="find_jobs"),
-        questionary.Choice(title=_icon_title("build", "Build Documents"), value="build_documents"),
-        questionary.Choice(title=_icon_title("bullet_bank", "Bullet Bank"), value="bullet_bank"),
-        questionary.Choice(title=_icon_title("evaluate", "Track & Follow Up"), value="track_followup"),
-        questionary.Choice(title=_icon_title("utility", "Settings & Upkeep"), value="settings_upkeep"),
+        questionary.Choice(
+            title=_icon_title("discovery", "Find Jobs"), value="find_jobs"
+        ),
+        questionary.Choice(
+            title=_icon_title("build", "Build Documents"), value="build_documents"
+        ),
+        questionary.Choice(
+            title=_icon_title("bullet_bank", "Bullet Bank"), value="bullet_bank"
+        ),
+        questionary.Choice(
+            title=_icon_title("evaluate", "Track & Follow Up"), value="track_followup"
+        ),
+        questionary.Choice(
+            title=_icon_title("utility", "Settings & Upkeep"), value="settings_upkeep"
+        ),
         questionary.Separator(" "),
         questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
         questionary.Choice(title=_icon_title("utility", "Exit"), value="exit"),
@@ -91,11 +103,25 @@ def _build_find_jobs_choices() -> list:
     the audit specifically praised that pattern for signaling "you're one
     level down from the main menu" and asked for it here too."""
     return [
-        questionary.Choice(title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"),
-        questionary.Choice(title=_icon_title("discovery", "↳ Add Job Description Manually"), value="add_manual_jd"),
-        questionary.Choice(title=_icon_title("discovery", "↳ Check Job Posting Liveness"), value="liveness"),
-        questionary.Choice(title=_icon_title("evaluate", "↳ Evaluate Pending Roles"), value="evaluate_all"),
-        questionary.Choice(title=_icon_title("utility", "↳ Archive Stale Postings"), value="stale_sweep"),
+        questionary.Choice(
+            title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"
+        ),
+        questionary.Choice(
+            title=_icon_title("discovery", "↳ Add Job Description Manually"),
+            value="add_manual_jd",
+        ),
+        questionary.Choice(
+            title=_icon_title("discovery", "↳ Check Job Posting Liveness"),
+            value="liveness",
+        ),
+        questionary.Choice(
+            title=_icon_title("evaluate", "↳ Evaluate Pending Roles"),
+            value="evaluate_all",
+        ),
+        questionary.Choice(
+            title=_icon_title("utility", "↳ Archive Stale Postings"),
+            value="stale_sweep",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -103,11 +129,30 @@ def _build_find_jobs_choices() -> list:
 def _build_build_documents_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
-        questionary.Choice(title=_icon_title("build", "↳ Build Full Application Package (Resume + Cover Letter)"), value="package_flow"),
-        questionary.Choice(title=_icon_title("build", "↳ Customize Resume for Specific Role(s)"), value="tailor_pick"),
-        questionary.Choice(title=_icon_title("build", "↳ Customize Resume for All Pending Roles (Batch Run)"), value="tailor_all"),
-        questionary.Choice(title=_icon_title("build", "↳ Write Cover Letter for Specific Role(s)"), value="coverletter_pick"),
-        questionary.Choice(title=_icon_title("build", "↳ Polish a Resume or Cover Letter With Gemini"), value="polish"),
+        questionary.Choice(
+            title=_icon_title(
+                "build", "↳ Build Full Application Package (Resume + Cover Letter)"
+            ),
+            value="package_flow",
+        ),
+        questionary.Choice(
+            title=_icon_title("build", "↳ Customize Resume for Specific Role(s)"),
+            value="tailor_pick",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "build", "↳ Customize Resume for All Pending Roles (Batch Run)"
+            ),
+            value="tailor_all",
+        ),
+        questionary.Choice(
+            title=_icon_title("build", "↳ Write Cover Letter for Specific Role(s)"),
+            value="coverletter_pick",
+        ),
+        questionary.Choice(
+            title=_icon_title("build", "↳ Polish a Resume or Cover Letter With Gemini"),
+            value="polish",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -115,8 +160,13 @@ def _build_build_documents_choices() -> list:
 def _build_track_followup_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
-        questionary.Choice(title=_icon_title("utility", "↳ Browse & Manage Jobs"), value="browse_jobs"),
-        questionary.Choice(title=_icon_title("evaluate", "↳ Career Dashboard"), value="career_dashboard"),
+        questionary.Choice(
+            title=_icon_title("utility", "↳ Browse & Manage Jobs"), value="browse_jobs"
+        ),
+        questionary.Choice(
+            title=_icon_title("evaluate", "↳ Career Dashboard"),
+            value="career_dashboard",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -129,12 +179,32 @@ def _build_settings_upkeep_choices() -> list:
     last_run = maintenance.get_last_run("doctor")
     last_run_label = f"(last run: {last_run[:10]})" if last_run else "(never run)"
     return [
-        questionary.Choice(title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"), value="doctor"),
-        questionary.Choice(title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"), value="manage_skills"),
-        questionary.Choice(title=_icon_title("utility", "↳ Manage Scraping, Boards & Search Queries"), value="manage_scraping"),
-        questionary.Choice(title=_icon_title("utility", "↳ Generate Sample Resume + Cover Letter (QA)"), value="build_sample"),
-        questionary.Choice(title=_icon_title("utility", "↳ Check for GitHub Updates"), value="check_updates"),
-        questionary.Choice(title=_icon_title("utility", "↳ Manage Profiles (Rename / Delete)"), value="manage_profiles"),
+        questionary.Choice(
+            title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"),
+            value="doctor",
+        ),
+        questionary.Choice(
+            title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"),
+            value="manage_skills",
+        ),
+        questionary.Choice(
+            title=_icon_title("utility", "↳ Manage Scraping, Boards & Search Queries"),
+            value="manage_scraping",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "utility", "↳ Generate Sample Resume + Cover Letter (QA)"
+            ),
+            value="build_sample",
+        ),
+        questionary.Choice(
+            title=_icon_title("utility", "↳ Check for GitHub Updates"),
+            value="check_updates",
+        ),
+        questionary.Choice(
+            title=_icon_title("utility", "↳ Manage Profiles (Rename / Delete)"),
+            value="manage_profiles",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -157,7 +227,7 @@ def _run_leaf_submenu(prompt: str, build_choices, session_stats: dict) -> None:
             sys.stdout.flush()
             cli_art.display_main_banner(reveal=False)
             cli_art.display_footer_commands()
-            
+
         choice = cli_art.select(prompt, choices=build_choices())
         if not choice or choice == "back":
             return
@@ -236,17 +306,37 @@ def _menu_choices() -> list:
         choices = all_choices
     else:
         choices = [c for c in all_choices if getattr(c, "value", None) != "bootstrap"]
-    return choices + [questionary.Separator(" "), _flourish_line(), questionary.Separator(" ")]
+    return choices + [
+        questionary.Separator(" "),
+        _flourish_line(),
+        questionary.Separator(" "),
+    ]
 
 
 def _build_scan_source_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
-        questionary.Choice(title=_icon_title("discovery", "All (default)"), value="all"),
-        questionary.Choice(title=_icon_title("discovery", "JobRight only"), value="jobright"),
-        questionary.Choice(title=_icon_title("discovery", "LinkedIn only"), value="linkedin"),
-        questionary.Choice(title=_icon_title("discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"), value="boards"),
-        questionary.Choice(title=_icon_title("discovery", "Direct-to-ATS only (Greenhouse, Ashby, Lever, etc.)"), value="ats"),
+        questionary.Choice(
+            title=_icon_title("discovery", "All (default)"), value="all"
+        ),
+        questionary.Choice(
+            title=_icon_title("discovery", "JobRight only"), value="jobright"
+        ),
+        questionary.Choice(
+            title=_icon_title("discovery", "LinkedIn only"), value="linkedin"
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "discovery", "Public job boards only (RemoteOK, TheMuse, etc.)"
+            ),
+            value="boards",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "discovery", "Direct-to-ATS only (Greenhouse, Ashby, Lever, etc.)"
+            ),
+            value="ats",
+        ),
     ]
 
 
@@ -268,7 +358,8 @@ def _confirm_active_profile() -> bool:
     import profile_paths
 
     names = sorted(
-        n for n in os.listdir(profile_paths.PROFILES_DIR)
+        n
+        for n in os.listdir(profile_paths.PROFILES_DIR)
         if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
     )
     current = profile_paths.active_profile()
@@ -344,9 +435,17 @@ def _confirm_icon_set() -> None:
     if not cli_art.console.is_terminal:
         return
 
-    nerd_row = "  ".join(theme._NERD_ICONS[k] for k in ("success", "error", "warning", "build", "bullet_bank"))
-    unicode_row = "  ".join(theme._UNICODE_ICONS[k] for k in ("success", "error", "warning", "build", "bullet_bank"))
-    cli_art.console.print("\nOne-time setup: which of these rows looks right in this terminal?")
+    nerd_row = "  ".join(
+        theme._NERD_ICONS[k]
+        for k in ("success", "error", "warning", "build", "bullet_bank")
+    )
+    unicode_row = "  ".join(
+        theme._UNICODE_ICONS[k]
+        for k in ("success", "error", "warning", "build", "bullet_bank")
+    )
+    cli_art.console.print(
+        "\nOne-time setup: which of these rows looks right in this terminal?"
+    )
     cli_art.console.print(f"  Nerd Font:  {nerd_row}")
     cli_art.console.print(f"  Unicode:    {unicode_row}")
     cli_art.console.print(
@@ -356,8 +455,13 @@ def _confirm_icon_set() -> None:
     choice = cli_art.select(
         "Which one?",
         choices=[
-            questionary.Choice(title="Nerd Font (the row above with the icons, if they rendered)", value="nerd"),
-            questionary.Choice(title="Unicode (plain symbols, works everywhere)", value="unicode"),
+            questionary.Choice(
+                title="Nerd Font (the row above with the icons, if they rendered)",
+                value="nerd",
+            ),
+            questionary.Choice(
+                title="Unicode (plain symbols, works everywhere)", value="unicode"
+            ),
         ],
     )
     if not choice:
@@ -392,15 +496,17 @@ def _print_source_docs_instructions(source_docs_dir: str) -> None:
         "  ✦ Writing samples\n\n"
         "[bold]Once you're finished, restart this program and click New User again to continue![/bold]"
     )
-    
+
     cli_art.console.print()
-    cli_art.console.print(Panel(
-        content,
-        title=f"[bold {theme.BRAND}]Setup Instructions[/bold {theme.BRAND}]",
-        border_style=theme.BRAND_ACCENT,
-        box=box.ROUNDED,
-        padding=(1, 2)
-    ))
+    cli_art.console.print(
+        Panel(
+            content,
+            title=f"[bold {theme.BRAND}]Setup Instructions[/bold {theme.BRAND}]",
+            border_style=theme.BRAND_ACCENT,
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
     cli_art.console.print()
 
 
@@ -419,8 +525,9 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
     try:
         name = profile or profile_paths.active_profile()
-        return os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, name)) and \
-            os.path.isdir(profile_paths.kb_dir(name))
+        return os.path.isdir(
+            os.path.join(profile_paths.PROFILES_DIR, name)
+        ) and os.path.isdir(profile_paths.kb_dir(name))
     except ValueError:
         return False
 
@@ -437,54 +544,58 @@ def _handle_bootstrap() -> bool:
         # UI if Go is installed. Otherwise, fall back to Python-native questionary.
         if shutil.which("go") is None:
             cli_art.console.print()
-            cli_art.console.print(f"[{theme.BRAND}]✦ Go not found -- Falling back to terminal wizard ✦[/{theme.BRAND}]")
-            
+            cli_art.console.print(
+                f"[{theme.BRAND}]✦ Go not found -- Falling back to terminal wizard ✦[/{theme.BRAND}]"
+            )
+
             profile_name = questionary.text(
                 "Profile name (e.g., 'morgan'):",
                 style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: True if text.strip() != "" else "Profile name cannot be empty."
+                validate=lambda text: (
+                    True if text.strip() != "" else "Profile name cannot be empty."
+                ),
             ).ask()
             if not profile_name:
                 return False
-            
+
             source_choice = questionary.select(
                 "Source of your career data:",
                 choices=["Resume PDF", "LinkedIn export (JSON)", "Manual markdown"],
-                style=cli_art.QUESTIONARY_STYLE
+                style=cli_art.QUESTIONARY_STYLE,
             ).ask()
             if not source_choice:
                 return False
-            
+
             source_map = {
                 "Resume PDF": "pdf",
                 "LinkedIn export (JSON)": "linkedin",
-                "Manual markdown": "manual"
+                "Manual markdown": "manual",
             }
             source_choice_val = source_map[source_choice]
-            
+
             ingest_path = ""
             if source_choice_val != "manual":
                 allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
                 ingest_path = picker.interactive_file_picker(
                     f"Browse and select your source {source_choice_val.upper()} file:",
-                    allowed_extensions=allowed_exts
+                    allowed_extensions=allowed_exts,
                 )
                 if not ingest_path:
                     return False
-            
+
             create_bullet = questionary.confirm(
                 "Build the bullet-bank now?",
                 default=True,
-                style=cli_art.QUESTIONARY_STYLE
+                style=cli_art.QUESTIONARY_STYLE,
             ).ask()
             if create_bullet is None:
                 return False
-            
+
             data = {
                 "profile_name": profile_name.strip(),
                 "source_choice": source_choice_val,
                 "ingest_path": ingest_path,
-                "create_bullet": bool(create_bullet)
+                "create_bullet": bool(create_bullet),
             }
         else:
             result = subprocess.run(
@@ -494,28 +605,40 @@ def _handle_bootstrap() -> bool:
                 text=True,
             )
             if result.returncode != 0:
-                cli_art.friendly_subprocess_error(result.stderr, "starting the setup wizard")
+                cli_art.friendly_subprocess_error(
+                    result.stderr, "starting the setup wizard"
+                )
                 return False
             try:
                 data = json.loads(result.stdout.strip())
             except json.JSONDecodeError as exc:
                 cli_art.friendly_error(
-                    exc, "reading the setup wizard's answers",
-                    fix="Run `resume doctor`, then try New User Setup again.")
+                    exc,
+                    "reading the setup wizard's answers",
+                    fix="Run `resume doctor`, then try New User Setup again.",
+                )
                 return False
-        
+
         name = data.get("profile_name")
         if name:
             bootstrap_bullet_bank.create_new_profile(name)
             profile_paths.set_active_profile(name)
-            
+
             source_path = data.get("ingest_path")
             if source_path and os.path.exists(source_path):
-                dest_dir = os.path.join(profile_paths.PROFILES_DIR, name, "knowledge_base", "bootstrap", "source_documents")
+                dest_dir = os.path.join(
+                    profile_paths.PROFILES_DIR,
+                    name,
+                    "knowledge_base",
+                    "bootstrap",
+                    "source_documents",
+                )
                 os.makedirs(dest_dir, exist_ok=True)
                 shutil.copy(source_path, dest_dir)
-                cli_art.cli_info(f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder.")
-            
+                cli_art.cli_info(
+                    f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
+                )
+
             if data.get("create_bullet"):
                 # Automatically run express auto-pilot onboarding!
                 return bootstrap_menu._run_express_setup(interactive=False)
@@ -525,7 +648,7 @@ def _handle_bootstrap() -> bool:
 
 
 def _handle_update_knowledge() -> bool:
-    """"Update My Knowledge" -- lets a returning profile (one that's
+    """ "Update My Knowledge" -- lets a returning profile (one that's
     already been through Phase 0 at least once) drop new source documents
     into the same source_documents/ folder and re-run just the parts they
     choose: the bullet bank (Phase 0 ingestion + the six-stage pipeline)
@@ -539,14 +662,17 @@ def _handle_update_knowledge() -> bool:
 
     if not _profile_is_set_up():
         cli_art.console.print(
-            "This profile hasn't been set up yet -- use \"New User? Start Here!\" first."
+            'This profile hasn\'t been set up yet -- use "New User? Start Here!" first.'
         )
         return False
 
-    source_docs_dir = os.path.join(profile_paths.kb_dir(), "bootstrap", "source_documents")
+    source_docs_dir = os.path.join(
+        profile_paths.kb_dir(), "bootstrap", "source_documents"
+    )
     os.makedirs(source_docs_dir, exist_ok=True)
     files = [
-        f for f in os.listdir(source_docs_dir)
+        f
+        for f in os.listdir(source_docs_dir)
         if os.path.isfile(os.path.join(source_docs_dir, f))
     ]
     if not files:
@@ -559,7 +685,8 @@ def _handle_update_knowledge() -> bool:
             questionary.Choice(title="Bullet Bank", value="bullets", checked=True),
             questionary.Choice(
                 title="Profile & Background Documents (cv.md, profile.yml, background guide)",
-                value="profile", checked=True,
+                value="profile",
+                checked=True,
             ),
         ],
     )
@@ -569,13 +696,16 @@ def _handle_update_knowledge() -> bool:
     scope = "both" if len(scope_choices) == 2 else scope_choices[0]
 
     proceed = charm_prompt.confirm(
-        f"Ready to process {len(files)} document(s)?", default=True,
+        f"Ready to process {len(files)} document(s)?",
+        default=True,
     )
     if not proceed:
         return False
 
     cli_art.display_bootstrap_intro(len(files))
-    script_path = os.path.join(bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py")
+    script_path = os.path.join(
+        bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py"
+    )
     result = subprocess.run([sys.executable, script_path, "--scope", scope])
     return result.returncode == 0
 
@@ -606,7 +736,9 @@ def _handle_add_manual_jd() -> bool:
     job_title = questionary.text(
         "Job Title:",
         style=cli_art.QUESTIONARY_STYLE,
-        validate=lambda text: True if text.strip() != "" else "Job title cannot be empty."
+        validate=lambda text: (
+            True if text.strip() != "" else "Job title cannot be empty."
+        ),
     ).ask()
     if not job_title:
         return False
@@ -614,14 +746,15 @@ def _handle_add_manual_jd() -> bool:
     company_name = questionary.text(
         "Company Name:",
         style=cli_art.QUESTIONARY_STYLE,
-        validate=lambda text: True if text.strip() != "" else "Company name cannot be empty."
+        validate=lambda text: (
+            True if text.strip() != "" else "Company name cannot be empty."
+        ),
     ).ask()
     if not company_name:
         return False
 
     source_url = questionary.text(
-        "Source URL (optional, press Enter to skip):",
-        style=cli_art.QUESTIONARY_STYLE
+        "Source URL (optional, press Enter to skip):", style=cli_art.QUESTIONARY_STYLE
     ).ask()
     if source_url is None:
         return False
@@ -630,16 +763,20 @@ def _handle_add_manual_jd() -> bool:
         "Paste the Job Description text (Press Esc then Enter to finish):",
         multiline=True,
         style=cli_art.QUESTIONARY_STYLE,
-        validate=lambda text: True if text.strip() != "" else "Job description cannot be empty."
+        validate=lambda text: (
+            True if text.strip() != "" else "Job description cannot be empty."
+        ),
     ).ask()
     if not description:
         return False
 
     # Standardize filename: company_title.json
-    safe_company = "".join(c if c.isalnum() else "_" for c in company_name.strip()).lower()
+    safe_company = "".join(
+        c if c.isalnum() else "_" for c in company_name.strip()
+    ).lower()
     safe_title = "".join(c if c.isalnum() else "_" for c in job_title.strip()).lower()
     filename = f"{safe_company}_{safe_title}_{str(uuid.uuid4())[:8]}.json"
-    
+
     jds_dir = profile_paths.jds_dir()
     os.makedirs(jds_dir, exist_ok=True)
     filepath = os.path.join(jds_dir, filename)
@@ -650,7 +787,7 @@ def _handle_add_manual_jd() -> bool:
         "source_url": source_url.strip() if source_url else "",
         "source_job_id": str(uuid.uuid4()),
         "description": description.strip(),
-        "date_added": datetime.datetime.now().isoformat()
+        "date_added": datetime.datetime.now().isoformat(),
     }
 
     try:
@@ -667,7 +804,12 @@ def _handle_liveness() -> bool:
     summary = liveness_module.run_liveness_check()
     if summary.get("error"):
         return False
-    checked = summary["active"] + summary["likely_active"] + summary["expired"] + summary["uncertain"]
+    checked = (
+        summary["active"]
+        + summary["likely_active"]
+        + summary["expired"]
+        + summary["uncertain"]
+    )
     return checked > 0
 
 
@@ -687,13 +829,17 @@ def _handle_evaluate_all() -> bool:
         return False
     already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
     if not to_evaluate:
-        cli_art.console.print(f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a score.")
+        cli_art.console.print(
+            f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a score."
+        )
         return False
     if not picker.should_proceed(len(to_evaluate), skip_confirm=False):
         cli_art.console.print("Aborted.")
         return False
     if already_evaluated:
-        cli_art.console.print(f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)")
+        cli_art.console.print(
+            f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)"
+        )
     results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
     cli_art.render_fit_table(results)
     return bool(results)
@@ -713,14 +859,24 @@ def _handle_tailor_all() -> bool:
 
 def _print_evaluation_detail(row: dict) -> None:
     evaluation = row["evaluation"]
-    cli_art.console.print(f"\n[bold]{row['company'] or '?'} -- {row['title'] or '?'}[/bold] ({row['status']})")
+    cli_art.console.print(
+        f"\n[bold]{row['company'] or '?'} -- {row['title'] or '?'}[/bold] ({row['status']})"
+    )
     cli_art.console.print()
-    cli_art.console.print(f"[bold]Archetype:[/bold] {evaluation.get('archetype') or 'unknown'}")
-    cli_art.console.print(f"[bold]Composite score:[/bold] {evaluation.get('composite_score')}/5")
-    cli_art.console.print(f"[bold]Fit:[/bold] {evaluation.get('fit_score')}/5  "
-                           f"[bold]Interview odds:[/bold] {evaluation.get('interview_odds_score')}/5  "
-                           f"[bold]Practical pursue:[/bold] {evaluation.get('practical_pursue_score')}/5")
-    cli_art.console.print(f"[bold]Recommendation:[/bold] {evaluation.get('recommendation') or 'unknown'}")
+    cli_art.console.print(
+        f"[bold]Archetype:[/bold] {evaluation.get('archetype') or 'unknown'}"
+    )
+    cli_art.console.print(
+        f"[bold]Composite score:[/bold] {evaluation.get('composite_score')}/5"
+    )
+    cli_art.console.print(
+        f"[bold]Fit:[/bold] {evaluation.get('fit_score')}/5  "
+        f"[bold]Interview odds:[/bold] {evaluation.get('interview_odds_score')}/5  "
+        f"[bold]Practical pursue:[/bold] {evaluation.get('practical_pursue_score')}/5"
+    )
+    cli_art.console.print(
+        f"[bold]Recommendation:[/bold] {evaluation.get('recommendation') or 'unknown'}"
+    )
     cli_art.console.print()
     cli_art.console.rule(style=f"dim {theme.BRAND_ACCENT}")
     cli_art.console.print()
@@ -733,9 +889,13 @@ def _print_evaluation_detail(row: dict) -> None:
         dims = ", ".join(f"{labels.get(k, k)}: {v}" for k, v in subscores.items())
         cli_art.console.print(f"[bold]{group_label}:[/bold] {dims}")
     if evaluation.get("recruiter_read"):
-        cli_art.console.print(f"[bold]Recruiter read:[/bold] {evaluation['recruiter_read']}")
+        cli_art.console.print(
+            f"[bold]Recruiter read:[/bold] {evaluation['recruiter_read']}"
+        )
     if evaluation.get("hard_blockers"):
-        cli_art.console.print(f"[bold]Hard blockers:[/bold] {', '.join(evaluation['hard_blockers'])}")
+        cli_art.console.print(
+            f"[bold]Hard blockers:[/bold] {', '.join(evaluation['hard_blockers'])}"
+        )
     if evaluation.get("why"):
         cli_art.console.print(f"[bold]Why:[/bold] {evaluation['why']}")
     if has_dimensions or evaluation.get("hard_blockers") or evaluation.get("why"):
@@ -743,15 +903,21 @@ def _print_evaluation_detail(row: dict) -> None:
     legitimacy = evaluation.get("posting_legitimacy")
     if legitimacy and legitimacy != "High Confidence":
         color = theme.WARNING if legitimacy == "Proceed with Caution" else theme.ERROR
-        cli_art.console.print(f"[bold {color}]Posting legitimacy: {legitimacy}[/bold {color}] -- {evaluation.get('posting_legitimacy_notes', '')}")
+        cli_art.console.print(
+            f"[bold {color}]Posting legitimacy: {legitimacy}[/bold {color}] -- {evaluation.get('posting_legitimacy_notes', '')}"
+        )
     liveness = row.get("liveness")
     if liveness:
-        cli_art.console.print(f"[bold]Last liveness check:[/bold] {liveness.get('result')} ({(liveness.get('checked_at') or '')[:10]}) -- {liveness.get('reason', '')}")
+        cli_art.console.print(
+            f"[bold]Last liveness check:[/bold] {liveness.get('result')} ({(liveness.get('checked_at') or '')[:10]}) -- {liveness.get('reason', '')}"
+        )
     cli_art.console.print("")
 
 
 def _handle_update_application_status(row: dict) -> None:
-    choices = [questionary.Choice(title=s, value=s) for s in jd_manager.APPLICATION_STATUSES]
+    choices = [
+        questionary.Choice(title=s, value=s) for s in jd_manager.APPLICATION_STATUSES
+    ]
     status = cli_art.select("Mark this application as:", choices=choices)
     if not status:
         return
@@ -774,7 +940,9 @@ def _handle_draft_outreach(row: dict) -> None:
             jd_data = json.load(f)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         jd_data = {}
-    contacts = orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+    contacts = (
+        orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+    )
     if not contacts:
         cli_art.console.print(
             "No real contacts found for this JD -- this only works for JobRight-sourced "
@@ -786,20 +954,27 @@ def _handle_draft_outreach(row: dict) -> None:
         contact = contacts[0]
     else:
         choice_labels = [
-            questionary.Choice(title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})", value=i)
+            questionary.Choice(
+                title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})",
+                value=i,
+            )
             for i, c in enumerate(contacts)
         ]
         # cli_art.select() still returns raw None on cancel (not collapsed
         # the way cli_art.confirm() collapses to False), so `is None` here
         # keeps correctly distinguishing "cancelled" from a real pick of
         # index 0 (falsy but valid).
-        picked = cli_art.select("Who would you like to reach out to?", choices=choice_labels)
+        picked = cli_art.select(
+            "Who would you like to reach out to?", choices=choice_labels
+        )
         if picked is None:
             return
         contact = contacts[picked]
 
     engine = orchestrator.ResumeEngine()
-    with cli_art.console.status(f"Drafting a message to {contact['name']}...", spinner="dots"):
+    with cli_art.console.status(
+        f"Drafting a message to {contact['name']}...", spinner="dots"
+    ):
         message = engine.draft_outreach_message(row["path"], contact)
     if not message:
         cli_art.display_error("Couldn't draft a message -- no parseable result.")
@@ -830,21 +1005,32 @@ def _handle_draft_followup(row: dict) -> None:
             jd_data = json.load(f)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         jd_data = {}
-    contacts = orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+    contacts = (
+        orchestrator.find_jd_contacts(jd_data) if isinstance(jd_data, dict) else []
+    )
 
     contact = None
     if len(contacts) == 1:
         contact = contacts[0]
     elif len(contacts) > 1:
         choice_labels = [
-            questionary.Choice(title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})", value=i)
+            questionary.Choice(
+                title=f"{c['name']} -- {c['title'] or '?'} ({c['connection_type']})",
+                value=i,
+            )
             for i, c in enumerate(contacts)
         ]
-        choice_labels.append(questionary.Choice(title="No specific contact -- address generically", value=-1))
+        choice_labels.append(
+            questionary.Choice(
+                title="No specific contact -- address generically", value=-1
+            )
+        )
         # `is None` (not falsy) -- -1 is a real, valid pick here ("address
         # generically"), and cli_art.select() still returns raw None on
         # cancel rather than collapsing it.
-        picked = cli_art.select("Who should this follow-up be addressed to?", choices=choice_labels)
+        picked = cli_art.select(
+            "Who should this follow-up be addressed to?", choices=choice_labels
+        )
         if picked is None:
             return
         if picked != -1:
@@ -883,18 +1069,45 @@ def _prompt_for_referral_if_unset(jd_path: str) -> None:
 
 def _browse_single_action(row: dict) -> bool:
     while True:
-        action_choices = [questionary.Choice(title="View More Details", value="details")]
+        action_choices = [
+            questionary.Choice(title="View More Details", value="details")
+        ]
         if row["status"] == "Pending":
-            action_choices.append(questionary.Choice(title=_icon_title("build", "Tailor Resume"), value="tailor"))
+            action_choices.append(
+                questionary.Choice(
+                    title=_icon_title("build", "Tailor Resume"), value="tailor"
+                )
+            )
         if row["status"] == "Completed":
-            action_choices.append(questionary.Choice(title=_icon_title("build", "Write Cover Letter"), value="coverletter"))
-            action_choices.append(questionary.Choice(title="Update Application Status", value="update_status"))
+            action_choices.append(
+                questionary.Choice(
+                    title=_icon_title("build", "Write Cover Letter"),
+                    value="coverletter",
+                )
+            )
+            action_choices.append(
+                questionary.Choice(
+                    title="Update Application Status", value="update_status"
+                )
+            )
             if row.get("application"):
-                action_choices.append(questionary.Choice(title="Log a Follow-up Sent", value="log_followup"))
+                action_choices.append(
+                    questionary.Choice(
+                        title="Log a Follow-up Sent", value="log_followup"
+                    )
+                )
                 if followup.compute_urgency(row["application"]) == "overdue":
-                    action_choices.append(questionary.Choice(title="Draft Follow-Up Message", value="draft_followup"))
-        action_choices.append(questionary.Choice(title="Draft Outreach Message", value="outreach"))
-        action_choices.append(questionary.Choice(title=_icon_title("utility", "Archive"), value="archive"))
+                    action_choices.append(
+                        questionary.Choice(
+                            title="Draft Follow-Up Message", value="draft_followup"
+                        )
+                    )
+        action_choices.append(
+            questionary.Choice(title="Draft Outreach Message", value="outreach")
+        )
+        action_choices.append(
+            questionary.Choice(title=_icon_title("utility", "Archive"), value="archive")
+        )
         action_choices.append(questionary.Choice(title="Back", value="back"))
 
         action = cli_art.select(
@@ -939,15 +1152,35 @@ def _browse_bulk_action(rows: list) -> bool:
     any_pending = any(r["status"] == "Pending" for r in rows)
     all_completed = all(r["status"] == "Completed" for r in rows)
 
-    action_choices = [questionary.Choice(title=_icon_title("evaluate", "Compare Selected"), value="compare")]
+    action_choices = [
+        questionary.Choice(
+            title=_icon_title("evaluate", "Compare Selected"), value="compare"
+        )
+    ]
     if any_pending:
-        action_choices.append(questionary.Choice(title=_icon_title("build", "Tailor Resumes for Selected"), value="tailor"))
+        action_choices.append(
+            questionary.Choice(
+                title=_icon_title("build", "Tailor Resumes for Selected"),
+                value="tailor",
+            )
+        )
     if all_completed:
-        action_choices.append(questionary.Choice(title=_icon_title("build", "Write Cover Letters for Selected"), value="coverletter"))
-    action_choices.append(questionary.Choice(title=_icon_title("utility", "Archive Selected"), value="archive"))
+        action_choices.append(
+            questionary.Choice(
+                title=_icon_title("build", "Write Cover Letters for Selected"),
+                value="coverletter",
+            )
+        )
+    action_choices.append(
+        questionary.Choice(
+            title=_icon_title("utility", "Archive Selected"), value="archive"
+        )
+    )
     action_choices.append(questionary.Choice(title="Back", value="back"))
 
-    action = cli_art.select(f"{len(rows)} JD(s) selected: choose an action", choices=action_choices)
+    action = cli_art.select(
+        f"{len(rows)} JD(s) selected: choose an action", choices=action_choices
+    )
 
     if not action or action == "back":
         return False
@@ -1030,7 +1263,9 @@ def _handle_coverletter_pick() -> bool:
     if not selected:
         return False
     engine = orchestrator.ResumeEngine()
-    successes = sum(1 for row in selected if engine.build_tailored_coverletter(row["path"]))
+    successes = sum(
+        1 for row in selected if engine.build_tailored_coverletter(row["path"])
+    )
     return successes > 0
 
 
@@ -1070,6 +1305,7 @@ def _handle_run_doctor() -> None:
     import shutil
 
     import profile_paths
+
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -1079,7 +1315,8 @@ def _handle_run_doctor() -> None:
     try:
         checks = doctor.run_checks()
         run_tests = charm_prompt.confirm(
-            "Also run the full test suite? (slower, ~20s)", default=True,
+            "Also run the full test suite? (slower, ~20s)",
+            default=True,
         )
         test_result = None
         if run_tests:
@@ -1096,7 +1333,8 @@ def _handle_run_doctor() -> None:
             },
             "Python packages (requirements.txt)": {
                 "description": "Install missing pip packages in your virtual environment",
-                "func": lambda c: [sys.executable, "-m", "pip", "install"] + c["detail"].replace("missing: ", "").split(", ")
+                "func": lambda c: [sys.executable, "-m", "pip", "install"]
+                + c["detail"].replace("missing: ", "").split(", "),
             },
             "Playwright npm package": {
                 "description": "Run 'npm install' to install browser automation dependencies",
@@ -1108,34 +1346,42 @@ def _handle_run_doctor() -> None:
             },
             "GEMINI_API_KEY": {
                 "description": "Provide a Gemini API Key and write it to your active .env file",
-                "special": "gemini_api"
-            }
+                "special": "gemini_api",
+            },
         }
 
-        failed_repairs = [c for c in checks if not c["passed"] and c["name"] in REPAIRABLE_CHECKS]
+        failed_repairs = [
+            c for c in checks if not c["passed"] and c["name"] in REPAIRABLE_CHECKS
+        ]
 
         if failed_repairs:
             cli_art.console.print()
-            cli_art.console.print(f"[bold {theme.WARNING}]✦  AUTO-REPAIR AVAILABLE  ✦[/bold {theme.WARNING}]")
-            cli_art.console.print("The Doctor detected that some of the failed checks can be repaired automatically:")
+            cli_art.console.print(
+                f"[bold {theme.WARNING}]✦  AUTO-REPAIR AVAILABLE  ✦[/bold {theme.WARNING}]"
+            )
+            cli_art.console.print(
+                "The Doctor detected that some of the failed checks can be repaired automatically:"
+            )
             for c in failed_repairs:
                 desc = REPAIRABLE_CHECKS[c["name"]]["description"]
                 cli_art.console.print(f"  • [bold]{c['name']}[/bold]: {desc}")
             cli_art.console.print()
-            
+
             should_repair = charm_prompt.confirm(
                 "Would you like me to attempt to repair these issues automatically?",
-                default=True
+                default=True,
             )
             if should_repair:
                 for c in failed_repairs:
-                    cli_art.console.print(f"\n[bold {theme.INFO}]Repairing: {c['name']}...[/bold {theme.INFO}]")
+                    cli_art.console.print(
+                        f"\n[bold {theme.INFO}]Repairing: {c['name']}...[/bold {theme.INFO}]"
+                    )
                     rule = REPAIRABLE_CHECKS[c["name"]]
-                    
+
                     if rule.get("special") == "gemini_api":
                         key_val = questionary.text(
                             "Enter your GEMINI_API_KEY:",
-                            style=cli_art.QUESTIONARY_STYLE
+                            style=cli_art.QUESTIONARY_STYLE,
                         ).ask()
                         if key_val:
                             env_p = profile_paths.env_path()
@@ -1143,7 +1389,7 @@ def _handle_run_doctor() -> None:
                             if os.path.exists(env_p):
                                 with open(env_p, "r", encoding="utf-8") as f:
                                     lines = f.readlines()
-                            
+
                             replaced = False
                             for i, l in enumerate(lines):
                                 if l.strip().startswith("GEMINI_API_KEY="):
@@ -1152,30 +1398,47 @@ def _handle_run_doctor() -> None:
                                     break
                             if not replaced:
                                 lines.append(f"GEMINI_API_KEY={key_val.strip()}\n")
-                            
+
                             with open(env_p, "w", encoding="utf-8") as f:
                                 f.writelines(lines)
-                            
-                            cli_art.console.print(f"[{theme.SUCCESS}]✓ GEMINI_API_KEY written to {env_p}![/{theme.SUCCESS}]")
+
+                            cli_art.console.print(
+                                f"[{theme.SUCCESS}]✓ GEMINI_API_KEY written to {env_p}![/{theme.SUCCESS}]"
+                            )
                         else:
-                            cli_art.console.print(f"[{theme.ERROR}]✗ GEMINI_API_KEY setup skipped.[/{theme.ERROR}]")
+                            cli_art.console.print(
+                                f"[{theme.ERROR}]✗ GEMINI_API_KEY setup skipped.[/{theme.ERROR}]"
+                            )
                     else:
                         if "command" in rule:
                             cmd = rule["command"]
                         else:
                             cmd = rule["func"](c)
-                        
+
                         try:
-                            res = subprocess.run(cmd, cwd=profile_paths.PROJECT_ROOT, capture_output=True, text=True)
+                            res = subprocess.run(
+                                cmd,
+                                cwd=profile_paths.PROJECT_ROOT,
+                                capture_output=True,
+                                text=True,
+                            )
                             if res.returncode == 0:
-                                cli_art.console.print(f"[{theme.SUCCESS}]✓ {c['name']} repaired successfully![/{theme.SUCCESS}]")
+                                cli_art.console.print(
+                                    f"[{theme.SUCCESS}]✓ {c['name']} repaired successfully![/{theme.SUCCESS}]"
+                                )
                             else:
-                                cli_art.console.print(f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {res.stderr.strip()}[/{theme.ERROR}]")
+                                cli_art.console.print(
+                                    f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {res.stderr.strip()}[/{theme.ERROR}]"
+                                )
                         except Exception as err:
-                            cli_art.console.print(f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {err}[/{theme.ERROR}]")
-                
+                            cli_art.console.print(
+                                f"[{theme.ERROR}]✗ Repair failed for {c['name']}: {err}[/{theme.ERROR}]"
+                            )
+
                 # Re-run checks to verify repairs!
-                cli_art.console.print(f"\n[bold {theme.INFO}]Re-running Doctor checks to verify repairs...[/bold {theme.INFO}]")
+                cli_art.console.print(
+                    f"\n[bold {theme.INFO}]Re-running Doctor checks to verify repairs...[/bold {theme.INFO}]"
+                )
                 checks = doctor.run_checks()
                 cli_art.render_doctor_report(checks, test_result)
 
@@ -1205,6 +1468,7 @@ def _handle_build_sample() -> None:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -1220,7 +1484,9 @@ def _handle_build_sample() -> None:
                 f"  {result['coverletter']['_output_paths']['pdf']}"
             )
         else:
-            cli_art.display_error("Sample build failed -- see output above for details.")
+            cli_art.display_error(
+                "Sample build failed -- see output above for details."
+            )
     finally:
         if scroll_region_modified:
             sys.stdout.write("\x1b[r")
@@ -1247,7 +1513,9 @@ def _handle_settings_upkeep() -> bool:
             cli_art.display_footer_commands()
             cli_art.console.print()
 
-        choice = cli_art.select("Settings & Upkeep", choices=_build_settings_upkeep_choices())
+        choice = cli_art.select(
+            "Settings & Upkeep", choices=_build_settings_upkeep_choices()
+        )
         if not choice or choice == "back":
             return False
         if choice == "doctor":
@@ -1273,13 +1541,15 @@ def _handle_settings_upkeep() -> bool:
 def _handle_manage_scraping():
     import profile_paths
     import yaml
-    
+
     use_alt = _should_use_alt_screen()
     profile = profile_paths.active_profile()
-    
-    filters_path = os.path.join(profile_paths.board_scanner_dir(profile), "scan_filters.yml")
+
+    filters_path = os.path.join(
+        profile_paths.board_scanner_dir(profile), "scan_filters.yml"
+    )
     profile_path = os.path.join(profile_paths.profile_root(profile), "profile.yml")
-    
+
     while True:
         if use_alt:
             sys.stdout.write("\x1b[2J\x1b[H")
@@ -1287,20 +1557,29 @@ def _handle_manage_scraping():
             cli_art.display_compact_banner("MANAGE SCRAPING, BOARDS & QUERIES")
             cli_art.display_footer_commands()
             cli_art.console.print()
-            
+
         choices = [
-            questionary.Choice("🔌 Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"),
+            questionary.Choice(
+                "🔌 Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"
+            ),
             questionary.Choice("➕ Add Custom RSS Job Board Feed", value="add_board"),
-            questionary.Choice("➖ Delete/Remove Custom RSS Job Board Feed", value="delete_board"),
-            questionary.Choice("🔍 Edit LinkedIn Boolean Search Queries", value="linkedin_queries"),
-            questionary.Choice("🎯 Edit Title Keyword Filters (Positive/Negative)", value="title_filters"),
-            questionary.Choice("Back", value="back")
+            questionary.Choice(
+                "➖ Delete/Remove Custom RSS Job Board Feed", value="delete_board"
+            ),
+            questionary.Choice(
+                "🔍 Edit LinkedIn Boolean Search Queries", value="linkedin_queries"
+            ),
+            questionary.Choice(
+                "🎯 Edit Title Keyword Filters (Positive/Negative)",
+                value="title_filters",
+            ),
+            questionary.Choice("Back", value="back"),
         ]
-        
+
         choice = cli_art.select("Manage Scraping & Filters:", choices=choices)
         if not choice or choice == "back":
             return
-            
+
         if choice == "toggle_boards":
             _handle_toggle_boards(filters_path)
             continue
@@ -1321,100 +1600,103 @@ def _handle_manage_scraping():
 def _handle_toggle_boards(filters_path):
     import scan_boards
     import yaml
-    
+
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
-        
+
     enabled_boards = filters.get("enabled_boards")
     if enabled_boards is None:
         enabled_boards = list(scan_boards.BOARD_PROVIDERS)
-        
+
     choices = []
     for b in scan_boards.BOARD_PROVIDERS:
         name = cli_art.format_board_name(b)
         choices.append(questionary.Choice(name, value=b, checked=b in enabled_boards))
-        
+
     selected = questionary.checkbox(
         "Select active job boards (Space to check/uncheck):",
         choices=choices,
-        style=cli_art.QUESTIONARY_STYLE
+        style=cli_art.QUESTIONARY_STYLE,
     ).ask()
-    
+
     if selected is None:
         return
-        
+
     filters["enabled_boards"] = list(selected)
     with open(filters_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
-        
+
     cli_art.cli_info("Active job boards updated successfully!")
     _pause_and_return()
 
 
 def _handle_add_custom_board(filters_path):
     import yaml
-    
+
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
-        
+
     custom_feeds = filters.get("custom_feeds") or []
-    
+
     feed_name = questionary.text(
         "Enter custom board name (e.g., 'Golang Jobs'):",
         style=cli_art.QUESTIONARY_STYLE,
-        validate=lambda text: True if text.strip() != "" else "Name cannot be empty."
+        validate=lambda text: True if text.strip() != "" else "Name cannot be empty.",
     ).ask()
     if not feed_name:
         return
-        
+
     feed_url = questionary.text(
         "Enter RSS Feed URL:",
         style=cli_art.QUESTIONARY_STYLE,
-        validate=lambda text: True if text.strip().startswith(("http://", "https://")) else "Must be a valid HTTP/HTTPS URL."
+        validate=lambda text: (
+            True
+            if text.strip().startswith(("http://", "https://"))
+            else "Must be a valid HTTP/HTTPS URL."
+        ),
     ).ask()
     if not feed_url:
         return
-        
-    custom_feeds.append({
-        "name": feed_name.strip(),
-        "url": feed_url.strip()
-    })
+
+    custom_feeds.append({"name": feed_name.strip(), "url": feed_url.strip()})
     filters["custom_feeds"] = custom_feeds
-    
+
     with open(filters_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
-        
+
     cli_art.cli_info(f"Custom RSS board '{feed_name}' added successfully!")
     _pause_and_return()
 
 
 def _handle_delete_custom_board(filters_path):
     import yaml
-    
+
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
-        
+
     custom_feeds = filters.get("custom_feeds") or []
     if not custom_feeds:
-        cli_art.console.print(f"{cli_art.WARNING} No custom RSS feeds configured.", soft_wrap=True)
+        cli_art.console.print(
+            f"{cli_art.WARNING} No custom RSS feeds configured.", soft_wrap=True
+        )
         _pause_and_return()
         return
-        
+
     choices = []
     for i, feed in enumerate(custom_feeds):
         choices.append(questionary.Choice(f"{feed['name']} ({feed['url']})", value=i))
     choices.append(questionary.Choice("Cancel", value="cancel"))
-    
+
     selected = cli_art.select("Select custom board to delete:", choices=choices)
     if selected == "cancel" or selected is None:
         return
-        
+
     deleted = custom_feeds.pop(selected)
     filters["custom_feeds"] = custom_feeds
-    
+
     with open(filters_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
-        
+
     cli_art.cli_info(f"Custom board '{deleted['name']}' removed successfully!")
     _pause_and_return()
 
@@ -1423,51 +1705,59 @@ def _handle_edit_linkedin_queries(profile_path):
     import time
 
     import yaml
-    
+
     with open(profile_path, "r", encoding="utf-8") as f:
         profile_data = yaml.safe_load(f) or {}
-        
+
     queries = profile_data.get("linkedin_search_queries") or []
-    
+
     while True:
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
         cli_art.display_compact_banner("EDIT LINKEDIN BOOLEAN QUERIES")
-        
+
         cli_art.console.print("Current Boolean search queries used on LinkedIn:\n")
         if not queries:
-            cli_art.console.print("  [yellow](None configured -- falling back to target roles)[/yellow]\n")
+            cli_art.console.print(
+                "  [yellow](None configured -- falling back to target roles)[/yellow]\n"
+            )
         else:
             for q in queries:
-                cli_art.console.print(f"  • [cyan]\"{q}\"[/cyan]")
+                cli_art.console.print(f'  • [cyan]"{q}"[/cyan]')
             cli_art.console.print()
-            
+
         choices = [
             questionary.Choice("➕ Add New Boolean Query String", value="add"),
             questionary.Choice("➖ Delete/Remove Boolean Query String", value="delete"),
-            questionary.Choice("Back", value="back")
+            questionary.Choice("Back", value="back"),
         ]
-        
+
         act = cli_art.select("Edit Queries:", choices=choices)
         if not act or act == "back":
             break
-            
+
         if act == "add":
             new_q = questionary.text(
                 "Enter your new Boolean Query:",
                 style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: True if text.strip() != "" else "Query cannot be empty."
+                validate=lambda text: (
+                    True if text.strip() != "" else "Query cannot be empty."
+                ),
             ).ask()
             if new_q:
                 queries.append(new_q.strip())
                 profile_data["linkedin_search_queries"] = queries
                 with open(profile_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(profile_data, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        profile_data, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Boolean query added successfully!")
                 time.sleep(1)
         elif act == "delete":
             if not queries:
-                cli_art.console.print(f"{cli_art.WARNING} No queries to delete.", soft_wrap=True)
+                cli_art.console.print(
+                    f"{cli_art.WARNING} No queries to delete.", soft_wrap=True
+                )
                 time.sleep(1)
                 continue
             choices_del = [questionary.Choice(q, value=q) for q in queries] + ["Cancel"]
@@ -1476,7 +1766,9 @@ def _handle_edit_linkedin_queries(profile_path):
                 queries.remove(to_del)
                 profile_data["linkedin_search_queries"] = queries
                 with open(profile_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(profile_data, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        profile_data, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Boolean query removed successfully!")
                 time.sleep(1)
 
@@ -1485,91 +1777,113 @@ def _handle_edit_title_filters(filters_path):
     import time
 
     import yaml
-    
+
     with open(filters_path, "r", encoding="utf-8") as f:
         filters = yaml.safe_load(f) or {}
-        
+
     title_filter = filters.get("title_filter") or {"positive": [], "negative": []}
-    
+
     while True:
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
         cli_art.display_compact_banner("EDIT TITLE KEYWORD FILTERS")
-        
-        cli_art.console.print("These keywords filter all standard job board listings.\n")
-        
+
+        cli_art.console.print(
+            "These keywords filter all standard job board listings.\n"
+        )
+
         pos = title_filter.get("positive") or []
         neg = title_filter.get("negative") or []
-        
-        cli_art.console.print(f"[green]✔ POSITIVE KEYWORDS[/green] (at least one MUST be present):")
+
+        cli_art.console.print(
+            f"[green]✔ POSITIVE KEYWORDS[/green] (at least one MUST be present):"
+        )
         if not pos:
             cli_art.console.print("  (Empty -- all titles pass)")
         else:
             cli_art.console.print(f"  {', '.join(pos)}")
-            
-        cli_art.console.print(f"\n[red]✘ NEGATIVE KEYWORDS[/red] (if present, job is skipped):")
+
+        cli_art.console.print(
+            f"\n[red]✘ NEGATIVE KEYWORDS[/red] (if present, job is skipped):"
+        )
         if not neg:
             cli_art.console.print("  (None configured)")
         else:
             cli_art.console.print(f"  {', '.join(neg)}")
         cli_art.console.print()
-        
+
         choices = [
             questionary.Choice("➕ Add Positive Keyword", value="add_pos"),
             questionary.Choice("➕ Add Negative Keyword", value="add_neg"),
             questionary.Choice("➖ Delete Positive Keyword", value="del_pos"),
             questionary.Choice("➖ Delete Negative Keyword", value="del_neg"),
-            questionary.Choice("Back", value="back")
+            questionary.Choice("Back", value="back"),
         ]
-        
+
         act = cli_art.select("Action:", choices=choices)
         if not act or act == "back":
             break
-            
+
         if act == "add_pos":
-            k = questionary.text("Enter positive title keyword:", style=cli_art.QUESTIONARY_STYLE).ask()
+            k = questionary.text(
+                "Enter positive title keyword:", style=cli_art.QUESTIONARY_STYLE
+            ).ask()
             if k:
                 pos.append(k.strip())
                 title_filter["positive"] = sorted(list(set(pos)))
                 filters["title_filter"] = title_filter
                 with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        filters, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Positive filter updated!")
                 time.sleep(1)
         elif act == "add_neg":
-            k = questionary.text("Enter negative title keyword:", style=cli_art.QUESTIONARY_STYLE).ask()
+            k = questionary.text(
+                "Enter negative title keyword:", style=cli_art.QUESTIONARY_STYLE
+            ).ask()
             if k:
                 neg.append(k.strip())
                 title_filter["negative"] = sorted(list(set(neg)))
                 filters["title_filter"] = title_filter
                 with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        filters, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Negative filter updated!")
                 time.sleep(1)
         elif act == "del_pos":
             if not pos:
                 continue
             choices_del = [questionary.Choice(x, value=x) for x in pos] + ["Cancel"]
-            to_del = cli_art.select("Select positive keyword to remove:", choices=choices_del)
+            to_del = cli_art.select(
+                "Select positive keyword to remove:", choices=choices_del
+            )
             if to_del and to_del != "Cancel":
                 pos.remove(to_del)
                 title_filter["positive"] = pos
                 filters["title_filter"] = title_filter
                 with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        filters, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Positive keyword removed!")
                 time.sleep(1)
         elif act == "del_neg":
             if not neg:
                 continue
             choices_del = [questionary.Choice(x, value=x) for x in neg] + ["Cancel"]
-            to_del = cli_art.select("Select negative keyword to remove:", choices=choices_del)
+            to_del = cli_art.select(
+                "Select negative keyword to remove:", choices=choices_del
+            )
             if to_del and to_del != "Cancel":
                 neg.remove(to_del)
                 title_filter["negative"] = neg
                 filters["title_filter"] = title_filter
                 with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+                    yaml.safe_dump(
+                        filters, f, default_flow_style=False, allow_unicode=True
+                    )
                 cli_art.cli_info("Negative keyword removed!")
                 time.sleep(1)
 
@@ -1578,6 +1892,7 @@ def _handle_manage_profiles():
     import shutil
 
     import profile_paths
+
     use_alt = _should_use_alt_screen()
     while True:
         if use_alt:
@@ -1587,11 +1902,14 @@ def _handle_manage_profiles():
             cli_art.display_footer_commands()
             cli_art.console.print()
         names = sorted(
-            n for n in os.listdir(profile_paths.PROFILES_DIR)
+            n
+            for n in os.listdir(profile_paths.PROFILES_DIR)
             if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
         )
         if not names:
-            cli_art.console.print(f"{cli_art.WARNING} No profiles exist.", soft_wrap=True)
+            cli_art.console.print(
+                f"{cli_art.WARNING} No profiles exist.", soft_wrap=True
+            )
             return
 
         choice = cli_art.select(
@@ -1600,20 +1918,21 @@ def _handle_manage_profiles():
                 questionary.Choice(title="Rename profile", value="rename"),
                 questionary.Choice(title="Delete profile", value="delete"),
                 questionary.Choice(title="Back", value="back"),
-            ]
+            ],
         )
         if not choice or choice == "back":
             return
 
         target = cli_art.select(
-            f"Select profile to {choice}:",
-            choices=names + ["Cancel"]
+            f"Select profile to {choice}:", choices=names + ["Cancel"]
         )
         if not target or target == "Cancel":
             continue
 
         if choice == "delete":
-            confirm = questionary.confirm(f"Are you sure you want to completely delete the profile '{target}' and all its data? This cannot be undone.").ask()
+            confirm = questionary.confirm(
+                f"Are you sure you want to completely delete the profile '{target}' and all its data? This cannot be undone."
+            ).ask()
             if not confirm:
                 continue
             for _label, path in profile_paths.sync_roots(target):
@@ -1657,12 +1976,14 @@ def _offer_discovery_backfill() -> bool:
 
     cli_art.cli_info(
         f"{preview['candidate_count']} of those can be dated from when this app "
-        "first saved them, which would let future sweeps see them.")
+        "first saved them, which would let future sweeps see them."
+    )
     # Named plainly: this edits the JD files, and the date is inferred
     # rather than published, so the user should know both before agreeing.
     if not cli_art.confirm_destructive(
-            "Add an estimated first-seen date to",
-            f"{preview['candidate_count']} undated posting(s)"):
+        "Add an estimated first-seen date to",
+        f"{preview['candidate_count']} undated posting(s)",
+    ):
         cli_art.cli_info("Left them undated.")
         return False
 
@@ -1695,7 +2016,9 @@ def _handle_stale_sweep() -> bool:
         if threshold < 1:
             raise ValueError("threshold must be at least 1 day")
     except ValueError:
-        cli_art.cli_warning(f"'{raw}' isn't a whole number of days -- nothing was archived.")
+        cli_art.cli_warning(
+            f"'{raw}' isn't a whole number of days -- nothing was archived."
+        )
         return False
 
     preview = stale_sweep.preview_sweep(threshold)
@@ -1703,15 +2026,20 @@ def _handle_stale_sweep() -> bool:
 
     if not to_archive:
         cli_art.cli_success(
-            f"Nothing to archive -- no pending postings are {threshold}+ days old.")
+            f"Nothing to archive -- no pending postings are {threshold}+ days old."
+        )
         return False
 
     cli_art.cli_info(
         f"{len(to_archive)} posting(s) are {threshold}+ days old. "
-        f"{preview['to_keep_count']} would stay.")
+        f"{preview['to_keep_count']} would stay."
+    )
     if preview["oldest_kept_days"] is not None:
-        cli_art.detail(f"   Oldest kept: {preview['oldest_kept_days']}d  "
-                       f"Newest moved: {preview['newest_moved_days']}d", level=cli_art.NORMAL)
+        cli_art.detail(
+            f"   Oldest kept: {preview['oldest_kept_days']}d  "
+            f"Newest moved: {preview['newest_moved_days']}d",
+            level=cli_art.NORMAL,
+        )
     if preview["skipped_no_age_count"]:
         # Deliberately surfaced rather than buried: these are postings the
         # sweep is choosing NOT to touch because it can't tell how old they
@@ -1719,33 +2047,41 @@ def _handle_stale_sweep() -> bool:
         # as expected deserves the reason -- plus the fix, offered right
         # here where the number that motivates it is on screen.
         cli_art.cli_info(
-            f"{preview['skipped_no_age_count']} posting(s) have no post date and were left alone.")
+            f"{preview['skipped_no_age_count']} posting(s) have no post date and were left alone."
+        )
         if _offer_discovery_backfill():
             preview = stale_sweep.preview_sweep(threshold)
             to_archive = preview["to_archive"]
             if not to_archive:
                 cli_art.cli_success(
-                    f"Nothing to archive -- no pending postings are {threshold}+ days old.")
+                    f"Nothing to archive -- no pending postings are {threshold}+ days old."
+                )
                 return True
             cli_art.cli_info(
-                f"Now {len(to_archive)} posting(s) are {threshold}+ days old.")
+                f"Now {len(to_archive)} posting(s) are {threshold}+ days old."
+            )
 
     # A sample, not all 800 rows -- scan.py's documented anti-spam rule.
     for row in to_archive[:5]:
-        cli_art.detail(f"   {row['company']} — {row['title']} ({row['age_days']}d)",
-                       level=cli_art.NORMAL)
+        cli_art.detail(
+            f"   {row['company']} — {row['title']} ({row['age_days']}d)",
+            level=cli_art.NORMAL,
+        )
     if len(to_archive) > 5:
         cli_art.detail(f"   ...and {len(to_archive) - 5} more", level=cli_art.NORMAL)
 
     if not cli_art.confirm_destructive(
-            "Archive", f"{len(to_archive)} stale posting(s) to expired/ (reversible)"):
+        "Archive", f"{len(to_archive)} stale posting(s) to expired/ (reversible)"
+    ):
         cli_art.cli_info("Nothing was archived.")
         return False
 
     result = stale_sweep.run_sweep(threshold)
     cli_art.cli_success(f"Archived {result['archived_count']} posting(s) to expired/.")
     for err in result["errors"]:
-        cli_art.cli_warning(f"Couldn't archive {os.path.basename(err['path'])}: {err['error']}")
+        cli_art.cli_warning(
+            f"Couldn't archive {os.path.basename(err['path'])}: {err['error']}"
+        )
     return True
 
 
@@ -1767,7 +2103,9 @@ def _prompt_for_update() -> None:
         # (same opt-out cli_art._reveal_banner() honors) since an
         # uninterruptible wait is exactly the kind of blocking motion that
         # flag exists to remove, not just visually simplify.
-        message = f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
+        message = (
+            f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
+        )
         if os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
             cli_art.console.print(message)
         else:
@@ -1826,6 +2164,7 @@ def _handle_check_updates() -> bool:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -1898,11 +2237,26 @@ _CHAIN = {
     # evaluate instead, same destination "liveness" itself chains to.
     "scan": [("Evaluate All JDs", "evaluate_all")],
     "liveness": [("Evaluate All JDs", "evaluate_all")],
-    "evaluate_all": [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
-    "package_flow": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
-    "package": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
-    "tailor_all": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
-    "tailor_pick": [("Write Cover Letter", "coverletter_pick"), ("Polish with Gemini", "polish")],
+    "evaluate_all": [
+        ("Customize Resume", "tailor_all"),
+        ("Browse & Manage Jobs", "browse_jobs"),
+    ],
+    "package_flow": [
+        ("Browse & Manage Jobs", "browse_jobs"),
+        ("Polish with Gemini", "polish"),
+    ],
+    "package": [
+        ("Browse & Manage Jobs", "browse_jobs"),
+        ("Polish with Gemini", "polish"),
+    ],
+    "tailor_all": [
+        ("Browse & Manage Jobs", "browse_jobs"),
+        ("Polish with Gemini", "polish"),
+    ],
+    "tailor_pick": [
+        ("Write Cover Letter", "coverletter_pick"),
+        ("Polish with Gemini", "polish"),
+    ],
     "coverletter_pick": [("Polish with Gemini", "polish")],
 }
 
@@ -1910,13 +2264,13 @@ _CHAIN = {
 # chain prompt stays visually consistent with the main menu instead of
 # falling back to plain text.
 _CHAIN_ICONS = {
-    "liveness":         "discovery",
-    "evaluate_all":     "evaluate",
-    "tailor_all":       "build",
-    "tailor_pick":      "build",
+    "liveness": "discovery",
+    "evaluate_all": "evaluate",
+    "tailor_all": "build",
+    "tailor_pick": "build",
     "coverletter_pick": "build",
-    "browse_jobs":      "utility",
-    "polish":           "build",
+    "browse_jobs": "utility",
+    "polish": "build",
 }
 
 # Labels for the session-end summary -- only actions worth reporting on
@@ -1997,45 +2351,67 @@ def offer_next_steps(
     cli_art.display_footer_commands()
 
     value = _CLI_ACTION_TO_VALUE.get(action, action)
-    
+
     # Trigger a premium, high-energy success celebration for milestones!
     if value in ("tailor_pick", "tailor_all", "coverletter_pick", "express"):
         if value == "express":
             cli_art.display_success_celebration(
                 "Express Auto-pilot Setup Complete!",
-                "We ingested your files, extracted your key achievements, populated your Bullet Bank, and built your tailored resume."
+                "We ingested your files, extracted your key achievements, populated your Bullet Bank, and built your tailored resume.",
             )
         elif value == "coverletter_pick":
             cli_art.display_success_celebration(
                 "Cover Letter Customized Successfully!",
-                "Your cover letter has been perfectly tailored and aligned to match the target job description."
+                "Your cover letter has been perfectly tailored and aligned to match the target job description.",
             )
         else:
             cli_art.display_success_celebration(
                 "Resume Customized & Polished!",
-                "All your achievement bullets have been dynamically rewritten and adapted for this specific role."
+                "All your achievement bullets have been dynamically rewritten and adapted for this specific role.",
             )
 
     next_options = _CHAIN.get(value) or []
-    choices = [questionary.Choice(title=_chain_choice_title(label, v), value=v) for label, v in next_options]
+    choices = [
+        questionary.Choice(title=_chain_choice_title(label, v), value=v)
+        for label, v in next_options
+    ]
 
     last_pdf = os.environ.get("RESUME_BUILDER_LAST_PDF")
     if last_pdf and os.path.exists(last_pdf):
-        choices.insert(0, questionary.Choice(title="↗ View Generated PDF", value="__view_pdf__"))
+        choices.insert(
+            0, questionary.Choice(title="↗ View Generated PDF", value="__view_pdf__")
+        )
 
     if from_cli:
         if value in ("tailor_pick", "coverletter_pick") and jd_file:
             doc_type = "Resume" if value == "tailor_pick" else "Cover Letter"
-            choices.insert(0, questionary.Choice(title=f"Polish this {doc_type}", value="__polish_this__"))
-        choices.append(questionary.Choice(title=_icon_title("hint", "Show Help"), value="__help__"))
-        choices.append(questionary.Choice(title=_icon_title("utility", "Return to Main Menu"), value="__menu__"))
-        choices.append(questionary.Choice(title=_icon_title("utility", "Exit"), value="__exit__"))
+            choices.insert(
+                0,
+                questionary.Choice(
+                    title=f"Polish this {doc_type}", value="__polish_this__"
+                ),
+            )
+        choices.append(
+            questionary.Choice(title=_icon_title("hint", "Show Help"), value="__help__")
+        )
+        choices.append(
+            questionary.Choice(
+                title=_icon_title("utility", "Return to Main Menu"), value="__menu__"
+            )
+        )
+        choices.append(
+            questionary.Choice(title=_icon_title("utility", "Exit"), value="__exit__")
+        )
     else:
         if not choices:
             # If we have a view_pdf option, we shouldn't return early even if there are no downstream chains!
             if not last_pdf or not os.path.exists(last_pdf):
                 return
-        choices.append(questionary.Choice(title=_icon_title("utility", "Back to Menu"), value="__back__"))
+        choices.append(
+            questionary.Choice(
+                title=_icon_title("utility", "Back to Menu"), value="__back__"
+            )
+        )
 
     cli_art.display_whats_next_panel()
     choice = cli_art.select("Choose one:", choices=choices)
@@ -2071,7 +2447,9 @@ def offer_next_steps(
 
 def _pause_and_return() -> None:
     cli_art.console.print()
-    cli_art.console.print(f"[{theme.MUTED}]Press Enter to return to the menu...[/{theme.MUTED}]")
+    cli_art.console.print(
+        f"[{theme.MUTED}]Press Enter to return to the menu...[/{theme.MUTED}]"
+    )
     if sys.stdin.isatty():
         try:
             sys.stdin.readline()
@@ -2080,8 +2458,14 @@ def _pause_and_return() -> None:
 
 
 def _run_with_chain(value: str, session_stats: dict) -> None:
-    interactive_actions = {"career_dashboard", "browse_jobs", "bullet_bank", "settings_upkeep", "help"}
-    
+    interactive_actions = {
+        "career_dashboard",
+        "browse_jobs",
+        "bullet_bank",
+        "settings_upkeep",
+        "help",
+    }
+
     action_titles = {
         "bootstrap": "Profile Bootstrapping Wizard",
         "update_knowledge": "Knowledge Base Update",
@@ -2094,21 +2478,21 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "polish": "Polishing Documents with Gemini",
         "stale_sweep": "Stale Application Sweep",
     }
-    
+
     is_interactive = value in interactive_actions
     title = action_titles.get(value)
-    
+
     scroll_region_modified = False
-    
+
     if not is_interactive and title:
         # Clear screen and draw the compact banner!
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
         cli_art.display_compact_banner(title)
-        
+
         # Draw the gorgeous execution footer static at the bottom row (row = rows)
         cli_art.display_execution_footer()
-        
+
         # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
         columns, rows = shutil.get_terminal_size()
         sys.stdout.write(f"\x1b[5;{rows-1}r")
@@ -2151,7 +2535,9 @@ def _alternate_screen():
     """Switches the terminal to the alternate screen buffer and restores it at exit.
     Only writes ANSI escape codes when running interactively in a TTY.
     """
-    is_interactive = sys.stdout.isatty() and not os.environ.get("RESUME_BUILDER_TESTING")
+    is_interactive = sys.stdout.isatty() and not os.environ.get(
+        "RESUME_BUILDER_TESTING"
+    )
     if is_interactive:
         sys.stdout.write("\x1b[?1049h\x1b[H")
         sys.stdout.flush()
@@ -2208,12 +2594,14 @@ def run_interactive_menu() -> None:
                 first_loop = False
             else:
                 cli_art.display_breadcrumb()
-            
+
             if use_alt:
                 cli_art.display_footer_commands()
 
             cli_art.console.print()
-            choice = cli_art.select("What would you like to do?", choices=_menu_choices())
+            choice = cli_art.select(
+                "What would you like to do?", choices=_menu_choices()
+            )
 
             if choice == "exit" or not choice:
                 cli_art.console.print(f"\n{_session_summary(session_stats)}\n")
@@ -2222,7 +2610,7 @@ def run_interactive_menu() -> None:
 
             if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
                 cli_art.console.print(
-                    f"[{theme.BRAND}]Take a look around! Choose \"New User? Start Here!\" when you're "
+                    f'[{theme.BRAND}]Take a look around! Choose "New User? Start Here!" when you\'re '
                     f"ready to set up your own profile -- nothing else runs until then.[/{theme.BRAND}]"
                 )
                 continue

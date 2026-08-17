@@ -5,7 +5,9 @@ import sys
 import unittest
 from unittest.mock import ANY, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
@@ -31,7 +33,11 @@ class TestWriteJdFile(unittest.TestCase):
         os.rmdir(self.tmp_dir)
 
     def test_writes_a_real_job_dict_to_a_sanitized_filename(self):
-        job = {"company_name": "Acme, Inc.", "job_title": "Content Strategist!", "source_job_id": "123"}
+        job = {
+            "company_name": "Acme, Inc.",
+            "job_title": "Content Strategist!",
+            "source_job_id": "123",
+        }
         dest = scan._write_jd_file(job)
         self.assertTrue(os.path.exists(dest))
         self.assertIn("AcmeInc", os.path.basename(dest))
@@ -51,7 +57,10 @@ class TestWriteJdFile(unittest.TestCase):
 class TestRunScanDedup(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher = patch(
+            "scan.jd_manager.build_known_jobs_index",
+            side_effect=_empty_known_jobs_index,
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -59,77 +68,139 @@ class TestRunScanDedup(unittest.TestCase):
     @patch("scan.jd_manager.JDTracker")
     def test_passes_job_title_to_dedup_check(self, mock_tracker_cls, mock_known):
         job = {
-            "source_job_id": "abc123", "company_name": "Acme",
-            "job_title": "Content Strategist", "source_url": "https://example.com/job/1",
+            "source_job_id": "abc123",
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://example.com/job/1",
         }
-        with patch.dict(scan.SOURCE_FETCHERS, {"jobright": lambda **kwargs: [job]}, clear=True), \
-             patch("scan.scan_jobright.fetch_jobright_jobs"), \
-             patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"jobright": lambda **kwargs: [job]}, clear=True
+            ),
+            patch("scan.scan_jobright.fetch_jobright_jobs"),
+            patch.object(scan, "_write_jd_file", return_value="jds/fake.json"),
+        ):
             scan.run_scan(["jobright"], verify=False)
         mock_known.assert_called_once_with(
-            "abc123", tracker=mock_tracker_cls.return_value,
-            source_url="https://example.com/job/1", company_name="Acme",
-            job_title="Content Strategist", index=ANY,
+            "abc123",
+            tracker=mock_tracker_cls.return_value,
+            source_url="https://example.com/job/1",
+            company_name="Acme",
+            job_title="Content Strategist",
+            index=ANY,
         )
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_falls_back_to_source_url_for_dedup_when_no_source_job_id(self, mock_tracker_cls, mock_known):
+    def test_falls_back_to_source_url_for_dedup_when_no_source_job_id(
+        self, mock_tracker_cls, mock_known
+    ):
         # Board-provider jobs (scan_boards.py) never have a source_job_id,
         # only a URL -- dedup must still run for them, not silently skip.
         job = {
-            "company_name": "Acme", "job_title": "Content Strategist",
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
             "source_url": "https://example.com/job/1",
         }
-        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True), \
-             patch.object(scan, "_write_jd_file", return_value="jds/fake.json"):
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
+            ),
+            patch.object(scan, "_write_jd_file", return_value="jds/fake.json"),
+        ):
             scan.run_scan(["boards"], verify=False)
         mock_known.assert_called_once_with(
-            "https://example.com/job/1", tracker=mock_tracker_cls.return_value,
-            source_url="https://example.com/job/1", company_name="Acme",
-            job_title="Content Strategist", index=ANY,
+            "https://example.com/job/1",
+            tracker=mock_tracker_cls.return_value,
+            source_url="https://example.com/job/1",
+            company_name="Acme",
+            job_title="Content Strategist",
+            index=ANY,
         )
 
 
 class TestRunScanVerify(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher = patch(
+            "scan.jd_manager.build_known_jobs_index",
+            side_effect=_empty_known_jobs_index,
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_verify_runs_by_default_on_newly_written_paths(self, mock_tracker_cls, mock_known):
-        job = {"company_name": "Acme", "job_title": "Content Strategist", "source_url": "https://x.com/1"}
-        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True), \
-             patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
-             patch("scan.liveness.verify_jd_paths", return_value={"expired_source_paths": []}) as mock_verify:
+    def test_verify_runs_by_default_on_newly_written_paths(
+        self, mock_tracker_cls, mock_known
+    ):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+        }
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
+            ),
+            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"),
+            patch(
+                "scan.liveness.verify_jd_paths",
+                return_value={"expired_source_paths": []},
+            ) as mock_verify,
+        ):
             scan.run_scan(["boards"])
         mock_verify.assert_called_once_with(["/tmp/fake.json"], activity=ANY)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_verify_false_skips_the_liveness_pass_entirely(self, mock_tracker_cls, mock_known):
-        job = {"company_name": "Acme", "job_title": "Content Strategist", "source_url": "https://x.com/1"}
-        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True), \
-             patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"), \
-             patch("scan.liveness.verify_jd_paths") as mock_verify:
+    def test_verify_false_skips_the_liveness_pass_entirely(
+        self, mock_tracker_cls, mock_known
+    ):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+        }
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
+            ),
+            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"),
+            patch("scan.liveness.verify_jd_paths") as mock_verify,
+        ):
             scan.run_scan(["boards"], verify=False)
         mock_verify.assert_not_called()
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_a_posting_verify_finds_expired_is_dropped_from_written_count_and_report(self, mock_tracker_cls, mock_known):
+    def test_a_posting_verify_finds_expired_is_dropped_from_written_count_and_report(
+        self, mock_tracker_cls, mock_known
+    ):
         jobs = [
-            {"company_name": "Acme", "job_title": "Still Open", "source_url": "https://x.com/1"},
-            {"company_name": "Ghost Co", "job_title": "Already Gone", "source_url": "https://x.com/2"},
+            {
+                "company_name": "Acme",
+                "job_title": "Still Open",
+                "source_url": "https://x.com/1",
+            },
+            {
+                "company_name": "Ghost Co",
+                "job_title": "Already Gone",
+                "source_url": "https://x.com/2",
+            },
         ]
         paths = iter(["/tmp/still-open.json", "/tmp/already-gone.json"])
-        with patch.dict(scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: jobs}, clear=True), \
-             patch.object(scan, "_write_jd_file", side_effect=lambda job: next(paths)), \
-             patch("scan.liveness.verify_jd_paths", return_value={"expired_source_paths": ["/tmp/already-gone.json"]}), \
-             patch("scan.cli_art.render_scan_report") as mock_report:
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: jobs}, clear=True
+            ),
+            patch.object(scan, "_write_jd_file", side_effect=lambda job: next(paths)),
+            patch(
+                "scan.liveness.verify_jd_paths",
+                return_value={"expired_source_paths": ["/tmp/already-gone.json"]},
+            ),
+            patch("scan.cli_art.render_scan_report") as mock_report,
+        ):
             written = scan.run_scan(["boards"])
 
         self.assertEqual(written, 1)
@@ -138,7 +209,9 @@ class TestRunScanVerify(unittest.TestCase):
         boards_result = source_results[0]
         self.assertEqual(boards_result["written"], 1)
         self.assertEqual(boards_result["dropped_expired"], 1)
-        self.assertEqual(boards_result["new_jobs"], [{"company": "Acme", "title": "Still Open"}])
+        self.assertEqual(
+            boards_result["new_jobs"], [{"company": "Acme", "title": "Still Open"}]
+        )
 
 
 class TestScanWarningCollection(unittest.TestCase):
@@ -149,37 +222,80 @@ class TestScanWarningCollection(unittest.TestCase):
     lines."""
 
     def setUp(self):
-        patcher = patch("scan.jd_manager.build_known_jobs_index", side_effect=_empty_known_jobs_index)
+        patcher = patch(
+            "scan.jd_manager.build_known_jobs_index",
+            side_effect=_empty_known_jobs_index,
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_warnings_are_grouped_by_provider_kind_and_reason(self, mock_tracker_cls, mock_known):
+    def test_warnings_are_grouped_by_provider_kind_and_reason(
+        self, mock_tracker_cls, mock_known
+    ):
         def fake_fetch(**kwargs):
             for _ in range(3):
-                logging.warning("boom", extra={"scan_warning": True, "kind": "posting_text_failed", "provider_id": "workday", "reason": "HTTP 404"})
-            logging.warning("boom2", extra={"scan_warning": True, "kind": "provider_failed", "provider_id": "greenhouse", "reason": "HTTP 404"})
+                logging.warning(
+                    "boom",
+                    extra={
+                        "scan_warning": True,
+                        "kind": "posting_text_failed",
+                        "provider_id": "workday",
+                        "reason": "HTTP 404",
+                    },
+                )
+            logging.warning(
+                "boom2",
+                extra={
+                    "scan_warning": True,
+                    "kind": "provider_failed",
+                    "provider_id": "greenhouse",
+                    "reason": "HTTP 404",
+                },
+            )
             return []
 
-        with patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True), \
-             patch("scan.cli_art.render_scan_report") as mock_report:
+        with (
+            patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True),
+            patch("scan.cli_art.render_scan_report") as mock_report,
+        ):
             scan.run_scan(["ats"], verify=False)
 
         source_results, _ = mock_report.call_args[0]
         warnings = source_results[0]["warnings"]
-        self.assertEqual(warnings[0], {"provider_id": "workday", "kind": "posting_text_failed", "reason": "HTTP 404", "count": 3})
-        self.assertEqual(warnings[1], {"provider_id": "greenhouse", "kind": "provider_failed", "reason": "HTTP 404", "count": 1})
+        self.assertEqual(
+            warnings[0],
+            {
+                "provider_id": "workday",
+                "kind": "posting_text_failed",
+                "reason": "HTTP 404",
+                "count": 3,
+            },
+        )
+        self.assertEqual(
+            warnings[1],
+            {
+                "provider_id": "greenhouse",
+                "kind": "provider_failed",
+                "reason": "HTTP 404",
+                "count": 1,
+            },
+        )
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_warnings_without_the_scan_warning_marker_are_ignored(self, mock_tracker_cls, mock_known):
+    def test_warnings_without_the_scan_warning_marker_are_ignored(
+        self, mock_tracker_cls, mock_known
+    ):
         def fake_fetch(**kwargs):
             logging.warning("some unrelated warning from somewhere else entirely")
             return []
 
-        with patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True), \
-             patch("scan.cli_art.render_scan_report") as mock_report:
+        with (
+            patch.dict(scan.SOURCE_FETCHERS, {"ats": fake_fetch}, clear=True),
+            patch("scan.cli_art.render_scan_report") as mock_report,
+        ):
             scan.run_scan(["ats"], verify=False)
 
         source_results, _ = mock_report.call_args[0]
@@ -187,16 +303,32 @@ class TestScanWarningCollection(unittest.TestCase):
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
-    def test_warnings_are_scoped_to_the_source_that_produced_them(self, mock_tracker_cls, mock_known):
+    def test_warnings_are_scoped_to_the_source_that_produced_them(
+        self, mock_tracker_cls, mock_known
+    ):
         def boards_fetch(**kwargs):
-            logging.warning("boom", extra={"scan_warning": True, "kind": "provider_failed", "provider_id": "himalayas", "reason": "HTTP 403"})
+            logging.warning(
+                "boom",
+                extra={
+                    "scan_warning": True,
+                    "kind": "provider_failed",
+                    "provider_id": "himalayas",
+                    "reason": "HTTP 403",
+                },
+            )
             return []
 
         def ats_fetch(**kwargs):
             return []
 
-        with patch.dict(scan.SOURCE_FETCHERS, {"boards": boards_fetch, "ats": ats_fetch}, clear=True), \
-             patch("scan.cli_art.render_scan_report") as mock_report:
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS,
+                {"boards": boards_fetch, "ats": ats_fetch},
+                clear=True,
+            ),
+            patch("scan.cli_art.render_scan_report") as mock_report,
+        ):
             scan.run_scan(["boards", "ats"], verify=False)
 
         source_results, _ = mock_report.call_args[0]
@@ -208,10 +340,12 @@ class TestScanWarningCollection(unittest.TestCase):
     def test_removes_the_handler_after_run_so_it_never_accumulates(self):
         root_logger = logging.getLogger()
         handlers_before = len(root_logger.handlers)
-        with patch.dict(scan.SOURCE_FETCHERS, {"ats": lambda **kwargs: []}, clear=True), \
-             patch("scan.jd_manager.job_key_known", return_value=False), \
-             patch("scan.jd_manager.JDTracker"), \
-             patch("scan.cli_art.render_scan_report"):
+        with (
+            patch.dict(scan.SOURCE_FETCHERS, {"ats": lambda **kwargs: []}, clear=True),
+            patch("scan.jd_manager.job_key_known", return_value=False),
+            patch("scan.jd_manager.JDTracker"),
+            patch("scan.cli_art.render_scan_report"),
+        ):
             scan.run_scan(["ats"], verify=False)
         self.assertEqual(len(root_logger.handlers), handlers_before)
 
