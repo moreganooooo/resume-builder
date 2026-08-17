@@ -40,8 +40,10 @@ KEEP_COLUMNS = [
 ]
 
 
-def trim_detective_findings(source_csv: str = SOURCE_CSV) -> list[dict]:
+def trim_detective_findings(source_csv: str | None = None) -> list[dict]:
     """Reads source_csv and returns rows projected to KEEP_COLUMNS."""
+    if source_csv is None:
+        source_csv = SOURCE_CSV
     with open(source_csv, "r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return [{col: row.get(col, "") for col in KEEP_COLUMNS} for row in rows]

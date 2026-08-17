@@ -48,6 +48,134 @@ class TestTagBulletBankReadsProfileYaml(unittest.TestCase):
         self.assertIn("[widgets]", scores)
         self.assertNotIn("[generalist]", scores)
 
+    def test_fallback_tag_default_when_no_empty_keywords(self):
+        from unittest.mock import patch
+
+        with patch(
+            "profile_paths.tags", return_value=[{"name": "tech", "keywords": ["code"]}]
+        ):
+            self.assertEqual(tag_bullet_bank.fallback_tag(), "[generalist]")
+
+    def test_assign_tags_multi_tag_and_needs_review(self):
+        from unittest.mock import patch
+
+        # Taxonomy where shared words score < 1.0, unique words score 1.0
+        tax = {
+            "[alpha]": ["common", "unique_a"],
+            "[beta]": ["common", "unique_b"],
+            "[gamma]": [],
+        }
+        with patch("tag_bullet_bank.tag_keywords", return_value=tax):
+            # Only common word matched -> scores < 1.0 -> needs_review=True
+            tag_str, needs_review = tag_bullet_bank.assign_tags("Text with common word")
+            self.assertTrue(needs_review)
+
+            # Both unique_a and unique_b matched -> both score >= 1.0 -> dual tag!
+            tag_str, needs_review = tag_bullet_bank.assign_tags(
+                "unique_a and unique_b here"
+            )
+            self.assertEqual(tag_str, "[alpha][beta]")
+            self.assertFalse(needs_review)
+
+
+class TestMainFlow(unittest.TestCase):
+    def test_main_cli_execution_and_error_handling(self):
+        import csv
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_csv = os.path.join(tmpdir, "bullets.csv")
+            out_csv = os.path.join(tmpdir, "custom_tagged.csv")
+
+            with open(input_csv, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(
+                    f, fieldnames=["Role / Company", "Tags", "Bullet Point"]
+                )
+                w.writeheader()
+                w.writerow(
+                    {
+                        "Role / Company": "Eng",
+                        "Tags": "[existing]",
+                        "Bullet Point": "Keep as is",
+                    }
+                )
+                w.writerow(
+                    {
+                        "Role / Company": "Eng",
+                        "Tags": "",
+                        "Bullet Point": "Outreach admin",
+                    }
+                )
+                w.writerow(
+                    {"Role / Company": "Eng", "Tags": "", "Bullet Point": "Zero hits"}
+                )
+
+            with patch("sys.argv", ["tag_bullet_bank.py", input_csv, "-o", out_csv]):
+                tag_bullet_bank.main()
+                self.assertTrue(os.path.exists(out_csv))
+                with open(out_csv, "r", encoding="utf-8") as f:
+                    rows = list(csv.DictReader(f))
+                    self.assertEqual(len(rows), 3)
+                    self.assertEqual(rows[0]["Tags"], "[existing]")
+                    self.assertTrue(rows[1]["Tags"])
+
+    def test_main_cli_default_out_path_and_review_generation(self):
+        import csv
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_csv = os.path.join(tmpdir, "bullets.csv")
+            with open(input_csv, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(
+                    f, fieldnames=["Role / Company", "Tags", "Bullet Point"]
+                )
+                w.writeheader()
+                w.writerow(
+                    {
+                        "Role / Company": "Eng",
+                        "Tags": "",
+                        "Bullet Point": "common keyword only",
+                    }
+                )
+
+            tax = {"[a]": ["common"], "[b]": ["common"], "[c]": []}
+            with (
+                patch("tag_bullet_bank.tag_keywords", return_value=tax),
+                patch("sys.argv", ["tag_bullet_bank.py", input_csv]),
+            ):
+                tag_bullet_bank.main()
+                expected_out = os.path.join(tmpdir, "bullets-tagged.csv")
+                review_out = os.path.join(tmpdir, "tag-review-needed.csv")
+                self.assertTrue(os.path.exists(expected_out))
+                self.assertTrue(os.path.exists(review_out))
+
+    def test_main_cli_unexpected_columns(self):
+        import csv
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_csv = os.path.join(tmpdir, "extra_cols.csv")
+            with open(input_csv, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(
+                    f, fieldnames=["Role / Company", "Tags", "Bullet Point", "Extra"]
+                )
+                w.writeheader()
+                w.writerow(
+                    {
+                        "Role / Company": "Eng",
+                        "Tags": "",
+                        "Bullet Point": "test",
+                        "Extra": "bad",
+                    }
+                )
+
+            with patch("sys.argv", ["tag_bullet_bank.py", input_csv]):
+                with self.assertRaises(ValueError):
+                    tag_bullet_bank.main()
+
 
 if __name__ == "__main__":
     unittest.main()

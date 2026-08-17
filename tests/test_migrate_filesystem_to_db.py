@@ -160,6 +160,63 @@ class TestMigrateBulletBank(unittest.TestCase):
         count = migrate.migrate_bullet_bank("isolated")
         self.assertEqual(count, 0)
 
+    def test_fallback_to_bullet_bank_keepers_csv(self):
+        os.remove(self._csv_path)
+        fallback_path = os.path.join(self._kb_dir, "bullet-bank-keepers.csv")
+        with open(fallback_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["company", "title", "bullet", "category", "audit_status"]
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "company": "Initech",
+                    "title": "Ops",
+                    "bullet": "Automated workflow",
+                    "category": "ops",
+                    "audit_status": "CLEAN",
+                }
+            )
+        count = migrate.migrate_bullet_bank("isolated")
+        self.assertEqual(count, 1)
+
+
+class TestMigrateJobsErrorsAndMain(unittest.TestCase):
+    def test_corrupted_json_handled_gracefully(self):
+        tmpdir = tempfile.mkdtemp()
+        try:
+            jd_base = os.path.join(tmpdir, "jds", "isolated")
+            os.makedirs(jd_base)
+            with open(os.path.join(jd_base, "bad.json"), "w") as f:
+                f.write("invalid json")
+            with (
+                patch("profile_paths.jd_dir", return_value=jd_base, create=True),
+                patch("profile_paths.profile_root", return_value=tmpdir),
+            ):
+                conn = db.get_db("isolated")
+                count = migrate.migrate_jobs("isolated", conn=conn)
+                conn.close()
+                self.assertEqual(count, 0)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_main_cli_execution(self):
+        tmpdir = tempfile.mkdtemp()
+        try:
+            jd_base = os.path.join(tmpdir, "jds", "testprof")
+            kb_dir = os.path.join(tmpdir, "knowledge_base")
+            os.makedirs(jd_base)
+            os.makedirs(kb_dir)
+            with (
+                patch("profile_paths.active_profile", return_value="testprof"),
+                patch("profile_paths.jd_dir", return_value=jd_base, create=True),
+                patch("profile_paths.kb_dir", return_value=kb_dir),
+                patch("profile_paths.profile_root", return_value=tmpdir),
+            ):
+                migrate.main()
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

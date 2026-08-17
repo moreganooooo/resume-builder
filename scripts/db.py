@@ -48,8 +48,7 @@ def checkpoint(profile: Optional[str] = None) -> None:
 def init_db(conn: sqlite3.Connection) -> None:
     """Initializes tables and indexes if they do not already exist."""
     with conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -94,8 +93,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
             CREATE INDEX IF NOT EXISTS idx_bullet_company ON bullet_bank(company);
             CREATE INDEX IF NOT EXISTS idx_bullet_audit_status ON bullet_bank(audit_status);
-        """
-        )
+        """)
 
 
 def upsert_job(

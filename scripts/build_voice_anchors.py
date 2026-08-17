@@ -27,7 +27,7 @@ INDEX_CSV = os.path.join(KB_DIR, "application-answers-index.csv")
 OUTPUT_MD = os.path.join(KB_DIR, "voice-anchors.md")
 
 
-def build_voice_anchors(index_csv: str = INDEX_CSV) -> str:
+def build_voice_anchors(index_csv: str | None = None) -> str:
     """Reads index_csv and returns the voice-anchors.md content as a string.
 
     Only rows with a genuine "Quote Worth Pulling" become a section.
@@ -41,6 +41,8 @@ def build_voice_anchors(index_csv: str = INDEX_CSV) -> str:
     this file's only job is specimens, not topical coverage (that's
     profile.yml/verified_facts.json's job).
     """
+    if index_csv is None:
+        index_csv = INDEX_CSV
     with open(index_csv, "r", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
