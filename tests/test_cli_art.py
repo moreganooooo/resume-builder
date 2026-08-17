@@ -530,5 +530,45 @@ class TestRenderTriageSummaryTable(unittest.TestCase):
         self.assertIn("Leftover", output)
 
 
+class TestThinkingStatus(unittest.TestCase):
+
+    def test_thinking_status_runs_and_cleans_up(self):
+        import time
+        with cli_art.thinking_status("Analyzing job posting..."):
+            time.sleep(0.05)
+        # Successfully entered and exited context manager without error
+
+
+class TestThemeTokens(unittest.TestCase):
+
+    def test_catppuccin_thinking_tokens_defined_in_theme(self):
+        import theme
+        self.assertTrue(hasattr(theme, "PEACH"))
+        self.assertTrue(hasattr(theme, "PINK"))
+        self.assertTrue(hasattr(theme, "MAUVE"))
+        self.assertTrue(hasattr(theme, "LAVENDER"))
+        self.assertTrue(hasattr(theme, "BLUE"))
+        self.assertTrue(hasattr(theme, "SKY"))
+        self.assertTrue(hasattr(theme, "THINKING_GRADIENT_COLORS"))
+        self.assertEqual(len(theme.THINKING_GRADIENT_COLORS), 6)
+
+
+class TestSparkleBannerAndCelebration(unittest.TestCase):
+
+    def test_sparkle_banner_renders(self):
+        output = _rendered(cli_art.sparkle_banner, "Job Search Playbook", "Step 1 of 3")
+        self.assertIn("Job Search Playbook", output)
+        self.assertIn("Step 1 of 3", output)
+        self.assertIn("✦", output)
+
+    def test_render_sparkle_celebration_renders(self):
+        output = _rendered(cli_art.render_sparkle_celebration, "Resume Tailored Successfully!", "Your new application is ready.", ["Review in dashboard", "Apply to job"])
+        self.assertIn("Resume Tailored Successfully!", output)
+        self.assertIn("What to do next:", output)
+        self.assertIn("Review in dashboard", output)
+        self.assertIn("Apply to job", output)
+
+
 if __name__ == "__main__":
     unittest.main()
+
