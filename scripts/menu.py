@@ -102,6 +102,7 @@ def _build_find_jobs_choices() -> list:
 def _build_build_documents_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
+        questionary.Choice(title=_icon_title("build", "↳ Build Full Application Package (Resume + Cover Letter)"), value="package_flow"),
         questionary.Choice(title=_icon_title("build", "↳ Customize Resume for Specific Role(s)"), value="tailor_pick"),
         questionary.Choice(title=_icon_title("build", "↳ Customize Resume for All Pending Roles (Batch Run)"), value="tailor_all"),
         questionary.Choice(title=_icon_title("build", "↳ Write Cover Letter for Specific Role(s)"), value="coverletter_pick"),
@@ -975,6 +976,26 @@ def _handle_browse_jobs() -> bool:
     return True
 
 
+def _handle_package_flow() -> bool:
+    """Build full application packages (Resume + Cover Letter + DOCX/PDF)
+    with fail-fast liveness and fit evaluation gates."""
+    selected = picker.browse_and_select_jds(statuses=["Pending"])
+    if not selected:
+        return False
+    engine = orchestrator.ResumeEngine()
+    completed_count = 0
+    for row in selected:
+        res = engine.build_application_package(
+            jd_path=row["path"],
+            interactive=True,
+        )
+        if res and res.get("status") == "completed":
+            completed_count += 1
+            if hasattr(cli_art, "render_application_package_hud"):
+                cli_art.render_application_package_hud(res)
+    return completed_count > 0
+
+
 def _handle_tailor_pick() -> bool:
     """Main-menu shortcut straight into the multi-select picker, scoped
     to Pending JDs, for tailoring one or a few specific roles without
@@ -1836,6 +1857,7 @@ _HANDLERS = {
     "add_manual_jd": _handle_add_manual_jd,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
+    "package_flow": _handle_package_flow,
     "tailor_all": _handle_tailor_all,
     "tailor_pick": _handle_tailor_pick,
     "coverletter_pick": _handle_coverletter_pick,
@@ -1860,6 +1882,8 @@ _CHAIN = {
     "scan": [("Evaluate All JDs", "evaluate_all")],
     "liveness": [("Evaluate All JDs", "evaluate_all")],
     "evaluate_all": [("Customize Resume", "tailor_all"), ("Browse & Manage Jobs", "browse_jobs")],
+    "package_flow": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
+    "package": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
     "tailor_all": [("Browse & Manage Jobs", "browse_jobs"), ("Polish with Gemini", "polish")],
     "tailor_pick": [("Write Cover Letter", "coverletter_pick"), ("Polish with Gemini", "polish")],
     "coverletter_pick": [("Polish with Gemini", "polish")],
