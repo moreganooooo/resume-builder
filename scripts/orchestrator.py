@@ -1176,6 +1176,7 @@ class ResumeEngine:
         self.deep_evidence_keywords = (
             self.load_yaml(self.kb_dir, "profile.yml").get("deep_evidence_keywords") or []
         )
+        self.voice_rules = self.load_yaml(self.scoring_dir, "voice_rules.yaml") or {}
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
@@ -2793,7 +2794,8 @@ class ResumeEngine:
             style_rules,
             kb_corpus=background_context,
             keeper_bullets=keeper_bullets,
-            keeper_embs=keeper_embs
+            keeper_embs=keeper_embs,
+            voice_rules=self.voice_rules,
         )
 
         if violations:
@@ -2819,7 +2821,8 @@ class ResumeEngine:
                     style_rules,
                     kb_corpus=background_context,
                     keeper_bullets=keeper_bullets,
-                    keeper_embs=keeper_embs
+                    keeper_embs=keeper_embs,
+                    voice_rules=self.voice_rules,
                 )
             if violations:
                 cli_art.detail(f"  {theme.colorize_icon('warning')} {len(violations)} issue(s) remain after retry, proceeding anyway:", level=cli_art.NORMAL)

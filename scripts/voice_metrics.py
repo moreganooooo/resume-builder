@@ -33,7 +33,7 @@ _DECIMAL_REGEX = re.compile(r"\b\d+\.\d+\b")
 DEFAULT_THRESHOLDS = {
     "sentence_std_dev_min": 4.5,
     "sentence_span_min": 12,
-    "sentence_length_max": 42,
+    "sentence_length_max": 55,
     "sentence_length_min": 3,
     "type_token_ratio_min": 0.46,
     "max_consecutive_same_opener": 2,
