@@ -9,6 +9,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
 import profile_paths  # noqa: E402
+import jd_manager  # noqa: E402
 
 
 class TestCoverLetterSchemaNewFields(unittest.TestCase):
@@ -151,6 +152,72 @@ class TestCoverLetterEnrichmentWiring(unittest.TestCase):
         result = self._run_build()
         self.assertEqual(result["contact_name"], "Maggie Smith")
         self.assertEqual(result["contact_title"], "HR Manager")
+
+
+class TestReferralInjection(unittest.TestCase):
+    """Feature #5: a saved _referral (jd_manager.save_referral()) should be
+    folded into build_tailored_coverletter()'s system_instruction as a
+    '=== REFERRAL ===' block; a JD with no referral saved should produce
+    no such block at all."""
+
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+        self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_referral.json")
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "job_title": "Content Strategist",
+                "company_name": "Acme Corp",
+                "description": "We are hiring a Content Strategist.",
+            }, f)
+
+        self.stem = orchestrator._build_output_stem(self.jd_path)
+        self.json_out = os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
+        self.html_out = os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
+
+    def tearDown(self):
+        for path in (self.jd_path, self.json_out, self.html_out):
+            if os.path.exists(path):
+                os.remove(path)
+
+    def _clean_letter_json(self):
+        return json.dumps({
+            "company_name": "Acme Corp",
+            "greeting": "Dear Acme Corp Hiring Team,",
+            "contact_name": "",
+            "contact_title": "",
+            "body_paragraphs": [
+                "When Acme Corp scaling its Content Strategist function, Jane Doe suggested I reach out.",
+                "My background lines up well with what you need.",
+            ],
+            "sign_off": "Sincerely,",
+        })
+
+    def _run_build(self):
+        with patch("orchestrator.subprocess.run", return_value=MagicMock(returncode=0, stdout="", stderr="")), \
+             patch("orchestrator.render_coverletter"), \
+             patch("orchestrator.validate_pdf_text.validate_coverletter_pdf_text", return_value=[]):
+            return self.engine.build_tailored_coverletter(self.jd_path)
+
+    @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
+    @patch("orchestrator.GeminiClient.generate")
+    def test_referral_block_present_in_system_instruction_when_saved(self, mock_generate, mock_research):
+        jd_manager.save_referral(self.jd_path, "Jane Doe, former coworker")
+        mock_generate.return_value = (self._clean_letter_json(), {})
+        self._run_build()
+        system_instruction = mock_generate.call_args_list[0].kwargs["system_instruction"]
+        # The prompt template's own instructions always mention the
+        # "=== REFERRAL ===" marker by name (explaining the convention), so
+        # check for the actual injected content instead of the marker text.
+        self.assertIn("Jane Doe, former coworker", system_instruction)
+        self.assertIn("The candidate has a referral for this specific role", system_instruction)
+
+    @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
+    @patch("orchestrator.GeminiClient.generate")
+    def test_no_referral_block_when_none_saved(self, mock_generate, mock_research):
+        mock_generate.return_value = (self._clean_letter_json(), {})
+        self._run_build()
+        system_instruction = mock_generate.call_args_list[0].kwargs["system_instruction"]
+        self.assertNotIn("The candidate has a referral for this specific role", system_instruction)
 
 
 if __name__ == "__main__":

@@ -55,10 +55,20 @@ def _candidate_urls(company_website: str) -> list:
     return [f"{base}{path}" for path in CANDIDATE_PATHS]
 
 
+_BOILERPLATE_TAGS = ["script", "style", "nav", "header", "footer", "aside"]
+_BOILERPLATE_SELECTORS = [
+    '[class*="cookie" i]', '[id*="cookie" i]',
+    '[class*="consent" i]', '[id*="consent" i]',
+]
+
+
 def _extract_visible_text(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style"]):
+    for tag in soup(_BOILERPLATE_TAGS):
         tag.decompose()
+    for selector in _BOILERPLATE_SELECTORS:
+        for tag in soup.select(selector):
+            tag.decompose()
     text = soup.get_text(separator=" ")
     return re.sub(r"\s+", " ", text).strip()
 

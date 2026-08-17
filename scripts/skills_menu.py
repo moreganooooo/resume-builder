@@ -111,7 +111,7 @@ def _add_skill(data: dict):
         
     evidence_count_str = questionary.text("Evidence Count (number of projects/roles using this):", default="1").ask()
     if evidence_count_str is None:
-        cli_art.display_warning("Skill creation cancelled.")
+        cli_art.console.print(f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True)
         return
 
     try:
@@ -121,13 +121,13 @@ def _add_skill(data: dict):
         
     use_notes = questionary.text("Use Notes (how you have used this skill/tool):").ask()
     if use_notes is None:
-        cli_art.display_warning("Skill creation cancelled.")
+        cli_art.console.print(f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True)
         return
     use_notes = use_notes.strip()
     
     tr_references_str = questionary.text("Evidence/Project References (comma-separated, e.g. TR-0007, profile.yml):", default="profile.yml").ask()
     if tr_references_str is None:
-        cli_art.display_warning("Skill creation cancelled.")
+        cli_art.console.print(f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True)
         return
     tr_references = [r.strip() for r in tr_references_str.split(",") if r.strip()]
     

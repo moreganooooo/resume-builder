@@ -21,6 +21,8 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
 import stale_sweep  # noqa: E402
+import profile_paths  # noqa: E402
+import db  # noqa: E402
 
 
 def _write_jd(path: str, **fields) -> str:
@@ -30,6 +32,17 @@ def _write_jd(path: str, **fields) -> str:
 
 
 class TestMoveJdTo(unittest.TestCase):
+    """move_jd_to() now also syncs data.db (F4) -- isolate every test in
+    this class from the real profile's database so a plain functional
+    test of the move itself doesn't write throwaway job rows into
+    production data (this bit once already; see docs/review's F4 fix)."""
+
+    def setUp(self):
+        self._db_tmpdir = tempfile.mkdtemp()
+        patcher = patch("profile_paths.profile_root", return_value=self._db_tmpdir)
+        self._profile_root_patch = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(lambda: __import__("shutil").rmtree(self._db_tmpdir, ignore_errors=True))
 
     def test_moves_into_destination_keeping_its_basename(self):
         with tempfile.TemporaryDirectory() as d:
@@ -74,6 +87,31 @@ class TestMoveJdTo(unittest.TestCase):
             dest_dir = os.path.join(d, "does", "not", "exist")
             result = jd_manager.move_jd_to(_write_jd(os.path.join(d, "job.json")), dest_dir)
             self.assertTrue(os.path.exists(result))
+
+    def test_moving_to_completed_updates_data_db_status_immediately(self):
+        """F4: data.db's status must reflect a JD's new location right
+        after the move, not just whenever some other save_* call next
+        happens to touch this JD (which may be never)."""
+        with tempfile.TemporaryDirectory() as d:
+            dest_dir = os.path.join(d, "completed")
+            src = _write_jd(os.path.join(d, "job.json"))
+            jd_manager.move_jd_to(src, dest_dir)
+
+            rows = db.get_jobs_by_status("completed", profile="irrelevant")
+            matches = [r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"]
+            self.assertEqual(len(matches), 1)
+
+    def test_moving_to_archived_updates_data_db_status_immediately(self):
+        """Same F4 gap existed in archive_jd(), a second, separate
+        function that also physically moves a JD's file."""
+        with tempfile.TemporaryDirectory() as d:
+            src = _write_jd(os.path.join(d, "job.json"))
+            with patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")):
+                jd_manager.archive_jd(src)
+
+            rows = db.get_jobs_by_status("archived", profile="irrelevant")
+            matches = [r for r in rows if r["company"] == "Acme" and r["title"] == "Analyst"]
+            self.assertEqual(len(matches), 1)
 
 
 class TestDiscoveredAt(unittest.TestCase):
