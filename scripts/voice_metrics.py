@@ -126,8 +126,7 @@ def detect_consecutive_opener_repetitions(sentences: List[str], max_consecutive:
     consecutive_word_count = 1
     current_word = ""
 
-    for i in range(len(openers)):
-        word = openers[i][0]
+    for word, _ in openers:
         if not word:
             consecutive_word_count = 1
             current_word = ""
