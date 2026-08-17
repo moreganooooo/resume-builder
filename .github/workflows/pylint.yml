@@ -40,6 +40,18 @@ jobs:
     - name: Complexity analysis with radon
       run: |
         radon cc scripts/ -a -nb
+    - name: Docstring coverage with pydocstyle
+      run: |
+        pydocstyle scripts/ --match-dir=scripts
+    - name: YAML validation with yamllint
+      run: |
+        yamllint -d "{rules: {line-length: {max: 120}, trailing-whitespace: disable}}" profiles/ scripts/ || true
+    - name: Spell check with codespell
+      run: |
+        codespell scripts/ tests/ docs/ --skip="*.json,*.csv,*.db,*.pyc" || true
+    - name: Check for vulnerable dependencies
+      run: |
+        safety check --json || true
     - name: Run unit tests
       run: |
         python -m unittest discover -s tests -v
