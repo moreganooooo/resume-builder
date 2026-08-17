@@ -6,7 +6,7 @@ thresholds:
   # Sentence length burstiness & variance (in words)
   sentence_std_dev_min: 4.5       # std dev < 4.5 flags monotonous AI pacing
   sentence_span_min: 12           # (max_len - min_len) must be >= 12 words
-  sentence_length_max: 42         # sentences > 42 words flag as run-on
+  sentence_length_max: 55         # sentences > 55 words flag as run-on
   sentence_length_min: 3          # sentences < 3 words flag as fragments
 
   # Lexical diversity (Type-Token Ratio)
