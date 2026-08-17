@@ -1,7 +1,7 @@
 # Implementation Plan: TUI Polish, "Shiny" Terminal Craft & Compassionate UX
 
-> **Target Spec**: [`docs/superpowers/specs/2026-08-17-tui-polish-design.md`](file:///Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-tui-polish-design.md)  
-> **Status**: Ready for Implementation (TDD, phase-by-phase)  
+> **Target Spec**: [`docs/superpowers/specs/2026-08-17-tui-polish-design.md`](file:///Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-tui-polish-design.md)
+> **Status**: Ready for Implementation (TDD, phase-by-phase)
 > **Primary Goals**:
 > 1. Complete visual unification (`┃` hover styling, universal `?` overlays, zero hardcoded hex drift).
 > 2. Activate vendored power (`glamour` magazine-grade markdown, `huh` onboarding wizard).

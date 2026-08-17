@@ -18,7 +18,7 @@ A: It is a mathematical converter that translates your qualitative 1-5 `intervie
 *   This removes abstract scoring bias and grounds your job-hunt pipeline in empirical, statistics-based probability.
 
 ### Q: How do Profile-Driven Overrides and Deal-Breakers work?
-A: If you enable `location.remote_required` in your profile configuration (`profile.yml`), any job description evaluated with onsite or hybrid language (resulting in `remote_quality < 5` or triggered `hard_blockers`) is immediately caught by a Python post-processor. 
+A: If you enable `location.remote_required` in your profile configuration (`profile.yml`), any job description evaluated with onsite or hybrid language (resulting in `remote_quality < 5` or triggered `hard_blockers`) is immediately caught by a Python post-processor.
 *   The system overrides the composite score to a flat **`0.00`** and recommendation to **`Skip`**.
 *   The job is **automatically archived** out of your pending queue, keeping your search hyper-focused. This framework is fully generic and works for any user's profile deal-breakers!
 
@@ -34,7 +34,7 @@ A: Drop your historic files (old resumes, cover letters, portfolios, course tran
 * **How it processes:** The program automatically parses, clean-extracts, and indexes these documents during your next build. This builds a rich, contextual semantic map of your career milestones, giving the LLM a deeper reservoir of true, verified facts to draw from.
 
 ### Q: How does the Bullet Bank compound over time?
-A: Whenever you run a tailoring build, the AI will suggest polished, high-impact phrasings of your achievements to align with the job posting. 
+A: Whenever you run a tailoring build, the AI will suggest polished, high-impact phrasings of your achievements to align with the job posting.
 * If you approve a build, the program takes those polished, tailored sentences and writes them directly back to your "Keepers" database (`profiles/<profile>/bullet-bank-keepers-audited.csv`) as approved, reusable achievements.
 * Your bullet bank is never static—it compounds and grows sharper with every single application!
 
@@ -48,7 +48,7 @@ A: When you bootstrap a profile, the system reads your raw historical resume and
 * The AI optimizer is **explicitly forbidden** from editing your Distinctive Sections, ensuring that your authentic human personality is never sanded away into generic AI-beige text.
 
 ### Q: How does the background Company Research work?
-A: If a job description contains a corporate homepage URL, a background web scraper immediately sweeps their primary About, Mission, Values, and Product pages. 
+A: If a job description contains a corporate homepage URL, a background web scraper immediately sweeps their primary About, Mission, Values, and Product pages.
 * It extracts their exact corporate culture and registers.
 * It dynamically adjusts your Resume Summary and Cover Letter opening paragraphs to match their tone (e.g., warmer and values-driven for mission-centric teams; sharper, technical, and metrics-focused for fast-paced B2B software companies).
 

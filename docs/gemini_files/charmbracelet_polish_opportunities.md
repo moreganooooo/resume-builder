@@ -8,7 +8,7 @@ By marrying the core Go dashboard (`bubbletea` + `lipgloss`) with advanced Charm
 
 ## 🎨 Core Theme & Visual Architecture
 
-Your existing design system (`DESIGN.md` / `dashboard/internal/theme/theme.go`) successfully implements a split-palette strategy: terminal-vibrant neons for the TUI (derived from Charmtone and Catppuccin) and strict monochrome formatting for print exports. 
+Your existing design system (`DESIGN.md` / `dashboard/internal/theme/theme.go`) successfully implements a split-palette strategy: terminal-vibrant neons for the TUI (derived from Charmtone and Catppuccin) and strict monochrome formatting for print exports.
 
 We can expand this foundation to build richer, highly stylized terminal layouts.
 
@@ -59,20 +59,20 @@ import (
 func RenderHeatmap(t theme.Theme, activityMap map[string]int, width int) string {
 	var sb strings.Builder
 	days := []string{"Mon", "Wed", "Fri"}
-	
+
 	// Create Catppuccin/Success color scale
 	emptyStyle := lipgloss.NewStyle().Foreground(t.Overlay)                      // ░
 	lowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2a5c4e"))          // ▒
 	medStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#1a9c73"))          // ▓
 	highStyle := lipgloss.NewStyle().Foreground(t.Green)                         // █
-	
+
 	labelStyle := lipgloss.NewStyle().Foreground(t.Subtext).Width(5)
 
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(t.Blue).Render("Activity Heatmap (Last 12 Weeks)\n\n"))
 
 	now := time.Now()
 	startDate := now.AddDate(0, 0, -12*7) // Go back 12 weeks
-	
+
 	for dayIdx := 0; dayIdx < 7; dayIdx++ {
 		// Only render Mon, Wed, Fri labels to keep terminal uncluttered
 		if dayIdx%2 == 1 {
@@ -103,14 +103,14 @@ func RenderHeatmap(t theme.Theme, activityMap map[string]int, width int) string 
 		}
 		sb.WriteString("\n")
 	}
-	
+
 	// Draw legend
-	sb.WriteString("\n" + strings.Repeat(" ", 6) + "Less " + 
-		emptyStyle.Render("░") + " " + 
-		lowStyle.Render("▒") + " " + 
-		medStyle.Render("▓") + " " + 
+	sb.WriteString("\n" + strings.Repeat(" ", 6) + "Less " +
+		emptyStyle.Render("░") + " " +
+		lowStyle.Render("▒") + " " +
+		medStyle.Render("▓") + " " +
 		highStyle.Render("█") + " More\n")
-		
+
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Overlay).
@@ -150,7 +150,7 @@ func RenderDimensionScores(t theme.Theme, dimensions map[string]float64, width i
 
 	for name, score := range dimensions { // score normalized between 0.0 and 1.0
 		barWidth := int(score * float64(maxBarWidth))
-		
+
 		// Map score to a gradient
 		var color lipgloss.Color
 		switch {
@@ -215,7 +215,7 @@ You can extend this exact physics engine to other micro-interactions!
 
 ## 📦 Feature Proposal 5: Documentation & Presentation Polish (`vhs` + `freeze`)
 
-The "Portfolio & Presentation" aspect of building an amazing terminal ecosystem is highly underrated. 
+The "Portfolio & Presentation" aspect of building an amazing terminal ecosystem is highly underrated.
 
 ### Interactive Screenshot Mode (`freeze`)
 You can bind an `s` key globally in your Bubble Tea dashboard. When pressed, it captures the current raw terminal string (including ANSI escape sequences), writes it to a temporary file, and runs a Go sub-process wrapper calling `freeze` to export a pixel-perfect styled PNG of the dashboard.

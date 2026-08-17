@@ -116,8 +116,8 @@ Narrative Planning: For each gap, form a mini “prompt plan”. E.g., For the �
 LLM Prompting: Feed the collected evidence into the LLM with a structured prompt. For instance:
 
 “Rewrite the following bullet from Base Resume with a focus on SEO, including relevant metrics from the user’s profile:
- Base bullet: ‘Led online marketing campaign.’ 
- Profile evidence: ‘increased traffic by 40%.’ 
+ Base bullet: ‘Led online marketing campaign.’
+ Profile evidence: ‘increased traffic by 40%.’
  JD keywords: [SEO, analytics, CTR].
  Desired bullet style: concise result-oriented.”
 
@@ -362,5 +362,3 @@ Sources: Tools and methods cited include official documentation and GitHub repos
 ### [Table]
 
 |  |
-
-

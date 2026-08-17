@@ -73,7 +73,7 @@ Based on comprehensive analysis of GitHub's ecosystem:
 
 **Market Share (2026):**
 - **MIT License**: ~60% of open-source projects
-- **Apache 2.0**: ~25% of open-source projects  
+- **Apache 2.0**: ~25% of open-source projects
 - **AGPL 3.0**: ~8% of open-source projects
 - **GPL (all versions)**: ~5-7% (declining)
 - **BSD variants**: ~2-3%
@@ -400,7 +400,7 @@ Based on analysis of high-performing repositories and expert guides:
   <img src="logo.png" width="120" />
   <h1>Project Name</h1>
   <p>One-line description</p>
-  
+
   <!-- Badges here - above the fold -->
   [![License](badge)](link)
   [![Build](badge)](link)

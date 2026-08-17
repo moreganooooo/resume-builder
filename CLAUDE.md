@@ -172,10 +172,10 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   — add new tiers by producing source text, not by adding a schema.
   Its `vocabulary_substitutions` field (e.g. `customers -> guests`) reaches
   the Summary and Cover Letter sections via prompt instructions, and is
-  integrated into bullet rewrites via **semantic LLM translation during Step 3**. 
-  Instead of blindly applying post-hoc regexes, preferred vocabulary terms 
-  are injected directly into the LLM bullet-rewrite instructions alongside the 
-  rest of the CV context, allowing the model to naturally construct grammatically 
+  integrated into bullet rewrites via **semantic LLM translation during Step 3**.
+  Instead of blindly applying post-hoc regexes, preferred vocabulary terms
+  are injected directly into the LLM bullet-rewrite instructions alongside the
+  rest of the CV context, allowing the model to naturally construct grammatically
   perfect, pluralization-safe sentences using the user's authentic voice.
   See `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
 - **Embedded ACID SQLite Store (`db.py`):** `profiles/<profile>/data.db` manages connection pooling, schema initialization, and database queries for job postings, application funnel status transitions, and bullet bank achievements with transaction safety and indexed query performance.

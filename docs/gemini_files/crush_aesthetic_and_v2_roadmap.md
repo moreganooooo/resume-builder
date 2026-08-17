@@ -24,7 +24,7 @@ import contextlib
 @contextlib.contextmanager
 def alternate_screen():
     """Switches the terminal to the alternate screen buffer and restores it at exit.
-    
+
     Using \x1b[?1049h tells standard ANSI terminals to hide scrollback history,
     hide scrollbars, and open a clean fullscreen canvas. \x1b[?1049l restores
     the original terminal screen and preserves previous scrollback content intact.
@@ -48,25 +48,25 @@ In `scripts/menu.py`, wrap your interactive main loop inside `alternate_screen()
 ```python
 def run_interactive_menu():
     session_stats = {"start_time": time.time(), "completed_count": 0}
-    
+
     # Immersive alternate-screen wrapper
     with alternate_screen():
         display_main_banner()
         display_tip()
-        
+
         while True:
             choice = cli_art.select("What would you like to do?", choices=_build_choices())
             if not choice or choice == "exit":
                 break
-                
+
             # If the choice is a submenu, it runs its own internal select loop
             if choice in _SUBMENUS:
                 _SUBMENUS[choice](session_stats)
             else:
                 _run_with_chain(choice, session_stats)
-                
+
             display_breadcrumb()
-            
+
     # Exit footer renders on standard screen once terminal is restored
     display_exit_footer()
 ```
@@ -153,7 +153,7 @@ You asked if there is value in upgrading to **Bubble Tea v2**, **Lip Gloss v2**,
 
 1. **Declarative Layouts (Bubble Tea v2):**
    In v1, you trigger alt-screen transitions and mouse tracking imperatively through commands (`tea.EnterAltScreen`) or launch arguments. In v2, you declare your layout settings directly inside your `View()` method inside a `tea.View` struct.
-   
+
    *V1 (Imperative):*
    ```go
    p := tea.NewProgram(m, tea.WithAltScreen()) // Stiff launch-only setting
@@ -192,5 +192,5 @@ Upgrading your Go modules to `github.com/charmbracelet/bubbletea/v2` and `github
 
 > [!IMPORTANT]
 > **Keep your current stable v1 setup for immediate visual polish, but schedule a v2 migration before deploying your SSH server (`wish`).**
-> 
+>
 > The visual redesign (Crush badges, dual-panes, title bars) is completely separate from the library version and can be fully implemented **today** in v1. Migrating to v2 is highly recommended if you expand into multi-user SSH clustering, as it eliminates global state color bugs entirely.

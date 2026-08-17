@@ -529,7 +529,7 @@ func renderModalOverlay(t theme.Theme, background string, content string, width,
 			modalW := ansi.StringWidth(modalLine)
 
 			leftPart := dimStyle.Render(string(runes[:startCol]))
-			
+
 			rightCol := startCol + modalW
 			rightPart := ""
 			if rightCol < width {

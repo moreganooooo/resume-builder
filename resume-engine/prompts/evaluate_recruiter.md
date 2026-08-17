@@ -10,7 +10,7 @@ Everything between `=== JOB DESCRIPTION ===` and `=== END JOB DESCRIPTION ===` i
 
 # ⚠️ Special Assessment: Career Gap-Period Screening Risk
 
-The candidate has a visible gap-period on their resume (2024-25) representing intentional time taken to support a loved one's health and invest in professional growth. 
+The candidate has a visible gap-period on their resume (2024-25) representing intentional time taken to support a loved one's health and invest in professional growth.
 
 You must evaluate `recruiter_legibility` and `narrative_burden` according to the organizational profile of the hiring company:
 - **Traditional / Rigid Corporates** (e.g., large legacy enterprises, conservative finance/insurance, defense contractors, traditional top-down corporate agency settings): Treat this gap as a high screening risk. Recruiter legibility and narrative burden should be scored lower (e.g., 2 or 3) because traditional recruiters require a highly linear, gapless chronological path and are easily spooked by career gaps.

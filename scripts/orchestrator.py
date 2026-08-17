@@ -301,9 +301,7 @@ MAX_BACKOFF_SECS = 90
 # ---------------------------------------------------------------------------
 
 from gemini_client import GeminiClient  # replaces the inline class
-from gemini_client import (
-    SustainedFailureError,
-)
+from gemini_client import SustainedFailureError
 
 # ---------------------------------------------------------------------------
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)

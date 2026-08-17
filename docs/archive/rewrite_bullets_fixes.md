@@ -5112,7 +5112,7 @@ And on bullet 3:
 **That last line is the smoking gun.** `"User wants a resume bullet rewritten."` — that phrase lives in `REWRITE_SYSTEM_BASE`:
 
 ```python
-"- Do not include a preamble, commentary, heading, description, or additional text 
+"- Do not include a preamble, commentary, heading, description, or additional text
 (example: \"*   User wants a resume bullet rewritten.\")."
 ```
 
@@ -5974,4 +5974,3 @@ We just merged the two per-attempt log lines into one, e.g.:
 ***
 
 That should get any new thread up to speed in seconds. 🎉
-

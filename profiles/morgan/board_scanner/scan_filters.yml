@@ -345,7 +345,7 @@ title_filter:
     - "Help Desk"
     - "Tier 1 Support"
     - "Technical Support Representative"
-    - "Inbound Calls" 
+    - "Inbound Calls"
 
     # Sales / outbound false positives
     - "Account Executive"
@@ -503,7 +503,7 @@ title_filter:
     - "Nights"
     - "OpenAI"
     - "Notion"
-    
+
     # Added to eliminate physical operations, logistics, and manufacturing
     - "Data Center"
     - "CNC "
@@ -513,7 +513,7 @@ title_filter:
     - "Inventory"
     - "Machining"
     - "Maintenance"
-    - "Astronaut" 
+    - "Astronaut"
     - "Distribution"
     - "Supply "
 
@@ -697,4 +697,3 @@ title_filter:
     - "Sign up for the"
     - "Data Governance"
     - "Religion"
-

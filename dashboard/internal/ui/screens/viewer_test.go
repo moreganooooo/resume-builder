@@ -241,4 +241,3 @@ func TestViewerNavigationAndBounds(t *testing.T) {
 		t.Errorf("expected showHelp false after 'esc'")
 	}
 }
-

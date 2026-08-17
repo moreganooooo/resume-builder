@@ -130,7 +130,7 @@ func renderCompactWarning(t theme.Theme, width, height int) string {
 	title := titleStyle.Render("┃ TERMINAL WINDOW TOO COMPACT")
 	sizeLine := fmt.Sprintf("Current size: %dx%d  Minimum required: 80x24", width, height)
 	instruction := descStyle.Render("Please expand or zoom out your terminal window to resume.")
-	
+
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Peach).
@@ -150,7 +150,7 @@ func renderCompactWarning(t theme.Theme, width, height int) string {
 	)
 
 	rendered := box.Render(content)
-	
+
 	// Center the box vertically and horizontally on the screen
 	lines := strings.Split(rendered, "\n")
 	boxHeight := len(lines)
@@ -173,7 +173,7 @@ func renderCompactWarning(t theme.Theme, width, height int) string {
 	for _, l := range lines {
 		paddedLines = append(paddedLines, leftPadStr+l)
 	}
-	
+
 	return strings.Join(paddedLines, "\n")
 }
 

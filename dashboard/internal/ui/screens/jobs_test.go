@@ -836,4 +836,3 @@ func TestDetailScrollOffsetResetAndClamping(t *testing.T) {
 		t.Errorf("expected detailScrollOffset to reset on page down, got %d", m.detailScrollOffset)
 	}
 }
-

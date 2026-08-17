@@ -247,7 +247,7 @@ graph TD
     A --> K{Shell Scripts?}
     K -->|Yes| L[Consider Gum]
     K -->|No| M[✅ Skip Gum - Not needed]
-    
+
     style C fill:#f9f,stroke:#333
     style F fill:#bbf,stroke:#333
     style M fill:#bbf,stroke:#333

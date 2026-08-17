@@ -283,7 +283,7 @@ def calculate_overall_score(dimension_scores):
         'experience_match': 0.10,
         'formatting': 0.05
     }
-    
+
     return sum(
         dimension_scores[dimension] * weights[dimension]
         for dimension in weights
@@ -325,7 +325,7 @@ class Rule:
     description: str
     weight: float
     check_function: Callable
-    
+
 # Loaded at server startup
 RULES = [
     Rule(category="ats_compatibility", name="file_format", ...),

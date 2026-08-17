@@ -1899,4 +1899,3 @@ Reuses `bullet_bank_menu.STAGES`/`_stage_status()`/`_handle_choice()` directly f
 Fixed a related real bug found along the way: `bootstrap_bullet_bank.py`, `bootstrap_profile.py`, and `bullet_bank_menu.py` all compute profile-scoped path constants at module level but weren't in `profile_paths._RELOAD_ON_PROFILE_SWITCH` -- meaning right after creating a brand-new profile mid-session, they'd have silently kept pointing at the old profile's paths. All three are now in that reload list.
 
 `scripts/menu.py`'s `_handle_bootstrap()` shrank to just the profile-creation/guest-mode gate, then delegates to `bootstrap_menu.run_bootstrap_menu()`. Test coverage: new `tests/test_bootstrap_menu.py`; `tests/test_menu_bootstrap.py`'s now-obsolete subprocess-flow tests replaced with delegation tests.
-

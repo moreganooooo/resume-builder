@@ -106,7 +106,10 @@
       "Bash(sed -i '102,105d' internal/theme/icons.go)",
       "Bash(sed -i '101r /tmp/fix_icons.txt' internal/theme/icons.go)",
       "Bash(rtk wc *)",
-      "Bash(isort *)"
+      "Bash(isort *)",
+      "Bash(rtk pre-commit *)",
+      "Bash(rtk pip *)",
+      "Bash(pre-commit run *)"
     ]
   },
   "hooks": {

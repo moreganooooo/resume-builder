@@ -277,7 +277,7 @@ This aligns with Huntr data: 1 interview per 17 tailored applications
 
 3. **Bayesian Approach (Inferred):**
    ```
-   P(Interview | Your Profile, Job) ∝ 
+   P(Interview | Your Profile, Job) ∝
    P(Your Profile | Interview) × P(Interview | Job)
    ```
    - Prior: Historical interview rates for similar roles
@@ -358,11 +358,11 @@ This aligns with Huntr data: 1 interview per 17 tailored applications
 
 **Mathematical Formula:**
 ```
-Scoring Rate (Group X) = 
-  Count(Candidates in Group X with Score ≥ Median) / 
+Scoring Rate (Group X) =
+  Count(Candidates in Group X with Score ≥ Median) /
   Count(All Candidates in Group X)
 
-Disparate Impact Ratio = 
+Disparate Impact Ratio =
   Scoring Rate (Minority Group) / Scoring Rate (Majority Group)
 
 Bias exists if: Disparate Impact Ratio < 0.8 (80% rule)

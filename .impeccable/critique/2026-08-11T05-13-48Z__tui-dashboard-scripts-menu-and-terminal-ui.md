@@ -2,7 +2,7 @@
 target: "TUI: dashboard/ + scripts/ menu and terminal UI"
 total_score: 26
 max_score: 40
-na_heuristics: 
+na_heuristics:
 p0_count: 1
 p1_count: 6
 timestamp: 2026-08-11T05-13-48Z

@@ -110,4 +110,3 @@ func NewMenuIcons() MenuIcons {
 		ScoreWeak:   "⊘",
 	}
 }
-

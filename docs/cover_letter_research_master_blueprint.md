@@ -1,6 +1,6 @@
 # 💎 2026 Cover Letter Research Synthesis & Master Blueprint
-> **Project**: `resume-builder`  
-> **Source Material**: Research files in `/Users/morganescott/Downloads/CoverLetterResearch/` and `gapsinresearch_answered.md`  
+> **Project**: `resume-builder`
+> **Source Material**: Research files in `/Users/morganescott/Downloads/CoverLetterResearch/` and `gapsinresearch_answered.md`
 > **Document Purpose**: Comprehensive synthesis of 2026 empirical hiring data, ATS platform behaviors, company policies, and an actionable 23-feature development roadmap for `resume-builder`.
 
 ---

@@ -1,7 +1,9 @@
 import os
 import re
 
-file_path = "/Users/morganescott/resume-builder/dashboard/internal/ui/screens/pipeline.go"
+file_path = (
+    "/Users/morganescott/resume-builder/dashboard/internal/ui/screens/pipeline.go"
+)
 
 with open(file_path, "r") as f:
     content = f.read()
@@ -84,7 +86,7 @@ func (m PipelineModel) View() string {
 	}
 
 	leftPane := m.renderSidebarList(leftWidth, availHeight)
-	
+
 	var rightPane string
 	if app, ok := m.CurrentApp(); ok {
 		rightPane = m.renderJobDetailPane(app, rightWidth, availHeight)
@@ -116,7 +118,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 
 	var lines []string
 	prevStatus := ""
-	
+
 	for i, app := range m.filtered {
 		norm := data.NormalizeStatus(app.Status)
 
@@ -141,7 +143,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 	if m.scrollOffset > 0 && m.scrollOffset < len(bodyLines) {
 		bodyLines = bodyLines[m.scrollOffset:]
 	}
-	
+
 	// Subtract 2 from height for the border
 	if len(bodyLines) > height-2 {
 		bodyLines = bodyLines[:height-2]
@@ -170,7 +172,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 func (m PipelineModel) renderSidebarAppLine(app model.CareerApplication, width int, selected bool) string {
 	scoreStyle := m.scoreStyle(app.Score)
 	score := scoreStyle.Render(fmt.Sprintf("%.1f", app.Score))
-	
+
 	compWidth := width - 6 // space for score and padding
 	company := truncateRunes(app.Company, compWidth)
 	companyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
@@ -179,12 +181,12 @@ func (m PipelineModel) renderSidebarAppLine(app model.CareerApplication, width i
 	}
 
 	line1 := fmt.Sprintf("%s %s", score, companyStyle.Render(company))
-	
+
 	roleWidth := width - 2
 	role := truncateRunes(app.Role, roleWidth)
 	roleStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	line2 := roleStyle.Render(role)
-	
+
 	block := line1 + "\\n" + line2
 
 	if selected {
@@ -204,33 +206,33 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 		Width(width - 2).
 		Height(height - 2).
 		Padding(1, 2)
-	
+
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
 	subtextStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 	valueStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	
+
 	var content []string
-	
+
 	// HEADER: Company & Role
 	content = append(content, titleStyle.Render(app.Company))
 	content = append(content, valueStyle.Render(app.Role))
 	content = append(content, "")
-	
+
 	// PROOF: Score, Status, Date
 	scoreStyle := m.scoreStyle(app.Score)
 	norm := data.NormalizeStatus(app.Status)
 	statusColor := m.statusColorMap()[norm]
-	
+
 	content = append(content, subtextStyle.Render("Interview Probability: ") + scoreStyle.Render(fmt.Sprintf("%.1f", app.Score)))
 	content = append(content, subtextStyle.Render("Status: ") + lipgloss.NewStyle().Foreground(statusColor).Render(statusLabel(norm)))
-	
+
 	dateStr := app.Date
 	if dateStr == "" {
 		dateStr = "Unknown"
 	}
 	content = append(content, subtextStyle.Render("Date Scanned/Posted: ") + valueStyle.Render(dateStr))
 	content = append(content, "")
-	
+
 	// QUICK FACTS
 	if app.WorkMode != "" || app.Location != "" || app.PayRange != "" {
 		facts := ""
@@ -274,7 +276,7 @@ func (m PipelineModel) renderEmptyDetailPane(width, height int) string {
 		Width(width - 2).
 		Height(height - 2).
 		Padding(1, 2)
-	
+
 	return borderStyle.Render(lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("Select a job to view details"))
 }"""
 content = content.replace(view_old, view_new)

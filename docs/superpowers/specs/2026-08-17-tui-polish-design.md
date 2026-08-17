@@ -1,8 +1,8 @@
 # Design Specification: TUI Polish & "Shiny" Terminal Craft
 
-> **Target**: Terminal UI & Go Dashboard (`dashboard/` and `scripts/cli_art.py` / `scripts/menu.py`)  
-> **Origin**: `docs/to_do/TUI_POLISH_BLUEPRINT.md` & `TUI_AUDIT_PROMPT.md`  
-> **Status**: Draft Spec for Review & Approval  
+> **Target**: Terminal UI & Go Dashboard (`dashboard/` and `scripts/cli_art.py` / `scripts/menu.py`)
+> **Origin**: `docs/to_do/TUI_POLISH_BLUEPRINT.md` & `TUI_AUDIT_PROMPT.md`
+> **Status**: Draft Spec for Review & Approval
 > **Guiding Principle**: Out-of-distribution terminal craft, 100% visual consistency, zero hardcoded hex drift, buttery 60 FPS motion, and an ultra-compassionate, frictionless UX designed specifically for non-technical, easily-overwhelmed job seekers.
 
 ---
@@ -205,7 +205,7 @@ When a user visits a screen with no data yet, they must never see a blank screen
 - **Empty Jobs Tab**:
   ```
   ✦ NO JOBS SAVED YET ✦
-  
+
   Ready to find your next opportunity?
   1. Open your terminal and run: resume scan (to auto-find postings)
   2. Or run: resume package <job_url> (to build a resume for a link immediately)
@@ -213,14 +213,14 @@ When a user visits a screen with no data yet, they must never see a blank screen
 - **Empty Pipeline Tab**:
   ```
   ✦ NO ACTIVE APPLICATIONS ✦
-  
+
   Your pipeline tracks applications from draft to interview.
   • Select a job in the Jobs tab (press 'j') to start tailoring!
   ```
 - **Empty Reports Tab**:
   ```
   ✦ NO REPORTS SELECTED ✦
-  
+
   Reports show detailed match scores, keyword audits, and hiring odds.
   • Open Pipeline ('p') or Jobs ('j') and press Enter on any role to view its report.
   ```
@@ -229,7 +229,7 @@ When a user visits a screen with no data yet, they must never see a blank screen
 - If the user clicks **Build Documents** but has no pending jobs saved:
   ```
   💡 No jobs in your queue yet!
-  
+
   Let's add one in 10 seconds:
   ➔ [1] Scan for new jobs from online boards
   ➔ [2] Paste a job posting URL or text manually
@@ -246,14 +246,14 @@ A dedicated, crystal-clear guide that gives anyone the entire workflow in 3 bull
 ✦ ─── HOW RESUME BUILDER WORKS IN 3 SIMPLE STEPS ─── ✦
 
 1. 📥 STEP 1: IMPORT YOUR EXPERIENCE (One time only)
-   Upload your current resume or LinkedIn export. We extract your achievements 
+   Upload your current resume or LinkedIn export. We extract your achievements
    into your Master Vault so you never have to re-type them.
 
 2. 🎯 STEP 2: PICK A JOB
    Found a role you like? Paste the job link or run 'Find Jobs' to browse.
 
 3. 🚀 STEP 3: BUILD YOUR APPLICATION (1 Click!)
-   Run 'Build Full Application Package' ➔ Get a 100% tailored, ATS-optimized 
+   Run 'Build Full Application Package' ➔ Get a 100% tailored, ATS-optimized
    Resume (PDF + DOCX) and a personalized Cover Letter in seconds!
 
 💡 Need help? Press '?' on any dashboard screen or select Help in the menu.
