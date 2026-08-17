@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import embed_bullet_bank  # noqa: E402
@@ -21,7 +23,9 @@ class TestEmbedBatchLengthGuard(unittest.TestCase):
     def test_raises_when_fewer_embeddings_come_back_than_sent(self, mock_post):
         mock_post.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"embeddings": [{"values": [0.1, 0.2]}]},  # only 1, for 2 texts sent
+            json=lambda: {
+                "embeddings": [{"values": [0.1, 0.2]}]
+            },  # only 1, for 2 texts sent
         )
         with self.assertRaises(RuntimeError):
             embed_bullet_bank.embed_batch(["bullet one", "bullet two"])
@@ -72,7 +76,10 @@ class TestEmbedBulletBankCheckpointStaleness(unittest.TestCase):
         vectors, start_index = embed_bullet_bank.load_checkpoint(new_sha)
         self.assertEqual(start_index, 0)
         self.assertEqual(vectors, [])
-        self.assertFalse(os.path.exists(embed_bullet_bank.CHECKPOINT_PATH), "stale checkpoint file should be removed")
+        self.assertFalse(
+            os.path.exists(embed_bullet_bank.CHECKPOINT_PATH),
+            "stale checkpoint file should be removed",
+        )
 
     def test_no_checkpoint_file_starts_fresh(self):
         vectors, start_index = embed_bullet_bank.load_checkpoint(bullets_sha(["a"]))

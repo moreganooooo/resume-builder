@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -16,37 +18,74 @@ class TestFixedContent(unittest.TestCase):
     def test_certifications_are_exactly_three_in_fixed_order(self):
         certs = fixed_content.CERTIFICATIONS
         self.assertEqual(len(certs), 3)
-        self.assertEqual(certs[0], {"title": "Email Marketing Software Certification", "org": "HubSpot", "year": "2026"})
-        self.assertEqual(certs[1], {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"})
-        self.assertEqual(certs[2], {"title": "Camp Portfolio", "org": "Bernstein Rein, Kansas City", "year": "2008"})
+        self.assertEqual(
+            certs[0],
+            {
+                "title": "Email Marketing Software Certification",
+                "org": "HubSpot",
+                "year": "2026",
+            },
+        )
+        self.assertEqual(
+            certs[1],
+            {
+                "title": "Video for Sales Certification",
+                "org": "Vidyard",
+                "year": "2021",
+            },
+        )
+        self.assertEqual(
+            certs[2],
+            {
+                "title": "Camp Portfolio",
+                "org": "Bernstein Rein, Kansas City",
+                "year": "2008",
+            },
+        )
 
     def test_build_education_returns_three_items_in_fixed_order(self):
-        edu = fixed_content.build_education({
-            "University of Kansas": "content_generalist",
-            "Kansas City Kansas Community College": "writing_content",
-        })
+        edu = fixed_content.build_education(
+            {
+                "University of Kansas": "content_generalist",
+                "Kansas City Kansas Community College": "writing_content",
+            }
+        )
         self.assertEqual(len(edu), 3)
         self.assertEqual(edu[0]["institution"], "University of Kansas")
         self.assertEqual(edu[1]["institution"], "Kansas City Kansas Community College")
         self.assertEqual(edu[2]["institution"], "Johnson County Community College")
 
     def test_build_education_selects_the_requested_ku_achievement(self):
-        edu = fixed_content.build_education({
-            "University of Kansas": "email_ops",
-            "Kansas City Kansas Community College": "generalist",
-        })
+        edu = fixed_content.build_education(
+            {
+                "University of Kansas": "email_ops",
+                "Kansas City Kansas Community College": "generalist",
+            }
+        )
         self.assertIn("800%", edu[0]["bullets"][1])
         self.assertIn("managed promotional campaigns", edu[0]["bullets"][1])
 
     def test_build_education_falls_back_to_first_option_on_unknown_key(self):
-        edu = fixed_content.build_education({
-            "University of Kansas": "not_a_real_key",
-            "Kansas City Kansas Community College": "not_a_real_key_either",
-        })
+        edu = fixed_content.build_education(
+            {
+                "University of Kansas": "not_a_real_key",
+                "Kansas City Kansas Community College": "not_a_real_key_either",
+            }
+        )
         # Check that one of the KU achievement options is the achievement bullet
-        self.assertTrue(any(value == edu[0]["bullets"][1] for value in fixed_content.KU_ACHIEVEMENT_OPTIONS.values()))
+        self.assertTrue(
+            any(
+                value == edu[0]["bullets"][1]
+                for value in fixed_content.KU_ACHIEVEMENT_OPTIONS.values()
+            )
+        )
         # Check that one of the KCKCC achievement options is the achievement bullet
-        self.assertTrue(any(value == edu[1]["bullets"][1] for value in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.values()))
+        self.assertTrue(
+            any(
+                value == edu[1]["bullets"][1]
+                for value in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.values()
+            )
+        )
 
     def test_build_education_defaults_to_empty_dict_when_no_keys_given(self):
         edu = fixed_content.build_education()
@@ -104,7 +143,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             self.assertIn(
                 company_name,
                 fixed_content.COMPANY_META,
-                f"'{company_name}' in COMPANY_TITLE_DESCRIPTOR must also be in COMPANY_META"
+                f"'{company_name}' in COMPANY_TITLE_DESCRIPTOR must also be in COMPANY_META",
             )
 
     def test_company_rename_note_references_exist(self):
@@ -113,7 +152,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             self.assertIn(
                 company_name,
                 fixed_content.COMPANY_META,
-                f"'{company_name}' in COMPANY_RENAME_NOTE must also be in COMPANY_META"
+                f"'{company_name}' in COMPANY_RENAME_NOTE must also be in COMPANY_META",
             )
 
     def test_company_fixed_title_references_exist(self):
@@ -122,7 +161,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             self.assertIn(
                 company_name,
                 fixed_content.COMPANY_META,
-                f"'{company_name}' in COMPANY_FIXED_TITLE must also be in COMPANY_META"
+                f"'{company_name}' in COMPANY_FIXED_TITLE must also be in COMPANY_META",
             )
 
     def test_clients_references_exist(self):
@@ -131,7 +170,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             self.assertIn(
                 company_name,
                 fixed_content.COMPANY_META,
-                f"'{company_name}' in CLIENTS must also be in COMPANY_META"
+                f"'{company_name}' in CLIENTS must also be in COMPANY_META",
             )
 
     def test_cv_section_keywords_references_exist(self):
@@ -141,7 +180,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             self.assertIn(
                 company_name,
                 fixed_content.COMPANY_META,
-                f"'{company_name}' referenced in CV_SECTION_KEYWORDS must exist in COMPANY_META"
+                f"'{company_name}' referenced in CV_SECTION_KEYWORDS must exist in COMPANY_META",
             )
 
     def test_career_note_company_exists(self):
@@ -151,7 +190,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
                 fixed_content.CAREER_NOTE_COMPANY,
                 fixed_content.COMPANY_META,
                 f"CAREER_NOTE_COMPANY '{fixed_content.CAREER_NOTE_COMPANY}' "
-                f"must exist in COMPANY_META"
+                f"must exist in COMPANY_META",
             )
 
     def test_contact_info_has_required_fields(self):
@@ -159,13 +198,13 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
         required_fields = {"NAME", "PHONE", "EMAIL", "LINKEDIN_DISPLAY", "LOCATION"}
         self.assertTrue(
             required_fields.issubset(fixed_content.CONTACT_INFO.keys()),
-            f"CONTACT_INFO missing fields: {required_fields - set(fixed_content.CONTACT_INFO.keys())}"
+            f"CONTACT_INFO missing fields: {required_fields - set(fixed_content.CONTACT_INFO.keys())}",
         )
 
         for field in required_fields:
             self.assertTrue(
                 len(fixed_content.CONTACT_INFO[field]) > 0,
-                f"CONTACT_INFO['{field}'] is empty"
+                f"CONTACT_INFO['{field}'] is empty",
             )
 
     def test_certifications_structure_is_valid(self):
@@ -174,16 +213,18 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             required_keys = {"title", "org", "year"}
             self.assertTrue(
                 required_keys.issubset(cert.keys()),
-                f"Certification missing keys. Got {cert.keys()}"
+                f"Certification missing keys. Got {cert.keys()}",
             )
-            self.assertTrue(len(cert["title"]) > 0, "Certification title cannot be empty")
+            self.assertTrue(
+                len(cert["title"]) > 0, "Certification title cannot be empty"
+            )
             self.assertTrue(len(cert["org"]) > 0, "Certification org cannot be empty")
 
     def test_background_identity_populated(self):
         """Test that BACKGROUND_IDENTITY has substantive content."""
         self.assertTrue(
             len(fixed_content.BACKGROUND_IDENTITY) > 50,
-            "BACKGROUND_IDENTITY should have substantive content"
+            "BACKGROUND_IDENTITY should have substantive content",
         )
 
     def test_background_tags_all_populated(self):
@@ -191,7 +232,7 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
         for tag, content in fixed_content.BACKGROUND_TAGS.items():
             self.assertTrue(
                 len(content) > 20,
-                f"BACKGROUND_TAGS['{tag}'] content too short: {len(content)} chars"
+                f"BACKGROUND_TAGS['{tag}'] content too short: {len(content)} chars",
             )
 
 

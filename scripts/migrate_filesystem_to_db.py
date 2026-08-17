@@ -21,14 +21,18 @@ import profile_paths
 
 def migrate_jobs(profile: str, conn=None) -> int:
     """Migrates all JSON files across jds/<profile>/ subdirectories into SQLite."""
-    jd_base = profile_paths.jd_dir(profile) if hasattr(profile_paths, "jd_dir") else os.path.join(profile_paths.PROJECT_ROOT, "jds", profile)
-    
+    jd_base = (
+        profile_paths.jd_dir(profile)
+        if hasattr(profile_paths, "jd_dir")
+        else os.path.join(profile_paths.PROJECT_ROOT, "jds", profile)
+    )
+
     subdirs = {
         "pending": os.path.join(jd_base),
         "completed": os.path.join(jd_base, "completed"),
-        "expired": os.path.join(jd_base, "expired")
+        "expired": os.path.join(jd_base, "expired"),
     }
-    
+
     count = 0
     for status, folder in subdirs.items():
         if not os.path.isdir(folder):
@@ -40,15 +44,17 @@ def migrate_jobs(profile: str, conn=None) -> int:
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
+
                 # Standardize payload
                 data["id"] = fname
-                data["status"] = status if status != "pending" else (data.get("status") or status)
+                data["status"] = (
+                    status if status != "pending" else (data.get("status") or status)
+                )
                 db.upsert_job(data, profile=profile, conn=conn)
                 count += 1
             except Exception as e:
                 print(f"Error migrating {fpath}: {e}")
-                
+
     return count
 
 
@@ -58,7 +64,7 @@ def migrate_bullet_bank(profile: str) -> int:
     audited_csv = os.path.join(kb_dir, "bullet-bank-keepers-audited.csv")
     if not os.path.exists(audited_csv):
         audited_csv = os.path.join(kb_dir, "bullet-bank-keepers.csv")
-    
+
     if not os.path.exists(audited_csv):
         return 0
 
@@ -70,7 +76,8 @@ def migrate_bullet_bank(profile: str) -> int:
             with conn:
                 for i, row in enumerate(reader):
                     bullet_id = row.get("id") or f"bullet_{i+1:04d}"
-                    conn.execute("""
+                    conn.execute(
+                        """
                         INSERT INTO bullet_bank (id, company, title, raw_bullet, polished_bullet, category, metric_value, action_verb, audit_status, source_cluster_id)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(id) DO UPDATE SET
@@ -83,18 +90,20 @@ def migrate_bullet_bank(profile: str) -> int:
                             action_verb=excluded.action_verb,
                             audit_status=excluded.audit_status,
                             source_cluster_id=excluded.source_cluster_id
-                    """, (
-                        bullet_id,
-                        row.get("company", ""),
-                        row.get("title", ""),
-                        row.get("raw_bullet") or row.get("bullet", ""),
-                        row.get("polished_bullet") or row.get("bullet", ""),
-                        row.get("category", ""),
-                        row.get("metric_value", ""),
-                        row.get("action_verb", ""),
-                        row.get("audit_status", "CLEAN"),
-                        row.get("source_cluster_id", "")
-                    ))
+                    """,
+                        (
+                            bullet_id,
+                            row.get("company", ""),
+                            row.get("title", ""),
+                            row.get("raw_bullet") or row.get("bullet", ""),
+                            row.get("polished_bullet") or row.get("bullet", ""),
+                            row.get("category", ""),
+                            row.get("metric_value", ""),
+                            row.get("action_verb", ""),
+                            row.get("audit_status", "CLEAN"),
+                            row.get("source_cluster_id", ""),
+                        ),
+                    )
                     count += 1
     finally:
         conn.close()
@@ -110,7 +119,9 @@ def main():
         bullets_count = migrate_bullet_bank(profile)
     finally:
         conn.close()
-    print(f"✓ Migration Complete: {jobs_count} job postings & {bullets_count} bullet records migrated to SQLite.")
+    print(
+        f"✓ Migration Complete: {jobs_count} job postings & {bullets_count} bullet records migrated to SQLite."
+    )
 
 
 if __name__ == "__main__":

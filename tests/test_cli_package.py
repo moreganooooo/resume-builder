@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+    ),
+)
 
 import cli
 
@@ -54,7 +59,9 @@ class TestCliPackage(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
 
     def test_cli_package_pick_and_referral_conflict(self):
-        result = self.runner.invoke(cli.cli, ["package", "--pick", "--referral", "Jane Doe"])
+        result = self.runner.invoke(
+            cli.cli, ["package", "--pick", "--referral", "Jane Doe"]
+        )
         self.assertEqual(result.exit_code, 1)
 
 

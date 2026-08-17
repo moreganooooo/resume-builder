@@ -6,7 +6,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import jd_manager  # noqa: E402
@@ -30,11 +32,16 @@ class TestComputeJobKey(unittest.TestCase):
         return path
 
     def test_uses_source_job_id_when_present(self):
-        path = self._write("job.json", json.dumps({
-            "source_job_id": "abc123",
-            "job_title": "Engineer",
-            "company_name": "Acme",
-        }))
+        path = self._write(
+            "job.json",
+            json.dumps(
+                {
+                    "source_job_id": "abc123",
+                    "job_title": "Engineer",
+                    "company_name": "Acme",
+                }
+            ),
+        )
         self.assertEqual(jd_manager.compute_job_key(path), "abc123")
 
     def test_hashes_plain_text_content(self):
@@ -45,12 +52,16 @@ class TestComputeJobKey(unittest.TestCase):
     def test_same_content_same_key(self):
         path_a = self._write("a.txt", "identical posting text")
         path_b = self._write("b.txt", "identical posting text")
-        self.assertEqual(jd_manager.compute_job_key(path_a), jd_manager.compute_job_key(path_b))
+        self.assertEqual(
+            jd_manager.compute_job_key(path_a), jd_manager.compute_job_key(path_b)
+        )
 
     def test_different_content_different_key(self):
         path_a = self._write("a.txt", "posting one")
         path_b = self._write("b.txt", "posting two")
-        self.assertNotEqual(jd_manager.compute_job_key(path_a), jd_manager.compute_job_key(path_b))
+        self.assertNotEqual(
+            jd_manager.compute_job_key(path_a), jd_manager.compute_job_key(path_b)
+        )
 
     def test_json_object_without_source_job_id_falls_back_to_hash(self):
         content = json.dumps({"job_title": "Engineer", "company_name": "Acme"})
@@ -77,11 +88,18 @@ class TestExtractJobMeta(unittest.TestCase):
         return path
 
     def test_reads_title_and_company_from_json(self):
-        path = self._write("job.json", json.dumps({
-            "job_title": "Content Strategist",
-            "company_name": "Abnormal AI",
-        }))
-        self.assertEqual(jd_manager.extract_job_meta(path), ("Content Strategist", "Abnormal AI"))
+        path = self._write(
+            "job.json",
+            json.dumps(
+                {
+                    "job_title": "Content Strategist",
+                    "company_name": "Abnormal AI",
+                }
+            ),
+        )
+        self.assertEqual(
+            jd_manager.extract_job_meta(path), ("Content Strategist", "Abnormal AI")
+        )
 
     def test_plain_text_returns_empty_strings(self):
         path = self._write("job.txt", "Just a plain job description with no JSON.")
@@ -106,8 +124,12 @@ class TestExtractSourceUrl(unittest.TestCase):
         return path
 
     def test_reads_source_url_from_json(self):
-        path = self._write("job.json", json.dumps({"source_url": "https://example.com/job/1"}))
-        self.assertEqual(jd_manager.extract_source_url(path), "https://example.com/job/1")
+        path = self._write(
+            "job.json", json.dumps({"source_url": "https://example.com/job/1"})
+        )
+        self.assertEqual(
+            jd_manager.extract_source_url(path), "https://example.com/job/1"
+        )
 
     def test_missing_source_url_returns_empty_string(self):
         path = self._write("job.json", json.dumps({"job_title": "Role"}))
@@ -124,7 +146,9 @@ class TestSplitBatchJds(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_split_batch")
         os.makedirs(self.tmp_dir, exist_ok=True)
         self._real_jds_dir = jd_manager.JDS_DIR
-        jd_manager.JDS_DIR = self.tmp_dir  # redirect writes into the temp dir for this test
+        jd_manager.JDS_DIR = (
+            self.tmp_dir
+        )  # redirect writes into the temp dir for this test
 
     def tearDown(self):
         jd_manager.JDS_DIR = self._real_jds_dir
@@ -139,10 +163,18 @@ class TestSplitBatchJds(unittest.TestCase):
         return path
 
     def test_splits_array_into_one_file_per_job_and_deletes_original(self):
-        batch_path = self._write("batch.json", json.dumps([
-            {"job_title": "Content Strategist", "company_name": "Abnormal AI"},
-            {"job_title": "Senior Manager, Lifecycle Marketing", "company_name": "Superhuman"},
-        ]))
+        batch_path = self._write(
+            "batch.json",
+            json.dumps(
+                [
+                    {"job_title": "Content Strategist", "company_name": "Abnormal AI"},
+                    {
+                        "job_title": "Senior Manager, Lifecycle Marketing",
+                        "company_name": "Superhuman",
+                    },
+                ]
+            ),
+        )
 
         result_paths = jd_manager.split_batch_jds(batch_path)
 
@@ -158,7 +190,9 @@ class TestSplitBatchJds(unittest.TestCase):
             self.assertEqual(json.load(f)["company_name"], "Superhuman")
 
     def test_single_json_object_passes_through_unchanged(self):
-        path = self._write("single.json", json.dumps({"job_title": "Engineer", "company_name": "Acme"}))
+        path = self._write(
+            "single.json", json.dumps({"job_title": "Engineer", "company_name": "Acme"})
+        )
         result_paths = jd_manager.split_batch_jds(path)
         self.assertEqual(result_paths, [path])
         self.assertTrue(os.path.exists(path))
@@ -170,10 +204,15 @@ class TestSplitBatchJds(unittest.TestCase):
         self.assertTrue(os.path.exists(path))
 
     def test_filename_collision_gets_numeric_suffix(self):
-        batch_path = self._write("batch2.json", json.dumps([
-            {"job_title": "Engineer", "company_name": "Acme"},
-            {"job_title": "Engineer", "company_name": "Acme"},
-        ]))
+        batch_path = self._write(
+            "batch2.json",
+            json.dumps(
+                [
+                    {"job_title": "Engineer", "company_name": "Acme"},
+                    {"job_title": "Engineer", "company_name": "Acme"},
+                ]
+            ),
+        )
         result_paths = jd_manager.split_batch_jds(batch_path)
         self.assertEqual(len(result_paths), 2)
         self.assertNotEqual(result_paths[0], result_paths[1])
@@ -197,15 +236,25 @@ class TestJDTracker(unittest.TestCase):
 
     def test_mark_completed_then_is_completed(self):
         tracker = jd_manager.JDTracker(self.csv_path)
-        tracker.mark_completed("abc123", job_title="Engineer", company_name="Acme",
-                                source_file="abc.json", output_json="output/json/abc.json",
-                                output_pdf="output/pdf/abc.pdf")
+        tracker.mark_completed(
+            "abc123",
+            job_title="Engineer",
+            company_name="Acme",
+            source_file="abc.json",
+            output_json="output/json/abc.json",
+            output_pdf="output/pdf/abc.pdf",
+        )
         self.assertTrue(tracker.is_completed("abc123"))
 
     def test_mark_failed_does_not_count_as_completed(self):
         tracker = jd_manager.JDTracker(self.csv_path)
-        tracker.mark_failed("abc123", job_title="Engineer", company_name="Acme",
-                             source_file="abc.json", error_message="builder returned empty")
+        tracker.mark_failed(
+            "abc123",
+            job_title="Engineer",
+            company_name="Acme",
+            source_file="abc.json",
+            error_message="builder returned empty",
+        )
         self.assertFalse(tracker.is_completed("abc123"))
 
     def test_failed_then_completed_counts_as_completed(self):
@@ -269,11 +318,15 @@ class TestCheckpoints(unittest.TestCase):
 
     def test_save_then_load_roundtrip(self):
         jd_manager.save_checkpoint("job1", {"jd_keywords": {"skills": ["python"]}})
-        self.assertEqual(jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}})
+        self.assertEqual(
+            jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}}
+        )
 
     def test_save_overwrites_previous_checkpoint(self):
         jd_manager.save_checkpoint("job1", {"jd_keywords": {}})
-        jd_manager.save_checkpoint("job1", {"jd_keywords": {}, "bullet_tuples": [["a", "b", "c"]]})
+        jd_manager.save_checkpoint(
+            "job1", {"jd_keywords": {}, "bullet_tuples": [["a", "b", "c"]]}
+        )
         self.assertIn("bullet_tuples", jd_manager.load_checkpoint("job1"))
 
     def test_delete_checkpoint_removes_file(self):
@@ -289,7 +342,9 @@ class TestCheckpoints(unittest.TestCase):
         jd_manager.save_checkpoint(unsafe_key, {"jd_keywords": {}})
         saved_path = jd_manager._checkpoint_path(unsafe_key)
         self.assertEqual(
-            os.path.commonpath([os.path.abspath(saved_path), os.path.abspath(self.tmp_dir)]),
+            os.path.commonpath(
+                [os.path.abspath(saved_path), os.path.abspath(self.tmp_dir)]
+            ),
             os.path.abspath(self.tmp_dir),
         )
         self.assertEqual(jd_manager.load_checkpoint(unsafe_key), {"jd_keywords": {}})
@@ -303,7 +358,9 @@ class TestCheckpoints(unittest.TestCase):
         jd_manager.save_checkpoint("job1", {"jd_keywords": {"skills": ["python"]}})
         with self.assertRaises(TypeError):
             jd_manager.save_checkpoint("job1", {"bad": object()})
-        self.assertEqual(jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}})
+        self.assertEqual(
+            jd_manager.load_checkpoint("job1"), {"jd_keywords": {"skills": ["python"]}}
+        )
         # No leftover temp file in the checkpoints dir either.
         leftovers = [n for n in os.listdir(self.tmp_dir) if n.endswith(".tmp")]
         self.assertEqual(leftovers, [])
@@ -318,7 +375,9 @@ class TestCheckpoints(unittest.TestCase):
             result = jd_manager.load_checkpoint("job1")
 
         self.assertEqual(result, {})
-        self.assertTrue(any("Corrupt checkpoint" in msg and path in msg for msg in logs.output))
+        self.assertTrue(
+            any("Corrupt checkpoint" in msg and path in msg for msg in logs.output)
+        )
 
 
 class TestGetPendingJds(unittest.TestCase):
@@ -365,7 +424,9 @@ class TestGetPendingJds(unittest.TestCase):
         concurrent `resume evaluate --refresh` run crashed doctor.py's
         banner this exact way."""
         self._write("stays.txt", "A plain-text JD that stays put.")
-        vanishing_path = self._write("vanishes.txt", "A plain-text JD that disappears mid-scan.")
+        vanishing_path = self._write(
+            "vanishes.txt", "A plain-text JD that disappears mid-scan."
+        )
 
         real_compute_job_key = jd_manager.compute_job_key
 
@@ -391,15 +452,22 @@ class TestGetPendingJds(unittest.TestCase):
         self.assertTrue(pending[0].endswith("posting.txt"))
 
     def test_splits_batch_file_and_returns_both_jobs(self):
-        self._write("batch.json", json.dumps([
-            {"job_title": "A", "company_name": "X"},
-            {"job_title": "B", "company_name": "Y"},
-        ]))
+        self._write(
+            "batch.json",
+            json.dumps(
+                [
+                    {"job_title": "A", "company_name": "X"},
+                    {"job_title": "B", "company_name": "Y"},
+                ]
+            ),
+        )
         pending = jd_manager.get_pending_jds()
         self.assertEqual(len(pending), 2)
 
     def test_already_completed_job_is_excluded(self):
-        path = self._write("posting.json", json.dumps({"source_job_id": "done-1", "job_title": "A"}))
+        path = self._write(
+            "posting.json", json.dumps({"source_job_id": "done-1", "job_title": "A"})
+        )
         jd_manager.JDTracker().mark_completed("done-1")
         pending = jd_manager.get_pending_jds()
         self.assertEqual(pending, [])
@@ -443,7 +511,9 @@ class TestGetCompletedJds(unittest.TestCase):
         return path
 
     def test_returns_files_in_completed_dir(self):
-        self._write_completed("done.json", json.dumps({"job_title": "A", "company_name": "X"}))
+        self._write_completed(
+            "done.json", json.dumps({"job_title": "A", "company_name": "X"})
+        )
         completed = jd_manager.get_completed_jds()
         self.assertEqual(len(completed), 1)
         self.assertTrue(completed[0].endswith("done.json"))
@@ -460,7 +530,9 @@ class TestGetCompletedJds(unittest.TestCase):
         self.assertEqual(jd_manager.get_completed_jds(), [])
 
     def test_pending_jds_are_not_included(self):
-        with open(os.path.join(self.tmp_dir, "still_pending.json"), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(self.tmp_dir, "still_pending.json"), "w", encoding="utf-8"
+        ) as f:
             f.write(json.dumps({"job_title": "A"}))
         self._write_completed("done.json", json.dumps({"job_title": "B"}))
         completed = jd_manager.get_completed_jds()
@@ -511,18 +583,26 @@ class TestJobKeyKnown(unittest.TestCase):
         self.assertTrue(jd_manager.job_key_known("abc123"))
 
     def test_true_when_matching_job_key_file_exists_pending(self):
-        self._write_pending("a.json", {"source_job_id": "abc123", "company_name": "Acme"})
+        self._write_pending(
+            "a.json", {"source_job_id": "abc123", "company_name": "Acme"}
+        )
         self.assertTrue(jd_manager.job_key_known("abc123"))
 
     def test_false_when_nothing_matches(self):
-        self._write_pending("a.json", {"source_job_id": "other", "company_name": "Acme"})
+        self._write_pending(
+            "a.json", {"source_job_id": "other", "company_name": "Acme"}
+        )
         self.assertFalse(jd_manager.job_key_known("abc123"))
 
     def test_true_for_same_source_url_and_company_name_despite_different_job_key(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Abnormal AI",
-            "source_url": "https://boards.greenhouse.io/embed/job_app?token=123",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Abnormal AI",
+                "source_url": "https://boards.greenhouse.io/embed/job_app?token=123",
+            },
+        )
         result = jd_manager.job_key_known(
             "new-different-id",
             source_url="https://boards.greenhouse.io/embed/job_app?token=123",
@@ -533,10 +613,14 @@ class TestJobKeyKnown(unittest.TestCase):
     def test_false_for_same_source_url_but_different_company_name(self):
         # Sibling brands can share application infrastructure (e.g. the
         # same Workday tenant) without being the same posting.
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Cambium Assessment",
-            "source_url": "https://cambiumlearning.wd1.myworkdayjobs.com/camb/job/REQ-1",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Cambium Assessment",
+                "source_url": "https://cambiumlearning.wd1.myworkdayjobs.com/camb/job/REQ-1",
+            },
+        )
         result = jd_manager.job_key_known(
             "new-different-id",
             source_url="https://cambiumlearning.wd1.myworkdayjobs.com/camb/job/REQ-1",
@@ -545,10 +629,14 @@ class TestJobKeyKnown(unittest.TestCase):
         self.assertFalse(result)
 
     def test_source_url_check_skipped_when_not_provided(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Acme",
-            "source_url": "https://example.com/job/1",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Acme",
+                "source_url": "https://example.com/job/1",
+            },
+        )
         result = jd_manager.job_key_known("new-different-id")
         self.assertFalse(result)
 
@@ -556,11 +644,15 @@ class TestJobKeyKnown(unittest.TestCase):
         # The same real job cross-posted on two different platforms (e.g.
         # JobRight's aggregated ATS URL vs. a separate LinkedIn scrape) has
         # no source_job_id or source_url in common at all.
-        self._write_pending("a.json", {
-            "source_job_id": "gem-abc123", "company_name": "Function Health",
-            "job_title": "Lifecycle Coordinator -- Acquisition",
-            "source_url": "https://jobs.gem.com/function-health/xyz",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "gem-abc123",
+                "company_name": "Function Health",
+                "job_title": "Lifecycle Coordinator -- Acquisition",
+                "source_url": "https://jobs.gem.com/function-health/xyz",
+            },
+        )
         result = jd_manager.job_key_known(
             "linkedin-4408958099",
             source_url="https://www.linkedin.com/jobs/view/4408958099/",
@@ -569,41 +661,65 @@ class TestJobKeyKnown(unittest.TestCase):
         )
         self.assertTrue(result)
 
-    def test_true_for_same_company_and_title_despite_case_and_punctuation_differences(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "function health",
-            "job_title": "Lifecycle Coordinator, Acquisition!",
-        })
+    def test_true_for_same_company_and_title_despite_case_and_punctuation_differences(
+        self,
+    ):
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "function health",
+                "job_title": "Lifecycle Coordinator, Acquisition!",
+            },
+        )
         result = jd_manager.job_key_known(
-            "new-id", company_name="FUNCTION HEALTH", job_title="lifecycle coordinator acquisition",
+            "new-id",
+            company_name="FUNCTION HEALTH",
+            job_title="lifecycle coordinator acquisition",
         )
         self.assertTrue(result)
 
     def test_false_for_same_company_but_different_title(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Acme",
-            "job_title": "Content Marketing Manager",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Acme",
+                "job_title": "Content Marketing Manager",
+            },
+        )
         result = jd_manager.job_key_known(
-            "new-id", company_name="Acme", job_title="Content Marketing Specialist",
+            "new-id",
+            company_name="Acme",
+            job_title="Content Marketing Specialist",
         )
         self.assertFalse(result)
 
     def test_false_for_same_title_but_different_company(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Acme",
-            "job_title": "Content Marketing Manager",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Acme",
+                "job_title": "Content Marketing Manager",
+            },
+        )
         result = jd_manager.job_key_known(
-            "new-id", company_name="Widgets Inc", job_title="Content Marketing Manager",
+            "new-id",
+            company_name="Widgets Inc",
+            job_title="Content Marketing Manager",
         )
         self.assertFalse(result)
 
     def test_company_and_title_check_skipped_when_not_provided(self):
-        self._write_pending("a.json", {
-            "source_job_id": "existing-id", "company_name": "Acme",
-            "job_title": "Content Marketing Manager",
-        })
+        self._write_pending(
+            "a.json",
+            {
+                "source_job_id": "existing-id",
+                "company_name": "Acme",
+                "job_title": "Content Marketing Manager",
+            },
+        )
         result = jd_manager.job_key_known("new-different-id")
         self.assertFalse(result)
 
@@ -624,8 +740,17 @@ class TestJobKeyKnown(unittest.TestCase):
     def test_true_for_source_url_and_company_match_in_archived_dir(self):
         path = os.path.join(jd_manager.ARCHIVED_DIR, "a.json")
         with open(path, "w", encoding="utf-8") as f:
-            json.dump({"source_job_id": "existing-id", "company_name": "Acme", "source_url": "https://x.com/1"}, f)
-        result = jd_manager.job_key_known("new-id", source_url="https://x.com/1", company_name="Acme")
+            json.dump(
+                {
+                    "source_job_id": "existing-id",
+                    "company_name": "Acme",
+                    "source_url": "https://x.com/1",
+                },
+                f,
+            )
+        result = jd_manager.job_key_known(
+            "new-id", source_url="https://x.com/1", company_name="Acme"
+        )
         self.assertTrue(result)
 
 
@@ -647,18 +772,29 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         return path
 
     def test_save_then_read_round_trips_score_and_recommendation(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
-        jd_manager.save_evaluation(path, {
-            "composite_score": 4.2, "recommendation": "Strong pursue", "hard_blockers": [],
-        })
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
+        jd_manager.save_evaluation(
+            path,
+            {
+                "composite_score": 4.2,
+                "recommendation": "Strong pursue",
+                "hard_blockers": [],
+            },
+        )
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["composite_score"], 4.2)
         self.assertEqual(result["recommendation"], "Strong pursue")
         self.assertIn("evaluated_at", result)
 
     def test_save_preserves_the_rest_of_the_jd_content(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
-        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
+        jd_manager.save_evaluation(
+            path, {"composite_score": 3.0, "recommendation": "Selective pursue"}
+        )
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         self.assertEqual(data["job_title"], "Role")
@@ -666,7 +802,9 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
 
     def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
         path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
-        jd_manager.save_evaluation(path, {"composite_score": 4.0, "recommendation": "Strong pursue"})
+        jd_manager.save_evaluation(
+            path, {"composite_score": 4.0, "recommendation": "Strong pursue"}
+        )
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
@@ -680,17 +818,28 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         # used to be computed and immediately discarded -- never reaching
         # disk, so there was no way to see why a role scored the way it did
         # without re-running the evaluation.
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
-        jd_manager.save_evaluation(path, {
-            "composite_score": 4.2, "recommendation": "Strong pursue",
-            "why": "Strong tools match, but the role skews more senior than usual.",
-        })
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
+        jd_manager.save_evaluation(
+            path,
+            {
+                "composite_score": 4.2,
+                "recommendation": "Strong pursue",
+                "why": "Strong tools match, but the role skews more senior than usual.",
+            },
+        )
         result = jd_manager.read_evaluation(path)
-        self.assertEqual(result["why"], "Strong tools match, but the role skews more senior than usual.")
+        self.assertEqual(
+            result["why"],
+            "Strong tools match, but the role skews more senior than usual.",
+        )
 
     def test_missing_why_persists_as_empty_string_not_missing_key(self):
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
-        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        jd_manager.save_evaluation(
+            path, {"composite_score": 3.0, "recommendation": "Selective pursue"}
+        )
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["why"], "")
 
@@ -703,22 +852,31 @@ class TestSaveAndReadEvaluation(unittest.TestCase):
         # and immediately discarded, same as `why` used to be -- needed
         # for the "List Jobs" browse view's per-JD drill-in detail.
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
-        jd_manager.save_evaluation(path, {
-            "composite_score": 4.2, "recommendation": "Strong pursue",
-            "archetype": "Lifecycle Marketing Manager",
-            "fit_subscores": {"functional_alignment": 5, "north_star_alignment": 4},
-            "interview_odds_subscores": {"title_continuity": 4},
-            "practical_pursue_subscores": {"remote_quality": 4},
-        })
+        jd_manager.save_evaluation(
+            path,
+            {
+                "composite_score": 4.2,
+                "recommendation": "Strong pursue",
+                "archetype": "Lifecycle Marketing Manager",
+                "fit_subscores": {"functional_alignment": 5, "north_star_alignment": 4},
+                "interview_odds_subscores": {"title_continuity": 4},
+                "practical_pursue_subscores": {"remote_quality": 4},
+            },
+        )
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["archetype"], "Lifecycle Marketing Manager")
-        self.assertEqual(result["fit_subscores"], {"functional_alignment": 5, "north_star_alignment": 4})
+        self.assertEqual(
+            result["fit_subscores"],
+            {"functional_alignment": 5, "north_star_alignment": 4},
+        )
         self.assertEqual(result["interview_odds_subscores"], {"title_continuity": 4})
         self.assertEqual(result["practical_pursue_subscores"], {"remote_quality": 4})
 
     def test_missing_archetype_and_subscores_persist_as_empty(self):
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
-        jd_manager.save_evaluation(path, {"composite_score": 3.0, "recommendation": "Selective pursue"})
+        jd_manager.save_evaluation(
+            path, {"composite_score": 3.0, "recommendation": "Selective pursue"}
+        )
         result = jd_manager.read_evaluation(path)
         self.assertEqual(result["archetype"], "")
         self.assertEqual(result["fit_subscores"], {})
@@ -788,7 +946,9 @@ class TestSaveAndReadLiveness(unittest.TestCase):
         return path
 
     def test_save_then_read_round_trips_result_reason_and_checked_at(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "source_url": "https://x"}))
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "source_url": "https://x"})
+        )
         jd_manager.save_liveness(path, "active", "apply button found")
         result = jd_manager.read_liveness(path)
         self.assertEqual(result["result"], "active")
@@ -796,7 +956,9 @@ class TestSaveAndReadLiveness(unittest.TestCase):
         self.assertIn("checked_at", result)
 
     def test_save_preserves_the_rest_of_the_jd_content(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
         jd_manager.save_liveness(path, "expired", "404")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -833,14 +995,18 @@ class TestSaveAndReadReferral(unittest.TestCase):
         return path
 
     def test_save_then_read_round_trips_text_and_saved_at(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "source_url": "https://x"}))
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "source_url": "https://x"})
+        )
         jd_manager.save_referral(path, "Jane Doe, former coworker")
         result = jd_manager.read_referral(path)
         self.assertEqual(result["text"], "Jane Doe, former coworker")
         self.assertIn("saved_at", result)
 
     def test_save_preserves_the_rest_of_the_jd_content(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
         jd_manager.save_referral(path, "Jane Doe")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -862,7 +1028,9 @@ class TestSaveAndReadReferral(unittest.TestCase):
 class TestSaveAndReadAtsClassification(unittest.TestCase):
 
     def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_ats_classification_persist")
+        self.tmp_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_ats_classification_persist"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
 
     def tearDown(self):
@@ -878,15 +1046,21 @@ class TestSaveAndReadAtsClassification(unittest.TestCase):
 
     def test_save_then_read_round_trips_provider_and_tier(self):
         path = self._write("a.json", json.dumps({"job_title": "Role"}))
-        jd_manager.save_ats_classification(path, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+        jd_manager.save_ats_classification(
+            path, {"provider_id": "workday", "weight_tier": "enterprise_high"}
+        )
         result = jd_manager.read_ats_classification(path)
         self.assertEqual(result["provider_id"], "workday")
         self.assertEqual(result["weight_tier"], "enterprise_high")
         self.assertIn("classified_at", result)
 
     def test_save_preserves_the_rest_of_the_jd_content(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
-        jd_manager.save_ats_classification(path, {"provider_id": "greenhouse", "weight_tier": "startup_zero"})
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
+        jd_manager.save_ats_classification(
+            path, {"provider_id": "greenhouse", "weight_tier": "startup_zero"}
+        )
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         self.assertEqual(data["job_title"], "Role")
@@ -898,7 +1072,9 @@ class TestSaveAndReadAtsClassification(unittest.TestCase):
 
     def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
         path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
-        jd_manager.save_ats_classification(path, {"provider_id": "workday", "weight_tier": "enterprise_high"})
+        jd_manager.save_ats_classification(
+            path, {"provider_id": "workday", "weight_tier": "enterprise_high"}
+        )
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
@@ -922,30 +1098,56 @@ class TestComputePostingAgeDays(unittest.TestCase):
         return path
 
     def test_iso_posted_at_ten_days_ago(self):
-        ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat()
+        ten_days_ago = (
+            datetime.datetime.now() - datetime.timedelta(days=10)
+        ).isoformat()
         path = self._write("a.json", {"posted_at": ten_days_ago})
         self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
 
     def test_unix_ms_publish_time(self):
-        ten_days_ago_ms = int((datetime.datetime.now() - datetime.timedelta(days=10)).timestamp() * 1000)
+        ten_days_ago_ms = int(
+            (datetime.datetime.now() - datetime.timedelta(days=10)).timestamp() * 1000
+        )
         path = self._write("a.json", {"publish_time": ten_days_ago_ms})
         self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
 
     def test_unix_seconds_publish_time(self):
-        ten_days_ago_s = (datetime.datetime.now() - datetime.timedelta(days=10)).timestamp()
+        ten_days_ago_s = (
+            datetime.datetime.now() - datetime.timedelta(days=10)
+        ).timestamp()
         path = self._write("a.json", {"publish_time": ten_days_ago_s})
         self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
 
     def test_falls_back_to_scan_confirmed_liveness_timestamp(self):
-        ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat(timespec="seconds")
-        path = self._write("a.json", {"_liveness": {"result": "active", "reason": "confirmed to exist by scan", "checked_at": ten_days_ago}})
+        ten_days_ago = (
+            datetime.datetime.now() - datetime.timedelta(days=10)
+        ).isoformat(timespec="seconds")
+        path = self._write(
+            "a.json",
+            {
+                "_liveness": {
+                    "result": "active",
+                    "reason": "confirmed to exist by scan",
+                    "checked_at": ten_days_ago,
+                }
+            },
+        )
         self.assertEqual(jd_manager.compute_posting_age_days(path), 10)
 
     def test_does_not_use_a_liveness_recheck_that_isnt_the_scan_seed(self):
         # A later liveness recheck's checked_at isn't "when this posting
         # was found" -- only the original scan-time seed counts.
         recent = datetime.datetime.now().isoformat(timespec="seconds")
-        path = self._write("a.json", {"_liveness": {"result": "active", "reason": "visible apply control detected", "checked_at": recent}})
+        path = self._write(
+            "a.json",
+            {
+                "_liveness": {
+                    "result": "active",
+                    "reason": "visible apply control detected",
+                    "checked_at": recent,
+                }
+            },
+        )
         self.assertIsNone(jd_manager.compute_posting_age_days(path))
 
     def test_no_date_signal_at_all_returns_none(self):
@@ -957,13 +1159,17 @@ class TestComputePostingAgeDays(unittest.TestCase):
         self.assertIsNone(jd_manager.compute_posting_age_days(path))
 
     def test_missing_file_returns_none(self):
-        self.assertIsNone(jd_manager.compute_posting_age_days(os.path.join(self.tmp_dir, "nope.json")))
+        self.assertIsNone(
+            jd_manager.compute_posting_age_days(os.path.join(self.tmp_dir, "nope.json"))
+        )
 
 
 class TestSaveAndReadApplicationStatus(unittest.TestCase):
 
     def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_application_status")
+        self.tmp_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_application_status"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
 
     def tearDown(self):
@@ -1017,7 +1223,9 @@ class TestSaveAndReadApplicationStatus(unittest.TestCase):
         self.assertEqual(result["follow_up_count"], 1)
 
     def test_save_preserves_the_rest_of_the_jd_content(self):
-        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        path = self._write(
+            "a.json", json.dumps({"job_title": "Role", "company_name": "Acme"})
+        )
         jd_manager.save_application_status(path, "Applied")
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -1042,7 +1250,9 @@ class TestReadJdTextStripsAnyUnderscoreKey(unittest.TestCase):
     leak into a Gemini prompt as job-description content."""
 
     def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_read_jd_text_liveness")
+        self.tmp_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_read_jd_text_liveness"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
 
     def tearDown(self):
@@ -1053,7 +1263,17 @@ class TestReadJdTextStripsAnyUnderscoreKey(unittest.TestCase):
     def test_strips_liveness_block_from_prompt_text(self):
         path = os.path.join(self.tmp_dir, "a.json")
         with open(path, "w", encoding="utf-8") as f:
-            json.dump({"job_title": "Role", "_liveness": {"result": "active", "reason": "x", "checked_at": "2026-07-21T00:00:00"}}, f)
+            json.dump(
+                {
+                    "job_title": "Role",
+                    "_liveness": {
+                        "result": "active",
+                        "reason": "x",
+                        "checked_at": "2026-07-21T00:00:00",
+                    },
+                },
+                f,
+            )
         text = jd_manager.read_jd_text(path)
         self.assertNotIn("_liveness", text)
         self.assertIn("Role", text)
@@ -1082,10 +1302,19 @@ class TestReadJdText(unittest.TestCase):
         self.assertEqual(jd_manager.read_jd_text(path), raw)
 
     def test_jd_with_evaluation_strips_only_that_key(self):
-        path = self._write("a.json", json.dumps({
-            "job_title": "Role", "company_name": "Acme",
-            "_evaluation": {"composite_score": 4.0, "recommendation": "Strong pursue"},
-        }))
+        path = self._write(
+            "a.json",
+            json.dumps(
+                {
+                    "job_title": "Role",
+                    "company_name": "Acme",
+                    "_evaluation": {
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                    },
+                }
+            ),
+        )
         result = jd_manager.read_jd_text(path)
         parsed = json.loads(result)
         self.assertNotIn("_evaluation", parsed)
@@ -1094,7 +1323,9 @@ class TestReadJdText(unittest.TestCase):
 
     def test_plain_text_jd_returns_raw_text_unchanged(self):
         path = self._write("dummy.txt", "Just a plain text job posting.")
-        self.assertEqual(jd_manager.read_jd_text(path), "Just a plain text job posting.")
+        self.assertEqual(
+            jd_manager.read_jd_text(path), "Just a plain text job posting."
+        )
 
     def test_missing_file_raises_file_not_found_error(self):
         with self.assertRaises(FileNotFoundError):
@@ -1115,18 +1346,29 @@ class TestProfileScopedPaths(unittest.TestCase):
 
     def test_jds_dir_is_profile_scoped(self):
         import importlib
+
         importlib.reload(jd_manager)
         self.assertTrue(jd_manager.JDS_DIR.endswith(os.path.join("jds", "morgan")))
 
     def test_applications_md_is_profile_scoped(self):
         import importlib
+
         importlib.reload(jd_manager)
-        self.assertTrue(jd_manager.APPLICATIONS_MD.endswith(os.path.join("data", "morgan", "applications.md")))
+        self.assertTrue(
+            jd_manager.APPLICATIONS_MD.endswith(
+                os.path.join("data", "morgan", "applications.md")
+            )
+        )
 
     def test_tracker_csv_is_profile_scoped(self):
         import importlib
+
         importlib.reload(jd_manager)
-        self.assertTrue(jd_manager.TRACKER_CSV.endswith(os.path.join("jds", "morgan", "jd_tracker_log.csv")))
+        self.assertTrue(
+            jd_manager.TRACKER_CSV.endswith(
+                os.path.join("jds", "morgan", "jd_tracker_log.csv")
+            )
+        )
 
 
 if __name__ == "__main__":

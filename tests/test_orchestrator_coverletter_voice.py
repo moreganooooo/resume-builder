@@ -4,7 +4,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
@@ -16,19 +18,36 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(os.path.dirname(__file__), "_tmp_jd_voice.json")
         with open(self.jd_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "job_title": "Content Strategist",
-                "company_name": "Acme Corp",
-                "description": "We are hiring a Content Strategist with strong writing skills.",
-            }, f)
+            json.dump(
+                {
+                    "job_title": "Content Strategist",
+                    "company_name": "Acme Corp",
+                    "description": "We are hiring a Content Strategist with strong writing skills.",
+                },
+                f,
+            )
         self.stem = orchestrator._build_output_stem(self.jd_path)
-        self.json_out = os.path.join(self.engine.output_json_dir, f"{self.stem}_CoverLetter.json")
-        self.html_out = os.path.join(self.engine.output_html_dir, f"{self.stem}_CoverLetter.html")
-        self.pdf_out = os.path.join(self.engine.output_pdf_dir, f"{self.stem}_CoverLetter.pdf")
-        self.docx_out = os.path.join(self.engine.output_docx_dir, f"{self.stem}_CoverLetter.docx")
+        self.json_out = os.path.join(
+            self.engine.output_json_dir, f"{self.stem}_CoverLetter.json"
+        )
+        self.html_out = os.path.join(
+            self.engine.output_html_dir, f"{self.stem}_CoverLetter.html"
+        )
+        self.pdf_out = os.path.join(
+            self.engine.output_pdf_dir, f"{self.stem}_CoverLetter.pdf"
+        )
+        self.docx_out = os.path.join(
+            self.engine.output_docx_dir, f"{self.stem}_CoverLetter.docx"
+        )
 
     def tearDown(self):
-        for path in (self.jd_path, self.json_out, self.html_out, self.pdf_out, self.docx_out):
+        for path in (
+            self.jd_path,
+            self.json_out,
+            self.html_out,
+            self.pdf_out,
+            self.docx_out,
+        ):
             if os.path.exists(path):
                 os.remove(path)
 
@@ -44,7 +63,13 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
     @patch("subprocess.run")
     @patch("orchestrator.GeminiClient.generate")
     def test_voice_violations_trigger_retry_with_issues_block(
-        self, mock_gen, mock_subp, mock_val_pdf, mock_render_html, mock_render_docx, mock_research
+        self,
+        mock_gen,
+        mock_subp,
+        mock_val_pdf,
+        mock_render_html,
+        mock_render_docx,
+        mock_research,
     ):
         mock_subp.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
 
@@ -91,11 +116,22 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
         # 1. On-demand keyword extraction call (if no checkpoint)
         # 2. Initial cover letter generation attempt (returns bad_letter)
         # 3. Validation retry fix call (returns good_letter)
-        keywords_resp = json.dumps({"hard_skills": ["content strategy"], "domain_keywords": ["CRM"]})
+        keywords_resp = json.dumps(
+            {"hard_skills": ["content strategy"], "domain_keywords": ["CRM"]}
+        )
         mock_gen.side_effect = [
-            (keywords_resp, MagicMock(prompt_token_count=50, candidates_token_count=50)),
-            (json.dumps(bad_letter), MagicMock(prompt_token_count=100, candidates_token_count=100)),
-            (json.dumps(good_letter), MagicMock(prompt_token_count=100, candidates_token_count=100)),
+            (
+                keywords_resp,
+                MagicMock(prompt_token_count=50, candidates_token_count=50),
+            ),
+            (
+                json.dumps(bad_letter),
+                MagicMock(prompt_token_count=100, candidates_token_count=100),
+            ),
+            (
+                json.dumps(good_letter),
+                MagicMock(prompt_token_count=100, candidates_token_count=100),
+            ),
         ]
 
         result = self.engine.build_tailored_coverletter(self.jd_path)

@@ -17,15 +17,18 @@ from pathlib import Path
 import cli_art
 import theme
 
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "cv-template.html")
+TEMPLATE_PATH = os.path.join(
+    PROJECT_ROOT, "resume-engine", "templates", "cv-template.html"
+)
 
 
 # ---------------------------------------------------------------------------
 # HTML FRAGMENT BUILDERS
 # Each function takes a slice of the resume JSON and returns an HTML string.
 # ---------------------------------------------------------------------------
+
 
 def _wrap_tagline_pipe(escaped_tagline: str) -> str:
     """
@@ -62,9 +65,18 @@ def _sanitize_copy(text: str) -> str:
     if not text:
         return text
     replacements = [
-        (r"\bactivation-ready assets\b", "campaign-ready email sequences, landing pages, and social posts"),
-        (r"\bassets that drive engagement across\b", "campaign-ready email sequences, landing pages, and social posts"),
-        (r"\bdrive engagement\b", "generate measurable email and landing-page interactions"),
+        (
+            r"\bactivation-ready assets\b",
+            "campaign-ready email sequences, landing pages, and social posts",
+        ),
+        (
+            r"\bassets that drive engagement across\b",
+            "campaign-ready email sequences, landing pages, and social posts",
+        ),
+        (
+            r"\bdrive engagement\b",
+            "generate measurable email and landing-page interactions",
+        ),
         (r"\bLeverages AI-assisted workflows\b", "Uses AI-assisted workflows"),
     ]
     out = text
@@ -83,10 +95,14 @@ def build_skills_html(skills: list[str]) -> str:
     """
     if not skills:
         return ""
+
     def render_skill(s: str) -> str:
         escaped = escape(s)
         return _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-    items = "".join(f'<span class="skill-item">{render_skill(s)}</span>' for s in skills)
+
+    items = "".join(
+        f'<span class="skill-item">{render_skill(s)}</span>' for s in skills
+    )
     return f'<div class="skills-grid">{items}</div>'
 
 
@@ -102,10 +118,13 @@ def build_experience_html(jobs: list[dict]) -> str:
     sep = '<span class="sep">|</span>'
     html = []
     for job in jobs:
-        bullets_html = "".join(f"<li>{escape(b)}</li>" for b in job.get("achievements", []))
+        bullets_html = "".join(
+            f"<li>{escape(b)}</li>" for b in job.get("achievements", [])
+        )
         career_note = (
             f'<div class="career-note"><strong>Career Note:</strong> {escape(job["career_note"])}</div>'
-            if job.get("career_note") else ""
+            if job.get("career_note")
+            else ""
         )
 
         # company is pre-escaped (it may already contain the escaped
@@ -113,14 +132,21 @@ def build_experience_html(jobs: list[dict]) -> str:
         company = escape(job.get("company", ""))
         if job.get("size_revenue"):
             company = f"{company} ({escape(job['size_revenue'])})"
-        meta_parts = [p for p in (company, job.get("location", ""), job.get("period", "")) if p]
-        meta_line = f" {sep} ".join(
-            part if part is company else escape(part) for part in meta_parts
-        ) if meta_parts else ""
+        meta_parts = [
+            p for p in (company, job.get("location", ""), job.get("period", "")) if p
+        ]
+        meta_line = (
+            f" {sep} ".join(
+                part if part is company else escape(part) for part in meta_parts
+            )
+            if meta_parts
+            else ""
+        )
 
         clients = (
             f'<div class="job-clients"><strong>Clients:</strong> {escape(job["clients"])}</div>'
-            if job.get("clients") else ""
+            if job.get("clients")
+            else ""
         )
 
         html.append(f"""
@@ -191,8 +217,20 @@ def build_education_html(edu: list[dict]) -> str:
         if e.get("bullets"):
             lis = "".join(f"<li>{escape(b)}</li>" for b in e["bullets"])
             bullets_html = f"<ul>{lis}</ul>"
-        desc = f'<div class="edu-desc">{escape(e["description"])}</div>' if e.get("description") else ""
-        meta_parts = [escape(p) for p in (e.get("institution", ""), e.get("location", ""), e.get("year", "")) if p]
+        desc = (
+            f'<div class="edu-desc">{escape(e["description"])}</div>'
+            if e.get("description")
+            else ""
+        )
+        meta_parts = [
+            escape(p)
+            for p in (
+                e.get("institution", ""),
+                e.get("location", ""),
+                e.get("year", ""),
+            )
+            if p
+        ]
         meta_line = f" {sep} ".join(meta_parts)
         html.append(f"""
         <div class="edu-item">
@@ -206,6 +244,7 @@ def build_education_html(edu: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 # MAIN RENDER FUNCTION
 # ---------------------------------------------------------------------------
+
 
 def render_html(resume_data: dict, output_path: str) -> str:
     """
@@ -228,44 +267,68 @@ def render_html(resume_data: dict, output_path: str) -> str:
     # SUMMARY_TEXT is intentionally NOT escaped -- tailor_resume.md requires
     # the first sentence to be wrapped in a literal <strong> tag.
     scalars = {
-        "LANG":               resume_data.get("LANG", "en"),
-        "NAME":               escape(resume_data.get("NAME", "")),
-        "TAGLINE":            _wrap_tagline_pipe(escape(resume_data.get("TAGLINE", ""))),
-        "PHONE":              escape(resume_data.get("PHONE", "")),
-        "EMAIL":              escape(resume_data.get("EMAIL", "")),
-        "LINKEDIN_DISPLAY":   escape(resume_data.get("LINKEDIN_DISPLAY", "")),
-        "LOCATION":           escape(resume_data.get("LOCATION", "")),
-        "PAGE_WIDTH":         resume_data.get("PAGE_WIDTH", "8.5in"),
-        "SUMMARY_TEXT":       _sanitize_copy(resume_data.get("SUMMARY_TEXT", "")),
+        "LANG": resume_data.get("LANG", "en"),
+        "NAME": escape(resume_data.get("NAME", "")),
+        "TAGLINE": _wrap_tagline_pipe(escape(resume_data.get("TAGLINE", ""))),
+        "PHONE": escape(resume_data.get("PHONE", "")),
+        "EMAIL": escape(resume_data.get("EMAIL", "")),
+        "LINKEDIN_DISPLAY": escape(resume_data.get("LINKEDIN_DISPLAY", "")),
+        "LOCATION": escape(resume_data.get("LOCATION", "")),
+        "PAGE_WIDTH": resume_data.get("PAGE_WIDTH", "8.5in"),
+        "SUMMARY_TEXT": _sanitize_copy(resume_data.get("SUMMARY_TEXT", "")),
         # Section heading labels (lets you override later if needed)
-        "SECTION_SUMMARY":        resume_data.get("SECTION_SUMMARY",        "Professional Summary"),
-        "SECTION_SKILLS":         resume_data.get("SECTION_SKILLS",         "Skills"),
-        "SECTION_EXPERIENCE":     resume_data.get("SECTION_EXPERIENCE",     "Work Experience"),
-        "SECTION_CERTIFICATIONS": resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
-        "SECTION_EDUCATION":      resume_data.get("SECTION_EDUCATION",      "Education"),
+        "SECTION_SUMMARY": resume_data.get("SECTION_SUMMARY", "Professional Summary"),
+        "SECTION_SKILLS": resume_data.get("SECTION_SKILLS", "Skills"),
+        "SECTION_EXPERIENCE": resume_data.get("SECTION_EXPERIENCE", "Work Experience"),
+        "SECTION_CERTIFICATIONS": resume_data.get(
+            "SECTION_CERTIFICATIONS", "Training & Certifications"
+        ),
+        "SECTION_EDUCATION": resume_data.get("SECTION_EDUCATION", "Education"),
     }
     for token, value in scalars.items():
         html = html.replace(f"{{{{{token}}}}}", value)
 
     # --- Block tokens (HTML fragments) ---
-    html = html.replace("{{SKILLS}}",         build_skills_html(resume_data.get("SKILLS", [])))
-    html = html.replace("{{EXPERIENCE}}",     build_experience_html(resume_data.get("EXPERIENCE", [])))
-    html = html.replace("{{CERTIFICATIONS}}", build_certifications_html(resume_data.get("CERTIFICATIONS", [])))
-    html = html.replace("{{EDUCATION}}",      build_education_html(resume_data.get("EDUCATION", [])))
-    html = html.replace("{{WHY_SECTION}}",    build_why_html(
-        resume_data.get("SECTION_WHY") or "",
-        _sanitize_copy(resume_data.get("WHY_TEXT") or ""),
-    ))
+    html = html.replace("{{SKILLS}}", build_skills_html(resume_data.get("SKILLS", [])))
+    html = html.replace(
+        "{{EXPERIENCE}}", build_experience_html(resume_data.get("EXPERIENCE", []))
+    )
+    html = html.replace(
+        "{{CERTIFICATIONS}}",
+        build_certifications_html(resume_data.get("CERTIFICATIONS", [])),
+    )
+    html = html.replace(
+        "{{EDUCATION}}", build_education_html(resume_data.get("EDUCATION", []))
+    )
+    html = html.replace(
+        "{{WHY_SECTION}}",
+        build_why_html(
+            resume_data.get("SECTION_WHY") or "",
+            _sanitize_copy(resume_data.get("WHY_TEXT") or ""),
+        ),
+    )
 
     # Final HTML-level cleanup: some buzzword phrases may survive
     # because they were split or wrapped in HTML in the source. Apply a
     # conservative set of case-insensitive replacements directly to the
     # rendered HTML to catch any remaining instances flagged by detectors.
     final_replacements = [
-        (r"activation-ready assets that drive engagement across email, web, and social", "campaign-ready email sequences, landing pages, and social posts"),
-        (r"assets that drive engagement across email, web, and social", "campaign-ready email sequences, landing pages, and social posts"),
-        (r"assets that drive engagement across", "campaign-ready email sequences, landing pages, and social posts"),
-        (r"drive engagement across", "generate measurable email and landing-page interactions across"),
+        (
+            r"activation-ready assets that drive engagement across email, web, and social",
+            "campaign-ready email sequences, landing pages, and social posts",
+        ),
+        (
+            r"assets that drive engagement across email, web, and social",
+            "campaign-ready email sequences, landing pages, and social posts",
+        ),
+        (
+            r"assets that drive engagement across",
+            "campaign-ready email sequences, landing pages, and social posts",
+        ),
+        (
+            r"drive engagement across",
+            "generate measurable email and landing-page interactions across",
+        ),
     ]
     for pat, repl in final_replacements:
         html = _re.sub(pat, repl, html, flags=_re.IGNORECASE)
@@ -274,7 +337,10 @@ def render_html(resume_data: dict, output_path: str) -> str:
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    cli_art.console.print(f"  {theme.colorize_icon('success')} HTML rendered → {output_path}", soft_wrap=True)
+    cli_art.console.print(
+        f"  {theme.colorize_icon('success')} HTML rendered → {output_path}",
+        soft_wrap=True,
+    )
     return output_path
 
 

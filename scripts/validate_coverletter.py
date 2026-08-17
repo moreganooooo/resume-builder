@@ -69,9 +69,13 @@ _MAX_WORD_COUNT = 450
 
 
 def _check_word_count(cover_letter_data: dict) -> list[str]:
-    total_words = sum(len(p.split()) for p in cover_letter_data.get("body_paragraphs", []))
+    total_words = sum(
+        len(p.split()) for p in cover_letter_data.get("body_paragraphs", [])
+    )
     if total_words < _MIN_WORD_COUNT or total_words > _MAX_WORD_COUNT:
-        return [f"Expected {_MIN_WORD_COUNT}-{_MAX_WORD_COUNT} words across body paragraphs, got {total_words}"]
+        return [
+            f"Expected {_MIN_WORD_COUNT}-{_MAX_WORD_COUNT} words across body paragraphs, got {total_words}"
+        ]
     return []
 
 
@@ -101,16 +105,23 @@ def _check_third_person_slip(cover_letter_data: dict) -> list[str]:
     terms = _third_person_terms()
     if not terms:
         return []
-    pattern = re.compile(r"\b(" + "|".join(re.escape(t) for t in terms) + r")\b", re.IGNORECASE)
+    pattern = re.compile(
+        r"\b(" + "|".join(re.escape(t) for t in terms) + r")\b", re.IGNORECASE
+    )
     violations = []
     haystacks = (
         [("greeting", cover_letter_data.get("greeting", ""))]
-        + [(f"body_paragraphs[{i}]", p) for i, p in enumerate(cover_letter_data.get("body_paragraphs", []))]
+        + [
+            (f"body_paragraphs[{i}]", p)
+            for i, p in enumerate(cover_letter_data.get("body_paragraphs", []))
+        ]
         + [("sign_off", cover_letter_data.get("sign_off", ""))]
     )
     for field_name, text in haystacks:
         if pattern.search(text):
-            violations.append(f"Third-person self-reference found in {field_name}: {text!r}")
+            violations.append(
+                f"Third-person self-reference found in {field_name}: {text!r}"
+            )
     return violations
 
 
@@ -185,7 +196,9 @@ def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
     return violations
 
 
-def _check_semantic_grounding(cover_letter_data: dict, keeper_bullets: list[str], keeper_embs) -> list[str]:
+def _check_semantic_grounding(
+    cover_letter_data: dict, keeper_bullets: list[str], keeper_embs
+) -> list[str]:
     """
     Rigorously checks each sentence of the cover letter that makes a professional claim,
     computing its cosine similarity against the keeper bullets embeddings.
@@ -198,44 +211,60 @@ def _check_semantic_grounding(cover_letter_data: dict, keeper_bullets: list[str]
     from gemini_client import GeminiClient
 
     violations = []
-    
+
     # Conversational or transitional phrases that can safely be bypassed
     transitional_keywords = [
-        "apply", "excited", "enthusiasm", "express my interest", "look forward",
-        "thank you", "for your consideration", "resume", "please accept", "dear", "sincerely",
-        "opportunity", "role", "position", "seeking", "qualified", "background"
+        "apply",
+        "excited",
+        "enthusiasm",
+        "express my interest",
+        "look forward",
+        "thank you",
+        "for your consideration",
+        "resume",
+        "please accept",
+        "dear",
+        "sincerely",
+        "opportunity",
+        "role",
+        "position",
+        "seeking",
+        "qualified",
+        "background",
     ]
-    
+
     # Precise sentence splitter regex
-    sentence_splitter = re.compile(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s')
-    
+    sentence_splitter = re.compile(r"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s")
+
     for p_idx, paragraph in enumerate(cover_letter_data.get("body_paragraphs", [])):
         sentences = [s.strip() for s in sentence_splitter.split(paragraph) if s.strip()]
         for s_idx, sentence in enumerate(sentences):
             # Only check substantive sentences capable of conveying professional claims
             if len(sentence) < 40:
                 continue
-            
+
             lowered = sentence.lower()
             if any(kw in lowered for kw in transitional_keywords):
                 continue
-                
+
             # Compute sentence embedding via sharing the main client
             emb = GeminiClient.embed(sentence)
             if emb is None:
                 continue
-                
+
             s_vec = np.array(emb, dtype=np.float32)
             s_norm = np.linalg.norm(s_vec)
             if s_norm > 0:
                 s_vec = s_vec / s_norm
-                
+
             # Normalize keeper embeddings matrix
-            embs_norm = keeper_embs / (np.linalg.norm(keeper_embs, axis=1, keepdims=True) + 1e-9)
+            embs_norm = keeper_embs / (
+                np.linalg.norm(keeper_embs, axis=1, keepdims=True) + 1e-9
+            )
             sims = embs_norm @ s_vec
             max_sim = float(np.max(sims))
             best_idx = int(np.argmax(sims))
-            
+
             # 0.60 is the state-of-the-art threshold representing high similarity for d=768
             if max_sim < 0.60:
                 violations.append(
@@ -246,7 +275,9 @@ def _check_semantic_grounding(cover_letter_data: dict, keeper_bullets: list[str]
     return violations
 
 
-def _check_voice_metrics(cover_letter_data: dict, voice_rules: dict | None = None) -> list[str]:
+def _check_voice_metrics(
+    cover_letter_data: dict, voice_rules: dict | None = None
+) -> list[str]:
     if not voice_rules:
         return []
     return voice_metrics.analyze_voice_metrics(cover_letter_data, rules=voice_rules)
@@ -257,7 +288,7 @@ def validate(
     style_rules: dict,
     kb_corpus: str = "",
     keeper_bullets: list[str] = None,
-    keeper_embs = None,
+    keeper_embs=None,
     voice_rules: dict = None,
 ) -> list[str]:
     violations = []
@@ -267,6 +298,8 @@ def validate(
     violations.extend(_check_third_person_slip(cover_letter_data))
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
     violations.extend(_check_cliched_openers(cover_letter_data))
-    violations.extend(_check_semantic_grounding(cover_letter_data, keeper_bullets, keeper_embs))
+    violations.extend(
+        _check_semantic_grounding(cover_letter_data, keeper_bullets, keeper_embs)
+    )
     violations.extend(_check_voice_metrics(cover_letter_data, voice_rules))
     return violations

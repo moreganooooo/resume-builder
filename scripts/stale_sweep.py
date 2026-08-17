@@ -76,12 +76,14 @@ def preview_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
             skipped_no_age_count += 1
             continue
         if outcome == "archive":
-            to_archive.append({
-                "path": row["path"],
-                "company": row["company"],
-                "title": row["title"],
-                "age_days": age_days,
-            })
+            to_archive.append(
+                {
+                    "path": row["path"],
+                    "company": row["company"],
+                    "title": row["title"],
+                    "age_days": age_days,
+                }
+            )
             if newest_moved_days is None or age_days < newest_moved_days:
                 newest_moved_days = age_days
         else:
@@ -182,11 +184,13 @@ def backfill_discovery_dates(dry_run: bool = True) -> dict:
         if jd_manager.compute_posting_age_days(path) is not None:
             continue
 
-        candidates.append({
-            "path": path,
-            "company": row.get("company") or "?",
-            "title": row.get("title") or "?",
-        })
+        candidates.append(
+            {
+                "path": path,
+                "company": row.get("company") or "?",
+                "title": row.get("title") or "?",
+            }
+        )
         if dry_run:
             continue
 
@@ -197,8 +201,10 @@ def backfill_discovery_dates(dry_run: bool = True) -> dict:
             stamped += 1
         except OSError as e:
             cli_art.friendly_warning(
-                e, f"dating {os.path.basename(path)}",
-                "leaving it undated, so it stays in the queue")
+                e,
+                f"dating {os.path.basename(path)}",
+                "leaving it undated, so it stays in the queue",
+            )
             errors.append({"path": path, "error": str(e)})
 
     return {

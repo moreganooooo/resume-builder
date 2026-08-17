@@ -23,15 +23,32 @@ class TestBannedPhraseConsistency(unittest.TestCase):
 
     def test_summary_score_buzzword_openers_are_a_subset_of_style_rules(self):
         missing = set(self.summary_score["buzzword_openers"]) - self.master_list
-        self.assertEqual(missing, set(), f"summary_score.yaml bans phrases not in style_rules.yaml: {missing}")
+        self.assertEqual(
+            missing,
+            set(),
+            f"summary_score.yaml bans phrases not in style_rules.yaml: {missing}",
+        )
 
     def test_language_quality_high_risk_buzzwords_are_a_subset_of_style_rules(self):
-        missing = set(self.language_quality["buzzwords"]["high_risk"]) - self.master_list
-        self.assertEqual(missing, set(), f"language_quality.yaml's high_risk bans phrases not in style_rules.yaml: {missing}")
+        missing = (
+            set(self.language_quality["buzzwords"]["high_risk"]) - self.master_list
+        )
+        self.assertEqual(
+            missing,
+            set(),
+            f"language_quality.yaml's high_risk bans phrases not in style_rules.yaml: {missing}",
+        )
 
     def test_language_quality_severe_ai_patterns_are_a_subset_of_style_rules(self):
-        missing = set(self.language_quality["ai_language_patterns"]["severe"]) - self.master_list
-        self.assertEqual(missing, set(), f"language_quality.yaml's severe ai_language_patterns ban phrases not in style_rules.yaml: {missing}")
+        missing = (
+            set(self.language_quality["ai_language_patterns"]["severe"])
+            - self.master_list
+        )
+        self.assertEqual(
+            missing,
+            set(),
+            f"language_quality.yaml's severe ai_language_patterns ban phrases not in style_rules.yaml: {missing}",
+        )
 
     def test_style_guide_derived_phrases_are_present(self):
         # From MorganWritingStyleGuide.txt's "Anti-Voice Red Flags",

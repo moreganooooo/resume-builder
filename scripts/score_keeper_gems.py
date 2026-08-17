@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
 # ---------------------------------------------------------------------------
-SCRIPT_DIR   = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
 if str(SCRIPT_DIR) not in sys.path:
@@ -40,8 +40,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
 
-KB_DIR       = Path(profile_paths.kb_dir())
-SCORING_DIR  = PROJECT_ROOT / "resume-engine" / "scoring"
+KB_DIR = Path(profile_paths.kb_dir())
+SCORING_DIR = PROJECT_ROOT / "resume-engine" / "scoring"
 
 load_dotenv(profile_paths.env_path())
 
@@ -55,25 +55,31 @@ from gemini_client import GeminiClient  # noqa: E402
 # ---------------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------------
-DEFAULT_INPUT  = KB_DIR / "bullet-bank-keepers-audited.csv"
-DEFAULT_OUTPUT = KB_DIR / "bullet-bank-keepers-audited.csv"   # in-place update
-GEMS_OUTPUT    = KB_DIR / "hidden-gems.csv"
+DEFAULT_INPUT = KB_DIR / "bullet-bank-keepers-audited.csv"
+DEFAULT_OUTPUT = KB_DIR / "bullet-bank-keepers-audited.csv"  # in-place update
+GEMS_OUTPUT = KB_DIR / "hidden-gems.csv"
 
-GEM_THRESHOLD  = 90    # hidden_gem_score >= 90 → hidden_gem_flag = True
-SLEEP_SECONDS  = 4     # politeness delay between API calls
-GEM_FLUSH_EVERY = 5    # flush scored CSV to disk every N bullets
-MODEL          = "gemma-4-31b-it"   # Gemma 4 31B — best free-tier allotment
+GEM_THRESHOLD = 90  # hidden_gem_score >= 90 → hidden_gem_flag = True
+SLEEP_SECONDS = 4  # politeness delay between API calls
+GEM_FLUSH_EVERY = 5  # flush scored CSV to disk every N bullets
+MODEL = "gemma-4-31b-it"  # Gemma 4 31B — best free-tier allotment
 
-BULLET_COL     = "Bullet Point"
-FALLBACK_COLS  = ["bullet", "achievement", "text", "Bullet", "Achievement"]
+BULLET_COL = "Bullet Point"
+FALLBACK_COLS = ["bullet", "achievement", "text", "Bullet", "Achievement"]
+
 
 # ---------------------------------------------------------------------------
 # SCHEMA
 # ---------------------------------------------------------------------------
 class HiddenGemSchema(BaseModel):
-    hidden_gem_score:  int  = Field(description="0-100: how memorable, rare, and evidence-rich is this bullet?")
-    hidden_gem_flag:   bool = Field(description="True if hidden_gem_score >= 90")
-    hidden_gem_reason: str  = Field(description="One sentence: what makes this a gem, or what holds it back")
+    hidden_gem_score: int = Field(
+        description="0-100: how memorable, rare, and evidence-rich is this bullet?"
+    )
+    hidden_gem_flag: bool = Field(description="True if hidden_gem_score >= 90")
+    hidden_gem_reason: str = Field(
+        description="One sentence: what makes this a gem, or what holds it back"
+    )
+
 
 # ---------------------------------------------------------------------------
 # HELPERS
@@ -83,7 +89,10 @@ def detect_col(headers: list[str]) -> str:
         return BULLET_COL
     for col in FALLBACK_COLS:
         if col in headers:
-            cli_art.console.print(f"  {theme.colorize_icon('warning')}  '{BULLET_COL}' not found — using '{col}' instead.", soft_wrap=True)
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')}  '{BULLET_COL}' not found — using '{col}' instead.",
+                soft_wrap=True,
+            )
             return col
     raise ValueError(f"Cannot find bullet text column. Headers: {headers}")
 
@@ -97,8 +106,10 @@ def build_system_prompt() -> str:
             rules_blob = rules_path.read_text(encoding="utf-8")
         except Exception as e:
             cli_art.friendly_warning(
-                e, "reading your scoring rules file",
-                "scoring without your custom rules, so results may not match your preferences")
+                e,
+                "reading your scoring rules file",
+                "scoring without your custom rules, so results may not match your preferences",
+            )
 
     return f"""You are a senior resume coach and hiring manager who has reviewed thousands of resumes.
 
@@ -153,47 +164,76 @@ def _write_scored_csv(path: str, rows: list, final_headers: list) -> None:
 # MAIN
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Score keeper bullets for hidden gem potential.")
-    parser.add_argument("--input",   default=str(DEFAULT_INPUT),  help="Input CSV path")
-    parser.add_argument("--output",  default=str(DEFAULT_OUTPUT), help="Output CSV path (default: in-place)")
-    parser.add_argument("--gems",    default=str(GEMS_OUTPUT),    help="Hidden-gems-only CSV path")
-    parser.add_argument("--dry-run", action="store_true",          help="Preview first 5 bullets, no API calls")
-    parser.add_argument("--limit",   type=int, default=0,          help="Only score N bullets (0 = all)")
+    parser = argparse.ArgumentParser(
+        description="Score keeper bullets for hidden gem potential."
+    )
+    parser.add_argument("--input", default=str(DEFAULT_INPUT), help="Input CSV path")
+    parser.add_argument(
+        "--output",
+        default=str(DEFAULT_OUTPUT),
+        help="Output CSV path (default: in-place)",
+    )
+    parser.add_argument(
+        "--gems", default=str(GEMS_OUTPUT), help="Hidden-gems-only CSV path"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview first 5 bullets, no API calls"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Only score N bullets (0 = all)"
+    )
     args = parser.parse_args()
 
-    cli_art.console.print(f"\n{theme.colorize_icon('discovery')} Loading: {args.input}", soft_wrap=True)
+    cli_art.console.print(
+        f"\n{theme.colorize_icon('discovery')} Loading: {args.input}", soft_wrap=True
+    )
     rows: list[dict] = []
     with open(args.input, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         headers = reader.fieldnames or []
-        rows    = list(reader)
+        rows = list(reader)
 
     if not rows:
-        cli_art.console.print(f"{theme.colorize_icon('warning')}  No rows found. Exiting.", soft_wrap=True)
+        cli_art.console.print(
+            f"{theme.colorize_icon('warning')}  No rows found. Exiting.", soft_wrap=True
+        )
         return
 
     bullet_col = detect_col(list(headers))
-    cli_art.console.print(f"  {theme.colorize_icon('success')} {len(rows)} rows loaded. Bullet column: '{bullet_col}'", soft_wrap=True)
+    cli_art.console.print(
+        f"  {theme.colorize_icon('success')} {len(rows)} rows loaded. Bullet column: '{bullet_col}'",
+        soft_wrap=True,
+    )
 
     # Determine which rows need scoring
     to_score_idx = [
-        i for i, row in enumerate(rows)
+        i
+        for i, row in enumerate(rows)
         if not row.get("hidden_gem_score")  # skip already-scored rows
     ]
 
     if args.limit > 0:
-        to_score_idx = to_score_idx[:args.limit]
+        to_score_idx = to_score_idx[: args.limit]
 
-    cli_art.console.print(f"  {theme.colorize_icon('evaluate')} Rows needing scoring: {len(to_score_idx)}", soft_wrap=True)
+    cli_art.console.print(
+        f"  {theme.colorize_icon('evaluate')} Rows needing scoring: {len(to_score_idx)}",
+        soft_wrap=True,
+    )
 
     if args.dry_run:
-        cli_art.console.print(f"\n{theme.colorize_icon('discovery')} Dry-run mode — first 5 bullets that would be scored:", soft_wrap=True)
+        cli_art.console.print(
+            f"\n{theme.colorize_icon('discovery')} Dry-run mode — first 5 bullets that would be scored:",
+            soft_wrap=True,
+        )
         for i in to_score_idx[:5]:
             cli_art.cli_info(f"[{i}] {rows[i].get(bullet_col, '')[:100]}")
         return
 
     if not to_score_idx:
-        cli_art.console.print(f"{theme.colorize_icon('success')}  All rows already scored. Nothing to do.", soft_wrap=True)
+        cli_art.console.print(
+            f"{theme.colorize_icon('success')}  All rows already scored. Nothing to do.",
+            soft_wrap=True,
+        )
         return
 
     system_prompt = build_system_prompt()
@@ -203,16 +243,16 @@ def main():
     new_cols = ["hidden_gem_score", "hidden_gem_flag", "hidden_gem_reason"]
     final_headers = list(headers) + [c for c in new_cols if c not in headers]
 
-    gem_count    = 0
+    gem_count = 0
     strong_count = 0
-    error_count  = 0
+    error_count = 0
     scored_since_flush = 0
 
     for n, i in enumerate(to_score_idx, start=1):
         bullet = rows[i].get(bullet_col, "").strip()
         if not bullet:
-            rows[i]["hidden_gem_score"]  = ""
-            rows[i]["hidden_gem_flag"]   = ""
+            rows[i]["hidden_gem_score"] = ""
+            rows[i]["hidden_gem_flag"] = ""
             rows[i]["hidden_gem_reason"] = ""
             continue
 
@@ -223,39 +263,60 @@ def main():
 
         result = score_bullet(system_prompt, bullet)
         if result:
-            score  = result.get("hidden_gem_score", 0)
-            flag   = score >= GEM_THRESHOLD
+            score = result.get("hidden_gem_score", 0)
+            flag = score >= GEM_THRESHOLD
             reason = result.get("hidden_gem_reason", "")
 
-            rows[i]["hidden_gem_score"]  = score
-            rows[i]["hidden_gem_flag"]   = flag
+            rows[i]["hidden_gem_score"] = score
+            rows[i]["hidden_gem_flag"] = flag
             rows[i]["hidden_gem_reason"] = reason
 
             if flag:
                 gem_count += 1
-                cli_art.console.print(f"    {theme.colorize_icon('gem')} GEM [{score}] {reason}", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('gem')} GEM [{score}] {reason}",
+                    soft_wrap=True,
+                )
             elif score >= 75:
                 strong_count += 1
-                cli_art.console.print(f"    {theme.colorize_icon('gem')} Strong [{score}]", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('gem')} Strong [{score}]", soft_wrap=True
+                )
             else:
-                cli_art.console.print(f"    {theme.colorize_icon('evaluate')} Score: {score}", soft_wrap=True)
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('evaluate')} Score: {score}",
+                    soft_wrap=True,
+                )
         else:
-            rows[i]["hidden_gem_score"]  = ""
-            rows[i]["hidden_gem_flag"]   = ""
+            rows[i]["hidden_gem_score"] = ""
+            rows[i]["hidden_gem_flag"] = ""
             rows[i]["hidden_gem_reason"] = "ERROR: scoring failed"
             error_count += 1
 
         scored_since_flush += 1
-        is_last = (n == len(to_score_idx))
+        is_last = n == len(to_score_idx)
         if scored_since_flush >= GEM_FLUSH_EVERY or is_last:
             _write_scored_csv(args.output, rows, final_headers)
             scored_since_flush = 0
-            cli_art.console.print(f"    {theme.colorize_icon('save')} Flushed scored CSV ({n}/{len(to_score_idx)} processed).", soft_wrap=True)
+            cli_art.console.print(
+                f"    {theme.colorize_icon('save')} Flushed scored CSV ({n}/{len(to_score_idx)} processed).",
+                soft_wrap=True,
+            )
 
-    cli_art.console.print(f"\n{theme.colorize_icon('success')} Scored CSV saved: {args.output}", soft_wrap=True)
-    cli_art.console.print(f"   {theme.colorize_icon('gem')} Hidden Gems:  {gem_count}", soft_wrap=True)
-    cli_art.console.print(f"   {theme.colorize_icon('gem')} Strong:        {strong_count}", soft_wrap=True)
-    cli_art.console.print(f"   {theme.colorize_icon('error')} Errors:        {error_count}", soft_wrap=True)
+    cli_art.console.print(
+        f"\n{theme.colorize_icon('success')} Scored CSV saved: {args.output}",
+        soft_wrap=True,
+    )
+    cli_art.console.print(
+        f"   {theme.colorize_icon('gem')} Hidden Gems:  {gem_count}", soft_wrap=True
+    )
+    cli_art.console.print(
+        f"   {theme.colorize_icon('gem')} Strong:        {strong_count}", soft_wrap=True
+    )
+    cli_art.console.print(
+        f"   {theme.colorize_icon('error')} Errors:        {error_count}",
+        soft_wrap=True,
+    )
 
     # Write gems-only CSV
     gem_rows = [r for r in rows if str(r.get("hidden_gem_flag", "")).lower() == "true"]
@@ -265,7 +326,10 @@ def main():
             writer = csv.DictWriter(f, fieldnames=final_headers, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(gem_rows)
-        cli_art.console.print(f"   {theme.colorize_icon('gem')} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)", soft_wrap=True)
+        cli_art.console.print(
+            f"   {theme.colorize_icon('gem')} Gems-only CSV: {args.gems} ({len(gem_rows)} rows)",
+            soft_wrap=True,
+        )
 
 
 if __name__ == "__main__":

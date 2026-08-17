@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import scan_jobright  # noqa: E402
@@ -16,10 +18,21 @@ class TestFetchJobrightJobsActivity(unittest.TestCase):
     def test_steps_through_activity_when_given(self, mock_get):
         response = MagicMock()
         response.status_code = 200
-        response.json.return_value = {"result": {"jobList": [
-            {"jobResult": {"jobId": "1", "jobTitle": "Data Engineer", "originalUrl": "https://x.com/1"},
-             "companyResult": {"companyName": "Acme"}, "displayScore": 80},
-        ]}}
+        response.json.return_value = {
+            "result": {
+                "jobList": [
+                    {
+                        "jobResult": {
+                            "jobId": "1",
+                            "jobTitle": "Data Engineer",
+                            "originalUrl": "https://x.com/1",
+                        },
+                        "companyResult": {"companyName": "Acme"},
+                        "displayScore": 80,
+                    },
+                ]
+            }
+        }
         mock_get.return_value = response
 
         activity = MagicMock()
@@ -27,9 +40,10 @@ class TestFetchJobrightJobsActivity(unittest.TestCase):
 
         self.assertEqual(len(jobs), 1)
         activity.step.assert_called_with(
-            "success", "JobRight",
+            "success",
+            "JobRight",
             '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
-            preserve_markup=True
+            preserve_markup=True,
         )
 
     @patch.dict(os.environ, {"JOBRIGHT_COOKIE_STRING": "fake-cookie"})

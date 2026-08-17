@@ -35,7 +35,10 @@ def build_sample() -> dict:
     build_tailored_*() call's own return dict ({} on failure, or the real
     data plus an _output_paths key on success)."""
     if not os.path.exists(SAMPLE_JD_PATH):
-        cli_art.console.print(f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}",
+            soft_wrap=True,
+        )
         return {"resume": {}, "coverletter": {}}
 
     # Clear any leftover checkpoint so this is always a full, fresh run --
@@ -48,7 +51,9 @@ def build_sample() -> dict:
 
     cli_art.console.rule("Building Sample Resume", style="dim")
     resume_result = engine.build_tailored_resume(
-        jd_path=SAMPLE_JD_PATH, master_resume={}, job_key=job_key,
+        jd_path=SAMPLE_JD_PATH,
+        master_resume={},
+        job_key=job_key,
     )
 
     cli_art.console.rule("Building Sample Cover Letter", style="dim")
@@ -64,13 +69,24 @@ if __name__ == "__main__":
 
     cli_art.console.rule("Sample Build Summary", style="dim")
     if resume_ok:
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('success')} Resume PDF:       {result['resume']['_output_paths']['pdf']}",
+            soft_wrap=True,
+        )
     else:
-        cli_art.console.print(f"  {theme.colorize_icon('error')} Resume build failed.", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('error')} Resume build failed.", soft_wrap=True
+        )
     if coverletter_ok:
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('success')} Cover letter PDF: {result['coverletter']['_output_paths']['pdf']}",
+            soft_wrap=True,
+        )
     else:
-        cli_art.console.print(f"  {theme.colorize_icon('error')} Cover letter build failed.", soft_wrap=True)
+        cli_art.console.print(
+            f"  {theme.colorize_icon('error')} Cover letter build failed.",
+            soft_wrap=True,
+        )
 
     if not (resume_ok and coverletter_ok):
         raise SystemExit(1)

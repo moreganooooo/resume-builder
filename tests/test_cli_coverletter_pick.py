@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cli  # noqa: E402
@@ -31,9 +33,14 @@ class TestCoverletterPickValidation(unittest.TestCase):
 
     def test_pick_declined_confirmation_aborts_without_evaluating(self):
         runner = CliRunner()
-        with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
-             patch("picker.questionary.confirm") as mock_confirm, \
-             patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate:
+        with (
+            patch(
+                "cli.jd_manager.get_pending_jds",
+                return_value=["jds/a.json", "jds/b.json"],
+            ),
+            patch("picker.questionary.confirm") as mock_confirm,
+            patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate,
+        ):
             mock_confirm.return_value.ask.return_value = False
             result = runner.invoke(cli.cli, ["coverletter", "--pick"])
         self.assertEqual(result.exit_code, 0)
@@ -43,36 +50,65 @@ class TestCoverletterPickValidation(unittest.TestCase):
     def test_referral_with_pick_is_an_error(self):
         runner = CliRunner()
         with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]):
-            result = runner.invoke(cli.cli, ["coverletter", "--pick", "--referral", "Jane Doe"])
+            result = runner.invoke(
+                cli.cli, ["coverletter", "--pick", "--referral", "Jane Doe"]
+            )
         self.assertEqual(result.exit_code, 1)
         self.assertIn("isn't valid with --pick", result.output)
 
     def test_referral_flag_is_saved_before_building(self):
-        with patch("cli.jd_manager.save_referral") as mock_save_referral, \
-             patch("cli.orchestrator.ResumeEngine") as mock_engine_cls:
+        with (
+            patch("cli.jd_manager.save_referral") as mock_save_referral,
+            patch("cli.orchestrator.ResumeEngine") as mock_engine_cls,
+        ):
             mock_engine = MagicMock()
             mock_engine.build_tailored_coverletter.return_value = {"ok": True}
             mock_engine_cls.return_value = mock_engine
 
             runner = CliRunner()
-            result = runner.invoke(cli.cli, ["coverletter", "README.md", "--referral", "Jane Doe, former coworker"])
+            result = runner.invoke(
+                cli.cli,
+                ["coverletter", "README.md", "--referral", "Jane Doe, former coworker"],
+            )
 
         self.assertEqual(result.exit_code, 0)
-        mock_save_referral.assert_called_once_with("README.md", "Jane Doe, former coworker")
+        mock_save_referral.assert_called_once_with(
+            "README.md", "Jane Doe, former coworker"
+        )
 
     def test_pick_generates_only_for_selected_jd(self):
         mock_question = MagicMock()
         mock_question.ask.return_value = ["jds/b.json"]
 
-        with patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]), \
-             patch("cli.batch_evaluate.evaluate_all_pending", return_value=[
-                 {"source_file": "jds/a.json", "company_name": "A", "job_title": "Role A",
-                  "composite_score": 4.0, "recommendation": "Strong pursue", "error": False},
-                 {"source_file": "jds/b.json", "company_name": "B", "job_title": "Role B",
-                  "composite_score": 3.0, "recommendation": "Selective pursue", "error": False},
-             ]), \
-             patch("cli_art.questionary.checkbox", return_value=mock_question), \
-             patch("cli.orchestrator.ResumeEngine") as mock_engine_cls:
+        with (
+            patch(
+                "cli.jd_manager.get_pending_jds",
+                return_value=["jds/a.json", "jds/b.json"],
+            ),
+            patch(
+                "cli.batch_evaluate.evaluate_all_pending",
+                return_value=[
+                    {
+                        "source_file": "jds/a.json",
+                        "company_name": "A",
+                        "job_title": "Role A",
+                        "composite_score": 4.0,
+                        "recommendation": "Strong pursue",
+                        "error": False,
+                    },
+                    {
+                        "source_file": "jds/b.json",
+                        "company_name": "B",
+                        "job_title": "Role B",
+                        "composite_score": 3.0,
+                        "recommendation": "Selective pursue",
+                        "error": False,
+                    },
+                ],
+            ),
+            patch("cli_art.questionary.checkbox", return_value=mock_question),
+            patch("cli.orchestrator.ResumeEngine") as mock_engine_cls,
+        ):
             mock_engine = MagicMock()
             mock_engine.build_tailored_coverletter.return_value = {"ok": True}
             mock_engine_cls.return_value = mock_engine

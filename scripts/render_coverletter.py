@@ -18,12 +18,19 @@ import cli_art
 import profile_paths
 import theme
 
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT  = os.path.dirname(SCRIPT_DIR)
-TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "resume-engine", "templates", "coverletter-template.html")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+TEMPLATE_PATH = os.path.join(
+    PROJECT_ROOT, "resume-engine", "templates", "coverletter-template.html"
+)
 
 
-def build_recipient_block_html(company_name: str, contact_name: str = "", contact_title: str = "", location: str = "") -> str:
+def build_recipient_block_html(
+    company_name: str,
+    contact_name: str = "",
+    contact_title: str = "",
+    location: str = "",
+) -> str:
     # Up to 3 lines in one .letter-address div (line-height 1.3, single
     # margin-top before the whole block) so it reads as a tight address
     # block rather than 3 separately-spaced paragraphs.
@@ -76,41 +83,54 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
 
     company_name = cover_letter_data.get("company_name", "")
     contact = profile_paths.fixed_content_module().CONTACT_INFO
-    title = f"{company_name} Cover Letter - {contact['NAME']}" if company_name else f"Cover Letter - {contact['NAME']}"
+    title = (
+        f"{company_name} Cover Letter - {contact['NAME']}"
+        if company_name
+        else f"Cover Letter - {contact['NAME']}"
+    )
 
     scalars = {
-        "LANG":             "en",
-        "DOCUMENT_TITLE":   escape(title),
-        "NAME":             escape(contact["NAME"]),
-        "TAGLINE":          escape(cover_letter_data.get("tagline", "")),
-        "PHONE":            escape(contact["PHONE"]),
-        "EMAIL":            escape(contact["EMAIL"]),
+        "LANG": "en",
+        "DOCUMENT_TITLE": escape(title),
+        "NAME": escape(contact["NAME"]),
+        "TAGLINE": escape(cover_letter_data.get("tagline", "")),
+        "PHONE": escape(contact["PHONE"]),
+        "EMAIL": escape(contact["EMAIL"]),
         "LINKEDIN_DISPLAY": escape(contact["LINKEDIN_DISPLAY"]),
-        "LOCATION":         escape(contact["LOCATION"]),
-        "PAGE_WIDTH":       "8.5in",
-        "DATE":             datetime.date.today().strftime("%B %-d, %Y"),
-        "GREETING":         escape(cover_letter_data.get("greeting", "")),
-        "SIGN_OFF":         escape(cover_letter_data.get("sign_off", "")),
-        "TYPED_NAME":       escape(contact["NAME"]),
-        "TYPED_CONTACT":    escape(f"{contact['EMAIL']} | {contact['PHONE']}"),
+        "LOCATION": escape(contact["LOCATION"]),
+        "PAGE_WIDTH": "8.5in",
+        "DATE": datetime.date.today().strftime("%B %-d, %Y"),
+        "GREETING": escape(cover_letter_data.get("greeting", "")),
+        "SIGN_OFF": escape(cover_letter_data.get("sign_off", "")),
+        "TYPED_NAME": escape(contact["NAME"]),
+        "TYPED_CONTACT": escape(f"{contact['EMAIL']} | {contact['PHONE']}"),
     }
     for token, value in scalars.items():
         html = html.replace(f"{{{{{token}}}}}", value)
 
-    html = html.replace("{{RECIPIENT_BLOCK}}", build_recipient_block_html(
-        company_name,
-        cover_letter_data.get("contact_name", ""),
-        cover_letter_data.get("contact_title", ""),
-        cover_letter_data.get("company_location", ""),
-    ))
-    html = html.replace("{{BODY_PARAGRAPHS}}", build_body_paragraphs_html(cover_letter_data.get("body_paragraphs", [])))
+    html = html.replace(
+        "{{RECIPIENT_BLOCK}}",
+        build_recipient_block_html(
+            company_name,
+            cover_letter_data.get("contact_name", ""),
+            cover_letter_data.get("contact_title", ""),
+            cover_letter_data.get("company_location", ""),
+        ),
+    )
+    html = html.replace(
+        "{{BODY_PARAGRAPHS}}",
+        build_body_paragraphs_html(cover_letter_data.get("body_paragraphs", [])),
+    )
     html = html.replace("{{SIGNATURE_BLOCK}}", build_signature_block_html())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
 
-    cli_art.console.print(f"  {theme.colorize_icon('success')} Cover letter HTML rendered → {output_path}", soft_wrap=True)
+    cli_art.console.print(
+        f"  {theme.colorize_icon('success')} Cover letter HTML rendered → {output_path}",
+        soft_wrap=True,
+    )
     return output_path
 
 

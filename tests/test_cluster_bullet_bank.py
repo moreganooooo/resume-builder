@@ -8,7 +8,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import cluster_bullet_bank  # noqa: E402
@@ -37,14 +39,22 @@ class TestStableClusterIds(unittest.TestCase):
     # stored in bullet-bank-keepers.csv.
 
     def test_same_membership_different_row_order_yields_same_ids(self):
-        bullets_run1 = ["Grew pipeline by 40%", "Grew pipeline by 40 percent", "Managed a team of five"]
+        bullets_run1 = [
+            "Grew pipeline by 40%",
+            "Grew pipeline by 40 percent",
+            "Managed a team of five",
+        ]
         raw_ids_run1 = [0, 0, 1]
         stable_run1 = cluster_bullet_bank.stable_cluster_ids(raw_ids_run1, bullets_run1)
 
         # Same three bullets, reordered (as if a new row were inserted
         # earlier in bullet-bank-clean.csv) -- single_linkage_cluster()
         # would hand back different raw group numbers here.
-        bullets_run2 = ["Managed a team of five", "Grew pipeline by 40 percent", "Grew pipeline by 40%"]
+        bullets_run2 = [
+            "Managed a team of five",
+            "Grew pipeline by 40 percent",
+            "Grew pipeline by 40%",
+        ]
         raw_ids_run2 = [5, 2, 2]
         stable_run2 = cluster_bullet_bank.stable_cluster_ids(raw_ids_run2, bullets_run2)
 
@@ -61,9 +71,12 @@ class TestStableClusterIds(unittest.TestCase):
     def test_membership_change_produces_a_different_id(self):
         # A cluster gaining a new member is a real change in identity --
         # its stable ID SHOULD change, unlike an unrelated row reorder.
-        before = cluster_bullet_bank.stable_cluster_ids([0, 0], ["Grew pipeline by 40%", "Grew pipeline by 41%"])
+        before = cluster_bullet_bank.stable_cluster_ids(
+            [0, 0], ["Grew pipeline by 40%", "Grew pipeline by 41%"]
+        )
         after = cluster_bullet_bank.stable_cluster_ids(
-            [0, 0, 0], ["Grew pipeline by 40%", "Grew pipeline by 41%", "Grew pipeline by 42%"]
+            [0, 0, 0],
+            ["Grew pipeline by 40%", "Grew pipeline by 41%", "Grew pipeline by 42%"],
         )
         self.assertNotEqual(before[0], after[0])
 
@@ -80,14 +93,26 @@ class TestSingleLinkageClusterIntegration(unittest.TestCase):
     # stable_cluster_ids() in isolation.
 
     def test_reordered_bullets_still_get_matching_stable_ids(self):
-        bullets_run1 = ["Grew pipeline by 40%", "Grew pipeline by 40 percent", "Managed a team of five"]
+        bullets_run1 = [
+            "Grew pipeline by 40%",
+            "Grew pipeline by 40 percent",
+            "Managed a team of five",
+        ]
         sim1 = _sim_matrix_from_groups([[0, 1]], n=3)
-        raw1 = cluster_bullet_bank.single_linkage_cluster(sim1, cluster_bullet_bank.SIMILARITY_THRESHOLD)
+        raw1 = cluster_bullet_bank.single_linkage_cluster(
+            sim1, cluster_bullet_bank.SIMILARITY_THRESHOLD
+        )
         stable1 = cluster_bullet_bank.stable_cluster_ids(raw1, bullets_run1)
 
-        bullets_run2 = ["Managed a team of five", "Grew pipeline by 40 percent", "Grew pipeline by 40%"]
+        bullets_run2 = [
+            "Managed a team of five",
+            "Grew pipeline by 40 percent",
+            "Grew pipeline by 40%",
+        ]
         sim2 = _sim_matrix_from_groups([[1, 2]], n=3)
-        raw2 = cluster_bullet_bank.single_linkage_cluster(sim2, cluster_bullet_bank.SIMILARITY_THRESHOLD)
+        raw2 = cluster_bullet_bank.single_linkage_cluster(
+            sim2, cluster_bullet_bank.SIMILARITY_THRESHOLD
+        )
         stable2 = cluster_bullet_bank.stable_cluster_ids(raw2, bullets_run2)
 
         id_by_bullet1 = dict(zip(bullets_run1, stable1))
@@ -109,22 +134,38 @@ class TestElectRepresentativeIsOrderIndependent(unittest.TestCase):
 
     def test_tied_scores_elect_the_same_bullet_regardless_of_row_order(self):
         rows = [
-            {self.BULLET_COL: "Ran the quarterly retention audit.", "accuracy_score": 90},
-            {self.BULLET_COL: "Analyzed the quarterly retention audit.", "accuracy_score": 90},
-            {self.BULLET_COL: "Built the quarterly retention audit.", "accuracy_score": 90},
+            {
+                self.BULLET_COL: "Ran the quarterly retention audit.",
+                "accuracy_score": 90,
+            },
+            {
+                self.BULLET_COL: "Analyzed the quarterly retention audit.",
+                "accuracy_score": 90,
+            },
+            {
+                self.BULLET_COL: "Built the quarterly retention audit.",
+                "accuracy_score": 90,
+            },
         ]
         elected = []
         for order in ([0, 1, 2], [2, 0, 1], [1, 2, 0]):
             group = self._group([rows[i] for i in order])
             idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
             elected.append(group.at[idx, self.BULLET_COL])
-        self.assertEqual(len(set(elected)), 1, f"election was order-dependent: {elected}")
+        self.assertEqual(
+            len(set(elected)), 1, f"election was order-dependent: {elected}"
+        )
 
     def test_a_strictly_higher_score_still_wins(self):
-        group = self._group([
-            {self.BULLET_COL: "Aaa lower score but sorts first.", "accuracy_score": 70},
-            {self.BULLET_COL: "Zzz highest score.", "accuracy_score": 95},
-        ])
+        group = self._group(
+            [
+                {
+                    self.BULLET_COL: "Aaa lower score but sorts first.",
+                    "accuracy_score": 70,
+                },
+                {self.BULLET_COL: "Zzz highest score.", "accuracy_score": 95},
+            ]
+        )
         idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
         self.assertEqual(group.at[idx, self.BULLET_COL], "Zzz highest score.")
 
@@ -139,13 +180,19 @@ class TestElectRepresentativeIsOrderIndependent(unittest.TestCase):
             group = self._group([rows[i] for i in order])
             idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
             elected.append(group.at[idx, self.BULLET_COL])
-        self.assertEqual(len(set(elected)), 1, f"election was order-dependent: {elected}")
+        self.assertEqual(
+            len(set(elected)), 1, f"election was order-dependent: {elected}"
+        )
 
     def test_longest_bullet_still_wins_when_no_scores_are_present(self):
-        group = self._group([
-            {self.BULLET_COL: "- Short one."},
-            {self.BULLET_COL: "- A considerably longer bullet that should win on length."},
-        ])
+        group = self._group(
+            [
+                {self.BULLET_COL: "- Short one."},
+                {
+                    self.BULLET_COL: "- A considerably longer bullet that should win on length."
+                },
+            ]
+        )
         idx = cluster_bullet_bank.elect_representative(group, self.BULLET_COL)
         self.assertIn("considerably longer", group.at[idx, self.BULLET_COL])
 
@@ -179,10 +226,14 @@ class TestClusterBulletBankCheckpointStaleness(unittest.TestCase):
     during a rate-limit pause went undetected on resume."""
 
     def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_cluster_checkpoint")
+        self.tmp_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_cluster_checkpoint"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
         self._real_checkpoint_path = cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH
-        cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH = os.path.join(self.tmp_dir, "checkpoint.npz")
+        cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH = os.path.join(
+            self.tmp_dir, "checkpoint.npz"
+        )
 
     def tearDown(self):
         cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH = self._real_checkpoint_path
@@ -218,14 +269,20 @@ class TestLoadOrBuildVectorsStaleness(unittest.TestCase):
     can catch that; shape alone cannot (B20, phase-9-backlog.md)."""
 
     def setUp(self):
-        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_cluster_vector_cache")
+        self.tmp_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_cluster_vector_cache"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
         self._real_cache = cluster_bullet_bank.VECTOR_CACHE
         self._real_cache_meta = cluster_bullet_bank.VECTOR_CACHE_META
         self._real_checkpoint = cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH
         cluster_bullet_bank.VECTOR_CACHE = os.path.join(self.tmp_dir, "vectors.npy")
-        cluster_bullet_bank.VECTOR_CACHE_META = os.path.join(self.tmp_dir, "vectors.meta")
-        cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH = os.path.join(self.tmp_dir, "checkpoint.npz")
+        cluster_bullet_bank.VECTOR_CACHE_META = os.path.join(
+            self.tmp_dir, "vectors.meta"
+        )
+        cluster_bullet_bank.CLUSTER_CHECKPOINT_PATH = os.path.join(
+            self.tmp_dir, "checkpoint.npz"
+        )
 
     def tearDown(self):
         cluster_bullet_bank.VECTOR_CACHE = self._real_cache
@@ -236,7 +293,10 @@ class TestLoadOrBuildVectorsStaleness(unittest.TestCase):
     @patch("cluster_bullet_bank.embed_batch")
     def test_matching_meta_reuses_cache_without_reembedding(self, mock_embed_batch):
         bullets = ["a", "b"]
-        np.save(cluster_bullet_bank.VECTOR_CACHE, np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32))
+        np.save(
+            cluster_bullet_bank.VECTOR_CACHE,
+            np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32),
+        )
         with open(cluster_bullet_bank.VECTOR_CACHE_META, "w") as f:
             json.dump({"bullets_sha": bullets_sha(bullets)}, f)
 
@@ -250,7 +310,10 @@ class TestLoadOrBuildVectorsStaleness(unittest.TestCase):
         # Same row count as the cache, different bullet text -- shape alone
         # would wrongly say the cache is still valid.
         cached_bullets = ["a", "b"]
-        np.save(cluster_bullet_bank.VECTOR_CACHE, np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32))
+        np.save(
+            cluster_bullet_bank.VECTOR_CACHE,
+            np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32),
+        )
         with open(cluster_bullet_bank.VECTOR_CACHE_META, "w") as f:
             json.dump({"bullets_sha": bullets_sha(cached_bullets)}, f)
 
@@ -262,9 +325,14 @@ class TestLoadOrBuildVectorsStaleness(unittest.TestCase):
         self.assertEqual(result.shape, (2, cluster_bullet_bank.EMBED_DIM))
 
     @patch("cluster_bullet_bank.embed_batch")
-    def test_missing_meta_triggers_reembed_even_with_matching_shape(self, mock_embed_batch):
+    def test_missing_meta_triggers_reembed_even_with_matching_shape(
+        self, mock_embed_batch
+    ):
         bullets = ["a", "b"]
-        np.save(cluster_bullet_bank.VECTOR_CACHE, np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32))
+        np.save(
+            cluster_bullet_bank.VECTOR_CACHE,
+            np.zeros((2, cluster_bullet_bank.EMBED_DIM), dtype=np.float32),
+        )
         # No .meta sidecar written at all.
 
         mock_embed_batch.return_value = [[0.1] * cluster_bullet_bank.EMBED_DIM] * 2

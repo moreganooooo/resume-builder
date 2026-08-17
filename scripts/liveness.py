@@ -33,6 +33,7 @@ _SUBPROCESS_ENV_STRIP = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "JOBRIGHT_COOKIE_ST
 def _child_env() -> dict:
     return {k: v for k, v in os.environ.items() if k not in _SUBPROCESS_ENV_STRIP}
 
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Maps check-liveness.mjs's structured progress-event `result` field to
@@ -40,8 +41,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # there's no "likely_active"-specific icon, so it shares "warning" with
 # "uncertain").
 _LIVENESS_ICON_BY_RESULT = {
-    "active": "success", "likely_active": "warning",
-    "expired": "error", "uncertain": "warning",
+    "active": "success",
+    "likely_active": "warning",
+    "expired": "error",
+    "uncertain": "warning",
 }
 
 
@@ -57,14 +60,20 @@ def _resolve_activity(activity):
     else:
         with cli_art.new_scan_activity() as local_activity:
             yield local_activity
+
+
 # Profile-scoped: this used to land at the repo root's output/, outside
 # profile_paths.sync_roots(). It's cleaned up in a finally block, so it only
 # persisted when the process was killed mid-check -- but a stray temp file
 # from one profile sitting in a shared path is still the wrong shape.
-LIVENESS_INPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_input_tmp.json")
+LIVENESS_INPUT_PATH = os.path.join(
+    profile_paths.output_dir(), "liveness_input_tmp.json"
+)
 # check-liveness.mjs's results JSON goes to a real file, not a pipe --
 # see _verify_candidates()'s Popen call for why (B21).
-LIVENESS_OUTPUT_PATH = os.path.join(profile_paths.output_dir(), "liveness_output_tmp.json")
+LIVENESS_OUTPUT_PATH = os.path.join(
+    profile_paths.output_dir(), "liveness_output_tmp.json"
+)
 
 # How recently a JD needs to have been checked (or scanned -- see
 # scan.py's seeding of _liveness at write time) to skip re-checking it by
@@ -90,7 +99,9 @@ def _is_recently_checked(jd_path: str) -> bool:
         checked_at = datetime.datetime.fromisoformat(liveness["checked_at"])
     except ValueError:
         return False
-    return (datetime.datetime.now() - checked_at) < datetime.timedelta(hours=RECENCY_HOURS)
+    return (datetime.datetime.now() - checked_at) < datetime.timedelta(
+        hours=RECENCY_HOURS
+    )
 
 
 def split_recently_checked(pending_paths: list) -> tuple:
@@ -117,11 +128,13 @@ def _gather_candidates(pending_paths: list) -> list:
         url = data.get("source_url") if isinstance(data, dict) else None
         if not url:
             continue
-        candidates.append({
-            "job_key": jd_manager.compute_job_key(path),
-            "source_file": path,
-            "url": url,
-        })
+        candidates.append(
+            {
+                "job_key": jd_manager.compute_job_key(path),
+                "source_file": path,
+                "url": url,
+            }
+        )
     return candidates
 
 
@@ -131,8 +144,8 @@ def _styled_jd_label(source_file: str | None) -> str:
         return "(unknown)"
     title, company = jd_manager.extract_job_meta(source_file)
     if title or company:
-        company_str = company or '?'
-        title_str = title or '?'
+        company_str = company or "?"
+        title_str = title or "?"
         return cli_art.format_jd_label(company_str, title_str)
     return os.path.basename(source_file)
 
@@ -157,18 +170,30 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     empty candidate list -- callers embedding this in a larger flow
     (scan.py) shouldn't get a standalone "nothing to check" message."""
     if not candidates:
-        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": []}
+        return {
+            "active": 0,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "moved": 0,
+            "expired_source_paths": [],
+        }
 
     os.makedirs(os.path.dirname(LIVENESS_INPUT_PATH), exist_ok=True)
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
     cli_art.print_literal()
-    cli_art.console.rule(f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]", style="dim")
+    cli_art.console.rule(
+        f"[bold {theme.BRAND}]Checking {len(candidates)} JD(s) via headless browser[/bold {theme.BRAND}]",
+        style="dim",
+    )
     cli_art.print_literal()
 
     script = os.path.join(SCRIPT_DIR, "check-liveness.mjs")
-    timeout_s = max(NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S)
+    timeout_s = max(
+        NODE_TIMEOUT_FLOOR_S, len(candidates) * NODE_TIMEOUT_PER_CANDIDATE_S
+    )
     try:
         # stdout goes to a real file, not a pipe: Node writes the final
         # JSON blob once, at exit, and it can exceed the OS pipe buffer on
@@ -179,7 +204,10 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         with open(LIVENESS_OUTPUT_PATH, "w", encoding="utf-8") as stdout_file:
             proc = subprocess.Popen(
                 ["node", script, "--json-file", LIVENESS_INPUT_PATH],
-                stdout=stdout_file, stderr=subprocess.PIPE, text=True, bufsize=1,
+                stdout=stdout_file,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
                 start_new_session=True,
                 env={**_child_env(), "RESUME_BUILDER_ICONS": theme.icon_set_name()},
             )
@@ -200,36 +228,73 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                         except json.JSONDecodeError:
                             pass
                         if isinstance(event, dict) and event.get("type") == "progress":
-                            icon_name = _LIVENESS_ICON_BY_RESULT.get(event.get("result"), "warning")
+                            icon_name = _LIVENESS_ICON_BY_RESULT.get(
+                                event.get("result"), "warning"
+                            )
                             message = _styled_jd_label(event.get("source_file"))
-                            resolved_activity.step(icon_name, "Verify", message, preserve_markup=True)
+                            resolved_activity.step(
+                                icon_name, "Verify", message, preserve_markup=True
+                            )
                         else:
                             cli_art.print_subprocess_output(f"  {stripped}")
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
-                cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.", soft_wrap=True)
-                return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
+                cli_art.console.print(
+                    f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.",
+                    soft_wrap=True,
+                )
+                return {
+                    "active": 0,
+                    "likely_active": 0,
+                    "expired": 0,
+                    "uncertain": 0,
+                    "moved": 0,
+                    "expired_source_paths": [],
+                    "error": True,
+                }
             finally:
                 if proc.poll() is None:
                     try:
                         import signal
+
                         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                     except Exception:
                         proc.kill()
                 proc.wait()
 
-
         if proc.returncode != 0:
-            cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).", soft_wrap=True)
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).",
+                soft_wrap=True,
+            )
+            return {
+                "active": 0,
+                "likely_active": 0,
+                "expired": 0,
+                "uncertain": 0,
+                "moved": 0,
+                "expired_source_paths": [],
+                "error": True,
+            }
 
         with open(LIVENESS_OUTPUT_PATH, "r", encoding="utf-8") as f:
             stdout_data = f.read()
         try:
             results = json.loads(stdout_data)
         except json.JSONDecodeError:
-            cli_art.console.print(f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}", soft_wrap=True)
-            return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "moved": 0, "expired_source_paths": [], "error": True}
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}",
+                soft_wrap=True,
+            )
+            return {
+                "active": 0,
+                "likely_active": 0,
+                "expired": 0,
+                "uncertain": 0,
+                "moved": 0,
+                "expired_source_paths": [],
+                "error": True,
+            }
     finally:
         for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
             if os.path.exists(path):
@@ -240,7 +305,12 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
 
     # Group results by outcome for better visual organization
-    results_by_status = {"active": [], "likely_active": [], "expired": [], "uncertain": []}
+    results_by_status = {
+        "active": [],
+        "likely_active": [],
+        "expired": [],
+        "uncertain": [],
+    }
     for r in results:
         outcome = r.get("result", "uncertain")
         counts[outcome] = counts.get(outcome, 0) + 1
@@ -312,24 +382,56 @@ def run_liveness_check(refresh: bool = False) -> dict:
     skipped = len(to_check) - len(candidates)
 
     if recently_checked:
-        cli_art.print_literal(f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)")
+        cli_art.print_literal(
+            f"({len(recently_checked)} JD(s) checked within the last {RECENCY_HOURS}h will be skipped -- use --refresh to re-check everything.)"
+        )
 
     if not candidates:
-        cli_art.print_literal(f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url.")
-        return {"active": 0, "likely_active": 0, "expired": 0, "uncertain": 0, "skipped": skipped, "recently_checked": len(recently_checked), "moved": 0}
+        cli_art.print_literal(
+            f"Nothing to check -- {len(to_check)} pending JD(s) (of {len(pending_paths)} total), none with a source_url."
+        )
+        return {
+            "active": 0,
+            "likely_active": 0,
+            "expired": 0,
+            "uncertain": 0,
+            "skipped": skipped,
+            "recently_checked": len(recently_checked),
+            "moved": 0,
+        }
 
     result = _verify_candidates(candidates)
     result["skipped"] = skipped
     result["recently_checked"] = len(recently_checked)
 
     if not result.get("error"):
-        cli_art.console.rule(f"[bold {theme.BRAND}]Liveness Summary[/bold {theme.BRAND}]", style="dim")
-        cli_art.console.print(f"  {theme.colorize_icon('success')} Active:                 {result['active']}", soft_wrap=True)
-        cli_art.console.print(f"  {theme.colorize_icon('warning')} Likely active:          {result['likely_active']}", soft_wrap=True)
-        cli_art.console.print(f"  {theme.colorize_icon('error')} Expired (moved):         {result['expired']}", soft_wrap=True)
-        cli_art.console.print(f"  {theme.colorize_icon('warning')} Uncertain (left):       {result['uncertain']}", soft_wrap=True)
-        cli_art.console.print(f"  {theme.colorize_icon('skip')} Skipped (no URL):       {skipped}", soft_wrap=True)
-        cli_art.console.print(f"  {theme.colorize_icon('skip')} Recently checked:       {len(recently_checked)}", soft_wrap=True)
+        cli_art.console.rule(
+            f"[bold {theme.BRAND}]Liveness Summary[/bold {theme.BRAND}]", style="dim"
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('success')} Active:                 {result['active']}",
+            soft_wrap=True,
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('warning')} Likely active:          {result['likely_active']}",
+            soft_wrap=True,
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('error')} Expired (moved):         {result['expired']}",
+            soft_wrap=True,
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('warning')} Uncertain (left):       {result['uncertain']}",
+            soft_wrap=True,
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('skip')} Skipped (no URL):       {skipped}",
+            soft_wrap=True,
+        )
+        cli_art.console.print(
+            f"  {theme.colorize_icon('skip')} Recently checked:       {len(recently_checked)}",
+            soft_wrap=True,
+        )
         cli_art.print_literal()
 
     return result

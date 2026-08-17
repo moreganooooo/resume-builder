@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 from docx import Document  # noqa: E402
@@ -19,15 +21,23 @@ def _minimal_resume_data(**overrides):
         "LOCATION": "Austin, TX",
         "SUMMARY_TEXT": "<strong>Product leader with 10 years experience.</strong> Focused on growth.",
         "SKILLS": ["**Product:** Roadmapping, A/B Testing", "SQL"],
-        "EXPERIENCE": [{
-            "title": "Senior PM",
-            "company": "Acme Corp",
-            "location": "Remote",
-            "period": "2020-Present",
-            "achievements": ["Shipped a feature used by 1M users."],
-        }],
+        "EXPERIENCE": [
+            {
+                "title": "Senior PM",
+                "company": "Acme Corp",
+                "location": "Remote",
+                "period": "2020-Present",
+                "achievements": ["Shipped a feature used by 1M users."],
+            }
+        ],
         "CERTIFICATIONS": [{"title": "PMP", "org": "PMI", "year": "2019"}],
-        "EDUCATION": [{"degree": "B.S. Computer Science", "institution": "State University", "year": "2015"}],
+        "EDUCATION": [
+            {
+                "degree": "B.S. Computer Science",
+                "institution": "State University",
+                "year": "2015",
+            }
+        ],
     }
     data.update(overrides)
     return data
@@ -36,7 +46,9 @@ def _minimal_resume_data(**overrides):
 class TestRenderResumeDocx(unittest.TestCase):
 
     def setUp(self):
-        self.out_path = os.path.join(os.path.dirname(__file__), "_tmp_resume_docx_test.docx")
+        self.out_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_resume_docx_test.docx"
+        )
 
     def tearDown(self):
         if os.path.exists(self.out_path):
@@ -62,7 +74,9 @@ class TestRenderResumeDocx(unittest.TestCase):
         self.assertNotIn("<strong>", summary_para.text)
         self.assertNotIn("</strong>", summary_para.text)
         self.assertTrue(summary_para.runs[0].bold)
-        self.assertIn("Product leader with 10 years experience.", summary_para.runs[0].text)
+        self.assertIn(
+            "Product leader with 10 years experience.", summary_para.runs[0].text
+        )
         self.assertFalse(summary_para.runs[-1].bold)
 
     def test_skills_markdown_bold_is_converted_to_a_bold_run(self):
@@ -125,13 +139,19 @@ class TestRenderResumeDocx(unittest.TestCase):
         self.assertEqual(bullet_para.style.name, "List Bullet")
 
     def test_why_section_is_omitted_entirely_when_blank(self):
-        render_resume_docx(_minimal_resume_data(WHY_TEXT="", SECTION_WHY=""), self.out_path)
+        render_resume_docx(
+            _minimal_resume_data(WHY_TEXT="", SECTION_WHY=""), self.out_path
+        )
         doc = Document(self.out_path)
-        headings = [p.text for p in doc.paragraphs if p.style.name.startswith("Heading")]
+        headings = [
+            p.text for p in doc.paragraphs if p.style.name.startswith("Heading")
+        ]
         self.assertNotIn("Additional Relevant Experience", headings)
 
     def test_why_section_is_omitted_when_literal_null_string(self):
-        render_resume_docx(_minimal_resume_data(WHY_TEXT="null", SECTION_WHY="null"), self.out_path)
+        render_resume_docx(
+            _minimal_resume_data(WHY_TEXT="null", SECTION_WHY="null"), self.out_path
+        )
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
         self.assertNotIn("null", [t.strip().lower() for t in texts])
@@ -152,7 +172,9 @@ class TestRenderResumeDocx(unittest.TestCase):
         self.assertNotIn("<em>", joined)
 
     def test_why_section_uses_custom_heading_when_provided(self):
-        data = _minimal_resume_data(WHY_TEXT="I'm a great fit.", SECTION_WHY="Why Acme Corp?")
+        data = _minimal_resume_data(
+            WHY_TEXT="I'm a great fit.", SECTION_WHY="Why Acme Corp?"
+        )
         render_resume_docx(data, self.out_path)
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
@@ -163,7 +185,9 @@ class TestRenderResumeDocx(unittest.TestCase):
         self.assertEqual(result, self.out_path)
 
     def test_creates_parent_directory_if_missing(self):
-        nested_path = os.path.join(os.path.dirname(__file__), "_tmp_docx_subdir", "resume.docx")
+        nested_path = os.path.join(
+            os.path.dirname(__file__), "_tmp_docx_subdir", "resume.docx"
+        )
         try:
             render_resume_docx(_minimal_resume_data(), nested_path)
             self.assertTrue(os.path.exists(nested_path))

@@ -56,8 +56,11 @@ def _summarize_warnings(records: list) -> list:
     counts = collections.Counter((r.provider_id, r.kind, r.reason) for r in records)
     return [
         {"provider_id": provider_id, "kind": kind, "reason": reason, "count": count}
-        for (provider_id, kind, reason), count in sorted(counts.items(), key=lambda kv: -kv[1])
+        for (provider_id, kind, reason), count in sorted(
+            counts.items(), key=lambda kv: -kv[1]
+        )
     ]
+
 
 # A JD just found by a scan is, by definition, confirmed to exist right
 # now -- seeding _liveness here means it starts inside liveness.py's
@@ -94,7 +97,9 @@ def _write_jd_file(job: dict) -> str:
 
     counter = 1
     while os.path.exists(dest):
-        dest = os.path.join(jd_manager.JDS_DIR, filename.replace(".json", f"_{counter}.json"))
+        dest = os.path.join(
+            jd_manager.JDS_DIR, filename.replace(".json", f"_{counter}.json")
+        )
         counter += 1
 
     # Only seed an optimistic _liveness for JDs with no source_url --
@@ -170,15 +175,25 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
             for source in sources:
                 fetch = SOURCE_FETCHERS.get(source)
                 if fetch is None:
-                    source_results.append({"source": source, "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})"})
+                    source_results.append(
+                        {
+                            "source": source,
+                            "error": f"unknown source (known: {', '.join(SOURCE_FETCHERS)})",
+                        }
+                    )
                     continue
 
                 warnings_before = len(collector.records)
                 jobs = fetch(activity=activity)
                 source_warnings = collector.records[warnings_before:]
                 result = {
-                    "source": source, "fetched": len(jobs), "written": 0, "skipped": 0,
-                    "dropped_expired": 0, "new_jobs": [], "warnings": _summarize_warnings(source_warnings),
+                    "source": source,
+                    "fetched": len(jobs),
+                    "written": 0,
+                    "skipped": 0,
+                    "dropped_expired": 0,
+                    "new_jobs": [],
+                    "warnings": _summarize_warnings(source_warnings),
                 }
 
                 for job in jobs:
@@ -193,17 +208,22 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                     # dedups when job_key is truthy).
                     job_key = str(job_id) if job_id else (source_url or "")
                     if job_key and jd_manager.job_key_known(
-                        job_key, tracker=tracker,
-                        source_url=source_url, company_name=job.get("company_name"),
-                        job_title=job.get("job_title"), index=known_jobs_index,
+                        job_key,
+                        tracker=tracker,
+                        source_url=source_url,
+                        company_name=job.get("company_name"),
+                        job_title=job.get("job_title"),
+                        index=known_jobs_index,
                     ):
                         result["skipped"] += 1
                         continue
 
                     dest = _write_jd_file(job)
                     jd_manager.add_to_known_jobs_index(
-                        known_jobs_index, job_key,
-                        source_url=source_url, company_name=job.get("company_name"),
+                        known_jobs_index,
+                        job_key,
+                        source_url=source_url,
+                        company_name=job.get("company_name"),
                         job_title=job.get("job_title"),
                     )
                     written += 1
@@ -213,9 +233,11 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                     written_paths[dest] = (result, new_job_entry)
 
                 source_results.append(result)
-                activity.tally(fetched=sum(r.get("fetched", 0) for r in source_results),
-                                written=sum(r.get("written", 0) for r in source_results),
-                                skipped=sum(r.get("skipped", 0) for r in source_results))
+                activity.tally(
+                    fetched=sum(r.get("fetched", 0) for r in source_results),
+                    written=sum(r.get("written", 0) for r in source_results),
+                    skipped=sum(r.get("skipped", 0) for r in source_results),
+                )
     finally:
         root_logger.removeHandler(collector)
 
@@ -228,12 +250,15 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                     f"{len(paths_to_verify)} new postings found -- verify all of them with a "
                     f"real browser check (~{len(paths_to_verify) * 5 // 60} min)? "
                     f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
-                    default=False, style=cli_art.QUESTIONARY_STYLE,
+                    default=False,
+                    style=cli_art.QUESTIONARY_STYLE,
                 ).ask()
             if not proceed:
                 paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
         with cli_art.new_scan_activity() as verify_activity:
-            verify_result = liveness.verify_jd_paths(paths_to_verify, activity=verify_activity)
+            verify_result = liveness.verify_jd_paths(
+                paths_to_verify, activity=verify_activity
+            )
         for path in verify_result.get("expired_source_paths", []):
             entry = written_paths.get(path)
             if not entry:

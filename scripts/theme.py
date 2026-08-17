@@ -133,6 +133,7 @@ _UNICODE_ICONS = {
     "back": "❮",
 }
 
+
 def _resolve_icon_set_name() -> str:
     if os.environ.get("RESUME_BUILDER_ICONS") == "unicode":
         return "unicode"
@@ -140,6 +141,7 @@ def _resolve_icon_set_name() -> str:
         return "nerd"
     try:
         import ui_config
+
         persisted = ui_config.get_icon_set()
     except (ImportError, AttributeError, OSError, ValueError):
         persisted = None
@@ -148,8 +150,6 @@ def _resolve_icon_set_name() -> str:
     if sys.stdin.isatty():
         return "nerd"
     return "unicode"
-
-
 
 
 _ICON_SET_NAME = _resolve_icon_set_name()
@@ -183,26 +183,28 @@ def set_icon_set(name: str) -> None:
     _ICON_SET_NAME = name
     ICONS = _UNICODE_ICONS if name == "unicode" else _NERD_ICONS
 
+
 # Map icon names to Rich markup colors for colorized output
 _ICON_COLORS = {
-    "success": SUCCESS,      # green
-    "error": ERROR,          # red
-    "warning": WARNING,      # gold
-    "hint": BRAND,           # blue
-    "discovery": INFO,       # light blue
-    "evaluate": BRAND_ACCENT,# purple
-    "build": SUCCESS,        # green
-    "utility": BRAND_ACCENT, # purple
-    "bullet_bank": BRAND,    # blue
-    "skip": ERROR,           # red
-    "save": SUCCESS,         # green
+    "success": SUCCESS,  # green
+    "error": ERROR,  # red
+    "warning": WARNING,  # gold
+    "hint": BRAND,  # blue
+    "discovery": INFO,  # light blue
+    "evaluate": BRAND_ACCENT,  # purple
+    "build": SUCCESS,  # green
+    "utility": BRAND_ACCENT,  # purple
+    "bullet_bank": BRAND,  # blue
+    "skip": ERROR,  # red
+    "save": SUCCESS,  # green
     "resume": BRAND_ACCENT,  # purple
-    "complete": SUCCESS,     # green
-    "gem": WARNING,          # gold
-    "prev": BRAND_ACCENT,    # purple, matches existing pagination style
-    "next": BRAND_ACCENT,    # purple, matches existing pagination style
-    "back": BRAND_ACCENT,    # purple, matches existing pagination style
+    "complete": SUCCESS,  # green
+    "gem": WARNING,  # gold
+    "prev": BRAND_ACCENT,  # purple, matches existing pagination style
+    "next": BRAND_ACCENT,  # purple, matches existing pagination style
+    "back": BRAND_ACCENT,  # purple, matches existing pagination style
 }
+
 
 def colorize_icon(name: str) -> str:
     """Return icon with Rich color markup ([hex]icon[/hex]).
@@ -221,6 +223,7 @@ def colorize_icon(name: str) -> str:
         return f"[{color}]{icon}[/{color}]"
     return icon
 
+
 def questionary_icon_tuple(name: str) -> tuple:
     """Return (style, icon) tuple for use in questionary Choice title lists.
     questionary/prompt_toolkit renders titles given as a list of
@@ -235,17 +238,20 @@ def questionary_icon_tuple(name: str) -> tuple:
     style = f"fg:{color}" if color else ""
     return (style, icon)
 
-QUESTIONARY_STYLE = Style([
-    ("qmark", f"fg:{BRAND_ACCENT} bold"),
-    ("question", "bold"),
-    ("answer", f"fg:{INFO} bold"),
-    ("pointer", f"fg:{BRAND_ACCENT} bold"),
-    ("highlighted", f"fg:{BRAND_ACCENT} bold"),
-    ("selected", f"fg:{SUCCESS}"),
-    ("separator", f"fg:{INFO} bold"),
-    ("new_user", f"fg:{SUCCESS} bold"),
-    ("exit_flourish", f"fg:{BRAND_ACCENT} bold"),
-    ("instruction", ""),
-    ("text", ""),
-    ("description", f"fg:{MUTED} italic"),
-])
+
+QUESTIONARY_STYLE = Style(
+    [
+        ("qmark", f"fg:{BRAND_ACCENT} bold"),
+        ("question", "bold"),
+        ("answer", f"fg:{INFO} bold"),
+        ("pointer", f"fg:{BRAND_ACCENT} bold"),
+        ("highlighted", f"fg:{BRAND_ACCENT} bold"),
+        ("selected", f"fg:{SUCCESS}"),
+        ("separator", f"fg:{INFO} bold"),
+        ("new_user", f"fg:{SUCCESS} bold"),
+        ("exit_flourish", f"fg:{BRAND_ACCENT} bold"),
+        ("instruction", ""),
+        ("text", ""),
+        ("description", f"fg:{MUTED} italic"),
+    ]
+)

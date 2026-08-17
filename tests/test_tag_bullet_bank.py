@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import tag_bullet_bank  # noqa: E402
@@ -26,7 +28,9 @@ class TestTagBulletBankReadsProfileYaml(unittest.TestCase):
         self.assertFalse(needs_review)
 
     def test_falls_back_to_the_catch_all_tag_when_nothing_matches(self):
-        tag_str, needs_review = tag_bullet_bank.assign_tags("Completely unrelated text with zero keyword hits.")
+        tag_str, needs_review = tag_bullet_bank.assign_tags(
+            "Completely unrelated text with zero keyword hits."
+        )
         self.assertEqual(tag_str, tag_bullet_bank.fallback_tag())
         self.assertFalse(needs_review)
 
@@ -34,9 +38,13 @@ class TestTagBulletBankReadsProfileYaml(unittest.TestCase):
         keywords_by_tag = tag_bullet_bank.tag_keywords()
         self.assertEqual(keywords_by_tag[tag_bullet_bank.fallback_tag()], [])
 
-    def test_score_bullet_accepts_an_explicit_taxonomy_without_reloading_profile_yaml(self):
+    def test_score_bullet_accepts_an_explicit_taxonomy_without_reloading_profile_yaml(
+        self,
+    ):
         fake_taxonomy = {"[widgets]": ["widget", "gadget"], "[generalist]": []}
-        scores = tag_bullet_bank.score_bullet("Built and shipped a new widget pipeline.", fake_taxonomy)
+        scores = tag_bullet_bank.score_bullet(
+            "Built and shipped a new widget pipeline.", fake_taxonomy
+        )
         self.assertIn("[widgets]", scores)
         self.assertNotIn("[generalist]", scores)
 

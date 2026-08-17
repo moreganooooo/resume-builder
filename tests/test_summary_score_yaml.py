@@ -10,7 +10,9 @@ SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 class TestSummaryScoreYaml(unittest.TestCase):
 
     def setUp(self):
-        with open(os.path.join(SCORING_DIR, "summary_score.yaml"), "r", encoding="utf-8") as f:
+        with open(
+            os.path.join(SCORING_DIR, "summary_score.yaml"), "r", encoding="utf-8"
+        ) as f:
             self.data = yaml.safe_load(f)
 
     def test_readability_uses_line_count_not_word_count(self):

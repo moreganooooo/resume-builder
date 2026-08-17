@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import profile_paths  # noqa: E402
@@ -49,19 +51,27 @@ class TestPathHelpers(unittest.TestCase):
         self.assertEqual(profile_paths.output_dir("morgan"), expected)
 
     def test_checkpoints_dir_nests_under_output_dir(self):
-        expected = os.path.join(profile_paths.PROJECT_ROOT, "output", "morgan", "checkpoints")
+        expected = os.path.join(
+            profile_paths.PROJECT_ROOT, "output", "morgan", "checkpoints"
+        )
         self.assertEqual(profile_paths.checkpoints_dir("morgan"), expected)
 
     def test_applications_md_path_resolves_under_top_level_data(self):
-        expected = os.path.join(profile_paths.PROJECT_ROOT, "data", "morgan", "applications.md")
+        expected = os.path.join(
+            profile_paths.PROJECT_ROOT, "data", "morgan", "applications.md"
+        )
         self.assertEqual(profile_paths.applications_md_path("morgan"), expected)
 
     def test_tracker_csv_path_lives_inside_jds_dir(self):
-        expected = os.path.join(profile_paths.PROJECT_ROOT, "jds", "morgan", "jd_tracker_log.csv")
+        expected = os.path.join(
+            profile_paths.PROJECT_ROOT, "jds", "morgan", "jd_tracker_log.csv"
+        )
         self.assertEqual(profile_paths.tracker_csv_path("morgan"), expected)
 
     def test_situational_roles_path_resolves_under_profile_root(self):
-        expected = os.path.join(profile_paths.PROFILES_DIR, "morgan", "situational_roles.yaml")
+        expected = os.path.join(
+            profile_paths.PROFILES_DIR, "morgan", "situational_roles.yaml"
+        )
         self.assertEqual(profile_paths.situational_roles_path("morgan"), expected)
 
     def test_data_dir_resolves_under_top_level_data(self):
@@ -94,6 +104,7 @@ class TestSyncRoots(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         for d in self.dirs:
             shutil.rmtree(d, ignore_errors=True)
 
@@ -115,7 +126,9 @@ class TestSyncRoots(unittest.TestCase):
 
     def test_write_sync_ignore_files_does_not_clobber_a_hand_edited_stignore(self):
         os.makedirs(profile_paths.profile_root(self.profile), exist_ok=True)
-        custom_path = os.path.join(profile_paths.profile_root(self.profile), ".stignore")
+        custom_path = os.path.join(
+            profile_paths.profile_root(self.profile), ".stignore"
+        )
         with open(custom_path, "w") as f:
             f.write("my-custom-rule\n")
 
@@ -179,14 +192,21 @@ class TestSetActiveProfileReloadsStaleModules(unittest.TestCase):
     def setUp(self):
         self._orig = os.environ.get("RESUME_PROFILE")
         self.second_profile = "test_reload_profile_xyz"
-        os.makedirs(os.path.join(profile_paths.PROFILES_DIR, self.second_profile), exist_ok=True)
+        os.makedirs(
+            os.path.join(profile_paths.PROFILES_DIR, self.second_profile), exist_ok=True
+        )
 
         import jd_manager
+
         self.jd_manager = jd_manager
 
     def tearDown(self):
         import shutil
-        shutil.rmtree(os.path.join(profile_paths.PROFILES_DIR, self.second_profile), ignore_errors=True)
+
+        shutil.rmtree(
+            os.path.join(profile_paths.PROFILES_DIR, self.second_profile),
+            ignore_errors=True,
+        )
         if self._orig is None:
             os.environ.pop("RESUME_PROFILE", None)
         else:
@@ -195,12 +215,16 @@ class TestSetActiveProfileReloadsStaleModules(unittest.TestCase):
 
     def test_jd_manager_jds_dir_updates_after_switch(self):
         profile_paths.set_active_profile(self.second_profile)
-        self.assertTrue(self.jd_manager.JDS_DIR.endswith(os.path.join("jds", self.second_profile)))
+        self.assertTrue(
+            self.jd_manager.JDS_DIR.endswith(os.path.join("jds", self.second_profile))
+        )
 
     def test_jd_manager_tracker_csv_updates_after_switch(self):
         profile_paths.set_active_profile(self.second_profile)
         self.assertTrue(
-            self.jd_manager.TRACKER_CSV.endswith(os.path.join("jds", self.second_profile, "jd_tracker_log.csv"))
+            self.jd_manager.TRACKER_CSV.endswith(
+                os.path.join("jds", self.second_profile, "jd_tracker_log.csv")
+            )
         )
 
 

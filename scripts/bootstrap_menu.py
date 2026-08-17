@@ -30,7 +30,11 @@ def _phase0_status() -> tuple:
     if not os.path.isdir(source_docs_dir):
         return ("Never run", "no source documents uploaded yet")
 
-    files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
+    files = [
+        f
+        for f in os.listdir(source_docs_dir)
+        if os.path.isfile(os.path.join(source_docs_dir, f))
+    ]
     total = len(files)
     if total == 0:
         return ("Never run", "no source documents uploaded yet")
@@ -78,12 +82,17 @@ def _run_phase0() -> bool:
     nothing extracted)."""
     source_docs_dir = bootstrap_bullet_bank.SOURCE_DOCS_DIR
     os.makedirs(source_docs_dir, exist_ok=True)
-    files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
+    files = [
+        f
+        for f in os.listdir(source_docs_dir)
+        if os.path.isfile(os.path.join(source_docs_dir, f))
+    ]
     if not files:
         # Deferred import: menu.py imports this module, so importing menu
         # at this module's top level would be circular -- safe here since
         # it only runs once both modules are already fully loaded.
         import menu
+
         menu._print_source_docs_instructions(source_docs_dir)
         return False
 
@@ -92,13 +101,15 @@ def _run_phase0() -> bool:
         cli_art.console.print(
             f"\n{theme.colorize_icon('warning')}  Skipping ingestion -- GEMINI_API_KEY isn't set yet. "
             "Every document ingestion processes needs it. Add it to your profile's .env, then come back "
-            "to this step."
-        , soft_wrap=True)
+            "to this step.",
+            soft_wrap=True,
+        )
         return False
 
     scroll_region_modified = False
     # Clear screen and draw the compact banner!
     import sys
+
     sys.stdout.write("\x1b[2J\x1b[H")
     sys.stdout.flush()
     cli_art.display_compact_banner("ONBOARDING | DOCUMENT INGESTION")
@@ -108,6 +119,7 @@ def _run_phase0() -> bool:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -139,21 +151,24 @@ def _run_phase05() -> bool:
             f"\n{theme.colorize_icon('warning')}  Step 0.5 needs Step 0 (document ingestion) finished "
             "first -- profile setup drafts your identity, tags, and cv.md from what ingestion extracted, "
             "and running it first would produce a blank, still-paid-for draft. Finish Step 0, then come "
-            "back."
-        , soft_wrap=True)
+            "back.",
+            soft_wrap=True,
+        )
         return False
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
         cli_art.console.print(
             f"\n{theme.colorize_icon('warning')}  Skipping profile setup -- GEMINI_API_KEY isn't set "
-            "yet. Add it to your profile's .env, then come back to this step."
-        , soft_wrap=True)
+            "yet. Add it to your profile's .env, then come back to this step.",
+            soft_wrap=True,
+        )
         return False
 
     scroll_region_modified = False
     # Clear screen and draw the compact banner!
     import sys
+
     sys.stdout.write("\x1b[2J\x1b[H")
     sys.stdout.flush()
     cli_art.display_compact_banner("ONBOARDING | PROFILE SETUP DRAFT")
@@ -163,6 +178,7 @@ def _run_phase05() -> bool:
 
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
+
     columns, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
@@ -182,9 +198,14 @@ def _run_express_setup(interactive: bool = True) -> bool:
     """Runs the entire onboarding pipeline end-to-end unattended."""
     source_docs_dir = bootstrap_bullet_bank.SOURCE_DOCS_DIR
     os.makedirs(source_docs_dir, exist_ok=True)
-    files = [f for f in os.listdir(source_docs_dir) if os.path.isfile(os.path.join(source_docs_dir, f))]
+    files = [
+        f
+        for f in os.listdir(source_docs_dir)
+        if os.path.isfile(os.path.join(source_docs_dir, f))
+    ]
     if not files:
         import menu
+
         menu._print_source_docs_instructions(source_docs_dir)
         return False
 
@@ -192,8 +213,9 @@ def _run_express_setup(interactive: bool = True) -> bool:
     if not secrets["gemini_key_set"]:
         cli_art.console.print(
             f"\n{theme.colorize_icon('warning')}  Skipping express setup -- GEMINI_API_KEY isn't set yet. "
-            "Add it to your profile's .env, then try again."
-        , soft_wrap=True)
+            "Add it to your profile's .env, then try again.",
+            soft_wrap=True,
+        )
         return False
 
     if interactive:
@@ -208,6 +230,7 @@ def _run_express_setup(interactive: bool = True) -> bool:
     scroll_region_modified = False
     import shutil
     import sys
+
     sys.stdout.write("\x1b[2J\x1b[H")
     sys.stdout.flush()
     cli_art.display_compact_banner("ONBOARDING | EXPRESS AUTO-PILOT")
@@ -224,15 +247,23 @@ def _run_express_setup(interactive: bool = True) -> bool:
         summary = bootstrap_bullet_bank.run_ingestion()
         bootstrap_bullet_bank.print_ingestion_summary(summary)
 
-        cli_art.print_literal("\nStage 2 of 8: Drafting your profile (identity, tags, cv.md)...")
+        cli_art.print_literal(
+            "\nStage 2 of 8: Drafting your profile (identity, tags, cv.md)..."
+        )
         bootstrap_profile.run_profile_setup()
 
-        cli_art.print_literal("\nStages 3-8: Running the six-stage bullet bank pipeline (unattended)...")
+        cli_art.print_literal(
+            "\nStages 3-8: Running the six-stage bullet bank pipeline (unattended)..."
+        )
         bootstrap_bullet_bank.run_full_pipeline(skip_confirm=True)
 
-        cli_art.print_literal(f"\n{theme.colorize_icon('success')} All done! Express setup complete. Your profile and bullet bank are fully prepared!")
+        cli_art.print_literal(
+            f"\n{theme.colorize_icon('success')} All done! Express setup complete. Your profile and bullet bank are fully prepared!"
+        )
     except Exception as e:
-        cli_art.print_literal(f"\n{theme.colorize_icon('warning')} Express setup encountered an error: {e}")
+        cli_art.print_literal(
+            f"\n{theme.colorize_icon('warning')} Express setup encountered an error: {e}"
+        )
         return False
     finally:
         if scroll_region_modified:
@@ -252,30 +283,45 @@ def _build_choices(include_express: bool = False) -> list:
     # copy changes here.
     choices = []
     if include_express:
-        choices.append(questionary.Choice(
-            title=[("class:text", "⚡ Express Auto-Pilot (Recommended - ~60s)  "),
-                   ("class:description", "(run all 8 onboarding steps end-to-end unattended)")],
-            value="express",
-        ))
-    
+        choices.append(
+            questionary.Choice(
+                title=[
+                    ("class:text", "⚡ Express Auto-Pilot (Recommended - ~60s)  "),
+                    (
+                        "class:description",
+                        "(run all 8 onboarding steps end-to-end unattended)",
+                    ),
+                ],
+                value="express",
+            )
+        )
+
     choices += [
         questionary.Choice(
-            title=[("class:text", "Upload Your Documents  "),
-                   ("class:description", "(extract achievements from uploaded files)")],
+            title=[
+                ("class:text", "Upload Your Documents  "),
+                ("class:description", "(extract achievements from uploaded files)"),
+            ],
             value="phase0",
         ),
         questionary.Choice(
-            title=[("class:text", "Draft Your Profile  "),
-                   ("class:description", "(identity, profile.yml, cv.md draft)")],
+            title=[
+                ("class:text", "Draft Your Profile  "),
+                ("class:description", "(identity, profile.yml, cv.md draft)"),
+            ],
             value="phase05",
         ),
     ]
     for stage in bullet_bank_menu.STAGES:
-        choices.append(questionary.Choice(
-            title=[("class:text", f"{stage['number']}. {stage['label']}  "),
-                   ("class:description", f"({stage['description']})")],
-            value=stage["key"],
-        ))
+        choices.append(
+            questionary.Choice(
+                title=[
+                    ("class:text", f"{stage['number']}. {stage['label']}  "),
+                    ("class:description", f"({stage['description']})"),
+                ],
+                value=stage["key"],
+            )
+        )
     choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
     return choices
 
@@ -287,6 +333,7 @@ def run_bootstrap_menu() -> bool:
     import sys
 
     import menu
+
     use_alt = menu._should_use_alt_screen()
     did_something = False
 
@@ -315,10 +362,13 @@ def run_bootstrap_menu() -> bool:
         # Row order carries the sequence here. See render_bullet_bank_status().
         cli_art.console.print()
         cli_art.render_bullet_bank_status(
-            stage_rows, [], title="Onboarding Progress", show_numbers=False)
+            stage_rows, [], title="Onboarding Progress", show_numbers=False
+        )
         cli_art.console.print()
 
-        choice = cli_art.select("New User Setup:", choices=_build_choices(include_express=True))
+        choice = cli_art.select(
+            "New User Setup:", choices=_build_choices(include_express=True)
+        )
         if not choice or choice == "__back__":
             return did_something
 

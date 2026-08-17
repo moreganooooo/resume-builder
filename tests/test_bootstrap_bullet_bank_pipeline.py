@@ -3,7 +3,9 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_bullet_bank  # noqa: E402
@@ -12,14 +14,17 @@ import bootstrap_bullet_bank  # noqa: E402
 class TestPipelineStages(unittest.TestCase):
 
     def test_six_stages_in_correct_order(self):
-        self.assertEqual(bootstrap_bullet_bank.PIPELINE_STAGES, [
-            "audit_bullet_bank.py",
-            "cluster_bullet_bank.py",
-            "rewrite_bullets.py",
-            "audit_keepers.py",
-            "score_keeper_gems.py",
-            "embed_bullet_bank.py",
-        ])
+        self.assertEqual(
+            bootstrap_bullet_bank.PIPELINE_STAGES,
+            [
+                "audit_bullet_bank.py",
+                "cluster_bullet_bank.py",
+                "rewrite_bullets.py",
+                "audit_keepers.py",
+                "score_keeper_gems.py",
+                "embed_bullet_bank.py",
+            ],
+        )
 
 
 class TestRunStage(unittest.TestCase):
@@ -65,14 +70,18 @@ class TestRunFullPipeline(unittest.TestCase):
 
     @patch("bootstrap_bullet_bank.questionary.confirm")
     @patch("bootstrap_bullet_bank.run_stage", return_value=True)
-    def test_yes_flag_skips_all_confirmation_prompts(self, mock_run_stage, mock_confirm):
+    def test_yes_flag_skips_all_confirmation_prompts(
+        self, mock_run_stage, mock_confirm
+    ):
         result = bootstrap_bullet_bank.run_full_pipeline(skip_confirm=True)
         self.assertTrue(result)
         mock_confirm.assert_not_called()
 
     @patch("bootstrap_bullet_bank.questionary.confirm")
     @patch("bootstrap_bullet_bank.run_stage", return_value=True)
-    def test_declining_first_gate_stops_before_any_stage_runs(self, mock_run_stage, mock_confirm):
+    def test_declining_first_gate_stops_before_any_stage_runs(
+        self, mock_run_stage, mock_confirm
+    ):
         mock_confirm.return_value.ask.return_value = False
         result = bootstrap_bullet_bank.run_full_pipeline(skip_confirm=False)
         self.assertFalse(result)
@@ -97,9 +106,25 @@ class TestMainDryRun(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_full_pipeline")
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py", "--dry-run"])
-    def test_dry_run_skips_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+    def test_dry_run_skips_full_pipeline(
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
+    ):
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once_with(dry_run=True, force=False)
         mock_run_full_pipeline.assert_not_called()
@@ -109,9 +134,25 @@ class TestMainDryRun(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_full_pipeline", return_value=True)
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py"])
-    def test_without_dry_run_calls_full_pipeline(self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+    def test_without_dry_run_calls_full_pipeline(
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
+    ):
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once_with(dry_run=False, force=False)
         mock_run_full_pipeline.assert_called_once()
@@ -125,10 +166,24 @@ class TestMainCallsProfileSetup(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py"])
     def test_profile_setup_runs_between_ingestion_and_pipeline(
-        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
     ):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
 
         bootstrap_bullet_bank.main()
 
@@ -142,10 +197,24 @@ class TestMainCallsProfileSetup(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py", "--dry-run"])
     def test_profile_setup_receives_dry_run_flag(
-        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
     ):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
 
         bootstrap_bullet_bank.main()
 
@@ -165,9 +234,18 @@ class TestMainScope(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py", "--scope", "bullets"])
     def test_scope_bullets_skips_profile_setup_but_still_ingests(
-        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
     ):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once()
         mock_profile_setup.assert_not_called()
@@ -179,10 +257,24 @@ class TestMainScope(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py", "--scope", "profile"])
     def test_scope_profile_skips_pipeline_but_still_ingests(
-        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
     ):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
         bootstrap_bullet_bank.main()
         mock_run_ingestion.assert_called_once()
         mock_profile_setup.assert_called_once()
@@ -194,10 +286,24 @@ class TestMainScope(unittest.TestCase):
     @patch("bootstrap_bullet_bank.run_ingestion")
     @patch("sys.argv", ["bootstrap_bullet_bank.py"])
     def test_default_scope_runs_both(
-        self, mock_run_ingestion, mock_run_full_pipeline, mock_profile_setup, mock_collect_secrets,
+        self,
+        mock_run_ingestion,
+        mock_run_full_pipeline,
+        mock_profile_setup,
+        mock_collect_secrets,
     ):
-        mock_run_ingestion.return_value = {"extracted": 0, "attributed": 0, "flagged": 0, "certificates": 0}
-        mock_profile_setup.return_value = {"full_name": "", "primary_roles": 0, "secondary_roles": 0, "recommendations_found": 0}
+        mock_run_ingestion.return_value = {
+            "extracted": 0,
+            "attributed": 0,
+            "flagged": 0,
+            "certificates": 0,
+        }
+        mock_profile_setup.return_value = {
+            "full_name": "",
+            "primary_roles": 0,
+            "secondary_roles": 0,
+            "recommendations_found": 0,
+        }
         bootstrap_bullet_bank.main()
         mock_profile_setup.assert_called_once()
         mock_run_full_pipeline.assert_called_once()
