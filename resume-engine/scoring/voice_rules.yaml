@@ -1,0 +1,16 @@
+version: 1.0
+# Voice Anchor & Stylometric Rules (Feature #9 / Group D)
+# Sourced from Morgan Escott Design System, voice-anchors.md, and 2026 ATS/AI-Detection Research.
+
+thresholds:
+  # Sentence length burstiness & variance (in words)
+  sentence_std_dev_min: 4.5       # std dev < 4.5 flags monotonous AI pacing
+  sentence_span_min: 12           # (max_len - min_len) must be >= 12 words
+  sentence_length_max: 42         # sentences > 42 words flag as run-on
+  sentence_length_min: 3          # sentences < 3 words flag as fragments
+
+  # Lexical diversity (Type-Token Ratio)
+  type_token_ratio_min: 0.46      # unique words / total words
+
+  # Syntactic repetition
+  max_consecutive_same_opener: 2  # flags 3+ consecutive sentences starting identically
