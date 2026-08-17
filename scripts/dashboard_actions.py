@@ -47,10 +47,11 @@ import sys
 import traceback
 
 import cli_art
-import dashboard
 import jd_manager
 import liveness
 import orchestrator
+
+import dashboard
 
 
 def _user_error(message: str) -> None:

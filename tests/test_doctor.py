@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -365,8 +365,8 @@ class TestRunChecks(unittest.TestCase):
 class TestCheckDataDb(unittest.TestCase):
 
     def test_passes_when_db_is_reachable_and_queryable(self):
-        import tempfile
         import shutil
+        import tempfile
         tmpdir = tempfile.mkdtemp()
         try:
             with patch("profile_paths.profile_root", return_value=tmpdir):

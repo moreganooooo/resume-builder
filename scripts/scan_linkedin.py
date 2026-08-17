@@ -20,17 +20,20 @@ import re
 import time
 
 import browser_cookie3
-import requests
-from bs4 import BeautifulSoup
-
 import cli_art
 import profile_paths
+import requests
+from bs4 import BeautifulSoup
 from linkedin_jobs_scraper import LinkedinScraper
-from linkedin_jobs_scraper.events import Events, EventData
-from linkedin_jobs_scraper.query import Query, QueryOptions, QueryFilters
+from linkedin_jobs_scraper.events import EventData, Events
 from linkedin_jobs_scraper.filters import (
-    RelevanceFilters, TimeFilters, TypeFilters, ExperienceLevelFilters, OnSiteOrRemoteFilters,
+    ExperienceLevelFilters,
+    OnSiteOrRemoteFilters,
+    RelevanceFilters,
+    TimeFilters,
+    TypeFilters,
 )
+from linkedin_jobs_scraper.query import Query, QueryFilters, QueryOptions
 
 DEFAULT_JOB_LIMIT_PER_QUERY = 20
 
@@ -64,12 +67,13 @@ def check_li_cookie_live(cookie_val: str) -> bool:
 def get_li_at_cookie() -> str:
     """Reads or extracts the live li_at session cookie. Saves and caches it
     profile-specifically to avoid repeated prompts."""
-    import questionary
-    import theme
+    import json
     import os
     import subprocess
-    import json
+
     import profile_paths
+    import questionary
+    import theme
 
     cookie_file = os.path.join(profile_paths.profile_root(), ".linkedin_cookie")
 

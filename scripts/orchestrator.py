@@ -1,21 +1,22 @@
-import os
-import time
-import yaml
-import json
 import inspect
-import re
+import json
+import os
 import random
-import requests
-import questionary
+import re
+import shutil
+import subprocess
+import time
+from typing import List, Literal, Tuple
+
 import company_research
-import situational_roles
 import numpy as np
 import pandas as pd
-import subprocess
-import shutil
-from pypdf import PdfReader
+import questionary
+import requests
+import situational_roles
+import yaml
 from dotenv import load_dotenv
-from typing import List, Literal, Tuple
+from pypdf import PdfReader
 
 # --- PATH RESOLUTION & ENV SETUP ---
 # Must run before any local import below: bullet_feedback -> rewrite_bullets
@@ -32,25 +33,25 @@ from typing import List, Literal, Tuple
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 import profile_paths
+
 load_dotenv(profile_paths.env_path(), override=True)
 
-from render_html import render_html
+import bullet_feedback
+import cli_art
+import jd_manager
+import kb_snapshot
+import liveness
+import normalize_resume
+import scan_ats
+import theme
+import validate_coverletter
+import validate_pdf_text
+import validate_resume
+from bullet_bank_hash import bullets_sha
 from render_coverletter import render_coverletter
 from render_coverletter_docx import render_coverletter_docx
+from render_html import render_html
 from render_resume_docx import render_resume_docx
-import normalize_resume
-import validate_resume
-import validate_pdf_text
-import validate_coverletter
-import jd_manager
-import scan_ats
-import liveness
-import bullet_feedback
-import kb_snapshot
-from bullet_bank_hash import bullets_sha
-import cli_art
-import theme
-
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
@@ -286,8 +287,10 @@ MAX_BACKOFF_SECS   = 90
 # GEMINI CLIENT  (raw REST)
 # ---------------------------------------------------------------------------
 
-from gemini_client import GeminiClient, SustainedFailureError  # replaces the inline class
-
+from gemini_client import (  # replaces the inline class
+    GeminiClient,
+    SustainedFailureError,
+)
 
 # ---------------------------------------------------------------------------
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)
@@ -814,13 +817,28 @@ def _summarize_keywords(jd_keywords: dict) -> str:
 # orchestrator.py's full dependency chain).
 # ---------------------------------------------------------------------------
 from schemas import (  # noqa: E402
-    BulletAuditSchema, WorkExperience, ResumeSchema, JDKeywordSchema,
-    FitSubscores, InterviewOddsSubscores, PracticalPursueSubscores,
-    FitEvaluationSchema, CapabilityEvaluationSchema, RecruiterEvaluationSchema,
-    CoverLetterSchema, VocabularySubstitution, CompanyResearchSchema,
-    CritiqueSchema, RewriteSchema, RewriteMinimalSchema, ResumeCritiqueSchema,
-    CertItem, EducationItem, ExperienceEntry, TemplateSchema,
+    BulletAuditSchema,
+    CapabilityEvaluationSchema,
+    CertItem,
+    CompanyResearchSchema,
+    CoverLetterSchema,
+    CritiqueSchema,
+    EducationItem,
+    ExperienceEntry,
+    FitEvaluationSchema,
+    FitSubscores,
+    InterviewOddsSubscores,
+    JDKeywordSchema,
+    PracticalPursueSubscores,
     RecommendationApplySchema,
+    RecruiterEvaluationSchema,
+    ResumeCritiqueSchema,
+    ResumeSchema,
+    RewriteMinimalSchema,
+    RewriteSchema,
+    TemplateSchema,
+    VocabularySubstitution,
+    WorkExperience,
 )
 
 # Weights ported from career-ops's modes/offer.md weighted-match matrix,
@@ -2778,8 +2796,8 @@ class ResumeEngine:
         emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
         if os.path.exists(bank_csv) and os.path.exists(emb_npy):
             try:
-                import pandas as pd
                 import numpy as np
+                import pandas as pd
                 df = pd.read_csv(bank_csv)
                 keeper_bullets = df["Bullet Point"].fillna("").tolist()
                 keeper_embs = np.load(emb_npy)

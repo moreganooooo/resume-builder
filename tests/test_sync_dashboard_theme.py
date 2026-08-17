@@ -6,8 +6,8 @@ from unittest.mock import patch
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-import theme  # noqa: E402
 import sync_dashboard_theme  # noqa: E402
+import theme  # noqa: E402
 
 
 class TestBuildGoThemeSource(unittest.TestCase):

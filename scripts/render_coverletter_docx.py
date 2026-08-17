@@ -19,9 +19,8 @@ import datetime
 import json
 import os
 
-from docx import Document
-
 import profile_paths
+from docx import Document
 
 
 def _build_recipient_lines(company_name: str, contact_name: str = "", contact_title: str = "",

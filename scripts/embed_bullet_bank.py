@@ -35,13 +35,14 @@ Dependencies:
     pip install requests numpy pandas python-dotenv
 """
 
-import os
-import time
 import json
+import os
 import sys
-import requests
+import time
+
 import numpy as np
 import pandas as pd
+import requests
 from dotenv import load_dotenv
 
 # --- PATH SETUP ---
@@ -50,11 +51,11 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import cli_art
 import profile_paths  # noqa: E402
+import theme
 from atomic_write import atomic_write  # noqa: E402
 from bullet_bank_hash import bullets_sha  # noqa: E402
-import cli_art
-import theme
 
 load_dotenv(profile_paths.env_path(), override=True)
 

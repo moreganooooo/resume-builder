@@ -9,6 +9,7 @@ Pure data/response-shape definitions -- no pipeline logic lives here.
 """
 
 from typing import List, Literal
+
 from pydantic import BaseModel, Field
 
 

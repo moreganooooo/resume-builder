@@ -11,7 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Dict, Any
+from typing import Any, Dict
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
