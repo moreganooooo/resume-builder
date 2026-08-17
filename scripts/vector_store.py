@@ -52,8 +52,25 @@ def search_bullet_bank(jd_text: str, top_k: int = 20) -> list[tuple[str, str, st
     except Exception:
         return []
 
-    if "Bullet Point" not in df.columns or len(df) != len(embs):
+    if "Bullet Point" not in df.columns:
         return []
+
+    if len(df) != len(embs):
+        # Row count changed (bullet added/removed) -- re-embed instead of
+        # bailing out silently. Same recovery path as the content-hash
+        # mismatch below; this was previously unreachable because this
+        # length check returned early before ever getting there, so
+        # adding/removing a bullet permanently broke vector search until
+        # someone manually reran embed_bullet_bank.py.
+        try:
+            import embed_bullet_bank
+            embed_bullet_bank.main()
+            embs = np.load(npy_path)
+            if len(df) != len(embs):
+                return []
+        except Exception as e:
+            print(f"Warning: vector auto-reembedding failed ({e}); falling back to keyword search.")
+            return []
 
     if os.path.exists(meta_path):
         try:

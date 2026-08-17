@@ -30,6 +30,20 @@ def get_db(profile: Optional[str] = None) -> sqlite3.Connection:
     return conn
 
 
+def checkpoint(profile: Optional[str] = None) -> None:
+    """Forces a WAL checkpoint so every committed write lands in data.db
+    itself, not just the (Syncthing-excluded, per .stignore) -wal file.
+    Call this at the end of any flow after which a Syncthing sync is
+    likely to happen soon -- otherwise writes sitting in the local WAL
+    that haven't been checkpointed yet simply never reach a second
+    machine, silently and with no error (F6)."""
+    conn = get_db(profile)
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+    finally:
+        conn.close()
+
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     """Initializes tables and indexes if they do not already exist."""

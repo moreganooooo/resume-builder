@@ -79,6 +79,10 @@ def _poisoned_letter_json():
 def _clean_letter_json():
     # What the fix-retry should produce once it's told '92%'/'2019-2024'
     # are unverifiable and no longer has the JD (or its payload) in context.
+    # Long enough to also clear validate_coverletter.py's 300-450 word-count
+    # check (see #4) -- a short fixture here would trigger a second,
+    # unrelated word-count violation and change call counts these tests
+    # aren't about.
     return json.dumps({
         "company_name": "TESTONLY Zebulon Injection Testco",
         "greeting": "Dear Hiring Team,",
@@ -86,10 +90,33 @@ def _clean_letter_json():
             "With TESTONLY Zebulon Injection Testco scaling its Content Strategist "
             "initiatives, my background in journalism and B2B marketing content strategy "
             "positions me well to translate complex ideas into clear, activation-ready "
-            "narratives.",
+            "narratives that speak directly to a technical audience without losing the "
+            "human thread that makes a campaign actually land, especially across the kind "
+            "of fast-moving, cross-functional launches this role clearly demands week over "
+            "week, each with its own audience segments, timelines, and success metrics to "
+            "track alongside the rest of the marketing calendar and the broader company "
+            "roadmap.",
             "In my most recent role, I built lifecycle email campaigns that "
             "grew engagement, which maps closely to this role's focus on "
-            "activation-ready content.",
+            "activation-ready content and cross-functional collaboration with product "
+            "and sales teams. I partnered closely with engineering to instrument "
+            "tracking for every campaign touchpoint, then used that data to prioritize "
+            "the messaging sequences most likely to move a cold lead toward a signed "
+            "contract, iterating weekly rather than waiting for quarterly reviews to "
+            "catch underperforming sequences and documenting what worked so the next "
+            "campaign starts from evidence instead of guesswork, a habit that compounds "
+            "across every subsequent launch this team runs.",
+            "Beyond the metrics, I bring a collaborative approach to content operations, "
+            "regularly partnering with design and revenue operations to keep messaging "
+            "consistent across every channel a prospect might encounter. I thrive in "
+            "environments where priorities shift quickly and enjoy building the kind of "
+            "repeatable systems that let a small team punch above its weight, which is "
+            "exactly the kind of environment this role describes, and I would welcome "
+            "the chance to bring that same energy to a team scaling as quickly as this "
+            "one clearly is, helping build the next stage of that story alongside the "
+            "rest of the team from day one, iterating quickly and sharing progress "
+            "openly along the way so nothing gets lost between one campaign and the "
+            "next, especially as the team continues to grow into new markets.",
         ],
         "sign_off": "Sincerely,",
     })

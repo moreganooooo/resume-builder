@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
@@ -354,6 +355,29 @@ class TestGetPendingJds(unittest.TestCase):
         self._write("posting.txt", "A plain-text JD.")
         pending = jd_manager.get_pending_jds()
         self.assertEqual(len(pending), 1)
+
+    def test_survives_a_file_vanishing_between_listing_and_opening(self):
+        """A concurrent process (batch evaluate archiving a Skip
+        recommendation, liveness moving an expired posting, etc.) can
+        remove a file between the directory listing and compute_job_key()
+        opening it -- this must skip that one file, not crash the whole
+        get_pending_jds() call. Observed for real during this session: a
+        concurrent `resume evaluate --refresh` run crashed doctor.py's
+        banner this exact way."""
+        self._write("stays.txt", "A plain-text JD that stays put.")
+        vanishing_path = self._write("vanishes.txt", "A plain-text JD that disappears mid-scan.")
+
+        real_compute_job_key = jd_manager.compute_job_key
+
+        def flaky_compute_job_key(path):
+            if path == vanishing_path:
+                os.remove(path)
+            return real_compute_job_key(path)
+
+        with patch("jd_manager.compute_job_key", side_effect=flaky_compute_job_key):
+            pending = jd_manager.get_pending_jds()
+
+        self.assertEqual([os.path.basename(p) for p in pending], ["stays.txt"])
 
     def test_ignores_hidden_files_like_ds_store(self):
         # Real .DS_Store files are binary and not valid UTF-8 -- writing one
@@ -786,6 +810,50 @@ class TestSaveAndReadLiveness(unittest.TestCase):
     def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
         path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
         jd_manager.save_liveness(path, "active", "n/a")
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content, "Just a plain text job posting, not JSON.")
+
+
+class TestSaveAndReadReferral(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_referral_persist")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, name, content):
+        path = os.path.join(self.tmp_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+
+    def test_save_then_read_round_trips_text_and_saved_at(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "source_url": "https://x"}))
+        jd_manager.save_referral(path, "Jane Doe, former coworker")
+        result = jd_manager.read_referral(path)
+        self.assertEqual(result["text"], "Jane Doe, former coworker")
+        self.assertIn("saved_at", result)
+
+    def test_save_preserves_the_rest_of_the_jd_content(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role", "company_name": "Acme"}))
+        jd_manager.save_referral(path, "Jane Doe")
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["job_title"], "Role")
+        self.assertEqual(data["company_name"], "Acme")
+
+    def test_read_referral_returns_none_when_never_saved(self):
+        path = self._write("a.json", json.dumps({"job_title": "Role"}))
+        self.assertIsNone(jd_manager.read_referral(path))
+
+    def test_save_on_plain_text_jd_does_not_raise_and_leaves_file_unchanged(self):
+        path = self._write("dummy.txt", "Just a plain text job posting, not JSON.")
+        jd_manager.save_referral(path, "Jane Doe")
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         self.assertEqual(content, "Just a plain text job posting, not JSON.")

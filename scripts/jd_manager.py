@@ -121,7 +121,7 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
         }
         db.upsert_job(job_record, profile=profile)
     except Exception as e:
-        logging.debug(f"SQLite db sync skipped/failed for {jd_path}: {e}")
+        logging.warning(f"SQLite db sync skipped/failed for {jd_path}: {e}")
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
@@ -306,6 +306,21 @@ def move_jd_to(jd_path: str, dest_dir: str) -> str:
         dest = os.path.join(dest_dir, f"{stem}_{counter}{ext}")
         counter += 1
     shutil.move(jd_path, dest)
+
+    # data.db's status column is partly inferred from the JD's file path
+    # (see _sync_jd_to_db's "completed"/"expired" in jd_path checks), so
+    # it has to be re-synced *after* the move using the new path -- the
+    # save_* functions that normally trigger this sync won't necessarily
+    # run again for a JD that's just being relocated (F4).
+    try:
+        with open(dest, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            _sync_jd_to_db(dest, data)
+    except Exception:
+        pass  # best-effort, same posture as _sync_jd_to_db's own callers;
+              # not every JD file is JSON (plain-text drop-ins exist too)
+
     return dest
 
 
@@ -371,6 +386,43 @@ def read_liveness(jd_path: str) -> dict | None:
     if not isinstance(data, dict):
         return None
     return data.get("_liveness")
+
+
+def save_referral(jd_path: str, text: str) -> None:
+    """Persists a referral contact into the JD's own JSON file under a
+    _referral key (text, saved_at), matching _liveness's existing pattern.
+    A referral is inherently per-application (this specific job came via a
+    specific contact), not a profile-wide default, so it lives on the JD
+    itself rather than in profile.yml. No-ops silently for non-JSON-dict
+    JDs, same as save_evaluation()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_referral"] = {
+        "text": text,
+        "saved_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
+
+def read_referral(jd_path: str) -> dict | None:
+    """Reads back a persisted _referral (see save_referral()), or None if
+    the JD isn't a JSON dict or has no referral recorded."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_referral")
 
 
 # Real posted-date field names vary by source: resume-builder's own board/
@@ -929,7 +981,19 @@ def get_pending_jds() -> list:
     for path in root_files:
         all_paths.extend(split_batch_jds(path))
 
-    return [p for p in all_paths if not tracker.is_completed(compute_job_key(p))]
+    # A concurrent process (batch evaluate archiving a Skip recommendation,
+    # liveness moving an expired posting, etc.) can remove a file between
+    # the os.listdir() snapshot above and compute_job_key() opening it here
+    # -- skip it rather than crash the whole listing over one JD that's
+    # already been relocated by something else.
+    pending = []
+    for p in all_paths:
+        try:
+            if not tracker.is_completed(compute_job_key(p)):
+                pending.append(p)
+        except FileNotFoundError:
+            continue
+    return pending
 
 
 def get_completed_jds() -> list:
@@ -980,4 +1044,15 @@ def archive_jd(jd_path: str) -> str:
     os.makedirs(ARCHIVED_DIR, exist_ok=True)
     dest = os.path.join(ARCHIVED_DIR, os.path.basename(jd_path))
     shutil.move(jd_path, dest)
+
+    # Same F4 fix as move_jd_to() above -- archived is a status data.db
+    # tracks too, and nothing else re-syncs it after this move.
+    try:
+        with open(dest, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            _sync_jd_to_db(dest, data)
+    except Exception:
+        pass
+
     return dest

@@ -337,6 +337,33 @@ def check_kb_allowlist() -> dict:
     )
 
 
+def check_data_db() -> dict:
+    """Confirms the active profile's data.db is reachable and writable --
+    jd_manager._sync_jd_to_db() swallows failures here as a warning-level
+    log line (best-effort, so a broken data.db never blocks the JSON-file
+    pipeline that's the real source of truth), which means it's easy for
+    the SQLite mirror to silently stop updating with nothing else
+    surfacing it. This check is the counterpart: a place that actually
+    fails loudly if the DB itself can't be opened or queried (F5)."""
+    import db
+    name = profile_paths.active_profile()
+    try:
+        conn = db.get_db(name)
+        try:
+            conn.execute("SELECT 1;").fetchone()
+        finally:
+            conn.close()
+    except Exception as e:
+        return _check(
+            f"SQLite data.db ({name})", False,
+            f"could not open or query: {e}",
+            f"Check disk space and file permissions on {db.get_db_path(name)}. If the file is "
+            "corrupted, the JSON files in jds/ remain the real source of truth -- data.db can be "
+            "rebuilt from them via `python scripts/migrate_filesystem_to_db.py`.",
+        )
+    return _check(f"SQLite data.db ({name})", True, "reachable and writable")
+
+
 CHECKS = [
     check_python_version,
     check_venv,
@@ -354,6 +381,7 @@ CHECKS = [
     check_dashboard_theme_sync,
     check_dashboard_color_lint,
     check_kb_allowlist,
+    check_data_db,
 ]
 
 

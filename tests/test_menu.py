@@ -399,14 +399,16 @@ class TestBrowseSingleAction(unittest.TestCase):
         self.assertIn("coverletter", values)
         self.assertNotIn("tailor", values)
 
+    @patch("menu._prompt_for_referral_if_unset")
     @patch("menu.orchestrator.ResumeEngine")
     @patch("menu.questionary.select")
-    def test_coverletter_action_on_completed_jd(self, mock_select, mock_engine_cls):
+    def test_coverletter_action_on_completed_jd(self, mock_select, mock_engine_cls, mock_prompt_referral):
         mock_select.return_value.ask.return_value = "coverletter"
         mock_engine_cls.return_value.build_tailored_coverletter.return_value = {"company_name": "Acme"}
         row = _row(status="Completed", path="jds/a.json")
         self.assertTrue(menu._browse_single_action(row))
         mock_engine_cls.return_value.build_tailored_coverletter.assert_called_once_with("jds/a.json")
+        mock_prompt_referral.assert_called_once_with("jds/a.json")
 
     @patch("menu.cli_art.confirm_destructive", return_value=True)
     @patch("menu.jd_manager.archive_jd")
@@ -564,6 +566,33 @@ class TestHandleLogFollowup(unittest.TestCase):
         row["application"] = None
         menu._handle_log_followup(row)
         mock_save.assert_called_once_with("jds/a.json", "Applied", log_followup=True)
+
+
+class TestPromptForReferralIfUnset(unittest.TestCase):
+
+    @patch("menu.jd_manager.read_referral", return_value={"text": "Jane Doe", "saved_at": "2026-08-17T00:00:00"})
+    @patch("menu.questionary.text")
+    @patch("menu.jd_manager.save_referral")
+    def test_skips_prompt_when_referral_already_saved(self, mock_save, mock_text, mock_read):
+        menu._prompt_for_referral_if_unset("jds/a.json")
+        mock_text.assert_not_called()
+        mock_save.assert_not_called()
+
+    @patch("menu.jd_manager.read_referral", return_value=None)
+    @patch("menu.questionary.text")
+    @patch("menu.jd_manager.save_referral")
+    def test_saves_answer_when_provided(self, mock_save, mock_text, mock_read):
+        mock_text.return_value.ask.return_value = "Jane Doe, former coworker"
+        menu._prompt_for_referral_if_unset("jds/a.json")
+        mock_save.assert_called_once_with("jds/a.json", "Jane Doe, former coworker")
+
+    @patch("menu.jd_manager.read_referral", return_value=None)
+    @patch("menu.questionary.text")
+    @patch("menu.jd_manager.save_referral")
+    def test_skipping_the_prompt_saves_nothing(self, mock_save, mock_text, mock_read):
+        mock_text.return_value.ask.return_value = ""
+        menu._prompt_for_referral_if_unset("jds/a.json")
+        mock_save.assert_not_called()
 
 
 class TestHandleDraftOutreach(unittest.TestCase):

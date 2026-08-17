@@ -18,12 +18,35 @@ def _valid_letter():
         "greeting": "Dear Hiring Team,",
         "body_paragraphs": [
             "With Acme Corp scaling its CRM and user acquisition, having a foundational "
-            "content strategy that converts cold traffic into loyal users is critical. "
-            "My background in campaign messaging and content operations maps directly "
-            "to these high-growth needs.",
+            "content strategy that converts cold traffic into loyal, engaged users is "
+            "critical to sustaining that growth without diluting brand voice or "
+            "overwhelming the support team with a wave of churn-driven inquiries. My "
+            "background in campaign messaging and content operations maps directly to "
+            "these high-growth needs, having spent years building lifecycle programs "
+            "that turn first-touch visitors into long-term customers across several "
+            "fast-moving markets and multiple simultaneous product launches, each with "
+            "its own audience segments, timelines, and success metrics to track "
+            "alongside the rest of the marketing calendar and the broader roadmap.",
             "In my most recent role, I built lifecycle email campaigns that grew "
             "engagement by double digits, which maps closely to the JD's focus on "
-            "activation-ready content.",
+            "activation-ready content and cross-functional collaboration with product "
+            "and sales teams. I partnered closely with engineering to instrument "
+            "tracking for every campaign touchpoint, then used that data to prioritize "
+            "the messaging sequences most likely to move a cold lead toward a signed "
+            "contract, iterating weekly rather than waiting for quarterly reviews to "
+            "catch underperforming sequences. That same instinct for pairing narrative "
+            "with measurement is what I would bring to this role from the very first "
+            "week, alongside a habit of documenting what worked so the next campaign "
+            "starts from evidence instead of guesswork.",
+            "Beyond the metrics, I bring a collaborative approach to content operations, "
+            "regularly partnering with design and revenue operations to keep messaging "
+            "consistent across every channel a prospect might encounter. I thrive in "
+            "environments where priorities shift quickly and enjoy building the kind of "
+            "repeatable systems that let a small team punch above its weight, which is "
+            "exactly the kind of environment this role describes. I would welcome the "
+            "chance to bring that same energy to a team that is scaling as quickly as "
+            "this one clearly is, and to help build the next stage of that story "
+            "alongside the rest of the team.",
         ],
         "sign_off": "Sincerely,",
     }
@@ -76,6 +99,25 @@ class TestValidateCoverLetter(unittest.TestCase):
                 any("clichéd/passive opener" in v for v in violations),
                 f"Failed to flag clichéd opener: {cliche!r}"
             )
+
+    def test_flags_too_few_words(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"] = [
+            "Short paragraph about the role.",
+            "Another short paragraph about my background.",
+        ]
+        violations = validate_coverletter.validate(letter, STYLE_RULES)
+        self.assertTrue(any("300-450 words" in v for v in violations), violations)
+
+    def test_flags_too_many_words(self):
+        letter = _valid_letter()
+        letter["body_paragraphs"] = [" ".join(["word"] * 250), " ".join(["word"] * 250)]
+        violations = validate_coverletter.validate(letter, STYLE_RULES)
+        self.assertTrue(any("300-450 words" in v for v in violations), violations)
+
+    def test_does_not_flag_word_count_within_range(self):
+        violations = validate_coverletter.validate(_valid_letter(), STYLE_RULES)
+        self.assertFalse(any("words across body paragraphs" in v for v in violations), violations)
 
     def test_allows_legitimate_third_party_pronoun(self):
         # Known trade-off, not a bug: "her"/"she" is a blunt heuristic (see

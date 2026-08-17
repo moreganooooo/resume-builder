@@ -64,37 +64,40 @@ def migrate_bullet_bank(profile: str) -> int:
 
     conn = db.get_db(profile)
     count = 0
-    with open(audited_csv, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        with conn:
-            for i, row in enumerate(reader):
-                bullet_id = row.get("id") or f"bullet_{i+1:04d}"
-                conn.execute("""
-                    INSERT INTO bullet_bank (id, company, title, raw_bullet, polished_bullet, category, metric_value, action_verb, audit_status, source_cluster_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        company=excluded.company,
-                        title=excluded.title,
-                        raw_bullet=excluded.raw_bullet,
-                        polished_bullet=excluded.polished_bullet,
-                        category=excluded.category,
-                        metric_value=excluded.metric_value,
-                        action_verb=excluded.action_verb,
-                        audit_status=excluded.audit_status,
-                        source_cluster_id=excluded.source_cluster_id
-                """, (
-                    bullet_id,
-                    row.get("company", ""),
-                    row.get("title", ""),
-                    row.get("raw_bullet") or row.get("bullet", ""),
-                    row.get("polished_bullet") or row.get("bullet", ""),
-                    row.get("category", ""),
-                    row.get("metric_value", ""),
-                    row.get("action_verb", ""),
-                    row.get("audit_status", "CLEAN"),
-                    row.get("source_cluster_id", "")
-                ))
-                count += 1
+    try:
+        with open(audited_csv, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            with conn:
+                for i, row in enumerate(reader):
+                    bullet_id = row.get("id") or f"bullet_{i+1:04d}"
+                    conn.execute("""
+                        INSERT INTO bullet_bank (id, company, title, raw_bullet, polished_bullet, category, metric_value, action_verb, audit_status, source_cluster_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            company=excluded.company,
+                            title=excluded.title,
+                            raw_bullet=excluded.raw_bullet,
+                            polished_bullet=excluded.polished_bullet,
+                            category=excluded.category,
+                            metric_value=excluded.metric_value,
+                            action_verb=excluded.action_verb,
+                            audit_status=excluded.audit_status,
+                            source_cluster_id=excluded.source_cluster_id
+                    """, (
+                        bullet_id,
+                        row.get("company", ""),
+                        row.get("title", ""),
+                        row.get("raw_bullet") or row.get("bullet", ""),
+                        row.get("polished_bullet") or row.get("bullet", ""),
+                        row.get("category", ""),
+                        row.get("metric_value", ""),
+                        row.get("action_verb", ""),
+                        row.get("audit_status", "CLEAN"),
+                        row.get("source_cluster_id", "")
+                    ))
+                    count += 1
+    finally:
+        conn.close()
     return count
 
 
