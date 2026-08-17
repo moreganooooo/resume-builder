@@ -84,6 +84,50 @@ class TestTrimDetectiveFindings(unittest.TestCase):
         rows = trim_detective_findings.trim_detective_findings(self.tmp_csv)
         self.assertEqual(len(rows), 1)
 
+    def test_main_missing_source(self):
+        from unittest.mock import patch
+
+        with patch.object(
+            trim_detective_findings, "SOURCE_CSV", "/nonexistent/findings.csv"
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                trim_detective_findings.main()
+            self.assertEqual(cm.exception.code, 1)
+
+    def test_main_success(self):
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = os.path.join(tmpdir, "detective-findings.csv")
+            output = os.path.join(tmpdir, "detective-findings-trimmed.csv")
+            with open(source, "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(
+                    f, fieldnames=trim_detective_findings.KEEP_COLUMNS + ["Extra"]
+                )
+                w.writeheader()
+                w.writerow(
+                    {
+                        "Source File": "test.doc",
+                        "Finding Type": "note",
+                        "Best Details": "done",
+                        "Confidence": "high",
+                        "Use Caveat": "none",
+                        "Extra": "secret",
+                    }
+                )
+
+            with (
+                patch.object(trim_detective_findings, "SOURCE_CSV", source),
+                patch.object(trim_detective_findings, "OUTPUT_CSV", output),
+            ):
+                trim_detective_findings.main()
+                self.assertTrue(os.path.exists(output))
+                with open(output, "r", encoding="utf-8") as f:
+                    r = list(csv.DictReader(f))
+                    self.assertEqual(len(r), 1)
+                    self.assertEqual(r[0]["Source File"], "test.doc")
+
 
 if __name__ == "__main__":
     unittest.main()

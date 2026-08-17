@@ -36,12 +36,18 @@ def load_applications(md_path: Path) -> list:
         cli_art.cli_warning(f"Could not read {md_path}: {e}")
         return apps
 
-    # Skip header lines
-    for line in lines[2:]:
-        if not line.startswith("|"):
+    # Parse table rows (skipping header and separator rows)
+    for line in lines:
+        line_clean = line.strip()
+        if not line_clean.startswith("|"):
             continue
-        parts = [p.strip() for p in line.strip("|").split("|")]
+        # Skip markdown table divider lines like |---|---|...
+        if set(line_clean.replace("|", "").strip()) <= {"-", ":"}:
+            continue
+        parts = [p.strip() for p in line_clean.strip("|").split("|")]
         if len(parts) < 10:
+            continue
+        if parts[0].lower() in ("#", "num", "number"):
             continue
         # Columns: #, Date, Company, Role, Score, Status, PDF, Link, Report, Notes
         _, date, company, role, score, status, _, _, _, _ = parts

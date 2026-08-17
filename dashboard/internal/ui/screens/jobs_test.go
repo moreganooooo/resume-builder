@@ -501,7 +501,7 @@ func TestScrollFollowsCursorPastVisibleWindow(t *testing.T) {
 	// 30 rows below, so the cursor is guaranteed to outrun the first screen.
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), manyJobRows(30), 100, 12)
 
-	for range 25 {
+	for i := 0; i < 25; i++ {
 		m, _ = m.Update(pressKey("down"))
 	}
 	if m.cursor != 25 {

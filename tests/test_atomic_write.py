@@ -79,6 +79,15 @@ class TestAtomicWrite(unittest.TestCase):
         with open(self.path, newline="", encoding="utf-8") as f:
             self.assertEqual(f.read(), "a,b,c\r\n")
 
+    def test_cleanup_os_error_suppressed(self):
+        from unittest.mock import patch
+
+        with patch("os.remove", side_effect=OSError("disk failure")):
+            with self.assertRaises(RuntimeError):
+                with atomic_write(self.path) as f:
+                    f.write("partial")
+                    raise RuntimeError("write error")
+
 
 if __name__ == "__main__":
     unittest.main()
