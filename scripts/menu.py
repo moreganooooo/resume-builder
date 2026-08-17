@@ -285,7 +285,7 @@ def _confirm_active_profile() -> bool:
 
     if choice == "Manage profiles...":
         _handle_manage_profiles()
-        return run_profile_selector()
+        return _confirm_active_profile()
 
     if choice in names:
         profile_paths.set_active_profile(choice)
@@ -1274,7 +1274,7 @@ def _handle_manage_scraping():
     profile = profile_paths.active_profile()
     
     filters_path = os.path.join(profile_paths.board_scanner_dir(profile), "scan_filters.yml")
-    profile_path = os.path.join(profile_paths.profile_dir(profile), "profile.yml")
+    profile_path = os.path.join(profile_paths.profile_root(profile), "profile.yml")
     
     while True:
         if use_alt:

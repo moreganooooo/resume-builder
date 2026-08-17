@@ -888,7 +888,7 @@ def _check_bullet_star_quality(resume_data: dict) -> list[str]:
         "rectified", "redesigned", "redeveloped", "reduced", "referred", "refinanced", "refined", "reframed",
         "regulated", "rehabilitated", "reinforced", "reintroduced", "reinvested", "rejuvenated", "related",
         "released", "relieved", "remedied", "remodeled", "renegotiated", "renovated", "reorganized", "repaired",
-        "repatriated", "replaced", "replied", "reported", "positioned", "represented", "reproduced", "reprogrammed",
+        "repatriated", "replaced", "replied", "reported", "represented", "reproduced", "reprogrammed",
         "requested", "required", "rescued", "researched", "reserved", "resettled", "resolved", "respected",
         "responded", "restored", "restructured", "retained", "retrieved", "revamped", "revealed", "reverenced",
         "reversed", "reviewed", "revised", "revitalized", "revived", "rewarded", "routed", "safeguarded",
@@ -1064,5 +1064,4 @@ def validate(
     if enforce_star or style_rules.get("enforce_star", False):
         violations.extend(_check_bullet_star_quality(resume_data))
         violations.extend(_check_boilerplate_and_cliches(resume_data))
-    return violations
     return violations

@@ -127,7 +127,7 @@ def main():
                     df.at[i, col] = result[col]
             scored += 1
         else:
-            print(f"    Skipping — no result returned.")
+            print("    Skipping — no result returned.")
 
     df.to_csv(KEEPERS_CSV, index=False)
     print(f"\n  Scored: {scored}  |  Already scored (skipped): {skipped}")

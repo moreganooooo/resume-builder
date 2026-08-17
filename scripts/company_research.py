@@ -261,7 +261,7 @@ def apply_vocabulary_substitutions(text: str, substitutions: list) -> str:
         left = r"\b" if _is_word_char(generic[0]) else r"(?<!\w)"
         right = r"\b" if _is_word_char(generic[-1]) else r"(?!\w)"
         pattern = re.compile(rf"{left}{re.escape(generic)}{right}", re.IGNORECASE)
-        text = pattern.sub(lambda m: _match_case(m.group(0), preferred), text)
+        text = pattern.sub(lambda m, p=preferred: _match_case(m.group(0), p), text)
 
     return text
 
