@@ -74,6 +74,126 @@ class TestFixedContent(unittest.TestCase):
         self.assertNotIn("KU_ACHIEVEMENT_KEY", fields)
         self.assertNotIn("KCKCC_ACHIEVEMENT_KEY", fields)
 
+    def test_all_ku_achievement_options_are_valid(self):
+        """Test that all KU achievement options produce valid education entries."""
+        for ku_key in fixed_content.KU_ACHIEVEMENT_OPTIONS.keys():
+            edu = fixed_content.build_education({"University of Kansas": ku_key})
+            self.assertEqual(len(edu), 3)
+            # The selected achievement is the second bullet for this school
+            expected_bullet = fixed_content.KU_ACHIEVEMENT_OPTIONS[ku_key]
+            self.assertEqual(edu[0]["bullets"][1], expected_bullet)
+
+    def test_all_kckcc_achievement_options_are_valid(self):
+        """Test that all KCKCC achievement options produce valid education entries."""
+        for kckcc_key in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.keys():
+            edu = fixed_content.build_education(
+                {"Kansas City Kansas Community College": kckcc_key}
+            )
+            self.assertEqual(len(edu), 3)
+            # The selected achievement is the second bullet for this school
+            expected_bullet = fixed_content.KCKCC_ACHIEVEMENT_OPTIONS[kckcc_key]
+            self.assertEqual(edu[1]["bullets"][1], expected_bullet)
+
+
+class TestFixedContentConstantConsistency(unittest.TestCase):
+    """Ensure constants in fixed_content are internally consistent across structures."""
+
+    def test_company_title_descriptor_references_exist(self):
+        """Test that all companies in COMPANY_TITLE_DESCRIPTOR exist in COMPANY_META."""
+        for company_name in fixed_content.COMPANY_TITLE_DESCRIPTOR.keys():
+            self.assertIn(
+                company_name,
+                fixed_content.COMPANY_META,
+                f"'{company_name}' in COMPANY_TITLE_DESCRIPTOR must also be in COMPANY_META"
+            )
+
+    def test_company_rename_note_references_exist(self):
+        """Test that all companies in COMPANY_RENAME_NOTE exist in COMPANY_META."""
+        for company_name in fixed_content.COMPANY_RENAME_NOTE.keys():
+            self.assertIn(
+                company_name,
+                fixed_content.COMPANY_META,
+                f"'{company_name}' in COMPANY_RENAME_NOTE must also be in COMPANY_META"
+            )
+
+    def test_company_fixed_title_references_exist(self):
+        """Test that all companies in COMPANY_FIXED_TITLE exist in COMPANY_META."""
+        for company_name in fixed_content.COMPANY_FIXED_TITLE.keys():
+            self.assertIn(
+                company_name,
+                fixed_content.COMPANY_META,
+                f"'{company_name}' in COMPANY_FIXED_TITLE must also be in COMPANY_META"
+            )
+
+    def test_clients_references_exist(self):
+        """Test that all companies in CLIENTS exist in COMPANY_META."""
+        for company_name in fixed_content.CLIENTS.keys():
+            self.assertIn(
+                company_name,
+                fixed_content.COMPANY_META,
+                f"'{company_name}' in CLIENTS must also be in COMPANY_META"
+            )
+
+    def test_cv_section_keywords_references_exist(self):
+        """Test that all companies in CV_SECTION_KEYWORDS exist in COMPANY_META."""
+        for keywords, company_name in fixed_content.CV_SECTION_KEYWORDS:
+            # CV_SECTION_KEYWORDS stores exact company names from COMPANY_META
+            self.assertIn(
+                company_name,
+                fixed_content.COMPANY_META,
+                f"'{company_name}' referenced in CV_SECTION_KEYWORDS must exist in COMPANY_META"
+            )
+
+    def test_career_note_company_exists(self):
+        """Test that CAREER_NOTE_COMPANY (if set) exists in COMPANY_META."""
+        if fixed_content.CAREER_NOTE_COMPANY:  # Empty string means no career note
+            self.assertIn(
+                fixed_content.CAREER_NOTE_COMPANY,
+                fixed_content.COMPANY_META,
+                f"CAREER_NOTE_COMPANY '{fixed_content.CAREER_NOTE_COMPANY}' "
+                f"must exist in COMPANY_META"
+            )
+
+    def test_contact_info_has_required_fields(self):
+        """Test CONTACT_INFO has all required fields and non-empty values."""
+        required_fields = {"NAME", "PHONE", "EMAIL", "LINKEDIN_DISPLAY", "LOCATION"}
+        self.assertTrue(
+            required_fields.issubset(fixed_content.CONTACT_INFO.keys()),
+            f"CONTACT_INFO missing fields: {required_fields - set(fixed_content.CONTACT_INFO.keys())}"
+        )
+
+        for field in required_fields:
+            self.assertTrue(
+                len(fixed_content.CONTACT_INFO[field]) > 0,
+                f"CONTACT_INFO['{field}'] is empty"
+            )
+
+    def test_certifications_structure_is_valid(self):
+        """Test that CERTIFICATIONS entries have correct structure and content."""
+        for cert in fixed_content.CERTIFICATIONS:
+            required_keys = {"title", "org", "year"}
+            self.assertTrue(
+                required_keys.issubset(cert.keys()),
+                f"Certification missing keys. Got {cert.keys()}"
+            )
+            self.assertTrue(len(cert["title"]) > 0, "Certification title cannot be empty")
+            self.assertTrue(len(cert["org"]) > 0, "Certification org cannot be empty")
+
+    def test_background_identity_populated(self):
+        """Test that BACKGROUND_IDENTITY has substantive content."""
+        self.assertTrue(
+            len(fixed_content.BACKGROUND_IDENTITY) > 50,
+            "BACKGROUND_IDENTITY should have substantive content"
+        )
+
+    def test_background_tags_all_populated(self):
+        """Test that all BACKGROUND_TAGS entries have substantive content."""
+        for tag, content in fixed_content.BACKGROUND_TAGS.items():
+            self.assertTrue(
+                len(content) > 20,
+                f"BACKGROUND_TAGS['{tag}'] content too short: {len(content)} chars"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
