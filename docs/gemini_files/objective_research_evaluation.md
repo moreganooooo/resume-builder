@@ -54,7 +54,7 @@ Below is an objective, highly realistic engineering assessment of which parts of
 
 ### B. Semantic Job Matching & Reranking (SCALE)
 * **What the research suggests**: Installing local deep-learning models (`Sentence-Transformers`, `HuggingFace Transformers`, `Ollama`) and setting up local vector indexes (`FAISS`) to embed and rank saved jobs.
-* **The Reality Check**: This is a classic "dependency trap." Installing `torch`, `sentence-transformers`, and `FAISS` on your Mac/Android devices will add **gigabytes** of bloat to your environment, slow down your CLI cold starts to several seconds, and drain mobile battery life. 
+* **The Reality Check**: This is a classic "dependency trap." Installing `torch`, `sentence-transformers`, and `FAISS` on your Mac/Android devices will add **gigabytes** of bloat to your environment, slow down your CLI cold starts to several seconds, and drain mobile battery life.
 * **The Smart Adaptation**:
   - You do *not* need local deep learning. You are already using the Gemini API.
   - When scanning or importing a list of job descriptions, execute asynchronous, lightweight batch calls to the Gemini-Flash embedding endpoint (or use a tiny, lightning-fast library like `RapidFuzz` for title/keyword matches).
@@ -66,14 +66,14 @@ Below is an objective, highly realistic engineering assessment of which parts of
 
 ### A. Local MCP SSE / JSON-Patch Server Architecture
 * **What the research suggests**: Re-implementing JobRight's headless Model Context Protocol (MCP) server endpoint (`https://mcp.jobright.ai/mcp`) locally over Server-Sent Events (SSE) and applying edits via RFC-6902 styled JSON patches (`indexPath`, `action`, `value`).
-* **The Reality Check**: **Discard this immediately.** JobRight built an MCP SSE server because their AI engine lives in the cloud and needs a secure, structured way to interact with client-side files and web-extension interfaces. 
+* **The Reality Check**: **Discard this immediately.** JobRight built an MCP SSE server because their AI engine lives in the cloud and needs a secure, structured way to interact with client-side files and web-extension interfaces.
 * **Why it hurts your project**: You have a fully local Python and Go codebase. Forcing yourself to run a persistent background web server that communicates via HTTP Server-Sent Events and applies nested JSON patches is massive architectural over-engineering. It introduces file-concurrency locks, state-sync issues, and security boundaries that only serve to make debugging your code a nightmare. Keep your data manipulations in simple, direct local file operations.
 
 ---
 
 ## ⚡ ADHD-Friendly, Frictionless UX Alignment
 
-As a personalized career operations pipeline, your system’s biggest risk is **cognitive fatigue**. Traditional resume checkers overwhelm you with a massive firehose of red circles, low percentages, and warning boxes. 
+As a personalized career operations pipeline, your system’s biggest risk is **cognitive fatigue**. Traditional resume checkers overwhelm you with a massive firehose of red circles, low percentages, and warning boxes.
 
 To keep this tool inspiring and highly useful, we suggest adopting a **"Progressive Disclosure" UX**:
 1. **The Quick Wins View**: In your Go dashboard's progress panel, show exactly **three key missing skills** at a time. Do not show fifty. Focus on the high-weight gaps.
@@ -100,7 +100,7 @@ gantt
 ```
 
 1. **Milestone 1 (Liveness & Safety Check)**: Add the `pdfminer.six` extraction checker to your `validate_resume.py` pipeline. This gives you instant safety guarantees that every PDF rendered is actually readable.
-2. **Milestone 2 (The Gap Matrix)**: Update your `evaluate` and `tailor` scripts to generate and store the `coverage_matrix` JSON in your `jd_manager.py` state. 
+2. **Milestone 2 (The Gap Matrix)**: Update your `evaluate` and `tailor` scripts to generate and store the `coverage_matrix` JSON in your `jd_manager.py` state.
 3. **Milestone 3 (Base Switching)**: Create the `profiles/default/base_resumes/` folder structure, and let the orchestrator copy the closest matching file before running its tailoring loop.
 
 ---

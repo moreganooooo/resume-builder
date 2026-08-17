@@ -47,10 +47,10 @@ Major ATS platforms (Workday, Greenhouse, iCIMS, SAP, Lever, Oracle) **do not** 
 ### 6. **Content Generation Formulas**
 Top platforms use multi-layered approaches:
 ```
-Job Description → Keyword Extraction + Semantic Analysis → 
-User Profile (skills, experience, goals) → 
-Content Generation (LLM + templates + industry best practices) → 
-Scoring (ATS alignment, readability, impact) → 
+Job Description → Keyword Extraction + Semantic Analysis →
+User Profile (skills, experience, goals) →
+Content Generation (LLM + templates + industry best practices) →
+Scoring (ATS alignment, readability, impact) →
 Iterative Refinement (user feedback loop)
 ```
 - **Enhancv:** 2M resume dataset + GPT-4, 27-point profile checker
@@ -99,14 +99,14 @@ Iterative Refinement (user feedback loop)
 
 #### **BeamJobs** - Best Overall AI Builder
 - **Verdict:** Clear leader for 2026, ideal balance of user control and AI intelligence
-- **Content Generation:** 
+- **Content Generation:**
   - Bullet point generation with **specific improvement suggestions** and scoring
   - AI pulls from work history, skills, and job targets
   - Creates **personalized** content (not generic text generation)
   - Strong active verbs, natural metric integration, varied sentence structure
 - **ATS Optimization:** 9 carefully curated templates, all ATS-compatible
 - **User Experience:** Seamless onboarding, real-time editing, Google Doc-like interface
-- **Differentiators:** 
+- **Differentiators:**
   - Shows **exactly how much stronger** resume becomes with each change
   - Free tier provides genuine value without account creation
   - 4.9/5 Trustpilot rating, 1-day customer support response
@@ -114,12 +114,12 @@ Iterative Refinement (user feedback loop)
 
 #### **Resume Optimizer Pro** - ATS Optimization Leader
 - **Verdict:** Highest parser accuracy for enterprise ATS systems
-- **ATS Performance:** 
+- **ATS Performance:**
   - 98% Workday parser score
   - 97% Greenhouse parser score
   - 95% Rezi (Workday)
   - 93% Jobscan Builder (Workday)
-- **Technical Approach:** 
+- **Technical Approach:**
   - Enforces **single-column structure**
   - Clean DOCX export
   - Live keyword matching against job descriptions
@@ -128,7 +128,7 @@ Iterative Refinement (user feedback loop)
 
 #### **Resumeble** - Human-Led Service Champion
 - **Verdict:** Best for personalized, high-touch resume writing
-- **Success Metrics:** 
+- **Success Metrics:**
   - **98.4% interview success rate** (clients land interviews within 30 days)
   - A+ BBB rating
   - 4.8/5 average customer rating
@@ -138,7 +138,7 @@ Iterative Refinement (user feedback loop)
   - One-on-one meetings, draft review, feedback incorporation
   - 4-day typical turnaround
 - **ATS Focus:** All resumes optimized for ATS systems
-- **Guarantees:** 
+- **Guarantees:**
   - Interview guarantee (Professional tier+)
   - Job offer guarantee (Executive Pro tier only)
 - **Pricing:** $157 (Standard) to $597 (Executive Pro)
@@ -327,7 +327,7 @@ Most platforms use variations of the **STAR method**:
 ```
 Input: Job description + User's work experience
 → Extract: Required skills, keywords, achievement patterns
-→ Generate: 
+→ Generate:
   - Action verb (from power verb database)
   + Quantifiable metric (from user data or industry benchmarks)
   + Context (situation/task from job description)
@@ -366,9 +366,9 @@ Input: Job description + User's work experience
 ##### **Professional Summary Generation**
 **Formula:**
 ```
-[Professional Title] with [X] years of experience in [Industry/Field], 
-specializing in [Key Skills 1-3]. 
-Proven track record of [Quantifiable Achievement 1] and [Quantifiable Achievement 2]. 
+[Professional Title] with [X] years of experience in [Industry/Field],
+specializing in [Key Skills 1-3].
+Proven track record of [Quantifiable Achievement 1] and [Quantifiable Achievement 2].
 Passionate about [Industry-Relevant Interest] with expertise in [Specific Tools/Methodologies].
 ```
 

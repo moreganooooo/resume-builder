@@ -149,14 +149,16 @@ def build_experience_html(jobs: list[dict]) -> str:
             else ""
         )
 
-        html.append(f"""
+        html.append(
+            f"""
         <div class="job">
           <div class="job-title">{_preserve_arrow_glyph(escape(job.get("title","")))}</div>
           <div class="job-meta">{meta_line}</div>
           {clients}
           <ul>{bullets_html}</ul>
           {career_note}
-        </div>""")
+        </div>"""
+        )
     return "\n".join(html)
 
 
@@ -164,10 +166,12 @@ def build_certifications_html(certs: list[dict]) -> str:
     """Renders each certification as a single pipe-separated line: Title | Org | Year."""
     html = []
     for c in certs:
-        html.append(f"""
+        html.append(
+            f"""
         <div class="cert-item">
           <span class="cert-title">{escape(c.get("title",""))}</span><span class="cert-sep">|</span><span class="cert-org">{escape(c.get("org",""))}</span><span class="cert-sep">|</span><span class="cert-year">{escape(c.get("year",""))}</span>
-        </div>""")
+        </div>"""
+        )
     return "\n".join(html)
 
 
@@ -232,12 +236,14 @@ def build_education_html(edu: list[dict]) -> str:
             if p
         ]
         meta_line = f" {sep} ".join(meta_parts)
-        html.append(f"""
+        html.append(
+            f"""
         <div class="edu-item">
           <div class="edu-header"><span class="edu-title">{escape(e.get("degree",""))}</span>{sep}<span class="edu-meta-text">{meta_line}</span></div>
           {desc}
           {bullets_html}
-        </div>""")
+        </div>"""
+        )
     return "\n".join(html)
 
 

@@ -1,9 +1,9 @@
 # 💎 RESUME-BUILDER
 ### The job-search pipeline that actually reads the room. ✨
 
-Not a "type in your job title, get a generic ChatGPT resume" toy. This is an ultra-premium, full-stack career operations pipeline built because I was tired of every AI resume tool doing exactly one of those steps badly and calling it a product. 
+Not a "type in your job title, get a generic ChatGPT resume" toy. This is an ultra-premium, full-stack career operations pipeline built because I was tired of every AI resume tool doing exactly one of those steps badly and calling it a product.
 
-This system **scans** real postings, **verifies** they're still active, **scores** your actual fit and ATS odds against a 10-dimensional rubric, **tailors** a resume and cover letter in your own distinct writing voice, **renders** a punishingly ATS-clean vector PDF, and **tracks** your applications. 
+This system **scans** real postings, **verifies** they're still active, **scores** your actual fit and ATS odds against a 10-dimensional rubric, **tailors** a resume and cover letter in your own distinct writing voice, **renders** a punishingly ATS-clean vector PDF, and **tracks** your applications.
 
 Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Terminal User Interface (TUI) on both your **Desktop computer** and **Android Linux Mobile (Google Pixel 10)**.
 
@@ -51,14 +51,14 @@ Most resume builders write in generic "AI-beige" jargon. We hate that.
 
 
 ### 🏢 Behind-The-Scenes Company Research
-When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages. 
+When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages.
 * It extracts their core business register and corporate culture.
-* It dynamically injects this context into your Resume Summary and Cover Letter's "Why this company" sections. 
+* It dynamically injects this context into your Resume Summary and Cover Letter's "Why this company" sections.
 * **The result:** A warm, values-driven tone-match for non-profit and mission-driven orgs, and a highly polished, crisp, metrics-focused tone-match for B2B SaaS companies.
 
 ### 🧹 Liveness Checks & The Staleness Sweep
-Job boards are notorious for keeping filled or dead listings active to inflate their traffic. 
-* Running **`resume liveness`** triggers non-blocking background HTTP requests directly to the listing's target URL. 
+Job boards are notorious for keeping filled or dead listings active to inflate their traffic.
+* Running **`resume liveness`** triggers non-blocking background HTTP requests directly to the listing's target URL.
 * Any listing that fails (returning a 404, redirecting to a generic search home, or closing registration) is automatically archived to your profile's `expired/` directory, sweeping out stale entries and keeping your active queue 100% actionable.
 
 ### 🚫 It Cannot Lie About You

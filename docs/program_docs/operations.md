@@ -10,7 +10,7 @@ To launch your central visual mission control, simply type:
 ```bash
 resume
 ```
-This loads our high-fidelity, Bubble Tea-based terminal dashboard, styled in a sleek Catppuccin color scheme. 
+This loads our high-fidelity, Bubble Tea-based terminal dashboard, styled in a sleek Catppuccin color scheme.
 
 ### Dashboard Sections & Features:
 1. **Pipeline Checkpoints:** Track where every single job posting sits in your queue—from *Newly Scanned* to *Evaluated*, *Tailored*, *Applied*, and *Followed Up*.
@@ -32,9 +32,9 @@ Our aggregator is designed to sweep multiple public and private channels simulta
 * **Customizing Search Queries:** In-program forms let you add, edit, or delete job board configurations, custom search queries, and keywords without opening a text editor.
 
 ### 🟢 Liveness Checks & The Staleness Sweep:
-Job boards are notorious for keeping filled or dead listings active to inflate their numbers. 
+Job boards are notorious for keeping filled or dead listings active to inflate their numbers.
 * To verify a posting's status, run **`resume liveness`**.
-* The program executes non-blocking background HTTP requests directly to the listing's target URL. 
+* The program executes non-blocking background HTTP requests directly to the listing's target URL.
 * Any listing that fails (returning a 404, redirecting to a generic search home, or closing registration) is automatically archived to your profile's `expired/` directory, sweeping out stale entries and keeping your active queue 100% actionable.
 
 ---
@@ -90,7 +90,7 @@ This program gets smarter about you the more you use it. It is designed as a sec
   * Every bullet point lives in your audited bank (`bullet-bank-keepers-audited.csv`).
   * If the AI suggests a beautiful, high-impact phrasing during a tailoring run and you approve it, that customized line is automatically queued back into your profile's "Keepers" database as an approved achievement.
   * Your bullet bank is a living, breathing asset that automatically compounds, refines, and expands with every single build!
-* **Interactive Profile Skills CLI Dashboard (`verified_tools.json`):** 
+* **Interactive Profile Skills CLI Dashboard (`verified_tools.json`):**
   * Under `Settings & Upkeep -> View & Manage Profile Skills`, a custom CLI dashboard displays your verified skills/tools grouped elegantly by category with confidence rating meters.
   * Supports full, atomic-write CLI CRUD operations (Add, Edit, Delete, View Detail) ensuring data consistency under `verified_tools.json` so your skills profile stays instantly updated as you learn new technologies.
 
@@ -99,9 +99,9 @@ This program gets smarter about you the more you use it. It is designed as a sec
 ## 🎭 5. Deep Company Research & Writing Voice Cloning
 
 ### 🔍 Behind-The-Scenes Company Research:
-When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages. 
+When you process a job description, if the scraper extracts a company URL, a background research agent immediately sweeps their About Us, Mission, Values, and Product pages.
 * It extracts their core business register and corporate culture.
-* It dynamically injects this context into your Resume Summary and Cover Letter's "Why this company" sections. 
+* It dynamically injects this context into your Resume Summary and Cover Letter's "Why this company" sections.
 * **Semantic Vocabulary Translation:** Preferred vocabulary substitutions (e.g. `customers -> guests`) are injected directly into the LLM bullet rewrite context during Step 3, replacing old post-hoc regex matches with semantic, grammatically perfect sentence layouts in the model's native translation step.
 * **The result:** A warm, values-driven tone-match for non-profit and mission-driven orgs, and a highly polished, crisp, metrics-focused tone-match for sharp B2B SaaS companies.
 
@@ -145,4 +145,3 @@ We implemented an advanced, multi-dimensional technical upgrade to guarantee tha
 5. **Proud Career Break Calibrator:** Automated timeline gap engine in `scripts/normalize_resume.py` that detects employment gaps >3 months and programmatically constructs a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity flags.
 6. **Transferable Skills Translation Matrix:** Direct reframing matrix embedded in `tailor_resume.md` that guides the LLM to translate raw historical tasks (e.g. blog posts, classroom tutoring, administrative tracking) into sophisticated archetype vocabulary without ever fabricating or exaggerating raw metrics.
 7. **Single-Column Layout & ATS Ligature Safeguards:** Enforces clean, semantic single-column rendering with static DM Sans fonts and explicit zero-ligature flags (`font-variant-ligatures: none`), guaranteeing 100% text extraction accuracy across Workday, Greenhouse, and Lever parsers.
-

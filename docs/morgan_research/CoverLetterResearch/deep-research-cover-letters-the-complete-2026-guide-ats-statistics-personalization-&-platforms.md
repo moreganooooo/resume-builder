@@ -788,7 +788,7 @@ Sincerely,
 ```
 Can you write a tailored letter in 15 minutes?
 ├── Yes → Write it (53% callback lift)
-└── No → 
+└── No →
     ├── Is it a quick-apply form with no upload field? → Skip it
     ├── Can you tailor it at all? → No → Skip it
     └── Yes → Write a tailored letter

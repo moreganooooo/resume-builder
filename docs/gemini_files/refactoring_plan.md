@@ -295,4 +295,3 @@
 - [x] **#18 Cross-Platform:** Operable directly on macOS, Linux, and Windows.
 - [x] **#19 Multi-Machine Sync:** Configured `PRAGMA journal_mode=WAL;` and Syncthing `.stignore` rules (`data.db-wal`, `data.db-shm`, `*.lock`).
 - [x] **#20 Storage & Sync:** Atomic single-source-of-truth database operations.
-

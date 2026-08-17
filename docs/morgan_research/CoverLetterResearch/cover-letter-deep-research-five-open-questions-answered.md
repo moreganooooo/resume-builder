@@ -171,7 +171,7 @@ A Zoevera analysis breaks cover letter effectiveness into five components:
 
 ### What is the current accuracy of AI detection for AI-generated cover letters?
 
-**Direct Answer:** **39% of hiring managers would reject a candidate if they suspected the cover letter was AI-generated without human editing**, while **AI-generated cover letters achieve 87% ATS compatibility vs. 72% for manually written** and **increase ATS relevance scores by 34%**. 
+**Direct Answer:** **39% of hiring managers would reject a candidate if they suspected the cover letter was AI-generated without human editing**, while **AI-generated cover letters achieve 87% ATS compatibility vs. 72% for manually written** and **increase ATS relevance scores by 34%**.
 
 ### AI vs. Human Performance
 

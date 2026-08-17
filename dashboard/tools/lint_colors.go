@@ -164,4 +164,3 @@ func main() {
 		fmt.Println("Color linting passed: no hard-coded colors found.")
 	}
 }
-

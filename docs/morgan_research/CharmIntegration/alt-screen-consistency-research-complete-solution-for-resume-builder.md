@@ -217,12 +217,12 @@ func isTerminal() bool {
 
 func main() {
     opts := []tea.ProgramOption{}
-    
+
     // Only enable alt-screen if we have a real terminal
     if isTerminal() {
         opts = append(opts, tea.WithAltScreen())
     }
-    
+
     p := tea.NewProgram(model{}, opts...)
     if _, err := p.Run(); err != nil {
         log.Fatal(err)
@@ -462,32 +462,32 @@ from rich.live import Live
 
 class ScreenManager:
     """Manages alt-screen state for the application."""
-    
+
     def __init__(self):
         self.console = Console()
         self._screen_depth = 0
         self._active = False
-    
+
     def is_active(self) -> bool:
         """Check if any screen is currently active."""
         return self._active
-    
+
     @contextmanager
     def screen(self, renderable=None, **kwargs) -> Generator[Live, None, None]:
         """
         Context manager for alt-screen displays.
-        
+
         Usage:
             with screen_manager.screen(renderable) as live:
                 live.update("new content")
-        
+
         Args:
             renderable: Initial renderable to display
             **kwargs: Additional arguments passed to Live()
         """
         # Only enable screen if stdout is a TTY
         enable_screen = sys.stdout.isatty()
-        
+
         # Set default kwargs
         live_kwargs = {
             'screen': enable_screen,
@@ -496,14 +496,14 @@ class ScreenManager:
             'transient': False,
             **kwargs
         }
-        
+
         # If we're already in a screen, don't nest with another screen
         if self._active and enable_screen:
             live_kwargs['screen'] = False
-        
+
         self._screen_depth += 1
         self._active = True
-        
+
         try:
             with Live(renderable, console=self.console, **live_kwargs) as live:
                 yield live
@@ -531,7 +531,7 @@ from rich.text import Text
 def show_main_menu():
     """Display the main menu with alt-screen."""
     from rich.layout import Layout
-    
+
     # Create menu layout
     layout = Layout(name="root")
     layout.split(
@@ -539,12 +539,12 @@ def show_main_menu():
         Layout(name="menu", ratio=1),
         Layout(name="footer", size=3),
     )
-    
+
     # Update with content
     layout["header"].update(get_sparkle_banner())
     layout["menu"].update(Panel("[Main Menu Options]", title="Resume Builder"))
     layout["footer"].update(Text("Use arrow keys to navigate, Enter to select", style="dim"))
-    
+
     # Display with alt-screen
     with screen_manager.screen(layout) as live:
         # Handle menu navigation
@@ -590,18 +590,18 @@ import sys
 def run_go_program(args, use_pty=True):
     """
     Run a Go program with proper terminal handling.
-    
+
     Args:
         args: List of arguments for the Go program
         use_pty: If True, use pseudo-terminal for alt-screen support
-    
+
     Returns:
         subprocess.Popen object
     """
     if use_pty and sys.stdout.isatty():
         # Use PTY to ensure proper terminal
         master, slave = pty.openpty()
-        
+
         proc = subprocess.Popen(
             args,
             stdin=subprocess.PIPE,
@@ -610,10 +610,10 @@ def run_go_program(args, use_pty=True):
             close_fds=True,
             preexec_fn=os.setsid
         )
-        
+
         # Close the slave fd in the parent
         os.close(slave)
-        
+
         # Read from master in a separate thread
         import threading
         def read_output():
@@ -626,10 +626,10 @@ def run_go_program(args, use_pty=True):
                     sys.stdout.flush()
                 except:
                     break
-        
+
         thread = threading.Thread(target=read_output, daemon=True)
         thread.start()
-        
+
         return proc
     else:
         # Fall back to normal subprocess
@@ -650,7 +650,7 @@ package main
 import (
     "os"
     "syscall"
-    
+
     tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -667,16 +667,16 @@ func main() {
     opts := []tea.ProgramOption{
         tea.WithAltScreen(),
     }
-    
+
     // Only use TTY if we're actually in a terminal
     // Bubble Tea will auto-detect stdin, but we need to check stdout
     if isTerminal() {
-        opts = append(opts, 
+        opts = append(opts,
             tea.WithInputTTY(),
             tea.WithOutputTTY(),
         )
     }
-    
+
     p := tea.NewProgram(initialModel(), opts...)
     if _, err := p.Run(); err != nil {
         os.Exit(1)
@@ -700,22 +700,22 @@ func main() {
 
 class ScreenStack:
     """Manages a stack of screens for nested navigation."""
-    
+
     def __init__(self):
         self.stack = []
         self.screen_manager = ScreenManager()
-    
+
     def push(self, screen_name: str, renderable):
         """Push a new screen onto the stack."""
         self.stack.append((screen_name, renderable))
         self._render()
-    
+
     def pop(self):
         """Pop the current screen from the stack."""
         if self.stack:
             self.stack.pop()
         self._render()
-    
+
     def replace(self, screen_name: str, renderable):
         """Replace the current screen."""
         if self.stack:
@@ -723,14 +723,14 @@ class ScreenStack:
         else:
             self.stack.append((screen_name, renderable))
         self._render()
-    
+
     def _render(self):
         """Render the current screen."""
         if not self.stack:
             return
-        
+
         name, renderable = self.stack[-1]
-        
+
         # Use screen manager to display
         with self.screen_manager.screen(renderable) as live:
             # This would need to be async to handle input
@@ -814,7 +814,7 @@ from rich import box
 def create_menu_layout(selected_index: int, menu_items: list) -> Layout:
     """Create the menu layout."""
     layout = Layout(name="root")
-    
+
     # Header with banner and logo
     header = Layout(name="header", size=6)
     header.split_row(
@@ -823,22 +823,22 @@ def create_menu_layout(selected_index: int, menu_items: list) -> Layout:
     )
     header["logo"].update(Panel(get_logo(), border_style="blue"))
     header["banner"].update(get_sparkle_banner())
-    
+
     # Menu items
     menu_layout = Layout(name="menu", ratio=1)
     menu_content = []
     for i, (label, _) in enumerate(menu_items):
         style = "bold cyan" if i == selected_index else "dim"
         menu_content.append(f"[{style}]{i+1}. {label}[/]")
-    menu_layout.update(Panel("\n".join(menu_content), 
+    menu_layout.update(Panel("\n".join(menu_content),
                             title="[bold]Main Menu[/bold]",
                             border_style="blue",
                             box=box.ROUNDED))
-    
+
     # Footer
     footer = Layout(name="footer", size=3)
     footer.update(Text("↑↓ Navigate  Enter Select  q Quit", style="dim"))
-    
+
     layout.split(header, menu_layout, footer)
     return layout
 
@@ -852,21 +852,21 @@ def show_main_menu():
         ("About", "about"),
         ("Quit", "quit"),
     ]
-    
+
     selected = 0
-    
+
     with screen_manager.screen(create_menu_layout(selected, menu_items)) as live:
         while True:
             # Get user input (you'll need to implement this)
             # For now, we'll use a simple approach
-            
+
             # Update layout with current selection
             live.update(create_menu_layout(selected, menu_items))
-            
+
             # Handle input - this would use your existing input handling
             # For example, using keyboard input:
             key = get_key_press()  # You need to implement this
-            
+
             if key == "down" or key == "j":
                 selected = (selected + 1) % len(menu_items)
             elif key == "up" or key == "k":
@@ -893,20 +893,20 @@ package main
 
 import (
     "os"
-    
+
     tea "github.com/charmbracelet/bubbletea"
 )
 
 func isTerminal() bool {
     // Check if we're running in a terminal
     // This is a simplified check - you may want to enhance it
-    
+
     // Check if stdout is a character device
     stat, err := os.Stat("/dev/tty")
     if err != nil {
         return false
     }
-    
+
     return stat.Mode()&os.ModeCharDevice != 0
 }
 
@@ -914,7 +914,7 @@ func main() {
     opts := []tea.ProgramOption{
         tea.WithAltScreen(),
     }
-    
+
     // If we're in a real terminal, force TTY allocation
     // This ensures alt-screen works even when called from subprocess
     if isTerminal() {
@@ -923,12 +923,12 @@ func main() {
             tea.WithOutputTTY(),
         )
     }
-    
+
     p := tea.NewProgram(initialModel(), opts...)
-    
+
     // Enable mouse support (since you're adding Bubblezone anyway)
     p.EnableMouseCellMotion()
-    
+
     if _, err := p.Run(); err != nil {
         os.Exit(1)
     }
