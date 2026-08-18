@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
@@ -560,4 +561,81 @@ func renderThickProgress(p progress.Model, theme theme.Theme, thickness int) str
 		lines = append(lines, single)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ToastNotification manages brief popup feedback for user actions.
+type ToastNotification struct {
+	icon      string
+	message   string
+	visible   bool
+	seconds   int
+	particles *anim.ConfettiEngine
+}
+
+// NewToastNotification creates a new toast notification component.
+func NewToastNotification() *ToastNotification {
+	return &ToastNotification{
+		particles: anim.NewConfettiEngine(80, 24),
+	}
+}
+
+// Visible returns whether the toast is actively being displayed.
+func (t *ToastNotification) Visible() bool {
+	return t.visible
+}
+
+// Show activates the toast message with an icon and duration in seconds.
+func (t *ToastNotification) Show(icon, msg string, seconds int) {
+	t.icon = icon
+	t.message = msg
+	t.visible = true
+	t.seconds = seconds
+	if t.particles != nil {
+		t.particles.Emit(40, 10, 25)
+	}
+}
+
+// Hide clears the toast message immediately.
+func (t *ToastNotification) Hide() {
+	t.visible = false
+	t.seconds = 0
+	if t.particles != nil {
+		t.particles.Clear()
+	}
+}
+
+// TickSecond decreases the remaining display time by one second.
+func (t *ToastNotification) TickSecond() {
+	if !t.visible {
+		return
+	}
+	t.seconds--
+	if t.seconds <= 0 {
+		t.Hide()
+	}
+}
+
+// Update advances the particle physics of any associated confetti.
+func (t *ToastNotification) Update() bool {
+	if t.particles != nil && t.particles.Active() {
+		return t.particles.Update()
+	}
+	return false
+}
+
+// Render formats the toast box centered in the available width.
+func (t *ToastNotification) Render(th theme.Theme, width int) string {
+	if !t.visible {
+		return ""
+	}
+	style := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(th.Base).
+		Background(th.Mauve).
+		Padding(0, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(th.Pink)
+
+	text := fmt.Sprintf("%s %s", t.icon, t.message)
+	return lipgloss.PlaceHorizontal(width, lipgloss.Center, style.Render(text))
 }

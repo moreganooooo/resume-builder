@@ -45,6 +45,7 @@ import html
 import logging
 import os
 import time
+import urllib.parse
 
 import cli_art
 import profile_paths
@@ -57,10 +58,53 @@ import yaml
 # that needs real inter-call pacing (see B26, docs/review/phase-9-backlog.md).
 _WEBSEARCH_MIN_GAP_SECONDS = 1.0
 
-# Mirrors board-scanners/providers/_recognition.mjs's RECOGNITION_RULES,
-# trimmed to only the providers actually vendored here (career-ops's list
-# also has bamboohr/jobvite/icims/jazzhr, which have no provider module
-# in this repo -- an entry matching one of those just won't resolve).
+# Tracking parameters stripped during URL canonicalization
+_TRACKING_QUERY_PARAMS = frozenset(
+    {
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "gh_src",
+        "gh_jid",
+        "lever-origin",
+        "lever-source",
+        "source",
+        "ref",
+        "sessionid",
+        "subid",
+        "fbclid",
+        "gclid",
+        "trk",
+        "trackingid",
+        "refid",
+        "spm",
+        "source_type",
+        "src",
+    }
+)
+
+
+def canonicalize_job_url(url: str) -> str:
+    """Strips tracking, referral, and session parameters from a job posting URL."""
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+        query_params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        filtered_params = [
+            (k, v) for k, v in query_params if k.lower() not in _TRACKING_QUERY_PARAMS
+        ]
+        new_query = urllib.parse.urlencode(filtered_params)
+        clean = parsed._replace(query=new_query, fragment="")
+        res = clean.geturl()
+        return res[:-1] if res.endswith("?") else res
+    except Exception:
+        return url.strip()
+
+
+# Recognition rules mapping provider IDs to host/domain fragments
 _ATS_HOST_PATTERNS = [
     ("greenhouse", "greenhouse.io"),
     ("ashby", "ashbyhq.com"),
@@ -71,6 +115,11 @@ _ATS_HOST_PATTERNS = [
     ("workday", "myworkdayjobs.com"),
     ("taleo", "taleo.net"),
     ("rippling", "ats.rippling.com"),
+    ("bamboohr", "bamboohr.com"),
+    ("jobvite", "jobvite.com"),
+    ("icims", "icims.com"),
+    ("linkedin", "linkedin.com/jobs"),
+    ("indeed", "indeed.com"),
 ]
 
 
@@ -87,10 +136,15 @@ _ATS_PROVIDER_IDS = frozenset(provider_id for provider_id, _ in _ATS_HOST_PATTER
 _ATS_WEIGHT_TIERS = {
     "workday": "enterprise_high",
     "taleo": "enterprise_high",
+    "icims": "enterprise_high",
     "rippling": "ai_prescreened",
     "greenhouse": "startup_zero",
     "lever": "startup_zero",
     "ashby": "evidence_based",
+    "smartrecruiters": "standard",
+    "workable": "standard",
+    "bamboohr": "standard",
+    "jobvite": "standard",
 }
 
 
@@ -147,7 +201,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     search_queries loops in fetch_ats_jobs() share exactly one copy of
     it."""
     title = html.unescape((raw.get("title") or "").strip())
-    url = raw.get("url") or ""
+    raw_url = raw.get("url") or ""
+    url = canonicalize_job_url(raw_url)
     if not title or not url or title.startswith(("http://", "https://")):
         return None
     if not scan_boards._passes_title_filter(title):
