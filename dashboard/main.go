@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -99,13 +100,24 @@ func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 	return m, tickTransition()
 }
 
+func isMobileTerminal() bool {
+	return os.Getenv("TERMUX_VERSION") != "" || os.Getenv("RESUME_BUILDER_MOBILE") == "1" || os.Getenv("RESUME_BUILDER_COMPACT") == "1"
+}
+
 // renderScreen is the undecorated View() for the current state -- shared
 // by View() itself and by the transition tick handler (which needs the
 // incoming screen's line count as the reveal's target, without recursing
 // through View()'s own reveal-clamping logic).
 func (m appModel) renderScreen() string {
-	if m.width > 0 && m.height > 0 && (m.width < 80 || m.height < 24) {
-		return renderCompactWarning(m.theme, m.width, m.height)
+	minWidth := 80
+	minHeight := 24
+	if isMobileTerminal() {
+		minWidth = 35
+		minHeight = 12
+	}
+
+	if m.width > 0 && m.height > 0 && (m.width < minWidth || m.height < minHeight) {
+		return renderCompactWarning(m.theme, m.width, m.height, minWidth, minHeight)
 	}
 
 	switch m.state {
@@ -124,14 +136,14 @@ func (m appModel) renderScreen() string {
 	}
 }
 
-func renderCompactWarning(t theme.Theme, width, height int) string {
+func renderCompactWarning(t theme.Theme, width, height, minWidth, minHeight int) string {
 	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Peach)
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve)
 	descStyle := lipgloss.NewStyle().Foreground(t.Subtext)
 	dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
 
 	title := titleStyle.Render("┃ TERMINAL WINDOW TOO COMPACT")
-	sizeLine := fmt.Sprintf("Current size: %dx%d  Minimum required: 80x24", width, height)
+	sizeLine := fmt.Sprintf("Current size: %dx%d  Minimum required: %dx%d", width, height, minWidth, minHeight)
 	instruction := descStyle.Render("Please expand or zoom out your terminal window to resume.")
 
 	box := lipgloss.NewStyle().

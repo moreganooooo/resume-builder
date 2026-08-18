@@ -30,6 +30,7 @@ audit-rewrite-queue.csv
 data/applications.md
 data/**/applications.md
 output/
+artifacts/
 logs/
 *.log
 

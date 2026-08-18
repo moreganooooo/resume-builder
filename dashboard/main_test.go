@@ -59,3 +59,28 @@ func TestAppModel_KBTransition(t *testing.T) {
 		t.Errorf("expected state to return to viewMenu, got %v", m.state)
 	}
 }
+
+func TestAppModel_MobileTerminal(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	app := appModel{
+		theme:  th,
+		width:  45,
+		height: 20,
+		state:  viewMenu,
+		menu:   menu.NewMenuModel(th),
+	}
+
+	// In desktop mode (default), 45x20 triggers compact warning
+	desktopView := ansi.Strip(app.renderScreen())
+	if !strings.Contains(desktopView, "TERMINAL WINDOW") || !strings.Contains(desktopView, "TOO COMPACT") {
+		t.Errorf("expected 45x20 to trigger compact warning in desktop mode, got:\n%s", desktopView)
+	}
+
+	// In mobile mode, 45x20 is accepted and renders menu
+	t.Setenv("RESUME_BUILDER_MOBILE", "1")
+	mobileView := ansi.Strip(app.renderScreen())
+	if strings.Contains(mobileView, "TERMINAL WINDOW") {
+		t.Errorf("expected 45x20 to NOT trigger compact warning in mobile mode, got:\n%s", mobileView)
+	}
+}
+
