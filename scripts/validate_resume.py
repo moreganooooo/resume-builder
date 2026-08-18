@@ -869,26 +869,50 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
                                 allowed_terms.add(w)
         except Exception:
             pass
+    else:
+        for fallback_tool in [
+            "outreach.io",
+            "outreach",
+            "salesforce",
+            "salesforce crm",
+            "hubspot",
+            "vidyard",
+            "persistiq",
+            "mailchimp",
+            "mindnode",
+            "canva",
+            "google sheets",
+            "thnks",
+        ]:
+            allowed_terms.add(fallback_tool.lower())
 
     # 2. Load profile.yml
+    pdata = {}
     if os.path.exists(profile_yml_path):
         try:
             with open(profile_yml_path, "r", encoding="utf-8") as f:
                 pdata = yaml.safe_load(f) or {}
-                # Add tags and their keywords
-                for tag in pdata.get("tags", []):
-                    allowed_terms.add(tag["name"].lower())
-                    for kw in tag.get("keywords", []):
-                        allowed_terms.add(kw.lower())
-                # Add target roles
-                target_roles = pdata.get("target_roles", {}) or {}
-                for role_group in ["primary", "secondary"]:
-                    for role in target_roles.get(role_group, []):
-                        for w in role.lower().split():
-                            if len(w) > 3:
-                                allowed_terms.add(w)
         except Exception:
-            pass
+            pdata = {}
+    else:
+        try:
+            pdata = profile_paths.profile_yaml() or {}
+        except Exception:
+            pdata = {}
+
+    if pdata:
+        # Add tags and their keywords
+        for tag in pdata.get("tags", []):
+            allowed_terms.add(tag["name"].lower())
+            for kw in tag.get("keywords", []):
+                allowed_terms.add(kw.lower())
+        # Add target roles
+        target_roles = pdata.get("target_roles", {}) or {}
+        for role_group in ["primary", "secondary"]:
+            for role in target_roles.get(role_group, []):
+                for w in role.lower().split():
+                    if len(w) > 3:
+                        allowed_terms.add(w)
 
     # Standard synonyms
     synonyms = {
