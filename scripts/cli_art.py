@@ -202,7 +202,11 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
     or when RESUME_BUILDER_MOTION=reduced, the same opt-out (and env var
     name) dashboard/main.go's reducedMotion() already offers for the Go
     side's screen-transition animation."""
-    if not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
+    if (
+        not console.is_terminal
+        or os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
+        or os.environ.get("CI") == "true"
+    ):
         console.print(render_frame(None))
         return
 
@@ -2028,12 +2032,19 @@ def thinking_status(message: str):
             idx += 1
             time.sleep(0.12)
 
-    status.start()
-    t = threading.Thread(target=update_gradient, daemon=True)
-    t.start()
-
     @contextlib.contextmanager
     def _runner():
+        if (
+            not console.is_terminal
+            or os.environ.get("CI") == "true"
+            or os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
+        ):
+            yield status
+            return
+
+        status.start()
+        t = threading.Thread(target=update_gradient, daemon=True)
+        t.start()
         try:
             yield status
         finally:
@@ -2169,6 +2180,16 @@ def display_success_celebration(title: str, subtitle: str) -> None:
         title=grad_title,
         title_align="center",
     )
+
+    if (
+        not console.is_terminal
+        or os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
+    ):
+        console.print()
+        console.print(panel)
+        console.print()
+        return
 
     sparkles = ["✨", "✦", "✧", "⭐", "🎉", "🔥", "💫", "💎"]
     sys.stdout.write("\x1b[?25l")  # Hide cursor
