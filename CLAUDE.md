@@ -38,22 +38,29 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   WSL2, which is POSIX) aren't actually protected against interleaved
   lines. Low real-world risk for a single-user CLI, but worth knowing if
   native-Windows support is ever load-bearing.
-- The interactive menu's icons default to Nerd Font glyphs — if your
+- The interactive menu and dashboard default to Catppuccin themes and Nerd Font glyphs — if your
   terminal doesn't have one active, set `RESUME_BUILDER_ICONS=unicode` in
   your shell profile (or before invoking `resume`) to fall back to plain
-  Unicode symbols.
+  Unicode symbols. For accessibility or reduced motion preferences, set
+  `RESUME_BUILDER_MOTION=reduced` to disable spring micro-animations. Theme
+  mode can be explicitly overridden with `RESUME_BUILDER_THEME=dark` or `light`.
 - API keys and source-specific secrets live in the active profile's own
   `.env` file (`profiles/<name>/.env`), not a shared project-root `.env`.
 - Multiple profiles can share one checkout (`profiles/<name>/`) —
   `RESUME_PROFILE` env var selects which one is active (defaults to
   `morgan` if unset). `scripts/profile_paths.py` is the single source of
   truth for every profile-scoped path; route new code through it rather
-  than hand-rolling a `profiles/<name>/...` join.
+  than hand-rolling a `profiles/<name>/...` join. The Go dashboard also
+  supports a direct CLI flag (`dashboard -profile <name>`) and displays the
+  active user profile and title in the main menu banner.
 - `resume doctor` is the fast way to check whether the whole environment
   (Python packages, Node/Playwright, API keys, fonts, KB files) is
   actually set up correctly, plus a real test-suite run — reach for it
   before manually debugging a "why isn't this working" environment issue.
-- `dashboard/` is a vendored Go module (Bubble Tea TUI, `resume dashboard`) — the one part of this repo not in Python. `scripts/dashboard.py` and `scripts/charm_prompt.py` dynamically pre-compile their Go binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`) on first launch for sub-millisecond execution (gitignored - never committed). They gracefully fall back to slow `go run` or Questionary prompts if Go is unavailable. Needs the Go toolchain installed for native execution.
+- `dashboard/` is a native Go module leveraging the Charmbracelet ecosystem (Bubble Tea v2, Lip Gloss v2, Glamour Markdown, Harmonica physics, and Huh forms, launched via `resume dashboard`).
+  - Pre-compilation: `scripts/dashboard.py` and `scripts/charm_prompt.py` dynamically compile their Go binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`) on first launch for sub-millisecond execution (gitignored - never committed). They gracefully fall back to slow `go run` or Questionary prompts if Go is unavailable.
+  - Interactive Screens: Includes Pipeline checkpoint tracker, Jobs accordion browser, Knowledge Base Explorer (`viewKB` for browsing tools, metrics, facts, and projects with Glamour-rendered markdown viewports and live substring filtering), Progress monitor with Bubbles progress bars, and Report view.
+  - Harmonica Physics & Responsive Viewport: Smooth spring-eased reveal animations and automatic terminal resize reflow with 80x24 minimum viewport warning cards.
 - **Multi-computer sync (Syncthing):** a profile's data can sync across
   machines via Syncthing, four independent folders per profile —
   `scripts/profile_paths.sync_roots(profile)` is the single source of
