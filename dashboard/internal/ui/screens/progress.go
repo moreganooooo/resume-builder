@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -65,45 +66,49 @@ func (m *ProgressModel) Resize(width, height int) {
 	m.clampScrollOffset()
 }
 
-// Update handles input for the progress screen. Resizing is not handled
-// here -- main.go's top-level WindowSizeMsg case calls Resize() directly
-// on the active screen before its own early-returns, so a
-// tea.WindowSizeMsg never actually reaches this Update() in the real app;
-// a case for it here was dead code (see viewer.go's Update for the same
-// pattern, already documented and cleaned up there).
+// Update handles input for the progress screen.
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		return m.handleKeyString(msg.String())
 	case tea.KeyMsg:
-		if m.showHelp {
-			switch msg.String() {
-			case "?", "esc", "q":
-				m.showHelp = false
-			}
-			return m, nil
+		return m.handleKeyString(msg.String())
+	}
+	return m, nil
+}
+
+func (m ProgressModel) handleKeyString(k string) (ProgressModel, tea.Cmd) {
+	if m.showHelp {
+		switch k {
+		case "?", "esc", "q":
+			m.showHelp = false
 		}
-		switch msg.String() {
-		case "?":
-			m.showHelp = true
-		case "q":
-			return m, func() tea.Msg { return ProgressClosedMsg{Quit: true} }
-		case "esc":
-			return m, func() tea.Msg { return ProgressClosedMsg{} }
-		case "down", "j":
-			m.scrollOffset++
-			m.clampScrollOffset()
-		case "up", "k":
-			if m.scrollOffset > 0 {
-				m.scrollOffset--
-			}
-		case "pgdown", "ctrl+d":
-			m.scrollOffset += m.height / 2
-			m.clampScrollOffset()
-		case "pgup", "ctrl+u":
-			m.scrollOffset -= m.height / 2
-			if m.scrollOffset < 0 {
-				m.scrollOffset = 0
-			}
+		return m, nil
+	}
+	switch k {
+	case "?":
+		m.showHelp = true
+	case "q":
+		return m, func() tea.Msg { return ProgressClosedMsg{Quit: true} }
+	case "esc":
+		return m, func() tea.Msg { return ProgressClosedMsg{} }
+	case "down", "j":
+		m.scrollOffset++
+		m.clampScrollOffset()
+	case "up", "k":
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
 		}
+	case "pgdown", "ctrl+d":
+		m.scrollOffset += m.height / 2
+		m.clampScrollOffset()
+	case "pgup", "ctrl+u":
+		m.scrollOffset -= m.height / 2
+		if m.scrollOffset < 0 {
+			m.scrollOffset = 0
+		}
+	case "home", "g":
+		m.scrollOffset = 0
 	}
 	return m, nil
 }
@@ -522,3 +527,81 @@ func (m ProgressModel) rateColor(rate float64) color.Color {
 		return m.theme.Red
 	}
 }
+
+// RenderSparkline converts a slice of integers into a compact Unicode sparkline.
+func RenderSparkline(values []int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if len(values) == 1 {
+		return "█"
+	}
+	min, max := values[0], values[0]
+	for _, v := range values {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	runes := []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+	var sb strings.Builder
+	for _, v := range values {
+		if max == min {
+			sb.WriteRune(' ')
+			continue
+		}
+		fraction := float64(v-min) / float64(max-min)
+		idx := int(fraction * 7.0)
+		if v > min && idx == 0 {
+			idx = 1
+		}
+		if idx > 7 {
+			idx = 7
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		sb.WriteRune(runes[idx])
+	}
+	return sb.String()
+}
+
+// RenderBlockBar renders an eighth-step block progress bar of the given total character width.
+func RenderBlockBar(width int, fraction float64) string {
+	if width <= 0 {
+		return ""
+	}
+	if fraction <= 0.0 {
+		return strings.Repeat(" ", width)
+	}
+	if fraction >= 1.0 {
+		return strings.Repeat("█", width)
+	}
+	eighthRunes := []rune{' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'}
+	totalEighths := int(math.Round(fraction * float64(width) * 8.0))
+	fullBlocks := totalEighths / 8
+	rem := totalEighths % 8
+
+	if fullBlocks > width {
+		fullBlocks = width
+		rem = 0
+	}
+
+	var sb strings.Builder
+	for i := 0; i < fullBlocks; i++ {
+		sb.WriteRune('█')
+	}
+	used := fullBlocks
+	if rem > 0 && used < width {
+		sb.WriteRune(eighthRunes[rem])
+		used++
+	}
+	for used < width {
+		sb.WriteRune(' ')
+		used++
+	}
+	return sb.String()
+}
+

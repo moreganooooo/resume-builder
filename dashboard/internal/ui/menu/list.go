@@ -120,10 +120,17 @@ func (m MenuModel) Init() tea.Cmd {
 
 // Update handles key presses.
 func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
+	var keyStr string
 	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		keyStr = msg.String()
 	case tea.KeyMsg:
+		keyStr = msg.String()
+	}
+
+	if keyStr != "" {
 		if m.showHelp {
-			switch msg.String() {
+			switch keyStr {
 			case "?", "esc", "q":
 				m.showHelp = false
 				return m, nil
@@ -131,8 +138,8 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 			return m, nil
 		}
 		// Track character sequence for easter eggs
-		if len(msg.String()) == 1 {
-			m.sparkleBuffer += msg.String()
+		if len(keyStr) == 1 {
+			m.sparkleBuffer += keyStr
 			if len(m.sparkleBuffer) > 20 {
 				m.sparkleBuffer = m.sparkleBuffer[len(m.sparkleBuffer)-20:]
 			}
@@ -140,11 +147,21 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 				m.sparkleActive = true
 			}
 		}
-		switch msg.String() {
+		switch keyStr {
 		case "?":
 			m.showHelp = true
 			return m, nil
 		case "q", "ctrl+c":
+			return m, func() tea.Msg { return MenuQuitMsg{} }
+		case "1":
+			return m, func() tea.Msg { return MenuSelectMsg{Command: "Pipeline"} }
+		case "2":
+			return m, func() tea.Msg { return MenuSelectMsg{Command: "Progress"} }
+		case "3":
+			return m, func() tea.Msg { return MenuSelectMsg{Command: "Reports"} }
+		case "4":
+			return m, func() tea.Msg { return MenuSelectMsg{Command: "Jobs"} }
+		case "5":
 			return m, func() tea.Msg { return MenuQuitMsg{} }
 		case "enter":
 			if sel, ok := m.list.SelectedItem().(MenuItem); ok {
@@ -157,6 +174,7 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
+
 
 // View renders the menu with a consistent header/footer layout.
 func (m MenuModel) View() string {

@@ -213,3 +213,55 @@ func ShimmerColor(c1, c2 color.Color, phase float64) color.Color {
 
 	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
 }
+
+// FormatTrackedHeader formats a header title with wide letter tracking and diamond accents.
+// Example: "PIPELINE" -> "✦  P I P E L I N E  ✧"
+func FormatTrackedHeader(title string) string {
+	if len(title) == 0 {
+		return "✦  ✧"
+	}
+	runes := []rune(title)
+	var sb strings.Builder
+	for i, r := range runes {
+		if i > 0 {
+			sb.WriteRune(' ')
+		}
+		sb.WriteRune(r)
+	}
+	return "✦  " + sb.String() + "  ✧"
+}
+
+func linearizeColorComponent(val float64) float64 {
+	if val <= 0.04045 {
+		return val / 12.92
+	}
+	return math.Pow((val+0.055)/1.055, 2.4)
+}
+
+// RelativeLuminance calculates the WCAG relative luminance of a color.
+func RelativeLuminance(c color.Color) float64 {
+	if c == nil {
+		return 0
+	}
+	r, g, b, _ := c.RGBA()
+	rs := float64(uint8(r>>8)) / 255.0
+	gs := float64(uint8(g>>8)) / 255.0
+	bs := float64(uint8(b>>8)) / 255.0
+
+	rLin := linearizeColorComponent(rs)
+	gLin := linearizeColorComponent(gs)
+	bLin := linearizeColorComponent(bs)
+
+	return 0.2126*rLin + 0.7152*gLin + 0.0722*bLin
+}
+
+// ContrastRatio calculates the WCAG 2.0 contrast ratio between two colors (ranging from 1.0 to 21.0).
+func ContrastRatio(c1, c2 color.Color) float64 {
+	l1 := RelativeLuminance(c1)
+	l2 := RelativeLuminance(c2)
+
+	lighter := math.Max(l1, l2)
+	darker := math.Min(l1, l2)
+
+	return (lighter + 0.05) / (darker + 0.05)
+}

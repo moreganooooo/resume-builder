@@ -159,8 +159,18 @@ type PipelineModel struct {
 	// bars.go's renderHelpOverlay) over this screen's normal body.
 	showHelp bool
 
+	undoStack []StatusChangeAction
+
 	animDone bool
 }
+
+// StatusChangeAction represents a status transition for in-place undo.
+type StatusChangeAction struct {
+	App        model.CareerApplication
+	PrevStatus string
+	NewStatus  string
+}
+
 
 type animationMsg struct{}
 
@@ -322,7 +332,13 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 			return m.handleSearchInput(msg)
 		}
 		return m.handleKey(msg)
+	case tea.KeyMsg:
+		if kp, ok := msg.(tea.KeyPressMsg); ok {
+			return m.Update(kp)
+		}
+		return m.Update(tea.KeyPressMsg(tea.Key{Text: msg.String()}))
 	case tea.WindowSizeMsg:
+
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
@@ -452,6 +468,22 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 			m.statusCursor = 0
 		}
 
+	case "u":
+		if len(m.undoStack) > 0 {
+			lastAction := m.undoStack[len(m.undoStack)-1]
+			m.undoStack = m.undoStack[:len(m.undoStack)-1]
+			m.notice = fmt.Sprintf("Reverted %s status back to %s", lastAction.App.Company, lastAction.PrevStatus)
+			return m, func() tea.Msg {
+				return PipelineUpdateStatusMsg{
+					CareerOpsPath: m.careerOpsPath,
+					App:           lastAction.App,
+					NewStatus:     lastAction.PrevStatus,
+				}
+			}
+		}
+		m.notice = "Nothing to undo"
+
+
 	case "g":
 		if len(m.filtered) > 0 {
 			m.cursor = 0
@@ -555,6 +587,11 @@ func (m PipelineModel) handleStatusPicker(msg tea.KeyPressMsg) (PipelineModel, t
 			if app, ok := m.CurrentApp(); ok {
 				newStatus := m.pendingStatus
 				m.pendingStatus = ""
+				m.undoStack = append(m.undoStack, StatusChangeAction{
+					App:        app,
+					PrevStatus: app.Status,
+					NewStatus:  newStatus,
+				})
 				return m, func() tea.Msg {
 					return PipelineUpdateStatusMsg{
 						CareerOpsPath: m.careerOpsPath,
@@ -563,6 +600,7 @@ func (m PipelineModel) handleStatusPicker(msg tea.KeyPressMsg) (PipelineModel, t
 					}
 				}
 			}
+
 		case "esc", "n", "N":
 			// Back out to the picker itself, not all the way out of it.
 			m.statusConfirm = false

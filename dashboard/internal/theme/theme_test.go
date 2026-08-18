@@ -87,3 +87,34 @@ func TestShimmerColor_PhaseShift(t *testing.T) {
 		t.Errorf("expected different phase to produce different shimmer colors, got %s and %s", hex1, hex2)
 	}
 }
+
+func TestFormatTrackedHeader(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"PIPELINE", "✦  P I P E L I N E  ✧"},
+		{"JOBS", "✦  J O B S  ✧"},
+		{"", "✦  ✧"},
+		{"A", "✦  A  ✧"},
+	}
+
+	for _, tc := range cases {
+		actual := FormatTrackedHeader(tc.input)
+		if actual != tc.expected {
+			t.Errorf("FormatTrackedHeader(%q) = %q; want %q", tc.input, actual, tc.expected)
+		}
+	}
+}
+
+func TestTheme_WCAGContrastCompliance(t *testing.T) {
+	themes := []string{"catppuccin-mocha", "catppuccin-latte"}
+	for _, name := range themes {
+		th := NewTheme(name)
+		ratio := ContrastRatio(th.Text, th.Base)
+		if ratio < 4.5 {
+			t.Errorf("theme %s text contrast ratio %.2f < 4.5 against base", name, ratio)
+		}
+	}
+}
+
