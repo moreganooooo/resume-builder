@@ -33,7 +33,14 @@ JOBRIGHT_HEADERS = {
 }
 JOBRIGHT_MAX_POSITION = 100
 JOBRIGHT_POSITION_INCREMENT = 10
-JOBRIGHT_REQUEST_DELAY_SECONDS = 2.0
+JOBRIGHT_REQUEST_DELAY_SECONDS = (
+    0.0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 2.0
+)
 MIN_MATCH_SCORE = 70  # jobs scoring below this are discarded, same as job_automater
 
 

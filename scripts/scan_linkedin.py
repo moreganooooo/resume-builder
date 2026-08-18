@@ -16,6 +16,7 @@ Differences from the original:
 """
 
 import logging
+import os
 import re
 import time
 
@@ -43,7 +44,14 @@ DEFAULT_JOB_LIMIT_PER_QUERY = 20
 # the one place in this subsystem with genuine account-ban risk, since it's
 # the account she job-searches from. Costs up to 5 extra minutes on a scan
 # that already takes longer; worth it.
-_PERSONALIZED_EXTRAS_DELAY_SECONDS = 5
+_PERSONALIZED_EXTRAS_DELAY_SECONDS = (
+    0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 5
+)
 
 
 def check_li_cookie_live(cookie_val: str) -> bool:

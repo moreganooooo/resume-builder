@@ -55,7 +55,7 @@ jobs:
         safety check --json || true
     - name: Run unit tests and code coverage
       run: |
-        coverage run -m unittest discover -s tests -v
+        coverage run -m unittest discover -s tests
         coverage report --fail-under=60
 
   go-tests:

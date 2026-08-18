@@ -19,7 +19,14 @@ import theme
 # Import shared objects from orchestrator
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
 
-SLEEP = 8  # seconds between calls — generous since this is a one-time offline task
+SLEEP = (
+    0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 8
+)  # seconds between calls — generous since this is a one-time offline task
 
 # Column name candidates for the bullet text field (handles variations across files)
 BULLET_COL_CANDIDATES = ["bullet", "achievement", "Bullet Point"]
