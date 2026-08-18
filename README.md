@@ -2,7 +2,7 @@
 ### The job-search pipeline that actually reads the room. ✨
 
 [![CI Multi-Version Matrix](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml/badge.svg)](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml)
-[![Tests](https://img.shields.io/badge/tests-1%2C867%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
+[![Tests](https://img.shields.io/badge/tests-1%2C874%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8.svg)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -65,7 +65,8 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 * **Bullet-Tag-to-Outcome Correlation:** Mathematical tracking correlating specific bullet categories and tags with real interview offers.
 
 ### 7. ⚡ Terminal Craft & Offline Multi-LLM Sovereignty
-* **Bubble Tea Go Cockpit:** 10ms instantaneous startup, Catppuccin palettes, live progress bars, and activity heatmaps.
+* **Charm TUI Cockpit (Bubble Tea v2 & Lip Gloss v2):** Instantaneous startup, Catppuccin themes, Harmonica spring physics animations, responsive 80x24 reflow, and interactive Knowledge Base Explorer.
+* **Accessibility & Customization:** First-class support for `RESUME_BUILDER_MOTION=reduced`, `RESUME_BUILDER_ICONS=unicode`, and `RESUME_BUILDER_THEME=dark|light`.
 * **Local Offline Tier (Ollama / vLLM):** Zero-cloud, local offline generation targeting DeepSeek-R1 / Llama 3 with zero API key dependencies.
 * **Multi-Key API Rotation & Context Caching:** Automatic key failover on HTTP 429 and explicit prompt prefix caching for 90% token cost savings.
 * **Decentralized Mobile P2P Sync:** Lightweight Termux client on Android Linux synced peer-to-peer via Syncthing.
@@ -74,12 +75,12 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 
 ## 🗺️ Documentation Directory
 
-* [**🚀 Unified Setup & Installation**](docs/installation.md) — The 1-click installer for macOS, Linux, WSL, and Android Termux.
-* [**⚙️ How It Works: Operations & Usage Guide**](docs/operations.md) — Detailed specifications for each pipeline module, dual-metric scoring, compounding bullet banks, and voice cloning.
+* [**🚀 Unified Setup & Installation**](docs/program_docs/installation.md) — The 1-click installer for macOS, Linux, WSL, and Android Termux.
+* [**⚙️ How It Works: Operations & Usage Guide**](docs/program_docs/operations.md) — Detailed specifications for each pipeline module, dual-metric scoring, compounding bullet banks, voice cloning, and TUI cockpit.
 * [**🤝 Contributing Guidelines**](CONTRIBUTING.md) — Development setup, test execution, and code style.
 * [**📜 Code of Conduct**](CODE_OF_CONDUCT.md) — Standards and community pledge.
 * [**🔒 Security Policy**](SECURITY.md) — Vulnerability reporting and local data sovereignty disclosures.
-* [**💬 FAQ & Troubleshooting**](docs/faq.md) — Quick fixes for session cookies, Playwright, API keys, and synchronization.
+* [**💬 FAQ & Troubleshooting**](docs/program_docs/faq.md) — Quick fixes for session cookies, Playwright, API keys, TUI customization, and synchronization.
 
 ---
 
@@ -88,6 +89,9 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 ```bash
 # Launch the main menu & TUI cockpit
 resume
+
+# Launch into a specific profile
+resume --profile morgan
 
 # Run self-healing health diagnostics across all checks
 resume doctor
@@ -102,7 +106,7 @@ resume scan --source linkedin --query "Staff Software Engineer"
 python scripts/mission_control.py
 
 # Export data lake to Parquet, DuckDB, or Excel
-python scripts/export_data.py --format all
+python scripts/export_data.py
 ```
 
 Let's go crush this job search! 🚀

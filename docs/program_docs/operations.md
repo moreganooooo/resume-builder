@@ -4,20 +4,35 @@ Welcome to the ultimate operational manual for `resume-builder`. This guide goes
 
 ---
 
-## 🧭 1. The Interactive Go TUI Dashboard
+## 🧭 1. The Interactive Charm TUI Dashboard & Knowledge Base Explorer
 
 To launch your central visual mission control, simply type:
 ```bash
 resume
 ```
-This loads our high-fidelity, Bubble Tea-based terminal dashboard, styled in a sleek Catppuccin color scheme.
+Or launch into a specific profile:
+```bash
+resume --profile morgan
+```
+This loads our high-fidelity, Charmbracelet-based terminal dashboard (Bubble Tea v2, Lip Gloss v2, Glamour, Harmonica physics), styled in an adaptive Catppuccin color scheme.
 
-### Dashboard Sections & Features:
-1. **Pipeline Checkpoints:** Track where every single job posting sits in your queue—from *Newly Scanned* to *Evaluated*, *Tailored*, *Applied*, and *Followed Up*.
-2. **Interactive Triage:** Move jobs through stages visually using arrow keys instead of editing database entries manually.
-3. **Live Metrics View:** Monitor your conversion funnel (e.g., Application-to-Interview ratios) with live ASCII bar charts.
-4. **Gamification & Achievement Loops:** Milestones (like submitting your 10th tailored resume) unlock high-energy celebration cards complete with twinkling terminal animations (`display_success_celebration`) to keep your momentum and career dopamine high!
-5. **Global Charmbracelet Prompts:** Confirmations, select menus, and checkboxes across the entire CLI are globally routed through Charm's state-of-the-art terminal prompt system (`Go/huh`), which compiles dynamically on its first launch into `dashboard/bin/prompt` for lightning-fast, sub-millisecond keyboard reactions.
+### Dashboard Screens & Core Keyboard Controls:
+1. **Pipeline Checkpoints (`1`):** Track where every single job posting sits in your queue—from *Newly Scanned* to *Evaluated*, *Tailored*, *Applied*, and *Followed Up*.
+2. **Interactive Jobs Triage (`2`):** Browse jobs in an accordion view and move them through stages visually using arrow keys (`h/j/k/l` or `←/↓/↑/→`).
+3. **Interactive Knowledge Base Explorer (`5`):**
+   * Instantaneously search, inspect, and preview all personal intelligence documents across **All**, **Tools & Skills**, **Verified Metrics**, **Core Facts**, and **Historical Projects**.
+   * Switch categories using `Tab` / `Shift+Tab` or `[` / `]`.
+   * Live filter entries by keyword using `/` or standard typing.
+   * Press `Enter` to open an item in the **Glamour Markdown Viewport**, rendering styled markdown with scrollable viewport navigation (`j/k`, `PageUp/PageDown`, `Esc` to return).
+4. **Live Metrics & Activity View (`4`):** Monitor your conversion funnel (e.g., Application-to-Interview ratios) with live ASCII bar charts and weekly progress metrics.
+5. **Real-Time Progress Tracking (`3`):** Dynamic Bubbles progress bars with color gradients and percentage metrics for active batch scans or tailoring jobs.
+6. **Harmonica Physics & Responsive Reflow:** Fluid spring-eased view transitions, automatic screen-resize reflow, and proactive 80x24 minimum viewport warning cards.
+7. **Accessibility & Preferences:**
+   * `RESUME_BUILDER_MOTION=reduced`: Disables spring animations for users with vestibular or motion sensitivities.
+   * `RESUME_BUILDER_ICONS=unicode`: Uses standard Unicode symbols instead of Nerd Fonts.
+   * `RESUME_BUILDER_THEME=dark|light`: Overrides automatic terminal background detection.
+8. **Gamification & Achievement Loops:** Milestones (like submitting your 10th tailored resume) unlock high-energy celebration cards complete with twinkling terminal animations (`display_success_celebration`) to keep your momentum and career dopamine high!
+9. **Global Charmbracelet Prompts:** Confirmations, select menus, and checkboxes across the entire CLI are globally routed through Charm's prompt system (`Go/huh`), which compiles dynamically on its first launch into `dashboard/bin/prompt` for lightning-fast, sub-millisecond keyboard reactions.
 
 ---
 

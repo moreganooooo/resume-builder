@@ -226,5 +226,4 @@ class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    import time
     unittest.main()

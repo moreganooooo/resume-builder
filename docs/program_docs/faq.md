@@ -102,7 +102,22 @@ A: Standard "AI-beige" cover letter templates often start with passive, flat phr
 A: When rendering HTML templates to PDFs, Chromium often combines characters like `fi`, `fl`, or `ff` into single Unicode ligature symbols (`ﬁ`, `ﬂ`). While this looks beautiful on paper, standard Applicant Tracking Systems (ATS) can fail to parse or index these ligatures correctly, filtering your resume out. Our system programmatically inspects the raw text layer of the final PDF output to assert that all targeted job keywords survived the rendering layer perfectly intact.
 
 ### Q: How does the embedded SQLite database (`data.db`) work?
-A: Every active profile stores job descriptions, application pipeline states, and bullet bank achievements inside an embedded ACID SQLite database located at `profiles/<profile>/data.db`. Handled via `scripts/db.py`, SQLite eliminates flat-file synchronization locks and JSON corruption, allowing lightning-fast query filtering and transaction-safe concurrency across TUI sessions.
+A: Every active profile stores job descriptions, application pipeline states, and bullet bank achievements inside an embedded ACID SQLite database located at `profiles/<profile>/data.db`. Handled via `scripts/db.py`, SQLite eliminates flat-file synchronization locks and JSON corruption, allowing lightning-fast query filtering and transaction-safe concurrency across TUI sessions. SQLite connections use Write-Ahead Logging (WAL) and automatic exponential retry backoff with jitter on `SQLITE_BUSY` contention.
 
 ### Q: What is the Typst Vector PDF Renderer?
 A: Typst is a modern, high-performance document markup and compilation system. Implemented in `scripts/render_typst.py`, the Typst renderer generates structured `.typ` document markup and compiles vector PDFs in sub-second time directly from CLI without invoking headless Chromium browsers. Both Typst and Chromium rendering engines are fully supported.
+
+### Q: How do I use the Knowledge Base Explorer screen in the TUI?
+A: Press `5` from the main menu (or navigate to `Knowledge Base Explorer`). You can:
+* Switch category tabs using `Tab` / `Shift+Tab` or `[` / `]` between **All**, **Tools & Skills**, **Verified Metrics**, **Core Facts**, and **Historical Projects**.
+* Live filter entries with instant search using `/` or regular key input.
+* Press `Enter` to open any entry in the **Glamour Markdown Viewport** to read detailed explanations, raw data, and metrics. Use `j`/`k` or `PageUp`/`PageDown` to scroll, and `Esc` to return.
+
+### Q: How do I switch user profiles or launch into a specific profile?
+A: You can launch directly into a profile with `resume --profile <profile_name>` or set the `RESUME_PROFILE` environment variable (`export RESUME_PROFILE=alex`). The Go dashboard automatically detects profile metadata (name, candidate role title, paths) and displays an active profile badge in the top menu banner.
+
+### Q: How do I adjust animations, themes, or icons for terminal compatibility?
+A: Set the following environment variables in your shell profile:
+* `RESUME_BUILDER_MOTION=reduced`: Disables Harmonica spring animations and replaces animated spinners with static indicators.
+* `RESUME_BUILDER_ICONS=unicode`: Replaces Nerd Font glyphs with standard Unicode symbols across all screens.
+* `RESUME_BUILDER_THEME=dark` or `light`: Explicitly selects the Catppuccin theme variant.
