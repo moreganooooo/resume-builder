@@ -1,0 +1,1 @@
+../../.agents/rules/mobile_termux.md
