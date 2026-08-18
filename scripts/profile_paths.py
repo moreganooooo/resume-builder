@@ -333,30 +333,103 @@ def _make_fallback_profile_yaml() -> dict:
             "candidate_location": "Getzville, NY (Buffalo Area)",
         },
         "fixed_credentials": {
+            "certifications": [
+                {
+                    "name": "Email Marketing Software Certification",
+                    "issuer": "HubSpot",
+                    "year": 2026,
+                },
+                {
+                    "name": "Video for Sales Certification",
+                    "issuer": "Vidyard",
+                    "year": 2021,
+                },
+                {
+                    "name": "Camp Portfolio",
+                    "issuer": "Bernstein Rein, Kansas City",
+                    "year": 2008,
+                },
+            ],
             "education": [
                 {
                     "institution": "University of Kansas",
+                    "credential": "BS, Journalism + Strategic Communication",
+                    "bullet_count": 2,
                     "achievement_options": {
-                        "content_generalist": "Content generalist bullet",
-                        "writing_content": "Writing and content bullet",
+                        "content_generalist": "broad audience-growth framing",
+                        "email_ops": "campaign/channel management framing",
+                        "content": "editorial/content-production framing",
                     },
                 },
                 {
                     "institution": "Kansas City Kansas Community College",
+                    "credential": "AA, Journalism",
+                    "bullet_count": 2,
                     "achievement_options": {
-                        "multimedia": "Multimedia bullet",
+                        "writing_content": "editorial/writing framing",
+                        "enablement_mgmt": "team leadership/enablement framing",
+                        "generalist": "balanced ownership framing",
                     },
                 },
-            ]
+                {
+                    "institution": "Johnson County Community College",
+                    "credential": "Coursework, Graphic Design",
+                    "bullet_count": 1,
+                },
+            ],
         },
         "roles": [
-            {"company": "Mercor", "min_bullets": 1},
-            {"company": "Treering Yearbooks", "min_bullets": 4},
-            {"company": "Inside Sales Team", "min_bullets": 2},
-            {"company": "Element 8 / Strategy LLC", "min_bullets": 1},
-            {"company": "VML", "min_bullets": 1},
-            {"company": "Callahan Creek", "min_bullets": 1},
+            {
+                "name": "Mercor",
+                "min_bullets": 2,
+                "target_bullets": 3,
+                "page": 1,
+                "flex_priority": 2,
+            },
+            {
+                "name": "Treering Yearbooks",
+                "min_bullets": 6,
+                "target_bullets": 7,
+                "page": 1,
+                "flex_priority": 1,
+            },
+            {
+                "name": "Inside Sales Team",
+                "min_bullets": 4,
+                "target_bullets": 5,
+                "page": 1,
+                "flex_priority": 1,
+                "must_fit_page_1": True,
+            },
+            {
+                "name": "Element 8 / Strategy LLC",
+                "min_bullets": 3,
+                "target_bullets": 4,
+                "page": 2,
+                "flex_priority": 2,
+            },
+            {
+                "name": "VML",
+                "min_bullets": 3,
+                "target_bullets": 4,
+                "page": 2,
+                "flex_priority": 2,
+            },
+            {
+                "name": "Callahan Creek",
+                "min_bullets": 3,
+                "target_bullets": 4,
+                "page": 2,
+                "flex_priority": 2,
+            },
         ],
+        "protected_bullets": [
+            "Outreach.io full platform ownership (vendor eval, Salesforce integration, migration, adoption training, ongoing stewardship)",
+            "CRM scrub: scale (thousands of accounts), systematic audit, verified $3M pipeline recovery",
+            "Content Committee: founded and chaired, 100+ assets, 129 sequences, QA process, voice/tone guidelines",
+            "SDR Process Map: 8-step website used as official onboarding asset years after creation",
+        ],
+        "voice_calibration_example": "It felt like more than an opportunity -- it felt like alignment.",
         "tags": [
             {
                 "name": "email",
