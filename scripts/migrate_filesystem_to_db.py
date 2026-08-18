@@ -9,7 +9,9 @@ and bullet bank CSV records into profiles/<profile>/data.db (SQLite).
 import csv
 import json
 import os
+import sqlite3
 import sys
+from typing import Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -58,7 +60,7 @@ def migrate_jobs(profile: str, conn=None) -> int:
     return count
 
 
-def migrate_bullet_bank(profile: str) -> int:
+def migrate_bullet_bank(profile: str, conn: Optional[sqlite3.Connection] = None) -> int:
     """Migrates audited bullet bank CSV records into SQLite."""
     kb_dir = profile_paths.kb_dir(profile)
     audited_csv = os.path.join(kb_dir, "bullet-bank-keepers-audited.csv")
@@ -68,7 +70,11 @@ def migrate_bullet_bank(profile: str) -> int:
     if not os.path.exists(audited_csv):
         return 0
 
-    conn = db.get_db(profile)
+    close_conn = False
+    if conn is None:
+        conn = db.get_db(profile)
+        close_conn = True
+
     count = 0
     try:
         with open(audited_csv, "r", encoding="utf-8") as f:
@@ -106,7 +112,8 @@ def migrate_bullet_bank(profile: str) -> int:
                     )
                     count += 1
     finally:
-        conn.close()
+        if close_conn:
+            conn.close()
     return count
 
 
@@ -116,7 +123,7 @@ def main():
     conn = db.get_db(profile)
     try:
         jobs_count = migrate_jobs(profile, conn=conn)
-        bullets_count = migrate_bullet_bank(profile)
+        bullets_count = migrate_bullet_bank(profile, conn=conn)
     finally:
         conn.close()
     print(
