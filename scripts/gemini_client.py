@@ -372,16 +372,12 @@ class GeminiClient:
             raise ValueError(
                 "generate(): tools (e.g. search grounding) and response_schema cannot be combined in one call."
             )
-
         failure_streak = 0
 
         for attempt in range(max_retries):
             if "gemma" in model.lower():
                 elapsed = time.time() - GeminiClient._last_gemma_call_ts
-                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS and not (
-                    os.environ.get("CI") == "true"
-                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
-                ):
+                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
                     wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
                     cli_art.console.print(
                         f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...",
