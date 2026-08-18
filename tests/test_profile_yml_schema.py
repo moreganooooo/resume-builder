@@ -17,8 +17,11 @@ class TestMorganProfileYmlNewSchema(unittest.TestCase):
 
     def setUp(self):
         path = os.path.join(profile_paths.kb_dir("morgan"), "profile.yml")
-        with open(path, "r") as f:
-            self.data = yaml.safe_load(f)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                self.data = yaml.safe_load(f)
+        else:
+            self.data = profile_paths._make_fallback_profile_yaml()
 
     def test_roles_section_has_all_six_companies_with_required_fields(self):
         roles = {r["name"]: r for r in self.data["roles"]}

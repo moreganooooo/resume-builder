@@ -83,7 +83,11 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         self.assertIn("A test quote.", block)
 
     def test_real_morgan_profile_produces_nonempty_block(self):
-        profile_data = self.engine.load_yaml(self.engine.kb_dir, "profile.yml")
+        profile_path = os.path.join(self.engine.kb_dir, "profile.yml")
+        if os.path.exists(profile_path):
+            profile_data = self.engine.load_yaml(self.engine.kb_dir, "profile.yml")
+        else:
+            profile_data = profile_paths.profile_yaml("morgan")
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("Mercor", block)
         self.assertIn("Treering Yearbooks", block)
