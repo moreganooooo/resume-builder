@@ -1,0 +1,22 @@
+- /Users/morganescott/resume-builder/docs/gemini_files/resume_writing_strengthening_plan.md
+- /Users/morganescott/resume-builder/docs/gemini_files/scoring_system_audit_report.md
+- /Users/morganescott/resume-builder/docs/gemini_files/scoring_system_upgrade_plan.md
+- /Users/morganescott/resume-builder/docs/gemini_files/tui_design_critique_and_audit.md
+- /Users/morganescott/resume-builder/docs/gemini_files/ux_deep_dive_dom.md
+- /Users/morganescott/resume-builder/docs/gemini_files/ux_ui_review.md
+- /Users/morganescott/resume-builder/docs/gemini_files/walkthrough 2.md
+- /Users/morganescott/resume-builder/docs/gemini_files/walkthrough.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CharmIntegration/alt-screen-consistency-research-complete-solution-for-resume-builder.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CharmIntegration/bubblezone-implementation-guide-add-mouse-support-to-resume-builder-dashboard.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CharmIntegration/dashboard-project-library-integration-gap-analysis (1).md
+- /Users/morganescott/resume-builder/docs/morgan_research/CharmIntegration/dashboard-project-library-integration-gap-analysis.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CharmIntegration/ultimate-charm-ecosystem-audit-complete-gap-analysis.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CompetitorRepoResearch/final-deep-dive-performance-integration-api-surveys-&-additional-research-areas.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CompetitorRepoResearch/job-hunting-tools-open-questions-&-gaps-verification-report.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CompetitorRepoResearch/open-source-job-hunting-tools-comprehensive-repository-analysis.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CoverLetterResearch/cover-letter-deep-research-five-open-questions-answered.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CoverLetterResearch/cover-letter-research-company-policies-new-ats-platforms-&-research-gaps.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CoverLetterResearch/deep-research-cover-letters-the-complete-2026-guide-ats-statistics-personalization-&-platforms.md
+- /Users/morganescott/resume-builder/docs/morgan_research/CoverLetterResearch/gapsinresearch_answered.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-job-matching-deep-dive-what-makes-it-better-than-competitors.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-deep-dive-complete-technical-analysis-of-diagnose_resume-and-update_resume.md

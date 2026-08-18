@@ -2,6 +2,8 @@
 package menu
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -46,11 +48,24 @@ var menuHelpCategories = []screens.HelpCategory{
 }
 
 type MenuModel struct {
-	list     list.Model
-	theme    theme.Theme
-	showHelp bool
-	width    int
-	height   int
+	list          list.Model
+	theme         theme.Theme
+	showHelp      bool
+	width         int
+	height        int
+	subtitle      string
+	sparkleBuffer string
+	sparkleActive bool
+}
+
+// SetSubtitle updates the dynamic motivational header text under the main menu title.
+func (m *MenuModel) SetSubtitle(sub string) {
+	m.subtitle = sub
+}
+
+// SparkleActive returns whether the sparkle easter egg mode is triggered.
+func (m MenuModel) SparkleActive() bool {
+	return m.sparkleActive
 }
 
 // NewMenuModel builds a list of top‑level commands using the token palette.
@@ -115,6 +130,16 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Track character sequence for easter eggs
+		if len(msg.String()) == 1 {
+			m.sparkleBuffer += msg.String()
+			if len(m.sparkleBuffer) > 20 {
+				m.sparkleBuffer = m.sparkleBuffer[len(m.sparkleBuffer)-20:]
+			}
+			if strings.HasSuffix(m.sparkleBuffer, "sparkle") {
+				m.sparkleActive = true
+			}
+		}
 		switch msg.String() {
 		case "?":
 			m.showHelp = true
@@ -166,7 +191,11 @@ func (m MenuModel) View() string {
 			Background(m.theme.Surface).
 			Width(width),
 	)
-	caption := captionStyle.Render("Review And Triage Your Job Search — The resume CLI Builds")
+	sub := m.subtitle
+	if sub == "" {
+		sub = "Review And Triage Your Job Search — The resume CLI Builds"
+	}
+	caption := captionStyle.Render(sub)
 
 	body := m.list.View()
 

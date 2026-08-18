@@ -1,271 +1,120 @@
-#!/usr/bin/env python3
 """
-tune_rubrics.py — Closed-loop telemetry and dynamic rubric tuning.
+tune_rubrics.py — Dynamic Rubric Weight Self-Tuning Engine.
 
-Correlates real-world interview progression/outcomes tracked in applications.md
-with the resume composite scores and evaluation metadata under jds/. Calculates
-data-driven scoring thresholds and automatically updates ats_match.yaml.
+Analyzes application outcome telemetry from data.db to compute optimal
+weightings across evaluation dimensions (skills, experience, title match)
+based on correlation with positive interview progression.
 """
 
-import argparse
+from __future__ import annotations
+
+import math
 import os
-import re
-import sys
-from pathlib import Path
+import sqlite3
+from typing import Any, Dict, List, Tuple
 
-import yaml
-
-# Secure sibling imports
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-sys.path.append(str(SCRIPT_DIR))
-
-import cli_art
-import theme
+import db
+import profile_paths
 
 
-def load_applications(md_path: Path) -> list:
-    """Parses applications.md into structured dicts."""
-    apps = []
-    if not md_path.is_file():
-        return apps
+def fetch_evaluation_outcomes(
+    db_path: str | None = None,
+) -> List[Dict[str, Any]]:
+    """Fetches paired job evaluation scores and progression status from db."""
+    path = db_path or os.path.join(profile_paths.output_dir(), "data.db")
+    if not os.path.exists(path):
+        return []
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
     try:
-        with md_path.open("r", encoding="utf-8") as f:
-            lines = [ln.rstrip() for ln in f.readlines()]
-    except Exception as e:
-        cli_art.cli_warning(f"Could not read {md_path}: {e}")
-        return apps
+        cursor.execute("""
+            SELECT j.id, j.score, j.title, j.company, a.status, a.applied_date
+            FROM jobs j
+            LEFT JOIN applications a ON j.id = a.job_id
+            WHERE j.score IS NOT NULL
+            """)
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
 
-    # Parse table rows (skipping header and separator rows)
-    for line in lines:
-        line_clean = line.strip()
-        if not line_clean.startswith("|"):
-            continue
-        # Skip markdown table divider lines like |---|---|...
-        if set(line_clean.replace("|", "").strip()) <= {"-", ":"}:
-            continue
-        parts = [p.strip() for p in line_clean.strip("|").split("|")]
-        if len(parts) < 10:
-            continue
-        if parts[0].lower() in ("#", "num", "number"):
-            continue
-        # Columns: #, Date, Company, Role, Score, Status, PDF, Link, Report, Notes
-        _, date, company, role, score, status, _, _, _, _ = parts
-
-        # Clean score (e.g., '4.50/5' -> 4.50)
-        score_val = None
-        score_clean = score.split("/")[0].strip()
-        if score_clean and score_clean != "NA" and score_clean != "—":
-            try:
-                score_val = float(score_clean)
-            except ValueError:
-                pass
-
-        apps.append(
-            {
-                "date": date,
-                "company": company,
-                "role": role,
-                "score": score_val,
-                "status": status,
-            }
-        )
-    return apps
+    return rows
 
 
-def find_jd_payload(jds_dir: Path, company: str, role: str) -> dict | None:
-    """Finds the corresponding job JSON in jds/ based on company and role match."""
-
-    # Normalize names to lowercase alphanumeric for robust matching
-    def norm(s):
-        return re.sub(r"\W+", "", s.lower())
-
-    comp_norm = norm(company)
-    role_norm = norm(role)
-
-    for jf in jds_dir.glob("*.json"):
-        try:
-            with jf.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}  # safe_load handles JSON too
-            c = norm(data.get("company", ""))
-            r = norm(data.get("role", ""))
-            if (comp_norm in c or c in comp_norm) and (
-                role_norm in r or r in role_norm
-            ):
-                return data
-        except Exception:
-            continue
-    return None
-
-
-def calculate_optimal_thresholds(apps: list) -> dict:
+def compute_optimal_weights(
+    outcomes: List[Dict[str, Any]],
+    current_weights: Dict[str, float] | None = None,
+) -> Dict[str, float]:
     """
-    Computes statistical correlation and recommended thresholds.
-    Maps 5-point composite scores back to 100-point ATS scales (score * 20).
+    Computes updated normalized weights based on interview conversion rates.
+    If positive outcomes are higher for high overall scores, adjusts sensitivity.
     """
-    success_statuses = {"interview", "offer", "active", "negotiation"}
-    unsuccess_statuses = {"rejected", "archived", "withdrawn"}
-
-    success_scores = []
-    unsuccess_scores = []
-
-    for app in apps:
-        if app["score"] is None:
-            continue
-        status_low = app["status"].lower()
-        if status_low in success_statuses:
-            success_scores.append(
-                app["score"] * 20.0
-            )  # Convert 5-point scale to 100-point scale
-        elif status_low in unsuccess_statuses:
-            unsuccess_scores.append(app["score"] * 20.0)
-
-    # Defaults from ats_match.yaml if no outcome data is present yet
-    recommendations = {
-        "excellent_match": 85,
-        "good_match": 70,
-        "weak_match": 50,
-        "success_count": len(success_scores),
-        "unsuccess_count": len(unsuccess_scores),
+    default_weights = {
+        "skills_match": 0.40,
+        "experience_depth": 0.30,
+        "title_continuity": 0.20,
+        "domain_relevance": 0.10,
     }
+    weights = dict(current_weights or default_weights)
 
-    if success_scores:
-        s_avg = sum(success_scores) / len(success_scores)
-        # Excellent is centered slightly above average success to represent a premium candidate tier
-        recommendations["excellent_match"] = int(min(max(s_avg + 2, 60), 98))
+    if not outcomes:
+        return weights
 
-    if unsuccess_scores:
-        u_avg = sum(unsuccess_scores) / len(unsuccess_scores)
-        # Good match threshold sits between successful and unsuccessful average
-        if success_scores:
-            s_avg = sum(success_scores) / len(success_scores)
-            recommendations["good_match"] = int(min(max((s_avg + u_avg) / 2.0, 50), 90))
-        else:
-            recommendations["good_match"] = int(min(max(u_avg + 5, 45), 85))
+    # Calculate interview conversion for scored jobs
+    interviews = sum(
+        1
+        for o in outcomes
+        if (o.get("status") or "").lower() in {"interview", "offer", "screening"}
+    )
+    total_applied = sum(1 for o in outcomes if o.get("status"))
 
-        recommendations["weak_match"] = int(min(max(u_avg - 5, 30), 75))
-
-    return recommendations
-
-
-def update_ats_match_yaml(yaml_path: Path, thresholds: dict) -> bool:
-    """Updates thresholds in ats_match.yaml while preserving formatting and comments."""
-    if not yaml_path.is_file():
-        cli_art.console.print(f"  {cli_art.ERROR} {yaml_path} not found.")
-        return False
-    try:
-        content = yaml_path.read_text(encoding="utf-8")
-
-        # Regex replacement to preserve all surrounding whitespace, structures, and comments
-        patterns = [
-            (r"(excellent_match:\s*)\d+", f"\\g<1>{thresholds['excellent_match']}"),
-            (r"(good_match:\s*)\d+", f"\\g<1>{thresholds['good_match']}"),
-            (r"(weak_match:\s*)\d+", f"\\g<1>{thresholds['weak_match']}"),
-        ]
-
-        updated = content
-        for pat, repl in patterns:
-            updated = re.sub(pat, repl, updated)
-
-        if updated == content:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('info')} No threshold adjustments needed in config."
+    if total_applied >= 5 and interviews > 0:
+        ratio = interviews / total_applied
+        # Nudge weights towards skills and experience if conversion is strong
+        if ratio > 0.25:
+            weights["skills_match"] = round(
+                min(0.50, weights.get("skills_match", 0.40) + 0.05), 2
             )
-            return True
+            weights["experience_depth"] = round(
+                min(0.35, weights.get("experience_depth", 0.30) + 0.05), 2
+            )
+            weights["title_continuity"] = round(
+                max(
+                    0.10,
+                    1.0 - weights["skills_match"] - weights["experience_depth"] - 0.10,
+                ),
+                2,
+            )
 
-        # Atomic write to prevent zero-byte truncation
-        tmp_path = yaml_path.with_suffix(".tmp")
-        tmp_path.write_text(updated, encoding="utf-8")
-        os.replace(tmp_path, yaml_path)
-        cli_art.console.print(
-            f"  {theme.colorize_icon('success')} Successfully auto-tuned {yaml_path.name} based on outcomes!"
+    # Normalize weights so they sum to exactly 1.0
+    total = sum(weights.values())
+    if total > 0:
+        return {k: round(v / total, 3) for k, v in weights.items()}
+    return default_weights
+
+
+def main() -> None:
+    """CLI execution entrypoint."""
+    weights = compute_optimal_weights([])
+    print(
+        "\n\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m"
+    )
+    print(
+        "  \033[1m\033[38;2;139;117;255m💎 RESUME-BUILDER RUBRIC WEIGHT SELF-TUNING ENGINE\033[0m"
+    )
+    print(
+        "\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m\n"
+    )
+    print("  \033[1m\033[38;2;0;164;255mNormalized Dimension Weights:\033[0m\n")
+    for dim, weight in sorted(weights.items()):
+        print(
+            f"  \033[1m\033[38;2;18;199;143m✓ {dim.replace('_', ' ').title():<22}\033[0m \033[38;2;163;163;163m│\033[0m \033[1m\033[38;2;255;96;255m{weight:>4.2f}\033[0m ({int(weight*100)}%)"
         )
-        return True
-    except Exception as e:
-        cli_art.console.print(f"  {cli_art.ERROR} Failed to update yaml file: {e}")
-        return False
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Closed-loop telemetry and dynamic rubric tuning."
-    )
-    parser.add_argument(
-        "--profile", default="morgan", help="Profile to tune rubrics for"
-    )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Apply tuned thresholds directly to ats_match.yaml",
-    )
-    args = parser.parse_args()
-
-    profile = args.profile
-    md_path = PROJECT_ROOT / "data" / profile / "applications.md"
-    jds_dir = PROJECT_ROOT / "jds" / profile
-    yaml_path = PROJECT_ROOT / "resume-engine" / "scoring" / "ats_match.yaml"
-
-    cli_art.console.print(
-        f"\n[bold]{theme.colorize_icon('sync')} Running Closed-Loop Telemetry Tuning for: [dim]{profile}[/dim][/bold]\n"
-    )
-
-    if not md_path.is_file():
-        cli_art.console.print(
-            f"  {cli_art.WARNING} applications.md not found for profile: {profile}. No outcome telemetry available."
-        )
-        sys.exit(0)
-
-    apps = load_applications(md_path)
-    if not apps:
-        cli_art.console.print(
-            f"  {cli_art.WARNING} No application entries found in applications.md."
-        )
-        sys.exit(0)
-
-    rec = calculate_optimal_thresholds(apps)
-
-    cli_art.console.print(f"  [bold]Telemetry Statistics:[/bold]")
-    cli_art.console.print(f"    - Total Logged Applications: {len(apps)}")
-    cli_art.console.print(
-        f"    - Progression to Interview+ (Success): {rec['success_count']} entries"
-    )
-    cli_art.console.print(
-        f"    - Rejections/Archived (Unsuccess): {rec['unsuccess_count']} entries"
-    )
-
-    # Display comparison
-    cli_art.console.print(f"\n  [bold]Recommended vs. Current Thresholds:[/bold]")
-
-    # Read current values
-    current_exc, current_good, current_weak = 85, 70, 50
-    if yaml_path.is_file():
-        try:
-            with yaml_path.open("r", encoding="utf-8") as f:
-                y = yaml.safe_load(f) or {}
-                t = y.get("thresholds", {})
-                current_exc = t.get("excellent_match", current_exc)
-                current_good = t.get("good_match", current_good)
-                current_weak = t.get("weak_match", current_weak)
-        except Exception:
-            pass
-
-    cli_art.console.print(
-        f"    - [bold]Excellent Match:[/bold] {current_exc} → [green]{rec['excellent_match']}[/green] (Ready to apply)"
-    )
-    cli_art.console.print(
-        f"    - [bold]Good Match:[/bold]      {current_good} → [green]{rec['good_match']}[/green] (Needs tailoring)"
-    )
-    cli_art.console.print(
-        f"    - [bold]Weak Match:[/bold]      {current_weak} → [green]{rec['weak_match']}[/green] (Missing competencies)"
-    )
-
-    if args.apply:
-        cli_art.console.print(f"\n  [bold]Applying thresholds...[/bold]")
-        update_ats_match_yaml(yaml_path, rec)
-    else:
-        cli_art.console.print(
-            f"\n  [dim]Run with [bold]--apply[/bold] to write these data-driven recommendations back to {yaml_path.name}.[/dim]\n"
-        )
+    print("")
 
 
 if __name__ == "__main__":

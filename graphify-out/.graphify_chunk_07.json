@@ -1,0 +1,563 @@
+{
+  "nodes": [
+    {
+      "id": "docs_superpowers_specs_2026_07_14_cli_ux_redesign_design",
+      "label": "CLI UX Redesign (Theme.py, Progress UI, Menu Grouping)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_07_15_bullet_bank_management_design",
+      "label": "Bullet Bank Management Menu (Submenu, Status Display)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_07_15_gemma_slim_context_design",
+      "label": "Gemma Slim Context (Model Fallback, Rate Limiting)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_07_16_cluster_embedding_checkpoint_design",
+      "label": "Cluster Embedding Checkpoint & Batching (Resume Flow)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-cluster-embedding-checkpoint-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_07_16_engine_profile_split_design",
+      "label": "Engine/Profile Split (Multi-User Support)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-engine-profile-split-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_07_16_rewrite_pipeline_resilience_design",
+      "label": "Rewrite Pipeline Resilience (Sustained Failure Detection)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-rewrite-pipeline-resilience-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_08_charm_prompt_migration_design",
+      "label": "Charm Prompt Migration (Go Binary Wrappers)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-charm-prompt-migration-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_08_jobs_screen_actions_design",
+      "label": "Jobs Screen Action Triggers (Liveness, Tailor, Status)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-actions-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_08_jobs_screen_design",
+      "label": "Jobs Screen Design (Data Bridge, Split-Pane)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_11_company_research_tiered_fallback_design",
+      "label": "Company Research Tiered Fallback (3-Tier Search)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_12_bullet_bank_family_progress_consistency_design",
+      "label": "Bullet Bank Family Themed Output & Markup Safety",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-bullet-bank-family-progress-consistency-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_12_coverletter_header_enrichment_design",
+      "label": "Cover Letter Header Enrichment (Company Facts, Contact)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-coverletter-header-enrichment-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_12_scan_verify_progress_consistency_design",
+      "label": "Scan + Verify Progress Consistency (ScanActivity)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-scan-verify-progress-consistency-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_17_docx_exporter_design",
+      "label": "DOCX Exporter Design (ATS-Optimized Rendering)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-docx-exporter-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_17_one_command_pipeline_design",
+      "label": "One-Command Application Pipeline (Package Orchestration)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_17_tui_polish_design",
+      "label": "TUI Polish & Shiny Terminal Craft (UX/Design)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-tui-polish-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_2026_08_17_voice_anchor_matcher_design",
+      "label": "Voice Anchor Matcher (Stylometric Analysis)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-voice-anchor-matcher-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_theme_py",
+      "label": "Theme System (Unified Visual Foundation)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_profile_paths",
+      "label": "Profile Paths (Multi-User Isolation)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-engine-profile-split-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_gemini_client_sustained_failure",
+      "label": "GeminiClient Sustained Failure Detection",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-rewrite-pipeline-resilience-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_dashboard_actions",
+      "label": "Dashboard Actions (Python-Go Bridge)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-actions-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_company_research_vocabulary",
+      "label": "Company Research Vocabulary Substitutions",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_cli_art_markup_safety",
+      "label": "CLI Art Markup Safety (Rich Escaping)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-bullet-bank-family-progress-consistency-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_scan_activity",
+      "label": "ScanActivity (Unified Scan Progress UI)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-scan-verify-progress-consistency-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_voice_metrics",
+      "label": "Voice Metrics (Stylometric Analysis)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-voice-anchor-matcher-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_render_docx",
+      "label": "Render DOCX (ATS-Optimized Rendering)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-docx-exporter-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_run_application_package",
+      "label": "run_application_package (One-Command Pipeline)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "concept_theme_py",
+      "target": "docs_superpowers_specs_2026_07_14_cli_ux_redesign_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md",
+      "source_location": "lines 78-114",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_07_14_cli_ux_redesign_design",
+      "target": "docs_superpowers_specs_2026_07_15_bullet_bank_management_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-14-cli-ux-redesign-design.md",
+      "source_location": "references menu integration",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_profile_paths",
+      "target": "docs_superpowers_specs_2026_07_16_engine_profile_split_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-engine-profile-split-design.md",
+      "source_location": "lines 186-192",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_07_15_gemma_slim_context_design",
+      "target": "docs_superpowers_specs_2026_07_16_rewrite_pipeline_resilience_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-15-gemma-slim-context-design.md",
+      "source_location": "both address bullet rewriting pipeline",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_gemini_client_sustained_failure",
+      "target": "docs_superpowers_specs_2026_07_16_rewrite_pipeline_resilience_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-rewrite-pipeline-resilience-design.md",
+      "source_location": "lines 85-119",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_07_16_cluster_embedding_checkpoint_design",
+      "target": "docs_superpowers_specs_2026_07_16_rewrite_pipeline_resilience_design",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-cluster-embedding-checkpoint-design.md",
+      "source_location": "both address checkpointing and API quota management",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_dashboard_actions",
+      "target": "docs_superpowers_specs_2026_08_08_jobs_screen_actions_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-actions-design.md",
+      "source_location": "lines 96-124",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_08_08_jobs_screen_design",
+      "target": "docs_superpowers_specs_2026_08_08_jobs_screen_actions_design",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-actions-design.md",
+      "source_location": "Context section lines 5-20",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_company_research_vocabulary",
+      "target": "docs_superpowers_specs_2026_08_11_company_research_tiered_fallback_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md",
+      "source_location": "lines 104-117",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_08_11_company_research_tiered_fallback_design",
+      "target": "docs_superpowers_specs_2026_08_12_coverletter_header_enrichment_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-coverletter-header-enrichment-design.md",
+      "source_location": "Both enhance cover letter content via company research",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_cli_art_markup_safety",
+      "target": "docs_superpowers_specs_2026_08_12_bullet_bank_family_progress_consistency_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-bullet-bank-family-progress-consistency-design.md",
+      "source_location": "lines 45-53",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_scan_activity",
+      "target": "docs_superpowers_specs_2026_08_12_scan_verify_progress_consistency_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-12-scan-verify-progress-consistency-design.md",
+      "source_location": "lines 50-71",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_render_docx",
+      "target": "docs_superpowers_specs_2026_08_17_docx_exporter_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-docx-exporter-design.md",
+      "source_location": "lines 30-51",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_run_application_package",
+      "target": "docs_superpowers_specs_2026_08_17_one_command_pipeline_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md",
+      "source_location": "lines 40-46",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_08_17_docx_exporter_design",
+      "target": "docs_superpowers_specs_2026_08_17_one_command_pipeline_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md",
+      "source_location": "Pipeline includes DOCX generation at Stage 4-5",
+      "weight": 1.0
+    },
+    {
+      "source": "concept_voice_metrics",
+      "target": "docs_superpowers_specs_2026_08_17_voice_anchor_matcher_design",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-voice-anchor-matcher-design.md",
+      "source_location": "lines 62-77",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_07_16_engine_profile_split_design",
+      "target": "docs_superpowers_specs_2026_08_08_charm_prompt_migration_design",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-charm-prompt-migration-design.md",
+      "source_location": "Both involve menu/profile interactions",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_08_12_scan_verify_progress_consistency_design",
+      "target": "docs_superpowers_specs_2026_08_17_tui_polish_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-tui-polish-design.md",
+      "source_location": "Both address CLI/TUI visual polish and progress display",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_2026_07_14_cli_ux_redesign_design",
+      "target": "docs_superpowers_specs_2026_08_17_tui_polish_design",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-tui-polish-design.md",
+      "source_location": "Both address theme and visual consistency",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "hyperedge_multi_user_infrastructure",
+      "label": "Multi-User Infrastructure (Profile Split, Paths, Isolation)",
+      "nodes": [
+        "concept_profile_paths",
+        "docs_superpowers_specs_2026_07_16_engine_profile_split_design",
+        "docs_superpowers_specs_2026_07_15_bullet_bank_management_design"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-engine-profile-split-design.md"
+    },
+    {
+      "id": "hyperedge_resilience_and_checkpointing",
+      "label": "Resilience & Checkpointing (API Quota, Failures, Recovery)",
+      "nodes": [
+        "concept_gemini_client_sustained_failure",
+        "docs_superpowers_specs_2026_07_16_cluster_embedding_checkpoint_design",
+        "docs_superpowers_specs_2026_07_16_rewrite_pipeline_resilience_design"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-16-cluster-embedding-checkpoint-design.md"
+    },
+    {
+      "id": "hyperedge_company_research_enrichment",
+      "label": "Company Research Enrichment (Vocabulary, Headers, Content)",
+      "nodes": [
+        "concept_company_research_vocabulary",
+        "docs_superpowers_specs_2026_08_11_company_research_tiered_fallback_design",
+        "docs_superpowers_specs_2026_08_12_coverletter_header_enrichment_design"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md"
+    },
+    {
+      "id": "hyperedge_dashboard_go_python_bridge",
+      "label": "Dashboard-Python Bridge (Jobs Screen, Actions, Export)",
+      "nodes": [
+        "concept_dashboard_actions",
+        "docs_superpowers_specs_2026_08_08_jobs_screen_design",
+        "docs_superpowers_specs_2026_08_08_jobs_screen_actions_design"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-08-jobs-screen-design.md"
+    },
+    {
+      "id": "hyperedge_cover_letter_pipeline",
+      "label": "Cover Letter Generation Pipeline (Voice, Research, DOCX, Package)",
+      "nodes": [
+        "docs_superpowers_specs_2026_08_12_coverletter_header_enrichment_design",
+        "concept_voice_metrics",
+        "concept_render_docx",
+        "docs_superpowers_specs_2026_08_17_one_command_pipeline_design"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-08-17-one-command-pipeline-design.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

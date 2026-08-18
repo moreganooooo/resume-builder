@@ -1724,6 +1724,312 @@ def _check_boilerplate_and_cliches(resume_data: dict) -> list[str]:
     return violations
 
 
+def _check_demographic_and_age_bias(resume_data: dict) -> list[str]:
+    """
+    Checks for demographic, age, marital, or non-inclusive bias indicators:
+    - Graduation dates older than 15 years in education entries
+    - Personal demographic markers (marital status, DOB, children, gender pronouns in non-Why fields)
+    - Non-inclusive tech jargon ('rockstar', 'ninja', 'guru', 'wizard', 'man-hours', 'master/slave')
+    """
+    violations = []
+
+    # 1. Graduation year check (>15 years ago, e.g. < 2011)
+    for edu in resume_data.get("EDUCATION", []):
+        year_str = edu.get("year", "") or edu.get("period", "")
+        years = re.findall(r"\b(19\d{2}|20\d{2})\b", year_str)
+        for y in years:
+            if int(y) < 2011:
+                violations.append(
+                    f"Demographic/Age Bias Warning: Education graduation year '{y}' is >15 years old ({edu.get('degree', '')} at {edu.get('institution', '')}). "
+                    f"Consider omitting graduation year to prevent subconscious age screening."
+                )
+
+    # 2. Demographic and non-inclusive phrasing check
+    prohibited_bias_patterns = [
+        (r"\b(?:date of birth|dob|born in)\b", "Date of birth declaration detected"),
+        (
+            r"\b(?:marital status|married|single|divorced)\b",
+            "Marital status declaration detected",
+        ),
+        (r"\b(?:father of|mother of|children)\b", "Family status declaration detected"),
+        (r"\b(?:rockstar|ninja|guru|wizard)\b", "Non-inclusive tech jargon detected"),
+        (
+            r"\b(?:man-hours|manhours)\b",
+            "Gendered phrasing ('man-hours') detected -- use 'person-hours' or 'work-hours'",
+        ),
+        (
+            r"\bmaster/slave\b",
+            "Non-inclusive terminology ('master/slave') detected -- use 'primary/replica' or 'leader/follower'",
+        ),
+    ]
+
+    haystacks = (
+        [_strip_html(resume_data.get("SUMMARY_TEXT", ""))]
+        + resume_data.get("SKILLS", [])
+        + _all_bullets(resume_data)
+    )
+
+    for text in haystacks:
+        lowered = text.lower()
+        for pattern, label in prohibited_bias_patterns:
+            if re.search(pattern, lowered):
+                violations.append(f"Demographic/Bias Linter: {label} in: {text!r}")
+
+    return violations
+
+
+def _check_keyword_density_ceiling(
+    resume_data: dict, max_density: float = 0.035
+) -> list[str]:
+    """
+    Ensures no single content keyword exceeds the 3.5% density ceiling
+    to prevent AI ATS keyword-stuffing penalties.
+    """
+    STOPWORDS = {
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "if",
+        "then",
+        "else",
+        "when",
+        "at",
+        "by",
+        "for",
+        "with",
+        "about",
+        "against",
+        "between",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "to",
+        "from",
+        "up",
+        "down",
+        "in",
+        "out",
+        "on",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "all",
+        "any",
+        "both",
+        "each",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "s",
+        "t",
+        "can",
+        "will",
+        "just",
+        "don",
+        "should",
+        "now",
+        "of",
+        "as",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "having",
+        "do",
+        "does",
+        "did",
+        "doing",
+        "across",
+        "company",
+        "including",
+        "per",
+    }
+
+    all_texts = (
+        [_strip_html(resume_data.get("SUMMARY_TEXT", ""))]
+        + [_strip_html(resume_data.get("WHY_TEXT", ""))]
+        + resume_data.get("SKILLS", [])
+        + _all_bullets(resume_data)
+    )
+    full_corpus = " ".join(all_texts).lower()
+    words = re.findall(r"\b[a-z]{3,}\b", full_corpus)
+    if not words:
+        return []
+
+    total_words = len(words)
+    counts: dict[str, int] = {}
+    for w in words:
+        if w not in STOPWORDS:
+            counts[w] = counts.get(w, 0) + 1
+
+    violations = []
+    for word, count in counts.items():
+        density = count / total_words
+        if density > max_density and count >= 5:
+            violations.append(
+                f"ATS Keyword Density Ceiling: Keyword '{word}' appears {count} times "
+                f"({density:.1%} of {total_words} words), exceeding the {max_density:.1%} natural density limit."
+            )
+    return violations
+
+
+def _check_summary_4element_formula(resume_data: dict) -> list[str]:
+    """
+    Enforces the standard 4-element Professional Summary formula:
+    1. Seniority / Experience span (e.g. '8 years', 'Senior', 'Lead')
+    2. Professional Title / Discipline (e.g. 'Product Manager', 'Lifecycle Marketer')
+    3. Core Skills / Competencies (e.g. 'CRM', 'Go-to-Market', 'Analytics')
+    4. Key Achievement / Quantified Outcome (e.g. 'Scaled outreach to 50,000+ contacts')
+    """
+    raw = resume_data.get("SUMMARY_TEXT", "") or ""
+    if not raw:
+        return []
+
+    clean_text = _strip_html(raw).strip()
+    if not clean_text:
+        return []
+
+    missing_elements = []
+
+    # 1. Seniority or Years of Experience
+    has_years = bool(
+        re.search(
+            r"\b(?:\d+\+?\s?(?:years?|yrs?)|senior|lead|principal|staff|director|head|founding)\b",
+            clean_text,
+            re.IGNORECASE,
+        )
+    )
+    if not has_years:
+        missing_elements.append("Years of Experience or Seniority level")
+
+    # 2. Professional Title / Discipline
+    has_title = bool(
+        re.search(
+            r"\b(?:marketer|manager|strategist|engineer|developer|designer|architect|lead|director|specialist|consultant|analyst|producer|writer)\b",
+            clean_text,
+            re.IGNORECASE,
+        )
+    )
+    if not has_title:
+        missing_elements.append("Professional Role/Discipline title")
+
+    # 3. Quantified Impact / Key Result (metric or outcome)
+    has_metric = bool(_METRIC_PATTERN.search(clean_text))
+    has_outcome = any(
+        term in clean_text.lower()
+        for term in (
+            "scaled",
+            "recovered",
+            "grew",
+            "built",
+            "spearheaded",
+            "orchestrated",
+            "drove",
+            "delivered",
+            "increased",
+            "optimized",
+            "reduced",
+            "led",
+        )
+    )
+    if not (has_metric or has_outcome):
+        missing_elements.append("Key Achievement or Measurable Outcome")
+
+    if missing_elements:
+        return [
+            f"Professional Summary 4-Element Formula: Summary is missing [{', '.join(missing_elements)}]. "
+            f"Expected '[Years/Seniority] + [Discipline] + [Core Skills] + [Key Achievement]': {clean_text!r}"
+        ]
+    return []
+
+
+def _check_cross_section_redundancy(
+    resume_data: dict, min_gram_words: int = 6
+) -> list[str]:
+    """
+    Detects word sequences (>= 6 words) duplicated across distinct resume sections
+    (e.g., verbatim overlap between Summary and an Experience bullet).
+    """
+    sections = {}
+
+    summary = _strip_html(resume_data.get("SUMMARY_TEXT", "")).strip()
+    if summary:
+        sections["Summary"] = summary
+
+    why = _strip_html(resume_data.get("WHY_TEXT", "")).strip()
+    if why:
+        sections["Why"] = why
+
+    bullets = _all_bullets(resume_data)
+    if bullets:
+        sections["Experience"] = " ".join(bullets)
+
+    # Tokenize each section into normalized words
+    section_tokens = {}
+    for sec_name, sec_text in sections.items():
+        tokens = [w.lower() for w in re.findall(r"\b[a-z0-9]+\b", sec_text)]
+        section_tokens[sec_name] = tokens
+
+    # Build n-grams per section
+    section_ngrams = {}
+    for sec_name, tokens in section_tokens.items():
+        ngrams = set()
+        for i in range(len(tokens) - min_gram_words + 1):
+            ngram = " ".join(tokens[i : i + min_gram_words])
+            ngrams.add(ngram)
+        section_ngrams[sec_name] = ngrams
+
+    violations = []
+    sec_names = list(section_ngrams.keys())
+    reported_ngrams = set()
+
+    for i in range(len(sec_names)):
+        for j in range(i + 1, len(sec_names)):
+            sec_a = sec_names[i]
+            sec_b = sec_names[j]
+            overlap = section_ngrams[sec_a].intersection(section_ngrams[sec_b])
+            for dup in overlap:
+                if dup not in reported_ngrams:
+                    reported_ngrams.add(dup)
+                    violations.append(
+                        f"Cross-Section Redundancy Warning: Identical phrase sequence '{dup}' "
+                        f"appears in both {sec_a} and {sec_b}. Avoid verbatim repetition across sections."
+                    )
+    return violations
+
+
 def validate(
     resume_data: dict,
     style_rules: dict,
@@ -1751,7 +2057,15 @@ def validate(
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))
     violations.extend(_check_bullet_counts(resume_data, role_bullet_minimums or {}))
-    if enforce_star or style_rules.get("enforce_star", False):
+    violations.extend(_check_demographic_and_age_bias(resume_data))
+    violations.extend(_check_keyword_density_ceiling(resume_data))
+    violations.extend(_check_cross_section_redundancy(resume_data))
+    if (
+        enforce_star
+        or style_rules.get("enforce_star", False)
+        or style_rules.get("enforce_summary_formula", False)
+    ):
+        violations.extend(_check_summary_4element_formula(resume_data))
         violations.extend(_check_bullet_star_quality(resume_data))
         violations.extend(_check_boilerplate_and_cliches(resume_data))
     return violations

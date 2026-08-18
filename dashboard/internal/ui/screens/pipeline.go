@@ -62,6 +62,15 @@ type PipelineRefreshMsg struct{}
 // PipelineOpenProgressMsg is emitted when the progress screen should open.
 type PipelineOpenProgressMsg struct{}
 
+// starfieldTickMsg drives continuous twinkle animation when detail pane is empty.
+type starfieldTickMsg time.Time
+
+func tickStarfield() tea.Cmd {
+	return tea.Tick(time.Millisecond*60, func(t time.Time) tea.Msg {
+		return starfieldTickMsg(t)
+	})
+}
+
 type reportSummary struct {
 	archetype string
 	tldr      string
@@ -175,14 +184,12 @@ func NewPipelineModel(t theme.Theme, apps []model.CareerApplication, metrics mod
 
 // Init implements tea.Model.
 func (m *PipelineModel) Init() tea.Cmd {
-	// RESUME_BUILDER_MOTION=reduced mirrors main.go's own opt-out for the
-	// screen-transition spring -- this fade-in is a separate animation
-	// main.go's reducedMotion() can't reach across the package boundary,
-	// so it re-checks the same env var directly (matching icons.go's own
-	// per-package RESUME_BUILDER_ICONS check).
 	if os.Getenv("RESUME_BUILDER_MOTION") == "reduced" {
 		m.animDone = true
 		return nil
+	}
+	if len(m.filtered) == 0 {
+		return tickStarfield()
 	}
 	// Kick off a short fade‑in animation.
 	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg { return animationMsg{} })
@@ -281,6 +288,11 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case animationMsg:
 		m.animDone = true
+		return m, nil
+	case starfieldTickMsg:
+		if len(m.filtered) == 0 && os.Getenv("RESUME_BUILDER_MOTION") != "reduced" {
+			return m, tickStarfield()
+		}
 		return m, nil
 	case PipelineURLOpenFailedMsg:
 		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)

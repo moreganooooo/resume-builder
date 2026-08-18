@@ -1,28 +1,23 @@
 """
-sync_dashboard_theme.py -- regenerates dashboard/internal/theme/
-resumebuilder.go's accent-color block from scripts/theme.py's own color
+sync_dashboard_theme.py -- Regenerates Go TUI theme files from Python theme tokens and synchronizes user theme preferences.
+
+Regenerates dashboard/internal/theme/resumebuilder.go from theme.py's color
 constants, so the two can never drift apart again (B23/P2F9). Also
 regenerates dashboard/internal/theme/subscore_labels.go from
 cli_art.py's own _FIT_DIMENSION_GROUPS, so the Jobs screen's subscore
-labels (Design critique P1: it was rendering raw snake_case schema keys
-like "functional_alignment" straight from the evaluation JSON) can never
-drift from the CLI's own render_comparison_table() labels either.
+labels can never drift from the CLI's own render_comparison_table() labels.
 
-Before this, the Go file's six accent hexes were hand-copied from
-theme.py with comments merely *claiming* they matched -- nothing enforced
-it, so a theme.py color change (like B23's own BRAND_ACCENT fix) would
-silently make those comments lie. doctor.py's check_dashboard_theme_sync()
-detects that drift; this script is how you fix it.
-
-Run this after changing any of theme.py's INFO/BRAND_ACCENT/SUCCESS/
-WARNING/BRAND/ERROR constants, or cli_art.py's _FIT_DIMENSION_GROUPS:
-
-    python scripts/sync_dashboard_theme.py
+Also provides helpers for getting and persisting the active UI theme preference.
 """
 
+from __future__ import annotations
+
+import json
 import os
+from typing import Any, Dict, List, Optional
 
 import cli_art
+import profile_paths
 import theme
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,9 +28,52 @@ SUBSCORE_LABELS_PATH = os.path.join(
     PROJECT_ROOT, "dashboard", "internal", "theme", "subscore_labels.go"
 )
 
-# (Go struct field, theme.py constant name, source token) -- the exact
-# mapping the file's own doc comment already describes, now enforced
-# instead of just asserted.
+SUPPORTED_THEMES = [
+    "modern",
+    "classic",
+    "minimal",
+    "cyberpunk",
+    "monochrome",
+    "dracula",
+]
+
+
+def get_active_theme(profile: Optional[str] = None) -> str:
+    """Gets the active UI theme for the given profile or globally."""
+    config_path = os.path.join(profile_paths.profile_root(profile), "theme.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                theme_name = data.get("theme", "modern").lower()
+                if theme_name in SUPPORTED_THEMES:
+                    return theme_name
+        except Exception:
+            pass
+    return "modern"
+
+
+def set_active_theme(theme_name: str, profile: Optional[str] = None) -> bool:
+    """Sets and persists the active theme configuration."""
+    theme_clean = theme_name.strip().lower()
+    if theme_clean not in SUPPORTED_THEMES:
+        return False
+
+    config_path = os.path.join(profile_paths.profile_root(profile), "theme.json")
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"theme": theme_clean, "updated_at": os.getenv("CURRENT_TIME", "")},
+                f,
+                indent=2,
+            )
+        return True
+    except Exception:
+        return False
+
+
+# (Go struct field, theme.py constant name, source token)
 _ACCENT_FIELDS = [
     ("Blue", "INFO", theme.INFO),
     ("Mauve", "BRAND_ACCENT", theme.BRAND_ACCENT),
@@ -153,8 +191,7 @@ _SUBSCORE_LABELS_FOOTER = "}\n"
 def _flat_subscore_labels() -> dict:
     """Flattens cli_art._FIT_DIMENSION_GROUPS's (layer_label, dict_key,
     {schema_key: display_label}) triples into one schema_key -> display_label
-    map -- see _SUBSCORE_LABELS_HEADER for why the layer grouping itself
-    doesn't need to survive into the generated Go map."""
+    map."""
     flat = {}
     for _layer_label, _dict_key, mapping in cli_art._FIT_DIMENSION_GROUPS:
         flat.update(mapping)

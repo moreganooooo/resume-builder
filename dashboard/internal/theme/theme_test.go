@@ -54,3 +54,36 @@ func TestRenderFlowingGradient(t *testing.T) {
 		t.Errorf("expected different phase to produce different ANSI color sequence")
 	}
 }
+
+func TestNewMenuIcons_DefaultToNerdFont(t *testing.T) {
+	// When unset, must default to Nerd Font icons (C8 fix)
+	t.Setenv("RESUME_BUILDER_ICONS", "")
+	icons := NewMenuIcons()
+	if icons.Pipeline != "" {
+		t.Errorf("expected default Pipeline icon to be Nerd Font '', got: %q", icons.Pipeline)
+	}
+
+	// When set to "unicode", must fall back to Unicode
+	t.Setenv("RESUME_BUILDER_ICONS", "unicode")
+	uIcons := NewMenuIcons()
+	if uIcons.Pipeline != "⚙" {
+		t.Errorf("expected Unicode Pipeline icon to be '⚙', got: %q", uIcons.Pipeline)
+	}
+}
+
+func TestShimmerColor_PhaseShift(t *testing.T) {
+	th := NewTheme("catppuccin-mocha")
+	col1 := ShimmerColor(th.Mauve, th.Blue, 0.0)
+	col2 := ShimmerColor(th.Mauve, th.Blue, 1.57)
+
+	if col1 == nil || col2 == nil {
+		t.Fatalf("expected non-nil shimmer colors")
+	}
+
+	hex1 := ColorToHex(col1)
+	hex2 := ColorToHex(col2)
+
+	if hex1 == hex2 {
+		t.Errorf("expected different phase to produce different shimmer colors, got %s and %s", hex1, hex2)
+	}
+}

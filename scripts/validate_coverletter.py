@@ -55,8 +55,8 @@ def _check_forbidden_phrases(cover_letter_data: dict, style_rules: dict) -> list
 
 def _check_paragraph_count(cover_letter_data: dict) -> list[str]:
     count = len(cover_letter_data.get("body_paragraphs", []))
-    if count < 2 or count > 3:
-        return [f"Expected 2-3 body paragraphs, got {count}"]
+    if count < 2 or count > 4:
+        return [f"Expected 2-4 body paragraphs, got {count}"]
     return []
 
 

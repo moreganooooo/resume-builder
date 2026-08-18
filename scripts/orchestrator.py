@@ -1279,6 +1279,7 @@ class ResumeEngine:
         self.jds_dir = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
+        self._gemma_segment_cache: dict = {}
         try:
             self.deep_evidence_keywords = (
                 self.load_yaml(self.kb_dir, "profile.yml") or {}

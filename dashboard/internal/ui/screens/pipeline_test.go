@@ -451,3 +451,27 @@ func TestSearchTypingDoesNotLoadReports(t *testing.T) {
 		}
 	}
 }
+
+func TestPipelineModel_StarfieldTickOnEmptyDetail(t *testing.T) {
+	// Empty pipeline: should initialize starfield tick loop
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{},
+		model.PipelineMetrics{Total: 0},
+		"..",
+		120,
+		40,
+	)
+
+	cmd := pm.Init()
+	if cmd == nil {
+		t.Fatalf("expected non-nil Init cmd for starfield animation loop on empty model")
+	}
+
+	// Update with starfieldTickMsg should schedule next tick when empty
+	var tickMsg starfieldTickMsg
+	_, nextCmd := pm.Update(tickMsg)
+	if nextCmd == nil {
+		t.Fatalf("expected next starfield tick cmd when detail pane is empty")
+	}
+}

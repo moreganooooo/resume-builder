@@ -5,12 +5,22 @@ Replaces raw JSON filesystem directory moves (jds/<profile>/pending, completed, 
 and flat CSV logs with atomic, ACID-compliant SQLite storage.
 """
 
+import hashlib
 import json
 import os
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 import profile_paths
+
+
+def compute_job_dedup_hash(title: str, company: str, location: str = "") -> str:
+    """Computes a deterministic SHA-256 hash for cross-board job deduplication."""
+    norm_title = " ".join((title or "").lower().split())
+    norm_company = " ".join((company or "").lower().split())
+    norm_loc = " ".join((location or "").lower().split())
+    raw = f"{norm_title}|{norm_company}|{norm_loc}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def get_db_path(profile: Optional[str] = None) -> str:
@@ -45,8 +55,16 @@ def checkpoint(profile: Optional[str] = None) -> None:
         conn.close()
 
 
-def init_db(conn: sqlite3.Connection) -> None:
+def init_db(conn: sqlite3.Connection | str) -> None:
     """Initializes tables and indexes if they do not already exist."""
+    if isinstance(conn, str):
+        c = sqlite3.connect(conn)
+        try:
+            init_db(c)
+        finally:
+            c.close()
+        return
+
     with conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS jobs (
@@ -61,6 +79,9 @@ def init_db(conn: sqlite3.Connection) -> None:
                 final_score REAL,
                 deal_breakers TEXT,
                 metadata_json TEXT,
+                dedup_hash TEXT,
+                visa_sponsored INTEGER DEFAULT 0,
+                ghost_probability REAL DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -86,14 +107,58 @@ def init_db(conn: sqlite3.Connection) -> None:
                 role TEXT NOT NULL,
                 status TEXT NOT NULL,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                responded_at TIMESTAMP,
                 notes TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS verification_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT REFERENCES jobs(id),
+                profile TEXT NOT NULL,
+                reviewer_action TEXT NOT NULL,
+                candidate_signoff_hash TEXT,
+                notes TEXT,
+                reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS contacts (
+                id TEXT PRIMARY KEY,
+                company TEXT NOT NULL,
+                name TEXT NOT NULL,
+                title TEXT,
+                email TEXT,
+                linkedin_url TEXT,
+                interaction_type TEXT DEFAULT 'general',
+                notes TEXT,
+                follow_up_date TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
             CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
             CREATE INDEX IF NOT EXISTS idx_bullet_company ON bullet_bank(company);
             CREATE INDEX IF NOT EXISTS idx_bullet_audit_status ON bullet_bank(audit_status);
+            CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
+            CREATE INDEX IF NOT EXISTS idx_verification_job ON verification_audit_log(job_id);
         """)
+
+        # Dynamic schema migrations for new columns
+        existing_cols = {
+            row["name"] if isinstance(row, sqlite3.Row) else row[1]
+            for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        if "dedup_hash" not in existing_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN dedup_hash TEXT;")
+        if "visa_sponsored" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE jobs ADD COLUMN visa_sponsored INTEGER DEFAULT 0;"
+            )
+        if "ghost_probability" not in existing_cols:
+            conn.execute(
+                "ALTER TABLE jobs ADD COLUMN ghost_probability REAL DEFAULT 0.0;"
+            )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_dedup ON jobs(dedup_hash);")
 
 
 def upsert_job(
@@ -149,6 +214,14 @@ def upsert_job(
     rec_score = job_data.get("recruiter_score")
     final_score = job_data.get("final_score") or job_data.get("score")
 
+    dedup_hash = job_data.get("dedup_hash") or compute_job_dedup_hash(
+        title, company, location
+    )
+    visa_sponsored = 1 if job_data.get("visa_sponsored") else 0
+    ghost_prob = float(
+        job_data.get("ghost_probability") or job_data.get("ghost_prob") or 0.0
+    )
+
     deal_breakers = (
         json.dumps(job_data.get("deal_breakers", []))
         if isinstance(job_data.get("deal_breakers"), list)
@@ -167,6 +240,9 @@ def upsert_job(
                 "jd_text",
                 "raw_text",
                 "status",
+                "dedup_hash",
+                "visa_sponsored",
+                "ghost_probability",
             )
         }
     )
@@ -175,8 +251,8 @@ def upsert_job(
         with conn:
             conn.execute(
                 """
-                INSERT INTO jobs (id, title, company, location, raw_text, status, capability_score, recruiter_score, final_score, deal_breakers, metadata_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO jobs (id, title, company, location, raw_text, status, capability_score, recruiter_score, final_score, deal_breakers, metadata_json, dedup_hash, visa_sponsored, ghost_probability, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
                     title=excluded.title,
                     company=excluded.company,
@@ -188,6 +264,9 @@ def upsert_job(
                     final_score=excluded.final_score,
                     deal_breakers=excluded.deal_breakers,
                     metadata_json=excluded.metadata_json,
+                    dedup_hash=excluded.dedup_hash,
+                    visa_sponsored=excluded.visa_sponsored,
+                    ghost_probability=excluded.ghost_probability,
                     updated_at=CURRENT_TIMESTAMP
             """,
                 (
@@ -202,6 +281,9 @@ def upsert_job(
                     final_score,
                     deal_breakers,
                     metadata_json,
+                    dedup_hash,
+                    visa_sponsored,
+                    ghost_prob,
                 ),
             )
     finally:
@@ -247,6 +329,277 @@ def update_job_status(
                 "UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (new_status, job_id),
             )
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def log_human_verification(
+    job_id: str,
+    profile: Optional[str] = None,
+    reviewer_action: str = "approved",
+    candidate_signoff_hash: Optional[str] = None,
+    notes: str = "",
+    conn: Optional[sqlite3.Connection] = None,
+) -> int:
+    """Logs a California SB 53 & NYC Local Law 144 compliance verification entry."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        prof_name = profile or "default"
+        if not candidate_signoff_hash:
+            sign_raw = f"{job_id}|{prof_name}|{reviewer_action}|{notes}"
+            candidate_signoff_hash = hashlib.sha256(
+                sign_raw.encode("utf-8")
+            ).hexdigest()
+
+        with conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO verification_audit_log (job_id, profile, reviewer_action, candidate_signoff_hash, notes, reviewed_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """,
+                (job_id, prof_name, reviewer_action, candidate_signoff_hash, notes),
+            )
+            return cursor.lastrowid
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_human_verifications(
+    job_id: Optional[str] = None,
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieves verification audit log entries."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        if job_id:
+            cursor = conn.execute(
+                "SELECT * FROM verification_audit_log WHERE job_id = ? ORDER BY reviewed_at DESC",
+                (job_id,),
+            )
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM verification_audit_log ORDER BY reviewed_at DESC"
+            )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def upsert_contact(
+    contact_data: Dict[str, Any],
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> str:
+    """Inserts or updates a networking CRM contact."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+
+    company = contact_data.get("company", "Unknown")
+    name = contact_data.get("name", "Unknown Contact")
+    contact_id = (
+        contact_data.get("id")
+        or hashlib.sha256(f"{company}|{name}".encode("utf-8")).hexdigest()[:16]
+    )
+    title = contact_data.get("title", "")
+    email = contact_data.get("email", "")
+    linkedin_url = contact_data.get("linkedin_url", "")
+    interaction_type = contact_data.get("interaction_type", "general")
+    notes = contact_data.get("notes", "")
+    follow_up_date = contact_data.get("follow_up_date", "")
+
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO contacts (id, company, name, title, email, linkedin_url, interaction_type, notes, follow_up_date, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    company=excluded.company,
+                    name=excluded.name,
+                    title=excluded.title,
+                    email=excluded.email,
+                    linkedin_url=excluded.linkedin_url,
+                    interaction_type=excluded.interaction_type,
+                    notes=excluded.notes,
+                    follow_up_date=excluded.follow_up_date,
+                    updated_at=CURRENT_TIMESTAMP
+            """,
+                (
+                    contact_id,
+                    company,
+                    name,
+                    title,
+                    email,
+                    linkedin_url,
+                    interaction_type,
+                    notes,
+                    follow_up_date,
+                ),
+            )
+            return contact_id
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_contacts(
+    profile: Optional[str] = None,
+    company: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieves contacts from the CRM table."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        if company:
+            cursor = conn.execute(
+                "SELECT * FROM contacts WHERE company = ? ORDER BY name ASC", (company,)
+            )
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM contacts ORDER BY company ASC, name ASC"
+            )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def calculate_funnel_velocity(
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> Dict[str, Any]:
+    """Calculates funnel progression metrics, stage conversion rates, and velocity."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        cursor = conn.execute(
+            "SELECT status, COUNT(*) as count FROM jobs GROUP BY status"
+        )
+        status_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
+
+        total_tracked = sum(status_counts.values())
+        applied = (
+            status_counts.get("applied", 0)
+            + status_counts.get("interview", 0)
+            + status_counts.get("offer", 0)
+            + status_counts.get("rejected", 0)
+            + status_counts.get("responded", 0)
+        )
+        interviews = status_counts.get("interview", 0) + status_counts.get("offer", 0)
+        offers = status_counts.get("offer", 0)
+
+        interview_rate = (interviews / applied * 100.0) if applied > 0 else 0.0
+        offer_rate = (offers / interviews * 100.0) if interviews > 0 else 0.0
+
+        return {
+            "total_tracked": total_tracked,
+            "status_counts": status_counts,
+            "applied_count": applied,
+            "interview_count": interviews,
+            "offer_count": offers,
+            "interview_conversion_pct": round(interview_rate, 1),
+            "offer_conversion_pct": round(offer_rate, 1),
+        }
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def run_integrity_check(
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> Dict[str, Any]:
+    """
+    Runs database integrity check and detects orphaned records and duplicates.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        # SQLite internal integrity
+        cursor = conn.execute("PRAGMA integrity_check;")
+        sqlite_integrity = [row[0] for row in cursor.fetchall()]
+
+        # Orphaned application logs
+        cursor = conn.execute(
+            "SELECT COUNT(*) as count FROM application_log WHERE job_id IS NOT NULL AND job_id NOT IN (SELECT id FROM jobs)"
+        )
+        orphaned_app_logs = cursor.fetchone()["count"]
+
+        # Orphaned audit logs
+        cursor = conn.execute(
+            "SELECT COUNT(*) as count FROM verification_audit_log WHERE job_id IS NOT NULL AND job_id NOT IN (SELECT id FROM jobs)"
+        )
+        orphaned_audit_logs = cursor.fetchone()["count"]
+
+        # Duplicate dedup hashes in jobs
+        cursor = conn.execute(
+            "SELECT dedup_hash, COUNT(*) as count FROM jobs WHERE dedup_hash IS NOT NULL AND dedup_hash != '' GROUP BY dedup_hash HAVING count > 1"
+        )
+        dup_hashes = cursor.fetchall()
+
+        is_healthy = (
+            sqlite_integrity == ["ok"]
+            and orphaned_app_logs == 0
+            and orphaned_audit_logs == 0
+            and len(dup_hashes) == 0
+        )
+
+        return {
+            "healthy": is_healthy,
+            "sqlite_integrity": sqlite_integrity,
+            "orphaned_application_logs": orphaned_app_logs,
+            "orphaned_audit_logs": orphaned_audit_logs,
+            "duplicate_job_hashes": len(dup_hashes),
+        }
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def clean_orphaned_records(
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> Dict[str, int]:
+    """
+    Cleans orphaned application logs and audit records, and reindexes tables.
+    """
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        with conn:
+            c1 = conn.execute(
+                "DELETE FROM application_log WHERE job_id IS NOT NULL AND job_id NOT IN (SELECT id FROM jobs)"
+            ).rowcount
+            c2 = conn.execute(
+                "DELETE FROM verification_audit_log WHERE job_id IS NOT NULL AND job_id NOT IN (SELECT id FROM jobs)"
+            ).rowcount
+            conn.execute("REINDEX;")
+        return {
+            "deleted_application_logs": c1,
+            "deleted_audit_logs": c2,
+            "total_cleaned": c1 + c2,
+        }
     finally:
         if close_conn:
             conn.close()

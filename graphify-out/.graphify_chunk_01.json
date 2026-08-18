@@ -1,0 +1,812 @@
+{
+  "nodes": [
+    {
+      "id": "docs_ideas_archive_resumebuilder",
+      "label": "Resume Builder Ideas Archive",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": "Morgan Escott",
+      "contributor": null
+    },
+    {
+      "id": "docs_archive_resumedesignsystem",
+      "label": "Resume Design System",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/archive/ResumeDesignSystem.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": "Morgan Escott",
+      "contributor": null
+    },
+    {
+      "id": "docs_mastercoverletter_blueprint",
+      "label": "Cover Letter Research Master Blueprint",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": "Morgan Escott",
+      "contributor": null
+    },
+    {
+      "id": "docs_gemini_implementation_plan",
+      "label": "Implementation Plan Master Edition",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_gemini_master_audit",
+      "label": "Master Audit Document",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_gemini_critical_audit",
+      "label": "Critical Audit Document",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/resume_builder_critical_audit.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumebuilder_system",
+      "label": "Resume Builder",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": "Morgan Escott",
+      "contributor": null
+    },
+    {
+      "id": "orchestrator_py",
+      "label": "Orchestrator Core Engine",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "229KB, ~3500+ lines",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "database_persistence_layer",
+      "label": "Database and Persistence Layer",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "sqlite_data_db",
+      "label": "SQLite Embedded Database",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": "profiles/<profile>/data.db",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "vector_rag_system",
+      "label": "Vector RAG Semantic Search",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "typst_pdf_engine",
+      "label": "Typst Vector PDF Rendering Engine",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "job_board_scanning",
+      "label": "Job Board Scanning",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "LinkedIn, JobRight, board scrapers",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "liveness_checking",
+      "label": "Liveness Checking",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "liveness.py, liveness-core.mjs",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bullet_bank_management",
+      "label": "Bullet Bank Management",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "bullet-bank-keepers-audited.csv, mining, auditing",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_generation",
+      "label": "Cover Letter Generation",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "tailor_coverletter.md, render_coverletter.py",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resume_tailoring_pipeline",
+      "label": "Resume Tailoring Pipeline",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "orchestrator.py run_pipeline()",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "evaluation_fit_scoring",
+      "label": "Evaluation & Fit Scoring",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "evaluate_fit.md, batch_evaluate.py",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ats_compatibility",
+      "label": "ATS Compatibility & Parsing",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": "ATS platform classification, DOCX vs PDF",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multiprofile_architecture",
+      "label": "Multi-Profile Architecture",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "profiles/<name>/, profile_paths.py",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bootstrap_wizard_flow",
+      "label": "Bootstrap Wizard Onboarding",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "bootstrap_bullet_bank.py, bootstrap_profile.py",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "company_research_enrichment",
+      "label": "Company Research & Enrichment",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": "company_research.py, tone mirroring",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "gemini_api_integration",
+      "label": "Gemini API Integration",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": "gemini_client.py, dynamic auth headers",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tui_menu_interface",
+      "label": "Terminal User Interface (TUI)",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "menu.py, cli_art.py, Go Bubble Tea dashboard",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "validate_resume_engine",
+      "label": "Resume Validation Engine",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "validate_resume.py, Google XYZ formula enforcement",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "knowledge_base_system",
+      "label": "Knowledge Base System",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "KB_ALLOWLIST, verified_claims.csv, evidence_guide.csv",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "syncthing_multidevice_sync",
+      "label": "Syncthing Multi-Device Sync",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "P2P sync across profiles, data sync",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "security_credentials_shield",
+      "label": "Credentials & Secrets Management",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": ".env files, plaintext API keys, session tokens",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "doctor_diagnostic_script",
+      "label": "Doctor Diagnostic Script",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "doctor.py, health checks, environment verification",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pipeline_architecture_rationale",
+      "label": "Six-Stage Pipeline Architecture",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "typst_adoption_rationale",
+      "label": "Typst Vector PDF Over Chromium",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "multiprofile_design_rationale",
+      "label": "Multi-Profile Engine Design",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "company_research_tiered_fallback",
+      "label": "Company Research Tiered Fallback",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "Three-tier fallback: company site, Google-grounded Gemini, JD text",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bullet_uniqueness_enforcement",
+      "label": "Bullet Uniqueness at Selection Time",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "mine_bullet_bank() two-pass selection, scarcity-first ordering",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "metadata_underscore_pattern",
+      "label": "Underscore-Prefixed Metadata Pattern",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": "_evaluation, _liveness, _application keys on JD JSON files",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "polyglot_stack_issue",
+      "label": "Polyglot Stack Fragmentation",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "Python + Node + Go + Shell + HTML/CSS stack complexity",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "xyzformula_critique",
+      "label": "Google XYZ Formula Critique",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": "Forced metrics create artificial AI-beige output",
+      "source_url": null,
+      "contributor": null
+    },
+    {
+      "id": "ats_platform_strategy",
+      "label": "ATS Platform-Specific Strategy",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": "Workday/Taleo Enterprise vs Greenhouse/Lever Startups different weighting",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "resumebuilder_system",
+      "target": "orchestrator_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_py",
+      "target": "resume_tailoring_pipeline",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "database_persistence_layer",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "database_persistence_layer",
+      "target": "sqlite_data_db",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_py",
+      "target": "vector_rag_system",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bullet_bank_management",
+      "target": "vector_rag_system",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "typst_pdf_engine",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "job_board_scanning",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "job_board_scanning",
+      "target": "liveness_checking",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "evaluation_fit_scoring",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "bullet_bank_management",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "cover_letter_generation",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_generation",
+      "target": "company_research_enrichment",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "validate_resume_engine",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_py",
+      "target": "gemini_api_integration",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_py",
+      "target": "multiprofile_architecture",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "bootstrap_wizard_flow",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bootstrap_wizard_flow",
+      "target": "multiprofile_architecture",
+      "relation": "initializes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "ats_compatibility",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "tui_menu_interface",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "knowledge_base_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "syncthing_multidevice_sync",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "security_credentials_shield",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "doctor_diagnostic_script",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resume_tailoring_pipeline",
+      "target": "pipeline_architecture_rationale",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "typst_pdf_engine",
+      "target": "typst_adoption_rationale",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/implementation_plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "multiprofile_architecture",
+      "target": "multiprofile_design_rationale",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "company_research_enrichment",
+      "target": "company_research_tiered_fallback",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bullet_bank_management",
+      "target": "bullet_uniqueness_enforcement",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "database_persistence_layer",
+      "target": "metadata_underscore_pattern",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumebuilder_system",
+      "target": "polyglot_stack_issue",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "validate_resume_engine",
+      "target": "xyzformula_critique",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/gemini_files/master_audit_document.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_generation",
+      "target": "ats_platform_strategy",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_generation",
+      "target": "ats_compatibility",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/cover_letter_research_master_blueprint.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "hyperedge_tailor_pipeline_flow",
+      "label": "Resume Tailoring Pipeline Flow",
+      "nodes": [
+        "job_board_scanning",
+        "evaluation_fit_scoring",
+        "bullet_bank_management",
+        "resume_tailoring_pipeline",
+        "validate_resume_engine",
+        "typst_pdf_engine"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md"
+    },
+    {
+      "id": "hyperedge_multiuser_support",
+      "label": "Multi-User Profile Support System",
+      "nodes": [
+        "multiprofile_architecture",
+        "bootstrap_wizard_flow",
+        "database_persistence_layer",
+        "security_credentials_shield",
+        "syncthing_multidevice_sync"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md"
+    },
+    {
+      "id": "hyperedge_knowledge_integration",
+      "label": "Knowledge Base Integration",
+      "nodes": [
+        "knowledge_base_system",
+        "vector_rag_system",
+        "bullet_bank_management",
+        "company_research_enrichment",
+        "resume_tailoring_pipeline"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/IDEAS_ARCHIVE.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

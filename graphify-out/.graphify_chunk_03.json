@@ -1,0 +1,605 @@
+{
+  "nodes": [
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_extended_technical_analysis_jobright_mcp_connector",
+      "label": "Jobright MCP Connector",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md",
+      "source_location": "line 1",
+      "captured_at": null,
+      "author": "Morgan Scott",
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_mcp_server",
+      "label": "MCP Server",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 15",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_fastmcp_framework",
+      "label": "FastMCP Framework",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 19",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_openai_gpt_4o",
+      "label": "OpenAI GPT-4o",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 18",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_parser_resume",
+      "label": "parser_resume",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md",
+      "source_location": "line 198",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_diagnose_resume",
+      "label": "diagnose_resume",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md",
+      "source_location": "line 199",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_update_resume",
+      "label": "update_resume",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md",
+      "source_location": "line 200",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "label": "Shared Analysis Engine",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 195",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_ats_compatibility_rules",
+      "label": "ATS Compatibility Rules",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 185",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_keyword_matching_rules",
+      "label": "Keyword Matching Rules",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 186",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_bullet_quality_rules",
+      "label": "Bullet Quality Rules",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 187",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_ats_platforms",
+      "label": "ATS Platforms",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 31-32",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_greenhouse_ats",
+      "label": "Greenhouse",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_lever_ats",
+      "label": "Lever",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_workday_ats",
+      "label": "Workday",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_scoring_system",
+      "label": "Scoring System",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 42-48",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Both MCP and web tools use identical weighted scoring: keyword_match 40%, ats_compatibility 25%, bullet_quality 20%, experience_match 10%, formatting 5%"
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_checker",
+      "label": "Resume Checker",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 29",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_helper",
+      "label": "Resume Helper",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 29",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_maker",
+      "label": "Resume Maker",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 29",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_rewriter",
+      "label": "Resume Rewriter",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 29",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_data_sources",
+      "label": "Data Sources for Job Listings",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 38-45",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Jobright aggregates 8M+ job listings from LinkedIn, Indeed, Glassdoor, company career pages, and niche job boards with 400K+ new jobs daily"
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_embedding_model",
+      "label": "text-embedding-3-small",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 20",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_program_docs_faq_split_agent_pipeline",
+      "label": "Split-Agent Pipeline",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 10",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Dual scoring system with separate LLM stages: Stage 1 evaluates Capability & Functional Fit, Stage 2 evaluates Recruiter Perception & Hiring Odds to prevent cognitive model saturation"
+    },
+    {
+      "id": "docs_program_docs_faq_piecewise_interview_probability_scale",
+      "label": "Piecewise Interview Probability Scale",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 14-18",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Mathematical converter translating qualitative 1-5 interview_odds_score into Absolute Interview Probability Percentage using baseline response rates and piecewise-interpolated Odds Ratios"
+    },
+    {
+      "id": "docs_program_docs_faq_bullet_bank",
+      "label": "Bullet Bank",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 36-39",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_program_docs_faq_bullet_bank_keepers",
+      "label": "bullet-bank-keepers-audited.csv",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 38",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_plan_phase_0_smoke",
+      "label": "Phase 0 - Cold-boot Smoke Run",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/PLAN.md",
+      "source_location": "line 88-104",
+      "captured_at": null,
+      "author": "Morgan Scott",
+      "contributor": null
+    },
+    {
+      "id": "docs_review_plan_phase_1_onboarding",
+      "label": "Phase 1 - Onboarding & new-user path",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/PLAN.md",
+      "source_location": "line 107-143",
+      "captured_at": null,
+      "author": "Morgan Scott",
+      "contributor": null
+    },
+    {
+      "id": "docs_review_plan_comprehensive_review",
+      "label": "Comprehensive Review Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/PLAN.md",
+      "source_location": "line 1-5",
+      "captured_at": null,
+      "author": "Morgan Scott",
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_tedix_dev_listing",
+      "label": "tedix.dev MCP Listing",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 92-107",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_10m_job_descriptions",
+      "label": "10M+ Job Descriptions Training Data",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 21",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Jobright trains on more than 10 million job descriptions for fine-tuning domain-specific models"
+    },
+    {
+      "id": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_feature_parity",
+      "label": "Feature Parity Matrix",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 325-337",
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "MCP and web tools share identical analysis engines and rulesets, confirming backend parity across all analysis features"
+    }
+  ],
+  "edges": [
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_jobright_mcp_connector",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_mcp_server",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md",
+      "source_location": "line 15-20",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_mcp_server",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_fastmcp_framework",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 19",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_parser_resume",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 195",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_diagnose_resume",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 195",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_update_resume",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 195",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_ats_compatibility_rules",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 205",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_keyword_matching_rules",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 205",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_bullet_quality_rules",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 205",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_fastmcp_framework",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_openai_gpt_4o",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 161",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_checker",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 215",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_helper",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 216",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_maker",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 217",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_resume_rewriter",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 219",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_ats_platforms",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_greenhouse_ats",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_ats_platforms",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_lever_ats",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_ats_platforms",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_workday_ats",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 32",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_program_docs_faq_split_agent_pipeline",
+      "target": "docs_program_docs_faq_piecewise_interview_probability_scale",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 10-18",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_program_docs_faq_bullet_bank",
+      "target": "docs_program_docs_faq_bullet_bank_keepers",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md",
+      "source_location": "line 38",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_jobright_mcp_connector",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_fastmcp_framework",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 19",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_scoring_system",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 42-48",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_feature_parity",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_mcp_server",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md",
+      "source_location": "line 325-337",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_10m_job_descriptions",
+      "target": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_openai_gpt_4o",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 21",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_data_sources",
+      "target": "docs_morgan_research_improvement_concepts_jobright_mcp_connector_jobright_mcp_connector",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md",
+      "source_location": "line 38-45",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "jobright_mcp_architecture_stack",
+      "label": "Jobright MCP Architecture Stack",
+      "nodes": [
+        "docs_morgan_research_improvement_concepts_jobright_mcp_connector_jobright_mcp_connector",
+        "docs_morgan_research_improvement_concepts_jobright_technical_deep_dive_fastmcp_framework",
+        "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_shared_analysis_engine"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md"
+    },
+    {
+      "id": "resume_analysis_rule_framework",
+      "label": "Resume Analysis Rule Framework",
+      "nodes": [
+        "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_ats_compatibility_rules",
+        "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_keyword_matching_rules",
+        "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_bullet_quality_rules"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md"
+    },
+    {
+      "id": "resume_builder_scoring_system",
+      "label": "Resume Builder Dual Scoring System",
+      "nodes": [
+        "docs_program_docs_faq_split_agent_pipeline",
+        "docs_program_docs_faq_piecewise_interview_probability_scale",
+        "docs_morgan_research_improvement_concepts_jobright_mcp_vs_web_tools_scoring_system"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/program_docs/faq.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

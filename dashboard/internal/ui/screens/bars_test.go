@@ -61,3 +61,34 @@ func TestRenderModalOverlayCentersAndDims(t *testing.T) {
 		t.Fatalf("expected left padding of row 8 to carry dimmed background prefix, got %q", strippedRow8)
 	}
 }
+
+func TestToastNotification_Lifecycle(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	toast := NewToastNotification()
+
+	if toast.Visible() {
+		t.Fatalf("expected initial toast to be hidden")
+	}
+
+	toast.Show("✨", "Application submitted!", 2)
+	if !toast.Visible() {
+		t.Fatalf("expected toast to be visible after Show")
+	}
+
+	rendered := toast.Render(th, 80)
+	if !strings.Contains(ansi.Strip(rendered), "Application submitted!") {
+		t.Fatalf("expected rendered toast to contain message, got: %s", rendered)
+	}
+
+	// Advance ticks until expired
+	for i := 0; i < 30; i++ {
+		toast.Update()
+	}
+	toast.TickSecond()
+	toast.TickSecond()
+	toast.TickSecond()
+
+	if toast.Visible() {
+		t.Fatalf("expected toast to expire after 2 seconds")
+	}
+}
