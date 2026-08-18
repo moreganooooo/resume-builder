@@ -25,7 +25,14 @@ import theme
 # stalls on any real batch run. 15 RPM / 2 calls-per-JD = 7.5 JD/min = 8.0s
 # minimum spacing, plus a buffer so a rolling-window quota counter doesn't
 # still trip it.
-SECONDS_BETWEEN_CALLS = 9.0
+SECONDS_BETWEEN_CALLS = (
+    0.0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 9.0
+)
 
 
 def _sort_key(result: dict) -> tuple:

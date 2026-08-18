@@ -244,19 +244,24 @@ Treering headhunted her directly from IST.
             "Kansas City Kansas Community College", ""
         )
 
-        if ku_achievement_key not in mod.KU_ACHIEVEMENT_OPTIONS:
+        ku_options = getattr(mod, "KU_ACHIEVEMENT_OPTIONS", {})
+        kckcc_options = getattr(mod, "KCKCC_ACHIEVEMENT_OPTIONS", {})
+
+        if ku_achievement_key not in ku_options:
             print(
                 f"  ⚠️  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option."
             )
-        ku_bullet = mod.KU_ACHIEVEMENT_OPTIONS.get(
-            ku_achievement_key, next(iter(mod.KU_ACHIEVEMENT_OPTIONS.values()))
+        ku_bullet = ku_options.get(
+            ku_achievement_key,
+            next(iter(ku_options.values())) if ku_options else "",
         )
-        if kckcc_achievement_key not in mod.KCKCC_ACHIEVEMENT_OPTIONS:
+        if kckcc_achievement_key not in kckcc_options:
             print(
                 f"  ⚠️  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option."
             )
-        kckcc_bullet = mod.KCKCC_ACHIEVEMENT_OPTIONS.get(
-            kckcc_achievement_key, next(iter(mod.KCKCC_ACHIEVEMENT_OPTIONS.values()))
+        kckcc_bullet = kckcc_options.get(
+            kckcc_achievement_key,
+            next(iter(kckcc_options.values())) if kckcc_options else "",
         )
         return [
             {

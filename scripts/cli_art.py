@@ -202,11 +202,7 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
     or when RESUME_BUILDER_MOTION=reduced, the same opt-out (and env var
     name) dashboard/main.go's reducedMotion() already offers for the Go
     side's screen-transition animation."""
-    if (
-        not console.is_terminal
-        or os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
-        or os.environ.get("CI") == "true"
-    ):
+    if not console.is_terminal or os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
         console.print(render_frame(None))
         return
 

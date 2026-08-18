@@ -378,7 +378,10 @@ class GeminiClient:
         for attempt in range(max_retries):
             if "gemma" in model.lower():
                 elapsed = time.time() - GeminiClient._last_gemma_call_ts
-                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
+                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS and not (
+                    os.environ.get("CI") == "true"
+                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                ):
                     wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
                     cli_art.console.print(
                         f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...",
@@ -529,9 +532,15 @@ class GeminiClient:
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = min(
-                    BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                ) + random.uniform(1, 4)
+                sleep_dur = (
+                    0
+                    if (
+                        os.environ.get("CI") == "true"
+                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                    )
+                    else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
+                    + random.uniform(1, 4)
+                )
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
                     f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...",
@@ -561,9 +570,15 @@ class GeminiClient:
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = min(
-                    BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                ) + random.uniform(1, 4)
+                sleep_dur = (
+                    0
+                    if (
+                        os.environ.get("CI") == "true"
+                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                    )
+                    else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
+                    + random.uniform(1, 4)
+                )
                 cli_art.console.print(
                     f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...",
                     soft_wrap=True,
