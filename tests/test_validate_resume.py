@@ -1003,9 +1003,9 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
         resume = {"SKILLS": ["**Technical Stack:** Kubernetes, React, Outreach.io"]}
         violations = validate_resume._check_hallucinated_tools(resume)
         # Kubernetes and React are definitely hallucinated, but Outreach.io is fine
-        self.assertTrue(any("Kubernetes" in v or "kubernetes" in v for v in violations))
-        self.assertTrue(any("React" in v or "react" in v for v in violations))
-        self.assertFalse(any("Outreach.io" in v or "outreach" in v for v in violations))
+        self.assertTrue(any("kubernetes" in v.lower() for v in violations))
+        self.assertTrue(any("react" in v.lower() for v in violations))
+        self.assertFalse(any("outreach" in v.lower() for v in violations))
 
     def test_reads_from_the_active_profiles_own_kb_dir_not_a_hardcoded_morgan_path(
         self,
