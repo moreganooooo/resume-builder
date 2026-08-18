@@ -84,8 +84,11 @@ def check_python_version() -> dict:
 def check_venv() -> dict:
     venv_path = os.path.join(PROJECT_ROOT, ".venv")
     exists = os.path.isdir(venv_path)
+    in_venv = getattr(sys, "prefix", "") != getattr(
+        sys, "base_prefix", getattr(sys, "prefix", "")
+    )
     has_python = os.path.isfile(os.path.join(venv_path, "bin", "python"))
-    ok = exists and has_python
+    ok = exists and (in_venv or has_python)
     detail = (
         f".venv/ {'found' if exists else 'missing'}, "
         f"{'ready to use' if ok else 'not usable'}"
