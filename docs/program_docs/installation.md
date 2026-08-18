@@ -10,7 +10,8 @@ For standard laptops and desktops, this installs the full Python backend and com
 
 ### Prerequisites:
 * Python `3.10+` installed on your system.
-* Node.js & `npm` (for PDF rendering via Playwright).
+* Go `1.21+` (Go `1.25` recommended) for compiling native Charm TUI binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`).
+* Node.js & `npm` (for HTML/CSS PDF rendering via Playwright) or Typst CLI (for instant native vector PDF rendering).
 
 ### Automated Setup:
 Simply navigate to your repository and execute our installation wizard:
@@ -21,7 +22,27 @@ Choose **`1` (Full Desktop Suite)**. The installer will:
 1. Provision a clean, isolated virtual environment in `.venv/`.
 2. Install all required Python packages (Pandas, Pydantic, GenAI, Rich, etc.).
 3. Compile Node dependencies and download Playwright's Chromium browser binary.
-4. Register the global shell alias so you can use the `resume` command from anywhere!
+4. Pre-compile the Go Charm dashboard and prompt binaries for sub-millisecond keyboard reactions.
+5. Register the global shell alias so you can use the `resume` command from anywhere!
+
+### Post-Install Verification:
+Run the self-healing diagnostic suite to verify all tools, fonts, keys, and test suites:
+```bash
+resume doctor
+```
+
+### Environment Customization Flags:
+You can configure UI accessibility and aesthetics in your shell rc file (`~/.zshrc` or `~/.bashrc`):
+```bash
+# Fallback to standard Unicode symbols if your terminal lacks Nerd Fonts
+export RESUME_BUILDER_ICONS=unicode
+
+# Disable spring micro-animations for motion/vestibular sensitivities
+export RESUME_BUILDER_MOTION=reduced
+
+# Force dark or light mode theme
+export RESUME_BUILDER_THEME=dark
+```
 
 ---
 
