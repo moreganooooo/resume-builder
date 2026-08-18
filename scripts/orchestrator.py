@@ -153,20 +153,14 @@ conservative and explain the limitation in context_gaps.
 # forever with capture_output=True swallowing every hint. 180s is generous
 # for a single-page render but still a real bound.
 PDF_GENERATION_TIMEOUT_SECONDS = 180
-CRITIQUE_SLEEP = 4  # seconds between critique calls (free-tier: 15 RPM)
-REWRITE_SLEEP = 4  # seconds before the rewrite call after a FAIL
-RESCORE_SLEEP = 8  # seconds before the re-score call after a rewrite
-RECOMMENDATION_SLEEP = (
-    8  # seconds between Step 5.5's one-recommendation-at-a-time calls
-)
-# Step 3's audit loop makes up to 30 calls (several with large segment
-# bundles, 16k-24k tokens each per the logs), then Step 4 immediately fires
-# one ~105k-token builder call -- cumulative tokens across that window can
-# approach the free tier's 250k input-tokens-per-minute cap (see
-# KB_ALLOWLIST's comment below for where that cap is already documented),
-# producing the timeouts/retries seen in a real run. This pause lets the
-# rolling per-minute window recover before the big call.
-PRE_BUILDER_SLEEP = 15
+_IS_TEST_OR_CI = os.environ.get("CI") == "true" or os.environ.get(
+    "RESUME_BUILDER_TESTING"
+) == "1"
+CRITIQUE_SLEEP = 0 if _IS_TEST_OR_CI else 4
+REWRITE_SLEEP = 0 if _IS_TEST_OR_CI else 4
+RESCORE_SLEEP = 0 if _IS_TEST_OR_CI else 8
+RECOMMENDATION_SLEEP = 0 if _IS_TEST_OR_CI else 8
+PRE_BUILDER_SLEEP = 0 if _IS_TEST_OR_CI else 15
 # (longer because rescore fires immediately after rewrite)
 
 

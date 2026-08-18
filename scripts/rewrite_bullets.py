@@ -179,9 +179,12 @@ REWRITE_MAX_OUTPUT_TOKENS = 2048
 # ---------------------------------------------------------------------------
 # SLEEP CONSTANTS
 # ---------------------------------------------------------------------------
-SLEEP_BETWEEN_BULLETS = 5
-SLEEP_BETWEEN_SCORES = 5
-SLEEP_ON_RETRY = 8
+_IS_TEST_OR_CI = (
+    os.environ.get("CI") == "true" or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+)
+SLEEP_BETWEEN_BULLETS = 0 if _IS_TEST_OR_CI else 5
+SLEEP_BETWEEN_SCORES = 0 if _IS_TEST_OR_CI else 5
+SLEEP_ON_RETRY = 0 if _IS_TEST_OR_CI else 8
 
 CSV_FLUSH_EVERY = 5
 
