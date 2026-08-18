@@ -151,7 +151,9 @@ def profile_yaml(profile: str = None) -> dict:
     fields (e.g. candidate.full_name) without pulling in orchestrator.py's
     ResumeEngine class."""
     path = os.path.join(kb_dir(profile), "profile.yml")
-    with open(path, "r") as f:
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 

@@ -1287,19 +1287,18 @@ class ResumeEngine:
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
         self.deep_evidence_keywords = (
-            self.load_yaml(self.kb_dir, "profile.yml").get("deep_evidence_keywords")
-            or []
+            profile_paths.profile_yaml().get("deep_evidence_keywords") or []
         )
         self.voice_rules = self.load_yaml(self.scoring_dir, "voice_rules.yaml") or {}
 
     def load_yaml(self, dir_path, filename):
         path = os.path.join(dir_path, filename)
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
     def load_prompt(self, filename):
         path = os.path.join(self.prompts_dir, filename)
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return f.read()
 
     def load_knowledge_base(self):
