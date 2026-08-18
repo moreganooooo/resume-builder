@@ -259,7 +259,11 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
 
                         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                     except Exception:
+                        pass
+                    try:
                         proc.kill()
+                    except Exception:
+                        pass
                 proc.wait()
 
         if proc.returncode != 0:
