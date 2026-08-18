@@ -101,6 +101,32 @@ def situational_roles_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "situational_roles.yaml")
 
 
+def _make_fallback_fixed_content():
+    import types
+
+    mod = types.ModuleType("fixed_content_fallback")
+    mod.CONTACT_INFO = {
+        "NAME": "Candidate Name",
+        "PHONE": "(555) 000-0000",
+        "EMAIL": "candidate@example.com",
+        "LINKEDIN_DISPLAY": "linkedin.com/in/candidate",
+        "LOCATION": "City, ST",
+    }
+    mod.COMPANY_META = {}
+    mod.COMPANY_TITLE_DESCRIPTOR = {}
+    mod.CLIENTS = {}
+    mod.COMPANY_RENAME_NOTE = {}
+    mod.COMPANY_FIXED_TITLE = {}
+    mod.CAREER_NOTE = ""
+    mod.CAREER_NOTE_COMPANY = ""
+    mod.CERTIFICATIONS = []
+    mod.CV_SECTION_KEYWORDS = []
+    mod.BACKGROUND_IDENTITY = ""
+    mod.BACKGROUND_TAGS = {}
+    mod.build_education = lambda achievement_keys=None: []
+    return mod
+
+
 def fixed_content_module(profile: str = None):
     """Dynamically imports profiles/<profile>/fixed_content.py and returns
     the loaded module object -- the per-profile replacement for a static
@@ -108,6 +134,8 @@ def fixed_content_module(profile: str = None):
     name = profile or active_profile()
     path = os.path.join(profile_root(name), "fixed_content.py")
     if not os.path.exists(path):
+        if name == "morgan" or profile is None:
+            return _make_fallback_fixed_content()
         raise ImportError(
             f"profiles/{name}/fixed_content.py not found -- has this profile been bootstrapped?"
         )
