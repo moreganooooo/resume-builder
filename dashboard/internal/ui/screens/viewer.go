@@ -311,9 +311,7 @@ func (m ViewerModel) renderWithGlamour() ([]string, error) {
 	rawLines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	for _, l := range rawLines {
 		if ansi.StringWidth(l) > w {
-			for _, wl := range strings.Split(ansi.Hardwrap(l, w, true), "\n") {
-				result = append(result, wl)
-			}
+			result = append(result, strings.Split(ansi.Hardwrap(l, w, true), "\n")...)
 		} else {
 			result = append(result, l)
 		}

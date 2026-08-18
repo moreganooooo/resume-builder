@@ -53,7 +53,7 @@ func main() {
 		"- Evidence match: 4",
 		"- Narrative burden: 3",
 	}, "\n")
-	os.WriteFile(tmpFile, []byte(md), 0644)
+	_ = os.WriteFile(tmpFile, []byte(md), 0644)
 
 	vm := screens.NewViewerModel(t, tmpFile, "Acme Corp — Engineering Manager", 120, 40)
 
@@ -61,10 +61,10 @@ func main() {
 	defer out.Close()
 
 	fmt.Fprintln(out, "=== PIPELINE ===")
-	out.WriteString(pm.View())
-	out.WriteString("\n\n=== JOBS ===\n")
-	out.WriteString(jm.View())
-	out.WriteString("\n\n=== VIEWER ===\n")
-	out.WriteString(vm.View())
-	out.WriteString("\n")
+	_, _ = out.WriteString(pm.View())
+	_, _ = out.WriteString("\n\n=== JOBS ===\n")
+	_, _ = out.WriteString(jm.View())
+	_, _ = out.WriteString("\n\n=== VIEWER ===\n")
+	_, _ = out.WriteString(vm.View())
+	_, _ = out.WriteString("\n")
 }
