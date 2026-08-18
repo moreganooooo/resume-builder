@@ -267,3 +267,63 @@ func TestViewerZeroByteAndExtremeBounds(t *testing.T) {
 	m.Resize(10, 4)
 	m.View()
 }
+
+func TestViewer_SearchAndJump(t *testing.T) {
+	lines := []string{
+		"Line 0 - intro",
+		"Line 1 - normal",
+		"Line 2 - normal",
+		"Line 3 - normal",
+		"Line 4 - normal",
+		"Line 5 - normal",
+		"Line 6 - TARGET match",
+		"Line 7 - normal",
+		"Line 8 - normal",
+		"Line 9 - normal",
+		"Line 10 - normal",
+		"Line 11 - normal",
+		"Line 12 - TARGET match second",
+		"Line 13 - end",
+		"Line 14 - end2",
+		"Line 15 - end3",
+	}
+	m := ViewerModel{
+		rawContent: strings.Join(lines, "\n"),
+		lines:      lines,
+		width:      80,
+		height:     8,
+		theme:      theme.NewTheme("catppuccin-mocha"),
+	}
+	m.rebuildRender()
+
+
+	// Press '/' to start search
+	m, _ = m.Update(pressKey("/"))
+	if !m.searchActive {
+		t.Fatalf("expected searchActive=true after '/'")
+	}
+
+	// Type query "TARGET"
+	for _, ch := range "TARGET" {
+		m, _ = m.Update(pressKey(string(ch)))
+	}
+	// Press Enter to commit search
+	m, _ = m.Update(pressKey("enter"))
+
+	if m.searchActive {
+		t.Fatalf("expected searchActive=false after enter")
+	}
+	if len(m.searchMatches) != 2 {
+		t.Fatalf("expected 2 matches for 'TARGET', got %d", len(m.searchMatches))
+	}
+
+	// Press 'n' to jump to next match
+	m, _ = m.Update(pressKey("n"))
+	if m.scrollOffset == 0 && m.searchMatches[m.searchMatchIdx] != 0 {
+		// should jump to match line
+		if m.scrollOffset != m.searchMatches[m.searchMatchIdx] {
+			t.Errorf("expected scrollOffset %d, got %d", m.searchMatches[m.searchMatchIdx], m.scrollOffset)
+		}
+	}
+}
+

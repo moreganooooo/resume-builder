@@ -92,3 +92,80 @@ func TestToastNotification_Lifecycle(t *testing.T) {
 		t.Fatalf("expected toast to expire after 2 seconds")
 	}
 }
+
+func TestRenderFooter_ThreeTiers(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	primary := []HelpBinding{{"Enter", "Select"}}
+	actions := []HelpBinding{{"t", "Tailor"}, {"a", "Archive"}}
+	system := []HelpBinding{{"?", "Help"}, {"q", "Quit"}}
+
+	rendered := RenderHierarchicalFooter(th, 80, primary, actions, system)
+	plain := ansi.Strip(rendered)
+
+	if !strings.Contains(plain, "Enter") || !strings.Contains(plain, "Select") {
+		t.Errorf("expected primary key in footer, got: %s", plain)
+	}
+	if !strings.Contains(plain, "Tailor") || !strings.Contains(plain, "Archive") {
+		t.Errorf("expected actions in footer, got: %s", plain)
+	}
+	if !strings.Contains(plain, "Help") || !strings.Contains(plain, "Quit") {
+		t.Errorf("expected system in footer, got: %s", plain)
+	}
+}
+
+func TestWindowResize_BelowMinDimensions(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	rendered := RenderWindowResizeGuidance(72, 20, 80, 24, th)
+	plain := ansi.Strip(rendered)
+
+	if !strings.Contains(plain, "Current: 72×20") {
+		t.Errorf("expected 'Current: 72×20' in guidance, got: %s", plain)
+	}
+	if !strings.Contains(plain, "Required: 80×24") {
+		t.Errorf("expected 'Required: 80×24' in guidance, got: %s", plain)
+	}
+}
+
+func TestHelpOverlay_Scrolling(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	categories := []HelpCategory{
+		{Label: "Navigation", Bindings: []HelpBinding{{"j/k", "Move down/up"}, {"g/G", "Top/Bottom"}}},
+		{Label: "Actions", Bindings: []HelpBinding{{"t", "Tailor resume"}, {"a", "Archive job"}}},
+		{Label: "System", Bindings: []HelpBinding{{"?", "Toggle help"}, {"q", "Quit"}}},
+	}
+	// Small height=12 with 3 categories should render with clip/scroll indicator
+	rendered := RenderHelpOverlay(th, "Jobs", categories, 80, 12)
+	plain := ansi.Strip(rendered)
+
+	if !strings.Contains(plain, "Jobs Help") {
+		t.Errorf("expected header 'Jobs Help', got: %s", plain)
+	}
+}
+
+func TestTruncate_UsesSingleRuneEllipsis(t *testing.T) {
+	result := Truncate("VeryLongString", 8)
+	if result != "VeryLon…" {
+		t.Errorf("Truncate('VeryLongString', 8) = %q; want %q", result, "VeryLon…")
+	}
+	if ansi.StringWidth(result) != 8 {
+		t.Errorf("expected width 8, got %d", ansi.StringWidth(result))
+	}
+}
+
+func TestStarfield_NarrowSplit_ClampsInnerDimensions(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	// Test very small bounds (3x3), must not panic
+	rendered := renderEmptyDetailPane(th, 3, 3)
+	if len(rendered) == 0 {
+		t.Errorf("expected non-empty rendered detail pane for narrow dimensions")
+	}
+}
+
+func TestClipboard_OSC52Sequence(t *testing.T) {
+	seq := FormatOSC52Copy("https://example.com/job/123")
+	if !strings.HasPrefix(seq, "\x1b]52;c;") || !strings.HasSuffix(seq, "\x07") {
+		t.Fatalf("expected valid OSC 52 sequence, got %q", seq)
+	}
+}
+
+

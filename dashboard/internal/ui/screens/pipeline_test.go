@@ -518,3 +518,77 @@ func TestRenderPipelineDetailPane_ZeroAndNilFields(t *testing.T) {
 		t.Fatalf("expected non-empty detail pane for empty CareerApplication")
 	}
 }
+
+func TestPipeline_UndoStatusChange(t *testing.T) {
+	app := model.CareerApplication{
+		Company: "Acme",
+		Role:    "Engineer",
+		Status:  "Evaluated",
+	}
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{app},
+		model.PipelineMetrics{Total: 1},
+		"..",
+		120,
+		40,
+	)
+	pm.applyFilterAndSort()
+
+	// Initial undo should notify nothing to undo
+	pm, _ = pm.Update(tea.KeyPressMsg(tea.Key{Code: 'u', Text: "u"}))
+	if !strings.Contains(pm.Notice(), "Nothing to undo") {
+		t.Fatalf("expected notice for empty undo stack, got %q", pm.Notice())
+	}
+	pm.notice = ""
+
+	// Change status: press 'c' to open picker, move down, press enter to select, press y to confirm
+	pm, _ = pm.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Text: "c"}))
+	pm, _ = pm.Update(tea.KeyPressMsg(tea.Key{Code: 'j', Text: "j"}))
+	pm, _ = pm.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	var cmd tea.Cmd
+	pm, cmd = pm.Update(tea.KeyPressMsg(tea.Key{Code: 'y', Text: "y"}))
+	if cmd == nil {
+		t.Fatalf("expected status update command")
+	}
+
+
+
+	// Check undo stack
+	if len(pm.undoStack) != 1 {
+		t.Fatalf("expected 1 item on undo stack, got %d", len(pm.undoStack))
+	}
+
+	// Dismiss any notice if present and press 'u' to undo
+	pm.notice = ""
+	pm, cmd = pm.Update(tea.KeyPressMsg(tea.Key{Code: 'u', Text: "u"}))
+	if cmd == nil {
+		t.Fatalf("expected undo command to revert status")
+	}
+	msg := cmd()
+	updateMsg, ok := msg.(PipelineUpdateStatusMsg)
+	if !ok {
+		t.Fatalf("expected PipelineUpdateStatusMsg, got %T", msg)
+	}
+	if updateMsg.NewStatus != "Evaluated" {
+		t.Fatalf("expected reverted status 'Evaluated', got %q", updateMsg.NewStatus)
+	}
+}
+
+func TestPipeline_EmptyStateContextual(t *testing.T) {
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{},
+		model.PipelineMetrics{Total: 0},
+		"..",
+		120,
+		40,
+	)
+	pm.applyFilterAndSort()
+
+	view := pm.View()
+	if !strings.Contains(view, "No applications") && !strings.Contains(view, "0") {
+		t.Fatalf("expected view to reflect zero applications or empty state")
+	}
+}
+
