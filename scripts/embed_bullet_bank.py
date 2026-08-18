@@ -66,7 +66,14 @@ AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM = 768  # sweet spot for text-only
 BATCH_SIZE = 20  # batchEmbedContents supports up to ~20 requests per call
-EMBED_SLEEP = 20  # seconds between batch calls → ~15 RPM
+EMBED_SLEEP = (
+    0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 20
+)  # seconds between batch calls → ~15 RPM
 MAX_RETRIES = 4
 
 KB_DIR = profile_paths.kb_dir()
