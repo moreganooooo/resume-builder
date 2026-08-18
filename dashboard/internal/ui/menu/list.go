@@ -2,12 +2,14 @@
 package menu
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/screens"
 )
@@ -36,6 +38,7 @@ var menuHelpCategories = []screens.HelpCategory{
 		Label: "Actions",
 		Bindings: []screens.HelpBinding{
 			{Key: "Enter", Desc: "Open selected view"},
+			{Key: "1-5", Desc: "Direct screen shortcut"},
 		},
 	},
 	{
@@ -56,11 +59,18 @@ type MenuModel struct {
 	subtitle      string
 	sparkleBuffer string
 	sparkleActive bool
+	profile       data.ProfileInfo
 }
 
 // SetSubtitle updates the dynamic motivational header text under the main menu title.
 func (m *MenuModel) SetSubtitle(sub string) {
 	m.subtitle = sub
+}
+
+// WithProfile sets the active profile for display in the main menu banner.
+func (m MenuModel) WithProfile(p data.ProfileInfo) MenuModel {
+	m.profile = p
+	return m
 }
 
 // SparkleActive returns whether the sparkle easter egg mode is triggered.
@@ -75,6 +85,7 @@ func NewMenuModel(t theme.Theme) MenuModel {
 		MenuItem{title: "Progress", desc: "Analytics and funnel", icon: t.Icons.Progress},
 		MenuItem{title: "Reports", desc: "Open a markdown report", icon: t.Icons.Report},
 		MenuItem{title: "Jobs", desc: "Browse & Manage Jobs", icon: t.Icons.Jobs},
+		MenuItem{title: "Knowledge Base", desc: "Inspect claims, metrics & tools", icon: t.Icons.Search},
 		MenuItem{title: "Exit", desc: "Leave the dashboard", icon: t.Icons.Quit},
 	}
 
@@ -162,6 +173,8 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 		case "4":
 			return m, func() tea.Msg { return MenuSelectMsg{Command: "Jobs"} }
 		case "5":
+			return m, func() tea.Msg { return MenuSelectMsg{Command: "Knowledge Base"} }
+		case "6":
 			return m, func() tea.Msg { return MenuQuitMsg{} }
 		case "enter":
 			if sel, ok := m.list.SelectedItem().(MenuItem); ok {
@@ -174,7 +187,6 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
-
 
 // View renders the menu with a consistent header/footer layout.
 func (m MenuModel) View() string {
@@ -200,7 +212,16 @@ func (m MenuModel) View() string {
 			Background(m.theme.Surface).
 			Width(width),
 	)
-	titleText := m.theme.Icons.Menu + "  " + theme.RenderColorGradient("✦ MAIN MENU ✧", m.theme.Mauve, m.theme.Blue)
+
+	profileBadge := ""
+	if m.profile.Name != "" {
+		profileBadge = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.Peach).
+			Render(fmt.Sprintf("  [Profile: %s • %s]", m.profile.Name, m.profile.Role))
+	}
+
+	titleText := m.theme.Icons.Menu + "  " + theme.RenderColorGradient("✦ MAIN MENU ✧", m.theme.Mauve, m.theme.Blue) + profileBadge
 	header := headerStyle.Render(titleText)
 
 	captionStyle := theme.PadHorizontal(
@@ -223,7 +244,7 @@ func (m MenuModel) View() string {
 			Background(m.theme.Surface).
 			Width(width),
 	)
-	footer := footerStyle.Render("←↑↓→ navigate • ↩ select • ? help • q quit")
+	footer := footerStyle.Render("←↑↓→ navigate • ↩ select • 1-5 jump • ? help • q quit")
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, caption, body, footer)
 }
