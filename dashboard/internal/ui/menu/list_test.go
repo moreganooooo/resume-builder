@@ -110,3 +110,30 @@ func TestMenuModel_SparkleEasterEgg(t *testing.T) {
 		t.Errorf("expected sparkle easter egg mode to activate after typing 'sparkle'")
 	}
 }
+
+func TestMenuModel_NumericShortcuts(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m.Resize(80, 24)
+
+	// Pressing '1' selects "Pipeline"
+	_, cmd := m.Update(pressKey("1"))
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on pressing '1'")
+	}
+	msg := cmd()
+	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Pipeline" {
+		t.Errorf("expected MenuSelectMsg with 'Pipeline', got: %#v", msg)
+	}
+
+	// Pressing '2' selects "Progress"
+	_, cmd = m.Update(pressKey("2"))
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on pressing '2'")
+	}
+	msg = cmd()
+	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Progress" {
+		t.Errorf("expected MenuSelectMsg with 'Progress', got: %#v", msg)
+	}
+}
+

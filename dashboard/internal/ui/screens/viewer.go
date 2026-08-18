@@ -24,17 +24,21 @@ type ViewerClosedMsg struct{ Quit bool }
 
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
-	lines         []string
-	rawContent    string
-	renderedLines []string
-	title         string
-	scrollOffset  int
-	width         int
-	height        int
-	theme         theme.Theme
+	lines          []string
+	rawContent     string
+	renderedLines  []string
+	title          string
+	scrollOffset   int
+	width          int
+	height         int
+	theme          theme.Theme
 	// showHelp toggles the `?` categorized keybinding overlay (see
 	// bars.go's renderHelpOverlay) over this screen's normal body.
-	showHelp bool
+	showHelp       bool
+	searchActive   bool
+	searchQuery    string
+	searchMatches  []int
+	searchMatchIdx int
 }
 
 var viewerHelpCategories = []helpCategory{
@@ -43,11 +47,16 @@ var viewerHelpCategories = []helpCategory{
 		{"PgUp / PgDn", "Page up / down"},
 		{"g / G (Home/End)", "Jump to top / bottom"},
 	}},
+	{"Search", []helpBinding{
+		{"/", "Search in report"},
+		{"n / N", "Jump to next / previous match"},
+	}},
 	{"Exit", []helpBinding{
 		{"Esc", "Back to the previous screen"},
 		{"q", "Quit dashboard"},
 	}},
 }
+
 
 // NewViewerModel creates a new file viewer for the given path.
 func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
@@ -140,72 +149,156 @@ func (m *ViewerModel) Resize(width, height int) {
 // on the active screen before its own early-returns, so a
 // tea.WindowSizeMsg never actually reaches this Update() in the real app;
 // a case for it here was dead code.
-func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if m.showHelp {
-			switch msg.String() {
-			case "?", "esc", "q":
-				m.showHelp = false
-			}
-			return m, nil
+func (m *ViewerModel) updateSearchMatches() {
+	m.searchMatches = nil
+	m.searchMatchIdx = 0
+	if m.searchQuery == "" {
+		return
+	}
+	q := strings.ToLower(m.searchQuery)
+	for idx, line := range m.renderedLines {
+		plain := strings.ToLower(ansi.Strip(line))
+		if strings.Contains(plain, q) {
+			m.searchMatches = append(m.searchMatches, idx)
 		}
-		switch msg.String() {
-		case "?":
-			m.showHelp = true
+	}
+}
 
-		case "q":
-			return m, func() tea.Msg { return ViewerClosedMsg{Quit: true} }
+func (m *ViewerModel) jumpNextMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.searchMatchIdx = (m.searchMatchIdx + 1) % len(m.searchMatches)
+	m.scrollOffset = m.searchMatches[m.searchMatchIdx]
+	m.clampScrollOffset()
+}
 
+func (m *ViewerModel) jumpPrevMatch() {
+	if len(m.searchMatches) == 0 {
+		return
+	}
+	m.searchMatchIdx--
+	if m.searchMatchIdx < 0 {
+		m.searchMatchIdx = len(m.searchMatches) - 1
+	}
+	m.scrollOffset = m.searchMatches[m.searchMatchIdx]
+	m.clampScrollOffset()
+}
+
+// Update handles input for the viewer screen.
+func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
+	var keyStr string
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		keyStr = msg.String()
+	case tea.KeyMsg:
+		keyStr = msg.String()
+	}
+
+	if keyStr == "" {
+		return m, nil
+	}
+
+	if m.showHelp {
+		switch keyStr {
+		case "?", "esc", "q":
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
+	if m.searchActive {
+		switch keyStr {
 		case "esc":
-			return m, func() tea.Msg { return ViewerClosedMsg{} }
+			m.searchActive = false
+		case "enter":
+			m.searchActive = false
+			if len(m.searchMatches) > 0 {
+				m.scrollOffset = m.searchMatches[0]
+				m.clampScrollOffset()
+			}
+		case "backspace":
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				m.updateSearchMatches()
+			}
+		default:
+			if len(keyStr) == 1 {
+				m.searchQuery += keyStr
+				m.updateSearchMatches()
+			}
+		}
+		return m, nil
+	}
 
-		case "down", "j":
-			maxScroll := len(m.renderedLines) - m.bodyHeight()
-			if maxScroll < 0 {
-				maxScroll = 0
-			}
-			if m.scrollOffset < maxScroll {
-				m.scrollOffset++
-			}
+	switch keyStr {
+	case "?":
+		m.showHelp = true
 
-		case "up", "k":
-			if m.scrollOffset > 0 {
-				m.scrollOffset--
-			}
+	case "/":
+		m.searchActive = true
+		m.searchQuery = ""
+		m.searchMatches = nil
+		m.searchMatchIdx = 0
 
-		case "pgdown", "ctrl+d":
-			jump := m.bodyHeight() / 2
-			maxScroll := len(m.renderedLines) - m.bodyHeight()
-			if maxScroll < 0 {
-				maxScroll = 0
-			}
-			m.scrollOffset += jump
-			if m.scrollOffset > maxScroll {
-				m.scrollOffset = maxScroll
-			}
+	case "n":
+		m.jumpNextMatch()
 
-		case "pgup", "ctrl+u":
-			jump := m.bodyHeight() / 2
-			m.scrollOffset -= jump
-			if m.scrollOffset < 0 {
-				m.scrollOffset = 0
-			}
+	case "N":
+		m.jumpPrevMatch()
 
-		case "home", "g":
-			m.scrollOffset = 0
+	case "q":
+		return m, func() tea.Msg { return ViewerClosedMsg{Quit: true} }
 
-		case "end", "G":
-			maxScroll := len(m.renderedLines) - m.bodyHeight()
-			if maxScroll < 0 {
-				maxScroll = 0
-			}
+	case "esc":
+		return m, func() tea.Msg { return ViewerClosedMsg{} }
+
+	case "down", "j":
+		maxScroll := len(m.renderedLines) - m.bodyHeight()
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if m.scrollOffset < maxScroll {
+			m.scrollOffset++
+		}
+
+	case "up", "k":
+		if m.scrollOffset > 0 {
+			m.scrollOffset--
+		}
+
+	case "pgdown", "ctrl+d":
+		jump := m.bodyHeight() / 2
+		maxScroll := len(m.renderedLines) - m.bodyHeight()
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		m.scrollOffset += jump
+		if m.scrollOffset > maxScroll {
 			m.scrollOffset = maxScroll
 		}
+
+	case "pgup", "ctrl+u":
+		jump := m.bodyHeight() / 2
+		m.scrollOffset -= jump
+		if m.scrollOffset < 0 {
+			m.scrollOffset = 0
+		}
+
+	case "home", "g":
+		m.scrollOffset = 0
+
+	case "end", "G":
+		maxScroll := len(m.renderedLines) - m.bodyHeight()
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		m.scrollOffset = maxScroll
 	}
 
 	return m, nil
 }
+
 
 func (m ViewerModel) bodyHeight() int {
 	h := m.height - 4 // header + footer + padding
@@ -733,14 +826,33 @@ func (m ViewerModel) renderFooter() string {
 		Width(m.width).
 		Padding(0, 1)
 
+	if m.searchActive {
+		promptStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Background(m.theme.Surface)
+		textStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Background(m.theme.Surface)
+		hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
+		return style.Render(promptStyle.Render("/ ") + textStyle.Render(m.searchQuery+"█") + hintStyle.Render("  Enter find • Esc cancel"))
+	}
+
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 
+	searchInfo := ""
+	if len(m.searchMatches) > 0 {
+		matchBadge := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Background(m.theme.Surface)
+		searchInfo = matchBadge.Render(fmt.Sprintf("[%d/%d] ", m.searchMatchIdx+1, len(m.searchMatches))) +
+			keyStyle.Render("n/N") + descStyle.Render(" jump  ")
+	} else if m.searchQuery != "" {
+		noMatch := lipgloss.NewStyle().Foreground(m.theme.Peach).Background(m.theme.Surface)
+		searchInfo = noMatch.Render("[0 matches] ")
+	}
+
 	return style.Render(
-		keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
-			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
+		searchInfo +
+			keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
+			keyStyle.Render("/") + descStyle.Render(" search  ") +
 			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
 			keyStyle.Render("?") + descStyle.Render(" help  ") +
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
+
