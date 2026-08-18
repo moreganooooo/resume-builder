@@ -2713,9 +2713,7 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            profile_roles = (
-                self.load_yaml(self.kb_dir, "profile.yml").get("roles") or []
-            )
+            profile_roles = profile_paths.profile_yaml().get("roles") or []
             company_min_bullets = {
                 r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r
             }
@@ -2884,15 +2882,7 @@ class ResumeEngine:
             )
             return {}
 
-        # Load candidate profile configuration
-        profile = {}
-        try:
-            profile = self.load_yaml(self.kb_dir, "profile.yml") or {}
-        except Exception as e:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} Could not load profile.yml: {e}",
-                soft_wrap=True,
-            )
+        profile = profile_paths.profile_yaml()
 
         remote_required = profile.get("location", {}).get("remote_required", False)
 
@@ -3690,9 +3680,9 @@ class ResumeEngine:
         style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
         # Same reason, same place: the post-trim gate runs on the resumed path
         # too, so the roster can't be computed inside the fresh-build branch.
-        role_roster = _required_role_roster(self.load_yaml(self.kb_dir, "profile.yml"))
+        role_roster = _required_role_roster(profile_paths.profile_yaml())
         role_bullet_minimums = _required_role_bullet_minimums(
-            self.load_yaml(self.kb_dir, "profile.yml")
+            profile_paths.profile_yaml()
         )
 
         resume_data = checkpoint.get("resume_data")
@@ -3727,9 +3717,7 @@ class ResumeEngine:
                     "should be rare by construction, not a default."
                 )
 
-            role_rules_block = self.build_role_rules_block(
-                self.load_yaml(self.kb_dir, "profile.yml")
-            )
+            role_rules_block = self.build_role_rules_block(profile_paths.profile_yaml())
 
             # style_rules.yaml/ai_risk.yaml used to be attached only to the
             # post-build critique call (Step 5) and polish.py's cover-letter
@@ -4456,9 +4444,7 @@ class ResumeEngine:
         trim_instructions = [
             lambda rd: "Trim the Summary to its 5-line limit.",
             lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
-            lambda rd: _bullet_removal_trim_instruction(
-                self.load_yaml(self.kb_dir, "profile.yml")
-            ),
+            lambda rd: _bullet_removal_trim_instruction(profile_paths.profile_yaml()),
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0
