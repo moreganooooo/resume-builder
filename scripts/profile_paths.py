@@ -106,24 +106,156 @@ def _make_fallback_fixed_content():
 
     mod = types.ModuleType("fixed_content_fallback")
     mod.CONTACT_INFO = {
-        "NAME": "Candidate Name",
-        "PHONE": "(555) 000-0000",
-        "EMAIL": "candidate@example.com",
-        "LINKEDIN_DISPLAY": "linkedin.com/in/candidate",
-        "LOCATION": "City, ST",
+        "NAME": "Morgan Escott",
+        "PHONE": "716-352-9050",
+        "EMAIL": "escott.morgan@gmail.com",
+        "LINKEDIN_DISPLAY": "linkedin.com/in/morganescott",
+        "LOCATION": "Getzville, NY (Buffalo Area)",
     }
-    mod.COMPANY_META = {}
-    mod.COMPANY_TITLE_DESCRIPTOR = {}
-    mod.CLIENTS = {}
-    mod.COMPANY_RENAME_NOTE = {}
-    mod.COMPANY_FIXED_TITLE = {}
-    mod.CAREER_NOTE = ""
-    mod.CAREER_NOTE_COMPANY = ""
-    mod.CERTIFICATIONS = []
-    mod.CV_SECTION_KEYWORDS = []
-    mod.BACKGROUND_IDENTITY = ""
+    mod.COMPANY_META = {
+        "Mercor": {"size_revenue": "~800 employees; $75M+ revenue", "location": "Short-Term Contract | Remote"},
+        "Treering Yearbooks": {"size_revenue": "~120 employees; $17M+ revenue", "location": "Remote"},
+        "Inside Sales Team": {"size_revenue": "~150 employees; ~$21M revenue", "location": "Buffalo, NY"},
+        "Element 8 / Strategy LLC": {"size_revenue": "~10–15 employees; ~$1M+ revenue", "location": "Lenexa, KS"},
+        "VML": {"size_revenue": "~600+ employees; ~$75M+ revenue", "location": "Kansas City, MO"},
+        "Callahan Creek": {"size_revenue": "~30 employees; ~$5M revenue", "location": "Lawrence, KS"},
+        "Humane Society of Greater Kansas City": {"location": "Kansas City, MO"},
+        "Unisource Document Products": {},
+        "Kansas Colloquies": {"location": "Bonner Springs, KS"},
+        "KU Payroll Office": {"location": "Lawrence, KS"},
+        "DeJoy, Knauff & Blood": {"location": "Rochester, NY"},
+        "USitek": {},
+    }
+    mod.COMPANY_TITLE_DESCRIPTOR = {
+        "Mercor": "AI Training",
+        "Treering Yearbooks": "SaaS/EdTech",
+        "Inside Sales Team": "Outbound/Agency",
+        "Element 8 / Strategy LLC": "Design/Agency/Startup",
+        "VML": "Agency/Digital/Brand",
+        "Callahan Creek": "Agency/Creative/Brand",
+        "Humane Society of Greater Kansas City": "Nonprofit/Animal Welfare",
+        "Unisource Document Products": "Print/Document Solutions",
+        "Kansas Colloquies": "Student Journalism",
+        "KU Payroll Office": "Higher Ed/Payroll",
+        "DeJoy, Knauff & Blood": "Tax/Accounting",
+        "USitek": "Clerical/Graphic Design",
+    }
+    mod.CLIENTS = {
+        "VML": {
+            "list": "SAP, Equinix, HughesNet, The Children's Place, Welch Allyn, Waste Management, Carlson Hotels, Gatorade",
+            "essential": True,
+        },
+        "Callahan Creek": {
+            "list": "Hill's Pet Nutrition, CommunityAmerica Credit Union, Sprint, Dave Ramsey, Free State Brewery, KC Ad Club",
+            "essential": True,
+        },
+    }
+    mod.COMPANY_RENAME_NOTE = {
+        "Inside Sales Team": "Alleyoop",
+        "Callahan Creek": "BarkleyOKRP",
+    }
+    mod.COMPANY_FIXED_TITLE = {
+        "Element 8 / Strategy LLC": "Design Assistant → Lead Designer",
+    }
+    mod.CAREER_NOTE = (
+        "After a fulfilling run at Treering, I took time in 2024–25 to support a loved one's "
+        "health and invest in my professional growth. I'm excited to return to work with "
+        "renewed focus."
+    )
+    mod.CAREER_NOTE_COMPANY = "Treering Yearbooks"
+    mod.CAREER_BREAK_ENTRY = {
+        "company": "Career Break — Professional Development & Retraining",
+        "title": "SaaS Strategy, Data Analytics, & Automation",
+        "period": "08/2024 - 08/2025",
+        "location": "Remote",
+        "achievements": [
+            "Completed comprehensive certifications in Google Data Analytics and HubSpot Lifecycle Marketing Software.",
+            "Developed personal data pipelines and campaign flow automation projects applying Python and SQL to campaign databases.",
+            "Managed family transition logistics and personal caregiving responsibilities with structured weekly timelines.",
+        ],
+    }
+    mod.CERTIFICATIONS = [
+        {"title": "Email Marketing Software Certification", "org": "HubSpot", "year": "2026"},
+        {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"},
+        {"title": "Camp Portfolio", "org": "Bernstein Rein, Kansas City", "year": "2008"},
+    ]
+    mod.CV_SECTION_KEYWORDS = [
+        (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
+        (["inside sales", "alleyoop", "ist"], "Inside Sales Team"),
+        (["usitek"], "USitek"),
+        (["element 8", "strategy llc"], "Element 8 / Strategy LLC"),
+        (["vml"], "VML"),
+        (["callahan"], "Callahan Creek"),
+        (["unisource", "udp"], "Unisource Document Products"),
+        (["humane society"], "Humane Society of Greater Kansas City"),
+        (["mercor"], "Mercor"),
+    ]
+    mod.KU_ACHIEVEMENT_OPTIONS = {
+        "content_generalist": "Marketing Intern, Lied Center of Performing Arts, drove 800% social media follower growth through organic content strategy and audience engagement",
+        "email_ops": "Marketing Intern, Lied Center of Performing Arts, managed promotional campaigns and digital channels, growing social media following by 800%",
+        "content": "Marketing Intern, Lied Center of Performing Arts, produced editorial and promotional content across channels, built early instinct for audience-specific messaging",
+    }
+    mod.KCKCC_ACHIEVEMENT_OPTIONS = {
+        "writing_content": "Editor-in-Chief, student newspaper for 1.5 years, assigned coverage, led editorial team, and managed weekly publication from story conception through print",
+        "enablement_mgmt": "Editor-in-Chief, student newspaper, led a team of reporters and columnists, managed editorial calendar, and upheld writing and voice standards across all content",
+        "generalist": "Editor-in-Chief, Kansas Colloquies student newspaper, managed publication end-to-end for 1.5 years while maintaining a full academic scholarship",
+    }
+    mod.BACKGROUND_IDENTITY = """
+Morgan is a creative and strategic marketer with 10+ years of experience spanning journalism,
+design, agency work, sales, CRM, and lifecycle content. She is the rare combination: writes
+campaigns that perform AND operates the stack (Salesforce + Outreach.io). She brings structure
+to creative work and energy to technical systems. She is seeking fully remote IC roles — not
+management. She has consistently been the person companies come back to: Callahan Creek extended
+her from intern to freelance; Element 8's CEO recruited her to lead Strategy LLC branding;
+Treering headhunted her directly from IST.
+""".strip()
     mod.BACKGROUND_TAGS = {}
-    mod.build_education = lambda achievement_keys=None: []
+
+    def _build_education(achievement_keys: dict = None) -> list:
+        achievement_keys = achievement_keys or {}
+        ku_achievement_key = achievement_keys.get("University of Kansas", "")
+        kckcc_achievement_key = achievement_keys.get("Kansas City Kansas Community College", "")
+
+        if ku_achievement_key not in mod.KU_ACHIEVEMENT_OPTIONS:
+            print(f"  ⚠️  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option.")
+        ku_bullet = mod.KU_ACHIEVEMENT_OPTIONS.get(
+            ku_achievement_key, next(iter(mod.KU_ACHIEVEMENT_OPTIONS.values()))
+        )
+        if kckcc_achievement_key not in mod.KCKCC_ACHIEVEMENT_OPTIONS:
+            print(f"  ⚠️  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option.")
+        kckcc_bullet = mod.KCKCC_ACHIEVEMENT_OPTIONS.get(
+            kckcc_achievement_key, next(iter(mod.KCKCC_ACHIEVEMENT_OPTIONS.values()))
+        )
+        return [
+            {
+                "degree": "BS, Journalism + Strategic Communication",
+                "institution": "University of Kansas",
+                "location": "Lawrence, KS",
+                "bullets": [
+                    "3.56 GPA, Phi Theta Kappa Scholarship recipient",
+                    ku_bullet,
+                ],
+            },
+            {
+                "degree": "AA, Journalism",
+                "institution": "Kansas City Kansas Community College",
+                "location": "Kansas City, KS",
+                "bullets": [
+                    "3.75 GPA, Full academic scholarship, Graduated with honors",
+                    kckcc_bullet,
+                ],
+            },
+            {
+                "degree": "Coursework, Graphic Design",
+                "institution": "Johnson County Community College",
+                "location": "Overland Park, KS",
+                "bullets": [
+                    "3.86 GPA, studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography",
+                ],
+            },
+        ]
+
+    mod.build_education = _build_education
     return mod
 
 
@@ -151,6 +283,17 @@ def _make_fallback_profile_yaml() -> dict:
             "full_name": "Morgan Escott",
             "first_name": "Morgan",
             "last_name": "Escott",
+            "email": "escott.morgan@gmail.com",
+            "phone": "+1-716-352-9050",
+            "location": "Getzville, NY (Buffalo Area)",
+            "linkedin": "linkedin.com/in/morganescott",
+            "portfolio_url": "https://escottmorgan.myportfolio.com",
+            "process_map_url": "https://escottmorgan.wixsite.com/processmap",
+            "pronouns": ["she", "her", "hers"],
+        },
+        "location": {
+            "remote_required": True,
+            "candidate_location": "Getzville, NY (Buffalo Area)",
         },
         "fixed_credentials": {
             "education": [
@@ -169,9 +312,58 @@ def _make_fallback_profile_yaml() -> dict:
                 },
             ]
         },
-        "roles": [],
-        "tags": [],
+        "roles": [
+            {"company": "Mercor", "min_bullets": 1},
+            {"company": "Treering Yearbooks", "min_bullets": 4},
+            {"company": "Inside Sales Team", "min_bullets": 2},
+            {"company": "Element 8 / Strategy LLC", "min_bullets": 1},
+            {"company": "VML", "min_bullets": 1},
+            {"company": "Callahan Creek", "min_bullets": 1},
+        ],
+        "tags": [
+            {"name": "email", "persona_description": "email marketing, lifecycle marketing, or CRM/ESP campaign roles", "keywords": ["email", "open rate", "reply rate", "sequence", "outreach", "campaign", "pta", "hot zone", "mailchimp", "persistiq"]},
+            {"name": "ops", "persona_description": "marketing operations, RevOps, CRM, automation, or analytics roles", "keywords": ["salesforce", "crm", "pipeline", "territory", "hygiene", "data", "hot zone", "import", "outreach", "integration"]},
+            {"name": "content", "persona_description": "content marketing, editorial strategy, brand voice, or copywriting roles", "keywords": ["content", "committee", "asset", "library", "governance", "voice", "sequence", "playbook", "onboarding", "training"]},
+            {"name": "enablement", "persona_description": "sales enablement, training/onboarding design, or content-governance roles", "keywords": ["training", "onboarding", "playbook", "sdr", "enablement", "committee", "process map", "coaching"]},
+            {"name": "mgmt", "persona_description": "team leadership, coaching, or people-management roles", "keywords": ["team", "coach", "manage", "sdr", "direct report", "training"]},
+            {"name": "writing", "persona_description": "copywriting, editorial, or long-form content-writing roles", "keywords": ["copy", "writing", "email", "sequence", "campaign", "authored"]},
+            {"name": "brand", "persona_description": "brand marketing, creative direction, or agency roles", "keywords": ["brand", "voice", "tone", "agency", "campaign", "creative"]},
+            {"name": "design", "persona_description": "graphic design, visual identity, or UX/UI roles", "keywords": ["design", "deck", "slide", "flyer", "illustrator", "canva"]},
+            {"name": "generalist", "persona_description": "general marketing or cross-functional roles", "keywords": []},
+        ],
         "deep_evidence_keywords": ["Treering Yearbooks"],
+        "target_roles": {
+            "primary": [
+                "Marketing Manager",
+                "Customer Marketing Manager",
+                "Content Marketing Manager",
+                "Email Marketing Specialist",
+                "Lifecycle Marketing Specialist",
+                "Sales Enablement Specialist",
+                "Onboarding Specialist",
+                "Implementation Specialist",
+            ],
+            "secondary": [
+                "Customer Education Specialist",
+                "Customer Adoption Specialist",
+                "Content Operations Specialist",
+                "Revenue Enablement Specialist",
+                "B2B Content Strategist",
+                "Campaign Specialist",
+                "Campaign Manager",
+                "CRM Marketing Specialist",
+                "Marketing Operations Specialist",
+                "Content Writer",
+                "Copywriter",
+                "Marketing Communications Specialist",
+            ],
+        },
+        "archetypes": {
+            "archetypes": [
+                {"name": "Customer Marketing Manager", "level": "Mid-Senior", "fit": "primary", "notes": "Customer engagement, onboarding, retention campaigns, advocacy, adoption programs, customer communications, and lifecycle journey design."},
+                {"name": "Lifecycle Marketing Specialist", "level": "Mid-Senior", "fit": "primary", "notes": "Lifecycle email sequences, automated journeys, user onboarding flows, segmentation, retention triggers, and ESP/CRM tooling."},
+            ]
+        },
     }
 
 
