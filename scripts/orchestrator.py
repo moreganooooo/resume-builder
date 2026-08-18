@@ -1359,9 +1359,7 @@ class ResumeEngine:
                 min_b = role.get("min_bullets", 1)
                 tgt_b = role.get("target_bullets", min_b)
                 pg = role.get("page", 1)
-                lines.append(
-                    f"| {name} | {min_b} | {tgt_b} | {pg} |"
-                )
+                lines.append(f"| {name} | {min_b} | {tgt_b} | {pg} |")
 
             must_fit_page_1 = [
                 (r.get("name") or r.get("company", ""))
