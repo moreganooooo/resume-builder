@@ -6,6 +6,7 @@ requests
 idna==3.15
 python-dotenv
 google-generativeai
+google-genai
 click
 rich
 linkedin-jobs-scraper

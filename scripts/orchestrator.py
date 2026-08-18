@@ -1285,10 +1285,14 @@ class ResumeEngine:
         self.jds_dir = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
-        self._gemma_segment_cache: dict = {}
-        self.deep_evidence_keywords = (
-            profile_paths.profile_yaml().get("deep_evidence_keywords") or []
-        )
+        try:
+            self.deep_evidence_keywords = (
+                (self.load_yaml(self.kb_dir, "profile.yml") or {}).get("deep_evidence_keywords") or []
+            )
+        except Exception:
+            self.deep_evidence_keywords = (
+                profile_paths.profile_yaml().get("deep_evidence_keywords") or []
+            )
         self.voice_rules = self.load_yaml(self.scoring_dir, "voice_rules.yaml") or {}
 
     def load_yaml(self, dir_path, filename):
@@ -2713,10 +2717,17 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            profile_roles = profile_paths.profile_yaml().get("roles") or []
+            try:
+                profile_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get("roles") or []
+            except Exception:
+                profile_roles = profile_paths.profile_yaml().get("roles") or []
             company_min_bullets = {
-                r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r
+                r["company"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r and "company" in r
             }
+            if not company_min_bullets:
+                company_min_bullets = {
+                    r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r and "name" in r
+                }
             combined_minimums = {
                 **company_min_bullets,
                 **(extra_company_minimums or {}),
@@ -2882,7 +2893,10 @@ class ResumeEngine:
             )
             return {}
 
-        profile = profile_paths.profile_yaml()
+        try:
+            profile = self.load_yaml(self.kb_dir, "profile.yml") or {}
+        except Exception:
+            profile = profile_paths.profile_yaml() or {}
 
         remote_required = profile.get("location", {}).get("remote_required", False)
 
@@ -3672,6 +3686,10 @@ class ResumeEngine:
             self.build_education_achievement_schema_fields()
         )
 
+        try:
+            _p_yaml = self.load_yaml(self.kb_dir, "profile.yml") or {}
+        except Exception:
+            _p_yaml = profile_paths.profile_yaml() or {}
         # Loaded unconditionally (not just in the fresh-build branch below)
         # for the same reason build_prompt is: Step 7's trim loop re-validates
         # every trim attempt regardless of whether this run resumed resume_data
@@ -3680,10 +3698,8 @@ class ResumeEngine:
         style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
         # Same reason, same place: the post-trim gate runs on the resumed path
         # too, so the roster can't be computed inside the fresh-build branch.
-        role_roster = _required_role_roster(profile_paths.profile_yaml())
-        role_bullet_minimums = _required_role_bullet_minimums(
-            profile_paths.profile_yaml()
-        )
+        role_roster = _required_role_roster(_p_yaml)
+        role_bullet_minimums = _required_role_bullet_minimums(_p_yaml)
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
@@ -3717,7 +3733,7 @@ class ResumeEngine:
                     "should be rare by construction, not a default."
                 )
 
-            role_rules_block = self.build_role_rules_block(profile_paths.profile_yaml())
+            role_rules_block = self.build_role_rules_block(_p_yaml)
 
             # style_rules.yaml/ai_risk.yaml used to be attached only to the
             # post-build critique call (Step 5) and polish.py's cover-letter
@@ -4444,7 +4460,7 @@ class ResumeEngine:
         trim_instructions = [
             lambda rd: "Trim the Summary to its 5-line limit.",
             lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
-            lambda rd: _bullet_removal_trim_instruction(profile_paths.profile_yaml()),
+            lambda rd: _bullet_removal_trim_instruction(_p_yaml),
         ]
         max_trim_attempts = len(trim_instructions)
         trim_attempt = 0

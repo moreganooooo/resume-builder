@@ -86,7 +86,10 @@ def check_venv() -> dict:
     exists = os.path.isdir(venv_path)
     has_python = os.path.isfile(os.path.join(venv_path, "bin", "python"))
     ok = exists and has_python
-    detail = f".venv/ {'found' if exists else 'missing'}, {'ready to use' if ok else 'not usable'}"
+    detail = (
+        f".venv/ {'found' if exists else 'missing'}, "
+        f"{'ready to use' if ok else 'not usable'}"
+    )
     return _check(
         ".venv/ exists and is ready",
         ok,
