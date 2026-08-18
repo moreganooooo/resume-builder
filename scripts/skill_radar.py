@@ -24,7 +24,7 @@ def compute_skill_radar_from_db(
     if isinstance(conn_or_path, str):
         if not os.path.exists(conn_or_path):
             return []
-        conn = sqlite3.connect(conn_or_path)
+        conn = sqlite3.connect(conn_or_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
         should_close = True
     else:
