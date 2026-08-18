@@ -21,12 +21,32 @@ import tempfile
 import cli_art
 import picker
 import profile_paths
+import ui_config
 
 DASHBOARD_DIR = os.path.join(profile_paths.PROJECT_ROOT, "dashboard")
 
 
 def go_available() -> bool:
     return shutil.which("go") is not None
+
+
+def _is_binary_stale(bin_path: str) -> bool:
+    """Returns True if the binary is missing or any .go file in dashboard/ is newer than bin_path."""
+    if not os.path.exists(bin_path):
+        return True
+    try:
+        bin_mtime = os.path.getmtime(bin_path)
+        for root, _, files in os.walk(DASHBOARD_DIR):
+            if os.path.basename(root) == "bin":
+                continue
+            for f in files:
+                if f.endswith(".go"):
+                    full_path = os.path.join(root, f)
+                    if os.path.getmtime(full_path) > bin_mtime:
+                        return True
+        return False
+    except OSError:
+        return True
 
 
 def _export_jobs_to(path: str) -> None:
@@ -58,7 +78,7 @@ def _write_jobs_export(profile: str = None) -> str:
 
 
 def compile_dashboard_if_needed() -> str:
-    """Pre-compiles the Go dashboard binary if missing, returning the path
+    """Pre-compiles the Go dashboard binary if missing or stale, returning the path
     to the compiled binary. If compilation fails or Go is missing, returns
     None so execution can fall back to 'go run .'."""
     import sys
@@ -71,12 +91,12 @@ def compile_dashboard_if_needed() -> str:
     bin_dir = os.path.join(DASHBOARD_DIR, "bin")
     bin_path = os.path.join(bin_dir, "dashboard")
 
-    if os.path.exists(bin_path):
+    if os.path.exists(bin_path) and not _is_binary_stale(bin_path):
         return bin_path
 
     os.makedirs(bin_dir, exist_ok=True)
     cli_art.cli_info(
-        "Pre-compiling the Career Dashboard for instant launches (only runs once)..."
+        "Pre-compiling the Career Dashboard for instant launches..."
     )
     try:
         subprocess.run(
@@ -133,6 +153,20 @@ def run(profile: str = None) -> tuple[bool, str]:
         cli_art.cli_info("Launching dashboard...")
 
     jobs_path = _write_jobs_export(profile)
+    active_profile = profile or profile_paths.get_active_profile()
+
+    # Pass profile-specific UI settings to the Go dashboard environment
+    env = os.environ.copy()
+    if active_profile:
+        env["RESUME_BUILDER_PROFILE"] = active_profile
+    u_cfg = ui_config.get_full_ui_config(active_profile)
+    if u_cfg.get("icon_set"):
+        env["RESUME_BUILDER_ICONS"] = u_cfg["icon_set"]
+    if u_cfg.get("motion"):
+        env["RESUME_BUILDER_MOTION"] = u_cfg["motion"]
+    if u_cfg.get("theme_mode"):
+        env["RESUME_BUILDER_THEME"] = u_cfg["theme_mode"]
+
     try:
         if bin_path and os.path.exists(bin_path):
             cmd = [
@@ -160,7 +194,7 @@ def run(profile: str = None) -> tuple[bool, str]:
                 "-project-root",
                 profile_paths.PROJECT_ROOT,
             ]
-        result = subprocess.run(cmd, cwd=DASHBOARD_DIR)
+        result = subprocess.run(cmd, cwd=DASHBOARD_DIR, env=env)
     finally:
         os.remove(jobs_path)
 

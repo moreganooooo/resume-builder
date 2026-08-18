@@ -29,10 +29,25 @@ from dotenv import load_dotenv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
+_KEY_INDEX = 0
+
+
+def rotate_api_key() -> str:
+    """Rotates to the next available API key in GEMINI_API_KEYS if present."""
+    global _KEY_INDEX
+    _KEY_INDEX += 1
+    return _get_api_key()
+
 
 def _get_api_key() -> str:
     # Always read current environment variable dynamically
     load_dotenv(profile_paths.env_path(), override=True)
+    keys_str = os.environ.get("GEMINI_API_KEYS")
+    if keys_str:
+        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        if keys:
+            return keys[_KEY_INDEX % len(keys)]
+
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
 
@@ -555,6 +570,7 @@ class GeminiClient:
                 failure_streak += 1
             elif resp.status_code == 429:
                 failure_streak += 1
+                rotate_api_key()
 
             if resp.status_code == HIGH_DEMAND_STATUS:
                 cli_art.console.print(
@@ -685,4 +701,46 @@ class GeminiClient:
             cli_art.console.print(
                 f"    {cli_art.WARNING} Embed error: {e}", soft_wrap=True
             )
+            return None
+
+
+class OllamaClient:
+    """Local offline LLM client for Ollama / vLLM execution without cloud API keys."""
+
+    DEFAULT_HOST = "http://localhost:11434"
+    DEFAULT_MODEL = "llama3.2"
+
+    @staticmethod
+    def is_available(host: str = DEFAULT_HOST) -> bool:
+        """Checks if the local Ollama daemon is reachable."""
+        try:
+            resp = requests.get(f"{host}/api/tags", timeout=2)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    @staticmethod
+    def generate(
+        prompt: str,
+        system_instruction: str = "",
+        model: str = DEFAULT_MODEL,
+        host: str = DEFAULT_HOST,
+        temperature: float = 0.0,
+    ) -> str | None:
+        """Generates a text completion using the local Ollama instance."""
+        url = f"{host}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "system": system_instruction,
+            "stream": False,
+            "options": {"temperature": temperature},
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=120)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("response", "")
+            return None
+        except Exception:
             return None

@@ -194,6 +194,139 @@ class TestDbSchema(unittest.TestCase):
         conn2.close()
         self.assertEqual(len(rows), 1)
 
+    def test_compute_job_dedup_hash_is_deterministic(self):
+        hash1 = db.compute_job_dedup_hash(
+            "Senior Product Manager", "Acme Corp", "Remote"
+        )
+        hash2 = db.compute_job_dedup_hash(
+            "senior product manager ", " acme corp", "remote"
+        )
+        self.assertEqual(hash1, hash2)
+        self.assertEqual(len(hash1), 64)
+
+    def test_log_and_get_human_verifications(self):
+        conn = db.get_db("isolated")
+        row_id = db.log_human_verification(
+            job_id="job_001",
+            profile="test_profile",
+            reviewer_action="approved",
+            notes="Passed compliance check",
+            conn=conn,
+        )
+        self.assertGreater(row_id, 0)
+
+        records = db.get_human_verifications(job_id="job_001", conn=conn)
+        conn.close()
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["profile"], "test_profile")
+        self.assertEqual(records[0]["reviewer_action"], "approved")
+        self.assertTrue(len(records[0]["candidate_signoff_hash"]) > 0)
+
+    def test_upsert_and_get_contacts(self):
+        conn = db.get_db("isolated")
+        c_id = db.upsert_contact(
+            {
+                "company": "Stripe",
+                "name": "Jane Doe",
+                "title": "Recruiter",
+                "email": "jane@stripe.com",
+                "interaction_type": "referral_chat",
+                "notes": "Spoke about infra role",
+            },
+            conn=conn,
+        )
+        self.assertTrue(len(c_id) > 0)
+
+        contacts = db.get_contacts(company="Stripe", conn=conn)
+        conn.close()
+        self.assertEqual(len(contacts), 1)
+        self.assertEqual(contacts[0]["name"], "Jane Doe")
+        self.assertEqual(contacts[0]["interaction_type"], "referral_chat")
+
+    def test_calculate_funnel_velocity(self):
+        conn = db.get_db("isolated")
+        db.upsert_job(
+            {
+                "id": "j1",
+                "title": "A",
+                "company": "C1",
+                "status": "applied",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "j2",
+                "title": "B",
+                "company": "C2",
+                "status": "interview",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "j3",
+                "title": "C",
+                "company": "C3",
+                "status": "offer",
+                "jd_text": "x",
+            },
+            conn=conn,
+        )
+
+        stats = db.calculate_funnel_velocity(conn=conn)
+        conn.close()
+        self.assertEqual(stats["applied_count"], 3)
+        self.assertEqual(stats["interview_count"], 2)
+        self.assertEqual(stats["offer_count"], 1)
+        self.assertEqual(stats["interview_conversion_pct"], 66.7)
+        self.assertEqual(stats["offer_conversion_pct"], 50.0)
+
+    def test_integrity_check_and_orphan_cleanup(self):
+        conn = db.get_db("isolated")
+        # Insert a job
+        db.upsert_job(
+            {
+                "id": "valid_job",
+                "title": "PM",
+                "company": "Co",
+                "status": "pending",
+                "jd_text": "text",
+            },
+            conn=conn,
+        )
+
+        # Insert valid and orphan application logs
+        conn.execute(
+            "INSERT INTO application_log (job_id, company, role, status) VALUES ('valid_job', 'Co', 'PM', 'applied')"
+        )
+        conn.execute(
+            "INSERT INTO application_log (job_id, company, role, status) VALUES ('orphan_job', 'GhostCo', 'Eng', 'applied')"
+        )
+        conn.execute(
+            "INSERT INTO verification_audit_log (job_id, profile, reviewer_action) VALUES ('orphan_job', 'test', 'approved')"
+        )
+        conn.commit()
+
+        # Check integrity
+        report = db.run_integrity_check(conn=conn)
+        self.assertFalse(report["healthy"])
+        self.assertEqual(report["orphaned_application_logs"], 1)
+        self.assertEqual(report["orphaned_audit_logs"], 1)
+
+        # Clean orphans
+        cleaned = db.clean_orphaned_records(conn=conn)
+        self.assertEqual(cleaned["deleted_application_logs"], 1)
+        self.assertEqual(cleaned["deleted_audit_logs"], 1)
+
+        # Re-check integrity
+        clean_report = db.run_integrity_check(conn=conn)
+        conn.close()
+        self.assertTrue(clean_report["healthy"])
+        self.assertEqual(clean_report["orphaned_application_logs"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

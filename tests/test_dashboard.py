@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -64,7 +65,8 @@ class TestRun(unittest.TestCase):
         self.assertEqual(args[8], dashboard.sys.executable)
         self.assertEqual(args[9], "-project-root")
         self.assertEqual(args[10], dashboard.profile_paths.PROJECT_ROOT)
-        self.assertEqual(mock_subproc.call_args[1], {"cwd": dashboard.DASHBOARD_DIR})
+        self.assertEqual(mock_subproc.call_args[1]["cwd"], dashboard.DASHBOARD_DIR)
+        self.assertIn("env", mock_subproc.call_args[1])
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
     @patch("dashboard.subprocess.run")
@@ -177,5 +179,52 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
         self.assertFalse(os.path.isfile(jobs_path))
 
 
+class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
+
+    @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
+    @patch("dashboard.subprocess.run")
+    @patch("dashboard.os.path.exists", return_value=True)
+    @patch("dashboard.go_available", return_value=True)
+    @patch("dashboard.ui_config.get_full_ui_config")
+    def test_run_passes_profile_ui_env_vars(
+        self, mock_ui_conf, mock_go, mock_exists, mock_subproc, mock_list
+    ):
+        mock_ui_conf.return_value = {
+            "icon_set": "unicode",
+            "motion": "reduced",
+            "theme_mode": "catppuccin-latte",
+        }
+        mock_subproc.return_value = MagicMock(returncode=0)
+        success, _ = dashboard.run("morgan")
+        self.assertTrue(success)
+        env = mock_subproc.call_args[1].get("env")
+        self.assertIsNotNone(env)
+        self.assertEqual(env.get("RESUME_BUILDER_PROFILE"), "morgan")
+        self.assertEqual(env.get("RESUME_BUILDER_ICONS"), "unicode")
+        self.assertEqual(env.get("RESUME_BUILDER_MOTION"), "reduced")
+
+    @patch("dashboard.go_available", return_value=True)
+    @patch("dashboard.subprocess.run")
+    def test_compile_dashboard_when_stale(self, mock_subproc, mock_go):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bin_dir = os.path.join(tmpdir, "bin")
+            os.makedirs(bin_dir, exist_ok=True)
+            bin_path = os.path.join(bin_dir, "dashboard")
+            # Create dummy bin
+            with open(bin_path, "w") as f:
+                f.write("bin")
+            # Create newer .go file
+            go_file = os.path.join(tmpdir, "main.go")
+            with open(go_file, "w") as f:
+                f.write("package main")
+            # Set go file mtime newer
+            os.utime(go_file, (time.time() + 100, time.time() + 100))
+
+            with patch("dashboard.DASHBOARD_DIR", tmpdir):
+                stale = dashboard._is_binary_stale(bin_path)
+                self.assertTrue(stale)
+
+
 if __name__ == "__main__":
+    import time
     unittest.main()

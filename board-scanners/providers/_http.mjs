@@ -92,13 +92,23 @@ export async function fetchWithTimeout(url, {
   timeoutMs = DEFAULT_TIMEOUT_MS, headers = {}, method = 'GET', body = null, redirect = 'follow',
   maxRetries = DEFAULT_MAX_RETRIES,
 } = {}) {
+  let targetUrl = url;
+  const scrapeDoKey = process.env.SCRAPEDO_API_KEY;
+
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fetchOnce(url, { timeoutMs, headers, method, body, redirect });
+      return await fetchOnce(targetUrl, { timeoutMs, headers, method, body, redirect });
     } catch (err) {
+      // Anti-Bot Proxy Fallback Tier: If 403 / Bot Blocked and Scrape.do key is available, fallback to proxy
+      if (err.status === 403 && scrapeDoKey && !targetUrl.includes('api.scrape.do')) {
+        targetUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}`;
+        continue;
+      }
+
       const retryable = err.name !== 'AbortError' && (err.status === undefined || isRetryableStatus(err.status));
       if (!retryable || attempt >= maxRetries) throw err;
-      const backoffMs = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+      const jitter = process.env.NODE_ENV === 'test' ? 0 : Math.floor(Math.random() * 100);
+      const backoffMs = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS) + jitter;
       await sleep(err.retryAfterMs ?? backoffMs);
     }
   }
@@ -136,8 +146,10 @@ export function makeHttpCtx(providerId) {
   function paced(fn) {
     if (!minGapMs) return fn;
     return (...args) => {
+      const jitter = process.env.NODE_ENV === 'test' ? 0 : Math.floor(Math.random() * 30);
+      const gap = minGapMs + jitter;
       const run = queue.then(() => fn(...args));
-      queue = run.then(() => sleep(minGapMs), () => sleep(minGapMs));
+      queue = run.then(() => sleep(gap), () => sleep(gap));
       return run;
     };
   }
@@ -148,3 +160,4 @@ export function makeHttpCtx(providerId) {
     fetchText: paced((url, opts = {}) => fetchText(url, { timeoutMs: defaultTimeoutMs, ...opts })),
   };
 }
+

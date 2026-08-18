@@ -110,9 +110,14 @@
       "Bash(rtk pre-commit *)",
       "Bash(rtk pip *)",
       "Bash(pre-commit run *)",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(graphify export *)"
     ]
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ],
   "hooks": {
     "SessionStart": [
       {
@@ -126,5 +131,6 @@
         ]
       }
     ]
-  }
+  },
+  "spinnerTipsEnabled": false
 }

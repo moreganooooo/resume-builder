@@ -194,3 +194,22 @@ func RenderFlowingGradient(text string, c1, c2 color.Color, phase float64) strin
 	result.WriteString("\x1b[0m")
 	return result.String()
 }
+
+// ShimmerColor returns an interpolated color along a sine-wave phase between c1 and c2.
+func ShimmerColor(c1, c2 color.Color, phase float64) color.Color {
+	if c1 == nil || c2 == nil {
+		return c1
+	}
+	r1, g1, b1, _ := c1.RGBA()
+	r2, g2, b2, _ := c2.RGBA()
+
+	red1, green1, blue1 := int(uint8(r1>>8)), int(uint8(g1>>8)), int(uint8(b1>>8))
+	red2, green2, blue2 := int(uint8(r2>>8)), int(uint8(g2>>8)), int(uint8(b2>>8))
+
+	t := (math.Sin(phase) + 1.0) / 2.0
+	r := int(float64(red1) + t*float64(red2-red1))
+	g := int(float64(green1) + t*float64(green2-green1))
+	b := int(float64(blue1) + t*float64(blue2-blue1))
+
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
+}

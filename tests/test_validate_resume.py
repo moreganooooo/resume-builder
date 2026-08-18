@@ -1039,6 +1039,99 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
                 # patched kb_dir says it's verified.
                 self.assertFalse(any("TotallyFakeToolXYZ" in v for v in violations))
 
+    def test_flags_demographic_and_age_bias(self):
+        # 1. Graduation year > 15 years old
+        resume_old_edu = {
+            "EDUCATION": [
+                {
+                    "institution": "University of California",
+                    "degree": "B.A. English",
+                    "year": "2005",
+                }
+            ]
+        }
+        violations = validate_resume._check_demographic_and_age_bias(resume_old_edu)
+        self.assertTrue(
+            any("2005" in v and "Demographic/Age Bias Warning" in v for v in violations)
+        )
+
+        # 2. Marital status / non-inclusive wording
+        resume_bias_text = {
+            "SUMMARY_TEXT": "Married rockstar developer with 10 years experience logged 2000 man-hours.",
+            "SKILLS": ["Master/Slave database clustering"],
+            "EXPERIENCE": [],
+        }
+        violations_text = validate_resume._check_demographic_and_age_bias(
+            resume_bias_text
+        )
+        self.assertTrue(any("Marital status" in v for v in violations_text))
+        self.assertTrue(any("rockstar" in v for v in violations_text))
+        self.assertTrue(any("man-hours" in v for v in violations_text))
+        self.assertTrue(any("master/slave" in v for v in violations_text))
+
+    def test_flags_excessive_keyword_density_ceiling(self):
+        # Repeat word "optimization" enough times to exceed 3.5% of total words
+        spammed_bullets = [
+            "Drove optimization across optimization pipelines with optimization frameworks for optimization scale and optimization telemetry."
+        ] * 3
+        resume = {
+            "SUMMARY_TEXT": "Senior product strategist with 8 years experience leading optimization.",
+            "SKILLS": ["**Focus:** Optimization Strategy"],
+            "EXPERIENCE": [
+                {
+                    "title": "Lead",
+                    "company": "Co",
+                    "period": "2020-2024",
+                    "achievements": spammed_bullets,
+                }
+            ],
+        }
+        violations = validate_resume._check_keyword_density_ceiling(
+            resume, max_density=0.035
+        )
+        self.assertTrue(
+            any(
+                "ATS Keyword Density Ceiling" in v and "optimization" in v
+                for v in violations
+            )
+        )
+
+    def test_summary_4element_formula_validation(self):
+        # Complete summary
+        good_summary = {
+            "SUMMARY_TEXT": "<strong>Senior Lifecycle Marketer with 8 years in CRM and email automation.</strong> Scaled customer outreach to 50,000+ monthly contacts."
+        }
+        self.assertEqual(
+            validate_resume._check_summary_4element_formula(good_summary), []
+        )
+
+    def test_flags_cross_section_redundancy(self):
+        repeated_phrase = (
+            "recovered three million dollars in dormant pipeline through workflows"
+        )
+        resume = {
+            "SUMMARY_TEXT": f"<strong>Senior Lifecycle Marketer with 8 years in CRM.</strong> Scaled systems and {repeated_phrase}.",
+            "EXPERIENCE": [
+                {
+                    "title": "Manager",
+                    "company": "Acme",
+                    "period": "2020-2024",
+                    "achievements": [
+                        f"Spearheaded CRM audit and {repeated_phrase} across territories",
+                    ],
+                }
+            ],
+        }
+        violations = validate_resume._check_cross_section_redundancy(
+            resume, min_gram_words=5
+        )
+        self.assertTrue(
+            any(
+                "Cross-Section Redundancy Warning" in v and "dormant pipeline" in v
+                for v in violations
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

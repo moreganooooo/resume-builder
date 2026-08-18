@@ -61,7 +61,7 @@ type MenuIcons struct {
 }
 
 func NewMenuIcons() MenuIcons {
-	if os.Getenv("RESUME_BUILDER_ICONS") == "nerd" {
+	if os.Getenv("RESUME_BUILDER_ICONS") != "unicode" {
 		return MenuIcons{
 			Pipeline:    "", // nf-fa-cog
 			Progress:    "", // nf-fa-bar_chart

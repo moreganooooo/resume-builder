@@ -1,0 +1,31 @@
+name: 💡 Feature Request
+description: Suggest an idea or architectural enhancement for resume-builder
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make resume-builder even more powerful? We'd love to hear it!
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: Is your feature request related to a problem or missing capability?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution / Architectural Design
+      description: A clear description of what you want to happen and how it fits into the pipeline.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Approaches
+      description: Any alternative solutions or features you've considered.
+    validations:
+      required: false
