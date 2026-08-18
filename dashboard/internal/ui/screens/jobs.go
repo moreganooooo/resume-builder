@@ -73,6 +73,7 @@ type JobsModel struct {
 	// proposal, not a commit.
 	statusConfirm bool
 	pendingStatus string
+	showConfirm   bool
 	// Search sub-state -- narrows the active filter by substring on
 	// company/title. Mirrors pipeline.go's identical searchInput/
 	// searchQuery pair exactly (same key to enter, same cancel/commit keys,
@@ -717,6 +718,23 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.showConfirm {
+			switch msg.String() {
+			case "enter", "y", "Y":
+				m.showConfirm = false
+				if job, ok := m.CurrentJob(); ok {
+					m.actionInProgress = "archive"
+					m.actionStartedAt = time.Now()
+					m.actionChan = make(chan tea.Msg)
+					ctx, cancel := context.WithCancel(context.Background())
+					m.actionCancel = cancel
+					return m, tea.Batch(m.runAction(ctx, m.actionChan, "archive", job.Path), m.spinner.Tick)
+				}
+			case "esc", "n", "N":
+				m.showConfirm = false
+			}
+			return m, nil
+		}
 		if m.statusPicker {
 			return m.handleStatusPickerKey(msg)
 		}
@@ -818,14 +836,9 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.statusPicker = true
 				m.statusCursor = 0
 			}
-		case "a":
-			if job, ok := m.CurrentJob(); ok {
-				m.actionInProgress = "archive"
-				m.actionStartedAt = time.Now()
-				m.actionChan = make(chan tea.Msg)
-				ctx, cancel := context.WithCancel(context.Background())
-				m.actionCancel = cancel
-				return m, tea.Batch(m.runAction(ctx, m.actionChan, "archive", job.Path), m.spinner.Tick)
+		case "a", "x":
+			if _, ok := m.CurrentJob(); ok {
+				m.showConfirm = true
 			}
 		case "J":
 			if _, ok := m.CurrentJob(); ok {
@@ -852,6 +865,14 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 			return m, func() tea.Msg { return JobsClosedMsg{Quit: false} }
 		}
+	case tea.KeyMsg:
+		if kp, ok := msg.(tea.KeyPressMsg); ok {
+			return m.Update(kp)
+		}
+		return m.Update(tea.KeyPressMsg(tea.Key{Text: msg.String()}))
+
+
+
 	case spinner.TickMsg:
 		if m.actionInProgress == "" {
 			return m, nil
@@ -922,9 +943,33 @@ var jobsHelpCategories = []helpCategory{
 	}},
 }
 
+func (m JobsModel) renderNextBestMove() string {
+	var best *model.JobRow
+	for i := range m.rows {
+		row := &m.rows[i]
+		if strings.EqualFold(row.Status, "Pending") && row.Evaluation.CompositeScore >= 4.0 {
+			if best == nil || row.Evaluation.CompositeScore > best.Evaluation.CompositeScore {
+				best = row
+			}
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	bannerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(m.theme.Mauve).
+		Background(m.theme.Surface).
+		Padding(0, 2).
+		Width(m.width)
+	msg := fmt.Sprintf("★ NEXT BEST MOVE: High match at %s (%.1f) — Press 't' to tailor now!", best.Company, best.Evaluation.CompositeScore)
+	return bannerStyle.Render(msg)
+}
+
 // View renders the jobs screen.
 func (m JobsModel) View() string {
 	header := m.renderHeader()
+	nextMove := m.renderNextBestMove()
 	var extra string
 	if m.actionInProgress != "" {
 		extra = m.renderActionStatus()
@@ -956,6 +1001,9 @@ func (m JobsModel) View() string {
 	// searchBar before extra (action-status/error/notice), matching
 	// pipeline.go's View() ordering of its own searchBar/notice rows.
 	content := header
+	if nextMove != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, nextMove)
+	}
 	if searchBar != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, searchBar)
 	}
@@ -972,6 +1020,7 @@ func (m JobsModel) View() string {
 
 	return fullContent
 }
+
 
 func actionLabel(action string) string {
 	switch action {
@@ -1653,3 +1702,62 @@ func (m JobsModel) stalledHint() string {
 	return fmt.Sprintf(" -- still going after %dm, which is longer than usual; esc to cancel",
 		int(elapsed.Minutes()))
 }
+
+// HighlightMatches highlights occurrences of query in text using highlightStyle (case-insensitive).
+func HighlightMatches(text, query string, highlightStyle lipgloss.Style) string {
+	if query == "" {
+		return text
+	}
+	lowerText := strings.ToLower(text)
+	lowerQuery := strings.ToLower(query)
+	var sb strings.Builder
+	lastIdx := 0
+	for {
+		idx := strings.Index(lowerText[lastIdx:], lowerQuery)
+		if idx == -1 {
+			sb.WriteString(text[lastIdx:])
+			break
+		}
+		actualIdx := lastIdx + idx
+		sb.WriteString(text[lastIdx:actualIdx])
+		matched := text[actualIdx : actualIdx+len(lowerQuery)]
+		sb.WriteString(highlightStyle.Render(matched))
+		lastIdx = actualIdx + len(lowerQuery)
+	}
+	return sb.String()
+}
+
+// RenderEvaluationBadges renders badges for evaluation composite score and sub-fit scores.
+func RenderEvaluationBadges(t theme.Theme, eval model.Evaluation) string {
+	score := eval.CompositeScore
+	icon := scoreIcon(t, score)
+	scoreBadge := scoreStyle(t, score).Render(fmt.Sprintf("%s %.1f Fit", icon, score))
+
+	dimStyle := lipgloss.NewStyle().Foreground(t.Subtext)
+	subBadges := fmt.Sprintf("%s  Fit: %.1f • Odds: %.1f • Pursue: %.1f",
+		scoreBadge, eval.FitScore, eval.InterviewOddsScore, eval.PracticalPursueScore)
+	return dimStyle.Render(subBadges)
+}
+
+// RenderTargetCompanyBadge renders a high-visibility badge for target dream companies.
+func RenderTargetCompanyBadge(t theme.Theme) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(t.Yellow).
+		Background(t.Surface).
+		Padding(0, 1).
+		Render("★ Target Dream Company")
+}
+
+// RenderSituationalRoleBadge renders a badge for matching situational role triggers.
+func RenderSituationalRoleBadge(t theme.Theme, role string) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(t.Sky).
+		Background(t.Surface).
+		Padding(0, 1).
+		Render(fmt.Sprintf("🎯 Situational Trigger: %s", role))
+}
+
+
+

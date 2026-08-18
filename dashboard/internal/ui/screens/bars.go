@@ -1,11 +1,13 @@
 package screens
 
 import (
+	"encoding/base64"
 	"fmt"
 	"image/color"
 	"math"
 	"strings"
 	"time"
+
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/lipgloss/v2"
@@ -639,3 +641,68 @@ func (t *ToastNotification) Render(th theme.Theme, width int) string {
 	text := fmt.Sprintf("%s %s", t.icon, t.message)
 	return lipgloss.PlaceHorizontal(width, lipgloss.Center, style.Render(text))
 }
+
+// Truncate truncates string s to width columns using a single Unicode ellipsis ('…').
+func Truncate(s string, width int) string {
+	return ansi.Truncate(s, width, "…")
+}
+
+// RenderWindowResizeGuidance renders a user-friendly notice when the terminal is below minimum dimensions.
+func RenderWindowResizeGuidance(currentW, currentH, minW, minH int, t theme.Theme) string {
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Peach).
+		Padding(1, 2).
+		Align(lipgloss.Center)
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(t.Peach).Render("✦ Terminal Window Too Small ✧")
+	current := lipgloss.NewStyle().Foreground(t.Red).Render(fmt.Sprintf("Current: %d×%d", currentW, currentH))
+	required := lipgloss.NewStyle().Foreground(t.Green).Render(fmt.Sprintf("Required: %d×%d", minW, minH))
+	hint := lipgloss.NewStyle().Foreground(t.Subtext).Render("Please expand your terminal window for optimal viewing.")
+
+	content := fmt.Sprintf("%s\n\n%s  |  %s\n\n%s", title, current, required, hint)
+	renderedBox := boxStyle.Render(content)
+	if currentW <= 0 || currentH <= 0 {
+		return renderedBox
+	}
+	return lipgloss.Place(currentW, currentH, lipgloss.Center, lipgloss.Center, renderedBox)
+}
+
+// RenderHierarchicalFooter renders an action bar with visual tier distinction (Primary, Actions, System).
+func RenderHierarchicalFooter(t theme.Theme, width int, primary, actions, system []HelpBinding) string {
+	style := lipgloss.NewStyle().
+		Foreground(t.Text).
+		Background(t.Surface).
+		Width(width).
+		Padding(0, 1)
+
+	var parts []string
+	for _, b := range primary {
+		key := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve).Background(t.Surface).Render("[" + b.Key + "]")
+		desc := lipgloss.NewStyle().Foreground(t.Text).Background(t.Surface).Render(" " + b.Desc)
+		parts = append(parts, key+desc)
+	}
+	for _, b := range actions {
+		key := lipgloss.NewStyle().Bold(true).Foreground(t.Blue).Background(t.Surface).Render(b.Key)
+		desc := lipgloss.NewStyle().Foreground(t.Subtext).Background(t.Surface).Render(" " + b.Desc)
+		parts = append(parts, key+desc)
+	}
+	for _, b := range system {
+		key := lipgloss.NewStyle().Bold(true).Foreground(t.Overlay).Background(t.Surface).Render(b.Key)
+		desc := lipgloss.NewStyle().Foreground(t.Subtext).Background(t.Surface).Render(" " + b.Desc)
+		parts = append(parts, key+desc)
+	}
+
+	keys := strings.Join(parts, "  ")
+	brand := lipgloss.NewStyle().Foreground(t.Subtext).Background(t.Surface).Render("resume-builder")
+	keys, brand, gap := fitBar(keys, brand, width, 2, t.Surface)
+	return style.Render(keys + gap + brand)
+}
+
+// FormatOSC52Copy formats text into an ANSI OSC 52 clipboard write sequence.
+func FormatOSC52Copy(text string) string {
+	b64 := base64.StdEncoding.EncodeToString([]byte(text))
+	return fmt.Sprintf("\x1b]52;c;%s\x07", b64)
+}
+
+

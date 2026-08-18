@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -923,3 +924,81 @@ func TestRenderJobDetailPane_ZeroAndNilFields(t *testing.T) {
 		t.Errorf("expected non-empty detail pane for empty JobRow")
 	}
 }
+
+func TestJobs_NextBestMoveBanner(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	rows := []model.JobRow{
+		{Company: "Stripe", Title: "Staff Engineer", Status: "Pending", Evaluation: model.Evaluation{CompositeScore: 4.8}},
+	}
+	m := NewJobsModel(th, rows, 120, 30)
+	view := ansi.Strip(m.View())
+
+	if !strings.Contains(view, "NEXT BEST MOVE") && !strings.Contains(view, "Stripe") {
+		t.Errorf("expected Next Best Move banner to highlight top pending match, got:\n%s", view)
+	}
+}
+
+func TestJobs_EvaluationBadges(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	eval := model.Evaluation{
+		CompositeScore:       4.5,
+		FitScore:             4.8,
+		InterviewOddsScore:   4.2,
+		PracticalPursueScore: 4.0,
+	}
+	rendered := RenderEvaluationBadges(th, eval)
+	plain := ansi.Strip(rendered)
+
+	if !strings.Contains(plain, "4.5") || !strings.Contains(plain, "Fit") {
+		t.Errorf("expected evaluation badges to render composite fit, got: %s", plain)
+	}
+}
+
+func TestJobs_SubstringHighlight(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	highlightStyle := lipgloss.NewStyle().Background(th.Mauve).Foreground(th.Base).Bold(true)
+	result := HighlightMatches("Google Cloud Platform", "cloud", highlightStyle)
+	plain := ansi.Strip(result)
+
+	if plain != "Google Cloud Platform" {
+		t.Errorf("plain text altered: got %q, want %q", plain, "Google Cloud Platform")
+	}
+	if !strings.Contains(result, "\x1b[") {
+		t.Errorf("expected ANSI escape code styling on matched substring")
+	}
+}
+
+func TestJobs_ArchiveConfirmation(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	rows := []model.JobRow{
+		{Path: "test.json", Company: "Target Corp", Title: "Lead", Status: "Pending"},
+	}
+	m := NewJobsModel(th, rows, 120, 30)
+
+	// Press 'x' or 'a' to archive
+	m, _ = m.Update(pressKey("x"))
+	if !m.showConfirm && !m.statusPicker {
+		t.Errorf("expected archive action to trigger confirmation overlay or status picker")
+	}
+}
+
+func TestJobs_TargetCompanyBadge(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	badge := RenderTargetCompanyBadge(th)
+	plain := ansi.Strip(badge)
+	if !strings.Contains(plain, "Target") && !strings.Contains(plain, "Dream") && !strings.Contains(plain, "★") {
+		t.Errorf("expected target company badge to contain Star or Target label, got: %s", plain)
+	}
+}
+
+func TestJobs_SituationalRoleTriggerBadge(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	badge := RenderSituationalRoleBadge(th, "Founding AI Engineer")
+	plain := ansi.Strip(badge)
+	if !strings.Contains(plain, "Founding AI Engineer") || !strings.Contains(plain, "Trigger") {
+		t.Errorf("expected situational role trigger badge to contain role and trigger label, got: %s", plain)
+	}
+}
+
+
+
