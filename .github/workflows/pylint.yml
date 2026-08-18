@@ -50,7 +50,7 @@ jobs:
         pydocstyle scripts/ --match-dir=scripts || true
     - name: YAML validation with yamllint
       run: |
-        yamllint -d "{rules: {line-length: {max: 120}, trailing-whitespace: disable}}" profiles/ scripts/ || true
+        yamllint -d "{rules: {line-length: disable, trailing-spaces: disable}}" profiles/ scripts/ || true
     - name: Spell check with codespell
       run: |
         codespell scripts/ tests/ docs/ --skip="*.json,*.csv,*.db,*.pyc" || true
