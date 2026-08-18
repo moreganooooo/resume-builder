@@ -1355,21 +1355,33 @@ class ResumeEngine:
             lines.append("| Company | Min | Target | Page |")
             lines.append("| --- | --- | --- | --- |")
             for role in roles:
+                name = role.get("name") or role.get("company", "")
+                min_b = role.get("min_bullets", 1)
+                tgt_b = role.get("target_bullets", min_b)
+                pg = role.get("page", 1)
                 lines.append(
-                    f"| {role['name']} | {role['min_bullets']} | {role['target_bullets']} | {role['page']} |"
+                    f"| {name} | {min_b} | {tgt_b} | {pg} |"
                 )
 
-            must_fit_page_1 = [r["name"] for r in roles if r.get("must_fit_page_1")]
+            must_fit_page_1 = [
+                (r.get("name") or r.get("company", ""))
+                for r in roles
+                if r.get("must_fit_page_1")
+            ]
+            must_fit_page_1 = [name for name in must_fit_page_1 if name]
             if must_fit_page_1:
                 lines.append(
                     f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}."
                 )
 
             flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
-            lines.append(
-                "\nTrim priority (lowest-priority roles trimmed toward their Min first, before any "
-                f"higher-priority role loses a bullet): {', '.join(r['name'] for r in flex_order)}."
-            )
+            flex_names = [(r.get("name") or r.get("company", "")) for r in flex_order]
+            flex_names = [name for name in flex_names if name]
+            if flex_names:
+                lines.append(
+                    "\nTrim priority (lowest-priority roles trimmed toward their Min first, before any "
+                    f"higher-priority role loses a bullet): {', '.join(flex_names)}."
+                )
 
         if protected:
             lines.append("\nProtected Bullets -- Do Not Aggressively Shorten:")
@@ -1549,6 +1561,10 @@ class ResumeEngine:
                     f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-anchors.md: {e}",
                     soft_wrap=True,
                 )
+        else:
+            sections.append(
+                "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
+            )
 
         if include_evidence_guide:
             evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
@@ -1567,6 +1583,10 @@ class ResumeEngine:
                         f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load evidence-guide.csv: {e}",
                         soft_wrap=True,
                     )
+            else:
+                sections.append(
+                    "=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n"
+                )
 
         return "\n\n".join(sections)
 
@@ -1620,6 +1640,10 @@ class ResumeEngine:
                     f"  {theme.colorize_icon('warning')} build_audit_static_prefix_gemma: could not load voice-anchors.md: {e}",
                     soft_wrap=True,
                 )
+        else:
+            sections.append(
+                "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
+            )
 
         return "\n\n".join(sections)
 

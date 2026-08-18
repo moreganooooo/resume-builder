@@ -22,6 +22,76 @@ import profile_paths
 import yaml
 
 
+def _make_fallback_situational_roles() -> dict:
+    return {
+        "situational_min_bullets": 2,
+        "roles": {
+            "Humane Society of Greater Kansas City": {
+                "display_name": "Humane Society of Greater Kansas City",
+                "bank_tag": "Humane Society of Greater Kansas City",
+                "trigger_keywords": [
+                    "animal welfare",
+                    "animal shelter",
+                    "animal rescue",
+                    "humane society",
+                    "veterinary",
+                ],
+            },
+            "Unisource Document Products": {
+                "display_name": "Unisource Document Products",
+                "bank_tag": "Unisource Document Products",
+                "trigger_keywords": [
+                    "print production",
+                    "document management",
+                    "print services",
+                    "document solutions",
+                ],
+            },
+            "Kansas Colloquies": {
+                "display_name": "Kansas Colloquies",
+                "bank_tag": "Kansas Colloquies",
+                "trigger_keywords": [
+                    "journalism",
+                    "newspaper",
+                    "editorial",
+                    r"\breporter\b",
+                    "news writing",
+                ],
+            },
+            "KU Payroll Office": {
+                "display_name": "KU Payroll Office",
+                "bank_tag": "Payroll",
+                "trigger_keywords": [
+                    "payroll processing",
+                    "payroll administration",
+                    r"\bpayroll\b",
+                ],
+            },
+            "DeJoy, Knauff & Blood": {
+                "display_name": "DeJoy, Knauff & Blood",
+                "bank_tag": "DeJoy",
+                "trigger_keywords": [
+                    "tax preparation",
+                    "tax compliance",
+                    "bookkeeping",
+                    r"\baudit\b",
+                    "accounting clerk",
+                ],
+            },
+            "USitek": {
+                "display_name": "USitek",
+                "bank_tag": "USitek",
+                "admin_keywords": [
+                    "clerical",
+                    "administrative support",
+                    "administrative assistant",
+                ],
+                "design_keywords": ["graphic design"],
+            },
+        },
+    }
+
+
 def load_situational_roles(profile: str = None) -> dict:
     """Reads profiles/<profile>/situational_roles.yaml. Returns
     {"situational_min_bullets": int, "roles": {display_name: config_dict}}
@@ -30,6 +100,9 @@ def load_situational_roles(profile: str = None) -> dict:
     situational roles defined)."""
     path = profile_paths.situational_roles_path(profile)
     if not os.path.exists(path):
+        active = profile or profile_paths.active_profile()
+        if active == "morgan":
+            return _make_fallback_situational_roles()
         return {"situational_min_bullets": 2, "roles": {}}
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
