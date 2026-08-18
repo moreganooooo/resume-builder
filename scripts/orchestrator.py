@@ -1287,8 +1287,8 @@ class ResumeEngine:
         self._segment_cache: dict = {}
         try:
             self.deep_evidence_keywords = (
-                (self.load_yaml(self.kb_dir, "profile.yml") or {}).get("deep_evidence_keywords") or []
-            )
+                self.load_yaml(self.kb_dir, "profile.yml") or {}
+            ).get("deep_evidence_keywords") or []
         except Exception:
             self.deep_evidence_keywords = (
                 profile_paths.profile_yaml().get("deep_evidence_keywords") or []
@@ -2718,15 +2718,21 @@ class ResumeEngine:
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
             try:
-                profile_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get("roles") or []
+                profile_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
+                    "roles"
+                ) or []
             except Exception:
                 profile_roles = profile_paths.profile_yaml().get("roles") or []
             company_min_bullets = {
-                r["company"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r and "company" in r
+                r["company"]: r["min_bullets"]
+                for r in profile_roles
+                if "min_bullets" in r and "company" in r
             }
             if not company_min_bullets:
                 company_min_bullets = {
-                    r["name"]: r["min_bullets"] for r in profile_roles if "min_bullets" in r and "name" in r
+                    r["name"]: r["min_bullets"]
+                    for r in profile_roles
+                    if "min_bullets" in r and "name" in r
                 }
             combined_minimums = {
                 **company_min_bullets,

@@ -113,12 +113,30 @@ def _make_fallback_fixed_content():
         "LOCATION": "Getzville, NY (Buffalo Area)",
     }
     mod.COMPANY_META = {
-        "Mercor": {"size_revenue": "~800 employees; $75M+ revenue", "location": "Short-Term Contract | Remote"},
-        "Treering Yearbooks": {"size_revenue": "~120 employees; $17M+ revenue", "location": "Remote"},
-        "Inside Sales Team": {"size_revenue": "~150 employees; ~$21M revenue", "location": "Buffalo, NY"},
-        "Element 8 / Strategy LLC": {"size_revenue": "~10–15 employees; ~$1M+ revenue", "location": "Lenexa, KS"},
-        "VML": {"size_revenue": "~600+ employees; ~$75M+ revenue", "location": "Kansas City, MO"},
-        "Callahan Creek": {"size_revenue": "~30 employees; ~$5M revenue", "location": "Lawrence, KS"},
+        "Mercor": {
+            "size_revenue": "~800 employees; $75M+ revenue",
+            "location": "Short-Term Contract | Remote",
+        },
+        "Treering Yearbooks": {
+            "size_revenue": "~120 employees; $17M+ revenue",
+            "location": "Remote",
+        },
+        "Inside Sales Team": {
+            "size_revenue": "~150 employees; ~$21M revenue",
+            "location": "Buffalo, NY",
+        },
+        "Element 8 / Strategy LLC": {
+            "size_revenue": "~10–15 employees; ~$1M+ revenue",
+            "location": "Lenexa, KS",
+        },
+        "VML": {
+            "size_revenue": "~600+ employees; ~$75M+ revenue",
+            "location": "Kansas City, MO",
+        },
+        "Callahan Creek": {
+            "size_revenue": "~30 employees; ~$5M revenue",
+            "location": "Lawrence, KS",
+        },
         "Humane Society of Greater Kansas City": {"location": "Kansas City, MO"},
         "Unisource Document Products": {},
         "Kansas Colloquies": {"location": "Bonner Springs, KS"},
@@ -175,9 +193,17 @@ def _make_fallback_fixed_content():
         ],
     }
     mod.CERTIFICATIONS = [
-        {"title": "Email Marketing Software Certification", "org": "HubSpot", "year": "2026"},
+        {
+            "title": "Email Marketing Software Certification",
+            "org": "HubSpot",
+            "year": "2026",
+        },
         {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"},
-        {"title": "Camp Portfolio", "org": "Bernstein Rein, Kansas City", "year": "2008"},
+        {
+            "title": "Camp Portfolio",
+            "org": "Bernstein Rein, Kansas City",
+            "year": "2008",
+        },
     ]
     mod.CV_SECTION_KEYWORDS = [
         (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
@@ -214,15 +240,21 @@ Treering headhunted her directly from IST.
     def _build_education(achievement_keys: dict = None) -> list:
         achievement_keys = achievement_keys or {}
         ku_achievement_key = achievement_keys.get("University of Kansas", "")
-        kckcc_achievement_key = achievement_keys.get("Kansas City Kansas Community College", "")
+        kckcc_achievement_key = achievement_keys.get(
+            "Kansas City Kansas Community College", ""
+        )
 
         if ku_achievement_key not in mod.KU_ACHIEVEMENT_OPTIONS:
-            print(f"  ⚠️  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option.")
+            print(
+                f"  ⚠️  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option."
+            )
         ku_bullet = mod.KU_ACHIEVEMENT_OPTIONS.get(
             ku_achievement_key, next(iter(mod.KU_ACHIEVEMENT_OPTIONS.values()))
         )
         if kckcc_achievement_key not in mod.KCKCC_ACHIEVEMENT_OPTIONS:
-            print(f"  ⚠️  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option.")
+            print(
+                f"  ⚠️  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option."
+            )
         kckcc_bullet = mod.KCKCC_ACHIEVEMENT_OPTIONS.get(
             kckcc_achievement_key, next(iter(mod.KCKCC_ACHIEVEMENT_OPTIONS.values()))
         )
@@ -321,15 +353,121 @@ def _make_fallback_profile_yaml() -> dict:
             {"company": "Callahan Creek", "min_bullets": 1},
         ],
         "tags": [
-            {"name": "email", "persona_description": "email marketing, lifecycle marketing, or CRM/ESP campaign roles", "keywords": ["email", "open rate", "reply rate", "sequence", "outreach", "campaign", "pta", "hot zone", "mailchimp", "persistiq"]},
-            {"name": "ops", "persona_description": "marketing operations, RevOps, CRM, automation, or analytics roles", "keywords": ["salesforce", "crm", "pipeline", "territory", "hygiene", "data", "hot zone", "import", "outreach", "integration"]},
-            {"name": "content", "persona_description": "content marketing, editorial strategy, brand voice, or copywriting roles", "keywords": ["content", "committee", "asset", "library", "governance", "voice", "sequence", "playbook", "onboarding", "training"]},
-            {"name": "enablement", "persona_description": "sales enablement, training/onboarding design, or content-governance roles", "keywords": ["training", "onboarding", "playbook", "sdr", "enablement", "committee", "process map", "coaching"]},
-            {"name": "mgmt", "persona_description": "team leadership, coaching, or people-management roles", "keywords": ["team", "coach", "manage", "sdr", "direct report", "training"]},
-            {"name": "writing", "persona_description": "copywriting, editorial, or long-form content-writing roles", "keywords": ["copy", "writing", "email", "sequence", "campaign", "authored"]},
-            {"name": "brand", "persona_description": "brand marketing, creative direction, or agency roles", "keywords": ["brand", "voice", "tone", "agency", "campaign", "creative"]},
-            {"name": "design", "persona_description": "graphic design, visual identity, or UX/UI roles", "keywords": ["design", "deck", "slide", "flyer", "illustrator", "canva"]},
-            {"name": "generalist", "persona_description": "general marketing or cross-functional roles", "keywords": []},
+            {
+                "name": "email",
+                "persona_description": "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
+                "keywords": [
+                    "email",
+                    "open rate",
+                    "reply rate",
+                    "sequence",
+                    "outreach",
+                    "campaign",
+                    "pta",
+                    "hot zone",
+                    "mailchimp",
+                    "persistiq",
+                ],
+            },
+            {
+                "name": "ops",
+                "persona_description": "marketing operations, RevOps, CRM, automation, or analytics roles",
+                "keywords": [
+                    "salesforce",
+                    "crm",
+                    "pipeline",
+                    "territory",
+                    "hygiene",
+                    "data",
+                    "hot zone",
+                    "import",
+                    "outreach",
+                    "integration",
+                ],
+            },
+            {
+                "name": "content",
+                "persona_description": "content marketing, editorial strategy, brand voice, or copywriting roles",
+                "keywords": [
+                    "content",
+                    "committee",
+                    "asset",
+                    "library",
+                    "governance",
+                    "voice",
+                    "sequence",
+                    "playbook",
+                    "onboarding",
+                    "training",
+                ],
+            },
+            {
+                "name": "enablement",
+                "persona_description": "sales enablement, training/onboarding design, or content-governance roles",
+                "keywords": [
+                    "training",
+                    "onboarding",
+                    "playbook",
+                    "sdr",
+                    "enablement",
+                    "committee",
+                    "process map",
+                    "coaching",
+                ],
+            },
+            {
+                "name": "mgmt",
+                "persona_description": "team leadership, coaching, or people-management roles",
+                "keywords": [
+                    "team",
+                    "coach",
+                    "manage",
+                    "sdr",
+                    "direct report",
+                    "training",
+                ],
+            },
+            {
+                "name": "writing",
+                "persona_description": "copywriting, editorial, or long-form content-writing roles",
+                "keywords": [
+                    "copy",
+                    "writing",
+                    "email",
+                    "sequence",
+                    "campaign",
+                    "authored",
+                ],
+            },
+            {
+                "name": "brand",
+                "persona_description": "brand marketing, creative direction, or agency roles",
+                "keywords": [
+                    "brand",
+                    "voice",
+                    "tone",
+                    "agency",
+                    "campaign",
+                    "creative",
+                ],
+            },
+            {
+                "name": "design",
+                "persona_description": "graphic design, visual identity, or UX/UI roles",
+                "keywords": [
+                    "design",
+                    "deck",
+                    "slide",
+                    "flyer",
+                    "illustrator",
+                    "canva",
+                ],
+            },
+            {
+                "name": "generalist",
+                "persona_description": "general marketing or cross-functional roles",
+                "keywords": [],
+            },
         ],
         "deep_evidence_keywords": ["Treering Yearbooks"],
         "target_roles": {
@@ -360,8 +498,18 @@ def _make_fallback_profile_yaml() -> dict:
         },
         "archetypes": {
             "archetypes": [
-                {"name": "Customer Marketing Manager", "level": "Mid-Senior", "fit": "primary", "notes": "Customer engagement, onboarding, retention campaigns, advocacy, adoption programs, customer communications, and lifecycle journey design."},
-                {"name": "Lifecycle Marketing Specialist", "level": "Mid-Senior", "fit": "primary", "notes": "Lifecycle email sequences, automated journeys, user onboarding flows, segmentation, retention triggers, and ESP/CRM tooling."},
+                {
+                    "name": "Customer Marketing Manager",
+                    "level": "Mid-Senior",
+                    "fit": "primary",
+                    "notes": "Customer engagement, onboarding, retention campaigns, advocacy, adoption programs, customer communications, and lifecycle journey design.",
+                },
+                {
+                    "name": "Lifecycle Marketing Specialist",
+                    "level": "Mid-Senior",
+                    "fit": "primary",
+                    "notes": "Lifecycle email sequences, automated journeys, user onboarding flows, segmentation, retention triggers, and ESP/CRM tooling.",
+                },
             ]
         },
     }
