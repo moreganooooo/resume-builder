@@ -82,3 +82,31 @@ func TestMenuModelNavigationAndHelp(t *testing.T) {
 		t.Errorf("expected MenuSelectMsg with non-empty command, got: %#v", selMsg)
 	}
 }
+
+func TestMenuModel_DynamicMotivationalHeader(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m.SetSubtitle("✦ 4 applications submitted this week • Keep up the momentum! ✧")
+	m.Resize(80, 24)
+
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "4 applications submitted this week") {
+		t.Errorf("expected view to contain dynamic motivational copy, got:\n%s", view)
+	}
+}
+
+func TestMenuModel_SparkleEasterEgg(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m.Resize(80, 24)
+
+	// Type "sparkle"
+	keys := []string{"s", "p", "a", "r", "k", "l", "e"}
+	for _, k := range keys {
+		m, _ = m.Update(pressKey(k))
+	}
+
+	if !m.SparkleActive() {
+		t.Errorf("expected sparkle easter egg mode to activate after typing 'sparkle'")
+	}
+}

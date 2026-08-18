@@ -62,6 +62,31 @@ class TestUiConfig(unittest.TestCase):
         self.assertEqual(config["other_key"], "keep me")
         self.assertEqual(config["icon_set"], "nerd")
 
+    def test_expanded_ui_config_helpers(self):
+        # Test default fallbacks
+        self.assertEqual(ui_config.get_motion_preference(), "full")
+        self.assertTrue(ui_config.get_celebrations_enabled())
+        self.assertEqual(ui_config.get_default_view(), "pipeline")
+        self.assertEqual(ui_config.get_theme_mode(), "resume-builder")
+
+        # Save customized preferences
+        ui_config.save_ui_preference("motion", "reduced")
+        ui_config.save_ui_preference("celebrations_enabled", False)
+        ui_config.save_ui_preference("default_view", "jobs")
+        ui_config.save_ui_preference("theme_mode", "catppuccin-mocha")
+
+        self.assertEqual(ui_config.get_motion_preference(), "reduced")
+        self.assertFalse(ui_config.get_celebrations_enabled())
+        self.assertEqual(ui_config.get_default_view(), "jobs")
+        self.assertEqual(ui_config.get_theme_mode(), "catppuccin-mocha")
+
+    def test_get_full_ui_config(self):
+        ui_config.save_icon_set("nerd")
+        ui_config.save_ui_preference("motion", "reduced")
+        full = ui_config.get_full_ui_config()
+        self.assertEqual(full["icon_set"], "nerd")
+        self.assertEqual(full["motion"], "reduced")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,632 @@
+{
+  "nodes": [
+    {
+      "id": "docs_superpowers_plans_2026_08_12_scan_verify_progress",
+      "label": "Scan + Verify Progress Consistency Implementation Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-12-scan-verify-progress-consistency.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_cli_art_scanactivity",
+      "label": "ScanActivity class - themed step-log component",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-12-scan-verify-progress-consistency.md",
+      "source_location": "lines 125-227",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_cover_letter_blueprint_roadmap",
+      "label": "Cover Letter Blueprint Roadmap - Groups A-E Status",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_feature_group_a",
+      "label": "Cover Letter Group A - Quality Quick Wins (COMPLETE)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group A",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_feature_group_b",
+      "label": "Cover Letter Group B - ATS-Aware Keyword Strategy (COMPLETE)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group B",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_feature_group_c",
+      "label": "Cover Letter Group C - DOCX Exporter (COMPLETE)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group C",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_feature_group_d",
+      "label": "Cover Letter Group D - Voice Anchor Matcher (COMPLETE)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group D",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "cover_letter_feature_group_e",
+      "label": "Cover Letter Group E - One-Command Pipeline (COMPLETE)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group E",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plans_docx_exporter",
+      "label": "DOCX Exporter Implementation Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-docx-exporter-implementation.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_render_coverletter_docx",
+      "label": "render_coverletter_docx - ATS-optimized DOCX renderer",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-docx-exporter-implementation.md",
+      "source_location": "Task 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_render_resume_docx",
+      "label": "render_resume_docx - ATS-optimized DOCX renderer",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-docx-exporter-implementation.md",
+      "source_location": "Task 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plans_one_command_pipeline",
+      "label": "One-Command Application Pipeline Implementation Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "orchestrator_build_application_package",
+      "label": "build_application_package - unified pipeline orchestrator",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md",
+      "source_location": "Task 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plans_tui_polish",
+      "label": "TUI Polish Implementation Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-tui-polish-implementation.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plans_voice_anchor_matcher",
+      "label": "Voice Anchor Matcher Implementation Plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_voice_metrics",
+      "label": "voice_metrics - pure stylometry and voice anchor validator",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resume_engine_scoring_voice_rules",
+      "label": "voice_rules.yaml - declarative voice thresholds",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_jd_batch_tracking",
+      "label": "JD Batch Tracking & Mid-Pipeline Resume Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-jd-batch-tracking-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_jd_manager",
+      "label": "jd_manager - JD intake and completion tracking",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-jd-batch-tracking-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_resume_spec_enforcement",
+      "label": "Resume Pipeline Spec Enforcement Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-resume-spec-enforcement-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_validate_resume",
+      "label": "validate_resume - deterministic spec enforcement",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-resume-spec-enforcement-design.md",
+      "source_location": "Phase 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_company_research",
+      "label": "Company Research (Cover Letter + Resume Tone-Mirroring) Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-company-research-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_company_research",
+      "label": "company_research - webpage scraping and research extraction",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-company-research-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_cover_letter_generation",
+      "label": "Cover Letter Generation Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_validate_coverletter",
+      "label": "validate_coverletter - cover letter validator",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_render_coverletter",
+      "label": "render_coverletter - HTML template renderer",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_batch_evaluate_picker",
+      "label": "Batch Evaluation + Interactive Job Picker Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_batch_evaluate",
+      "label": "batch_evaluate - batch scoring and selection",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_specs_liveness_checker",
+      "label": "Liveness Checker Design",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-liveness-checker-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_liveness",
+      "label": "liveness - job posting URL liveness verification",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-liveness-checker-design.md",
+      "source_location": "Components section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "checkpoint_resume_feature",
+      "label": "Mid-Pipeline Resume Checkpointing - fault tolerance pattern",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-jd-batch-tracking-design.md",
+      "source_location": "Mid-Pipeline Resume section",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ats_classification_feature",
+      "label": "ATS Classification - provider detection and weighting",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group B",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "keyword_front_loading_feature",
+      "label": "Keyword Front-Loading - ATS-aware keyword placement",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group B",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "docs_cover_letter_blueprint_roadmap",
+      "target": "cover_letter_feature_group_a",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 27",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_cover_letter_blueprint_roadmap",
+      "target": "cover_letter_feature_group_b",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 38",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_cover_letter_blueprint_roadmap",
+      "target": "cover_letter_feature_group_c",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 49",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_cover_letter_blueprint_roadmap",
+      "target": "cover_letter_feature_group_d",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 58",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_cover_letter_blueprint_roadmap",
+      "target": "cover_letter_feature_group_e",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 71",
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_feature_group_c",
+      "target": "docs_superpowers_plans_docx_exporter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 49",
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_feature_group_d",
+      "target": "docs_superpowers_plans_voice_anchor_matcher",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 60",
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_feature_group_e",
+      "target": "docs_superpowers_plans_one_command_pipeline",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "line 74",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plans_docx_exporter",
+      "target": "scripts_render_coverletter_docx",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-docx-exporter-implementation.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plans_docx_exporter",
+      "target": "scripts_render_resume_docx",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-docx-exporter-implementation.md",
+      "source_location": "Task 2",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plans_one_command_pipeline",
+      "target": "orchestrator_build_application_package",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plans_voice_anchor_matcher",
+      "target": "scripts_voice_metrics",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plans_voice_anchor_matcher",
+      "target": "resume_engine_scoring_voice_rules",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_voice_metrics",
+      "target": "scripts_validate_coverletter",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 3",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_jd_batch_tracking",
+      "target": "scripts_jd_manager",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-jd-batch-tracking-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_jd_batch_tracking",
+      "target": "checkpoint_resume_feature",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-jd-batch-tracking-design.md",
+      "source_location": "Mid-Pipeline Resume section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_resume_spec_enforcement",
+      "target": "scripts_validate_resume",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-01-resume-spec-enforcement-design.md",
+      "source_location": "Phase 3",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_company_research",
+      "target": "scripts_company_research",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-company-research-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_cover_letter_generation",
+      "target": "scripts_validate_coverletter",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_cover_letter_generation",
+      "target": "scripts_render_coverletter",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-04-cover-letter-generation-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_batch_evaluate_picker",
+      "target": "scripts_batch_evaluate",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_specs_liveness_checker",
+      "target": "scripts_liveness",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/specs/2026-07-05-liveness-checker-design.md",
+      "source_location": "Components section",
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_feature_group_b",
+      "target": "ats_classification_feature",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group B",
+      "weight": 1.0
+    },
+    {
+      "source": "cover_letter_feature_group_b",
+      "target": "keyword_front_loading_feature",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-cover-letter-blueprint-roadmap.md",
+      "source_location": "Group B",
+      "weight": 1.0
+    },
+    {
+      "source": "orchestrator_build_application_package",
+      "target": "scripts_batch_evaluate",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-one-command-pipeline-implementation.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "scripts_validate_coverletter",
+      "target": "resume_engine_scoring_voice_rules",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-08-17-voice-anchor-matcher-implementation.md",
+      "source_location": "Task 3",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

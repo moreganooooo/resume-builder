@@ -1,0 +1,22 @@
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-connector-extended-technical-analysis-&-sources.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-mcp-vs-web-tools-deep-research-report-&-technical-analysis.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources (1).md
+- /Users/morganescott/resume-builder/docs/morgan_research/ImprovementConcepts/jobright-technical-deep-dive-model-stack-rulesets-ats-simulation-&-data-sources.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ResumeWritingResearch/comprehensive-resume-generation-&-writing-services-research-report-2026.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ResumeWritingResearch/deep-dive-answering-open-questions-on-resume-generation-and-ats-compatibility-2026.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ResumeWritingResearch/deep-dive-sales-marketing-data-science-&-stem-industry-resume-strategies-2026.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ResumeWritingResearch/deep-research-industry-variations-emerging-platforms-job-gaps-&-career-switching-2026.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ResumeWritingResearch/the-complete-guide-to-resume-writing-rules-used-by-top-ai-platforms-2026.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ScoringSystemResearch/answered-open-questions-calculation-methodologies-&-technical-deep-dive.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ScoringSystemResearch/comprehensive-research-report-job-&-interview-hiring-odds-scoring-across-resume-generation-&-job-hunting-platforms.md
+- /Users/morganescott/resume-builder/docs/morgan_research/ScoringSystemResearch/deep-dive-research-report-interview-&-hiring-odds-calculation-methodologies.md
+- /Users/morganescott/resume-builder/docs/program_docs/faq.md
+- /Users/morganescott/resume-builder/docs/program_docs/installation.md
+- /Users/morganescott/resume-builder/docs/program_docs/operations.md
+- /Users/morganescott/resume-builder/docs/review/PLAN.md
+- /Users/morganescott/resume-builder/docs/review/fix-pass-plan.md
+- /Users/morganescott/resume-builder/docs/review/master_audit_document.md
+- /Users/morganescott/resume-builder/docs/review/onboarding_and_remediation_guide.md
+- /Users/morganescott/resume-builder/docs/review/phase-0-smoke.md
+- /Users/morganescott/resume-builder/docs/review/phase-1-onboarding.md
+- /Users/morganescott/resume-builder/docs/review/phase-10-rubrics.md

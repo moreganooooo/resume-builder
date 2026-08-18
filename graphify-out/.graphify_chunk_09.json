@@ -1,0 +1,666 @@
+{
+  "nodes": [
+    {
+      "id": "resumeengine_prompts_tailor_coverletter",
+      "label": "Tailor Cover Letter Prompt",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_coverletter.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_prompts_tailor_resume",
+      "label": "Tailor Resume Prompt",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_hard_failures",
+      "label": "Hard Failures Rules",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/hard_failures.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_language_quality",
+      "label": "Language Quality Rules",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/language_quality.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_style_rules",
+      "label": "Style Rules",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/style_rules.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_truthfulness_rules",
+      "label": "Truthfulness Rules",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/truthfulness_rules.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_verb_intent_mapping",
+      "label": "Verb Intent Mapping",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/verb_intent_mapping.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_rules_verb_taxonomy",
+      "label": "Verb Taxonomy",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/verb_taxonomy.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_readme",
+      "label": "Scoring Architecture Documentation",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_ai_risk",
+      "label": "AI Risk Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/ai_risk.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_ats_match",
+      "label": "ATS Match Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/ats_match.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_believability",
+      "label": "Believability Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/believability.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_certifications_score",
+      "label": "Certifications Relevance Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/certifications_score.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_evidence_alignment",
+      "label": "Evidence Alignment Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/evidence_alignment.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_experience_structure_score",
+      "label": "Experience Structure Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/experience_structure_score.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_manager_test",
+      "label": "Manager Test Rubric",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/manager_test.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_professional_identity_score",
+      "label": "Professional Identity Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/professional_identity_score.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_recruiter_score",
+      "label": "Recruiter Scannability Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/recruiter_score.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_resume_cohesion_score",
+      "label": "Resume Cohesion Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/resume_cohesion_score.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_role_dna",
+      "label": "Role Archetype DNA Library",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/role_dna.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_skills_scoring",
+      "label": "Skills Scoring and Vocabulary Bank",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/skills_scoring.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resumeengine_scoring_specificity",
+      "label": "Specificity Scoring",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/specificity.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_forbidden_phrases",
+      "label": "Forbidden Phrases",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/style_rules.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_verb_strength_hierarchy",
+      "label": "Verb Strength Hierarchy",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/verb_taxonomy.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_archetype_system",
+      "label": "Professional Archetype System",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/role_dna.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_manager_test",
+      "label": "Manager Test Framework",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/manager_test.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_evidence_traceability",
+      "label": "Evidence Traceability Principle",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/evidence_alignment.yaml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": "lines 89-91",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "resumeengine_rules_verb_intent_mapping",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "resumeengine_rules_verb_taxonomy",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "resumeengine_scoring_manager_test",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": "lines 194-195",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "resumeengine_scoring_role_dna",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": "lines 30-33",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_coverletter",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_coverletter.md",
+      "source_location": "line 24",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_believability",
+      "target": "resumeengine_scoring_ai_risk",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/believability.yaml",
+      "source_location": "lines 45-48",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_believability",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/believability.yaml",
+      "source_location": "line 48",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_manager_test",
+      "target": "resumeengine_scoring_ai_risk",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/manager_test.yaml",
+      "source_location": "line 44",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_manager_test",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/manager_test.yaml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_professional_identity_score",
+      "target": "resumeengine_scoring_role_dna",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/professional_identity_score.yaml",
+      "source_location": "lines 25-26",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_professional_identity_score",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/professional_identity_score.yaml",
+      "source_location": "line 347",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_skills_scoring",
+      "target": "resumeengine_scoring_professional_identity_score",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/skills_scoring.yaml",
+      "source_location": "lines 20-22",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_skills_scoring",
+      "target": "resumeengine_rules_style_rules",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/skills_scoring.yaml",
+      "source_location": "line 328",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_resume_cohesion_score",
+      "target": "resumeengine_scoring_professional_identity_score",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/resume_cohesion_score.yaml",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_ats_match",
+      "target": "resumeengine_scoring_role_dna",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/ats_match.yaml",
+      "source_location": "line 28",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_readme",
+      "target": "resumeengine_scoring_manager_test",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md",
+      "source_location": "line 11",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_readme",
+      "target": "resumeengine_scoring_believability",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md",
+      "source_location": "line 12",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_readme",
+      "target": "resumeengine_scoring_ai_risk",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md",
+      "source_location": "line 13",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_readme",
+      "target": "resumeengine_scoring_role_dna",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md",
+      "source_location": "line 18",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_rules_language_quality",
+      "target": "concept_forbidden_phrases",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/language_quality.yaml",
+      "source_location": "lines 266-292",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_rules_style_rules",
+      "target": "concept_forbidden_phrases",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/style_rules.yaml",
+      "source_location": "lines 180-227",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_ai_risk",
+      "target": "concept_forbidden_phrases",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/ai_risk.yaml",
+      "source_location": "lines 78-97",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_rules_verb_taxonomy",
+      "target": "concept_verb_strength_hierarchy",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/verb_taxonomy.yaml",
+      "source_location": "lines 566-616",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_rules_verb_intent_mapping",
+      "target": "concept_verb_strength_hierarchy",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/verb_intent_mapping.yaml",
+      "source_location": "lines 30-42",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_rules_language_quality",
+      "target": "concept_verb_strength_hierarchy",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/rules/language_quality.yaml",
+      "source_location": "lines 110-135",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_role_dna",
+      "target": "concept_archetype_system",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/role_dna.yaml",
+      "source_location": "lines 13-129",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_professional_identity_score",
+      "target": "concept_archetype_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/professional_identity_score.yaml",
+      "source_location": "lines 83-130",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_skills_scoring",
+      "target": "concept_archetype_system",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/skills_scoring.yaml",
+      "source_location": "lines 24-36",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_manager_test",
+      "target": "concept_manager_test",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/manager_test.yaml",
+      "source_location": "lines 9-62",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_scoring_evidence_alignment",
+      "target": "concept_evidence_traceability",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/evidence_alignment.yaml",
+      "source_location": "lines 1-22",
+      "weight": 1.0
+    },
+    {
+      "source": "resumeengine_prompts_tailor_resume",
+      "target": "concept_evidence_traceability",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md",
+      "source_location": "lines 5-9",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "he_scoring_validation_system",
+      "label": "Resume Scoring and Validation System",
+      "nodes": [
+        "resumeengine_scoring_believability",
+        "resumeengine_scoring_manager_test",
+        "resumeengine_scoring_evidence_alignment"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/README.md"
+    },
+    {
+      "id": "he_prompt_generation_system",
+      "label": "Resume and Cover Letter Generation Pipeline",
+      "nodes": [
+        "resumeengine_prompts_tailor_resume",
+        "resumeengine_rules_verb_intent_mapping",
+        "resumeengine_scoring_role_dna"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/prompts/tailor_resume.md"
+    },
+    {
+      "id": "he_language_quality_enforcement",
+      "label": "Language Quality and Banned Phrase Enforcement",
+      "nodes": [
+        "resumeengine_rules_language_quality",
+        "resumeengine_rules_style_rules",
+        "resumeengine_scoring_ai_risk"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/resume-engine/scoring/ai_risk.yaml"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

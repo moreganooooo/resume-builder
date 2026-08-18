@@ -1,0 +1,590 @@
+{
+  "nodes": [
+    {
+      "id": "docs_review_phase_2_ligature_corruption",
+      "label": "Ligatures corrupt ATS keywords in PDF",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_2_palette_contrast",
+      "label": "Palette has no contrast contract; selection pointer is least legible",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_2_banner_performance",
+      "label": "Launch banner animation takes 27s instead of 1.6s",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_3_output_voice",
+      "label": "Voice-anchors file is mostly paraphrase, not specimen",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "Finding 8b",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_3_summary_generic",
+      "label": "Summary is generic by explicit instruction; quality rule unenforced",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "Finding 4",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_4_pdf_render_dependency",
+      "label": "PDF rendering depends on stray node_modules in home directory",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_4_checkpoint_corruption",
+      "label": "Checkpoint writes are non-atomic; corruption discarded silently",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_6_keeper_bank_columns",
+      "label": "Triage appends keeper rows into wrong columns; destroys provenance",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-6-bullet-bank.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_7_scanner_warnings",
+      "label": "Scanner warnings silently discarded by warning collector",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7-discovery.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_7b_workday_unbounded",
+      "label": "Workday provider fires unthrottled POSTs and returns zero jobs",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7b-board-scanners.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_8_jd_injection",
+      "label": "Job posting can dictate contents of cover letter (prompt injection)",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-8-trust-secrets.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_11_missing_employers",
+      "label": "Three employers missing from rendered resume due to no roster requirement",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-11-orphans.md",
+      "source_location": "Trace 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_phase_12_playwright_dead",
+      "label": "Playwright e2e scaffold is dead and unachievable",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-12-residue.md",
+      "source_location": "Disposition table",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_orchestrator",
+      "label": "Resume builder orchestrator",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_generate_pdf",
+      "label": "PDF generation via Playwright/Chromium",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_validate_pdf_text",
+      "label": "PDF text-layer validation",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_theme",
+      "label": "Terminal color theme and semantic tokens",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 2",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_cli_art",
+      "label": "CLI art and table rendering",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_jd_manager",
+      "label": "JD tracking and checkpoint management",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "scripts_gemini_client",
+      "label": "Gemini API client with retry and quota handling",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Findings reference",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "resume_engine_prompts_tailor",
+      "label": "Resume tailoring prompt",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "Finding 4",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "board_scanners_workday",
+      "label": "Workday ATS job scraper provider",
+      "file_type": "code",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7b-board-scanners.md",
+      "source_location": "Finding 1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_review_plan_gaps",
+      "label": "Review of gaps in PLAN.md itself",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/plan-gaps.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_brief_bootstrap",
+      "label": "Bootstrap/new-user flow polish brief",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/briefs/2026-08-13-bootstrap-new-user-flow-brief.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plan_jd_batch_tracking",
+      "label": "JD batch tracking implementation plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-07-01-jd-batch-tracking.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_superpowers_plan_company_research",
+      "label": "Company research (tone-mirroring) plan",
+      "file_type": "document",
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-07-04-company-research.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_ligature_css_fix",
+      "label": "Disable ligatures via CSS font-variant-ligatures",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md",
+      "source_location": "Contradiction C1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_checkpoint_atomicity",
+      "label": "Use temp file + os.replace() for atomic writes",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 6",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_prompt_injection_defense",
+      "label": "Untrusted JD text requires closing delimiter and sanitization",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-8-trust-secrets.md",
+      "source_location": "Finding 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concept_rate_limiting_providers",
+      "label": "Board-scanner providers need explicit rate limiting and backoff",
+      "file_type": "concept",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7b-board-scanners.md",
+      "source_location": "Finding 3",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "plan_phase_ordering_issue",
+      "label": "Review phases ordered to create backward handoffs",
+      "file_type": "rationale",
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md",
+      "source_location": "Handoff ledger structural finding",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "docs_review_phase_2_ligature_corruption",
+      "target": "concept_ligature_css_fix",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md",
+      "source_location": "Contradiction C1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_2_ligature_corruption",
+      "target": "scripts_generate_pdf",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_2_ligature_corruption",
+      "target": "resume_engine_prompts_tailor",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "BLOCKER 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_2_palette_contrast",
+      "target": "scripts_theme",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 2",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_2_banner_performance",
+      "target": "scripts_cli_art",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-2-visual-design.md",
+      "source_location": "Finding 3",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_3_output_voice",
+      "target": "docs_review_phase_6_keeper_bank_columns",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md",
+      "source_location": "Contradiction C7",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_3_summary_generic",
+      "target": "resume_engine_prompts_tailor",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-3-output-quality.md",
+      "source_location": "Finding 4",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_4_pdf_render_dependency",
+      "target": "scripts_generate_pdf",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_4_checkpoint_corruption",
+      "target": "concept_checkpoint_atomicity",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 6",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_4_checkpoint_corruption",
+      "target": "scripts_jd_manager",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md",
+      "source_location": "Finding 6",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_6_keeper_bank_columns",
+      "target": "scripts_orchestrator",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-6-bullet-bank.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_7_scanner_warnings",
+      "target": "scripts_orchestrator",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7-discovery.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_7b_workday_unbounded",
+      "target": "board_scanners_workday",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7b-board-scanners.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_7b_workday_unbounded",
+      "target": "concept_rate_limiting_providers",
+      "relation": "rationale_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-7b-board-scanners.md",
+      "source_location": "Finding 3",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_8_jd_injection",
+      "target": "concept_prompt_injection_defense",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-8-trust-secrets.md",
+      "source_location": "Finding 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_11_missing_employers",
+      "target": "scripts_orchestrator",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-11-orphans.md",
+      "source_location": "Trace 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_review_phase_12_playwright_dead",
+      "target": "docs_review_plan_gaps",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-12-residue.md",
+      "source_location": "Disposition table",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plan_jd_batch_tracking",
+      "target": "scripts_jd_manager",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-07-01-jd-batch-tracking.md",
+      "source_location": "Task 1",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_superpowers_plan_company_research",
+      "target": "resume_engine_prompts_tailor",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/superpowers/plans/2026-07-04-company-research.md",
+      "source_location": "Goal",
+      "weight": 1.0
+    },
+    {
+      "source": "plan_phase_ordering_issue",
+      "target": "docs_review_plan_gaps",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md",
+      "source_location": "Handoff ledger",
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "hyperedge_pdf_rendering_chain",
+      "label": "PDF rendering pipeline dependencies",
+      "nodes": [
+        "docs_review_phase_2_ligature_corruption",
+        "scripts_generate_pdf",
+        "scripts_validate_pdf_text"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-4-reliability.md"
+    },
+    {
+      "id": "hyperedge_data_integrity_risks",
+      "label": "Data integrity and corruption risks",
+      "nodes": [
+        "docs_review_phase_4_checkpoint_corruption",
+        "docs_review_phase_6_keeper_bank_columns",
+        "concept_checkpoint_atomicity"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-9-backlog.md"
+    },
+    {
+      "id": "hyperedge_prompt_safety_chain",
+      "label": "Prompt injection and security risks",
+      "nodes": [
+        "docs_review_phase_8_jd_injection",
+        "concept_prompt_injection_defense",
+        "scripts_orchestrator"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "/Users/morganescott/resume-builder/docs/review/phase-8-trust-secrets.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

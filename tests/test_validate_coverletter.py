@@ -70,13 +70,13 @@ class TestValidateCoverLetter(unittest.TestCase):
         letter = _valid_letter()
         letter["body_paragraphs"] = ["Only one paragraph here."]
         violations = validate_coverletter.validate(letter, STYLE_RULES)
-        self.assertTrue(any("Expected 2-3 body paragraphs" in v for v in violations))
+        self.assertTrue(any("Expected 2-4 body paragraphs" in v for v in violations))
 
     def test_flags_too_many_paragraphs(self):
         letter = _valid_letter()
-        letter["body_paragraphs"] = ["One.", "Two.", "Three.", "Four."]
+        letter["body_paragraphs"] = ["One.", "Two.", "Three.", "Four.", "Five."]
         violations = validate_coverletter.validate(letter, STYLE_RULES)
-        self.assertTrue(any("Expected 2-3 body paragraphs" in v for v in violations))
+        self.assertTrue(any("Expected 2-4 body paragraphs" in v for v in violations))
 
     def test_flags_third_person_slip(self):
         letter = _valid_letter()

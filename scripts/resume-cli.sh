@@ -20,22 +20,29 @@ elif [ -n "$BASH_VERSION" ]; then
   fi
 fi
 
+# TrueColor / ANSI hex mappings matching theme.py tokens
+_RB_BRAND="\033[38;2;139;117;255m"      # #8B75FF (Charmtone Hazy / Lavender)
+_RB_ACCENT="\033[38;2;255;96;255m"     # #FF60FF (Charmtone Dolly / Brand Accent)
+_RB_SUCCESS="\033[38;2;18;199;143m"    # #12C78F (Charmtone Guac / Green)
+_RB_INFO="\033[38;2;0;164;255m"        # #00A4FF (Charmtone Malibu / Blue)
+_RB_WARNING="\033[38;2;245;239;52m"    # #F5EF34 (Charmtone Mustard / Yellow)
+_RB_ERROR="\033[38;2;255;123;153m"     # #FF7B99 (Charmtone Coral / Red)
+_RB_MUTED="\033[38;2;163;163;163m"     # #A3A3A3 (Muted Gray)
+_RB_BOLD="\033[1m"
+_RB_RESET="\033[0m"
+
 if [ "$_RESUME_DIRECT_RUN" -eq 1 ]; then
   local_path="${BASH_SOURCE[0]:-$0}"
   abs_path="$(cd "$(dirname "$local_path")" && pwd)/$(basename "$local_path")"
-  echo "--------------------------------------------------------"
-  echo "  ✦  RESUME-BUILDER SHELL SHORTCUTS  ✦"
-  echo "--------------------------------------------------------"
-  echo "You executed this script directly instead of sourcing it."
-  echo "To use the 'resume' command from anywhere in your shell,"
-  echo "please SOURCE this file instead of running it."
-  echo ""
-  echo "Run this command to activate it for your current session:"
-  echo "  source $abs_path"
-  echo ""
-  echo "Or add it to your profile (~/.zshrc or ~/.bashrc) permanently:"
-  echo "  echo \"source $abs_path\" >> ~/.zshrc"
-  echo "--------------------------------------------------------"
+  printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
+  printf "  ${_RB_BOLD}${_RB_BRAND}✦  RESUME-BUILDER SHELL SHORTCUTS  ✦${_RB_RESET}\n"
+  printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
+  printf "  ${_RB_WARNING}⚠  You executed this script directly instead of sourcing it.${_RB_RESET}\n"
+  printf "  ${_RB_MUTED}To use the${_RB_RESET} ${_RB_BOLD}${_RB_ACCENT}resume${_RB_RESET} ${_RB_MUTED}command from anywhere in your shell, source it:${_RB_RESET}\n\n"
+  printf "  ${_RB_BOLD}${_RB_SUCCESS}source %s${_RB_RESET}\n\n" "$abs_path"
+  printf "  ${_RB_MUTED}Or add it to your profile (~/.zshrc or ~/.bashrc) permanently:${_RB_RESET}\n"
+  printf "  ${_RB_INFO}echo \"source %s\" >> ~/.zshrc${_RB_RESET}\n" "$abs_path"
+  printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n\n"
   exit 1
 fi
 
@@ -65,18 +72,25 @@ _resume_ensure_profile() {
   default="$(printf '%s\n' "$names" | head -1)"
   local choice
   if command -v gum >/dev/null 2>&1; then
-    choice="$(printf '%s\n' "$names" | gum choose --header "Which profile for this terminal session?")"
+    choice="$(printf '%s\n' "$names" | gum choose --header "✦ Which profile for this terminal session?")"
   else
-    echo "Multiple resume-builder profiles found:"
+    printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
+    printf "  ${_RB_BOLD}${_RB_BRAND}💎 RESUME-BUILDER PROFILE SELECTOR${_RB_RESET}\n"
+    printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
+    printf "  ${_RB_MUTED}Multiple profiles found in${_RB_RESET} ${_RB_INFO}profiles/${_RB_RESET}:\n"
     while IFS= read -r name; do
-      printf '  %s\n' "$name"
+      if [ "$name" = "$default" ]; then
+        printf "    ${_RB_ACCENT}●${_RB_RESET} ${_RB_BOLD}%s${_RB_RESET} ${_RB_MUTED}(default)${_RB_RESET}\n" "$name"
+      else
+        printf "    ${_RB_MUTED}○${_RB_RESET} %s\n" "$name"
+      fi
     done <<< "$names"
-    printf "Which profile for this terminal session? [%s]: " "$default"
+    printf "\n  ${_RB_BOLD}Which profile for this session?${_RB_RESET} [${_RB_ACCENT}%s${_RB_RESET}]: " "$default"
     read -r choice
   fi
   choice="${choice:-$default}"
   export RESUME_PROFILE="$choice"
-  echo "Using profile: $RESUME_PROFILE (set for this terminal session only)"
+  printf "  ${_RB_SUCCESS}✓ Active profile:${_RB_RESET} ${_RB_BOLD}${_RB_ACCENT}%s${_RB_RESET} ${_RB_MUTED}(session only)${_RB_RESET}\n\n" "$RESUME_PROFILE"
 }
 
 resume() {
@@ -88,9 +102,16 @@ resume() {
   case "$cmd" in
     activate)
       cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate
+      local active_prof="${RESUME_PROFILE:-default}"
+      printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
+      printf "  ${_RB_BOLD}${_RB_SUCCESS}✓ Python Virtual Environment Activated${_RB_RESET} ${_RB_MUTED}(.venv)${_RB_RESET}\n"
+      printf "  ${_RB_BOLD}📁 Working Directory:${_RB_RESET} ${_RB_INFO}%s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
+      printf "  ${_RB_BOLD}👤 Active Profile:${_RB_RESET}    ${_RB_ACCENT}%s${_RB_RESET}\n" "$active_prof"
+      printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n\n"
       ;;
     cd)
       cd "$_RESUME_BUILDER_DIR"
+      printf "  ${_RB_INFO}📁 %s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
       ;;
     run)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate
@@ -159,3 +180,8 @@ resume() {
       ;;
   esac
 }
+
+# CLI Aliases
+alias rb="resume"
+alias jobkit="resume"
+

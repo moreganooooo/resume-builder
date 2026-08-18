@@ -1,0 +1,24 @@
+{
+  "name": "resume-builder",
+  "description": "Enterprise-grade AI-powered ATS resume optimizer, cover letter synthesizer, job scanner, and job search CRM.",
+  "topics": [
+    "resume-builder",
+    "ats-optimization",
+    "llm",
+    "gemini",
+    "job-search",
+    "career-ops",
+    "cover-letter-generator",
+    "tui",
+    "typst",
+    "job-scraper",
+    "crm",
+    "python",
+    "automation"
+  ],
+  "homepage": "https://github.com/moreganooooo/resume-builder",
+  "private": false,
+  "has_issues": true,
+  "has_projects": true,
+  "has_wiki": false
+}

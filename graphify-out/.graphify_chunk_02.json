@@ -1,0 +1,804 @@
+{
+  "metadata": {
+    "chunk": "chunk_2",
+    "total_files": 22,
+    "extraction_date": "2026-08-18",
+    "extraction_tool": "claude-haiku-4-5",
+    "schema_version": "1.0"
+  },
+  "nodes": [
+    {
+      "id": "resume_scoring_system",
+      "label": "Resume Scoring System",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Multi-dimensional scoring framework for evaluating resume quality and ATS compatibility"
+    },
+    {
+      "id": "ats_parsing_engine",
+      "label": "ATS Parsing Engine",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Applicant Tracking System parsing and keyword extraction system"
+    },
+    {
+      "id": "cover_letter_effectiveness",
+      "label": "Cover Letter Effectiveness",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Research on cover letter impact with 53% callback rate improvement for tailored letters"
+    },
+    {
+      "id": "job_matching_algorithm",
+      "label": "Job Matching Algorithm",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Semantic skills-based matching with multi-dimensional scoring (70-80% accuracy)"
+    },
+    {
+      "id": "tui_dashboard_design",
+      "label": "TUI Dashboard Design",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Terminal user interface design critique and audit (40/40 usability, 20/20 technical)"
+    },
+    {
+      "id": "charm_ecosystem",
+      "label": "Charm Ecosystem Integration",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Bubble Tea TUI library integration with Catppuccin theme (90% complete, Bubblezone gap)"
+    },
+    {
+      "id": "bubblezone_integration",
+      "label": "Bubblezone Integration Gap",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Critical missing feature for mouse support in dashboard"
+    },
+    {
+      "id": "jobright_matching",
+      "label": "Jobright Job Matching",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "AI-powered job matching with insider connection discovery and spam filtering"
+    },
+    {
+      "id": "keyword_placement_strategy",
+      "label": "Keyword Placement Strategy",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Opening paragraph carries highest ATS weight (first 100 words critical)"
+    },
+    {
+      "id": "file_format_parsing",
+      "label": "File Format Parsing Accuracy",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "DOCX 96.7% parse rate > PDF text 91.3% >> scanned PDF 4.3%"
+    },
+    {
+      "id": "employment_gap_handling",
+      "label": "Employment Gap Handling",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "79% of employers accept career gaps with productive explanation"
+    },
+    {
+      "id": "career_change_framing",
+      "label": "Career Change Framing",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Four-part structure for addressing career transitions: hook, bridge, evidence, close"
+    },
+    {
+      "id": "referral_power",
+      "label": "Referral Power",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Referrals increase hire rate 15x, 19% of recruiters specifically look for mentions"
+    },
+    {
+      "id": "regional_variations",
+      "label": "Regional Cover Letter Variations",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Germany: required, France: critical, UK: important, US: optional but strategic (65.3% value)"
+    },
+    {
+      "id": "semantic_matching",
+      "label": "Semantic Matching vs Keyword Matching",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Semantic understanding of skills and experience depth vs simple keyword counting"
+    },
+    {
+      "id": "compatibility_scoring",
+      "label": "Compatibility Scoring System",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Multi-dimensional scoring with weights: skills 40%, experience 25%, preferences 20%, culture 10%, ATS 5%"
+    },
+    {
+      "id": "ghost_job_detection",
+      "label": "Ghost Job Detection",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Filtering fake listings, expired postings, and recycled jobs from aggregated boards"
+    },
+    {
+      "id": "insider_connection_discovery",
+      "label": "Insider Connection Discovery",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Cross-references job listings with LinkedIn network for 1st/2nd-degree connections"
+    },
+    {
+      "id": "resume_tailoring_automation",
+      "label": "Resume Tailoring Automation",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "AI-powered integration of job matching and resume optimization feedback loop"
+    },
+    {
+      "id": "company_research_integration",
+      "label": "Company Research Integration",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "INFERRED",
+      "confidence": 0.75,
+      "description": "Three-tier fallback: company site scrape, Google-Search-grounded Gemini, JD text"
+    },
+    {
+      "id": "proprietary_algorithm_details",
+      "label": "Proprietary Algorithm Details",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "AMBIGUOUS",
+      "confidence": 0.2,
+      "description": "Exact embedding model, LLM choice, training data composition remain unspecified"
+    },
+    {
+      "id": "ats_weighting_formula",
+      "label": "ATS Weighting Formula",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "AMBIGUOUS",
+      "confidence": 0.15,
+      "description": "Precise weight distribution across ATS platforms varies by system configuration"
+    },
+    {
+      "id": "syncthing_sync_strategy",
+      "label": "Syncthing Multi-Computer Sync",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Direct device-to-device TLS-encrypted sync of four profile data folders"
+    },
+    {
+      "id": "ux_friction_analysis",
+      "label": "UX Friction Analysis",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Eight identified friction points: shell script trap, ghost resume bug, Go fallacy, sequential slog, missing paste portal"
+    },
+    {
+      "id": "dom_persona_research",
+      "label": "Dom Persona UX Research",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "ADHD tech-savvy user persona with specific friction point mapping"
+    },
+    {
+      "id": "open_source_job_hunting",
+      "label": "Open Source Job Hunting Tools",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Repository landscape: interviews (65K stars), career-ops (64K), remote-jobs (40K)"
+    },
+    {
+      "id": "ai_detection_evasion",
+      "label": "AI Detection in Cover Letters",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "39% rejection if suspected AI, editing required to humanize outputs"
+    },
+    {
+      "id": "ats_platform_ecosystem",
+      "label": "ATS Platform Ecosystem",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Greenhouse 23.73%, Workday 21.72%, Ashby 15.41%, Taleo ~15%, iCIMS ~10%, Lever ~8%"
+    },
+    {
+      "id": "recruiter_reading_behavior",
+      "label": "Recruiter Reading Behavior",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "45% read cover letter BEFORE resume, 6-second ATS filter, 7-second human review"
+    },
+    {
+      "id": "industry_specific_variations",
+      "label": "Industry-Specific Cover Letter Weight",
+      "type": "concept",
+      "file_type": "document",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Finance/Consulting/Government: 20% weight; Tech/Startups: 0-10%; Creative: optional"
+    },
+    {
+      "id": "html_asset_path_strategy",
+      "label": "HTML Asset Path Strategy",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Absolute file:// URLs required for rendered HTML assets, never relative paths"
+    },
+    {
+      "id": "bullet_uniqueness_enforcement",
+      "label": "Bullet Uniqueness Enforcement",
+      "type": "concept",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Two-pass selection: pass 1 refuses collisions, pass 2 ignores them, hill-climbing retry strategy"
+    },
+    {
+      "id": "resume_engine",
+      "label": "Resume Engine",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "ResumeEngine class with build_tailored_resume() and build_tailored_coverletter() methods"
+    },
+    {
+      "id": "orchestrator_pipeline",
+      "label": "Orchestrator Pipeline",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "orchestrator.py runs batch pipeline for JD processing, handles checkpoints and resumption"
+    },
+    {
+      "id": "profile_paths_module",
+      "label": "Profile Paths Module",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Single source of truth for profile-scoped paths via profile_paths.py"
+    },
+    {
+      "id": "jd_metadata_convention",
+      "label": "JD JSON Metadata Convention",
+      "type": "rationale",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Underscore-prefixed keys (_evaluation, _liveness, _application) for persisted state"
+    },
+    {
+      "id": "playwright_macos12_pin",
+      "label": "Playwright macOS 12 Pin",
+      "type": "rationale",
+      "file_type": "rationale",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Exact 1.61.1 pin required; >=1.62 drops macOS 12 support, breaks PDF rendering"
+    },
+    {
+      "id": "gemini_api_auth_shield",
+      "label": "Dynamic Credentials Shield",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "gemini_client.py calculates auth headers dynamically per call for profile switching"
+    },
+    {
+      "id": "typst_vector_rendering",
+      "label": "Typst Vector PDF Engine",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "render_typst.py provides sub-second vector PDF generation without browser overhead"
+    },
+    {
+      "id": "sqlite_acid_store",
+      "label": "Embedded ACID SQLite Store",
+      "type": "code",
+      "file_type": "code",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "db.py manages connection pooling, schema initialization, transaction safety"
+    }
+  ],
+  "edges": [
+    {
+      "source": "resume_scoring_system",
+      "target": "ats_parsing_engine",
+      "relation": "shares_data_with",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Scoring relies on ATS keyword extraction output"
+    },
+    {
+      "source": "cover_letter_effectiveness",
+      "target": "ats_parsing_engine",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Cover letters receive 0-20% weight depending on ATS platform"
+    },
+    {
+      "source": "job_matching_algorithm",
+      "target": "semantic_matching",
+      "relation": "implements",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Job matching uses semantic understanding over keyword counting"
+    },
+    {
+      "source": "job_matching_algorithm",
+      "target": "compatibility_scoring",
+      "relation": "implements",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Compatibility scoring is core to matching algorithm"
+    },
+    {
+      "source": "jobright_matching",
+      "target": "job_matching_algorithm",
+      "relation": "references",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Jobright implements semantic matching with 70-80% accuracy"
+    },
+    {
+      "source": "jobright_matching",
+      "target": "ghost_job_detection",
+      "relation": "implements",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Jobright filters ghost jobs and spam listings"
+    },
+    {
+      "source": "jobright_matching",
+      "target": "insider_connection_discovery",
+      "relation": "implements",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Automated referral discovery increases interview odds 5-10x"
+    },
+    {
+      "source": "keyword_placement_strategy",
+      "target": "ats_parsing_engine",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Opening paragraph weight determines keyword importance"
+    },
+    {
+      "source": "file_format_parsing",
+      "target": "ats_parsing_engine",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "File format affects parsing accuracy (DOCX > PDF > scanned)"
+    },
+    {
+      "source": "employment_gap_handling",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "79% acceptance with explanation in cover letter"
+    },
+    {
+      "source": "career_change_framing",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Career changes require stronger personalization for +53% callback lift"
+    },
+    {
+      "source": "referral_power",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Referrals mentioned in first 2 sentences provide 15x hire rate boost"
+    },
+    {
+      "source": "regional_variations",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Geographic regions require different cover letter importance levels"
+    },
+    {
+      "source": "semantic_matching",
+      "target": "compatibility_scoring",
+      "relation": "conceptually_related_to",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Semantic matching feeds multi-dimensional compatibility calculation"
+    },
+    {
+      "source": "resume_tailoring_automation",
+      "target": "job_matching_algorithm",
+      "relation": "shares_data_with",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Matching feedback loop optimizes resume tailoring"
+    },
+    {
+      "source": "resume_tailoring_automation",
+      "target": "resume_scoring_system",
+      "relation": "conceptually_related_to",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Tailoring improves scoring through ATS optimization"
+    },
+    {
+      "source": "company_research_integration",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "INFERRED",
+      "confidence": 0.75,
+      "description": "Company research improves personalization depth"
+    },
+    {
+      "source": "tui_dashboard_design",
+      "target": "charm_ecosystem",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Dashboard built on Charm Bubble Tea TUI framework"
+    },
+    {
+      "source": "charm_ecosystem",
+      "target": "bubblezone_integration",
+      "relation": "references",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Bubblezone is critical missing piece in Charm integration"
+    },
+    {
+      "source": "ux_friction_analysis",
+      "target": "tui_dashboard_design",
+      "relation": "rationale_for",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Friction points identified to improve TUI usability"
+    },
+    {
+      "source": "dom_persona_research",
+      "target": "ux_friction_analysis",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "ADHD persona analysis maps specific friction points"
+    },
+    {
+      "source": "open_source_job_hunting",
+      "target": "job_matching_algorithm",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Open source ecosystem context for competitive positioning"
+    },
+    {
+      "source": "ai_detection_evasion",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "AI-generated content requires human editing to avoid rejection"
+    },
+    {
+      "source": "ats_platform_ecosystem",
+      "target": "ats_parsing_engine",
+      "relation": "references",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Platform market share shapes ATS optimization priorities"
+    },
+    {
+      "source": "recruiter_reading_behavior",
+      "target": "cover_letter_effectiveness",
+      "relation": "rationale_for",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "7-second human review justifies high-impact opening paragraph"
+    },
+    {
+      "source": "industry_specific_variations",
+      "target": "cover_letter_effectiveness",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Industry determines ATS scoring weight (20% finance vs 0-10% tech)"
+    },
+    {
+      "source": "html_asset_path_strategy",
+      "target": "resume_engine",
+      "relation": "rationale_for",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Absolute file:// URLs fix asset loading in rendered HTML"
+    },
+    {
+      "source": "bullet_uniqueness_enforcement",
+      "target": "resume_engine",
+      "relation": "implements",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "mine_bullet_bank() uses two-pass selection to avoid collisions"
+    },
+    {
+      "source": "orchestrator_pipeline",
+      "target": "resume_engine",
+      "relation": "calls",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Orchestrator drives ResumeEngine.build_tailored_resume() pipeline"
+    },
+    {
+      "source": "profile_paths_module",
+      "target": "orchestrator_pipeline",
+      "relation": "shares_data_with",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Profile paths module supplies all profile-scoped directory paths"
+    },
+    {
+      "source": "jd_metadata_convention",
+      "target": "profile_paths_module",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Metadata convention works with profile scoping for state persistence"
+    },
+    {
+      "source": "syncthing_sync_strategy",
+      "target": "profile_paths_module",
+      "relation": "conceptually_related_to",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Syncthing syncs the four profile data folders identified by profile_paths.sync_roots()"
+    },
+    {
+      "source": "playwright_macos12_pin",
+      "target": "resume_engine",
+      "relation": "rationale_for",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Exact version pin prevents silent PDF rendering failure on macOS 12"
+    },
+    {
+      "source": "gemini_api_auth_shield",
+      "target": "resume_engine",
+      "relation": "shares_data_with",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Dynamic auth headers enable profile-aware Gemini API calls"
+    },
+    {
+      "source": "typst_vector_rendering",
+      "target": "resume_engine",
+      "relation": "calls",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "render_typst.py provides vector PDF output for ResumeEngine"
+    },
+    {
+      "source": "sqlite_acid_store",
+      "target": "orchestrator_pipeline",
+      "relation": "shares_data_with",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Database manages job postings and application funnel state"
+    },
+    {
+      "source": "proprietary_algorithm_details",
+      "target": "job_matching_algorithm",
+      "relation": "rationale_for",
+      "classification": "AMBIGUOUS",
+      "confidence": 0.2,
+      "description": "Unknown specifics limit reproducibility of matching accuracy"
+    },
+    {
+      "source": "ats_weighting_formula",
+      "target": "ats_platform_ecosystem",
+      "relation": "rationale_for",
+      "classification": "AMBIGUOUS",
+      "confidence": 0.15,
+      "description": "Exact weights vary by platform configuration and industry"
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "resume_pipeline",
+      "nodes": [
+        "resume_scoring_system",
+        "ats_parsing_engine",
+        "keyword_placement_strategy",
+        "html_asset_path_strategy",
+        "bullet_uniqueness_enforcement",
+        "resume_engine"
+      ],
+      "relation": "pipeline",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Resume building pipeline: scoring → ATS parsing → keyword placement → asset handling → uniqueness enforcement → engine output"
+    },
+    {
+      "id": "cover_letter_optimization",
+      "nodes": [
+        "cover_letter_effectiveness",
+        "file_format_parsing",
+        "keyword_placement_strategy",
+        "recruiter_reading_behavior",
+        "ats_platform_ecosystem",
+        "ai_detection_evasion"
+      ],
+      "relation": "optimization_chain",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Cover letter optimization: effectiveness research → file format → keyword placement → recruiter behavior → platform ecosystem → AI detection avoidance"
+    },
+    {
+      "id": "career_transition_support",
+      "nodes": [
+        "employment_gap_handling",
+        "career_change_framing",
+        "referral_power",
+        "industry_specific_variations",
+        "regional_variations"
+      ],
+      "relation": "support_system",
+      "classification": "INFERRED",
+      "confidence": 0.85,
+      "description": "Career transition support system addressing gaps, changes, referrals, industry and regional factors"
+    },
+    {
+      "id": "job_matching_ecosystem",
+      "nodes": [
+        "job_matching_algorithm",
+        "semantic_matching",
+        "compatibility_scoring",
+        "ghost_job_detection",
+        "insider_connection_discovery",
+        "jobright_matching"
+      ],
+      "relation": "technology_stack",
+      "classification": "INFERRED",
+      "confidence": 0.95,
+      "description": "Job matching technology: semantic algorithm → compatibility scoring → ghost job filtering → insider connections → Jobright implementation"
+    },
+    {
+      "id": "tui_implementation",
+      "nodes": [
+        "tui_dashboard_design",
+        "charm_ecosystem",
+        "bubblezone_integration",
+        "ux_friction_analysis",
+        "dom_persona_research"
+      ],
+      "relation": "implementation_stack",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Dashboard TUI implementation: design critique → Charm framework → Bubblezone gap → friction analysis → persona research"
+    },
+    {
+      "id": "core_infrastructure",
+      "nodes": [
+        "orchestrator_pipeline",
+        "profile_paths_module",
+        "jd_metadata_convention",
+        "syncthing_sync_strategy",
+        "sqlite_acid_store",
+        "gemini_api_auth_shield"
+      ],
+      "relation": "architectural_layer",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "Core infrastructure: orchestrator → profile paths → JD metadata → sync strategy → database → API auth"
+    },
+    {
+      "id": "pdf_rendering_system",
+      "nodes": [
+        "playwright_macos12_pin",
+        "typst_vector_rendering",
+        "html_asset_path_strategy",
+        "resume_engine"
+      ],
+      "relation": "rendering_pipeline",
+      "classification": "EXTRACTED",
+      "confidence": 1.0,
+      "description": "PDF rendering: Playwright version pin → Typst engine → asset path strategy → resume output"
+    }
+  ],
+  "statistics": {
+    "total_nodes": 37,
+    "total_edges": 37,
+    "total_hyperedges": 7,
+    "classification_breakdown": {
+      "EXTRACTED": 30,
+      "INFERRED": 15,
+      "AMBIGUOUS": 2
+    },
+    "confidence_distribution": {
+      "1.0": 30,
+      "0.95": 7,
+      "0.85": 5,
+      "0.75": 1,
+      "0.2": 1,
+      "0.15": 1
+    },
+    "file_type_distribution": {
+      "concept": 25,
+      "code": 6,
+      "rationale": 6,
+      "document": 0
+    }
+  }
+}

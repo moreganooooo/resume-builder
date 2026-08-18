@@ -457,6 +457,23 @@ class TestNormalizeRawJobAndLoaders(unittest.TestCase):
                 self.assertEqual(comps, [{"name": "TestCo"}])
                 self.assertEqual(queries, [{"name": "TestQuery"}])
 
+    def test_canonicalize_job_url_strips_tracking_params(self):
+        url = "https://boards.greenhouse.io/acme/jobs/12345?gh_src=custom_source&utm_source=linkedin&utm_medium=job_post&utm_campaign=hiring"
+        cleaned = scan_ats.canonicalize_job_url(url)
+        self.assertEqual(cleaned, "https://boards.greenhouse.io/acme/jobs/12345")
+
+        lever_url = "https://jobs.lever.co/acme/abc-123?lever-origin=applied&lever-source=Indeed&ref=some_ref"
+        self.assertEqual(
+            scan_ats.canonicalize_job_url(lever_url),
+            "https://jobs.lever.co/acme/abc-123",
+        )
+
+        preserves_real_query = "https://example.com/job?id=123&utm_source=email"
+        self.assertEqual(
+            scan_ats.canonicalize_job_url(preserves_real_query),
+            "https://example.com/job?id=123",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

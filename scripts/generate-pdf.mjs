@@ -294,7 +294,7 @@ async function generatePDF() {
     }, targetMaxHeightPx);
 
 
-    // Generate PDF
+    // Generate PDF with PDF/UA & WCAG accessibility tags and outline
     const pdfBuffer = await page.pdf({
       format: format,
       printBackground: true,
@@ -305,6 +305,8 @@ async function generatePDF() {
         left: '0.5in',
       },
       preferCSSPageSize: false,
+      tagged: true,
+      outline: true,
     });
 
     // Write PDF
