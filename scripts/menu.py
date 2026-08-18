@@ -2108,7 +2108,10 @@ def _prompt_for_update() -> None:
         message = (
             f"{cli_art.WARNING} You have uncommitted changes -- skipping update check."
         )
-        if os.environ.get("RESUME_BUILDER_MOTION") == "reduced":
+        if (
+            os.environ.get("RESUME_BUILDER_MOTION") == "reduced"
+            or os.environ.get("CI") == "true"
+        ):
             cli_art.console.print(message)
         else:
             import time
