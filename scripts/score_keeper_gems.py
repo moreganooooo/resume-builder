@@ -60,7 +60,14 @@ DEFAULT_OUTPUT = KB_DIR / "bullet-bank-keepers-audited.csv"  # in-place update
 GEMS_OUTPUT = KB_DIR / "hidden-gems.csv"
 
 GEM_THRESHOLD = 90  # hidden_gem_score >= 90 → hidden_gem_flag = True
-SLEEP_SECONDS = 4  # politeness delay between API calls
+SLEEP_SECONDS = (
+    0
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+    else 4
+)  # politeness delay between API calls
 GEM_FLUSH_EVERY = 5  # flush scored CSV to disk every N bullets
 MODEL = "gemma-4-31b-it"  # Gemma 4 31B — best free-tier allotment
 
