@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ const (
 	viewProgress
 	viewMenu
 	viewJobs
+	viewKB
 )
 
 type appModel struct {
@@ -36,12 +38,14 @@ type appModel struct {
 	viewer          screens.ViewerModel
 	progress        screens.ProgressModel
 	jobs            screens.JobsModel
+	kb              screens.KBModel
 	menu            menu.MenuModel
 	state           viewState
 	previousState   viewState // screen to return to on "back" (esc); set by startTransition
 	careerOpsPath   string
 	theme           theme.Theme
 	progressMetrics model.ProgressMetrics
+	profile         data.ProfileInfo
 	width, height   int // real terminal size, tracked from tea.WindowSizeMsg
 
 	// Every screen switch (including the initial launch into the menu)
@@ -79,9 +83,7 @@ func tickTransition() tea.Cmd {
 // Recording m.state as previousState before overwriting it -- rather than
 // only setting previousState at each menu-selection/open-report/open-
 // progress call site -- gives every screen a "back" target for free:
-// Pipeline and Jobs are only ever entered from the Menu, Progress and
-// Reports from either the Menu or Pipeline, and whichever screen was
-// active when a transition starts is always the correct one to return to.
+// Whichever screen was active when a transition starts is always the correct one to return to.
 func (m appModel) startTransition(newState viewState) (tea.Model, tea.Cmd) {
 	m.previousState = m.state
 	m.state = newState
@@ -115,6 +117,8 @@ func (m appModel) renderScreen() string {
 		return m.menu.View()
 	case viewJobs:
 		return m.jobs.View()
+	case viewKB:
+		return m.kb.View()
 	default:
 		return m.pipeline.View()
 	}
@@ -185,11 +189,6 @@ type pipelineDataLoadedMsg struct {
 }
 
 // reloadPipelineDataCmd re-reads and reparses applications.md as a tea.Cmd
-// (bubbletea runs every returned Cmd on its own goroutine) instead of doing
-// that file I/O + parsing synchronously inside Update() -- previously
-// PipelineUpdateStatusMsg/PipelineRefreshMsg ran this work inline on the UI
-// thread, unlike screens.JobsModel's own async runAction pattern for
-// subprocess work.
 func (m appModel) reloadPipelineDataCmd() tea.Cmd {
 	careerOpsPath := m.careerOpsPath
 	return func() tea.Msg {
@@ -200,21 +199,13 @@ func (m appModel) reloadPipelineDataCmd() tea.Cmd {
 	}
 }
 
-// Init only returns a tea.Cmd, not a model -- bubbletea's Program keeps
-// using the exact model instance passed to tea.NewProgram() for every
-// subsequent Update() call, so any field mutation made here (on Init's own
-// value-receiver copy) is silently discarded. main() sets state/menu/the
-// initial transition directly on the real model for that reason; this
-// just returns commands based on whatever main() already set.
+// Init only returns a tea.Cmd, not a model
 func (m appModel) Init() tea.Cmd {
 	return tea.Batch(m.menu.Init(), tickTransition())
 }
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Ctrl+C is handled here, ahead of the type switch below, so it quits
-	// cleanly from every screen (pipeline/viewer/progress/menu) the same way "q"
-	// does on the pipeline screen -- rather than being silently swallowed by
-	// whichever sub-model's own KeyMsg handling doesn't recognize it.
+	// Ctrl+C is handled here so it quits cleanly from every screen
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		keyStr := key.String()
 		if keyStr == "ctrl+c" || (keyStr == "q" && m.width > 0 && (m.width < 80 || m.height < 24)) {
@@ -222,9 +213,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Handled ahead of the viewMenu early-return below (and the main type
-	// switch) so it still fires during the launch-into-menu reveal, not
-	// just transitions between the other screens.
+	// Handled ahead of the viewMenu early-return
 	if _, ok := msg.(transitionTickMsg); ok {
 		if !m.transitioning {
 			return m, nil
@@ -238,23 +227,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickTransition()
 	}
 
-	// Also handled ahead of the viewMenu early-return -- menu/pipeline/jobs
-	// all exist from launch (unlike viewer/progress, only constructed once
-	// opened), so they all need every resize, not just while each happens
-	// to be the active screen. Previously this whole case lived below the
-	// early-return, so while state == viewMenu (i.e. always, at launch --
-	// see startTransition/Init's doc comments) the very first real
-	// tea.WindowSizeMsg never reached pipeline/jobs at all, leaving them
-	// stuck at NewPipelineModel/NewJobsModel's hardcoded 120x40 default
-	// instead of the real terminal size. menu's own list.Model had the
-	// same problem one level down: NewMenuModel calls list.New(items,
-	// delegate, 30, 15) as a fixed placeholder size that nothing ever
-	// resized (see MenuModel.Resize's own doc comment).
+	// Handle window resize for all views
 	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = wsm.Width, wsm.Height
 		m.menu.Resize(wsm.Width, wsm.Height)
 		m.pipeline.Resize(wsm.Width, wsm.Height)
 		m.jobs.Resize(wsm.Width, wsm.Height)
+		m.kb.Resize(wsm.Width, wsm.Height)
 		if m.state == viewReport {
 			m.viewer.Resize(wsm.Width, wsm.Height)
 		}
@@ -266,11 +245,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// If we're in the menu view, handle menu-generated messages at app level
-	// (MenuSelectMsg, MenuQuitMsg) instead of re-delegating them to menu.Update,
-	// which would silently swallow them. Other messages go to menu.Update.
+	// Menu view message dispatch
 	if m.state == viewMenu {
-		// Check for menu messages first
 		if _, ok := msg.(menu.MenuQuitMsg); ok {
 			return m, tea.Quit
 		}
@@ -286,12 +262,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.startTransition(viewReport)
 			case "Jobs":
 				return m.startTransition(viewJobs)
+			case "Knowledge Base":
+				return m.startTransition(viewKB)
 			case "Exit":
 				return m, tea.Quit
 			}
 			return m, nil
 		}
-		// Delegate other messages (KeyMsg, etc.) to menu model
 		var cmd tea.Cmd
 		m.menu, cmd = m.menu.Update(msg)
 		return m, cmd
@@ -305,6 +282,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startTransition(m.previousState)
 
 	case screens.JobsClosedMsg:
+		if msg.Quit {
+			return m, tea.Quit
+		}
+		return m.startTransition(m.previousState)
+
+	case screens.KBCloseMsg:
 		if msg.Quit {
 			return m, tea.Quit
 		}
@@ -393,6 +376,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.jobs = jm
 			return m, cmd
 		}
+		if m.state == viewKB {
+			km, cmd := m.kb.Update(msg)
+			m.kb = km
+			return m, cmd
+		}
 		pm, cmd := m.pipeline.Update(msg)
 		m.pipeline = pm
 		return m, cmd
@@ -400,12 +388,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m appModel) View() tea.View {
-	// Reuse the same render the current tick already computed (see
-	// transitionTickMsg's handler above) instead of paying for a second
-	// full View() pass every frame. Falls back to a fresh render whenever
-	// there's no cached one yet -- e.g. the very first frame, drawn before
-	// any tick message has been processed -- so this is never worse than
-	// the unconditional render it replaces, only cheaper on repeat ticks.
 	target := m.transitionRender
 	if !m.transitioning || target == "" {
 		target = m.renderScreen()
@@ -435,6 +417,7 @@ func main() {
 	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
 	pythonPathFlag := flag.String("python-path", "python3", "Path to the Python interpreter for dashboard actions (see scripts/dashboard.py)")
 	projectRootFlag := flag.String("project-root", ".", "Path to the resume-builder project root (for locating scripts/dashboard_actions.py)")
+	profileFlag := flag.String("profile", "morgan", "Active user profile name")
 	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
 	flag.Parse()
 
@@ -449,6 +432,9 @@ func main() {
 	// Compute metrics
 	metrics := data.ComputeMetrics(apps)
 	progressMetrics := data.ComputeProgressMetrics(apps)
+
+	// Load active profile
+	profile := data.LoadActiveProfile(*projectRootFlag, *profileFlag)
 
 	// Batch-load all report summaries
 	t := theme.NewTheme(*themeFlag)
@@ -475,30 +461,27 @@ func main() {
 	}
 	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(*jobsPathFlag, *pythonPathFlag, *projectRootFlag)
 
+	// Load Knowledge Base assets
+	kbDir := filepath.Join(*projectRootFlag, "profiles", *profileFlag, "knowledge_base")
+	kbItems := data.LoadKBItems(kbDir)
+	kbScreen := screens.NewKBModel(t, kbItems, 120, 40).WithProfile(profile)
+
 	m := appModel{
 		pipeline:        pm,
 		jobs:            jm,
+		kb:              kbScreen,
 		careerOpsPath:   careerOpsPath,
 		theme:           t,
 		progressMetrics: progressMetrics,
+		profile:         profile,
 
-		// Set directly on the model passed to tea.NewProgram (not inside
-		// Init(), whose mutations bubbletea discards -- see Init's own doc
-		// comment): starts on the menu, already armed to reveal it via the
-		// same top-down wipe every later screen switch uses -- unless
-		// reducedMotion() opts out, matching startTransition's own check.
 		state:            viewMenu,
-		menu:             menu.NewMenuModel(t),
+		menu:             menu.NewMenuModel(t).WithProfile(profile),
 		transitioning:    !anim.ReducedMotion(),
 		transitionSpring: anim.NewSpring(anim.Organic, 0, 24),
 	}
 
 	p := tea.NewProgram(m)
-	// ErrInterrupted is bubbletea's documented return value for a SIGINT/
-	// InterruptMsg (see its doc comment) -- the rare case where Ctrl+C
-	// reaches the process as a signal rather than the KeyMsg the appModel.
-	// Update handler above normally catches. Either way a Ctrl+C quit is not
-	// a crash, so it should not print "Error:" or exit non-zero.
 	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrInterrupted) {
 		log.Fatalf("%v", err)
 	}
