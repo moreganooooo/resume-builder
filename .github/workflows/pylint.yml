@@ -8,6 +8,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PYTHONUNBUFFERED: "1"
+      RESUME_BUILDER_TESTING: "1"
+      PYTHONPATH: "scripts"
     strategy:
       fail-fast: false
       matrix:
