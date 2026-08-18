@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
@@ -95,6 +96,25 @@ func TestMenuModel_DynamicMotivationalHeader(t *testing.T) {
 	}
 }
 
+func TestMenuModel_ProfileBadge(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m = m.WithProfile(data.ProfileInfo{
+		Name:     "morgan",
+		Role:     "Staff Software Engineer",
+		IsActive: true,
+	})
+	m.Resize(80, 24)
+
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "Profile: morgan") {
+		t.Errorf("expected view to contain 'Profile: morgan', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Staff Software Engineer") {
+		t.Errorf("expected view to contain role 'Staff Software Engineer', got:\n%s", view)
+	}
+}
+
 func TestMenuModel_SparkleEasterEgg(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
 	m := NewMenuModel(th)
@@ -135,5 +155,14 @@ func TestMenuModel_NumericShortcuts(t *testing.T) {
 	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Progress" {
 		t.Errorf("expected MenuSelectMsg with 'Progress', got: %#v", msg)
 	}
-}
 
+	// Pressing '5' selects "Knowledge Base"
+	_, cmd = m.Update(pressKey("5"))
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on pressing '5'")
+	}
+	msg = cmd()
+	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Knowledge Base" {
+		t.Errorf("expected MenuSelectMsg with 'Knowledge Base', got: %#v", msg)
+	}
+}
