@@ -153,9 +153,9 @@ conservative and explain the limitation in context_gaps.
 # forever with capture_output=True swallowing every hint. 180s is generous
 # for a single-page render but still a real bound.
 PDF_GENERATION_TIMEOUT_SECONDS = 180
-_IS_TEST_OR_CI = os.environ.get("CI") == "true" or os.environ.get(
-    "RESUME_BUILDER_TESTING"
-) == "1"
+_IS_TEST_OR_CI = (
+    os.environ.get("CI") == "true" or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+)
 CRITIQUE_SLEEP = 0 if _IS_TEST_OR_CI else 4
 REWRITE_SLEEP = 0 if _IS_TEST_OR_CI else 4
 RESCORE_SLEEP = 0 if _IS_TEST_OR_CI else 8
