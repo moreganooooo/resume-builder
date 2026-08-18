@@ -525,9 +525,11 @@ def _profile_is_set_up(profile: str = None) -> bool:
 
     try:
         name = profile or profile_paths.active_profile()
-        return os.path.isdir(
-            os.path.join(profile_paths.PROFILES_DIR, name)
-        ) and os.path.isdir(profile_paths.kb_dir(name))
+        p_dir = os.path.join(profile_paths.PROFILES_DIR, name)
+        k_dir = profile_paths.kb_dir(name)
+        return (os.path.isdir(p_dir) or os.path.exists(p_dir)) and (
+            os.path.isdir(k_dir) or os.path.exists(k_dir)
+        )
     except ValueError:
         return False
 
