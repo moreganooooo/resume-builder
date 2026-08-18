@@ -8,6 +8,7 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
+import profile_paths  # noqa: E402
 
 
 class TestBuildRoleRulesBlock(unittest.TestCase):
