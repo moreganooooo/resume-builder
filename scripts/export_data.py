@@ -122,7 +122,7 @@ def main() -> None:
     if not os.path.exists(db_path):
         db_path = "data.db"
     out_dir = os.path.join("output", "morgan", "datalake")
-    res = export_pipeline_datalake(db_path, out_dir)
+    res = export_data_lake(db_path, out_dir)
     for fmt, path in res.items():
         print(
             f"  \033[1m\033[38;2;18;199;143m✓ {fmt.upper():<8}\033[0m \033[38;2;163;163;163m→\033[0m \033[38;2;0;164;255m{path}\033[0m"

@@ -95,9 +95,7 @@ def compile_dashboard_if_needed() -> str:
         return bin_path
 
     os.makedirs(bin_dir, exist_ok=True)
-    cli_art.cli_info(
-        "Pre-compiling the Career Dashboard for instant launches..."
-    )
+    cli_art.cli_info("Pre-compiling the Career Dashboard for instant launches...")
     try:
         subprocess.run(
             ["go", "build", "-o", bin_path, "."],
@@ -153,7 +151,7 @@ def run(profile: str = None) -> tuple[bool, str]:
         cli_art.cli_info("Launching dashboard...")
 
     jobs_path = _write_jobs_export(profile)
-    active_profile = profile or profile_paths.get_active_profile()
+    active_profile = profile or profile_paths.active_profile()
 
     # Pass profile-specific UI settings to the Go dashboard environment
     env = os.environ.copy()
