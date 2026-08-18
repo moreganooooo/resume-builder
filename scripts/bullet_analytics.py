@@ -27,7 +27,7 @@ def analyze_bullet_tag_performance(
     if not os.path.exists(path):
         return {}
 
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10.0)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
