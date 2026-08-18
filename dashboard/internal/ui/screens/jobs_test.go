@@ -808,6 +808,20 @@ func TestMatchesJobSearchIncludesDescription(t *testing.T) {
 	if matchesJobSearch(job, "Python") {
 		t.Errorf("expected query 'Python' not to match job with unrelated description")
 	}
+
+	// Unicode resilience: pasted zero-width spaces, smart quotes, non-breaking spaces
+	jobUnicode := model.JobRow{
+		Company: "L’Oréal", Title: "“Principal” Engineer", Description: "Experience with multi-cloud infrastructure",
+	}
+	if !matchesJobSearch(jobUnicode, "L'Oreal") {
+		t.Errorf("expected ASCII apostrophe query to match smart apostrophe company")
+	}
+	if !matchesJobSearch(jobUnicode, "Principal\u200B") {
+		t.Errorf("expected query with zero-width space to match title")
+	}
+	if !matchesJobSearch(jobUnicode, "multi-cloud infrastructure") {
+		t.Errorf("expected regular space query to match non-breaking space description")
+	}
 }
 
 func TestDetailScrollOffsetResetAndClamping(t *testing.T) {
@@ -834,5 +848,78 @@ func TestDetailScrollOffsetResetAndClamping(t *testing.T) {
 	m, _ = m.Update(pressKey("pgdown"))
 	if m.detailScrollOffset != 0 {
 		t.Errorf("expected detailScrollOffset to reset on page down, got %d", m.detailScrollOffset)
+	}
+}
+
+func TestJobsModelActionCancellationOnEsc(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	cancelled := false
+	m.actionInProgress = "tailor"
+	m.actionCancel = func() {
+		cancelled = true
+	}
+	m.actionChan = make(chan tea.Msg)
+
+	// Other key presses should be swallowed while in progress
+	m, _ = m.Update(pressKey("j"))
+	if cancelled {
+		t.Errorf("expected action not to be cancelled on 'j' keypress")
+	}
+	if m.actionInProgress != "tailor" {
+		t.Errorf("expected actionInProgress to remain 'tailor', got %q", m.actionInProgress)
+	}
+
+	// Esc key press should invoke cancel function and reset in-flight state
+	m, _ = m.Update(pressKey("esc"))
+	if !cancelled {
+		t.Errorf("expected cancel function to be called on 'esc'")
+	}
+	if m.actionInProgress != "" {
+		t.Errorf("expected actionInProgress to be cleared, got %q", m.actionInProgress)
+	}
+	if m.actionCancel != nil {
+		t.Errorf("expected actionCancel to be nil after cancellation")
+	}
+	if m.actionChan != nil {
+		t.Errorf("expected actionChan to be nil after cancellation")
+	}
+	if m.notice != "Cancelled" {
+		t.Errorf("expected notice to be 'Cancelled', got %q", m.notice)
+	}
+}
+
+func TestWaitForActionMsg_NilAndCloseHandling(t *testing.T) {
+	cmdNil := waitForActionMsg(nil)
+	if cmdNil != nil {
+		t.Errorf("expected nil cmd for nil channel")
+	}
+
+	ch := make(chan tea.Msg, 1)
+	close(ch)
+	cmdClosed := waitForActionMsg(ch)
+	if cmdClosed == nil {
+		t.Fatalf("expected non-nil cmd for closed channel")
+	}
+	msg := cmdClosed()
+	if msg != nil {
+		t.Errorf("expected nil msg from closed channel, got %#v", msg)
+	}
+}
+
+func TestRenderJobDetailPane_ZeroAndNilFields(t *testing.T) {
+	// JobRow with all empty / zero-value fields
+	emptyRow := model.JobRow{}
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), []model.JobRow{emptyRow}, 120, 40)
+
+	// Ensure view rendering does not panic with zero/nil model fields
+	view := m.View()
+	if view == "" {
+		t.Errorf("expected non-empty view for empty JobRow")
+	}
+
+	detail := m.renderJobDetailPane(emptyRow, 60, 30)
+	if detail == "" {
+		t.Errorf("expected non-empty detail pane for empty JobRow")
 	}
 }

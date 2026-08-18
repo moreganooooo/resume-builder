@@ -475,3 +475,46 @@ func TestPipelineModel_StarfieldTickOnEmptyDetail(t *testing.T) {
 		t.Fatalf("expected next starfield tick cmd when detail pane is empty")
 	}
 }
+
+func TestPipelineModel_SetNotice(t *testing.T) {
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{},
+		model.PipelineMetrics{Total: 0},
+		"..",
+		120,
+		40,
+	)
+
+	pm.SetNotice("Status update failed: permission denied")
+	if pm.Notice() != "Status update failed: permission denied" {
+		t.Fatalf("expected notice %q, got %q", "Status update failed: permission denied", pm.Notice())
+	}
+	rendered := pm.renderNotice()
+	if !strings.Contains(rendered, "permission denied") {
+		t.Fatalf("expected rendered notice to contain 'permission denied', got %q", rendered)
+	}
+}
+
+func TestRenderPipelineDetailPane_ZeroAndNilFields(t *testing.T) {
+	// CareerApplication with completely empty fields
+	emptyApp := model.CareerApplication{}
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		[]model.CareerApplication{emptyApp},
+		model.PipelineMetrics{},
+		"..",
+		120,
+		40,
+	)
+
+	view := pm.View()
+	if view == "" {
+		t.Fatalf("expected non-empty view for empty CareerApplication")
+	}
+
+	detail := pm.renderJobDetailPane(emptyApp, 60, 30)
+	if detail == "" {
+		t.Fatalf("expected non-empty detail pane for empty CareerApplication")
+	}
+}

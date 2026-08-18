@@ -227,17 +227,17 @@ func (m *JobsModel) applyFilter() {
 // or requirement buried in the body surfaces without needing to know which
 // company posted it.
 func matchesJobSearch(job model.JobRow, query string) bool {
-	if query == "" {
+	q := data.NormalizeUnicodeSearch(query)
+	if q == "" {
 		return true
 	}
-	q := strings.ToLower(query)
-	if strings.Contains(strings.ToLower(job.Company), q) {
+	if strings.Contains(data.NormalizeUnicodeSearch(job.Company), q) {
 		return true
 	}
-	if strings.Contains(strings.ToLower(job.Title), q) {
+	if strings.Contains(data.NormalizeUnicodeSearch(job.Title), q) {
 		return true
 	}
-	if job.Description != "" && strings.Contains(strings.ToLower(job.Description), q) {
+	if job.Description != "" && strings.Contains(data.NormalizeUnicodeSearch(job.Description), q) {
 		return true
 	}
 	return false
@@ -366,8 +366,15 @@ func (m *JobsModel) Resize(width, height int) {
 // jobsActionCompleteMsg. Re-issued after every progress message so the
 // listen loop keeps going until completion.
 func waitForActionMsg(ch chan tea.Msg) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		return <-ch
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
 	}
 }
 
@@ -396,11 +403,17 @@ func (m JobsModel) runAction(ctx context.Context, ch chan tea.Msg, action, jdPat
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			ch <- jobsActionCompleteMsg{action: action, err: err}
+			select {
+			case ch <- jobsActionCompleteMsg{action: action, err: err}:
+			case <-ctx.Done():
+			}
 			return
 		}
 		if err := cmd.Start(); err != nil {
-			ch <- jobsActionCompleteMsg{action: action, err: err}
+			select {
+			case ch <- jobsActionCompleteMsg{action: action, err: err}:
+			case <-ctx.Done():
+			}
 			return
 		}
 
@@ -410,13 +423,21 @@ func (m JobsModel) runAction(ctx context.Context, ch chan tea.Msg, action, jdPat
 			if match := stepLineRe.FindStringSubmatch(line); match != nil {
 				step, parseErr := strconv.ParseFloat(match[1], 64)
 				if parseErr == nil {
-					ch <- jobsActionProgressMsg{step: step, label: match[2]}
+					select {
+					case ch <- jobsActionProgressMsg{step: step, label: match[2]}:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
 
 		waitErr := cmd.Wait()
-		ch <- jobsActionCompleteMsg{action: action, err: waitErr, output: stderrBuf.String()}
+		select {
+		case ch <- jobsActionCompleteMsg{action: action, err: waitErr, output: stderrBuf.String()}:
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	return waitForActionMsg(ch)
