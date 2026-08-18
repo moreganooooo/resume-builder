@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 )
 
 func TestParseApplicationsUsesTrackerNumberColumn(t *testing.T) {
@@ -141,5 +143,23 @@ func TestLoadReportSummaryCachesUntilFileChanges(t *testing.T) {
 	_, tldr, _, _ = LoadReportSummary(tempDir, reportPath)
 	if tldr != "second version" {
 		t.Fatalf("expected mtime change to invalidate cache and return %q, got %q", "second version", tldr)
+	}
+}
+
+func TestComputeProgressMetrics_DegradedAndEmpty(t *testing.T) {
+	// 1. Nil slice
+	pm := ComputeProgressMetrics(nil)
+	if pm.ActiveApps != 0 || pm.AvgScore != 0 || len(pm.FunnelStages) != 5 {
+		t.Fatalf("unexpected progress metrics on nil apps: %+v", pm)
+	}
+
+	// 2. Corrupt / invalid date strings
+	apps := []model.CareerApplication{
+		{Score: -1, Status: "unknown", Date: "invalid-date-format"},
+		{Score: 6.0, Status: "interview", Date: "not-a-date"},
+	}
+	pm2 := ComputeProgressMetrics(apps)
+	if pm2.ActiveApps != 2 {
+		t.Fatalf("expected 2 active apps, got %d", pm2.ActiveApps)
 	}
 }

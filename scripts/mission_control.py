@@ -31,7 +31,7 @@ def get_mission_control_summary(
             "system_health": "No Database Found",
         }
 
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10.0)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 

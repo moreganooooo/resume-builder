@@ -283,6 +283,16 @@ func (m PipelineModel) CurrentApp() (model.CareerApplication, bool) {
 	return m.filtered[m.cursor], true
 }
 
+// SetNotice sets the user-facing notice/error banner message.
+func (m *PipelineModel) SetNotice(n string) {
+	m.notice = n
+}
+
+// Notice returns the current notice message.
+func (m PipelineModel) Notice() string {
+	return m.notice
+}
+
 // Update handles input for the pipeline screen.
 func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -603,17 +613,17 @@ func (m PipelineModel) loadCurrentReport() tea.Cmd {
 }
 
 func matchesSearch(app model.CareerApplication, query string) bool {
-	if query == "" {
+	q := data.NormalizeUnicodeSearch(query)
+	if q == "" {
 		return true
 	}
-	q := strings.ToLower(query)
-	if strings.Contains(strings.ToLower(app.Company), q) {
+	if strings.Contains(data.NormalizeUnicodeSearch(app.Company), q) {
 		return true
 	}
-	if strings.Contains(strings.ToLower(app.Role), q) {
+	if strings.Contains(data.NormalizeUnicodeSearch(app.Role), q) {
 		return true
 	}
-	if strings.Contains(strings.ToLower(app.Notes), q) {
+	if strings.Contains(data.NormalizeUnicodeSearch(app.Notes), q) {
 		return true
 	}
 	return false

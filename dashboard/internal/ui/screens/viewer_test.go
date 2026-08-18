@@ -241,3 +241,29 @@ func TestViewerNavigationAndBounds(t *testing.T) {
 		t.Errorf("expected showHelp false after 'esc'")
 	}
 }
+
+func TestViewerZeroByteAndExtremeBounds(t *testing.T) {
+	// 1. Zero-byte empty content
+	m := ViewerModel{
+		rawContent: "",
+		lines:      nil,
+		width:      80,
+		height:     24,
+		theme:      theme.NewTheme("catppuccin-mocha"),
+	}
+	m.rebuildRender()
+	view := m.View()
+	if !strings.Contains(view, "(empty file)") && !strings.Contains(view, "empty") {
+		t.Errorf("expected empty file notice in view, got: %s", view)
+	}
+
+	// 2. Extreme 0 and negative dimensions must not panic
+	m.Resize(0, 0)
+	m.View()
+
+	m.Resize(-5, -10)
+	m.View()
+
+	m.Resize(10, 4)
+	m.View()
+}

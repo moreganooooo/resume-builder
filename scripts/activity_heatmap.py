@@ -33,7 +33,7 @@ def get_daily_application_counts(
     if not os.path.exists(path):
         return dict(counts)
 
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=10.0)
     cursor = conn.cursor()
     try:
         cursor.execute(
