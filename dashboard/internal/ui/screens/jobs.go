@@ -851,35 +851,6 @@ var jobsFitGroups = []struct {
 	{"Practical pursue", func(e model.Evaluation) map[string]int { return e.PracticalPursueSubscores }},
 }
 
-// formatSubscores renders a fit/interview-odds/practical-pursue subscore
-// dict as a human-readable line. Previously rendered the raw snake_case
-// schema key verbatim (e.g. "functional_alignment: 4") -- internal-jargon
-// leakage a job-seeking user was never meant to see; theme.SubscoreLabels
-// (generated from scripts/cli_art.py's own _FIT_DIMENSION_GROUPS by
-// scripts/sync_dashboard_theme.py) is the label map every other surface in
-// this codebase already uses for these keys. Falls back to the raw key for
-// any schema key the generator doesn't know about yet, rather than
-// silently dropping it -- a missing label is a bug to notice, not hide.
-func formatSubscores(scores map[string]int) string {
-	if len(scores) == 0 {
-		return "-"
-	}
-	keys := make([]string, 0, len(scores))
-	for k := range scores {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, len(keys))
-	for i, k := range keys {
-		label, ok := theme.SubscoreLabels[k]
-		if !ok {
-			label = k
-		}
-		parts[i] = fmt.Sprintf("%s: %d", label, scores[k])
-	}
-	return strings.Join(parts, ", ")
-}
-
 // chromeAvailHeight budgets room for the header and help bars, plus
 // extraRows chrome rows (action-status/error/notice, and/or the search bar)
 // when they're showing -- the split-pane's declared Height() previously

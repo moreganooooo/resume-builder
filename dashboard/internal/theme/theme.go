@@ -5,16 +5,12 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"os"
 	"strings"
 
 	"charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
 	"github.com/muesli/termenv"
 )
-
-var terminalProfile = colorprofile.Detect(os.Stdout, os.Environ())
 
 func c(ansi, ansi256, truecolor string) color.Color {
 	return lipgloss.Color(truecolor)
@@ -122,14 +118,14 @@ func parseHex(h string) (r, g, b int) {
 		h = h[1:]
 	}
 	if len(h) == 3 {
-		fmt.Sscanf(h, "%1x%1x%1x", &r, &g, &b)
+		_, _ = fmt.Sscanf(h, "%1x%1x%1x", &r, &g, &b)
 		r = r * 17
 		g = g * 17
 		b = b * 17
 		return
 	}
 	if len(h) == 6 {
-		fmt.Sscanf(h, "%2x%2x%2x", &r, &g, &b)
+		_, _ = fmt.Sscanf(h, "%2x%2x%2x", &r, &g, &b)
 	}
 	return
 }
