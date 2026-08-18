@@ -261,10 +261,11 @@ class TestLiveness(unittest.TestCase):
         self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
         self.assertFalse(os.path.exists(liveness.LIVENESS_OUTPUT_PATH))
 
+    @patch("liveness.os.killpg")
     @patch("liveness.jd_manager.get_pending_jds")
     @patch("liveness.subprocess.Popen")
     def test_timeout_returns_error_and_kills_the_process(
-        self, mock_popen, mock_get_pending
+        self, mock_popen, mock_get_pending, mock_killpg
     ):
         mock_get_pending.return_value = [self.with_url_path]
         created_procs = []

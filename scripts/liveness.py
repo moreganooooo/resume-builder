@@ -257,7 +257,8 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     try:
                         import signal
 
-                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                        if isinstance(proc.pid, int) and proc.pid > 1:
+                            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                     except Exception:
                         pass
                     try:
