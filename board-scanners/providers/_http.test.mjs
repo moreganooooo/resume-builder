@@ -4,7 +4,15 @@
 // where needed, timers) via node:test's built-in `t.mock` -- no real network
 // calls, no real waiting on backoff delays.
 //
-// Run: node --test board-scanners/providers/_http.test.mjs
+// Run: npm test (from the project root) -- or directly:
+//   NODE_ENV=test node --test board-scanners/providers/_http.test.mjs
+// NODE_ENV=test is required here, not optional: the exponential-backoff
+// retry test below ticks a mocked clock by fixed amounts that only match
+// _http.mjs's real backoff delay when its jitter term is suppressed via
+// `process.env.NODE_ENV === 'test'`. Without it, real Math.random() jitter
+// routinely pushes the actual delay past the fixed tick(), so the retry's
+// setTimeout never fires within the ticked window and the test hangs
+// indefinitely instead of failing loudly.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

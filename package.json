@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "NODE_ENV=test node --test board-scanners/providers/*.test.mjs"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moreganooooo/resume-builder.git"

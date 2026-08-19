@@ -18,14 +18,14 @@ This loads our high-fidelity, Charmbracelet-based terminal dashboard (Bubble Tea
 
 ### Dashboard Screens & Core Keyboard Controls:
 1. **Pipeline Checkpoints (`1`):** Track where every single job posting sits in your queue—from *Newly Scanned* to *Evaluated*, *Tailored*, *Applied*, and *Followed Up*.
-2. **Interactive Jobs Triage (`2`):** Browse jobs in an accordion view and move them through stages visually using arrow keys (`h/j/k/l` or `←/↓/↑/→`).
-3. **Interactive Knowledge Base Explorer (`5`):**
+2. **Real-Time Progress Tracking (`2`):** Dynamic Bubbles progress bars with color gradients and percentage metrics for active batch scans or tailoring jobs, monitoring your conversion funnel (e.g., Application-to-Interview ratios).
+3. **Report Viewer (`3`):** Read full job/company research reports and evaluation write-ups in the Glamour markdown viewport.
+4. **Interactive Jobs Triage (`4`):** Browse jobs in an accordion view and move them through stages visually using arrow keys (`h/j/k/l` or `←/↓/↑/→`).
+5. **Interactive Knowledge Base Explorer (`5`):**
    * Instantaneously search, inspect, and preview all personal intelligence documents across **All**, **Tools & Skills**, **Verified Metrics**, **Core Facts**, and **Historical Projects**.
    * Switch categories using `Tab` / `Shift+Tab` or `[` / `]`.
    * Live filter entries by keyword using `/` or standard typing.
    * Press `Enter` to open an item in the **Glamour Markdown Viewport**, rendering styled markdown with scrollable viewport navigation (`j/k`, `PageUp/PageDown`, `Esc` to return).
-4. **Live Metrics & Activity View (`4`):** Monitor your conversion funnel (e.g., Application-to-Interview ratios) with live ASCII bar charts and weekly progress metrics.
-5. **Real-Time Progress Tracking (`3`):** Dynamic Bubbles progress bars with color gradients and percentage metrics for active batch scans or tailoring jobs.
 6. **Harmonica Physics & Responsive Reflow:** Fluid spring-eased view transitions, automatic screen-resize reflow, and proactive 80x24 minimum viewport warning cards.
 7. **Accessibility & Preferences:**
    * `RESUME_BUILDER_MOTION=reduced`: Disables spring animations for users with vestibular or motion sensitivities.

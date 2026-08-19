@@ -57,7 +57,11 @@ func main() {
 
 	vm := screens.NewViewerModel(t, tmpFile, "Acme Corp — Engineering Manager", 120, 40)
 
-	out, _ := os.Create("/tmp/dashboard_render.txt")
+	out, err := os.CreateTemp("", "dashboard_render_*.txt")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create render output file: %v\n", err)
+		os.Exit(1)
+	}
 	defer out.Close()
 
 	fmt.Fprintln(out, "=== PIPELINE ===")
@@ -67,4 +71,8 @@ func main() {
 	_, _ = out.WriteString("\n\n=== VIEWER ===\n")
 	_, _ = out.WriteString(vm.View())
 	_, _ = out.WriteString("\n")
+
+	// Report the temp file's path on stdout so callers (e.g.
+	// scripts/capture_tui_visuals.py) don't have to guess a fixed name.
+	fmt.Println(out.Name())
 }

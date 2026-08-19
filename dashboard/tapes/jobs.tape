@@ -12,7 +12,7 @@ Set FontFamily "JetBrainsMono Nerd Font"
 Type "python3 scripts/dashboard.py"
 Enter
 Sleep 1s
-Type "2"
+Type "4"
 Sleep 1.5s
 Screenshot artifacts/tui_jobs.png
 Sleep 2s

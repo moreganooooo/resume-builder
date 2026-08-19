@@ -2,7 +2,7 @@
 // (docs/review/phase-9-backlog.md): the /postings list endpoint never
 // carries a description -- only GET /postings/{id}'s jobAd.sections does.
 //
-// Run: node --test board-scanners/providers/smartrecruiters.test.mjs
+// Run: npm test (from the project root)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
