@@ -15,6 +15,7 @@ load_dotenv(profile_paths.env_path())
 
 import cli_art
 import theme
+from atomic_write import atomic_write
 
 # Import shared objects from orchestrator
 from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
@@ -162,7 +163,8 @@ def run_audit(csv_path=None, out_path=None, sleep_seconds=SLEEP):
             )
 
         # --- CHECKPOINT SAVE after every bullet ---
-        pd.DataFrame(results).to_csv(out_path, index=False)
+        with atomic_write(out_path) as f:
+            pd.DataFrame(results).to_csv(f, index=False)
         cli_art.detail(f"Checkpoint saved ({len(results)} bullets scored)")
 
         if i < total - 1 and sleep_seconds > 0:

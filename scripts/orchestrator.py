@@ -3086,7 +3086,7 @@ class ResumeEngine:
         research_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
             system_instruction=research_prompt,
-            contents=f"=== COMPANY SOURCE TEXT ===\n{source_text}",
+            contents=f"=== COMPANY SOURCE TEXT ===\n{source_text}\n=== END COMPANY SOURCE TEXT ===",
             response_schema=CompanyResearchSchema,
             temperature=0.0,
         )

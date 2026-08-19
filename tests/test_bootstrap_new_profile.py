@@ -86,6 +86,16 @@ class TestCreateNewProfile(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             bootstrap_bullet_bank.create_new_profile(self.test_profile)
 
+    def test_rejects_path_traversal_in_profile_name(self):
+        """Both UI entry points (the Go wizard, the questionary fallback)
+        only check for non-empty -- create_new_profile is the one place
+        they both funnel through, so it must reject a name that would
+        escape profiles/ via os.path.join (e.g. "../../tmp/pwned") rather
+        than silently creating directories outside the intended tree."""
+        for bad_name in ("../escape", "a/b", "..", "trailing/slash/", "with space"):
+            with self.assertRaises(ValueError):
+                bootstrap_bullet_bank.create_new_profile(bad_name)
+
     def test_scaffold_has_every_attribute_orchestrator_actually_accesses(self):
         """
         Regression test: BACKGROUND_IDENTITY/BACKGROUND_TAGS were added to

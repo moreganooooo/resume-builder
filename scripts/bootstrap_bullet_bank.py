@@ -30,6 +30,7 @@ Usage:
 import csv
 import json
 import os
+import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -129,6 +130,9 @@ location_filter:
 """
 
 
+_VALID_PROFILE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
 def create_new_profile(name: str) -> str:
     """Scaffolds a fresh profiles/<name>/ directory: knowledge_base/ (plus
     its bootstrap/source_documents/ subfolder), a blank fixed_content.py,
@@ -139,8 +143,19 @@ def create_new_profile(name: str) -> str:
     every one of this profile's sync roots
     (profile_paths.write_sync_ignore_files()) so it's ready for Syncthing
     out of the box. Raises FileExistsError if the profile already
-    exists -- never silently overwrites one."""
+    exists -- never silently overwrites one. Raises ValueError if name
+    contains anything other than letters/digits/underscore/hyphen -- both
+    UI entry points (the Go wizard and the questionary fallback) only
+    check for non-empty, so a name containing "/" or ".." must be rejected
+    here, the one place both funnel through, before it reaches the
+    os.path.join below and can land outside profiles/ entirely."""
     import profile_paths
+
+    if not _VALID_PROFILE_NAME.match(name):
+        raise ValueError(
+            f"Invalid profile name {name!r} -- use only letters, digits, "
+            "underscores, and hyphens."
+        )
 
     profile_root = os.path.join(profile_paths.PROFILES_DIR, name)
     if os.path.isdir(profile_root):

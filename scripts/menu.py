@@ -623,7 +623,15 @@ def _handle_bootstrap() -> bool:
 
         name = data.get("profile_name")
         if name:
-            bootstrap_bullet_bank.create_new_profile(name)
+            try:
+                bootstrap_bullet_bank.create_new_profile(name)
+            except ValueError as exc:
+                cli_art.friendly_error(
+                    exc,
+                    "creating the new profile",
+                    fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
+                )
+                return False
             profile_paths.set_active_profile(name)
 
             source_path = data.get("ingest_path")
