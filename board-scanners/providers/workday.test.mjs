@@ -1,10 +1,7 @@
 // Unit tests for workday.mjs's pagination safety net (B19,
-// docs/review/phase-9-backlog.md). No existing Node test harness exists for
-// board-scanners/providers/*.mjs (confirmed: no package.json test script, no
-// other *.test.mjs/*.spec.mjs in this directory) -- these use Node's built-in
-// `node:test` + `node:assert`, matching smartrecruiters.mjs's pattern of
-// exporting a pure function for unit testing rather than exercising a live
-// network call.
+// docs/review/phase-9-backlog.md) -- uses Node's built-in `node:test` +
+// `node:assert`, matching smartrecruiters.mjs's pattern of exporting a pure
+// function for unit testing rather than exercising a live network call.
 //
 // `resolveWorkdayLimit`, `paginateWorkdayJobs`, and (added for B36,
 // docs/review/phase-9-backlog.md) `fetchJobDescription` are exercised here --
@@ -12,7 +9,7 @@
 // mocked `ctx`), so none of this touches Playwright or a real Workday
 // tenant.
 //
-// Run: node --test board-scanners/providers/workday.test.mjs
+// Run: npm test (from the project root)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

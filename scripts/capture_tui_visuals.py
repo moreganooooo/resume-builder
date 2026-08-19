@@ -149,13 +149,15 @@ def capture_with_rendercapture(output_png: str) -> bool:
         print(f"[!] rendercapture failed: {render_proc.stderr}")
         return False
 
-    raw_output_file = "/tmp/dashboard_render.txt"
-    if not os.path.exists(raw_output_file):
-        print("[!] Expected /tmp/dashboard_render.txt not generated.")
+    stdout_lines = [line for line in render_proc.stdout.splitlines() if line.strip()]
+    raw_output_file = stdout_lines[-1] if stdout_lines else ""
+    if not raw_output_file or not os.path.exists(raw_output_file):
+        print("[!] rendercapture did not report a valid output file path.")
         return False
 
     with open(raw_output_file, "r", encoding="utf-8") as f:
         ansi_content = f.read()
+    os.remove(raw_output_file)
 
     html_content = parse_ansi_to_html(ansi_content)
     tmp_html = os.path.join(ARTIFACTS_DIR, "preview.html")
