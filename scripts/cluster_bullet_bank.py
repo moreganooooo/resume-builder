@@ -558,7 +558,8 @@ def main():
     ]
     other_cols = [c for c in df.columns if c not in front_cols]
     df = df[front_cols + other_cols]
-    df.to_csv(CLUSTER_MAP_CSV, index=False)
+    with atomic_write(CLUSTER_MAP_CSV) as f:
+        df.to_csv(f, index=False)
     cli_art.cli_success(f"Wrote {len(df)} rows to {CLUSTER_MAP_CSV}")
 
     # --- WRITE CLUSTER MAP JSON (human-readable summary) ---
@@ -596,7 +597,8 @@ def main():
         new_rows = non_rep[~non_rep[bullet_col].isin(existing_bullets)]
         if len(new_rows) > 0:
             combined = pd.concat([existing, new_rows], ignore_index=True)
-            combined.to_csv(REWRITE_QUEUE, index=False)
+            with atomic_write(REWRITE_QUEUE) as f:
+                combined.to_csv(f, index=False)
             cli_art.cli_success(
                 f"Appended {len(new_rows)} new rows to existing {REWRITE_QUEUE} ({len(combined)} total)"
             )
@@ -605,7 +607,8 @@ def main():
                 f"No new rows to append -- {REWRITE_QUEUE} already up to date."
             )
     else:
-        non_rep.to_csv(REWRITE_QUEUE, index=False)
+        with atomic_write(REWRITE_QUEUE) as f:
+            non_rep.to_csv(f, index=False)
         cli_art.cli_success(f"Wrote {len(non_rep)} rows to {REWRITE_QUEUE}")
 
     cli_art.cli_success("Done.")
