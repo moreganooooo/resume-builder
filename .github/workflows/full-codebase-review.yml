@@ -30,73 +30,97 @@ jobs:
         pip install -r requirements-dev.txt
 
     - name: Full import check with isort
+      id: isort
+      continue-on-error: true
       run: |
-        isort --check-only --diff scripts/ tests/ || true
+        isort --check-only --diff scripts/ tests/
 
     - name: Full formatting check with black
+      id: black
+      continue-on-error: true
       run: |
-        black --check --diff scripts/ tests/ || true
+        black --check --diff scripts/ tests/
 
     - name: Full type check with mypy
+      id: mypy
+      continue-on-error: true
       run: |
-        mypy scripts/ --ignore-missing-imports || true
+        mypy scripts/ --ignore-missing-imports
 
     - name: Full security scan with bandit
+      id: bandit
+      continue-on-error: true
       run: |
-        bandit -r scripts/ -ll || true
+        bandit -r scripts/ -ll
 
     - name: Full code quality with pylint
+      id: pylint
+      continue-on-error: true
       run: |
-        PYTHONPATH=scripts pylint $(git ls-files '*.py') --exit-zero || true
+        PYTHONPATH=scripts pylint $(git ls-files '*.py')
 
     - name: Full complexity analysis with radon
+      id: radon
+      continue-on-error: true
       run: |
-        radon cc scripts/ -a -nb || true
+        radon cc scripts/ -a -nb
 
     - name: Full docstring coverage with pydocstyle
+      id: pydocstyle
+      continue-on-error: true
       run: |
-        pydocstyle scripts/ --match-dir=scripts || true
+        pydocstyle scripts/ --match-dir=scripts
 
     - name: Full YAML validation
+      id: yamllint
+      continue-on-error: true
       run: |
-        yamllint -d "{rules: {line-length: {max: 120}, trailing-whitespace: disable}}" profiles/ scripts/ docs/ || true
+        yamllint -d "{rules: {line-length: {max: 120}, trailing-whitespace: disable}}" profiles/ scripts/ docs/
 
     - name: Full spell check
+      id: codespell
+      continue-on-error: true
       run: |
-        codespell scripts/ tests/ docs/ --skip="*.json,*.csv,*.db,*.pyc" || true
+        codespell scripts/ tests/ docs/ --skip="*.json,*.csv,*.db,*.pyc"
 
     - name: Full vulnerability scan
+      id: safety
+      continue-on-error: true
       run: |
-        safety check --json || true
+        safety check --json
 
     - name: Run all unit tests
+      id: unittest
       run: |
         python -m unittest discover -s tests -v
 
     - name: Full coverage report
+      id: coverage
+      continue-on-error: true
       run: |
         coverage run -m unittest discover -s tests
-        coverage report --fail-under=60 || true
+        coverage report --fail-under=60
         coverage xml
 
     - name: Create summary report
       if: always()
       run: |
+        status() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
         echo "## Full Codebase Review Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Python Version: ${{ matrix.python-version }}" >> $GITHUB_STEP_SUMMARY
         echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Tools Run:" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ isort (import sorting)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ black (code formatting)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ mypy (type checking)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ bandit (security)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ pylint (code quality)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ radon (complexity)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ pydocstyle (docstrings)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ yamllint (YAML validation)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ codespell (spell check)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ safety (vulnerability scan)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ unittest (test suite)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ coverage (code coverage)" >> $GITHUB_STEP_SUMMARY
+        echo "### Tools Run (result reflects this run, not assumed):" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.isort.outcome }}') isort (import sorting)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.black.outcome }}') black (code formatting)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.mypy.outcome }}') mypy (type checking)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.bandit.outcome }}') bandit (security)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.pylint.outcome }}') pylint (code quality)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.radon.outcome }}') radon (complexity)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.pydocstyle.outcome }}') pydocstyle (docstrings)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.yamllint.outcome }}') yamllint (YAML validation)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.codespell.outcome }}') codespell (spell check)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.safety.outcome }}') safety (vulnerability scan)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.unittest.outcome }}') unittest (test suite)" >> $GITHUB_STEP_SUMMARY
+        echo "- $(status '${{ steps.coverage.outcome }}') coverage (code coverage)" >> $GITHUB_STEP_SUMMARY
