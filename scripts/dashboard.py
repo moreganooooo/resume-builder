@@ -177,6 +177,8 @@ def run(profile: str = None) -> tuple[bool, str]:
                 sys.executable,
                 "-project-root",
                 profile_paths.PROJECT_ROOT,
+                "-profile",
+                active_profile or "morgan",
             ]
         else:
             cmd = [
@@ -191,6 +193,8 @@ def run(profile: str = None) -> tuple[bool, str]:
                 sys.executable,
                 "-project-root",
                 profile_paths.PROJECT_ROOT,
+                "-profile",
+                active_profile or "morgan",
             ]
         result = subprocess.run(cmd, cwd=DASHBOARD_DIR, env=env)
     finally:

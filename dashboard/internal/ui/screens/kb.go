@@ -247,9 +247,18 @@ func (m KBModel) View() string {
 
 	// 3. Main Content Split View (Left List / Right Details)
 	vis := m.visibleItems()
+	// Two 30-col-minimum panes plus border/padding/gap need ~70 columns
+	// side by side; below that (e.g. the 35-col mobile floor) stack them
+	// vertically instead so neither pane gets clipped or wraps its border.
+	narrowLayout := w < 70
 	leftWidth := max(30, min(45, w/3))
 	rightWidth := max(30, w-leftWidth-6)
 	contentHeight := max(10, h-8)
+	if narrowLayout {
+		leftWidth = max(20, w-4)
+		rightWidth = leftWidth
+		contentHeight = max(4, (h-10)/2)
+	}
 
 	// Render Left Item List
 	var listLines []string
@@ -321,7 +330,12 @@ func (m KBModel) View() string {
 		Height(contentHeight).
 		Render(detailContent)
 
-	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, " ", rightPane)
+	var splitView string
+	if narrowLayout {
+		splitView = lipgloss.JoinVertical(lipgloss.Left, leftPane, rightPane)
+	} else {
+		splitView = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, " ", rightPane)
+	}
 
 	// 4. Action Footer
 	primary := []HelpBinding{

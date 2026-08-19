@@ -72,14 +72,14 @@ func TestAppModel_MobileTerminal(t *testing.T) {
 
 	// In desktop mode (default), 45x20 triggers compact warning
 	desktopView := ansi.Strip(app.renderScreen())
-	if !strings.Contains(desktopView, "TERMINAL WINDOW") || !strings.Contains(desktopView, "TOO COMPACT") {
+	if !strings.Contains(desktopView, "Terminal Window Too Small") {
 		t.Errorf("expected 45x20 to trigger compact warning in desktop mode, got:\n%s", desktopView)
 	}
 
 	// In mobile mode, 45x20 is accepted and renders menu
 	t.Setenv("RESUME_BUILDER_MOBILE", "1")
 	mobileView := ansi.Strip(app.renderScreen())
-	if strings.Contains(mobileView, "TERMINAL WINDOW") {
+	if strings.Contains(mobileView, "Terminal Window Too Small") {
 		t.Errorf("expected 45x20 to NOT trigger compact warning in mobile mode, got:\n%s", mobileView)
 	}
 }

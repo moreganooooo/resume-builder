@@ -12,7 +12,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/log"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
@@ -137,59 +136,7 @@ func (m appModel) renderScreen() string {
 }
 
 func renderCompactWarning(t theme.Theme, width, height, minWidth, minHeight int) string {
-	accentStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Peach)
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve)
-	descStyle := lipgloss.NewStyle().Foreground(t.Subtext)
-	dimStyle := lipgloss.NewStyle().Foreground(t.Overlay)
-
-	title := titleStyle.Render("┃ TERMINAL WINDOW TOO COMPACT")
-	sizeLine := fmt.Sprintf("Current size: %dx%d  Minimum required: %dx%d", width, height, minWidth, minHeight)
-	instruction := descStyle.Render("Please expand or zoom out your terminal window to resume.")
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Peach).
-		Padding(1, 3).
-		Width(min(width-4, 70)).
-		Align(lipgloss.Center)
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Center,
-		title,
-		"",
-		accentStyle.Render(sizeLine),
-		"",
-		instruction,
-		"",
-		dimStyle.Render("Press Ctrl+C or Q to exit"),
-	)
-
-	rendered := box.Render(content)
-
-	// Center the box vertically and horizontally on the screen
-	lines := strings.Split(rendered, "\n")
-	boxHeight := len(lines)
-	boxWidth := lipgloss.Width(rendered)
-
-	topPadding := (height - boxHeight) / 2
-	if topPadding < 0 {
-		topPadding = 0
-	}
-	leftPadding := (width - boxWidth) / 2
-	if leftPadding < 0 {
-		leftPadding = 0
-	}
-
-	leftPadStr := strings.Repeat(" ", leftPadding)
-	var paddedLines []string
-	for i := 0; i < topPadding; i++ {
-		paddedLines = append(paddedLines, "")
-	}
-	for _, l := range lines {
-		paddedLines = append(paddedLines, leftPadStr+l)
-	}
-
-	return strings.Join(paddedLines, "\n")
+	return screens.RenderWindowResizeGuidance(width, height, minWidth, minHeight, t)
 }
 
 // pipelineDataLoadedMsg carries the result of reloadPipelineDataCmd's
@@ -220,7 +167,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Ctrl+C is handled here so it quits cleanly from every screen
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		keyStr := key.String()
-		if keyStr == "ctrl+c" || (keyStr == "q" && m.width > 0 && (m.width < 80 || m.height < 24)) {
+		minWidth, minHeight := 80, 24
+		if isMobileTerminal() {
+			minWidth, minHeight = 35, 12
+		}
+		if keyStr == "ctrl+c" || (keyStr == "q" && m.width > 0 && (m.width < minWidth || m.height < minHeight)) {
 			return m, tea.Quit
 		}
 	}

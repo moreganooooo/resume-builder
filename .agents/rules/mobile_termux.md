@@ -1,3 +1,10 @@
+---
+paths:
+  - "dashboard/**/*.go"
+  - "scripts/build_mobile.sh"
+  - "scripts/capture_tui_visuals.py"
+---
+
 # Mobile & Termux Guidelines for Resume Builder
 
 ## Mobile Screen Geometries & Ergonomics
