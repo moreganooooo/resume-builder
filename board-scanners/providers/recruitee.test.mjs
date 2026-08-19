@@ -3,7 +3,7 @@
 // list response already carries `description`/`requirements` -- no second
 // detail fetch needed, unlike SmartRecruiters or Workday.
 //
-// Run: node --test board-scanners/providers/recruitee.test.mjs
+// Run: npm test (from the project root)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

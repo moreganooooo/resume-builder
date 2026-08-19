@@ -1,3 +1,8 @@
+---
+paths:
+  - "dashboard/**/*.go"
+---
+
 # TUI & Charm Coding Standards for Resume Builder
 
 ## Visual Hierarchy & Styling Rules

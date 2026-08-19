@@ -4,7 +4,7 @@
 // itself a fetchable markdown detail page before this parser strips it
 // down to the human-facing URL.
 //
-// Run: node --test board-scanners/providers/workable.test.mjs
+// Run: npm test (from the project root)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

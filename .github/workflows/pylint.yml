@@ -85,3 +85,15 @@ jobs:
     - name: Run Go tests
       run: |
         cd dashboard && go test ./...
+
+  node-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Run board-scanners provider tests
+      run: npm test
+      timeout-minutes: 2
