@@ -36,18 +36,18 @@ def generate_interview_prep_dossier(
 ) -> str:
     """Renders a comprehensive interview prep guide in Markdown format."""
     lines = [
-        f"# 🎙️ Interview Preparation Dossier: {job_title} @ {company}",
+        f"# ◉ Interview Preparation Dossier: {job_title} @ {company}",
         "",
-        "## 🧭 1. Target Core Competencies & Skills",
+        "## ⌖ 1. Target Core Competencies & Skills",
     ]
 
     for skill in target_skills[:8]:
-        lines.append(f"- 🔹 **{skill}**")
+        lines.append(f"- ▸ **{skill}**")
 
     lines.extend(
         [
             "",
-            "## 🏆 2. Structured STAR Behavioral Stories (Situation-Task-Action-Result)",
+            "## ★ 2. Structured STAR Behavioral Stories (Situation-Task-Action-Result)",
             "",
         ]
     )
@@ -69,7 +69,7 @@ def generate_interview_prep_dossier(
 
     lines.extend(
         [
-            "## 💡 3. High-Impact Reverse-Interview Questions for the Hiring Team",
+            "## ✦ 3. High-Impact Reverse-Interview Questions for the Hiring Team",
             f"1. *'What are the most critical milestones you want this {job_title} to achieve in the first 90 days?'*",
             "2. *'How does your engineering team balance rapid feature delivery with architectural technical debt?'*",
             "3. *'What distinguishes someone who is merely good in this role from someone who is truly exceptional?'*",
@@ -103,7 +103,7 @@ def main() -> None:
         "\n\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m"
     )
     print(
-        "  \033[1m\033[38;2;139;117;255m💎 RESUME-BUILDER INTERVIEW PREP & STAR DOSSIER GENERATOR\033[0m"
+        "  \033[1m\033[38;2;139;117;255m◈ RESUME-BUILDER INTERVIEW PREP & STAR DOSSIER GENERATOR\033[0m"
     )
     print(
         "\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m\n"

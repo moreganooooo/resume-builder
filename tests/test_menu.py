@@ -22,6 +22,17 @@ def _title_text(title) -> str:
     return "".join(text for _, text in title)
 
 
+def _icon_glyph(title):
+    """Extract just the icon glyph from a _icon_title()-built title (its
+    first (style, text) tuple), or None for a plain-string title with no
+    icon at all. Distinct from _title_text(), which flattens icon+label
+    together and so can't tell two same-icon items apart from two
+    different-icon items with visually similar flattened text."""
+    if isinstance(title, str):
+        return None
+    return title[0][1]
+
+
 class TestChoicesAndHandlers(unittest.TestCase):
     # As of the 2026-08 menu collapse (design-audit-approved 7-item tree),
     # every leaf action except "bullet_bank"/"settings_upkeep" (which open
@@ -189,6 +200,36 @@ class TestChoicesAndHandlers(unittest.TestCase):
         ):
             choices = [c for c in builder() if isinstance(c, questionary.Choice)]
             self.assertEqual(choices[-1].value, "back", builder.__name__)
+
+    def test_no_two_items_in_the_same_list_share_an_icon(self):
+        # Regression for "Exit" and "Settings & Upkeep" both rendering the
+        # same wrench glyph in the Main Menu (both used icon="utility") --
+        # visually indistinguishable even though they're unrelated actions.
+        # Sharing an icon across DIFFERENT lists (e.g. "discovery" used by
+        # both "Find Jobs" and its own "Scan for New Jobs" submenu item) is
+        # fine and intentional -- the bug is two different items in the
+        # SAME visible list looking identical.
+        for builder in (
+            menu._build_choices,
+            menu._build_find_jobs_choices,
+            menu._build_build_documents_choices,
+            menu._build_track_followup_choices,
+            menu._build_settings_upkeep_choices,
+        ):
+            seen = {}
+            for c in builder():
+                if not isinstance(c, questionary.Choice):
+                    continue
+                icon = _icon_glyph(c.title)
+                if icon is None:
+                    continue
+                self.assertNotIn(
+                    icon,
+                    seen,
+                    f"{builder.__name__}: {c.value!r} shares an icon with "
+                    f"{seen.get(icon)!r}",
+                )
+                seen[icon] = c.value
 
 
 class TestHandleScan(unittest.TestCase):
@@ -1384,6 +1425,113 @@ class TestRunWithChain(unittest.TestCase):
         ):
             menu._run_with_chain("first", {})
         self.assertEqual(calls, ["first", "second"])
+
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.sys.stdout")
+    def test_tailor_pick_and_coverletter_pick_skip_the_scroll_region_clamp(
+        self, mock_stdout, mock_banner, mock_footer
+    ):
+        # Regression: menu.py's _run_with_chain() sets a DECSTBM scroll
+        # region (\x1b[5;{rows-1}r) around every leaf action's banner --
+        # fine for actions whose prompts route through the Charm/huh
+        # binary, but tailor_pick/coverletter_pick's picker still renders
+        # its multi-select checkbox via raw questionary
+        # (picker.browse_and_select_jds -> _paginated_checkbox), which
+        # renders nothing at all under a clamped scroll region. These two
+        # must skip the clamp -- everything else (banner, footer) still
+        # runs.
+        for value in ("tailor_pick", "coverletter_pick"):
+            mock_stdout.reset_mock()
+            with patch.dict(menu._HANDLERS, {value: lambda: False}, clear=False):
+                menu._run_with_chain(value, {})
+            writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+            self.assertNotIn(
+                "\x1b[5;", writes, f"{value}: scroll region was set despite skip-set"
+            )
+            mock_banner.assert_called()
+
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.sys.stdout")
+    def test_other_scroll_region_actions_are_unaffected(
+        self, mock_stdout, mock_banner, mock_footer
+    ):
+        with patch.dict(menu._HANDLERS, {"evaluate_all": lambda: False}, clear=False):
+            menu._run_with_chain("evaluate_all", {})
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("\x1b[5;", writes)
+
+
+class TestRunInteractiveMenuClearsProfilePickerLeftovers(unittest.TestCase):
+    # Regression: the profile picker ("Who's using resume-builder?", a
+    # huh/Bubbletea prompt drawn directly to the terminal) doesn't erase
+    # itself on exit, so it stayed on screen as scrollback underneath the
+    # banner/tip/menu that render right after it -- confirmed in a real
+    # screenshot showing all three stacked at once. run_interactive_menu()
+    # now clears and redraws a static banner once profile confirmation
+    # succeeds, but only inside the alt-screen buffer (use_alt=True) --
+    # clearing real terminal scrollback (use_alt=False) would be a much
+    # more aggressive, unwanted change of behavior.
+
+    def _run_one_pass_and_exit(self):
+        # Drives run_interactive_menu() through exactly one real loop
+        # iteration (choice="exit") so it returns instead of blocking.
+        menu.run_interactive_menu()
+
+    @patch("menu._should_use_alt_screen", return_value=True)
+    @patch("menu._alternate_screen")
+    @patch("menu.cli_art.display_main_banner")
+    @patch("menu._confirm_active_profile", return_value=True)
+    @patch("menu._confirm_icon_set")
+    @patch("menu._prompt_for_update")
+    @patch("menu.cli_art.display_tip")
+    @patch("menu.cli_art.select", return_value="exit")
+    @patch("menu.sys.stdout")
+    def test_clears_and_redraws_banner_when_alt_screen_is_active(
+        self,
+        mock_stdout,
+        mock_select,
+        mock_tip,
+        mock_update,
+        mock_icons,
+        mock_confirm_profile,
+        mock_banner,
+        mock_alt_screen,
+        mock_use_alt,
+    ):
+        self._run_one_pass_and_exit()
+
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("\x1b[2J\x1b[H", writes)
+        # First call is the real animated reveal (no reveal kwarg forced
+        # False); the redraw immediately after profile confirmation must
+        # be reveal=False, a static redraw, not a second intro animation.
+        self.assertEqual(mock_banner.call_args_list[1].kwargs, {"reveal": False})
+
+    @patch("menu._should_use_alt_screen", return_value=False)
+    @patch("menu.cli_art.display_main_banner")
+    @patch("menu._confirm_active_profile", return_value=True)
+    @patch("menu._confirm_icon_set")
+    @patch("menu._prompt_for_update")
+    @patch("menu.cli_art.display_tip")
+    @patch("menu.cli_art.select", return_value="exit")
+    @patch("menu.sys.stdout")
+    def test_does_not_clear_when_alt_screen_is_off(
+        self,
+        mock_stdout,
+        mock_select,
+        mock_tip,
+        mock_update,
+        mock_icons,
+        mock_confirm_profile,
+        mock_banner,
+        mock_use_alt,
+    ):
+        self._run_one_pass_and_exit()
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertNotIn("\x1b[2J\x1b[H", writes)
+        self.assertEqual(mock_banner.call_count, 1)
 
 
 class TestSessionSummary(unittest.TestCase):

@@ -62,17 +62,17 @@ def build_negotiation_strategy(
 def generate_negotiation_guide_markdown(strategy_data: Dict[str, Any]) -> str:
     """Renders a complete negotiation guide in Markdown format."""
     lines = [
-        f"# 💼 Compensation Negotiation Playbook: {strategy_data['role']} @ {strategy_data['company']}",
+        f"# ▣ Compensation Negotiation Playbook: {strategy_data['role']} @ {strategy_data['company']}",
         "",
-        "## 📊 1. Compensation Breakdown & Targets",
+        "## ▤ 1. Compensation Breakdown & Targets",
         f"- **Initial Offer Base:** `${strategy_data['initial_offer']:,}`",
         f"- **Candidate Target Base:** `${strategy_data['target_base']:,}`",
         f"- **Recommended Counter-Anchor:** `${strategy_data['recommended_counter']:,}`",
         "",
-        "## 🎯 2. Strategic Posture & Plan",
+        "## ⌖ 2. Strategic Posture & Plan",
         f"> {strategy_data['strategy']}",
         "",
-        "## ✉️ 3. Ready-to-Send Counter-Offer Email Script",
+        "## ✉ 3. Ready-to-Send Counter-Offer Email Script",
         "```text",
         strategy_data["email_script"],
         "```",
@@ -96,7 +96,7 @@ def main() -> None:
         "\n\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m"
     )
     print(
-        "  \033[1m\033[38;2;139;117;255m💎 RESUME-BUILDER SALARY NEGOTIATION PLAYBOOK ENGINE\033[0m"
+        "  \033[1m\033[38;2;139;117;255m◈ RESUME-BUILDER SALARY NEGOTIATION PLAYBOOK ENGINE\033[0m"
     )
     print(
         "\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m\n"

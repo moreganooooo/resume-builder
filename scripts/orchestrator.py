@@ -37,6 +37,7 @@ import profile_paths
 load_dotenv(profile_paths.env_path(), override=True)
 
 import bullet_feedback
+import charm_prompt
 import cli_art
 import jd_manager
 import kb_snapshot
@@ -738,14 +739,14 @@ def _required_role_bullet_minimums(profile_data: dict) -> dict[str, int]:
 def _confirm_continue_without_keywords() -> bool:
     """Single-file interactive escape hatch for the empty-keywords stop. Only
     ever reached with interactive=True, so a non-TTY (batch, `resume sample`,
-    tests) can never block on it; questionary.confirm().ask() returns None on
-    an interrupted/unreadable stdin, and bool(None) already reads as 'no'."""
+    tests) can never block on it. cli_art.confirm() already returns False
+    (not None) on an interrupted/unreadable stdin -- the bool() wrapper is
+    just defensive."""
     return bool(
-        questionary.confirm(
+        cli_art.confirm(
             "Build the resume anyway, with no JD keywords?",
             default=False,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
     )
 
 
@@ -820,13 +821,27 @@ def _review_recommendations_interactively(
         "approve which recommendations to attempt (nothing below is applied until you say yes).",
         level=cli_art.NORMAL,
     )
+    import sys
+
     approved_recs = []
     for idx, rec in enumerate(recs, start=1):
-        answer = questionary.confirm(
-            f"[{idx}/{len(recs)}] {rec}\n    Apply this?",
-            default=False,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        # Inlines cli_art.confirm()'s own test-mode/Charm-routing split
+        # rather than calling it directly -- cli_art.confirm() coerces a
+        # Ctrl-C to False, which would collapse it with an explicit
+        # per-recommendation "no" below; this loop needs the real None to
+        # tell "interrupted, stop asking" apart from "declined just this
+        # one and keep going".
+        if "unittest" in sys.modules:
+            answer = questionary.confirm(
+                f"[{idx}/{len(recs)}] {rec}\n    Apply this?",
+                default=False,
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
+        else:
+            answer = charm_prompt.confirm(
+                f"[{idx}/{len(recs)}] {rec}\n    Apply this?",
+                default=False,
+            )
         if answer is None:
             cli_art.console.print(
                 f"  {theme.colorize_icon('warning')} Review interrupted -- treating remaining "

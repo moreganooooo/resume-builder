@@ -222,12 +222,20 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
 
 def _stats_line_text() -> str:
     """Real, live data -- no new persistence. pending count comes from
-    jd_manager.get_pending_jds(); tailored count comes from the append-only
+    picker.count_active_roles() -- the SAME definition the dashboard's
+    Jobs and Pipeline screens use, so the banner cannot disagree with
+    them (it used to say 157 while both dashboard screens said 812,
+    because it was counting JD files and they were counting evaluated
+    roles). Tailored count comes from the append-only
     tracker CSV, NOT from jds/completed/'s file count -- archive_jd() moves
     files out of that directory, which would make an "All-Time" total go
     down. This walks the whole JD corpus, so it is expensive: call it once
     and reuse the string, never once per animation frame."""
-    pending = len(jd_manager.get_pending_jds())
+    # Imported here, not at module scope: picker imports cli_art, so a
+    # top-level import would be circular.
+    import picker
+
+    pending = picker.count_active_roles()
     tailored = jd_manager.count_completed_resumes()
     return f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
 
@@ -282,7 +290,7 @@ TIPS = [
     "Want the AI to sound like you? Drop past cover letters, personal bios, or emails into source_documents/ — our engine extracts and clones your unique tone and style automatically!",
     "What is a 'Bullet Bank'? It is your living achievement inventory. Curate your accomplishments there, and the AI will auto-select and adapt the best matches for each job description!",
     "To target your job search, customize your active search keywords inside your profile's search_queries.json file directly in-app or in your editor.",
-    "Did you know? Logging into LinkedIn or JobRight in Google Chrome lets our scanner fetch session cookies automatically on macOS — no manual copy-pasting required!",
+    "Logging into LinkedIn or JobRight in Google Chrome lets our scanner fetch session cookies automatically on macOS — no manual copy-pasting required!",
     "Running low on time? Try 'Express Setup (Auto-pilot)' — it ingests your source files, constructs your bullet bank, and builds a customized resume in a single click!",
     "Have a specific edit in mind? Use 'Polish Resume or Cover Letter' to conversationally ask the AI for exact visual, wording, or structure tweaks.",
     "Landed an interview? Update your status in the Applications Tracker to unlock achievements and watch your funnel conversion rate rise!",
@@ -1116,7 +1124,7 @@ def display_playbook() -> None:
     """Renders the simple, compassionate 3-Step Job Search Playbook for ADHD job-seekers."""
     content = Text()
     content.append(
-        "🎯 STEP 1: Find & Pick High-Fit Roles\n", style=f"bold {theme.BRAND}"
+        "⌖ STEP 1: Find & Pick High-Fit Roles\n", style=f"bold {theme.BRAND}"
     )
     content.append(
         "   • Run 'Find Jobs' -> 'Scan for New Jobs' (or paste a job link directly).\n",
@@ -1127,7 +1135,7 @@ def display_playbook() -> None:
         style=theme.MUTED,
     )
 
-    content.append("🚀 STEP 2: 1-Click Tailor & Build\n", style=f"bold {theme.SUCCESS}")
+    content.append("▶ STEP 2: 1-Click Tailor & Build\n", style=f"bold {theme.SUCCESS}")
     content.append(
         "   • Select 'Build Documents' -> 'Build Full Application Package'.\n",
         style=theme.MUTED,
@@ -1138,7 +1146,7 @@ def display_playbook() -> None:
     )
 
     content.append(
-        "💼 STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}"
+        "▣ STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}"
     )
     content.append(
         "   • Open 'Track & Follow Up' -> 'Career Dashboard' to review and submit.\n",
@@ -1692,10 +1700,24 @@ def confirm(message: str, default: bool = False, **kwargs) -> bool:
     return bool(answer)
 
 
-def text(message: str, **kwargs):
-    """questionary.text() with this app's style applied."""
-    kwargs.setdefault("style", QUESTIONARY_STYLE)
-    return questionary.text(message, **kwargs).ask()
+def text(message: str, default: str = "") -> str | None:
+    """questionary.text() with this app's style applied, or upgraded to Charm.
+
+    Was raw questionary.text() unconditionally, the one prompt type that
+    never got a Go/huh counterpart when confirm/select/checkbox migrated
+    (see charm_prompt.py's text()) -- which mattered beyond visual
+    consistency: menu.py's _run_with_chain() sets a DECSTBM scroll region
+    around every leaf action's banner, and prompt_toolkit (questionary's
+    renderer) doesn't render at all under it. Stale Sweep's "Archive
+    postings older than how many days?" prompt (this function's only
+    menu.py call site) hit exactly that dead end."""
+    import sys
+
+    if "unittest" in sys.modules:
+        return questionary.text(
+            message, default=default, style=QUESTIONARY_STYLE
+        ).ask()
+    return charm_prompt.text(message, default=default)
 
 
 def checkbox(message: str, choices, **kwargs):
@@ -1974,7 +1996,7 @@ def display_compact_banner(action_title: str) -> None:
     panel_content = Text()
     panel_content.append("✦ ", style=theme.BRAND_ACCENT)
     panel_content.append(
-        make_gradient_text("💎 RESUME BUILDER ", theme.BRAND, theme.BRAND_ACCENT)
+        make_gradient_text("◈ RESUME BUILDER ", theme.BRAND, theme.BRAND_ACCENT)
     )
     panel_content.append("│ ", style=theme.MUTED)
     panel_content.append(
@@ -2151,21 +2173,21 @@ def display_success_celebration(title: str, subtitle: str) -> None:
 
     panel_content = Text()
     panel_content.append(
-        "\n🎉 ✦ ─── HECK YEAH! ─── ✦ 🎉\n\n", style=f"bold {theme.BRAND_ACCENT}"
+        "\n✦ ✦ ─── HECK YEAH! ─── ✦ ✦\n\n", style=f"bold {theme.BRAND_ACCENT}"
     )
     panel_content.append(title.upper(), style=f"bold {theme.SUCCESS}")
     panel_content.append("\n\n", style="default")
     panel_content.append(subtitle, style=f"italic {theme.INFO}")
     panel_content.append(
-        "\n\n💡 Remember: Every tailored resume brings you one step closer to your dream gig!",
+        "\n\n✦ Remember: Every tailored resume brings you one step closer to your dream gig!",
         style=theme.MUTED,
     )
     panel_content.append(
-        "\nGo crush this application! 🚀\n", style=f"bold {theme.BRAND}"
+        "\nGo crush this application! ▶\n", style=f"bold {theme.BRAND}"
     )
 
     grad_title = make_gradient_text(
-        "🌟 ACHIEVEMENT UNLOCKED 🌟", theme.BRAND_ACCENT, theme.BRAND
+        "✦ ACHIEVEMENT UNLOCKED ✦", theme.BRAND_ACCENT, theme.BRAND
     )
 
     panel = Panel(
@@ -2187,7 +2209,7 @@ def display_success_celebration(title: str, subtitle: str) -> None:
         console.print()
         return
 
-    sparkles = ["✨", "✦", "✧", "⭐", "🎉", "🔥", "💫", "💎"]
+    sparkles = ["✦", "✧", "★", "◆", "◈", "•", "◇", "✢"]
     sys.stdout.write("\x1b[?25l")  # Hide cursor
     sys.stdout.flush()
 
@@ -2237,22 +2259,22 @@ def render_application_package_hud(package_result: dict) -> None:
     ats_tier = ats_info.get("weight_tier", "")
 
     hud_content = Text()
-    hud_content.append("🏢 Company:  ", style="bold")
+    hud_content.append("▦ Company:  ", style="bold")
     hud_content.append(f"{company_name}\n", style=f"bold {theme.BRAND}")
-    hud_content.append("💼 Role:     ", style="bold")
+    hud_content.append("▣ Role:     ", style="bold")
     hud_content.append(f"{job_title}\n", style="bold")
 
     if composite_score != "-" or rec != "N/A":
-        hud_content.append("🎯 Fit:      ", style="bold")
+        hud_content.append("⌖ Fit:      ", style="bold")
         score_str = f"{composite_score}/5.0" if composite_score != "-" else ""
         hud_content.append(f"{score_str} ({rec})\n", style=f"bold {theme.SUCCESS}")
 
     if ats_provider or ats_tier:
         tier_str = f" ({ats_tier})" if ats_tier else ""
-        hud_content.append("🤖 ATS:      ", style="bold")
+        hud_content.append("▤ ATS:      ", style="bold")
         hud_content.append(f"{ats_provider}{tier_str}\n", style=f"{theme.MUTED}")
 
-    hud_content.append("\n📄 Resume Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}")
+    hud_content.append("\n▥ Resume Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}")
     res_pdf = output_paths.get("resume_pdf")
     res_docx = output_paths.get("resume_docx")
     if res_pdf:
@@ -2263,7 +2285,7 @@ def render_application_package_hud(package_result: dict) -> None:
         hud_content.append(f"{res_docx}\n", style=theme.SUCCESS)
 
     hud_content.append(
-        "\n✉️  Cover Letter Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}"
+        "\n✉  Cover Letter Artifacts:\n", style=f"bold {theme.BRAND_ACCENT}"
     )
     cl_pdf = output_paths.get("coverletter_pdf")
     cl_docx = output_paths.get("coverletter_docx")
@@ -2281,7 +2303,7 @@ def render_application_package_hud(package_result: dict) -> None:
 
     panel = Panel(
         hud_content,
-        title=f"[bold {theme.BRAND}]🚀 APPLICATION PACKAGE COMPLETE[/bold {theme.BRAND}]",
+        title=f"[bold {theme.BRAND}]▶ APPLICATION PACKAGE COMPLETE[/bold {theme.BRAND}]",
         title_align="left",
         border_style=theme.BRAND_ACCENT,
         box=box.ROUNDED,
@@ -2317,9 +2339,9 @@ def render_sparkle_celebration(
 ) -> None:
     """Renders a high-dopamine, ADHD-friendly completion screen celebrating user progress."""
     content = Text()
-    content.append("✨ ", style=theme.BRAND_ACCENT)
+    content.append("✦ ", style=theme.BRAND_ACCENT)
     content.append(make_gradient_text(title, theme.SUCCESS, theme.BRAND_ACCENT))
-    content.append(" ✨\n\n", style=theme.BRAND_ACCENT)
+    content.append(" ✦\n\n", style=theme.BRAND_ACCENT)
     content.append(f"{message}\n")
 
     if tips:

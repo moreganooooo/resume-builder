@@ -5,21 +5,28 @@ of menu.py's questionary call sites can move to Charm without a bespoke
 Go binary per prompt (see
 docs/superpowers/specs/2026-08-08-charm-prompt-migration-design.md).
 
-select()/checkbox() have no production call sites yet -- deliberately, per
-that spec's own Non-Goals: only confirm()'s 5 call sites were converted to
-"prove the pattern end-to-end" before the remaining 13 select()/checkbox()
-sites in menu.py (including the icon-heavy main menu). Converting those is
-explicitly deferred as "straightforward mechanical follow-up," not
-abandoned -- this isn't stale code, it's finished infrastructure ahead of
-its call sites. Both functions are exercised directly by
-tests/test_charm_prompt.py.
+confirm()/select()/checkbox() are all in production use now (cli_art.py's
+wrappers route every interactive prompt through here outside of tests --
+see cli_art.confirm/select/checkbox()). text() (added 2026-08-19) was the
+last holdout: it had no Go/huh counterpart at all until then, which meant
+every cli_art.text() call site rendered nothing when invoked from a
+menu.py leaf action -- menu._run_with_chain() sets a DECSTBM scroll region
+around the banner that questionary's renderer (prompt_toolkit) can't draw
+under, while huh/Bubbletea can. See CLAUDE.md's Architecture notes for the
+fuller writeup of that conflict and everywhere it turned up.
+
+The one remaining raw-questionary holdout by design, not oversight, is
+picker.py's multi-select checkbox (_paginated_checkbox) -- its cross-page
+"still checked" state has no huh equivalent wired up yet, so its two call
+sites (Tailor/Cover-Letter "pick specific role(s)") are opted out of the
+scroll-region clamp instead (menu._run_with_chain's _skip_scroll_region).
 
 Each function's call shape mirrors the questionary function it replaces:
-select()/confirm()/checkbox() all return the answer directly (no `.ask()`
-chain), with None meaning the user cancelled (ESC/Ctrl-C) -- exactly what
-questionary's own `.ask()` returns on cancellation, so existing
-`if not choice: return False` guards in menu.py need no changes at their
-call sites.
+select()/confirm()/checkbox()/text() all return the answer directly (no
+`.ask()` chain), with None meaning the user cancelled (ESC/Ctrl-C) --
+exactly what questionary's own `.ask()` returns on cancellation, so
+existing `if not choice: return False` guards in menu.py need no changes
+at their call sites.
 
 Go is documented as optional (see doctor.check_go()) -- only `resume
 dashboard` is supposed to require it. So every function here falls back
@@ -42,6 +49,20 @@ _DASHBOARD_DIR = os.path.join(_PROJECT_ROOT, "dashboard")
 _BIN_PATH = os.path.join(_DASHBOARD_DIR, "bin", "prompt")
 
 
+def _is_selectable(choice) -> bool:
+    """False for a questionary.Separator or any explicitly-disabled Choice
+    -- both carry a non-None .disabled (Separator defaults it to "-").
+    questionary's own prompts skip these when building the option list;
+    the Go huh binary has no such concept and, unfiltered, rendered a
+    Separator as a real blank-label option a user could arrow onto and
+    submit, returning its value (e.g. " ") straight back to a caller that
+    only guards `if not choice` -- non-empty whitespace passed that guard
+    and reached `_HANDLERS[" "]`, a KeyError with no indication onscreen
+    of what happened beyond the menu going dead. See
+    tests/test_charm_prompt.py's TestSeparatorsAreNeverSelectable."""
+    return getattr(choice, "disabled", None) is None
+
+
 def _option_dict(choice) -> dict:
     if isinstance(choice, dict):
         return {"label": choice["label"], "value": choice["value"]}
@@ -59,13 +80,33 @@ def _go_available() -> bool:
     return shutil.which("go") is not None
 
 
+def _prompt_binary_is_stale() -> bool:
+    """True if any Go source under dashboard/ is newer than the cached
+    binary. A plain "does the binary exist" check (the previous behavior)
+    left every source fix silently unapplied until someone noticed the
+    running binary didn't match the code and deleted dashboard/bin/prompt
+    by hand -- exactly what happened chasing the 2026-08-19 black-text-on-
+    dark-terminal regression, where the theme.go/prompt.go fixes had no
+    effect until the stale cached binary was manually removed."""
+    bin_mtime = os.path.getmtime(_BIN_PATH)
+    for root, _dirs, files in os.walk(_DASHBOARD_DIR):
+        if os.sep + "bin" + os.sep in root + os.sep:
+            continue
+        for name in files:
+            if name.endswith(".go") or name in ("go.mod", "go.sum"):
+                if os.path.getmtime(os.path.join(root, name)) > bin_mtime:
+                    return True
+    return False
+
+
 def _compile_prompt_if_needed() -> str:
-    """Pre-compiles the Go prompt binary if missing, returning the path
-    to the compiled binary. If compilation fails or Go is missing, returns None."""
+    """Compiles the Go prompt binary if missing or stale (see
+    _prompt_binary_is_stale), returning the path to the compiled binary.
+    If compilation fails or Go is missing, returns None."""
     if not _go_available():
         return None
 
-    if os.path.exists(_BIN_PATH):
+    if os.path.exists(_BIN_PATH) and not _prompt_binary_is_stale():
         return _BIN_PATH
 
     os.makedirs(os.path.dirname(_BIN_PATH), exist_ok=True)
@@ -89,18 +130,23 @@ def _run_prompt(spec: dict):
     else:
         cmd = ["go", "run", "./cmd/prompt", json.dumps(spec)]
 
+    # stderr is left connected to our own terminal (not captured) -- huh/
+    # Bubbletea render the live form there by default, and need a real tty
+    # to do raw-mode drawing, which a pipe can't provide (confirmed via a
+    # pty-attached test). The binary's JSON answer goes to stdout, so
+    # that's the only stream we capture.
     result = subprocess.run(
         cmd,
         cwd=_DASHBOARD_DIR,
-        capture_output=True,
+        stdout=subprocess.PIPE,
         text=True,
     )
     if result.returncode == _CANCEL_EXIT_CODE:
         return None
     if result.returncode != 0:
-        raise RuntimeError(
-            f"charm_prompt failed (exit {result.returncode}): {result.stderr.strip()}"
-        )
+        # stderr isn't captured (see above) -- log.Fatalf's message already
+        # printed live to the terminal, so this just carries the exit code.
+        raise RuntimeError(f"charm_prompt failed (exit {result.returncode})")
     try:
         return json.loads(result.stdout.strip())
     except json.JSONDecodeError as e:
@@ -143,7 +189,7 @@ def select(message: str, choices: list, default: str | None = None) -> str | Non
     spec = {
         "type": "select",
         "message": message,
-        "options": [_option_dict(c) for c in choices],
+        "options": [_option_dict(c) for c in choices if _is_selectable(c)],
     }
     if default is not None:
         spec["default_value"] = default
@@ -167,7 +213,7 @@ def checkbox(message: str, choices: list) -> list | None:
     spec = {
         "type": "checkbox",
         "message": message,
-        "options": [_option_dict(c) for c in choices],
+        "options": [_option_dict(c) for c in choices if _is_selectable(c)],
     }
     try:
         data = _run_prompt(spec)
@@ -179,3 +225,21 @@ def checkbox(message: str, choices: list) -> list | None:
     if data is None:
         return None
     return data.get("values", [])
+
+
+def text(message: str, default: str = "") -> str | None:
+    if not _go_available():
+        return questionary.text(
+            message, default=default, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+    spec = {"type": "text", "message": message, "default_value": default}
+    try:
+        data = _run_prompt(spec)
+    except RuntimeError as e:
+        _warn_and_degrade(e)
+        return questionary.text(
+            message, default=default, style=cli_art.QUESTIONARY_STYLE
+        ).ask()
+    if data is None:
+        return None
+    return data["value"]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 💎 RESUME-BUILDER UNIFIED INSTALLER & SETUP WIZARD 💎
+# ◈ RESUME-BUILDER UNIFIED INSTALLER & SETUP WIZARD ◈
 # Supports: macOS, Linux, Windows (WSL), and Mobile (Android Termux)
 # ==============================================================================
 
@@ -22,7 +22,7 @@ clear
 
 # Print TrueColor Gradient Banner
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n"
-printf "${BOLD}${BRAND}    💎  R E S U M E   B U I L D E R   I N S T A L L E R  💎${RESET}\n"
+printf "${BOLD}${BRAND}    ◈  R E S U M E   B U I L D E R   I N S T A L L E R  ◈${RESET}\n"
 printf "${BOLD}${ACCENT}       Multi-Platform Setup Wizard (Desktop & Mobile Sync)${RESET}\n"
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n\n"
 
@@ -144,13 +144,13 @@ fi
 
 # 6.5. Mobile-Specific Power-User Optimizations
 if [ "$IS_MOBILE" -eq 1 ]; then
-    printf "\n${BOLD}${BRAND}📱 DETECTED MOBILE: OPTIMIZE FOR LINUX MOBILE?${RESET}\n"
+    printf "\n${BOLD}${BRAND}▯ DETECTED MOBILE: OPTIMIZE FOR LINUX MOBILE?${RESET}\n"
     printf "This will automatically:\n"
-    printf "  ✨ Install & configure ${BOLD}Nerd Fonts${RESET} (for terminal icons/sparkles)\n"
-    printf "  🎨 Install a clean ${BOLD}Catppuccin Macchiato${RESET} TrueColor theme\n"
-    printf "  📋 Setup ${BOLD}termux-api clipboard sync${RESET} utility\n"
-    printf "  ⌨️  Install specialized touch terminal navigation keys (ESC, CTRL, Arrow keys)\n"
-    printf "  🚀 Create a One-Tap Home Screen Launcher via ${BOLD}Termux:Widget${RESET}\n"
+    printf "  ✦ Install & configure ${BOLD}Nerd Fonts${RESET} (for terminal icons/sparkles)\n"
+    printf "  ◈ Install a clean ${BOLD}Catppuccin Macchiato${RESET} TrueColor theme\n"
+    printf "  ▤ Setup ${BOLD}termux-api clipboard sync${RESET} utility\n"
+    printf "  ⌨  Install specialized touch terminal navigation keys (ESC, CTRL, Arrow keys)\n"
+    printf "  ▶ Create a One-Tap Home Screen Launcher via ${BOLD}Termux:Widget${RESET}\n"
     printf "\nApply these beautiful optimizations? [Y/n]: "
     read -r opt_choice
     opt_choice="${opt_choice:-Y}"
@@ -222,11 +222,11 @@ fi
 # 7. Print Post-Installation Actions
 printf "\n"
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n"
-printf "       🎉  ${BOLD}${SUCCESS}INSTALLATION COMPLETED SUCCESSFULLY!${RESET}  🎉\n"
+printf "       ✦  ${BOLD}${SUCCESS}INSTALLATION COMPLETED SUCCESSFULLY!${RESET}  ✦\n"
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n\n"
 
 if [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" -eq 1 ]; then
-    printf "${BOLD}${ACCENT}📱 MOBILE SYNCING COMPANION STRATEGY ACTIVATED:${RESET}\n"
+    printf "${BOLD}${ACCENT}▯ MOBILE SYNCING COMPANION STRATEGY ACTIVATED:${RESET}\n"
     printf "  1. Install ${BOLD}Syncthing${RESET} on your Desktop and your Pixel 10.\n"
     printf "  2. Pair devices and share your active profile directories:\n"
     printf "     - ${BOLD}profiles/morgan/${RESET}\n"

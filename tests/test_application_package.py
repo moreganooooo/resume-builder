@@ -21,6 +21,25 @@ import profile_paths
 class TestApplicationPackage(unittest.TestCase):
 
     def setUp(self):
+        # build_application_package() runs for real here (only liveness and
+        # the LLM calls are mocked), and it writes job rows through
+        # db.upsert_job -> profile_paths. Without redirecting PROFILES_DIR
+        # those writes land in the developer's own profiles/<name>/data.db:
+        # this class alone put thousands of "Test"/"Role" @ "Acme Corp" rows
+        # into a real 61 MB database, where they then showed up in the
+        # dashboard as real jobs. Same isolation pattern as
+        # test_profile_gate.py.
+        tmp_profiles = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp_profiles, ignore_errors=True)
+        os.makedirs(os.path.join(tmp_profiles, "testprofile"), exist_ok=True)
+
+        for patcher in (
+            patch.object(profile_paths, "PROFILES_DIR", tmp_profiles),
+            patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
         self.engine = orchestrator.ResumeEngine()
         self.test_dir = tempfile.mkdtemp()
         self.jd_path = os.path.join(self.test_dir, "test_job.json")

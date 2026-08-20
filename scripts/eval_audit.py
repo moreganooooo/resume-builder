@@ -28,7 +28,7 @@ def generate_evaluation_audit_markdown(
     tailoring_tips = evaluation.get("tailoring_tips", [])
 
     lines = [
-        f"# 🎯 Evaluation Audit Trail: {title} @ {company}",
+        f"# ⌖ Evaluation Audit Trail: {title} @ {company}",
         "",
         f"- **Composite Fit Score:** `{score}` / 100 ({tier})",
         f"- **Empirical Interview Odds:** `{odds}`",
@@ -37,33 +37,33 @@ def generate_evaluation_audit_markdown(
         "",
         "---",
         "",
-        "## 💡 Scoring Rationale & Evidence",
+        "## ✦ Scoring Rationale & Evidence",
         "",
         "### Key Alignments & Strengths",
     ]
 
     if pros:
         for p in pros:
-            lines.append(f"- ✅ {p}")
+            lines.append(f"- ✓ {p}")
     else:
         lines.append("- *No specific standout strengths recorded.*")
 
     lines.extend(["", "### Friction Points & Risk Factors"])
     if cons:
         for c in cons:
-            lines.append(f"- ⚠️ {c}")
+            lines.append(f"- ⚠ {c}")
     else:
         lines.append("- *No significant friction points detected.*")
 
     lines.extend(["", "### Missing Skills & Keyword Gaps"])
     if missing_skills:
         for s in missing_skills:
-            lines.append(f"- ❌ `{s}`")
+            lines.append(f"- ✗ `{s}`")
     else:
         lines.append("- *No critical missing skills.*")
 
     if tailoring_tips:
-        lines.extend(["", "## 🛠 Recommended Tailoring Strategy"])
+        lines.extend(["", "## ⚒ Recommended Tailoring Strategy"])
         for tip in tailoring_tips:
             lines.append(f"1. {tip}")
 
@@ -88,7 +88,7 @@ def main() -> None:
         "\n\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m"
     )
     print(
-        "  \033[1m\033[38;2;139;117;255m💎 RESUME-BUILDER EVALUATION AUDIT TRAIL ENGINE\033[0m"
+        "  \033[1m\033[38;2;139;117;255m◈ RESUME-BUILDER EVALUATION AUDIT TRAIL ENGINE\033[0m"
     )
     print(
         "\033[1m\033[38;2;139;117;255m✦ ────────────────────────────────────────────────────────────── ✦\033[0m\n"

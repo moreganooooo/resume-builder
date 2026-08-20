@@ -92,7 +92,7 @@ def _build_choices() -> list:
         ),
         questionary.Separator(" "),
         questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
-        questionary.Choice(title=_icon_title("utility", "Exit"), value="exit"),
+        questionary.Choice(title=_icon_title("exit", "Exit"), value="exit"),
     ]
 
 
@@ -107,11 +107,11 @@ def _build_find_jobs_choices() -> list:
             title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"
         ),
         questionary.Choice(
-            title=_icon_title("discovery", "↳ Add Job Description Manually"),
+            title=_icon_title("save", "↳ Add Job Description Manually"),
             value="add_manual_jd",
         ),
         questionary.Choice(
-            title=_icon_title("discovery", "↳ Check Job Posting Liveness"),
+            title=_icon_title("complete", "↳ Check Job Posting Liveness"),
             value="liveness",
         ),
         questionary.Choice(
@@ -136,21 +136,21 @@ def _build_build_documents_choices() -> list:
             value="package_flow",
         ),
         questionary.Choice(
-            title=_icon_title("build", "↳ Customize Resume for Specific Role(s)"),
+            title=_icon_title("resume", "↳ Customize Resume for Specific Role(s)"),
             value="tailor_pick",
         ),
         questionary.Choice(
             title=_icon_title(
-                "build", "↳ Customize Resume for All Pending Roles (Batch Run)"
+                "evaluate", "↳ Customize Resume for All Pending Roles (Batch Run)"
             ),
             value="tailor_all",
         ),
         questionary.Choice(
-            title=_icon_title("build", "↳ Write Cover Letter for Specific Role(s)"),
+            title=_icon_title("save", "↳ Write Cover Letter for Specific Role(s)"),
             value="coverletter_pick",
         ),
         questionary.Choice(
-            title=_icon_title("build", "↳ Polish a Resume or Cover Letter With Gemini"),
+            title=_icon_title("gem", "↳ Polish a Resume or Cover Letter With Gemini"),
             value="polish",
         ),
         questionary.Choice(title="Back", value="back"),
@@ -188,21 +188,21 @@ def _build_settings_upkeep_choices() -> list:
             value="manage_skills",
         ),
         questionary.Choice(
-            title=_icon_title("utility", "↳ Manage Scraping, Boards & Search Queries"),
+            title=_icon_title("discovery", "↳ Manage Scraping, Boards & Search Queries"),
             value="manage_scraping",
         ),
         questionary.Choice(
             title=_icon_title(
-                "utility", "↳ Generate Sample Resume + Cover Letter (QA)"
+                "build", "↳ Generate Sample Resume + Cover Letter (QA)"
             ),
             value="build_sample",
         ),
         questionary.Choice(
-            title=_icon_title("utility", "↳ Check for GitHub Updates"),
+            title=_icon_title("next", "↳ Check for GitHub Updates"),
             value="check_updates",
         ),
         questionary.Choice(
-            title=_icon_title("utility", "↳ Manage Profiles (Rename / Delete)"),
+            title=_icon_title("prev", "↳ Manage Profiles (Rename / Delete)"),
             value="manage_profiles",
         ),
         questionary.Choice(title="Back", value="back"),
@@ -362,7 +362,19 @@ def _confirm_active_profile() -> bool:
         for n in os.listdir(profile_paths.PROFILES_DIR)
         if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
     )
-    current = profile_paths.active_profile()
+    # profile_paths.active_profile() falls back to a hardcoded "morgan"
+    # (lowercase) when RESUME_PROFILE is unset -- a real folder renamed to
+    # different casing (e.g. profiles/Morgan/) then makes `current in
+    # names` fail on this case-sensitive string comparison, even though
+    # profiles/morgan and profiles/Morgan are the SAME directory on
+    # macOS's case-insensitive-but-preserving filesystem. Resolving
+    # against a lowercased lookup first means the picker's default
+    # selection (and its "currently: X" display) tracks whatever a
+    # profile is actually named on disk right now, automatically, rather
+    # than needing this hardcoded elsewhere to be kept in sync by hand
+    # every time a profile folder is renamed.
+    current_raw = profile_paths.active_profile()
+    current = {n.lower(): n for n in names}.get(current_raw.lower(), current_raw)
     # cli_art.select() is a thin wrapper around questionary.select().ask()
     # (bakes in QUESTIONARY_STYLE) -- it still returns raw None on Ctrl-C/
     # Esc exactly like the direct .ask() call this replaced, so the
@@ -1570,17 +1582,17 @@ def _handle_manage_scraping():
 
         choices = [
             questionary.Choice(
-                "🔌 Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"
+                "⊞ Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"
             ),
             questionary.Choice("➕ Add Custom RSS Job Board Feed", value="add_board"),
             questionary.Choice(
                 "➖ Delete/Remove Custom RSS Job Board Feed", value="delete_board"
             ),
             questionary.Choice(
-                "🔍 Edit LinkedIn Boolean Search Queries", value="linkedin_queries"
+                "⌖ Edit LinkedIn Boolean Search Queries", value="linkedin_queries"
             ),
             questionary.Choice(
-                "🎯 Edit Title Keyword Filters (Positive/Negative)",
+                "⌖ Edit Title Keyword Filters (Positive/Negative)",
                 value="title_filters",
             ),
             questionary.Choice("Back", value="back"),
@@ -2413,7 +2425,7 @@ def offer_next_steps(
             )
         )
         choices.append(
-            questionary.Choice(title=_icon_title("utility", "Exit"), value="__exit__")
+            questionary.Choice(title=_icon_title("exit", "Exit"), value="__exit__")
         )
     else:
         if not choices:
@@ -2492,6 +2504,22 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "stale_sweep": "Stale Application Sweep",
     }
 
+    # tailor_pick/coverletter_pick's picker.browse_and_select_jds() renders
+    # its multi-select via a raw questionary.checkbox() (see
+    # _paginated_checkbox() in picker.py) -- unlike confirm/select/text,
+    # checkbox has no Go/huh migration yet, since its cross-page "still
+    # checked" state (a real feature, not cosmetic) has no equivalent
+    # wired through charm_prompt's spec/Option shape today. Below, the
+    # scroll region set right before running a handler is exactly what
+    # broke evaluate_all/tailor_all/stale_sweep/polish before each got
+    # migrated: prompt_toolkit (questionary's renderer) doesn't understand
+    # a clamped scroll region and renders nothing under it (see
+    # picker.should_proceed()'s docstring for the full mechanism). These
+    # two skip the clamp entirely rather than risk a rushed, lossy
+    # checkbox port -- everything else about the action (banner, footer,
+    # chain-offer afterward) stays the same.
+    _skip_scroll_region = {"tailor_pick", "coverletter_pick"}
+
     is_interactive = value in interactive_actions
     title = action_titles.get(value)
 
@@ -2506,12 +2534,13 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         # Draw the gorgeous execution footer static at the bottom row (row = rows)
         cli_art.display_execution_footer()
 
-        # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
-        columns, rows = shutil.get_terminal_size()
-        sys.stdout.write(f"\x1b[5;{rows-1}r")
-        sys.stdout.write("\x1b[5;1H")
-        sys.stdout.flush()
-        scroll_region_modified = True
+        if value not in _skip_scroll_region:
+            # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+            columns, rows = shutil.get_terminal_size()
+            sys.stdout.write(f"\x1b[5;{rows-1}r")
+            sys.stdout.write("\x1b[5;1H")
+            sys.stdout.flush()
+            scroll_region_modified = True
 
     try:
         did_something = _HANDLERS[value]()
@@ -2589,6 +2618,22 @@ def run_interactive_menu() -> None:
             # icon-set/update-check prompts and a menu the user never asked for.
             cli_art.display_exit_footer()
             return
+        if use_alt:
+            # The profile picker (a huh/Bubbletea prompt, drawn directly to
+            # the real terminal -- see charm_prompt.py's _run_prompt())
+            # doesn't erase itself on exit, so without this its "Who's
+            # using resume-builder?" block just sits there as normal
+            # scrollback, stacking up underneath the banner/tip/menu that
+            # render next. Since we're already inside the alt-screen
+            # buffer (_alternate_screen() above), a clear here is safe --
+            # there's no real scrollback to lose, just this screen's own
+            # prior frame. reveal=False: the animated reveal already
+            # played once for display_main_banner() above; this redraw is
+            # just to give the picker's leftovers a clean base to
+            # disappear under, not a second intro.
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_main_banner(reveal=False)
         _confirm_icon_set()
         _prompt_for_update()
         cli_art.display_tip()

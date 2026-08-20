@@ -438,11 +438,9 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
             )
         )
 
-        result = questionary.select(
-            "Which document do you want to polish?",
-            choices=choices,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        result = cli_art.select(
+            "Which document do you want to polish?", choices=choices
+        )
         if result is None or result == _POLISH_NAV_BACK:
             return None
         if result == _POLISH_NAV_PREV:
@@ -484,9 +482,7 @@ def run_polish_session(json_path: str) -> None:
 
     while True:
         try:
-            instruction = questionary.text(
-                "polish>", style=cli_art.QUESTIONARY_STYLE
-            ).ask()
+            instruction = cli_art.text("polish>")
         except (KeyboardInterrupt, EOFError):
             instruction = None
 
@@ -506,15 +502,14 @@ def run_polish_session(json_path: str) -> None:
             continue
 
         cli_art.console.print("\n".join(diff_lines))
-        decision = questionary.select(
+        decision = cli_art.select(
             "Apply this change?",
             choices=[
                 questionary.Choice(title="Accept", value="accept"),
                 questionary.Choice(title="Reject and rephrase", value="reject"),
                 questionary.Choice(title="Quit", value="quit"),
             ],
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
 
         if decision == "quit" or decision is None:
             break

@@ -114,7 +114,7 @@ class TestRevealBanner(unittest.TestCase):
 class TestDisplayMainBanner(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
-    @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json", "c.json"])
+    @patch("picker.count_active_roles", return_value=2)
     def test_runs_without_error_in_non_terminal_mode(
         self, mock_pending, mock_completed
     ):
@@ -134,7 +134,7 @@ class TestDisplayMainBanner(unittest.TestCase):
         self.assertIn("1 Resumes Customized All-Time", output)
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
-    @patch("cli_art.jd_manager.get_pending_jds", return_value=["b.json"])
+    @patch("picker.count_active_roles", return_value=1)
     def test_stats_are_computed_once_not_per_frame(self, mock_pending, mock_completed):
         """B2: the stats line is constant for the length of the reveal, but was
         recomputed on all 31 frames -- each call walks the whole JD corpus, which
@@ -155,7 +155,7 @@ class TestDisplayMainBanner(unittest.TestCase):
 class TestDisplayStatsLine(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)
-    @patch("cli_art.jd_manager.get_pending_jds", return_value=["c.json"])
+    @patch("picker.count_active_roles", return_value=1)
     def test_prints_real_pending_and_tailored_counts(
         self, mock_pending, mock_completed
     ):
@@ -188,6 +188,17 @@ class TestDisplayTip(unittest.TestCase):
             for tip in cli_art.TIPS
         )
         self.assertTrue(matched)
+
+    def test_no_tip_starts_with_its_own_did_you_know_prefix(self):
+        # Regression: one tip's own text was "Did you know? Logging
+        # into..." on top of display_tip() unconditionally prepending
+        # "Did you know? " itself, rendering as "Did you know? Did you
+        # know? Logging into..." in the panel.
+        for tip in cli_art.TIPS:
+            self.assertFalse(
+                tip.lower().startswith("did you know"),
+                f"tip already starts with its own 'Did you know?': {tip!r}",
+            )
 
 
 class TestShortWhy(unittest.TestCase):
@@ -610,6 +621,30 @@ class TestScanActivity(unittest.TestCase):
             )
         self.assertIn("Fetched 5", task.description)
         self.assertIn("Written 2", task.description)
+
+
+class TestText(unittest.TestCase):
+    # cli_art.text() degrades to raw questionary.text() whenever "unittest"
+    # is in sys.modules (true for the whole test run) -- same test-mode
+    # branch confirm()/select()/checkbox() already use, so these mock
+    # questionary directly rather than the Go binary path.
+
+    def test_passes_message_and_default_through(self):
+        with patch("cli_art.questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = "45"
+            result = cli_art.text("Archive postings older than how many days?", default="30")
+        mock_text.assert_called_once_with(
+            "Archive postings older than how many days?",
+            default="30",
+            style=cli_art.QUESTIONARY_STYLE,
+        )
+        self.assertEqual(result, "45")
+
+    def test_cancellation_returns_none(self):
+        with patch("cli_art.questionary.text") as mock_text:
+            mock_text.return_value.ask.return_value = None
+            result = cli_art.text("No GEMINI_API_KEY found -- enter it now:")
+        self.assertIsNone(result)
 
 
 class TestMarkupEscaping(unittest.TestCase):
