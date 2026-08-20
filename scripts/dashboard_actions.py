@@ -43,11 +43,13 @@ describe_error() only returns strings, it never touches the Rich console.
 """
 
 import argparse
+import os
 import sys
 import traceback
 
 import cli_art
 import jd_manager
+import jd_source
 import liveness
 import orchestrator
 
@@ -73,7 +75,12 @@ def _user_error_from_exception(exc: BaseException, context: str) -> None:
 
 
 def _liveness(jd_path: str, jobs_path: str) -> int:
-    result = liveness.verify_jd_paths([jd_path])
+    with jd_source.resolved_jd(jd_path) as (path, _is_db):
+        return _liveness_at(path, jd_path, jobs_path)
+
+
+def _liveness_at(path: str, jd_path: str, jobs_path: str) -> int:
+    result = liveness.verify_jd_paths([path])
     if result.get("error"):
         # Raw detail first, plain sentence last -- see the contract above.
         print(
@@ -89,6 +96,20 @@ def _liveness(jd_path: str, jobs_path: str) -> int:
 
 
 def _tailor(jd_path: str, jobs_path: str) -> int:
+    # Tailoring is the one action that materializes a real file. The
+    # pipeline moves the JD into completed/ on success, which a temp file
+    # cannot support -- and a job being tailored is one actually being
+    # pursued, so it has earned the disk.
+    if not os.path.exists(jd_path):
+        try:
+            jd_path = jd_source.materialize_permanently(jd_path)
+        except LookupError as exc:
+            print(f"tailor failed: {exc}", file=sys.stderr)
+            _user_error(
+                "Couldn't find this job's details, so no resume was built."
+            )
+            return 1
+
     completed, _failed = orchestrator.run_pipeline(jd_path=jd_path)
     if completed == 0:
         print(f"tailoring failed for {jd_path}", file=sys.stderr)
@@ -114,13 +135,23 @@ def _status(jd_path: str, new_status: str, jobs_path: str) -> int:
             f'"{new_status}" isn\'t a status this app recognizes, so nothing was changed.'
         )
         return 1
-    jd_manager.save_application_status(jd_path, new_status)
+    with jd_source.resolved_jd(jd_path) as (path, _is_db):
+        jd_manager.save_application_status(path, new_status)
     dashboard._export_jobs_to(jobs_path)
     return 0
 
 
 def _archive(jd_path: str, jobs_path: str) -> int:
     try:
+        if not os.path.exists(jd_path):
+            # Database-only job: flip the status rather than moving a file.
+            # Routing this through archive_jd would deposit a stray JD in
+            # jds/archived/ -- the on-disk clutter jd_source exists to avoid.
+            jd_source.set_status(jd_path, "archived")
+            print(f"Archived job {jd_path} (database-only, no file moved)")
+            dashboard._export_jobs_to(jobs_path)
+            return 0
+
         archived_path = jd_manager.archive_jd(jd_path)
         print(f"Archived to: {archived_path}")
     except Exception as exc:
@@ -130,6 +161,17 @@ def _archive(jd_path: str, jobs_path: str) -> int:
             "Check that the file still exists and try again."
         )
         return 1
+    dashboard._export_jobs_to(jobs_path)
+    return 0
+
+
+def _export(jobs_path: str) -> int:
+    """Writes the JD evaluation export to jobs_path. Delegates to
+    dashboard._export_jobs_to so there is exactly one implementation of
+    "what the export contains" -- the Python menu's launch path and the
+    dashboard's own startup fallback must not drift apart."""
+    import dashboard
+
     dashboard._export_jobs_to(jobs_path)
     return 0
 
@@ -155,6 +197,14 @@ def main() -> int:
     archive_parser.add_argument("jd_path")
     archive_parser.add_argument("--jobs-path", required=True)
 
+    # Unlike the actions above, "export" takes no jd_path: it writes the
+    # whole evaluation export. The Go dashboard calls this at startup when
+    # it was launched without -jobs-path (a bare `dashboard -profile X`
+    # rather than via the Python menu), which used to leave Browse & Manage
+    # Jobs silently empty -- LoadJobs was simply never called.
+    export_parser = subparsers.add_parser("export")
+    export_parser.add_argument("--jobs-path", required=True)
+
     args = parser.parse_args()
 
     if args.command == "liveness":
@@ -165,6 +215,8 @@ def main() -> int:
         return _status(args.jd_path, args.new_status, args.jobs_path)
     if args.command == "archive":
         return _archive(args.jd_path, args.jobs_path)
+    if args.command == "export":
+        return _export(args.jobs_path)
     return 1
 
 
@@ -175,6 +227,7 @@ _ACTION_CONTEXTS = {
     "tailor": "building a tailored resume for this job",
     "status": "updating this job's application status",
     "archive": "archiving this job posting",
+    "export": "loading your evaluated jobs",
 }
 
 

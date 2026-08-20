@@ -1,6 +1,9 @@
 import contextlib
 import io
+import json
 import os
+import shutil
+import tempfile
 import sys
 import unittest
 from unittest.mock import patch
@@ -13,7 +16,26 @@ sys.path.insert(0, SCRIPTS_DIR)
 import dashboard_actions  # noqa: E402
 
 
-class TestLiveness(unittest.TestCase):
+class JDFileTestCase(unittest.TestCase):
+    """Gives each test a real JD file on disk.
+
+    These tests used to pass the string self.jd_path, which never
+    existed. That was harmless while every action took a path blindly,
+    but actions now fall back to a database lookup when the path is
+    absent (see jd_source.resolved_jd), so a fictional path silently
+    exercises the wrong branch. A real file keeps them testing what they
+    name.
+    """
+
+    def setUp(self):
+        self._dir = tempfile.mkdtemp()
+        self.jd_path = os.path.join(self._dir, "a.json")
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump({"job_title": "Analyst", "company_name": "Acme"}, f)
+        self.addCleanup(shutil.rmtree, self._dir, ignore_errors=True)
+
+
+class TestLiveness(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.liveness.verify_jd_paths")
@@ -25,8 +47,8 @@ class TestLiveness(unittest.TestCase):
             "uncertain": 0,
             "moved": 0,
         }
-        code = dashboard_actions._liveness("jds/morgan/a.json", "/tmp/jobs.json")
-        mock_verify.assert_called_once_with(["jds/morgan/a.json"])
+        code = dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
+        mock_verify.assert_called_once_with([self.jd_path])
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)
 
@@ -36,19 +58,19 @@ class TestLiveness(unittest.TestCase):
         self, mock_verify, mock_export
     ):
         mock_verify.return_value = {"error": True}
-        code = dashboard_actions._liveness("jds/morgan/a.json", "/tmp/jobs.json")
+        code = dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
 
-class TestTailor(unittest.TestCase):
+class TestTailor(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.orchestrator.run_pipeline")
     def test_success_refreshes_export_and_returns_zero(self, mock_run, mock_export):
         mock_run.return_value = (1, 0)
-        code = dashboard_actions._tailor("jds/morgan/a.json", "/tmp/jobs.json")
-        mock_run.assert_called_once_with(jd_path="jds/morgan/a.json")
+        code = dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
+        mock_run.assert_called_once_with(jd_path=self.jd_path)
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)
 
@@ -58,12 +80,12 @@ class TestTailor(unittest.TestCase):
         self, mock_run, mock_export
     ):
         mock_run.return_value = (0, 1)
-        code = dashboard_actions._tailor("jds/morgan/a.json", "/tmp/jobs.json")
+        code = dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
 
-class TestStatus(unittest.TestCase):
+class TestStatus(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.save_application_status")
@@ -71,9 +93,9 @@ class TestStatus(unittest.TestCase):
         self, mock_save, mock_export
     ):
         code = dashboard_actions._status(
-            "jds/morgan/a.json", "Applied", "/tmp/jobs.json"
+            self.jd_path, "Applied", "/tmp/jobs.json"
         )
-        mock_save.assert_called_once_with("jds/morgan/a.json", "Applied")
+        mock_save.assert_called_once_with(self.jd_path, "Applied")
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)
 
@@ -81,21 +103,21 @@ class TestStatus(unittest.TestCase):
     @patch("dashboard_actions.jd_manager.save_application_status")
     def test_invalid_status_rejected_without_saving(self, mock_save, mock_export):
         code = dashboard_actions._status(
-            "jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json"
+            self.jd_path, "NotARealStatus", "/tmp/jobs.json"
         )
         self.assertEqual(code, 1)
         mock_save.assert_not_called()
         mock_export.assert_not_called()
 
 
-class TestArchive(unittest.TestCase):
+class TestArchive(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.archive_jd")
     def test_success_refreshes_export_and_returns_zero(self, mock_archive, mock_export):
         mock_archive.return_value = "archived/a.json"
-        code = dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
-        mock_archive.assert_called_once_with("jds/morgan/a.json")
+        code = dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
+        mock_archive.assert_called_once_with(self.jd_path)
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)
 
@@ -105,12 +127,48 @@ class TestArchive(unittest.TestCase):
         self, mock_archive, mock_export
     ):
         mock_archive.side_effect = Exception("OS Error")
-        code = dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
+        code = dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
 
-class TestUserErrorContract(unittest.TestCase):
+class TestExport(unittest.TestCase):
+    """The `export` subcommand backs main.go's startup fallback: a
+    dashboard launched straight from the binary gets no -jobs-path, and
+    without this would show an empty Browse & Manage Jobs screen."""
+
+    def test_export_writes_the_jobs_file_and_succeeds(self):
+        rows = [{"title": "Lifecycle Marketing Manager", "skills": []}]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "jobs.json")
+            with patch("picker.list_all_evaluated_jds", return_value=rows):
+                code = dashboard_actions._export(out)
+
+            self.assertEqual(code, 0)
+            with open(out, encoding="utf-8") as fh:
+                self.assertEqual(json.load(fh), rows)
+
+    def test_export_is_routed_from_the_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "jobs.json")
+            argv = ["dashboard_actions.py", "export", "--jobs-path", out]
+            with patch.object(sys, "argv", argv):
+                with patch("picker.list_all_evaluated_jds", return_value=[]):
+                    self.assertEqual(dashboard_actions.main(), 0)
+            self.assertTrue(os.path.exists(out))
+
+    def test_export_does_not_require_a_jd_path(self):
+        """Unlike every other subcommand, export operates on the whole
+        corpus -- requiring a positional jd_path would break main.go."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "jobs.json")
+            argv = ["dashboard_actions.py", "export", "--jobs-path", out]
+            with patch.object(sys, "argv", argv):
+                with patch("picker.list_all_evaluated_jds", return_value=[]):
+                    dashboard_actions.main()  # must not SystemExit
+
+
+class TestUserErrorContract(JDFileTestCase):
     """dashboard_actions.py promises jobs.go that on failure its LAST
     non-empty stderr line is "USER_ERROR: <plain sentence>" -- Go's
     parseActionError() checks only that final line and gives up at the
@@ -136,7 +194,7 @@ class TestUserErrorContract(unittest.TestCase):
     def test_invalid_status_puts_marker_on_the_last_line(self):
         err = self._capture_stderr(
             lambda: dashboard_actions._status(
-                "jds/morgan/a.json", "NotARealStatus", "/tmp/jobs.json"
+                self.jd_path, "NotARealStatus", "/tmp/jobs.json"
             )
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
@@ -148,7 +206,7 @@ class TestUserErrorContract(unittest.TestCase):
     def test_archive_failure_puts_marker_on_the_last_line(self, mock_archive):
         mock_archive.side_effect = Exception("OS Error")
         err = self._capture_stderr(
-            lambda: dashboard_actions._archive("jds/morgan/a.json", "/tmp/jobs.json")
+            lambda: dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 
@@ -156,7 +214,7 @@ class TestUserErrorContract(unittest.TestCase):
     def test_liveness_failure_puts_marker_on_the_last_line(self, mock_verify):
         mock_verify.return_value = {"error": "connection refused"}
         err = self._capture_stderr(
-            lambda: dashboard_actions._liveness("jds/morgan/a.json", "/tmp/jobs.json")
+            lambda: dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
         self.assertIn("connection refused", err)
@@ -165,7 +223,7 @@ class TestUserErrorContract(unittest.TestCase):
     def test_tailor_failure_puts_marker_on_the_last_line(self, mock_run):
         mock_run.return_value = (0, 1)
         err = self._capture_stderr(
-            lambda: dashboard_actions._tailor("jds/morgan/a.json", "/tmp/jobs.json")
+            lambda: dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 

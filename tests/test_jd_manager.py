@@ -388,6 +388,15 @@ class TestGetPendingJds(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
         self._real_jds_dir = jd_manager.JDS_DIR
         self._real_completed_dir = jd_manager.COMPLETED_DIR
+        # JDTracker resolves its path per instance now, so patching the
+        # module constant alone no longer redirects it.
+        self._tracker_patch = patch.object(
+            jd_manager.profile_paths,
+            "tracker_csv_path",
+            return_value=os.path.join(self.tmp_dir, "tracker.csv"),
+        )
+        self._tracker_patch.start()
+        self.addCleanup(self._tracker_patch.stop)
         self._real_tracker_csv = jd_manager.TRACKER_CSV
         jd_manager.JDS_DIR = self.tmp_dir
         jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
@@ -488,6 +497,15 @@ class TestGetCompletedJds(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp_dir, "completed"), exist_ok=True)
         self._real_jds_dir = jd_manager.JDS_DIR
         self._real_completed_dir = jd_manager.COMPLETED_DIR
+        # JDTracker resolves its path per instance now, so patching the
+        # module constant alone no longer redirects it.
+        self._tracker_patch = patch.object(
+            jd_manager.profile_paths,
+            "tracker_csv_path",
+            return_value=os.path.join(self.tmp_dir, "tracker.csv"),
+        )
+        self._tracker_patch.start()
+        self.addCleanup(self._tracker_patch.stop)
         self._real_tracker_csv = jd_manager.TRACKER_CSV
         jd_manager.JDS_DIR = self.tmp_dir
         jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")
@@ -552,6 +570,15 @@ class TestJobKeyKnown(unittest.TestCase):
         self._real_completed_dir = jd_manager.COMPLETED_DIR
         self._real_archived_dir = jd_manager.ARCHIVED_DIR
         self._real_expired_dir = jd_manager.EXPIRED_DIR
+        # JDTracker resolves its path per instance now, so patching the
+        # module constant alone no longer redirects it.
+        self._tracker_patch = patch.object(
+            jd_manager.profile_paths,
+            "tracker_csv_path",
+            return_value=os.path.join(self.tmp_dir, "tracker.csv"),
+        )
+        self._tracker_patch.start()
+        self.addCleanup(self._tracker_patch.stop)
         self._real_tracker_csv = jd_manager.TRACKER_CSV
         jd_manager.JDS_DIR = self.tmp_dir
         jd_manager.COMPLETED_DIR = os.path.join(self.tmp_dir, "completed")

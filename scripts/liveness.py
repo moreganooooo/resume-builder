@@ -114,6 +114,111 @@ def split_recently_checked(pending_paths: list) -> tuple:
     return recently_checked, to_check
 
 
+def _liveness_is_recent(liveness: dict | None) -> bool:
+    """_is_recently_checked() for an in-memory _liveness block, so a
+    database row can be skipped without materializing a file for it."""
+    if not liveness or not liveness.get("checked_at"):
+        return False
+    try:
+        checked_at = datetime.datetime.fromisoformat(liveness["checked_at"])
+    except (ValueError, TypeError):
+        return False
+    return (datetime.datetime.now() - checked_at) < datetime.timedelta(
+        hours=RECENCY_HOURS
+    )
+
+
+def _save_liveness_to_db(job_id: str, outcome: str, reason: str) -> None:
+    """Persists a liveness result onto a job row that has no JD file."""
+    import jd_source
+
+    try:
+        with jd_source.resolved_jd(job_id) as (path, _is_db):
+            jd_manager.save_liveness(path, outcome, reason)
+    except (LookupError, OSError):
+        return
+
+
+def _gather_db_candidates() -> list:
+    """Liveness candidates for evaluated roles that exist only in data.db.
+
+    Most pending roles have no JD file, so a file-only sweep checked 157
+    of 812 and reported that as the total -- which read as the app
+    disagreeing with itself. Returns the same {job_key, source_file, url}
+    shape, with source_file carrying the job id; the write-back paths
+    branch on whether it names a real file.
+    """
+    import db
+
+    # Hard stop under tests pointed at the real profile. A liveness sweep
+    # is real network I/O through Playwright: when this first shipped, the
+    # existing liveness tests mocked the filesystem JD list but knew
+    # nothing about a database source, so the suite quietly launched
+    # Chromium and began checking 643 live URLs. Failing closed here is
+    # the only place that can catch it for every current and future test.
+    if db._is_unisolated_test_write():
+        return []
+
+    try:
+        conn = db.get_db()
+    except Exception:
+        return []
+
+    try:
+        rows = conn.execute(
+            "SELECT id, metadata_json FROM jobs WHERE status = 'pending'"
+        ).fetchall()
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+    # A row keyed by content hash may still have a JD file (see
+    # jobs.id's two shapes), and os.path.exists() cannot see that.
+    # Without hashing the pending files the sweep double-counted ~126
+    # roles it had already gathered from disk.
+    file_keys = set()
+    for path in jd_manager.get_pending_jds():
+        file_keys.add(os.path.basename(path))
+        try:
+            file_keys.add(jd_manager.compute_job_key(path))
+        except (OSError, ValueError):
+            continue
+
+    candidates = []
+    for row in rows:
+        job_id = str(row["id"])
+        if os.path.exists(job_id) or job_id in file_keys:
+            continue  # file-backed; the filesystem sweep already has it
+        if os.path.basename(job_id) in file_keys:
+            continue
+        try:
+            data = json.loads(row["metadata_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+
+        # Only evaluated roles, matching picker.list_all_evaluated_jds().
+        # Sweeping every pending row instead would check 1,411 postings
+        # and report that figure, which is a third number for the user to
+        # reconcile against the 812 every screen shows.
+        if not data.get("_evaluation"):
+            continue
+
+        url = data.get("source_url")
+        if not url:
+            continue
+
+        # Same 24-hour skip the filesystem path gets. Without it every run
+        # would re-check hundreds of URLs through Playwright.
+        if _liveness_is_recent(data.get("_liveness")):
+            continue
+
+        candidates.append({"job_key": job_id, "source_file": job_id, "url": url})
+    return candidates
+
+
 def _gather_candidates(pending_paths: list) -> list:
     """Returns [{"job_key": ..., "source_file": ..., "url": ...}, ...] for
     every path in pending_paths whose JD data has a real source_url; the
@@ -327,6 +432,11 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         outcome = r.get("result", "uncertain")
         if source_file and os.path.exists(source_file):
             jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
+        elif source_file:
+            # A database-only role: source_file is its job id, not a path.
+            # Round-trip through jd_source so the same save_liveness() call
+            # applies, then the result is synced back into the row.
+            _save_liveness_to_db(source_file, outcome, r.get("reason", ""))
 
     # Move expired JDs to expired/ folder
     expired_source_paths = []
@@ -342,6 +452,13 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
             jd_manager.move_jd_to(source_file, jd_manager.EXPIRED_DIR)
             moved += 1
             expired_source_paths.append(source_file)
+        elif source_file:
+            # Nothing to move -- expiring a database-only role is a status
+            # change, not a file operation.
+            import jd_source
+
+            jd_source.set_status(source_file, "expired")
+            moved += 1
 
     return {
         "active": counts.get("active", 0),
@@ -385,6 +502,11 @@ def run_liveness_check(refresh: bool = False) -> dict:
 
     candidates = _gather_candidates(to_check)
     skipped = len(to_check) - len(candidates)
+
+    # Include roles that live only in the database. Without these the
+    # sweep covered 157 of 812 pending roles while every other screen
+    # counted all 812.
+    candidates.extend(_gather_db_candidates())
 
     if recently_checked:
         cli_art.print_literal(

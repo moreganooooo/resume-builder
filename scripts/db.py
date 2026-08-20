@@ -9,9 +9,48 @@ import hashlib
 import json
 import os
 import sqlite3
+import sys
 from typing import Any, Dict, List, Optional
 
 import profile_paths
+
+# The profiles/ directory as it exists in a real checkout. Captured at
+# import time so a test that redirects profile_paths.PROFILES_DIR to a
+# temp dir no longer matches it -- that redirection is exactly what marks
+# a test as properly isolated.
+_REAL_PROFILES_DIR = os.path.abspath(profile_paths.PROFILES_DIR)
+
+
+def _is_unisolated_test_write(profile: Optional[str] = None) -> bool:
+    """True when a test is about to write into the developer's own
+    profile database.
+
+    Dozens of tests exercise code paths that reach upsert_job incidentally
+    -- liveness moves, jd_manager round-trips, orchestrator batches -- and
+    none of them assert on the row that gets written. Left unguarded they
+    appended junk rows ("Test"/"Role" @ "Acme Corp") to a real 61 MB
+    data.db on every single run, where the dashboard then showed them as
+    genuine jobs. Purging them is pointless while the next test run
+    recreates them, so the write is dropped at the source.
+
+    The isolation signal is the resolved database path, not any single
+    module attribute: tests isolate themselves by patching whichever hook
+    they happen to know about (profile_paths.PROFILES_DIR in
+    test_application_package, profile_paths.profile_root in
+    test_jd_discovery_and_moves), and both are legitimate. Asking where
+    the write would actually land covers every such patch point.
+
+    Comparison is case-folded because macOS resolves profiles/morgan and
+    profiles/Morgan to the same file while os.path.abspath reports two
+    different strings -- the exact reason this went unnoticed.
+    """
+    if "unittest" not in sys.modules:
+        return False
+    try:
+        target = os.path.abspath(profile_paths.profile_root(profile))
+    except Exception:
+        return False
+    return target.lower().startswith(_REAL_PROFILES_DIR.lower() + os.sep)
 
 
 def compute_job_dedup_hash(title: str, company: str, location: str = "") -> str:
@@ -172,6 +211,9 @@ def upsert_job(
         or job_data.get("filename")
         or f"{job_data.get('company', 'Unknown')}_{job_data.get('title', 'Role')}"
     )
+    if conn is None and _is_unisolated_test_write(profile):
+        return
+
     close_conn = False
     if conn is None:
         conn = get_db(profile)
@@ -203,16 +245,38 @@ def upsert_job(
     else:
         status = "pending"
 
-    title = job_data.get("title", "Untitled Role")
-    company = job_data.get("company", "Unknown Company")
+    # Accept both spellings. Scraped JD JSON files use the source
+    # platform's own keys (job_title/company_name) -- only rows that came
+    # through jd_manager.list_* have already been normalized to
+    # title/company. Reading just the normalized spelling is what left
+    # 1,876 rows at "Untitled Role" and 3,438 at "Unknown Company" with
+    # the real values sitting untouched in metadata_json; see
+    # backfill_job_columns.py, which repairs exactly that damage.
+    title = job_data.get("title") or job_data.get("job_title") or "Untitled Role"
+    company = (
+        job_data.get("company") or job_data.get("company_name") or "Unknown Company"
+    )
     location = job_data.get("location", "")
     raw_text = (
         job_data.get("jd_text") or job_data.get("raw_text") or json.dumps(job_data)
     )
 
-    cap_score = job_data.get("capability_score")
-    rec_score = job_data.get("recruiter_score")
-    final_score = job_data.get("final_score") or job_data.get("score")
+    # Same failure mode for the score: an evaluated JD carries it under
+    # _evaluation.composite_score (see CLAUDE.md's "JD JSON metadata
+    # convention"), not as a bare final_score/score key.
+    evaluation = job_data.get("_evaluation")
+    if not isinstance(evaluation, dict):
+        evaluation = {}
+
+    cap_score = job_data.get("capability_score") or evaluation.get("fit_score")
+    rec_score = job_data.get("recruiter_score") or evaluation.get(
+        "interview_odds_score"
+    )
+    final_score = (
+        job_data.get("final_score")
+        or job_data.get("score")
+        or evaluation.get("composite_score")
+    )
 
     dedup_hash = job_data.get("dedup_hash") or compute_job_dedup_hash(
         title, company, location
