@@ -43,6 +43,7 @@ type appModel struct {
 	state           viewState
 	previousState   viewState // screen to return to on "back" (esc); set by startTransition
 	careerOpsPath   string
+	jobsPath        string
 	theme           theme.Theme
 	progressMetrics model.ProgressMetrics
 	profile         data.ProfileInfo
@@ -147,11 +148,26 @@ type pipelineDataLoadedMsg struct {
 	progressMetrics model.ProgressMetrics
 }
 
-// reloadPipelineDataCmd re-reads and reparses applications.md as a tea.Cmd
+// reloadPipelineDataCmd re-reads the pipeline's data off-thread.
+//
+// It must read the SAME source startup does -- the jobs export, falling
+// back to applications.md -- or a refresh would silently swap Pipeline
+// back to the old, unmerged data set mid-session.
 func (m appModel) reloadPipelineDataCmd() tea.Cmd {
 	careerOpsPath := m.careerOpsPath
+	jobsPath := m.jobsPath
 	return func() tea.Msg {
-		apps := data.ParseApplications(careerOpsPath)
+		var apps []model.CareerApplication
+		if jobsPath != "" {
+			if rows, err := data.LoadJobs(jobsPath); err == nil {
+				apps = data.JobRowsToApplications(rows)
+			} else {
+				log.Warnf("pipeline reload could not read the jobs export: %v", err)
+			}
+		}
+		if len(apps) == 0 {
+			apps = data.ParseApplications(careerOpsPath)
+		}
 		metrics := data.ComputeMetrics(apps)
 		progressMetrics := data.ComputeProgressMetrics(apps)
 		return pipelineDataLoadedMsg{apps: apps, metrics: metrics, progressMetrics: progressMetrics}
@@ -220,9 +236,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "Progress":
 				m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
 				return m.startTransition(viewProgress)
-			case "Reports":
-				m.viewer = screens.NewEmptyViewerModel(m.theme, m.width, m.height)
-				return m.startTransition(viewReport)
 			case "Jobs":
 				return m.startTransition(viewJobs)
 			case "Knowledge Base":
@@ -375,6 +388,42 @@ func (m appModel) View() tea.View {
 	return v
 }
 
+
+// generateJobsExport writes a JD evaluation export to a temp file by
+// invoking the same Python bridge scripts/dashboard.py uses, and returns
+// its path. Used only as the startup fallback when -jobs-path was not
+// supplied; the export is a fresh snapshot either way, so regenerating it
+// here matches what the menu launch path would have handed us.
+//
+// The temp file is deliberately not removed on exit: jobs.go's actions
+// rewrite this same path to refresh the running screen, so it has to
+// outlive this function. It lands in the OS temp dir like the Python
+// side's own mkstemp export does.
+func generateJobsExport(pythonPath, projectRoot string) (string, error) {
+	f, err := os.CreateTemp("", "dashboard_jobs_*.json")
+	if err != nil {
+		return "", err
+	}
+	path := f.Name()
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(
+		pythonPath,
+		filepath.Join(projectRoot, "scripts", "dashboard_actions.py"),
+		"export", "--jobs-path", path,
+	)
+	cmd.Dir = projectRoot
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(path)
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return path, nil
+}
+
+
 func main() {
 	pathFlag := flag.String("path", ".", "Path to career-ops directory")
 	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
@@ -386,10 +435,37 @@ func main() {
 
 	careerOpsPath := *pathFlag
 
-	// Load applications
-	apps := data.ParseApplications(careerOpsPath)
-	if apps == nil {
-		log.Fatalf("could not find applications.md in %s or %s/data/", careerOpsPath, careerOpsPath)
+	jobsPath := *jobsPathFlag
+	if jobsPath == "" {
+		generated, err := generateJobsExport(*pythonPathFlag, *projectRootFlag)
+		if err != nil {
+			log.Warnf("could not generate a jobs export (Browse & Manage Jobs will be empty): %v", err)
+		} else {
+			jobsPath = generated
+		}
+	}
+
+
+	var jobRows []model.JobRow
+	if jobsPath != "" {
+		rows, err := data.LoadJobs(jobsPath)
+		if err != nil {
+			log.Warnf("failed to load jobs export: %v", err)
+		} else {
+			jobRows = rows
+		}
+	}
+
+	// Pipeline and Browse & Manage Jobs now read the SAME export. They used
+	// to parse two unrelated sources -- applications.md and this JSON --
+	// so the same job could appear in one screen and not the other, with
+	// different scores, and Pipeline showed archived/expired jobs as
+	// scoreless rows. applications.md remains the fallback for a checkout
+	// with no export (career-ops data, or a profile that has never run a
+	// scan).
+	apps := data.JobRowsToApplications(jobRows)
+	if len(apps) == 0 {
+		apps = data.ParseApplications(careerOpsPath)
 	}
 
 	// Compute metrics
@@ -413,16 +489,13 @@ func main() {
 		}
 	}
 
-	var jobRows []model.JobRow
-	if *jobsPathFlag != "" {
-		rows, err := data.LoadJobs(*jobsPathFlag)
-		if err != nil {
-			log.Warnf("failed to load jobs export: %v", err)
-		} else {
-			jobRows = rows
-		}
-	}
-	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(*jobsPathFlag, *pythonPathFlag, *projectRootFlag)
+	// Browse & Manage Jobs reads a JSON export produced by the Python
+	// side, not the database directly. scripts/dashboard.py writes one
+	// per launch and passes -jobs-path; a dashboard started straight from
+	// the binary (`dashboard -profile morgan`) has no such flag, and used
+	// to render a permanently empty Jobs screen with no indication why.
+	// Generate our own export in that case rather than showing nothing.
+	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(jobsPath, *pythonPathFlag, *projectRootFlag)
 
 	// Load Knowledge Base assets
 	kbDir := filepath.Join(*projectRootFlag, "profiles", *profileFlag, "knowledge_base")
@@ -434,6 +507,7 @@ func main() {
 		jobs:            jm,
 		kb:              kbScreen,
 		careerOpsPath:   careerOpsPath,
+		jobsPath:        jobsPath,
 		theme:           t,
 		progressMetrics: progressMetrics,
 		profile:         profile,

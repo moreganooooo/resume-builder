@@ -1,5 +1,10 @@
 package model
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // JobRow is one JD with a persisted evaluation, as exported by
 // scripts/dashboard.py's JSON bridge (picker.list_all_evaluated_jds()).
 type JobRow struct {
@@ -11,12 +16,48 @@ type JobRow struct {
 	SourcePlatform string       `json:"source_platform"`
 	SourceURL      string       `json:"source_url"`
 	CompanyWebsite string       `json:"company_website"`
-	Skills         []string     `json:"skills"`
+	Skills         []JobSkill   `json:"skills"`
 	Research       *Research    `json:"research"`
 	Evaluation     Evaluation   `json:"evaluation"`
 	Liveness       *Liveness    `json:"liveness"`
 	Application    *Application `json:"application"`
 	Coverage       *Coverage    `json:"coverage"`
+}
+
+// JobSkill is one entry of a JD's extracted skill list.
+//
+// The Python exporter emits these as objects -- {"skill", "score",
+// "type"} -- but this field was declared []string, so encoding/json
+// failed the whole document and data.LoadJobs returned an error for
+// every export. The dashboard logged a warning and fell back to nil
+// rows, which is why Browse & Manage Jobs rendered permanently empty
+// however it was launched. UnmarshalJSON also accepts a bare string so
+// older exports, and any hand-written fixture, still load.
+type JobSkill struct {
+	Name  string `json:"skill"`
+	Score int    `json:"score"`
+	Type  string `json:"type"`
+}
+
+func (s *JobSkill) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if strings.HasPrefix(trimmed, "\"") {
+		var name string
+		if err := json.Unmarshal(data, &name); err != nil {
+			return err
+		}
+		s.Name = name
+		return nil
+	}
+
+	// Alias to avoid recursing back into this method.
+	type rawSkill JobSkill
+	var raw rawSkill
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = JobSkill(raw)
+	return nil
 }
 
 // Coverage mirrors the _coverage key persisted by
