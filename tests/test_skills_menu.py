@@ -5,7 +5,9 @@ _add_skill() already guards every questionary...ask() call with an
 that correct behavior down against regression, not to fix a bug."""
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +23,24 @@ class TestAddSkillCancellation(unittest.TestCase):
     """questionary's convention: .ask() returns None on Ctrl+C/Esc rather
     than raising. Each prompt in _add_skill() must treat that as a clean
     cancel -- nothing partially written to the tools list."""
+
+    def setUp(self):
+        # _add_skill() ends by calling _save_verified_tools(), which writes
+        # the WHOLE dict it was handed. These tests pass {"tools": []}, so
+        # an unredirected save replaced the developer's real
+        # verified_tools.json with a single "ChatGPT" entry -- on every
+        # full test run. That is literally how the live profile's tools
+        # ledger came to hold exactly one tool.
+        self._tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
+
+        patcher = patch.object(
+            skills_menu,
+            "_get_verified_tools_path",
+            return_value=os.path.join(self._tmpdir, "verified_tools.json"),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_cancel_at_name_prompt_writes_nothing(self):
         with patch("questionary.text") as mock_text:
@@ -144,11 +164,21 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
             data = skills_menu._load_verified_tools()
             self.assertEqual(data["tools"], [])
 
-            # Corrupt file loads default skeleton
+            # A corrupt file must RAISE, not degrade to an empty skeleton.
+            # The caller edits whatever it gets back and saves it over the
+            # same path, so returning {"tools": []} for an unreadable file
+            # would silently delete every tool in the ledger.
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write("invalid json")
-            data_corrupt = skills_menu._load_verified_tools()
-            self.assertEqual(data_corrupt["tools"], [])
+            with self.assertRaises(Exception):
+                skills_menu._load_verified_tools()
+
+            # ...and the unreadable file is still on disk, unmodified.
+            with open(file_path, encoding="utf-8") as f:
+                self.assertEqual(f.read(), "invalid json")
+
+            os.remove(file_path)
+            data = skills_menu._load_verified_tools()
 
             # Saving data writes valid JSON
             data["tools"].append(
