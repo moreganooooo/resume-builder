@@ -630,9 +630,16 @@ def run_full_pipeline(skip_confirm: bool = False) -> bool:
     simply re-running this function later resumes correctly."""
     for i, script_name in enumerate(PIPELINE_STAGES):
         if i in _CONFIRMATION_GATES and not skip_confirm:
-            proceed = questionary.confirm(
-                _CONFIRMATION_GATES[i], default=True, style=cli_art.QUESTIONARY_STYLE
-            ).ask()
+            # cli_art.confirm(), not raw questionary -- this pipeline is
+            # commonly launched as a subprocess from menu.py's
+            # _handle_update_knowledge(), which runs under a DECSTBM
+            # scroll region _run_with_chain() sets around the parent
+            # process's banner. That clamp is real terminal state, not
+            # process-local -- a child subprocess inherits the same tty
+            # and is just as affected, so a raw questionary confirm here
+            # rendered nothing at all (see picker.should_proceed()'s
+            # docstring for the underlying mechanism).
+            proceed = cli_art.confirm(_CONFIRMATION_GATES[i], default=True)
             if not proceed:
                 cli_art.print_literal(
                     "Stopped. Re-run this same command later to continue from here."

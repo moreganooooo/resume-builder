@@ -36,16 +36,17 @@ def _load_verified_tools() -> dict:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        cli_art.display_error(f"Failed to read verified_tools.json: {e}")
-        return {
-            "_meta": {
-                "source": "manual",
-                "last_updated": "",
-                "total_entries": 0,
-                "note": "Confidence reflects depth of documented use in archive evidence.",
-            },
-            "tools": [],
-        }
+        # Do NOT fall back to an empty skeleton here. The caller edits
+        # whatever this returns and saves it straight back over the same
+        # path, so handing back {"tools": []} for a file that merely
+        # failed to parse turns a transient read error into permanent
+        # deletion of every tool in the ledger. Raising keeps the file on
+        # disk intact and surfaces the real problem.
+        cli_art.display_error(
+            f"Failed to read verified_tools.json: {e}. Refusing to continue, "
+            "because saving now would overwrite the file with an empty list."
+        )
+        raise
 
 
 def _save_verified_tools(data: dict) -> bool:
@@ -289,9 +290,9 @@ def _view_skill_details(data: dict, tool_id: str):
         )
 
         choices = [
-            questionary.Choice("✏️  Edit This Skill", "edit"),
-            questionary.Choice("❌  Delete This Skill", "delete"),
-            questionary.Choice("⬅️  Back to Skills List", "back"),
+            questionary.Choice("✏  Edit This Skill", "edit"),
+            questionary.Choice("✗  Delete This Skill", "delete"),
+            questionary.Choice("⬅  Back to Skills List", "back"),
         ]
 
         action = cli_art.select("Manage This Skill", choices=choices)
@@ -336,10 +337,10 @@ def run_skills_menu():
         if tools:
             choices.append(
                 questionary.Choice(
-                    "👁️  Select a Skill to View/Edit/Delete", "select_skill"
+                    "◉  Select a Skill to View/Edit/Delete", "select_skill"
                 )
             )
-        choices.append(questionary.Choice("⬅️  Back to Settings & Upkeep", "back"))
+        choices.append(questionary.Choice("⬅  Back to Settings & Upkeep", "back"))
 
         action = cli_art.select("Skills Actions", choices=choices)
         if not action or action == "back":

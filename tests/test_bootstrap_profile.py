@@ -1424,5 +1424,166 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         self.assertEqual(summary["linkedin_search_queries"], 0)
 
 
+class TestVerifiedLedgerDataLoss(unittest.TestCase):
+    """write_verified_ledger() overwrites all three ledger files
+    unconditionally. Two separate defects made that destructive:
+    the bullet source was a bootstrap-only CSV that no established
+    profile has, and an empty extraction was still written out."""
+
+    def _make_kb(self, tmpdir):
+        paths = {
+            "metrics": os.path.join(tmpdir, "verified_metrics.json"),
+            "tools": os.path.join(tmpdir, "verified_tools.json"),
+            "projects": os.path.join(tmpdir, "verified_projects.json"),
+            "facts": os.path.join(tmpdir, "verified_facts.json"),
+        }
+        for key, path in paths.items():
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"_meta": {"total_entries": 2}, key: ["real", "data"]}, f)
+        return paths
+
+    def test_empty_extraction_does_not_erase_existing_ledger_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = self._make_kb(tmpdir)
+            before = {k: open(v, encoding="utf-8").read() for k, v in paths.items()}
+
+            with (
+                patch.object(bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]),
+                patch.object(bootstrap_profile, "VERIFIED_TOOLS_PATH", paths["tools"]),
+                patch.object(bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]),
+                patch.object(bootstrap_profile, "VERIFIED_FACTS_PATH", paths["facts"]),
+                patch.object(
+                    bootstrap_profile, "_achievements_summary_text_by_employer",
+                    return_value="",
+                ),
+            ):
+                bootstrap_profile.write_verified_ledger()
+
+            after = {k: open(v, encoding="utf-8").read() for k, v in paths.items()}
+            self.assertEqual(before, after, "an empty extraction erased real KB data")
+
+    def test_existing_seed_files_are_never_blanked(self):
+        """Everything below the metrics/tools/projects block seeds a NEW
+        profile. Those writes were unconditional, so running this on an
+        established profile blanked a 97 KB verified-claims.csv and a
+        curated facts ledger with no prompt and no error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = self._make_kb(tmpdir)
+            seeds = {
+                "VERIFIED_FACTS_PATH": os.path.join(tmpdir, "verified_facts.json"),
+                "VERIFIED_CLAIMS_PATH": os.path.join(tmpdir, "verified-claims.csv"),
+                "EVIDENCE_GRAPH_PATH": os.path.join(tmpdir, "evidence_graph.json"),
+                "EVIDENCE_GUIDE_PATH": os.path.join(tmpdir, "evidence-guide.csv"),
+                "SCREENSHOT_METRICS_PATH": os.path.join(tmpdir, "shots.csv"),
+                "RECRUITER_PATTERNS_PATH": os.path.join(tmpdir, "patterns.json"),
+            }
+            for path in seeds.values():
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write("REAL CURATED CONTENT")
+
+            extraction = bootstrap_extractors.LedgerExtraction(
+                metrics=[], tools=[bootstrap_extractors.NamedLedgerItem(
+                    name="Braze", employer="Acme")], projects=[]
+            )
+
+            patches = [
+                patch.object(bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]),
+                patch.object(bootstrap_profile, "VERIFIED_TOOLS_PATH", paths["tools"]),
+                patch.object(bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]),
+                patch.object(
+                    bootstrap_profile,
+                    "_achievements_summary_text_by_employer",
+                    return_value="[Acme] - used Braze",
+                ),
+                patch.object(
+                    bootstrap_extractors,
+                    "extract_ledger_entries_chunked",
+                    return_value=extraction,
+                ),
+            ]
+            for name, path in seeds.items():
+                patches.append(patch.object(bootstrap_profile, name, path))
+
+            for p in patches:
+                p.start()
+            try:
+                bootstrap_profile.write_verified_ledger()
+            finally:
+                for p in patches:
+                    p.stop()
+
+            for name, path in seeds.items():
+                with open(path, encoding="utf-8") as f:
+                    self.assertEqual(
+                        f.read(), "REAL CURATED CONTENT", f"{name} was blanked"
+                    )
+
+    def test_seed_is_written_when_the_file_is_absent(self):
+        """The guard must not break a genuine first-time bootstrap."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = os.path.join(tmpdir, "verified_facts.json")
+            self.assertTrue(bootstrap_profile._seed_only_if_absent(missing))
+
+            with open(missing, "w", encoding="utf-8") as f:
+                f.write("x")
+            self.assertFalse(bootstrap_profile._seed_only_if_absent(missing))
+
+    def test_zero_byte_seed_counts_as_absent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty = os.path.join(tmpdir, "empty.json")
+            open(empty, "w").close()
+            self.assertTrue(bootstrap_profile._seed_only_if_absent(empty))
+
+
+    def test_bullet_source_falls_back_to_the_established_bullet_bank(self):
+        """An established profile has no bullet-bank-draft.csv -- reading
+        only that path is what produced the empty extraction above."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            draft = os.path.join(tmpdir, "bullet-bank-draft.csv")
+            clean = os.path.join(tmpdir, "bullet-bank-clean.csv")
+            with open(clean, "w", encoding="utf-8") as f:
+                f.write("Role / Company,Tags,Bullet Point\nAcme,[x],- Did a thing\n")
+
+            with (
+                patch.object(bootstrap_bullet_bank, "DRAFT_CSV_PATH", draft),
+                patch.object(bootstrap_bullet_bank, "BULLET_BANK_CLEAN_PATH", clean),
+            ):
+                self.assertEqual(bootstrap_profile._bullet_source_path(), clean)
+
+                text = bootstrap_profile._achievements_summary_text_by_employer()
+                self.assertIn("[Acme] - Did a thing", text)
+
+    def test_draft_csv_still_wins_while_a_profile_is_being_bootstrapped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            draft = os.path.join(tmpdir, "bullet-bank-draft.csv")
+            clean = os.path.join(tmpdir, "bullet-bank-clean.csv")
+            for path, company in ((draft, "DraftCo"), (clean, "CleanCo")):
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(f"Role / Company,Tags,Bullet Point\n{company},[x],- b\n")
+
+            with (
+                patch.object(bootstrap_bullet_bank, "DRAFT_CSV_PATH", draft),
+                patch.object(bootstrap_bullet_bank, "BULLET_BANK_CLEAN_PATH", clean),
+            ):
+                self.assertEqual(bootstrap_profile._bullet_source_path(), draft)
+
+    def test_no_bullet_source_at_all_returns_none(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(
+                    bootstrap_bullet_bank, "DRAFT_CSV_PATH",
+                    os.path.join(tmpdir, "nope.csv"),
+                ),
+                patch.object(
+                    bootstrap_bullet_bank, "BULLET_BANK_CLEAN_PATH",
+                    os.path.join(tmpdir, "also-nope.csv"),
+                ),
+            ):
+                self.assertIsNone(bootstrap_profile._bullet_source_path())
+                self.assertEqual(
+                    bootstrap_profile._achievements_summary_text_by_employer(), ""
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

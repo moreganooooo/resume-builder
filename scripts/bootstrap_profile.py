@@ -81,6 +81,28 @@ def _achievements_summary_text() -> str:
     return "\n".join(row.get("Bullet Point", "") for row in rows)
 
 
+def _bullet_source_path() -> str | None:
+    """The CSV to read achievement bullets from, or None if neither exists.
+
+    bullet-bank-draft.csv is a *bootstrap-only* artifact: it exists while
+    a profile is being onboarded and not afterwards. An established
+    profile keeps its bullets in bullet-bank-clean.csv, which shares the
+    "Role / Company" + "Bullet Point" columns this module needs.
+
+    Reading only the draft meant write_verified_ledger() saw an empty
+    achievements string on any established profile, extracted nothing,
+    and then wrote total_entries: 0 over verified_metrics/tools/projects
+    -- turning a routine bootstrap re-run into silent KB data loss.
+    """
+    for path in (
+        bootstrap_bullet_bank.DRAFT_CSV_PATH,
+        bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH,
+    ):
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            return path
+    return None
+
+
 def _achievements_summary_text_by_employer() -> str:
     """Same bullets as _achievements_summary_text(), but each line prefixed
     with its "Role / Company" in brackets -- required by extract_ledger_entries()
@@ -89,9 +111,10 @@ def _achievements_summary_text_by_employer() -> str:
     profile's verified_metrics/tools/projects.json would have no "employer"
     field, silently disabling filter_projects_by_employer()'s protection
     against cross-company content leaking into a rewritten bullet."""
-    if not os.path.exists(bootstrap_bullet_bank.DRAFT_CSV_PATH):
+    path = _bullet_source_path()
+    if path is None:
         return ""
-    with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     return "\n".join(
         f"[{row.get('Role / Company', '')}] {row.get('Bullet Point', '')}"
@@ -574,6 +597,22 @@ def seed_scan_filters_from_target_roles(identity: dict) -> bool:
     return True
 
 
+def _seed_only_if_absent(path: str) -> bool:
+    """True when `path` should be written with its blank starter content.
+
+    Everything below the metrics/tools/projects block seeds a NEW
+    profile: an empty facts ledger, an empty evidence graph, and
+    header-only verified-claims / evidence-guide / screenshot-metrics
+    CSVs. Those writes were unconditional, so calling this function on an
+    established profile blanked real work -- a 97 KB verified-claims.csv
+    and a curated facts ledger among them -- with no prompt and no error.
+
+    A seed is starter content by definition, so it is only correct to
+    write when there is nothing there yet.
+    """
+    return not os.path.exists(path) or os.path.getsize(path) == 0
+
+
 def write_verified_ledger(dry_run: bool = False) -> None:
     achievements_text = _achievements_summary_text_by_employer()
     extraction = (
@@ -583,6 +622,25 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         if achievements_text
         else bootstrap_extractors.LedgerExtraction()
     )
+
+    # Never overwrite a populated ledger with an empty extraction.
+    #
+    # Every write below is unconditional, so an extraction that returned
+    # nothing -- no bullet source on disk, an API failure, a dry run --
+    # used to replace curated verified_metrics/tools/projects.json with
+    # total_entries: 0. That is pure data loss with no error and no
+    # prompt, and it is silent precisely when something else already went
+    # wrong. Bailing out leaves the existing files untouched.
+    if not (extraction.metrics or extraction.tools or extraction.projects):
+        if os.path.exists(VERIFIED_METRICS_PATH) or os.path.exists(
+            VERIFIED_TOOLS_PATH
+        ):
+            cli_art.cli_warning(
+                "Skipped rewriting the verified ledger: extraction returned no "
+                "entries, and overwriting would erase the existing "
+                "metrics/tools/projects files."
+            )
+            return
 
     os.makedirs(os.path.dirname(VERIFIED_METRICS_PATH), exist_ok=True)
 
@@ -638,8 +696,9 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         },
         "facts": [],
     }
-    with atomic_write(VERIFIED_FACTS_PATH, encoding="utf-8") as f:
-        json.dump(empty_facts, f, indent=2)
+    if _seed_only_if_absent(VERIFIED_FACTS_PATH):
+        with atomic_write(VERIFIED_FACTS_PATH, encoding="utf-8") as f:
+            json.dump(empty_facts, f, indent=2)
 
     empty_graph = {
         "_meta": {
@@ -650,65 +709,69 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         "nodes": [],
         "edges": [],
     }
-    with atomic_write(EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
-        json.dump(empty_graph, f, indent=2)
+    if _seed_only_if_absent(EVIDENCE_GRAPH_PATH):
+        with atomic_write(EVIDENCE_GRAPH_PATH, encoding="utf-8") as f:
+            json.dump(empty_graph, f, indent=2)
 
-    with atomic_write(VERIFIED_CLAIMS_PATH, newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            [
-                "Claim / Finding",
-                "Verification Status",
-                "Source File",
-                "Evidence / Detail",
-                "Metric(s)",
-                "Confidence",
-                "Use in Resume?",
-                "Use in Portfolio?",
-                "Next Follow-Up",
-            ]
-        )
+    if _seed_only_if_absent(VERIFIED_CLAIMS_PATH):
+        with atomic_write(VERIFIED_CLAIMS_PATH, newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "Claim / Finding",
+                    "Verification Status",
+                    "Source File",
+                    "Evidence / Detail",
+                    "Metric(s)",
+                    "Confidence",
+                    "Use in Resume?",
+                    "Use in Portfolio?",
+                    "Next Follow-Up",
+                ]
+            )
 
-    with atomic_write(EVIDENCE_GUIDE_PATH, newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            [
-                "Evidence Cluster",
-                "Finding",
-                "Source File(s)",
-                "Best Detail / Quote",
-                "Best Metric",
-                "What This Proves About You",
-                "Where to Use It",
-                "Confidence",
-                "Source URL / Notes",
-            ]
-        )
+    if _seed_only_if_absent(EVIDENCE_GUIDE_PATH):
+        with atomic_write(EVIDENCE_GUIDE_PATH, newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "Evidence Cluster",
+                    "Finding",
+                    "Source File(s)",
+                    "Best Detail / Quote",
+                    "Best Metric",
+                    "What This Proves About You",
+                    "Where to Use It",
+                    "Confidence",
+                    "Source URL / Notes",
+                ]
+            )
 
-    with atomic_write(SCREENSHOT_METRICS_PATH, newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            [
-                "Source Batch",
-                "Campaign / Screenshot Title",
-                "Screenshot File(s)",
-                "Contacted",
-                "Reached",
-                "Reached %",
-                "Opened",
-                "Open %",
-                "Replied",
-                "Reply %",
-                "Clicked %",
-                "Bounced",
-                "Bounce %",
-                "Opted Out",
-                "Opt-Out %",
-                "Best Detail / Notes",
-                "Confidence",
-                "Reviewed",
-            ]
-        )
+    if _seed_only_if_absent(SCREENSHOT_METRICS_PATH):
+        with atomic_write(SCREENSHOT_METRICS_PATH, newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "Source Batch",
+                    "Campaign / Screenshot Title",
+                    "Screenshot File(s)",
+                    "Contacted",
+                    "Reached",
+                    "Reached %",
+                    "Opened",
+                    "Open %",
+                    "Replied",
+                    "Reply %",
+                    "Clicked %",
+                    "Bounced",
+                    "Bounce %",
+                    "Opted Out",
+                    "Opt-Out %",
+                    "Best Detail / Notes",
+                    "Confidence",
+                    "Reviewed",
+                ]
+            )
 
     empty_recruiter_patterns = {
         "_meta": {
@@ -716,8 +779,9 @@ def write_verified_ledger(dry_run: bool = False) -> None:
         },
         "patterns": [],
     }
-    with atomic_write(RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
-        json.dump(empty_recruiter_patterns, f, indent=2)
+    if _seed_only_if_absent(RECRUITER_PATTERNS_PATH):
+        with atomic_write(RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
+            json.dump(empty_recruiter_patterns, f, indent=2)
 
 
 def _build_cv_draft_rows() -> list:
