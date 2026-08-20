@@ -2,7 +2,7 @@
 ### The job-search pipeline that actually reads the room. ✨
 
 [![CI Multi-Version Matrix](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml/badge.svg)](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml)
-[![Tests](https://img.shields.io/badge/tests-1%2C874%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
+[![Tests](https://img.shields.io/badge/tests-1%2C910%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8.svg)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
