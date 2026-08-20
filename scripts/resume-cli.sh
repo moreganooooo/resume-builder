@@ -75,7 +75,7 @@ _resume_ensure_profile() {
     choice="$(printf '%s\n' "$names" | gum choose --header "✦ Which profile for this terminal session?")"
   else
     printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
-    printf "  ${_RB_BOLD}${_RB_BRAND}💎 RESUME-BUILDER PROFILE SELECTOR${_RB_RESET}\n"
+    printf "  ${_RB_BOLD}${_RB_BRAND}◈ RESUME-BUILDER PROFILE SELECTOR${_RB_RESET}\n"
     printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
     printf "  ${_RB_MUTED}Multiple profiles found in${_RB_RESET} ${_RB_INFO}profiles/${_RB_RESET}:\n"
     while IFS= read -r name; do
@@ -105,13 +105,13 @@ resume() {
       local active_prof="${RESUME_PROFILE:-default}"
       printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
       printf "  ${_RB_BOLD}${_RB_SUCCESS}✓ Python Virtual Environment Activated${_RB_RESET} ${_RB_MUTED}(.venv)${_RB_RESET}\n"
-      printf "  ${_RB_BOLD}📁 Working Directory:${_RB_RESET} ${_RB_INFO}%s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
-      printf "  ${_RB_BOLD}👤 Active Profile:${_RB_RESET}    ${_RB_ACCENT}%s${_RB_RESET}\n" "$active_prof"
+      printf "  ${_RB_BOLD}◰ Working Directory:${_RB_RESET} ${_RB_INFO}%s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
+      printf "  ${_RB_BOLD}◉ Active Profile:${_RB_RESET}    ${_RB_ACCENT}%s${_RB_RESET}\n" "$active_prof"
       printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n\n"
       ;;
     cd)
       cd "$_RESUME_BUILDER_DIR"
-      printf "  ${_RB_INFO}📁 %s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
+      printf "  ${_RB_INFO}◰ %s${_RB_RESET}\n" "$_RESUME_BUILDER_DIR"
       ;;
     run)
       ( cd "$_RESUME_BUILDER_DIR" && source .venv/bin/activate

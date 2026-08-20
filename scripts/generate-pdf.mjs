@@ -31,14 +31,14 @@ mkdirSync(resolve(__dirname, '../output'), { recursive: true });
 // fallback is simply to drop it rather than invent ASCII replacements.
 const PLAIN_ICONS = process.env.RESUME_BUILDER_ICONS === 'unicode';
 const ICON = {
-  input: PLAIN_ICONS ? '' : '📄 ',
-  output: PLAIN_ICONS ? '' : '📁 ',
-  format: PLAIN_ICONS ? '' : '📏 ',
-  cleanup: PLAIN_ICONS ? '' : '🧹 ',
-  success: PLAIN_ICONS ? '' : '✅ ',
-  pages: PLAIN_ICONS ? '' : '📊 ',
-  size: PLAIN_ICONS ? '' : '📦 ',
-  error: PLAIN_ICONS ? '' : '❌ ',
+  input: PLAIN_ICONS ? '' : '▥ ',
+  output: PLAIN_ICONS ? '' : '◰ ',
+  format: PLAIN_ICONS ? '' : '⊢ ',
+  cleanup: PLAIN_ICONS ? '' : '⌫ ',
+  success: PLAIN_ICONS ? '' : '✓ ',
+  pages: PLAIN_ICONS ? '' : '▤ ',
+  size: PLAIN_ICONS ? '' : '▣ ',
+  error: PLAIN_ICONS ? '' : '✗ ',
 };
 
 /**
