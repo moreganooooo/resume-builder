@@ -1400,7 +1400,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 		// Render skills as a wrapped list of badges
 		line := ""
 		for i, s := range job.Skills {
-			badge := "[" + s + "]"
+			badge := "[" + s.Name + "]"
 			if i == 0 {
 				line = badge
 			} else if len(line)+1+len(badge) <= wrapWidth {
@@ -1756,7 +1756,7 @@ func RenderSituationalRoleBadge(t theme.Theme, role string) string {
 		Foreground(t.Sky).
 		Background(t.Surface).
 		Padding(0, 1).
-		Render(fmt.Sprintf("🎯 Situational Trigger: %s", role))
+		Render(fmt.Sprintf("⌖ Situational Trigger: %s", role))
 }
 
 

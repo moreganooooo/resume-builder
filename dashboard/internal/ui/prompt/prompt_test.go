@@ -41,6 +41,20 @@ func TestSpecUnmarshal_SelectWithOptions(t *testing.T) {
 	}
 }
 
+func TestSpecUnmarshal_TextWithDefaultValue(t *testing.T) {
+	raw := `{"type":"text","message":"Archive postings older than how many days?","default_value":"30"}`
+	var spec Spec
+	if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if spec.Type != "text" {
+		t.Errorf("Type = %q, want %q", spec.Type, "text")
+	}
+	if spec.DefaultValue != "30" {
+		t.Errorf("DefaultValue = %q, want %q", spec.DefaultValue, "30")
+	}
+}
+
 func TestResultMarshal_Confirm(t *testing.T) {
 	answer := true
 	result := Result{Confirmed: &answer}

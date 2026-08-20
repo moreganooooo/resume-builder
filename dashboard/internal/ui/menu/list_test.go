@@ -156,13 +156,63 @@ func TestMenuModel_NumericShortcuts(t *testing.T) {
 		t.Errorf("expected MenuSelectMsg with 'Progress', got: %#v", msg)
 	}
 
-	// Pressing '5' selects "Knowledge Base"
-	_, cmd = m.Update(pressKey("5"))
+	// Pressing '4' selects "Knowledge Base" -- 4, not 5, since the dead
+	// "Reports" entry was removed from the menu.
+	_, cmd = m.Update(pressKey("4"))
 	if cmd == nil {
-		t.Fatalf("expected non-nil cmd on pressing '5'")
+		t.Fatalf("expected non-nil cmd on pressing '4'")
 	}
 	msg = cmd()
 	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Knowledge Base" {
 		t.Errorf("expected MenuSelectMsg with 'Knowledge Base', got: %#v", msg)
+	}
+}
+
+// TestMenuModel_ShortcutsMatchVisibleOrder pins the numeric shortcuts to
+// the rendered menu rather than to hard-coded expectations. Removing the
+// "Reports" row silently shifted every shortcut below it; asserting the
+// two agree means the next add/remove can't desync them.
+func TestMenuModel_ShortcutsMatchVisibleOrder(t *testing.T) {
+	m := NewMenuModel(theme.NewTheme("resume-builder"))
+
+	for i, item := range m.list.Items() {
+		entry, ok := item.(MenuItem)
+		if !ok {
+			t.Fatalf("item %d is not a MenuItem", i)
+		}
+
+		key := string(rune('1' + i))
+		_, cmd := m.Update(pressKey(key))
+		if cmd == nil {
+			t.Fatalf("pressing %q produced no command", key)
+		}
+
+		switch msg := cmd().(type) {
+		case MenuSelectMsg:
+			if msg.Command != entry.title {
+				t.Errorf("key %q selected %q, but row %d is %q", key, msg.Command, i, entry.title)
+			}
+		case MenuQuitMsg:
+			// The Exit row is wired to quit directly rather than to a
+			// select message, so it is the one legitimate mismatch.
+			if entry.title != "Exit" {
+				t.Errorf("key %q quit, but row %d is %q, not Exit", key, i, entry.title)
+			}
+		default:
+			t.Errorf("key %q produced unexpected %#v", key, msg)
+		}
+	}
+}
+
+// TestMenuModel_HasNoReportsEntry keeps the dead-end from coming back:
+// the Reports viewer had no resume-builder-produced reports to open, so
+// the row always rendered an empty screen.
+func TestMenuModel_HasNoReportsEntry(t *testing.T) {
+	m := NewMenuModel(theme.NewTheme("resume-builder"))
+
+	for _, item := range m.list.Items() {
+		if entry, ok := item.(MenuItem); ok && entry.title == "Reports" {
+			t.Fatal("the Reports menu entry is back; it opens an empty viewer")
+		}
 	}
 }
