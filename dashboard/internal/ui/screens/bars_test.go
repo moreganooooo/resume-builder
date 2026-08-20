@@ -70,7 +70,7 @@ func TestToastNotification_Lifecycle(t *testing.T) {
 		t.Fatalf("expected initial toast to be hidden")
 	}
 
-	toast.Show("✨", "Application submitted!", 2)
+	toast.Show("✦", "Application submitted!", 2)
 	if !toast.Visible() {
 		t.Fatalf("expected toast to be visible after Show")
 	}

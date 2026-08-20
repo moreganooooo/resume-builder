@@ -1,6 +1,15 @@
 package theme
 
-import "github.com/charmbracelet/lipgloss"
+// lipgloss/v2, not the legacy github.com/charmbracelet/lipgloss (v1) this
+// generator used to emit -- a v1 lipgloss.Color satisfies the Theme
+// struct's image/color.Color field just fine at compile time, but huh
+// v2's Style.Foreground() (theme.go's HuhTheme()) doesn't know how to
+// resolve a v1 color through it and silently renders rgb(0,0,0): every
+// prompt title and the select-cursor "> " prefix went pure black on this
+// theme specifically, since catppuccin.go/catppuccin_latte.go already
+// used this file's own c() helper (already v2) and never hit it. Confirmed
+// by inspecting the compiled binary's raw SGR output directly.
+import lipgloss "charm.land/lipgloss/v2"
 
 // newResumeBuilder mirrors resume-builder's own CLI palette
 // (scripts/theme.py) so the dashboard reads as the same product, not a

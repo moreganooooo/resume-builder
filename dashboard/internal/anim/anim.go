@@ -151,7 +151,7 @@ func (c *ConfettiEngine) Emit(x, y, count int) {
 	if ReducedMotion() {
 		return
 	}
-	glyphs := []rune{'✦', '✧', '★', '◆', '●', '■', '•', '✨'}
+	glyphs := []rune{'✦', '✧', '★', '◆', '●', '■', '•', '✢'}
 	colors := []string{"#cba6f7", "#89b4fa", "#a6e3a1", "#f9e2af", "#f38ba8", "#fab387"}
 
 	for i := 0; i < count; i++ {

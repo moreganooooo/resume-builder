@@ -54,5 +54,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to encode result: %v", err)
 	}
+	// huh/Bubbletea render the live form on stderr by default (confirmed
+	// empirically -- a pty-attached test showed the ANSI draw sequences
+	// arriving there, not on stdout). The Python caller leaves stderr
+	// connected to the real terminal for that reason and captures only
+	// stdout for this answer. See scripts/charm_prompt.py's _run_prompt().
 	fmt.Println(string(out))
 }
