@@ -712,7 +712,14 @@ class JDTracker:
     """Thin CSV-backed completion log, keyed by job_key."""
 
     def __init__(self, csv_path: str = None):
-        self.csv_path = csv_path or TRACKER_CSV
+        # Resolved per instance, NOT from the module-level TRACKER_CSV
+        # constant. That constant is computed once at import, so it keeps
+        # pointing at whichever profile was active then -- it survived a
+        # profile switch, and it survived tests redirecting
+        # profile_paths.PROFILES_DIR, which is how the test suite came to
+        # append two "completed" rows to a real tracker log on every run
+        # and inflate the "Resumes Customized All-Time" banner.
+        self.csv_path = csv_path or profile_paths.tracker_csv_path()
 
     def _read_rows(self) -> list:
         if not os.path.exists(self.csv_path):

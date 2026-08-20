@@ -616,3 +616,33 @@ class TestVerifyCandidatesActivity(unittest.TestCase):
 
         activity.step.assert_not_called()
         mock_print_raw.assert_called_once()
+
+class TestDatabaseCandidatesAreGuardedInTests(unittest.TestCase):
+    """A liveness sweep is real Playwright network I/O. When database
+    candidates were first added, the existing tests mocked the filesystem
+    JD list but knew nothing about a database source, so the suite
+    silently launched Chromium and started checking 643 live URLs."""
+
+    def test_no_database_candidates_against_the_real_profile(self):
+        self.assertEqual(liveness._gather_db_candidates(), [])
+
+    def test_liveness_recency_helper_skips_a_recent_check(self):
+        import datetime
+
+        recent = {"checked_at": datetime.datetime.now().isoformat()}
+        self.assertTrue(liveness._liveness_is_recent(recent))
+
+    def test_liveness_recency_helper_allows_a_stale_check(self):
+        import datetime
+
+        stale = {
+            "checked_at": (
+                datetime.datetime.now() - datetime.timedelta(days=5)
+            ).isoformat()
+        }
+        self.assertFalse(liveness._liveness_is_recent(stale))
+
+    def test_liveness_recency_helper_tolerates_junk(self):
+        for value in (None, {}, {"checked_at": "not-a-date"}, {"checked_at": None}):
+            self.assertFalse(liveness._liveness_is_recent(value))
+
