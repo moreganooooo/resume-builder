@@ -8,10 +8,39 @@ package prompt
 
 import (
 	"fmt"
+	"os"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
+
+// newForm builds a huh.Form with this app's theme and a forced TrueColor
+// profile. Color-profile detection (like isDark in theme.HuhTheme) reads
+// TERM/COLORTERM from the subprocess environment rather than doing an
+// async terminal round trip, but it's just as unreliable in practice
+// through this Python-subprocess invocation -- COLORTERM doesn't always
+// survive being inherited down from a real terminal through a shell
+// through subprocess.run(), so the profile can silently downgrade to
+// ANSI/no-color, which is indistinguishable from "no color set" (default
+// foreground, often black) for anything this app didn't explicitly give
+// a background too. Forcing TrueColor sidesteps that the same way
+// HuhTheme() sidesteps the isDark detection.
+//
+// WithProgramOptions *replaces* Form.teaOptions rather than appending to
+// it, so tea.WithOutput(os.Stderr) -- the default NewForm() sets, and the
+// whole reason rendering ever reaches the real terminal instead of the
+// piped stdout Python captures for the JSON answer -- must be repeated
+// here explicitly or this call silently undoes that fix.
+func newForm(t theme.Theme, group *huh.Group) *huh.Form {
+	return huh.NewForm(group).
+		WithTheme(t.HuhTheme()).
+		WithProgramOptions(
+			tea.WithOutput(os.Stderr),
+			tea.WithColorProfile(colorprofile.TrueColor),
+		)
+}
 
 // Option is one selectable item in a select or checkbox prompt.
 type Option struct {
@@ -20,11 +49,11 @@ type Option struct {
 }
 
 // Spec describes the prompt to render, decoded from the CLI argument JSON.
-// Default is used by "confirm"; DefaultValue is used by "select" -- kept
-// as separate fields since they're different JSON types, not a shared
-// "default" key.
+// Default is used by "confirm"; DefaultValue is used by "select" and
+// "text" (the pre-filled/editable starting value) -- kept as separate
+// fields since they're different JSON types, not a shared "default" key.
 type Spec struct {
-	Type         string   `json:"type"` // "select", "confirm", or "checkbox"
+	Type         string   `json:"type"` // "select", "confirm", "checkbox", or "text"
 	Message      string   `json:"message"`
 	Options      []Option `json:"options,omitempty"`
 	Default      bool     `json:"default,omitempty"`
@@ -52,6 +81,8 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 		return runSelect(t, spec)
 	case "checkbox":
 		return runCheckbox(t, spec)
+	case "text":
+		return runText(t, spec)
 	default:
 		return Result{}, fmt.Errorf("unknown prompt type %q", spec.Type)
 	}
@@ -62,7 +93,7 @@ func runConfirm(t theme.Theme, spec Spec) (Result, error) {
 	field := huh.NewConfirm().
 		Title(spec.Message).
 		Value(&answer)
-	form := huh.NewForm(huh.NewGroup(field)).WithTheme(t.HuhTheme())
+	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
 		return Result{}, err
 	}
@@ -79,7 +110,31 @@ func runSelect(t theme.Theme, spec Spec) (Result, error) {
 		Title(spec.Message).
 		Options(opts...).
 		Value(&answer)
-	form := huh.NewForm(huh.NewGroup(field)).WithTheme(t.HuhTheme())
+	form := newForm(t, huh.NewGroup(field))
+	if err := form.Run(); err != nil {
+		return Result{}, err
+	}
+	return Result{Value: answer}, nil
+}
+
+// runText renders a free-text input field -- the one prompt type
+// scripts/charm_prompt.py never got a Go counterpart for (see its own
+// module docstring), so cli_art.text()'s two call sites (menu.py's Stale
+// Sweep age-threshold prompt, cli.py's GEMINI_API_KEY entry) stayed on
+// raw questionary.text() long after confirm/select/checkbox migrated.
+// That mattered beyond just visual consistency: menu.py's
+// _run_with_chain() sets a DECSTBM scroll region around every leaf
+// action's banner, and prompt_toolkit (questionary's renderer) doesn't
+// understand a clamped scroll region -- Stale Sweep's prompt rendered
+// nothing at all under it, the same dead-end evaluate_all's confirm had
+// before it was routed through huh. See picker.should_proceed()'s
+// docstring for the fuller writeup of that conflict.
+func runText(t theme.Theme, spec Spec) (Result, error) {
+	answer := spec.DefaultValue
+	field := huh.NewInput().
+		Title(spec.Message).
+		Value(&answer)
+	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
 		return Result{}, err
 	}
@@ -96,7 +151,7 @@ func runCheckbox(t theme.Theme, spec Spec) (Result, error) {
 		Title(spec.Message).
 		Options(opts...).
 		Value(&answer)
-	form := huh.NewForm(huh.NewGroup(field)).WithTheme(t.HuhTheme())
+	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
 		return Result{}, err
 	}

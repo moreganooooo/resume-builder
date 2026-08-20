@@ -105,7 +105,25 @@ func NewTheme(name string) Theme {
 // own label under the one theme that needed a real per-theme token here.
 func (t Theme) HuhTheme() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
-		ht := huh.ThemeCharm(isDark)
+		// isDark is huh's own guess, set from an async OSC background-color
+		// query (tea.BackgroundColorMsg) that huh's Bubbletea Program sends
+		// and waits on. Through this binary's Python-subprocess/pty
+		// invocation that round trip is unreliable -- the response often
+		// never arrives before first render, leaving isDark at Go's false
+		// zero-value and producing light-theme colors (incl. black text)
+		// against this app's actual dark terminal. This app never ships a
+		// light theme regardless (see NewTheme's hardcoded "resume-builder"
+		// case, never "auto"), so the incoming isDark is ignored in favor
+		// of a hardcoded true.
+		//
+		// ThemeCatppuccin, not ThemeCharm: it's huh's built-in Catppuccin
+		// theme, sourced from the same canonical Mocha palette this app's
+		// own hex values already match (see catppuccin.go's Mauve
+		// #cba6f7) -- so it styles every field (options, descriptions,
+		// errors, buttons, text-input cursor/placeholder...), not just the
+		// 3 this function overrides, and stays palette-consistent doing
+		// it.
+		ht := huh.ThemeCatppuccin(true)
 		ht.Focused.Title = ht.Focused.Title.Foreground(t.Token.Mauve)
 		ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.Token.Mauve)
 		ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)

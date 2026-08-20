@@ -83,7 +83,6 @@ func NewMenuModel(t theme.Theme) MenuModel {
 	items := []list.Item{
 		MenuItem{title: "Pipeline", desc: "Career pipeline view", icon: t.Icons.Pipeline},
 		MenuItem{title: "Progress", desc: "Analytics and funnel", icon: t.Icons.Progress},
-		MenuItem{title: "Reports", desc: "Open a markdown report", icon: t.Icons.Report},
 		MenuItem{title: "Jobs", desc: "Browse & Manage Jobs", icon: t.Icons.Jobs},
 		MenuItem{title: "Knowledge Base", desc: "Inspect claims, metrics & tools", icon: t.Icons.Search},
 		MenuItem{title: "Exit", desc: "Leave the dashboard", icon: t.Icons.Quit},
@@ -168,13 +167,15 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 			return m, func() tea.Msg { return MenuSelectMsg{Command: "Pipeline"} }
 		case "2":
 			return m, func() tea.Msg { return MenuSelectMsg{Command: "Progress"} }
+		// No "Reports" entry: it opened an empty viewer, because the
+		// markdown reports it browsed are produced by career-ops, not by
+		// resume-builder. Pipeline still opens a report directly when an
+		// application actually has one (PipelineOpenReportMsg).
 		case "3":
-			return m, func() tea.Msg { return MenuSelectMsg{Command: "Reports"} }
-		case "4":
 			return m, func() tea.Msg { return MenuSelectMsg{Command: "Jobs"} }
-		case "5":
+		case "4":
 			return m, func() tea.Msg { return MenuSelectMsg{Command: "Knowledge Base"} }
-		case "6":
+		case "5":
 			return m, func() tea.Msg { return MenuQuitMsg{} }
 		case "enter":
 			if sel, ok := m.list.SelectedItem().(MenuItem); ok {
