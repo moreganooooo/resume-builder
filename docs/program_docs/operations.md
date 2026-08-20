@@ -32,7 +32,7 @@ This loads our high-fidelity, Charmbracelet-based terminal dashboard (Bubble Tea
    * `RESUME_BUILDER_ICONS=unicode`: Uses standard Unicode symbols instead of Nerd Fonts.
    * `RESUME_BUILDER_THEME=dark|light`: Overrides automatic terminal background detection.
 8. **Gamification & Achievement Loops:** Milestones (like submitting your 10th tailored resume) unlock high-energy celebration cards complete with twinkling terminal animations (`display_success_celebration`) to keep your momentum and career dopamine high!
-9. **Global Charmbracelet Prompts:** Confirmations, select menus, and checkboxes across the entire CLI are globally routed through Charm's prompt system (`Go/huh`), which compiles dynamically on its first launch into `dashboard/bin/prompt` for lightning-fast, sub-millisecond keyboard reactions.
+9. **Global Charmbracelet Prompts:** Confirmations, select menus, checkboxes, and free-text input across the entire CLI are globally routed through Charm's prompt system (`Go/huh`), which compiles dynamically on its first launch into `dashboard/bin/prompt` for lightning-fast, sub-millisecond keyboard reactions.
 
 ---
 
