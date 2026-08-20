@@ -623,7 +623,7 @@ def stage1_audit_keepers(
         cli_art.cli_success("All keepers already clean — no scoring needed.")
     elif skip_rescore:
         cli_art.cli_info(
-            "⏭️  --skip-rescore set: classifying with existing scores, no API calls."
+            "⊳  --skip-rescore set: classifying with existing scores, no API calls."
         )
         for idx in to_score.index:
             df_keepers.loc[idx, "audit_status"] = _audit_status(df_keepers.loc[idx])

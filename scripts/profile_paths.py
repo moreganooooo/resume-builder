@@ -249,7 +249,7 @@ Treering headhunted her directly from IST.
 
         if ku_achievement_key not in ku_options:
             print(
-                f"  ⚠️  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option."
+                f"  ⚠  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option."
             )
         ku_bullet = ku_options.get(
             ku_achievement_key,
@@ -257,7 +257,7 @@ Treering headhunted her directly from IST.
         )
         if kckcc_achievement_key not in kckcc_options:
             print(
-                f"  ⚠️  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option."
+                f"  ⚠  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option."
             )
         kckcc_bullet = kckcc_options.get(
             kckcc_achievement_key,

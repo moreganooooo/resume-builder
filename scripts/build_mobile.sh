@@ -37,7 +37,7 @@ for target in "${TARGETS[@]}"; do
   desc="${target#* (}"
   desc="${desc%)}"
 
-  echo "  🔨 Compiling for ${os_arch}/${arch} [${desc}]..."
+  echo "  ⚒ Compiling for ${os_arch}/${arch} [${desc}]..."
   
   # Strip debug symbols (-s -w) for smallest binary size
   CGO_ENABLED=0 GOOS="${os_arch}" GOARCH="${arch}" go build -ldflags="-s -w" -o "${DIST_DIR}/${binary_name}" .

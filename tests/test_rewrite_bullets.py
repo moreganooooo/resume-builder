@@ -148,17 +148,24 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         if not cls.kb.static_prefix:
             cls.kb.static_prefix = "STATIC PREFIX " * 20
             cls.kb.gemma_static_prefix = "GEMMA PREFIX"
-        if not cls.kb.projects_entries:
-            cls.kb.projects_entries = [
-                {
-                    "employer": "Treering Yearbooks",
-                    "name": "Outreach.io Platform Rollout",
-                },
-                {
-                    "employer": "Element 8 / Strategy LLC",
-                    "name": "Strategy LLC Brand Identity",
-                },
-            ]
+        # Always install the fixture, never "only if the real KB is empty".
+        # These tests assert employer SCOPING -- which projects reach which
+        # bullet -- so they have to control the project list outright. The
+        # conditional version silently tested nothing but the real
+        # profile's contents, and passed only while that profile's
+        # verified_projects.json happened to be missing an "Inside Sales
+        # Team" entry. Repopulating the ledger broke them, which is the
+        # coupling itself, not a regression in the scoping logic.
+        cls.kb.projects_entries = [
+            {
+                "employer": "Treering Yearbooks",
+                "name": "Outreach.io Platform Rollout",
+            },
+            {
+                "employer": "Element 8 / Strategy LLC",
+                "name": "Strategy LLC Brand Identity",
+            },
+        ]
 
     def test_gemma_static_prefix_excludes_profile(self):
         # profile.yml is dropped entirely from Gemma's tier -- its trimmed

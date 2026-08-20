@@ -899,7 +899,7 @@ class KnowledgeBase:
         self._segment_cache: dict = {}
         self._gemma_segment_cache: dict = {}
         cli_art.console.print(
-            "   ℹ️  Call warm_segment_cache(df_map) before starting the rewrite loop.\n",
+            "   ℹ  Call warm_segment_cache(df_map) before starting the rewrite loop.\n",
             soft_wrap=True,
         )
 

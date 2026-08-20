@@ -286,7 +286,7 @@ def _build_choices(include_express: bool = False) -> list:
         choices.append(
             questionary.Choice(
                 title=[
-                    ("class:text", "⚡ Express Auto-Pilot (Recommended - ~60s)  "),
+                    ("class:text", "▶ Express Auto-Pilot (Recommended - ~60s)  "),
                     (
                         "class:description",
                         "(run all 8 onboarding steps end-to-end unattended)",

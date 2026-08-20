@@ -242,7 +242,7 @@ class TestResumeDocxExport(unittest.TestCase):
     ):
         mock_generate.side_effect = self._generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         stdout_buf = io.StringIO()
@@ -277,7 +277,7 @@ class TestResumeDocxExport(unittest.TestCase):
     ):
         mock_generate.side_effect = self._generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         stdout_buf = io.StringIO()

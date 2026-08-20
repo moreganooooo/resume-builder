@@ -18,7 +18,6 @@ import os
 import cli_art
 import jd_manager
 import liveness
-import questionary
 import scan_ats
 import scan_boards
 import scan_jobright
@@ -246,13 +245,12 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
         if len(paths_to_verify) > VERIFY_CONFIRM_THRESHOLD:
             proceed = True
             if cli_art.console.is_terminal:
-                proceed = questionary.confirm(
+                proceed = cli_art.confirm(
                     f"{len(paths_to_verify)} new postings found -- verify all of them with a "
                     f"real browser check (~{len(paths_to_verify) * 5 // 60} min)? "
                     f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
                     default=False,
-                    style=cli_art.QUESTIONARY_STYLE,
-                ).ask()
+                )
             if not proceed:
                 paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
         with cli_art.new_scan_activity() as verify_activity:

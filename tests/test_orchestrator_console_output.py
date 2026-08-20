@@ -17,11 +17,11 @@ class TestParsePdfResult(unittest.TestCase):
     def test_extracts_page_count_and_size(self, mock_pdf_reader):
         mock_pdf_reader.return_value.pages = [MagicMock()] * 3
         stdout = (
-            "📄 Input:  /x/y.html\n"
-            "📁 Output: /x/y.pdf\n"
-            "📏 Format: LETTER\n"
-            "✅ PDF generated: /x/y.pdf\n"
-            "📦 Size: 69.2 KB\n"
+            "▥ Input:  /x/y.html\n"
+            "◰ Output: /x/y.pdf\n"
+            "⊢ Format: LETTER\n"
+            "✓ PDF generated: /x/y.pdf\n"
+            "▣ Size: 69.2 KB\n"
         )
         page_count, size_str = orchestrator._parse_pdf_result(stdout, "/x/y.pdf")
         self.assertEqual(page_count, 3)
@@ -30,7 +30,7 @@ class TestParsePdfResult(unittest.TestCase):
     @patch("orchestrator.PdfReader", side_effect=Exception("not a real PDF"))
     def test_unreadable_pdf_returns_none(self, mock_pdf_reader):
         page_count, size_str = orchestrator._parse_pdf_result(
-            "📦 Size: 10.0 KB", "/x/y.pdf"
+            "▣ Size: 10.0 KB", "/x/y.pdf"
         )
         self.assertIsNone(page_count)
         self.assertEqual(size_str, "10.0 KB")

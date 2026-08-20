@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -42,6 +44,13 @@ class TestCliProfileFlag(unittest.TestCase):
 
 
 class TestMenuProfileGate(unittest.TestCase):
+    # Isolated from the real profiles/ directory via a temp dir patched
+    # onto profile_paths.PROFILES_DIR -- these tests used to list()
+    # whatever profiles actually exist on the machine running them and
+    # assert against a hardcoded "morgan", which broke the moment the
+    # real profile folder was renamed to different casing ("Morgan").
+    # A fixture directory means these tests can never again depend on
+    # what any real profile is named, on this machine or any other.
 
     def setUp(self):
         self._orig_profile = os.environ.get("RESUME_PROFILE")
@@ -49,7 +58,17 @@ class TestMenuProfileGate(unittest.TestCase):
         os.environ.pop("RESUME_PROFILE", None)
         os.environ.pop("RESUME_GUEST_MODE", None)
 
+        self._tmp_profiles_dir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self._tmp_profiles_dir, "testuser"))
+        os.makedirs(os.path.join(self._tmp_profiles_dir, "test_profile"))
+        self._profiles_dir_patcher = patch.object(
+            profile_paths, "PROFILES_DIR", self._tmp_profiles_dir
+        )
+        self._profiles_dir_patcher.start()
+
     def tearDown(self):
+        self._profiles_dir_patcher.stop()
+        shutil.rmtree(self._tmp_profiles_dir, ignore_errors=True)
         for var, orig in (
             ("RESUME_PROFILE", self._orig_profile),
             ("RESUME_GUEST_MODE", self._orig_guest),
@@ -88,16 +107,38 @@ class TestMenuProfileGate(unittest.TestCase):
 
     def test_gate_always_shown_even_with_a_single_profile(self):
         with patch("questionary.select") as mock_select:
-            mock_select.return_value.ask.return_value = "morgan"
+            mock_select.return_value.ask.return_value = "testuser"
             menu._confirm_active_profile()
         mock_select.assert_called_once()
 
     def test_choosing_existing_profile_sets_it_for_session(self):
         with patch("questionary.select") as mock_select:
-            mock_select.return_value.ask.return_value = "morgan"
+            mock_select.return_value.ask.return_value = "testuser"
             menu._confirm_active_profile()
-        self.assertEqual(os.environ.get("RESUME_PROFILE"), "morgan")
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "testuser")
         self.assertIsNone(os.environ.get("RESUME_GUEST_MODE"))
+
+    def test_default_selection_matches_active_profile_regardless_of_case(self):
+        # Regression: profile_paths.active_profile() falls back to a
+        # hardcoded "morgan" (lowercase) when RESUME_PROFILE is unset. A
+        # real profile folder renamed to different casing used to make
+        # `current in names` fail, silently falling back to names[0]
+        # (alphabetically-first, not necessarily the active profile) as
+        # the picker's highlighted default instead of the real one.
+        # active_profile() itself is mocked here (rather than set via
+        # RESUME_PROFILE) so this stays deterministic across filesystems
+        # -- macOS resolves profiles/TESTUSER against a real testuser/
+        # dir case-insensitively, but a case-sensitive filesystem (e.g.
+        # CI on Linux) would raise inside active_profile() itself before
+        # this fix is even reached.
+        with (
+            patch("profile_paths.active_profile", return_value="TESTUSER"),
+            patch("questionary.select") as mock_select,
+        ):
+            mock_select.return_value.ask.return_value = "testuser"
+            menu._confirm_active_profile()
+        self.assertEqual(mock_select.call_args.kwargs["default"], "testuser")
+        self.assertIn("currently: testuser", mock_select.call_args.args[0])
 
     def test_im_new_here_then_start_setup_calls_bootstrap(self):
         with (
