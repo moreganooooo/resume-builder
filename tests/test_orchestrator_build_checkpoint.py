@@ -168,7 +168,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         stdout_buf = io.StringIO()
@@ -485,7 +485,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -663,7 +663,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             patch("orchestrator.time.sleep", lambda *a, **kw: None),
             patch(
                 "orchestrator.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr=""),
+                return_value=MagicMock(returncode=0, stdout="▤ Pages: 2\n", stderr=""),
             ),
             patch(
                 "orchestrator.validate_pdf_text.validate_pdf_text",
@@ -735,7 +735,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             patch("orchestrator.time.sleep", lambda *a, **kw: None),
             patch(
                 "orchestrator.subprocess.run",
-                return_value=MagicMock(returncode=0, stdout="📊 Pages: 2\n", stderr=""),
+                return_value=MagicMock(returncode=0, stdout="▤ Pages: 2\n", stderr=""),
             ),
             patch(
                 "orchestrator.validate_pdf_text.validate_pdf_text",
@@ -801,7 +801,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             pages = 3 if pdf_call_count["n"] == 1 else 2
             return MagicMock(
                 returncode=0,
-                stdout=f"📄 Input:  x\n📁 Output: y\n📏 Format: LETTER\n✅ PDF generated: y\n📊 Pages: {pages}\n📦 Size: 42.0 KB\n",
+                stdout=f"▥ Input:  x\n◰ Output: y\n⊢ Format: LETTER\n✓ PDF generated: y\n▤ Pages: {pages}\n▣ Size: 42.0 KB\n",
                 stderr="",
             )
 
@@ -862,7 +862,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -965,7 +965,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         mock_validate.side_effect = validate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1056,7 +1056,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         mock_validate.side_effect = validate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1199,7 +1199,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         def subprocess_side_effect(*args, **kwargs):
             pages = page_counts[pdf_call_count["n"]]
             pdf_call_count["n"] += 1
-            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+            return MagicMock(returncode=0, stdout=f"▤ Pages: {pages}\n", stderr="")
 
         mock_subprocess_run.side_effect = subprocess_side_effect
 
@@ -1268,7 +1268,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         def subprocess_side_effect(*args, **kwargs):
             pdf_call_count["n"] += 1
             pages = 3 if pdf_call_count["n"] == 1 else 2
-            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+            return MagicMock(returncode=0, stdout=f"▤ Pages: {pages}\n", stderr="")
 
         mock_subprocess_run.side_effect = subprocess_side_effect
 
@@ -1348,7 +1348,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         def subprocess_side_effect(*args, **kwargs):
             pdf_call_count["n"] += 1
             pages = 3 if pdf_call_count["n"] == 1 else 2
-            return MagicMock(returncode=0, stdout=f"📊 Pages: {pages}\n", stderr="")
+            return MagicMock(returncode=0, stdout=f"▤ Pages: {pages}\n", stderr="")
 
         mock_subprocess_run.side_effect = subprocess_side_effect
 
@@ -1422,7 +1422,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         # Every render reports 3 pages, no matter how many trim attempts run.
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 3\n", stderr=""
+            returncode=0, stdout="▤ Pages: 3\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1500,7 +1500,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         # Always over-length -- forces the trim loop to run to exhaustion.
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 3\n", stderr=""
+            returncode=0, stdout="▤ Pages: 3\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1621,7 +1621,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1706,7 +1706,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
         # Step 4's own initial validation call must stay clean (call 1); the
         # recommendation pass's candidate (call 2) is the one that must fail.
@@ -1797,7 +1797,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):
@@ -1954,7 +1954,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
 
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(
-            returncode=0, stdout="📊 Pages: 2\n", stderr=""
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
         with patch.object(self.engine, "mine_bullet_bank"):

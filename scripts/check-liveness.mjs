@@ -33,7 +33,7 @@ import { checkUrlLiveness } from './liveness-browser.mjs';
 const PLAIN_ICONS = process.env.RESUME_BUILDER_ICONS === 'unicode';
 const RESULT_ICONS = PLAIN_ICONS
   ? { active: '✓', likely_active: '~', expired: '✗', uncertain: '⚠' }
-  : { active: '✅', likely_active: '🟡', expired: '❌', uncertain: '⚠️' };
+  : { active: '✓', likely_active: '◐', expired: '✗', uncertain: '⚠' };
 const UNKNOWN_ICON = PLAIN_ICONS ? '?' : '❓';
 
 export function buildProgressEvent(index, total, candidate, result, code, reason) {

@@ -97,40 +97,44 @@ _NERD_ICONS = {
     "prev": "",  # nf-fa-chevron_left
     "next": "",  # nf-fa-chevron_right
     "back": "",  # nf-fa-chevron_left
+    "exit": "",  # nf-fa-power_off
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
 # README's "Fonts"/Setup notes for how to opt in via RESUME_BUILDER_ICONS.
 #
-# B22/P1F7: four of the original picks here (evaluate/build/skip/save) are
-# real emoji with Emoji_Presentation=Yes -- terminals render those as
-# full-color, double-width glyphs regardless of ANSI foreground, which
-# both breaks Rich's column-width math (it assumes single-width) and
-# ignores the theme entirely. Replaced with plain ASCII, which is
-# guaranteed single-width and colorless-by-default in every terminal/font,
-# same safety class as warning/utility's ⚠/⚙ (Emoji_Presentation=No,
-# render as narrow text glyphs, not touched here since they're already
-# fine). hint/discovery/resume/gem's diamond/circle/triangle glyphs are
-# ambiguous-width (not emoji, but can measure wide under some CJK-font
-# configurations) -- also moved to ASCII rather than relying on locale.
+# Every glyph here must be TEXT presentation, never emoji. Emoji (any
+# codepoint with Emoji_Presentation=Yes) render as full-color double-width
+# glyphs regardless of ANSI foreground: they break Rich's column-width
+# math, which assumes single-width, and they ignore the theme palette
+# entirely. This dict has drifted back to emoji twice now -- most recently
+# in a0eabe8e, which left this very comment describing a replacement it
+# had undone -- so test_theme.py asserts the property directly rather
+# than trusting review.
+#
+# Prefer East_Asian_Width=Neutral codepoints. The three A (ambiguous)
+# glyphs below -- resume's ▶, evaluate's ▤, bullet_bank's ◈ -- can measure
+# wide under some CJK font configurations; they are kept because they are
+# the legible picks for their slots and this project ships a Latin locale.
 _UNICODE_ICONS = {
-    "success": "✓",
-    "error": "✗",
-    "warning": "⚠",
-    "hint": "✦",
-    "discovery": "🔍",
-    "evaluate": "📊",
-    "build": "⚙",
-    "utility": "🛠",
-    "bullet_bank": "💎",
-    "skip": "⊘",
-    "save": "💾",
-    "resume": "▶",
-    "complete": "✓",
-    "gem": "✦",
-    "prev": "❮",
-    "next": "❯",
-    "back": "❮",
+    "success": "✓",  # U+2713 check mark
+    "error": "✗",  # U+2717 ballot x
+    "warning": "⚠",  # U+26A0 warning sign
+    "hint": "✦",  # U+2726 four-pointed star
+    "discovery": "⌖",  # U+2316 position indicator (was the magnifier emoji)
+    "evaluate": "▤",  # U+25A4 square with horizontal fill (was the bar-chart emoji)
+    "build": "⚒",  # U+2692 hammer and pick -- construct (was the gear, now on "utility")
+    "utility": "⚙",  # U+2699 gear -- settings (was the hammer-and-wrench emoji)
+    "bullet_bank": "◈",  # U+25C8 diamond in diamond (was the gem emoji)
+    "skip": "⊘",  # U+2298 circled division slash
+    "save": "⭳",  # U+2B73 arrow to bar (was the floppy-disk emoji)
+    "resume": "▶",  # U+25B6 play triangle
+    "complete": "✓",  # U+2713 check mark, consistent with success
+    "gem": "✦",  # U+2726 four-pointed star
+    "prev": "❮",  # U+276E angle quote left
+    "next": "❯",  # U+276F angle quote right
+    "back": "❮",  # U+276E angle quote left, same as prev
+    "exit": "⏻",  # U+23FB power symbol
 }
 
 
@@ -203,6 +207,7 @@ _ICON_COLORS = {
     "prev": BRAND_ACCENT,  # purple, matches existing pagination style
     "next": BRAND_ACCENT,  # purple, matches existing pagination style
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
+    "exit": ERROR,  # red -- distinct from "utility" (Settings & Upkeep) it used to share
 }
 
 
