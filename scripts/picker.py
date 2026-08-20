@@ -7,6 +7,7 @@ tailor-pick/coverletter-pick items -- one implementation instead of four.
 
 import json
 import os
+import sys
 
 import batch_evaluate
 import cli_art
@@ -32,14 +33,26 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
 
     A change here to the confirmation wording/behavior should be checked
     against cli._should_proceed() too -- these two copies aren't kept in
-    sync automatically, only by convention."""
+    sync automatically, only by convention.
+
+    Uses cli_art.confirm() (the huh/Bubbletea prompt), not a raw
+    questionary.confirm() -- menu.py's _run_with_chain() sets a DECSTBM
+    scroll region (`\\x1b[5;{rows-1}r`) around every leaf action's banner
+    before calling into a handler like _handle_evaluate_all() that lands
+    here. prompt_toolkit (questionary's renderer) computes its own cursor
+    geometry assuming it owns the full scroll region; clamped into a
+    sub-region it never asked for, its confirm prompt silently failed to
+    render at all -- the banner printed, then the menu looked dead until
+    Ctrl-C, with no error. huh/Bubbletea's own renderer isn't
+    scroll-region-aware in the same way and already runs fine under this
+    same clamp elsewhere (see _handle_run_doctor's charm_prompt.confirm()
+    call), so routing through it here sidesteps the conflict instead of
+    trying to fix prompt_toolkit's geometry assumptions."""
     if skip_confirm:
         return True
-    return bool(
-        questionary.confirm(
-            f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+    return cli_art.confirm(
+        f"About to {action} {count} pending JD(s) -- one real Gemini call each. Continue?",
+        default=False,
     )
 
 
@@ -427,8 +440,107 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "coverage": jd_manager.read_coverage(path),
                 }
             )
+    if "Pending" in statuses:
+        rows.extend(_database_only_rows(rows))
+
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
+
+
+def _database_only_rows(file_rows: list) -> list:
+    """Evaluated jobs that live only in data.db, in the same dict shape.
+
+    Most pending jobs have no JD file -- the filesystem-to-database
+    migration keyed them by content hash and never wrote one -- so a
+    filesystem-only scan showed a few hundred jobs while thousands sat
+    invisible, including the majority of the highest-scoring ones.
+
+    Their "path" is the job id rather than a real path. That is what
+    jd_source.resolved_jd() consumes, so every dashboard action keeps
+    working on them without a file ever being written.
+    """
+    try:
+        import db
+    except ImportError:
+        return []
+
+    seen = set()
+    for row in file_rows:
+        path = row.get("path") or ""
+        seen.add(os.path.basename(path))
+        try:
+            seen.add(jd_manager.compute_job_key(path))
+        except (OSError, ValueError):
+            pass
+
+    try:
+        conn = db.get_db()
+    except Exception:
+        return []
+
+    try:
+        records = conn.execute(
+            "SELECT id, title, company, status, metadata_json"
+            " FROM jobs WHERE status = 'pending'"
+        ).fetchall()
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+    extra = []
+    for record in records:
+        job_id = str(record["id"])
+        if job_id in seen or os.path.basename(job_id) in seen:
+            continue
+
+        try:
+            data = json.loads(record["metadata_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+
+        evaluation = data.get("_evaluation")
+        if not evaluation:
+            continue
+
+        extra.append(
+            {
+                "path": job_id,
+                "status": "Pending",
+                "evaluation": evaluation,
+                "liveness": data.get("_liveness"),
+                "application": data.get("_application"),
+                "title": record["title"] or data.get("job_title") or "",
+                "company": record["company"] or data.get("company_name") or "",
+                "description": data.get("description", "") or "",
+                "source_platform": data.get("source_platform", "") or "",
+                "source_url": data.get("source_url")
+                or data.get("application_url", "")
+                or "",
+                "company_website": data.get("company_website", "") or "",
+                "skills": data.get("skills") or [],
+                "research": data.get("_research"),
+                "coverage": data.get("_coverage"),
+            }
+        )
+    return extra
+
+
+def count_active_roles() -> int:
+    """How many evaluated roles are actually awaiting work.
+
+    The single definition of "how many roles do I have", so the CLI banner
+    and the Go dashboard cannot disagree. They used to: the banner counted
+    JD FILES via jd_manager.get_pending_jds() (157) while both dashboard
+    screens counted this export (812), because most evaluated jobs live
+    only in data.db and have no file. Two true numbers measuring
+    different things reads as a bug.
+
+    Expired and archived roles are excluded, as they are everywhere else.
+    """
+    return len(list_all_evaluated_jds(statuses=["Pending"]))
 
 
 def browse_and_select_jds(
@@ -555,7 +667,7 @@ def interactive_file_picker(
         # Parent directory choice
         parent_dir = os.path.dirname(current_dir)
         if parent_dir != current_dir:
-            choices.append(questionary.Choice("📁 .. (Go Up)", value=".."))
+            choices.append(questionary.Choice("◰ .. (Go Up)", value=".."))
 
         try:
             items = sorted(os.listdir(current_dir))
@@ -588,16 +700,16 @@ def interactive_file_picker(
         # Add folders to choices
         for f in sorted(folders, key=lambda s: s.lower()):
             choices.append(
-                questionary.Choice(f"📁 {f}/", value=os.path.join(current_dir, f))
+                questionary.Choice(f"◰ {f}/", value=os.path.join(current_dir, f))
             )
 
         # Add files to choices
         for f in sorted(files, key=lambda s: s.lower()):
             choices.append(
-                questionary.Choice(f"📄 {f}", value=os.path.join(current_dir, f))
+                questionary.Choice(f"▥ {f}", value=os.path.join(current_dir, f))
             )
 
-        choices.append(questionary.Choice("❌ [Cancel]", value="__cancel__"))
+        choices.append(questionary.Choice("✗ [Cancel]", value="__cancel__"))
 
         selected = questionary.select(
             prompt, choices=choices, style=cli_art.QUESTIONARY_STYLE

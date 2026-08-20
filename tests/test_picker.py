@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +11,7 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import picker  # noqa: E402
+import profile_paths  # noqa: E402
 
 
 class TestTruncate(unittest.TestCase):
@@ -65,11 +68,18 @@ class TestPickAndProcessRowWidthClamp(unittest.TestCase):
 class TestShouldProceed(unittest.TestCase):
 
     def test_defaults_to_evaluate_wording(self):
+        # should_proceed() routes through cli_art.confirm() (the huh
+        # prompt), which under "unittest" in sys.modules degrades to this
+        # same questionary.confirm() -- see cli_art.confirm()'s own
+        # test-mode branch. Patched on the shared questionary module
+        # object, so it's intercepted regardless of which module's
+        # `questionary` name triggered the lookup.
         with patch("picker.questionary.confirm") as mock_confirm:
             mock_confirm.return_value.ask.return_value = True
             picker.should_proceed(5, skip_confirm=False)
         mock_confirm.assert_called_once_with(
             "About to evaluate 5 pending JD(s) -- one real Gemini call each. Continue?",
+            default=False,
             style=picker.cli_art.QUESTIONARY_STYLE,
         )
 
@@ -79,6 +89,7 @@ class TestShouldProceed(unittest.TestCase):
             picker.should_proceed(5, skip_confirm=False, action="tailor")
         mock_confirm.assert_called_once_with(
             "About to tailor 5 pending JD(s) -- one real Gemini call each. Continue?",
+            default=False,
             style=picker.cli_art.QUESTIONARY_STYLE,
         )
 
@@ -230,6 +241,24 @@ class TestPickAndProcess(unittest.TestCase):
 
 
 class TestListAllEvaluatedJds(unittest.TestCase):
+    """These tests mock the filesystem JD list. list_all_evaluated_jds()
+    now also unions in database-only jobs, which reaches a real data.db
+    and drags hundreds of live rows into every assertion here -- so the
+    profile is redirected at a temp directory, giving each test an empty
+    database of its own."""
+
+    def setUp(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
+
+        for patcher in (
+            patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
 
     @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("picker.jd_manager.read_liveness", return_value=None)
