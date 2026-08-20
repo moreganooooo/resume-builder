@@ -94,7 +94,6 @@
       "Bash(resume doctor *)",
       "Bash(npm ls *)",
       "Bash(npm install *)",
-      "mcp__plugin_lumen_lumen__semantic_search",
       "Bash(rtk git *)",
       "Bash(rtk read *)",
       "Bash(rtk ls *)",
@@ -111,26 +110,17 @@
       "Bash(rtk pip *)",
       "Bash(pre-commit run *)",
       "Skill(update-config)",
-      "Bash(graphify export *)"
+      "Bash(graphify export *)",
+      "Bash(npm cache *)",
+      "Bash(yarn cache *)",
+      "Bash(brew cleanup *)",
+      "Bash(rtk du *)",
+      "Bash(docker system *)"
     ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "code-review-graph"
   ],
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/morganescott/.local/bin/headroom wrap selfheal --marker headroom-wrap-selfheal",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  },
   "spinnerTipsEnabled": false
 }

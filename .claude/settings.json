@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./profiles/*/.env)",
+      "Read(./profiles/*/.linkedin_cookie)"
+    ]
+  }
+}
