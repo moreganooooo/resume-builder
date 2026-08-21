@@ -85,6 +85,12 @@ BOARD_PROVIDERS = [
     # provider's own .mjs throws, _run_node_provider logs it and moves on).
     "adzuna",
     "usajobs",
+    # Location-aware, unlike everything above it -- Jooble takes a city
+    # and radius server-side, which is what gives the radius filter any
+    # local postings to work on. Needs JOOBLE_API_KEY, and a city/state
+    # under `location:` in scan_filters.yml (its API returns nothing for
+    # a bare ZIP).
+    "jooble",
 ]
 
 NODE_TIMEOUT_SECONDS = 30
@@ -240,7 +246,13 @@ def _flag_thin_description(job: dict, provider_id: str, source_url: str) -> None
     reuses this module's other helpers the same way -- see its own
     docstring)."""
     chars = len((job.get("description") or "").strip())
-    if chars >= MIN_DESCRIPTION_CHARS:
+    # A provider that KNOWS its text is a teaser outranks the length
+    # check. Jooble's snippet runs ~275 chars -- comfortably over
+    # MIN_DESCRIPTION_CHARS -- while being a truncated blurb its API
+    # will never expand and whose posting page 403s any fetch. Trusting
+    # length alone would report those postings as fine and only surface
+    # the shortfall later, in a bad tailored resume.
+    if chars >= MIN_DESCRIPTION_CHARS and not job.get("description_is_teaser"):
         return
     job["_scan"] = {"thin_description": True, "description_chars": chars}
     _scan_warning(
@@ -382,12 +394,27 @@ def fetch_board_jobs(
         activity.start_source(len(sources), label="Fetching")
 
     # Local worker task per board provider
+    # Location-aware providers (jooble) need the configured origin; the
+    # rest ignore these keys harmlessly. Sent as city/state because
+    # Jooble's API returns an empty 200 for a bare ZIP -- see its own
+    # module header.
+    location_config = filters.get("location") or {}
+    origin_city = str(location_config.get("city") or "").strip()
+    origin_state = str(location_config.get("state") or "").strip()
+    origin_label = (
+        f"{origin_city}, {origin_state}" if origin_city and origin_state else ""
+    )
+
     def process_provider(provider_id: str) -> list:
         # `entry.name` is what a provider falls back to for `company` when
         # its own raw listing has none.
         entry = {"name": provider_id}
         if search_term:
             entry["search_term"] = search_term
+        if origin_label:
+            entry["location"] = origin_label
+            if location_config.get("radius_miles"):
+                entry["radius_miles"] = location_config["radius_miles"]
 
         try:
             raw_jobs = _run_node_provider(provider_id, entry)
@@ -433,6 +460,10 @@ def fetch_board_jobs(
                 "posted_at": raw.get("posted_at") or "",
                 "description": description,
             }
+            # Carried from the raw listing so the flag survives this
+            # rebuild -- _flag_thin_description reads it off `job`.
+            if raw.get("description_is_teaser"):
+                job["description_is_teaser"] = True
             _flag_thin_description(job, provider_id, url)
             provider_jobs.append(job)
 
