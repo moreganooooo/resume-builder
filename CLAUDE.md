@@ -457,6 +457,105 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `theme_test.go`'s `TestHuhThemeTitleIsNotBlack` theme-name list when
   adding a variant — a nil-check can't catch this since a v1 color is a
   valid non-nil value that just resolves wrong.
+- **Location and commute radius are one switch, and it is opt-in.**
+  `scripts/geo_distance.py` resolves a location string to a point
+  (bundled GeoNames centroids in `assets/geodata/`, ~680 KB gzipped, NOT
+  `data/` -- that is profile-scoped and a Syncthing root, and this is
+  shared read-only reference data). `scripts/location_filter.py` turns
+  that into a verdict: exclusion fencing ("Excluding CA, CO, NY"),
+  compound hubs scored by NEAREST ("Austin, TX OR Overland Park, KS"),
+  radius, and international rejection. `scripts/location_settings.py` is
+  the editor behind Settings & Upkeep. Three rules that look like details
+  and are not: (1) an unresolvable location is KEPT for review, never
+  treated as far away -- surfacing an unknown is cheap to eyeball,
+  silently dropping a commutable role is not; (2) `distance_miles` is
+  `None` when unknown, never `0`, and decodes into a `*float64` on the Go
+  side so a nearest-first sort cannot float unknowns to the top; (3) a
+  posting whose workplace mode cannot be determined is never dropped on
+  mode alone, because providers routinely omit the field.
+  `workplace_mode` accepts a single value or a LIST (`[remote, onsite]`)
+  for the combination one value cannot express. The whole thing is
+  inert until a `location:` block exists in `scan_filters.yml`: that
+  block both relaxes the keyword `block:` list (which rejects
+  "Onsite"/"Hybrid" outright) and supplies the radius replacing it, so
+  the two can never be out of step.
+- **The location gate has exactly one chokepoint.**
+  `scan_boards._passes_location_filter()` -- `scan_ats.py` routes through
+  it too, so anything added there covers both scanners. It is NOT in
+  `prefilter.py`, which reads JD body prose at batch-sweep time for
+  deal-breaker phrases; that is a different input at a different stage
+  and stays a downstream safety net. A provider whose location format the
+  resolver cannot parse silently defeats the radius by landing in the
+  permissive "unresolvable" bucket -- adzuna did exactly this by
+  reporting "Buffalo, Erie County" (city, COUNTY) until it was mapped
+  from its structured `area` array instead.
+- **Aggregators are discovery sources; ATS boards are text sources.**
+  Measured: greenhouse a median of 8,898 description characters,
+  workday 8,427, indeed 3,983 -- versus jooble ~275 and adzuna EXACTLY
+  500, both with a trailing ellipsis and no recovery path (both posting
+  pages 403 every fetch, browser User-Agent included). That is their
+  business model, not a bug to fix. A provider that knows its text is a
+  blurb sets `description_is_teaser`, which
+  `scan_boards._flag_thin_description()` honors REGARDLESS of length --
+  adzuna's 500 chars clears `MIN_DESCRIPTION_CHARS`, so length alone
+  would report it as complete. That constant was raised 200 -> 600,
+  calibrated against this profile's own corpus: the thinnest real
+  posting from any full-text source is 632 characters, and teasers
+  cluster near 275, so 600 sits in the empty gap between the two
+  populations.
+- **`scripts/discover_local_employers.py` bridges the two.** It reads
+  local postings, extracts employer names, probes each for a public ATS
+  board, and appends confirmed hits to `tracked_companies.yml`. Two
+  false-positive classes were found by running it live and both would
+  have attributed a national company's postings to a local employer:
+  (1) slug guessing -- a first-word fallback matched "Stellar Roofing"
+  to whatever company owns the `stellar` board, and five of six hits in
+  the first run were this; only full-name slugs are tried now; (2)
+  unverified ownership -- where a provider discloses who owns a board the
+  name must match, since SmartRecruiters answered for "Evolution Dental
+  Science" with a board named plainly "Evolution". Ashby and Lever
+  disclose no owner, so there the strict slug is the only evidence.
+  Detection also requires a NON-EMPTY posting list: SmartRecruiters
+  returns 200 with `totalFound: 0` for slugs that do not exist at all.
+- **A JD with no description is never written (`scan.run_scan`).**
+  Writing one makes the emptiness permanent -- `job_key_known()` skips
+  that posting on every later scan, so the good version never lands.
+  Only workday produced these (28 of 615 on 2026-08-21): its listing
+  endpoint carries no body text and its posting page is a JS SPA, so
+  `_fetch_posting_text` cannot recover one either. The underlying cause
+  was workday's detail fetches SHARING pagination's 20s budget; they now
+  have their own, and workday gets a longer subprocess timeout via
+  `scan_boards.PROVIDER_TIMEOUT_SECONDS` rather than raising the default
+  for all providers. Its ctx pacing (`minGapMs: 250`, fully serialized)
+  is deliberate politeness toward the target site and is NOT a knob to
+  turn -- ~76 postings genuinely need ~46s.
+- **Indeed is a Python source, and only Indeed.** `scripts/scan_indeed.py`
+  is registered in `scan.py`'s `SOURCE_FETCHERS` alongside jobright and
+  linkedin, because Indeed has no free public API and the only
+  maintained scraper is JobSpy (MIT), a Python library. Of JobSpy's five
+  sites, only Indeed works: zip_recruiter 403s (Cloudflare, and
+  `curl_cffi` impersonation does not help -- tested), glassdoor 400s with
+  "location not parsed", google returns 0 results even with
+  `google_search_term`, and linkedin returns an EMPTY location field that
+  would defeat the radius filter (and is already covered by
+  `scan_linkedin.py`). Those measurements, including a control run where
+  Indeed succeeded in the same process, are recorded in that module's
+  docstring so they read as tested-and-rejected rather than untried.
+  Note JobSpy hard-pins `numpy==1.26.3`, which will fight any Dependabot
+  bump of numpy.
+- **Websearch sweeps: Python searches, Node filters.** Brave's free tier
+  became metered, so DuckDuckGo is the default backend
+  (`scripts/websearch_ddg.py`) and Brave is used only when
+  `BRAVE_API_KEY` is set. The search MUST happen in Python: DuckDuckGo's
+  HTML endpoint answers a plain Node fetch with HTTP 202 and an empty
+  challenge page after the first request or two, pacing and browser
+  User-Agent included. The filtering deliberately stays in
+  `websearch.mjs`, where the blocked-domain list, job-URL recognition and
+  provider promotion already live -- results ride along on the entry as
+  `_results`. `search()` returns `[]` under `unittest` unless
+  `RESUME_ALLOW_TEST_NETWORK` is set, because every scan_ats test that
+  exercises the sweep loop reaches it and the suite otherwise fires real
+  queries (the same shape as the liveness/Playwright regression above).
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a

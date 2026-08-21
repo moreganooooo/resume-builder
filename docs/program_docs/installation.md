@@ -20,10 +20,41 @@ Simply navigate to your repository and execute our installation wizard:
 ```
 Choose **`1` (Full Desktop Suite)**. The installer will:
 1. Provision a clean, isolated virtual environment in `.venv/`.
-2. Install all required Python packages (Pandas, Pydantic, GenAI, Rich, etc.).
+2. Install all required Python packages (Pandas, Pydantic, GenAI, Rich, JobSpy, ddgs, etc.).
 3. Compile Node dependencies and download Playwright's Chromium browser binary.
 4. Pre-compile the Go Charm dashboard and prompt binaries for sub-millisecond keyboard reactions.
 5. Register the global shell alias so you can use the `resume` command from anywhere!
+
+### 🔑 Optional Job-Source API Keys
+
+All of these are optional and free, and every one lives in the **active profile's** own `.env` (`profiles/<name>/.env`) — never a shared project-root file. The scanner works without any of them; each one just adds a source.
+
+| Key | Source | What it adds |
+| --- | --- | --- |
+| *(none needed)* | **Indeed** (via JobSpy) | The best free source of full local job descriptions. Works out of the box. |
+| *(none needed)* | **DuckDuckGo** | Backs the `scan_method: websearch` sweeps. Replaced Brave, whose free tier became metered. |
+| `USAJOBS_APP_KEY` + `USAJOBS_EMAIL` | [developer.usajobs.gov](https://developer.usajobs.gov/) | Federal roles with complete descriptions. **Both are required** — USAJOBS authenticates on the registered email sent as the `User-Agent` header, so a key alone fails. |
+| `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` | [developer.adzuna.com](https://developer.adzuna.com) | Broad local coverage. Descriptions are truncated to exactly 500 characters, so treat it as discovery, not tailoring input. |
+| `JOOBLE_API_KEY` | [jooble.org/api/about](https://jooble.org/api/about) | Local aggregation. Descriptions are ~275-character teasers; discovery only. |
+| `BRAVE_API_KEY` | [api.search.brave.com](https://api.search.brave.com) | Optional. If set, the websearch sweeps use Brave instead of DuckDuckGo. |
+
+```bash
+# Example — add to profiles/<your-profile>/.env
+echo 'USAJOBS_APP_KEY=your-key' >> profiles/Morgan/.env
+echo 'USAJOBS_EMAIL=you@example.com' >> profiles/Morgan/.env
+```
+
+> **Note:** `.env` is gitignored but is deliberately **not** excluded from Syncthing, so a second machine picks up your keys without you retyping them. See the Multi-Device section below.
+
+### 📍 Setting Your Location & Commute Radius
+
+Distance filtering is **off until you configure it**. From the main menu, choose **Settings & Upkeep → Location & Commute Radius**, then set:
+
+* **Origin** — a ZIP code (most precise) or a city and state. Validated against the offline index as you enter it, so an unresolvable origin is rejected immediately rather than silently disabling every later distance check.
+* **Radius** — 5, 10, 15, 20, or 25 miles. This is straight-line distance; a real drive in a US metro runs roughly 1.2–1.4× that, so 25 miles is about a 30-mile commute.
+* **Workplace types** — a checkbox, so you can combine them. Selecting Remote + On-site (but not Hybrid) is a real, common answer that a single-choice setting cannot express.
+
+Turning this on also relaxes the keyword filter that otherwise rejects every "Onsite"/"Hybrid" posting outright — the same switch does both, so they can never disagree.
 
 ### Post-Install Verification:
 Run the self-healing diagnostic suite to verify all tools, fonts, keys, and test suites:
