@@ -227,9 +227,15 @@ class TestFetchBoardJobs(unittest.TestCase):
         self.assertEqual(jobs[0]["description"], "fallback text")
         mock_fetch_text.assert_called_once_with("https://x.com/1", "fourdayweek")
 
+    # Pinned to a config with no `location:` block: the entry is asserted
+    # by exact equality, and a configured origin legitimately adds
+    # location/radius_miles keys (see TestProviderOriginEntry).
+    @patch("scan_boards._load_filters", return_value={})
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_boards._run_node_provider", return_value=[])
-    def test_search_term_passed_per_provider_entry(self, mock_run, mock_fetch_text):
+    def test_search_term_passed_per_provider_entry(
+        self, mock_run, mock_fetch_text, mock_filters
+    ):
         scan_boards.fetch_board_jobs(
             sources=["remoteok", "remotive"], search_term="marketing"
         )
@@ -352,3 +358,89 @@ class TestFlagThinDescription(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTeaserDescriptions(unittest.TestCase):
+    """A provider that knows its text is a blurb outranks the length check."""
+
+    def test_long_teaser_is_still_flagged_thin(self):
+        # Jooble's snippet runs ~275 chars -- over MIN_DESCRIPTION_CHARS --
+        # while being a truncated blurb whose full text is unreachable.
+        job = {"description": "x" * 275, "description_is_teaser": True}
+        scan_boards._flag_thin_description(job, "jooble", "https://x.com/1")
+        self.assertTrue(job["_scan"]["thin_description"])
+
+    def test_long_real_description_is_not_flagged(self):
+        job = {"description": "x" * 275}
+        scan_boards._flag_thin_description(job, "greenhouse", "https://x.com/1")
+        self.assertNotIn("_scan", job)
+
+    def test_short_description_still_flagged_without_the_marker(self):
+        job = {"description": "too short"}
+        scan_boards._flag_thin_description(job, "greenhouse", "https://x.com/1")
+        self.assertTrue(job["_scan"]["thin_description"])
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider")
+    @patch("scan_boards._load_filters")
+    def test_teaser_marker_survives_the_job_rebuild(
+        self, mock_filters, mock_run, mock_fetch
+    ):
+        mock_filters.return_value = {}
+        mock_run.return_value = [
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://x.com/1",
+                "company": "Acme",
+                "location": "Buffalo, NY",
+                "description": "x" * 275,
+                "description_is_teaser": True,
+            }
+        ]
+        jobs = scan_boards.fetch_board_jobs(sources=["jooble"])
+        self.assertEqual(len(jobs), 1)
+        self.assertTrue(jobs[0]["_scan"]["thin_description"])
+
+
+class TestProviderOriginEntry(unittest.TestCase):
+    """Location-aware providers receive the configured origin."""
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_boards._load_filters")
+    def test_origin_passed_as_city_state(self, mock_filters, mock_run, _):
+        mock_filters.return_value = {
+            "location": {
+                "city": "Getzville",
+                "state": "NY",
+                "zip": "14068",
+                "radius_miles": 25,
+            }
+        }
+        scan_boards.fetch_board_jobs(sources=["jooble"])
+        entry = mock_run.call_args[0][1]
+        # City/state, NOT the ZIP: Jooble's API answers 200 with zero
+        # results for a bare ZIP.
+        self.assertEqual(entry["location"], "Getzville, NY")
+        self.assertEqual(entry["radius_miles"], 25)
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_boards._load_filters")
+    def test_no_origin_keys_when_unconfigured(self, mock_filters, mock_run, _):
+        mock_filters.return_value = {}
+        scan_boards.fetch_board_jobs(sources=["remoteok"])
+        entry = mock_run.call_args[0][1]
+        self.assertNotIn("location", entry)
+        self.assertNotIn("radius_miles", entry)
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider", return_value=[])
+    @patch("scan_boards._load_filters")
+    def test_zip_only_origin_sends_no_location(self, mock_filters, mock_run, _):
+        # Without a city the label would be meaningless to Jooble, so it
+        # is omitted and the provider fails loudly rather than silently
+        # returning nothing.
+        mock_filters.return_value = {"location": {"zip": "14068", "radius_miles": 25}}
+        scan_boards.fetch_board_jobs(sources=["jooble"])
+        self.assertNotIn("location", mock_run.call_args[0][1])
