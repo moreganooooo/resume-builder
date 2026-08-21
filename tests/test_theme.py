@@ -142,7 +142,9 @@ class TestUnicodeIconsAreTextNotEmoji(unittest.TestCase):
             for ch in glyph
             if self._is_emoji(ch)
         }
-        self.assertEqual(offenders, {}, f"emoji leaked into _UNICODE_ICONS: {offenders}")
+        self.assertEqual(
+            offenders, {}, f"emoji leaked into _UNICODE_ICONS: {offenders}"
+        )
 
     def test_every_unicode_icon_is_single_width(self):
         from wcwidth import wcswidth

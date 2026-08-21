@@ -156,9 +156,7 @@ class TestSetStatus(JDSourceTestCase):
         jd_source.set_status("abc123hash", "archived")
 
         conn = db.get_db()
-        row = conn.execute(
-            "SELECT status FROM jobs WHERE id = 'abc123hash'"
-        ).fetchone()
+        row = conn.execute("SELECT status FROM jobs WHERE id = 'abc123hash'").fetchone()
         conn.close()
 
         self.assertEqual(row[0], "archived")

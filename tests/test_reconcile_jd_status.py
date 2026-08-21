@@ -36,8 +36,10 @@ class TestReconcile(unittest.TestCase):
         conn.close()
 
     def _write_jd(self, subdir, name, **fields):
-        path = os.path.join(self.jds, subdir, name) if subdir else os.path.join(
-            self.jds, name
+        path = (
+            os.path.join(self.jds, subdir, name)
+            if subdir
+            else os.path.join(self.jds, name)
         )
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"job_title": "Analyst", "company_name": "Acme", **fields}, f)
@@ -55,9 +57,7 @@ class TestReconcile(unittest.TestCase):
 
     def _status(self, job_id):
         conn = sqlite3.connect(self.db_path)
-        row = conn.execute(
-            "SELECT status FROM jobs WHERE id = ?", (job_id,)
-        ).fetchone()
+        row = conn.execute("SELECT status FROM jobs WHERE id = ?", (job_id,)).fetchone()
         conn.close()
         return row[0]
 

@@ -17,7 +17,6 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import backfill_job_columns as bjc  # noqa: E402
-
 import db  # noqa: E402
 
 
@@ -28,7 +27,6 @@ def _make_db(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     db.init_db(conn)
     return conn
-
 
 
 EVALUATED_JD = {

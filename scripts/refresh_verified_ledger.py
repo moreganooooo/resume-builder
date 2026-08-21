@@ -125,9 +125,7 @@ def refresh(
         f"({len(text):,} chars of bullets)."
     )
 
-    extraction = bootstrap_extractors.extract_ledger_entries_chunked(
-        "\n".join(chunks)
-    )
+    extraction = bootstrap_extractors.extract_ledger_entries_chunked("\n".join(chunks))
 
     targets = [
         (
@@ -161,9 +159,7 @@ def refresh(
     for path, list_key, incoming, key_fields, id_prefix in targets:
         data = _load(path, list_key)
         before = len(data[list_key])
-        merged, added = merge_entries(
-            data[list_key], incoming, key_fields, id_prefix
-        )
+        merged, added = merge_entries(data[list_key], incoming, key_fields, id_prefix)
 
         stats["files"][list_key] = {
             "before": before,
@@ -193,7 +189,9 @@ def refresh(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--apply", action="store_true", help="write the merged ledger (default: dry run)"
+        "--apply",
+        action="store_true",
+        help="write the merged ledger (default: dry run)",
     )
     parser.add_argument(
         "--max-chunks",

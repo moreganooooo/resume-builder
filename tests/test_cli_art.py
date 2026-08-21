@@ -632,7 +632,9 @@ class TestText(unittest.TestCase):
     def test_passes_message_and_default_through(self):
         with patch("cli_art.questionary.text") as mock_text:
             mock_text.return_value.ask.return_value = "45"
-            result = cli_art.text("Archive postings older than how many days?", default="30")
+            result = cli_art.text(
+                "Archive postings older than how many days?", default="30"
+            )
         mock_text.assert_called_once_with(
             "Archive postings older than how many days?",
             default="30",

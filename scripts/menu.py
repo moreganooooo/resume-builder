@@ -188,13 +188,13 @@ def _build_settings_upkeep_choices() -> list:
             value="manage_skills",
         ),
         questionary.Choice(
-            title=_icon_title("discovery", "↳ Manage Scraping, Boards & Search Queries"),
+            title=_icon_title(
+                "discovery", "↳ Manage Scraping, Boards & Search Queries"
+            ),
             value="manage_scraping",
         ),
         questionary.Choice(
-            title=_icon_title(
-                "build", "↳ Generate Sample Resume + Cover Letter (QA)"
-            ),
+            title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
             value="build_sample",
         ),
         questionary.Choice(

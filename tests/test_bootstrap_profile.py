@@ -1448,12 +1448,17 @@ class TestVerifiedLedgerDataLoss(unittest.TestCase):
             before = {k: open(v, encoding="utf-8").read() for k, v in paths.items()}
 
             with (
-                patch.object(bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]),
+                patch.object(
+                    bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]
+                ),
                 patch.object(bootstrap_profile, "VERIFIED_TOOLS_PATH", paths["tools"]),
-                patch.object(bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]),
+                patch.object(
+                    bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]
+                ),
                 patch.object(bootstrap_profile, "VERIFIED_FACTS_PATH", paths["facts"]),
                 patch.object(
-                    bootstrap_profile, "_achievements_summary_text_by_employer",
+                    bootstrap_profile,
+                    "_achievements_summary_text_by_employer",
                     return_value="",
                 ),
             ):
@@ -1482,14 +1487,21 @@ class TestVerifiedLedgerDataLoss(unittest.TestCase):
                     f.write("REAL CURATED CONTENT")
 
             extraction = bootstrap_extractors.LedgerExtraction(
-                metrics=[], tools=[bootstrap_extractors.NamedLedgerItem(
-                    name="Braze", employer="Acme")], projects=[]
+                metrics=[],
+                tools=[
+                    bootstrap_extractors.NamedLedgerItem(name="Braze", employer="Acme")
+                ],
+                projects=[],
             )
 
             patches = [
-                patch.object(bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]),
+                patch.object(
+                    bootstrap_profile, "VERIFIED_METRICS_PATH", paths["metrics"]
+                ),
                 patch.object(bootstrap_profile, "VERIFIED_TOOLS_PATH", paths["tools"]),
-                patch.object(bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]),
+                patch.object(
+                    bootstrap_profile, "VERIFIED_PROJECTS_PATH", paths["projects"]
+                ),
                 patch.object(
                     bootstrap_profile,
                     "_achievements_summary_text_by_employer",
@@ -1534,7 +1546,6 @@ class TestVerifiedLedgerDataLoss(unittest.TestCase):
             open(empty, "w").close()
             self.assertTrue(bootstrap_profile._seed_only_if_absent(empty))
 
-
     def test_bullet_source_falls_back_to_the_established_bullet_bank(self):
         """An established profile has no bullet-bank-draft.csv -- reading
         only that path is what produced the empty extraction above."""
@@ -1571,11 +1582,13 @@ class TestVerifiedLedgerDataLoss(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             with (
                 patch.object(
-                    bootstrap_bullet_bank, "DRAFT_CSV_PATH",
+                    bootstrap_bullet_bank,
+                    "DRAFT_CSV_PATH",
                     os.path.join(tmpdir, "nope.csv"),
                 ),
                 patch.object(
-                    bootstrap_bullet_bank, "BULLET_BANK_CLEAN_PATH",
+                    bootstrap_bullet_bank,
+                    "BULLET_BANK_CLEAN_PATH",
                     os.path.join(tmpdir, "also-nope.csv"),
                 ),
             ):

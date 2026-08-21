@@ -632,9 +632,7 @@ def write_verified_ledger(dry_run: bool = False) -> None:
     # prompt, and it is silent precisely when something else already went
     # wrong. Bailing out leaves the existing files untouched.
     if not (extraction.metrics or extraction.tools or extraction.projects):
-        if os.path.exists(VERIFIED_METRICS_PATH) or os.path.exists(
-            VERIFIED_TOOLS_PATH
-        ):
+        if os.path.exists(VERIFIED_METRICS_PATH) or os.path.exists(VERIFIED_TOOLS_PATH):
             cli_art.cli_warning(
                 "Skipped rewriting the verified ledger: extraction returned no "
                 "entries, and overwriting would erase the existing "

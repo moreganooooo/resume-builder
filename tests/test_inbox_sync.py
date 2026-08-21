@@ -102,7 +102,7 @@ class TestSmartQuoteNormalization(unittest.TestCase):
 
     def test_normalizer_folds_quotes_dashes_and_nbsp(self):
         folded = inbox_sync._normalize_text("a\u2019b \u201cc\u201d d\u2013e\u00a0f")
-        self.assertEqual(folded, "a'b \"c\" d-e f")
+        self.assertEqual(folded, 'a\'b "c" d-e f')
 
 
 class TestApplicationGate(unittest.TestCase):
@@ -128,7 +128,8 @@ class TestApplicationGate(unittest.TestCase):
     def test_newsletter_is_rejected(self):
         self.assertFalse(
             inbox_sync.is_job_application_mail(
-                "The New York Times <nytdirect@nytimes.com>", "The Morning: Bot meets bot"
+                "The New York Times <nytdirect@nytimes.com>",
+                "The Morning: Bot meets bot",
             )
         )
 
@@ -178,9 +179,18 @@ class TestGateFiltersResults(unittest.TestCase):
 
     def test_non_application_mail_is_dropped_entirely(self):
         messages = [
-            {"from": "nytdirect@nytimes.com", "subject": "The Morning", "body": "unfortunately", "date": ""},
-            {"from": "team@mercor.com", "subject": "Update on your application for X",
-             "body": "we won't be moving forward with your application", "date": ""},
+            {
+                "from": "nytdirect@nytimes.com",
+                "subject": "The Morning",
+                "body": "unfortunately",
+                "date": "",
+            },
+            {
+                "from": "team@mercor.com",
+                "subject": "Update on your application for X",
+                "body": "we won't be moving forward with your application",
+                "date": "",
+            },
         ]
 
         results = process_email_messages(messages)
@@ -231,7 +241,7 @@ class TestATSDomainSuffixMatching(unittest.TestCase):
             self.assertFalse(inbox_sync._is_ats_domain(domain), domain)
 
     def test_lookalike_suffix_does_not_match(self):
-        """"evilicims.com" must not match "icims.com"."""
+        """ "evilicims.com" must not match "icims.com"."""
         self.assertFalse(inbox_sync._is_ats_domain("evilicims.com"))
 
 
@@ -361,7 +371,9 @@ class TestRecruiterDetection(unittest.TestCase):
     def test_resume_discovery_phrase(self):
         self.assertTrue(
             inbox_sync.is_recruiter_outreach(
-                "x@unknown.example", "Role", "I came across your resume on a job portal."
+                "x@unknown.example",
+                "Role",
+                "I came across your resume on a job portal.",
             )
         )
 
@@ -553,8 +565,18 @@ class TestCompanyNormalization(unittest.TestCase):
 class TestCompanyMatching(unittest.TestCase):
 
     JOBS = [
-        {"id": "1", "title": "Lifecycle Manager", "company": "Rula", "status": "applied"},
-        {"id": "2", "title": "Content Strategist", "company": "Stripe", "status": "pending"},
+        {
+            "id": "1",
+            "title": "Lifecycle Manager",
+            "company": "Rula",
+            "status": "applied",
+        },
+        {
+            "id": "2",
+            "title": "Content Strategist",
+            "company": "Stripe",
+            "status": "pending",
+        },
     ]
 
     def test_exact_normalized_match(self):
@@ -562,7 +584,9 @@ class TestCompanyMatching(unittest.TestCase):
         self.assertEqual([m["id"] for m in matches], ["1"])
 
     def test_unknown_company_matches_nothing(self):
-        self.assertEqual(inbox_sync.match_company_to_jobs("Unknown Company", self.JOBS), [])
+        self.assertEqual(
+            inbox_sync.match_company_to_jobs("Unknown Company", self.JOBS), []
+        )
 
     def test_empty_company_matches_nothing(self):
         self.assertEqual(inbox_sync.match_company_to_jobs("", self.JOBS), [])
@@ -627,7 +651,14 @@ class TestProcessEmailMessages(unittest.TestCase):
                 "date": "",
             }
         ]
-        jobs = [{"id": "1", "title": "Lifecycle Manager", "company": "Rula", "status": "applied"}]
+        jobs = [
+            {
+                "id": "1",
+                "title": "Lifecycle Manager",
+                "company": "Rula",
+                "status": "applied",
+            }
+        ]
 
         results = process_email_messages(messages, jobs=jobs)
 
