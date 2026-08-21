@@ -42,6 +42,7 @@ type MenuIcons struct {
 	External string // nf-fa-external_link
 	Clock    string // nf-fa-clock_o
 	Graph    string // nf-fa-line_chart
+	Location string // nf-fa-map_marker (theme.py's "location")
 
 	// Score* give a composite/interview-probability score's color tier
 	// (see screens/bars.go's scoreStyle) a redundant shape cue too, so a
@@ -63,22 +64,22 @@ type MenuIcons struct {
 func NewMenuIcons() MenuIcons {
 	if os.Getenv("RESUME_BUILDER_ICONS") != "unicode" {
 		return MenuIcons{
-			Pipeline:    "", // nf-fa-cog
-			Progress:    "", // nf-fa-bar_chart
-			Report:      "", // nf-fa-file_text_o
-			Quit:        "", // nf-fa-sign_out
-			Menu:        "", // nf-fa-bars
-			Jobs:        "▣", // briefcase / job board icon replacement
-			Profile:     "", // nf-fa-user
-			Search:      "", // nf-fa-search
-			Source:      "", // nf-fa-folder_open
-			Path:        "", // nf-fa-file_o
-			Magic:       "", // nf-fa-magic
-			Trash:       "", // nf-fa-trash
-			Edit:        "", // nf-fa-pencil
-			External:    "", // nf-fa-external_link
-			Clock:       "", // nf-fa-clock_o
-			Graph:       "", // nf-fa-line_chart
+			Pipeline: "", // nf-fa-cog
+			Progress: "", // nf-fa-bar_chart
+			Report:   "", // nf-fa-file_text_o
+			Quit:     "", // nf-fa-sign_out
+			Menu:     "", // nf-fa-bars
+			Jobs:     "▣", // briefcase / job board icon replacement
+			Profile:  "", // nf-fa-user
+			Search:   "", // nf-fa-search
+			Source:   "", // nf-fa-folder_open
+			Path:     "", // nf-fa-file_o
+			Magic:    "", // nf-fa-magic
+			Trash:    "", // nf-fa-trash
+			Edit:     "", // nf-fa-pencil
+			External: "", // nf-fa-external_link
+			Clock:    "", // nf-fa-clock_o
+			Graph:    "", // nf-fa-line_chart
 
 			ScoreStrong: "✓",
 			ScoreGood:   "✦",
@@ -87,22 +88,23 @@ func NewMenuIcons() MenuIcons {
 		}
 	}
 	return MenuIcons{
-		Pipeline:    "⚙",
-		Progress:    "▤",
-		Report:      "▥",
-		Quit:        "✕",
-		Menu:        "≡",
-		Jobs:        "▣",
-		Profile:     "◉",
-		Search:      "⌖",
-		Source:      "◰",
-		Path:        "⌗",
-		Magic:       "✦",
-		Trash:       "⌫",
-		Edit:        "✎",
-		External:    "↗",
-		Clock:       "◷",
-		Graph:       "▨",
+		Pipeline: "⚙",
+		Progress: "▤",
+		Report:   "▥",
+		Quit:     "✕",
+		Menu:     "≡",
+		Jobs:     "▣",
+		Profile:  "◉",
+		Search:   "⌖",
+		Source:   "◰",
+		Path:     "⌗",
+		Magic:    "✦",
+		Trash:    "⌫",
+		Edit:     "✎",
+		External: "↗",
+		Clock:    "◷",
+		Graph:    "▨",
+		Location: "⌂",
 
 		ScoreStrong: "✓",
 		ScoreGood:   "✦",

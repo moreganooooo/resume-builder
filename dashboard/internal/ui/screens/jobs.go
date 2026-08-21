@@ -33,12 +33,20 @@ type JobsClosedMsg struct{ Quit bool }
 // Structurally mirrors PipelineModel (see pipeline.go) but scoped to a
 // single-key filter cycle instead of a full tab bar/sort cycle/search.
 type JobsModel struct {
-	rows          []model.JobRow
-	filtered      []model.JobRow
-	cursor        int
-	scrollOffset  int
-	detailScrollOffset int // scroll position in the detail pane (J/K keys)
-	filter        string // "all", "pending", "completed"
+	rows               []model.JobRow
+	filtered           []model.JobRow
+	cursor             int
+	scrollOffset       int
+	detailScrollOffset int    // scroll position in the detail pane (J/K keys)
+	filter             string // "all", "pending", "completed"
+	// workplaceFilter narrows by workplace mode -- "" means no
+	// restriction. Kept separate from `filter` rather than folded into
+	// its cycle so the two compose: "high_fit" AND "onsite" is a
+	// question worth asking, and one combined cycle could not express it.
+	workplaceFilter string
+	// distanceSort orders by measured distance ascending instead of the
+	// default composite-score ordering.
+	distanceSort  bool
 	width, height int
 	theme         theme.Theme
 
@@ -203,7 +211,16 @@ func (m *JobsModel) applyFilter() {
 			if r.Evaluation.CompositeScore < 3.0 {
 				continue
 			}
-		// "all" has no score/status restriction
+			// "all" has no score/status restriction
+		}
+
+		// Narrow by workplace mode. A row whose mode could not be
+		// determined is excluded from a specific mode rather than shown
+		// under all of them -- "unknown" is not evidence of anything, and
+		// listing it under "Remote" would be a claim the data does not
+		// support.
+		if m.workplaceFilter != "" && r.Workplace != m.workplaceFilter {
+			continue
 		}
 
 		// Apply search query within the active filter
@@ -211,6 +228,9 @@ func (m *JobsModel) applyFilter() {
 			continue
 		}
 		out = append(out, r)
+	}
+	if m.distanceSort {
+		sortByDistance(out)
 	}
 	m.filtered = out
 	if m.cursor >= len(m.filtered) {
@@ -220,6 +240,25 @@ func (m *JobsModel) applyFilter() {
 		m.cursor = 0
 	}
 	m.adjustScroll()
+}
+
+// sortByDistance orders rows nearest-first, with unmeasured rows last.
+//
+// Rows without a distance sort to the END, never the start. They are
+// mostly remote postings and unparseable location strings; floating them
+// to the top would bury the handful of genuinely nearby jobs that are
+// the entire reason to sort this way. Stable, so rows that tie on
+// distance -- and the whole unmeasured tail -- keep their existing
+// score order.
+func sortByDistance(rows []model.JobRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, aOK := rows[i].Miles()
+		b, bOK := rows[j].Miles()
+		if aOK && bOK {
+			return a < b
+		}
+		return aOK && !bOK
+	})
 }
 
 // matchesJobSearch reports whether job matches the lowercased search query
@@ -342,6 +381,41 @@ func nextJobsFilter(current string) string {
 		return "recent"
 	default:
 		return "all"
+	}
+}
+
+// nextWorkplaceFilter cycles the [w] workplace modes. The empty string
+// is "no restriction" and is part of the cycle, so [w] always returns to
+// showing everything rather than trapping the user in a narrowed view.
+//
+// Note there is no distance threshold here: the radius is applied at
+// SCAN time by scripts/location_filter.py, so anything on this screen is
+// already inside it. Filtering on "onsite" therefore means "on-site and
+// commutable", not "on-site anywhere".
+func nextWorkplaceFilter(current string) string {
+	switch current {
+	case "":
+		return model.WorkplaceRemote
+	case model.WorkplaceRemote:
+		return model.WorkplaceHybrid
+	case model.WorkplaceHybrid:
+		return model.WorkplaceOnsite
+	default:
+		return ""
+	}
+}
+
+// workplaceFilterLabel names the active [w] mode for the status bar.
+func workplaceFilterLabel(current string) string {
+	switch current {
+	case model.WorkplaceRemote:
+		return "Remote"
+	case model.WorkplaceHybrid:
+		return "Hybrid"
+	case model.WorkplaceOnsite:
+		return "On-site"
+	default:
+		return "All"
 	}
 }
 
@@ -808,6 +882,17 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "f":
 			m.filter = nextJobsFilter(m.filter)
 			m.applyFilter()
+		case "w":
+			m.workplaceFilter = nextWorkplaceFilter(m.workplaceFilter)
+			m.cursor = 0
+			m.applyFilter()
+		case "d":
+			// Reachable only in the normal state: the actionError branch
+			// above intercepts "d" for its raw-detail toggle and returns
+			// before this switch, so the two never contend.
+			m.distanceSort = !m.distanceSort
+			m.cursor = 0
+			m.applyFilter()
 		case "l":
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
@@ -870,8 +955,6 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			return m.Update(kp)
 		}
 		return m.Update(tea.KeyPressMsg(tea.Key{Text: msg.String()}))
-
-
 
 	case spinner.TickMsg:
 		if m.actionInProgress == "" {
@@ -1021,7 +1104,6 @@ func (m JobsModel) View() string {
 	return fullContent
 }
 
-
 func actionLabel(action string) string {
 	switch action {
 	case "liveness":
@@ -1133,9 +1215,21 @@ func (m JobsModel) renderHeader() string {
 
 	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	info := countStyle.Render(fmt.Sprintf("%d job(s) ", len(m.filtered))) +
-		filterStyle.Render("⏺ " + filterLabel)
+		filterStyle.Render("⏺ "+filterLabel)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs + "  ") +
+	// Only shown once engaged. A permanent "Workplace: All / Sort: Score"
+	// readout would spend header width restating the defaults; these
+	// appear exactly when the user has changed something and needs to
+	// know a narrowing is in effect.
+	modeStyle := lipgloss.NewStyle().Foreground(m.theme.Sky).Background(m.theme.Surface)
+	if m.workplaceFilter != "" {
+		info += modeStyle.Render("  " + m.theme.Icons.Location + " " + workplaceFilterLabel(m.workplaceFilter))
+	}
+	if m.distanceSort {
+		info += modeStyle.Render("  ↕ nearest")
+	}
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs+"  ") +
 		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ JOBS ✧", m.theme.Blue, m.theme.Peach))
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 	return style.Render(title + gap + info)
@@ -1276,7 +1370,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	scrollBorder := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Overlay).
-		Width(width - 2).
+		Width(width-2).
 		Padding(1, 2)
 
 	wrapWidth := width - 10 // inner content width for wrapped text
@@ -1321,6 +1415,18 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	content = append(content, styles.Value.Render(job.Title))
 	if job.SourcePlatform != "" {
 		content = append(content, styles.Subtext.Render("via "+job.SourcePlatform))
+	}
+	if badge := locationBadge(m.theme, job); badge != "" {
+		line := badge
+		// The raw location string earns its place next to the badge: the
+		// badge says "6.2 mi", the string says which town, and a commute
+		// decision needs both.
+		if job.Location != "" {
+			line += styles.Subtext.Render("  " + truncateRunes(job.Location, wrapWidth-lipgloss.Width(badge)-4))
+		}
+		content = append(content, line)
+	} else if job.Location != "" {
+		content = append(content, styles.Subtext.Render(truncateRunes(job.Location, wrapWidth)))
 	}
 	content = append(content, "")
 
@@ -1607,6 +1713,8 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
 			keyStyle.Render("/") + descStyle.Render(" search  ") +
 			keyStyle.Render("f") + descStyle.Render(" filter  ") +
+			keyStyle.Render("w") + descStyle.Render(" workplace  ") +
+			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
@@ -1654,6 +1762,41 @@ func layerScoreText(t theme.Theme, score float64) string {
 // icon, and three competing color signals per row turns a scannable list
 // into noise. Carrying no color here also means there is no color-only
 // signal to make redundant -- the numbers are the whole message.
+// locationBadge renders a job's workplace and distance, e.g.
+// "⌂ On-site · 6.2 mi" or "⌂ Remote". Returns "" when there is nothing
+// truthful to say -- an unknown workplace with no distance gets no badge
+// rather than a placeholder, since an empty slot reads as "not stated"
+// while "Unknown" reads like a value the data actually carries.
+//
+// The glyph comes from the theme icon set (Nerd Font, with a Unicode
+// fallback under RESUME_BUILDER_ICONS=unicode), never a literal emoji --
+// an emoji renders at inconsistent width across terminals and breaks the
+// column alignment every row here depends on.
+func locationBadge(t theme.Theme, job model.JobRow) string {
+	label := ""
+	switch job.Workplace {
+	case model.WorkplaceRemote:
+		label = "Remote"
+	case model.WorkplaceHybrid:
+		label = "Hybrid"
+	case model.WorkplaceOnsite:
+		label = "On-site"
+	}
+
+	if miles, ok := job.Miles(); ok {
+		distance := fmt.Sprintf("%.1f mi", miles)
+		if label == "" {
+			label = distance
+		} else {
+			label = label + " · " + distance
+		}
+	}
+	if label == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().Foreground(t.Sky).Render(t.Icons.Location + " " + label)
+}
+
 func jobSubtitleWithScores(t theme.Theme, job model.JobRow, width int) string {
 	eval := job.Evaluation
 	if width < jobsScoreDetailMinWidth || (eval.FitScore <= 0 && eval.InterviewOddsScore <= 0) {
@@ -1758,6 +1901,3 @@ func RenderSituationalRoleBadge(t theme.Theme, role string) string {
 		Padding(0, 1).
 		Render(fmt.Sprintf("⌖ Situational Trigger: %s", role))
 }
-
-
-
