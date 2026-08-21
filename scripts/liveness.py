@@ -11,6 +11,7 @@ See docs/superpowers/specs/2026-07-05-liveness-checker-design.md.
 import contextlib
 import datetime
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -19,6 +20,7 @@ import cli_art
 import jd_manager
 import profile_paths
 import theme
+from atomic_write import atomic_write
 
 # Vars this repo's own subprocess children (Chromium via check-liveness.mjs
 # here, every board/ATS provider via scan_boards.py's own copy of this
@@ -257,6 +259,55 @@ def _gather_candidates(pending_paths: list) -> list:
     return candidates
 
 
+def _checkpoint_path() -> str:
+    """Where an in-flight sweep records what it has already verified."""
+    return os.path.join(profile_paths.checkpoints_dir(), "liveness_sweep.json")
+
+
+def _load_checkpoint() -> dict:
+    """Verdicts from an interrupted sweep, keyed by job_key.
+
+    A full sweep is 30-50 minutes of Playwright. Losing it to a Ctrl-C,
+    a closed laptop, or a crash means paying that again for work already
+    done, so each verdict is persisted as it arrives and replayed on the
+    next run.
+    """
+    try:
+        with open(_checkpoint_path(), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    results = data.get("results")
+    return results if isinstance(results, dict) else {}
+
+
+def _save_checkpoint(results_by_key: dict) -> None:
+    """Best-effort. A checkpoint that cannot be written must never take
+    the sweep down with it -- the sweep's own work is the valuable part."""
+    try:
+        os.makedirs(profile_paths.checkpoints_dir(), exist_ok=True)
+        with atomic_write(_checkpoint_path(), "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "saved_at": datetime.datetime.now().isoformat(),
+                    "results": results_by_key,
+                },
+                handle,
+            )
+    except (OSError, ValueError, TypeError) as e:
+        logging.debug(f"liveness: could not write checkpoint -- {e}")
+
+
+def _clear_checkpoint() -> None:
+    """Removes the checkpoint once a sweep has finished and persisted."""
+    try:
+        os.remove(_checkpoint_path())
+    except OSError:
+        pass
+
+
 def _results_from_progress(events: list, candidates: list) -> list:
     """Rebuilds the result rows from streamed progress events.
 
@@ -336,6 +387,27 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
             "expired_source_paths": [],
         }
 
+    # Resume an interrupted sweep. A full run is 30-50 minutes of real
+    # browser work, which is long enough that a Ctrl-C, a closed lid, or
+    # a crash is likely -- and previously cost the entire run.
+    original_candidates = list(candidates)
+    resumed_results = {
+        key: value
+        for key, value in _load_checkpoint().items()
+        if any(c.get("job_key") == key for c in candidates)
+    }
+    if resumed_results:
+        candidates = [c for c in candidates if c.get("job_key") not in resumed_results]
+        cli_art.console.print(
+            f"\n  {theme.colorize_icon('success')}  Resuming: "
+            f"{len(resumed_results)} JD(s) already verified in an earlier run, "
+            f"{len(candidates)} left to check.",
+            soft_wrap=True,
+        )
+    candidate_by_source = {
+        c["source_file"]: c for c in candidates if c.get("source_file")
+    }
+
     os.makedirs(os.path.dirname(LIVENESS_INPUT_PATH), exist_ok=True)
     with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
@@ -381,6 +453,9 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 # the formatting, not the results -- see the fallback
                 # below.
                 streamed_results = []
+                # Persisted as they arrive so an interrupted sweep can
+                # resume instead of re-checking work already done.
+                checkpoint = dict(resumed_results)
                 candidate_meta = {
                     c["source_file"]: {
                         "title": c.get("title") or "",
@@ -400,6 +475,20 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                             pass
                         if isinstance(event, dict) and event.get("type") == "progress":
                             streamed_results.append(event)
+                            source = event.get("source_file")
+                            if source and source in candidate_by_source:
+                                checkpoint[candidate_by_source[source]["job_key"]] = {
+                                    "result": event.get("result"),
+                                    "code": event.get("code"),
+                                    "reason": event.get("reason"),
+                                    "source_file": source,
+                                }
+                                # Batched: a sweep is hundreds of events
+                                # and the file is rewritten whole each
+                                # time. Every 10 bounds a crash to at
+                                # most 10 re-checks.
+                                if len(checkpoint) % 10 == 0:
+                                    _save_checkpoint(checkpoint)
                             icon_name = _LIVENESS_ICON_BY_RESULT.get(
                                 event.get("result"), "warning"
                             )
@@ -498,6 +587,25 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
             if os.path.exists(path):
                 os.remove(path)
 
+    # Fold in anything an earlier, interrupted run already verified.
+    # Those candidates were filtered out above, so the child never saw
+    # them and they are absent from `results` -- without this they would
+    # be silently dropped from the summary and never persisted.
+    if resumed_results:
+        by_key = {c.get("job_key"): c for c in original_candidates}
+        for key, saved in resumed_results.items():
+            candidate = by_key.get(key)
+            if not candidate:
+                continue
+            results.append(
+                {
+                    **candidate,
+                    "result": saved.get("result"),
+                    "code": saved.get("code"),
+                    "reason": saved.get("reason"),
+                }
+            )
+
     counts = {}
     moved = 0
     os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
@@ -547,6 +655,12 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
 
             jd_source.set_status(source_file, "expired")
             moved += 1
+
+    # Every verdict is now persisted via save_liveness(), so the
+    # checkpoint has done its job. Cleared only on this path -- an early
+    # return above means the sweep did NOT finish, and that is exactly
+    # when the next run needs it.
+    _clear_checkpoint()
 
     return {
         "active": counts.get("active", 0),
