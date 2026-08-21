@@ -230,6 +230,10 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         "posted_at": raw.get("posted_at") or "",
         "description": description,
     }
+    # Same carry as scan_boards.fetch_board_jobs -- a provider that
+    # declares its text a teaser must not lose that across the rebuild.
+    if raw.get("description_is_teaser"):
+        job["description_is_teaser"] = True
     scan_boards._flag_thin_description(job, provider_id, url)
     return job
 
