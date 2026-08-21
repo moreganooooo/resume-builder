@@ -36,12 +36,15 @@
 # rather than dropped: surfacing an unknown is cheap to eyeball, while
 # silently discarding a commutable role is not.
 #
-# location:
-#   city: Kansas City
-#   state: MO
-#   zip: "64111"
-#   radius_miles: 25
-#   workplace_mode: any
+# Edit this block from the menu: Settings & Upkeep -> Location & Commute
+# Radius (scripts/location_settings.py), which preserves these comments.
+
+location:
+  city: Getzville
+  state: NY
+  zip: "14068"
+  radius_miles: 25
+  workplace_mode: any
 
 location_filter:
   always_allow:

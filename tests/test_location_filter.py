@@ -104,6 +104,19 @@ class TestInternational(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertFalse(lf.looks_international(value))
 
+    def test_canadian_province_codes_detected(self):
+        # These look exactly like US state codes; without explicit
+        # handling "Toronto, ON" passes as merely unresolvable.
+        for value in ("Toronto, ON", "Vancouver, BC", "Montreal, QC"):
+            with self.subTest(value=value):
+                self.assertTrue(lf.looks_international(value))
+
+    def test_us_state_codes_are_not_mistaken_for_provinces(self):
+        # Guards the collision check: OR, ME, NE and friends are states.
+        for value in ("Portland, OR", "Bangor, ME", "Omaha, NE", "Reno, NV"):
+            with self.subTest(value=value):
+                self.assertFalse(lf.looks_international(value))
+
 
 class TestEvaluateLocation(unittest.TestCase):
     def test_remote_passes(self):

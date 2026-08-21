@@ -147,6 +147,26 @@ _INTERNATIONAL_TOKENS = {
     "latam",
 }
 
+# Canadian province codes look exactly like US state codes, so without
+# this "Toronto, ON" parses as an ordinary "City, XX" and sails through
+# as merely unresolvable. Checked against the US list: none of these
+# collide with a real state code, so matching them is unambiguous.
+_INTERNATIONAL_TOKENS |= {
+    "on",
+    "qc",
+    "bc",
+    "ab",
+    "mb",
+    "sk",
+    "ns",
+    "nb",
+    "nl",
+    "pe",
+    "yt",
+    "nt",
+    "nu",
+}
+
 # Workplace words are not part of a place name. "Hybrid - Kansas City, MO"
 # must resolve to Kansas City, or every hybrid posting looks unresolvable
 # and silently survives the radius check.
