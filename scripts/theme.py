@@ -131,6 +131,7 @@ _UNICODE_ICONS = {
     "resume": "▶",  # U+25B6 play triangle
     "complete": "✓",  # U+2713 check mark, consistent with success
     "gem": "✦",  # U+2726 four-pointed star
+    "location": "⌂",  # U+2302 house -- place/commute (never the pin emoji)
     "prev": "❮",  # U+276E angle quote left
     "next": "❯",  # U+276F angle quote right
     "back": "❮",  # U+276E angle quote left, same as prev

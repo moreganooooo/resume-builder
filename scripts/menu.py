@@ -171,6 +171,26 @@ def _build_track_followup_choices() -> list:
     ]
 
 
+def _location_filter_label() -> str:
+    """Current radius setting, shown inline so the menu states what is
+    configured without the user having to open the editor to find out."""
+    try:
+        import location_settings
+
+        return f"({location_settings.describe(location_settings.read_settings())})"
+    except Exception:
+        return ""
+
+
+def _handle_manage_location() -> bool:
+    """Settings & Upkeep -> Location & Commute Radius."""
+    import location_settings
+
+    location_settings.run_location_settings()
+    _pause_and_return()
+    return True
+
+
 def _build_settings_upkeep_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why
     (the last-run label below is itself state that can change between
@@ -192,6 +212,12 @@ def _build_settings_upkeep_choices() -> list:
                 "discovery", "↳ Manage Scraping, Boards & Search Queries"
             ),
             value="manage_scraping",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "location", f"↳ Location & Commute Radius {_location_filter_label()}"
+            ),
+            value="manage_location",
         ),
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
@@ -1548,6 +1574,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_scraping":
             _handle_manage_scraping()
+            continue
+        if choice == "manage_location":
+            _handle_manage_location()
             continue
         if choice == "build_sample":
             _handle_build_sample()
