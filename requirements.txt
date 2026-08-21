@@ -3,7 +3,7 @@ numpy
 pyyaml
 pydantic
 requests
-idna==3.15
+idna==3.19
 python-dotenv
 google-generativeai
 google-genai
