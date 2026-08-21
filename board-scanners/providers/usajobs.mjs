@@ -28,6 +28,13 @@ export default {
       'User-Agent': email,
     };
     const params = new URLSearchParams({ Keyword: entry.search_term || '' });
+    // USAJOBS takes a place name plus a radius in MILES (unlike Adzuna's
+    // kilometres), both optional. Supplied by scan_boards.py from the
+    // profile's configured origin.
+    if (entry.location) {
+      params.set('LocationName', entry.location);
+      if (entry.radius_miles) params.set('Radius', String(entry.radius_miles));
+    }
     const url = `${USAJOBS_API_URL}?${params.toString()}`;
     const json = await ctx.fetchJson(url, { headers });
     const items = Array.isArray(json?.SearchResult?.SearchResultItems)
