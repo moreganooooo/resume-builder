@@ -20,6 +20,7 @@ import jd_manager
 import liveness
 import scan_ats
 import scan_boards
+import scan_indeed
 import scan_jobright
 import scan_linkedin
 import theme
@@ -81,6 +82,11 @@ VERIFY_CONFIRM_THRESHOLD = 25
 SOURCE_FETCHERS = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
+    # Indeed via JobSpy -- the largest US board and, so far, the only
+    # free source of tailoring-grade text for LOCAL roles. See
+    # scan_indeed.py for why it is a Python source and not a Node
+    # provider, and why it scrapes only Indeed of JobSpy's five sites.
+    "indeed": scan_indeed.fetch_indeed_jobs,
     "boards": scan_boards.fetch_board_jobs,
     "ats": scan_ats.fetch_ats_jobs,
 }

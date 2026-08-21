@@ -29,6 +29,7 @@ dependencies = [
     "pdfminer.six",
     "pypdf>=6.16.1",
     "odfpy",
+    "python-jobspy",
     "openpyxl",
 ]
 
