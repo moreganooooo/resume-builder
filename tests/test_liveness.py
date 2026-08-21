@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -730,3 +731,53 @@ class TestDatabaseRowLabels(unittest.TestCase):
 
     def test_missing_entry_does_not_raise(self):
         self.assertEqual(liveness._styled_jd_label(self.HASH, {}), self.HASH)
+
+
+class TestSweepCheckpoint(unittest.TestCase):
+    """A 30-50 minute sweep must survive an interruption.
+
+    Before this, a Ctrl-C or a crash at minute 40 threw away every
+    verdict and the next run started from zero.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        patcher = patch.object(
+            liveness.profile_paths, "checkpoints_dir", return_value=self.dir.name
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_round_trip(self):
+        liveness._save_checkpoint({"k1": {"result": "active"}})
+        self.assertEqual(liveness._load_checkpoint()["k1"]["result"], "active")
+
+    def test_clear_removes_it(self):
+        liveness._save_checkpoint({"k1": {"result": "active"}})
+        liveness._clear_checkpoint()
+        self.assertEqual(liveness._load_checkpoint(), {})
+
+    def test_missing_checkpoint_is_empty_not_an_error(self):
+        self.assertEqual(liveness._load_checkpoint(), {})
+
+    def test_clearing_a_missing_checkpoint_is_safe(self):
+        liveness._clear_checkpoint()  # must not raise
+
+    def test_corrupt_checkpoint_degrades_to_empty(self):
+        # A half-written file must not block the next sweep.
+        with open(liveness._checkpoint_path(), "w", encoding="utf-8") as handle:
+            handle.write('{"results": {"k1": ')
+        self.assertEqual(liveness._load_checkpoint(), {})
+
+    def test_unexpected_shape_degrades_to_empty(self):
+        with open(liveness._checkpoint_path(), "w", encoding="utf-8") as handle:
+            handle.write('["not", "a", "dict"]')
+        self.assertEqual(liveness._load_checkpoint(), {})
+
+    def test_save_failure_never_raises(self):
+        # The sweep's own work matters more than the checkpoint.
+        with patch.object(
+            liveness.profile_paths, "checkpoints_dir", return_value="/nonexistent/x"
+        ):
+            liveness._save_checkpoint({"k1": {"result": "active"}})  # must not raise
