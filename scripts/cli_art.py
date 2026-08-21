@@ -1714,9 +1714,7 @@ def text(message: str, default: str = "") -> str | None:
     import sys
 
     if "unittest" in sys.modules:
-        return questionary.text(
-            message, default=default, style=QUESTIONARY_STYLE
-        ).ask()
+        return questionary.text(message, default=default, style=QUESTIONARY_STYLE).ask()
     return charm_prompt.text(message, default=default)
 
 

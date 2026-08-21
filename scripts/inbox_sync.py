@@ -37,11 +37,10 @@ from datetime import datetime, timedelta
 from email.header import decode_header, make_header
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-
 import cli_art
 import db
 import profile_paths
+from dotenv import load_dotenv
 
 DEFAULT_IMAP_HOST = "imap.gmail.com"
 DEFAULT_FOLDER = "INBOX"
@@ -126,9 +125,7 @@ def _is_employer_ats(domain: str) -> bool:
 def _is_ats_domain(domain: str) -> bool:
     """Suffix match, so a subdomain of a known ATS still counts."""
     domain = (domain or "").lower().strip(".")
-    return any(
-        domain == ats or domain.endswith("." + ats) for ats in ATS_DOMAINS
-    )
+    return any(domain == ats or domain.endswith("." + ats) for ats in ATS_DOMAINS)
 
 
 # Contexts that use application/interview vocabulary for something that is
@@ -206,7 +203,6 @@ def _sender_domain(from_header: str) -> str:
     return match.group(1).lower() if match else ""
 
 
-
 # Staffing and contract-recruiting firms. Distinct from ATS_DOMAINS:
 # an ATS sends automated status mail about an application you submitted,
 # whereas these are humans pitching roles at you. Both are job mail, but
@@ -272,9 +268,7 @@ NON_JOB_DOMAINS = {
 
 def _is_non_job_domain(domain: str) -> bool:
     domain = (domain or "").lower().strip(".")
-    return any(
-        domain == bad or domain.endswith("." + bad) for bad in NON_JOB_DOMAINS
-    )
+    return any(domain == bad or domain.endswith("." + bad) for bad in NON_JOB_DOMAINS)
 
 
 def is_recruiter_outreach(from_header: str, subject: str, body: str = "") -> bool:
@@ -287,9 +281,7 @@ def is_recruiter_outreach(from_header: str, subject: str, body: str = "") -> boo
     whose subjects carry no application vocabulary at all.
     """
     domain = _sender_domain(from_header)
-    if any(
-        domain == rec or domain.endswith("." + rec) for rec in RECRUITER_DOMAINS
-    ):
+    if any(domain == rec or domain.endswith("." + rec) for rec in RECRUITER_DOMAINS):
         return True
 
     text = _normalize_text(f"{subject} {body}")
@@ -379,9 +371,7 @@ def _normalize_text(text: str) -> str:
     return " ".join((text or "").translate(_PUNCT_MAP).split())
 
 
-def classify_email_intent(
-    subject: str, body: str, from_header: str = ""
-) -> str:
+def classify_email_intent(subject: str, body: str, from_header: str = "") -> str:
     """Classifies a message into 'offer', 'rejection', 'interview',
     'acknowledgment', 'recruiter_outreach', or 'unknown'.
 
@@ -720,13 +710,16 @@ def process_email_messages(
                 "date": msg.get("date", ""),
                 "intent": intent,
                 "matched_jobs": [
-                    {"id": m.get("id"), "title": m.get("title"), "status": m.get("status")}
+                    {
+                        "id": m.get("id"),
+                        "title": m.get("title"),
+                        "status": m.get("status"),
+                    }
                     for m in matches
                 ],
             }
         )
     return results
-
 
 
 # --- Sent mail -------------------------------------------------------
@@ -903,9 +896,7 @@ def applications_without_replies(
     `received` set covering at least the same period as `sent`.
     """
     replied = {
-        _sender_domain(r.get("from", "")).lower()
-        for r in received
-        if r.get("from")
+        _sender_domain(r.get("from", "")).lower() for r in received if r.get("from")
     }
     replied.discard("")
 
@@ -941,7 +932,9 @@ def list_folders(conn: imaplib.IMAP4_SSL) -> List[str]:
         return []
     names = []
     for line in raw or []:
-        decoded = line.decode(errors="replace") if isinstance(line, bytes) else str(line)
+        decoded = (
+            line.decode(errors="replace") if isinstance(line, bytes) else str(line)
+        )
         if '"' in decoded:
             names.append(decoded.rsplit('"', 2)[-2])
     return names
@@ -979,9 +972,7 @@ def sync_inbox(
             except Exception:
                 return
             return
-        for result in process_email_messages(
-            messages, jobs=jobs, trust_all=trusted
-        ):
+        for result in process_email_messages(messages, jobs=jobs, trust_all=trusted):
             key = (result["from"], result["subject"], result["date"])
             if key in seen:
                 continue

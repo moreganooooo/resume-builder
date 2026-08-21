@@ -617,6 +617,7 @@ class TestVerifyCandidatesActivity(unittest.TestCase):
         activity.step.assert_not_called()
         mock_print_raw.assert_called_once()
 
+
 class TestDatabaseCandidatesAreGuardedInTests(unittest.TestCase):
     """A liveness sweep is real Playwright network I/O. When database
     candidates were first added, the existing tests mocked the filesystem
@@ -645,4 +646,3 @@ class TestDatabaseCandidatesAreGuardedInTests(unittest.TestCase):
     def test_liveness_recency_helper_tolerates_junk(self):
         for value in (None, {}, {"checked_at": "not-a-date"}, {"checked_at": None}):
             self.assertFalse(liveness._liveness_is_recent(value))
-

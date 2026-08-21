@@ -34,7 +34,9 @@ class TestRoleExtraction(unittest.TestCase):
 
     def test_role_from_interest_subject(self):
         self.assertEqual(
-            em.extract_role("Thank you for your interest in Copywriter", "", "rejection"),
+            em.extract_role(
+                "Thank you for your interest in Copywriter", "", "rejection"
+            ),
             "Copywriter",
         )
 
@@ -59,7 +61,9 @@ class TestRoleExtraction(unittest.TestCase):
         )
 
     def test_no_role_returns_none(self):
-        self.assertIsNone(em.extract_role("Hello there", "Just checking in", "rejection"))
+        self.assertIsNone(
+            em.extract_role("Hello there", "Just checking in", "rejection")
+        )
 
 
 class TestRoleNormalization(unittest.TestCase):
@@ -70,7 +74,7 @@ class TestRoleNormalization(unittest.TestCase):
         )
 
     def test_meaningful_parenthetical_is_kept(self):
-        """"(Commercial B2B)" contains a digit but is part of the role's
+        """ "(Commercial B2B)" contains a digit but is part of the role's
         real name -- stripping it merged two different Aquent postings."""
         self.assertIn("b2b", em.normalize_role("Content Strategist (Commercial B2B)"))
 
@@ -94,7 +98,9 @@ class TestRoleSimilarity(unittest.TestCase):
 
     def test_word_order_is_tolerated(self):
         self.assertGreater(
-            em.role_similarity("Marketing Content Manager", "Content Marketing Manager"),
+            em.role_similarity(
+                "Marketing Content Manager", "Content Marketing Manager"
+            ),
             0.7,
         )
 
@@ -142,17 +148,19 @@ class TestMatching(unittest.TestCase):
         proposals = self._plan("Update on your application for Graphic Designer")
 
         for proposal in proposals:
-            self.assertEqual(
-                proposal["action"], "skip", f"wrongly proposed {proposal}"
-            )
+            self.assertEqual(proposal["action"], "skip", f"wrongly proposed {proposal}")
 
     def test_unknown_company_yields_nothing(self):
-        self.assertEqual(self._plan("Update on your application for X", company="Nope"), [])
+        self.assertEqual(
+            self._plan("Update on your application for X", company="Nope"), []
+        )
 
     def test_company_key_collapses_spacing(self):
         """A saved "Khan Academy" and a sender-derived "khanacademy" are
         the same company."""
-        self.assertEqual(em._company_key("Khan Academy"), em._company_key("khanacademy"))
+        self.assertEqual(
+            em._company_key("Khan Academy"), em._company_key("khanacademy")
+        )
 
     def test_ambiguous_ties_are_demoted_below_auto(self):
         """Two saved roles scoring alike means nothing distinguishes them,
@@ -227,9 +235,10 @@ class TestApplyUpdates(unittest.TestCase):
         def fake_resolved(job_id, profile=None):
             yield ("/tmp/fake.json", True)
 
-        with patch("jd_source.resolved_jd", fake_resolved), patch(
-            "jd_manager.save_application_status"
-        ) as save:
+        with (
+            patch("jd_source.resolved_jd", fake_resolved),
+            patch("jd_manager.save_application_status") as save,
+        ):
             applied = em.apply_updates(proposals, include_confirmed=True)
 
         self.assertEqual(applied, 1)

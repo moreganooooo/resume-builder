@@ -122,7 +122,10 @@ def plan_project_merges(projects: List[dict]) -> Dict[str, str]:
         tokens = _tokens(name)
         if len(tokens) < PROJECT_PREFIX_TOKENS:
             continue
-        key = (_norm(project.get("employer", "")), tuple(tokens[:PROJECT_PREFIX_TOKENS]))
+        key = (
+            _norm(project.get("employer", "")),
+            tuple(tokens[:PROJECT_PREFIX_TOKENS]),
+        )
         clusters[key].append(name)
 
     merges: Dict[str, str] = {}
@@ -220,7 +223,9 @@ def main() -> int:
 
     for list_key, info in report.items():
         removed = info["before"] - info["after"]
-        print(f"\n  {list_key}: {info['before']} -> {info['after']}  ({verb} {removed})")
+        print(
+            f"\n  {list_key}: {info['before']} -> {info['after']}  ({verb} {removed})"
+        )
         for dup, canonical in list(info["merges"].items())[: args.show]:
             print(f"      {dup!r}  ->  {canonical!r}")
         if len(info["merges"]) > args.show:
