@@ -46,6 +46,7 @@ import logging
 import os
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cli_art
 import profile_paths
@@ -266,23 +267,55 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
     if activity is not None:
         activity.start_source(len(companies) + len(queries), label="Checking")
 
-    for company in companies:
-        if activity is not None:
-            company_name = company.get("name") or "?"
-            message = f"Checking {cli_art.format_board_name(company_name)}"
-            activity.step("discovery", "ATS", message, preserve_markup=True)
+    # Companies are fetched concurrently -- each is an independent Node
+    # subprocess against a different ATS host, so they were only ever
+    # sequential by omission. With ~400 tracked entries that serialization
+    # was the single largest cost in a scan, and the reason a real run
+    # reads as a hang (see the `activity` note above). Mirrors the same
+    # 8-worker pool scan_boards.fetch_board_jobs() already uses.
+    #
+    # Kept out of the pool: the websearch sweep loop below, which paces
+    # itself against Brave's free-tier 1 req/sec limit. Parallelizing that
+    # would trade a slow scan for a rate-limited one.
+    def process_company(company: dict) -> list:
         provider_id = _resolve_provider_id(company)
         if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
-            continue
+            return []
 
         raw_jobs = scan_boards._run_node_provider(provider_id, company)
         logging.info(
             f"scan_ats: {company.get('name')} ({provider_id}) returned {len(raw_jobs)} raw listing(s)."
         )
+        found = []
         for raw in raw_jobs:
             job = _normalize_raw_job(raw, provider_id, company.get("name"))
             if job:
-                jobs.append(job)
+                found.append(job)
+        return found
+
+    if companies:
+        max_workers = min(len(companies), 8)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            for company in companies:
+                # Announced from the main thread at submit time, so the
+                # step log stays ordered and ScanActivity is never touched
+                # concurrently.
+                if activity is not None:
+                    company_name = company.get("name") or "?"
+                    message = f"Checking {cli_art.format_board_name(company_name)}"
+                    activity.step("discovery", "ATS", message, preserve_markup=True)
+                futures[executor.submit(process_company, company)] = company
+
+            for future in as_completed(futures):
+                company = futures[future]
+                try:
+                    jobs.extend(future.result())
+                except Exception as e:
+                    # One unreachable ATS host must not abort the scan.
+                    logging.error(
+                        f"scan_ats: Future task failed for {company.get('name')}: {e}"
+                    )
 
     last_websearch_call_at = None
     for query in queries:
