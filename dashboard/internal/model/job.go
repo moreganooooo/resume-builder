@@ -22,6 +22,39 @@ type JobRow struct {
 	Liveness       *Liveness    `json:"liveness"`
 	Application    *Application `json:"application"`
 	Coverage       *Coverage    `json:"coverage"`
+
+	// Location is the posting's stated location, verbatim. Workplace is
+	// "remote"/"hybrid"/"onsite"/"unknown" as classified by Python's
+	// location_filter.
+	Location  string `json:"location"`
+	Workplace string `json:"workplace"`
+
+	// DistanceMiles is a POINTER on purpose. A JSON null means the
+	// location could not be resolved, which is a different fact from
+	// "zero miles away" -- a float64 would collapse the two and sort
+	// every unresolvable posting to the top of a distance sort.
+	DistanceMiles *float64 `json:"distance_miles"`
+}
+
+// Workplace values, matching scripts/location_filter.py.
+const (
+	WorkplaceRemote  = "remote"
+	WorkplaceHybrid  = "hybrid"
+	WorkplaceOnsite  = "onsite"
+	WorkplaceUnknown = "unknown"
+)
+
+// HasDistance reports whether this row has a real measured distance.
+func (j JobRow) HasDistance() bool {
+	return j.DistanceMiles != nil
+}
+
+// Miles returns the measured distance, and whether there was one.
+func (j JobRow) Miles() (float64, bool) {
+	if j.DistanceMiles == nil {
+		return 0, false
+	}
+	return *j.DistanceMiles, true
 }
 
 // JobSkill is one entry of a JD's extracted skill list.

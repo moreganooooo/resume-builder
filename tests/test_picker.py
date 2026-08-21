@@ -499,3 +499,56 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         ):
             result = picker.browse_and_select_jds(page_size=1)
         self.assertEqual(result, [])
+
+
+class TestLocationFields(unittest.TestCase):
+    """The location/workplace/distance columns added to the export."""
+
+    SETTINGS = {
+        "city": "Getzville",
+        "state": "NY",
+        "zip": "14068",
+        "radius_miles": 25,
+        "workplace_mode": "any",
+    }
+
+    def test_nearby_onsite_gets_a_distance(self):
+        fields = picker._location_fields({"location": "Buffalo, NY"}, self.SETTINGS)
+        self.assertEqual(fields["location"], "Buffalo, NY")
+        self.assertIsNotNone(fields["distance_miles"])
+        self.assertLess(fields["distance_miles"], 25)
+
+    def test_remote_is_classified_without_a_distance(self):
+        fields = picker._location_fields({"location": "Remote (US)"}, self.SETTINGS)
+        self.assertEqual(fields["workplace"], "remote")
+        self.assertIsNone(fields["distance_miles"])
+
+    def test_unresolvable_location_has_no_distance(self):
+        # None, never 0 -- the Go side sorts on this, and a zero would
+        # place an unknown location at the top of a nearest-first sort.
+        fields = picker._location_fields(
+            {"location": "Greater Austin Area"}, self.SETTINGS
+        )
+        self.assertIsNone(fields["distance_miles"])
+
+    def test_missing_location_is_empty_not_none(self):
+        fields = picker._location_fields({}, self.SETTINGS)
+        self.assertEqual(fields["location"], "")
+        self.assertIsNone(fields["distance_miles"])
+
+    def test_structured_hints_are_used(self):
+        fields = picker._location_fields(
+            {"location": "Austin, TX", "work_model": "Hybrid"}, self.SETTINGS
+        )
+        self.assertEqual(fields["workplace"], "hybrid")
+
+    def test_unconfigured_profile_yields_no_distance(self):
+        # With no location: block, distance is not computed at all --
+        # every row still exports the columns, just empty.
+        fields = picker._location_fields({"location": "Buffalo, NY"}, {})
+        self.assertIsNone(fields["distance_miles"])
+        self.assertEqual(fields["location"], "Buffalo, NY")
+
+    def test_reader_degrades_to_empty_on_failure(self):
+        with patch.dict("sys.modules", {"location_settings": None}):
+            self.assertEqual(picker._read_location_settings(), {})
