@@ -24,6 +24,16 @@ export default {
       results_per_page: String(ADZUNA_RESULTS_PER_PAGE),
     });
     if (entry.search_term) params.set('what', entry.search_term);
+    // Location comes from scan_filters.yml's `location:` block via
+    // scan_boards.py. Adzuna's `distance` is KILOMETRES, so the
+    // configured mile radius is converted -- sending miles verbatim
+    // would quietly search a radius 1.6x too small.
+    if (entry.location) {
+      params.set('where', entry.location);
+      if (entry.radius_miles) {
+        params.set('distance', String(Math.max(1, Math.round(Number(entry.radius_miles) * 1.60934))));
+      }
+    }
     const url = `${ADZUNA_API_BASE_URL}/${ADZUNA_COUNTRY_CODE}/search/1?${params.toString()}`;
     const json = await ctx.fetchJson(url, { headers: ADZUNA_HEADERS });
     const jobs = Array.isArray(json?.results) ? json.results : [];

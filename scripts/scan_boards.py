@@ -96,7 +96,15 @@ BOARD_PROVIDERS = [
 NODE_TIMEOUT_SECONDS = 30
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
-MIN_DESCRIPTION_CHARS = 200
+# Raised from 200 on 2026-08-21, calibrated against this profile's own
+# corpus rather than a guess. Median description length by source:
+# greenhouse 8,898, workday 8,427, himalayas 8,356, jobicy 6,638,
+# linkedin 5,485, jobright 1,727 -- and the THINNEST real posting from
+# any of them is 632 chars. Aggregator teasers cluster around 275.
+# 200 sat below every teaser, so it never fired on one; 600 sits in the
+# empty gap between the two populations. This only raises a warning and
+# sets job["_scan"], it never drops a posting.
+MIN_DESCRIPTION_CHARS = 600
 
 # Vars no board/ATS provider has any legitimate need for (unlike
 # ADZUNA_APP_ID/ADZUNA_APP_KEY, USAJOBS_API_KEY/etc. above, which specific
