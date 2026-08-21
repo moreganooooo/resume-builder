@@ -41,6 +41,11 @@ PLACEHOLDER_TITLES = {"", "Test", "Role", "Untitled Role"}
 FIXTURE_COMPANIES = {"Acme", "Acme Corp", "Testco", "Unknown Company"}
 FIXTURE_URL_HOSTS = ("example.com", "example.org")
 
+# Fixture URLs that are not on an example.* host. The board-scanner
+# tests post against a fake Greenhouse slug, and those rows DO carry a
+# description -- see _is_seeded_fixture for why that matters.
+FIXTURE_URL_MARKERS = ("greenhouse.io/testco",)
+
 
 def _payload(row: sqlite3.Row) -> dict:
     for column in ("metadata_json", "raw_text"):
@@ -56,14 +61,39 @@ def _payload(row: sqlite3.Row) -> dict:
     return {}
 
 
+def _is_seeded_fixture(row: sqlite3.Row, data: dict) -> bool:
+    """True for a row that is unmistakably test-suite output.
+
+    The description veto below rests on "no fixture populates a
+    description". That stopped being true: 390 rows titled "Senior
+    Content Strategist" @ "Testco" reached a real data.db between
+    2026-08-17 and 2026-08-20 (before db._is_unisolated_test_write
+    existed), each carrying a full fake description AND a fake
+    Greenhouse URL. They survived every purge, and a liveness sweep
+    dutifully checked all 390 against the same dead fixture URL --
+    rendering as bare content hashes, since their metadata_json has no
+    job_title/company_name for a label to use.
+
+    Requires BOTH signals: a fixture company AND a fixture URL. Either
+    alone could plausibly be a real posting; together they cannot be.
+    """
+    url = str(data.get("source_url") or "")
+    company = str(row["company"] or "").strip()
+    return company in FIXTURE_COMPANIES and any(
+        marker in url for marker in FIXTURE_URL_MARKERS
+    )
+
+
 def is_stub(row: sqlite3.Row) -> bool:
     """True for a row carrying no recoverable job content.
 
-    A real description is an absolute veto -- it is the one field no
-    fixture in this codebase populates, and the one field that makes a
-    row useful to the user -- so it is checked first and short-circuits.
+    A real description is an absolute veto -- the one field that makes a
+    row useful to the user -- EXCEPT where the description itself came
+    from a fixture (see _is_seeded_fixture).
     """
     data = _payload(row)
+    if _is_seeded_fixture(row, data):
+        return True
     if str(data.get("description") or "").strip():
         return False
 
