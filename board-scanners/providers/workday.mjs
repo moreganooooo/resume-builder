@@ -22,7 +22,23 @@ const SEARCH_PATH_RE = /\/wday\/cxs\/[^/]+\/[^/]+\/jobs$/;
 // result instead of the whole run being discarded:
 const WORKDAY_MAX_PAGES = 50;          // mirrors smartrecruiters.mjs:13
 const WORKDAY_PAGE_DELAY_MS = 300;     // politeness delay between paginated POSTs
-const WORKDAY_TIME_BUDGET_MS = 20_000; // stay well under the 30s parent timeout
+const WORKDAY_TIME_BUDGET_MS = 20_000; // pagination budget (browser work)
+
+// Description fetches get their OWN budget rather than sharing
+// pagination's. Sharing one meant a board with many pages spent the
+// whole allowance listing jobs and had nothing left to describe them:
+// The Nature Conservancy returned 76 jobs of which 52 had EMPTY
+// descriptions, standalone, with no concurrency involved. An empty
+// description is worse than a slow one -- the listing endpoint never
+// carries body text and the posting page is a JS SPA, so nothing
+// downstream can recover it, and the JD is written anyway and then
+// blocks a future good fetch via job_key_known()'s dedup.
+// Sized to actually finish a large board rather than to look fast.
+// ctx pacing for workday is minGapMs 250 and fully serialized (see
+// PROVIDER_HTTP_CONFIG) -- deliberate politeness toward the target site,
+// not a knob to turn -- so ~76 postings need roughly 46s of wall clock.
+// Cutting that short is what produced empty descriptions.
+const WORKDAY_DETAIL_BUDGET_MS = 55_000;
 const WORKDAY_DEFAULT_LIMIT = 20;      // fallback when the board reports limit: 0
 
 // B36 (docs/review/phase-9-backlog.md): the search/listing response never
@@ -32,7 +48,10 @@ const WORKDAY_DEFAULT_LIMIT = 20;      // fallback when the board reports limit:
 // scan_boards.py's plain-GET page-fetch fallback can't scrape one either.
 // Bounded by count; shares the same wall-clock deadline as pagination
 // below rather than a second budget.
-const WORKDAY_DETAIL_FETCH_CAP = 40;
+// Raised from 40 once details stopped sharing pagination's budget --
+// the real bound is now WORKDAY_DETAIL_BUDGET_MS, and 40 was leaving
+// large boards permanently short.
+const WORKDAY_DETAIL_FETCH_CAP = 120;
 
 /**
  * Resolves the effective page size from a Workday search response. Exported
@@ -244,11 +263,13 @@ export default {
 
     // B36: description detail-fetches are plain JSON requests through ctx
     // -- no Playwright needed, so these run after the browser has already
-    // closed. Shares `deadline` with the pagination above rather than a
-    // second budget, so the two together can't exceed
-    // WORKDAY_TIME_BUDGET_MS.
+    // closed. They now run against their own deadline, started here, so
+    // a slow pagination phase cannot consume the time descriptions need.
+    // scan_boards.py gives workday a longer subprocess timeout to cover
+    // both phases (see PROVIDER_TIMEOUT_SECONDS).
+    const detailDeadline = Date.now() + WORKDAY_DETAIL_BUDGET_MS;
     for (const job of jobs.slice(0, WORKDAY_DETAIL_FETCH_CAP)) {
-      if (Date.now() >= deadline) break;
+      if (Date.now() >= detailDeadline) break;
       if (!job._externalPath || !apiBase) continue;
       job.description = await fetchJobDescription(ctx, apiBase, job._externalPath);
       delete job._externalPath;
