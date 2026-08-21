@@ -198,15 +198,35 @@ export default {
   },
 
   async fetch(entry, ctx) {
-    if (!BRAVE_API_KEY) {
-      throw new Error(
-        'websearch: BRAVE_API_KEY is not set. Add it to your .env file.\n' +
-        '  Get a free key at: https://api.search.brave.com'
-      );
-    }
-
     const query = /** @type {any} */ (entry).scan_query;
     if (!query) throw new Error(`no scan_query defined for ${entry.name}`);
+
+    // Two backends, one filter. When the caller has already run the
+    // search itself -- scripts/scan_ats.py does this via
+    // websearch_ddg.py whenever BRAVE_API_KEY is absent -- the results
+    // arrive on the entry and everything below judges them exactly as
+    // it judges Brave's.
+    //
+    // The search moved to Python because DuckDuckGo's HTML endpoint
+    // answers a plain Node fetch with HTTP 202 and an empty challenge
+    // page after the first request or two, pacing included; the `ddgs`
+    // library does the token handshake those endpoints expect. The
+    // FILTERING deliberately stayed here, where the blocked-domain
+    // list, job-URL recognition and provider promotion already live --
+    // a second copy in Python is how the two would drift apart.
+    const supplied = /** @type {any} */ (entry)._results;
+    if (Array.isArray(supplied)) {
+      return mapResults(supplied, entry);
+    }
+
+    if (!BRAVE_API_KEY) {
+      throw new Error(
+        'websearch: no search backend available -- BRAVE_API_KEY is not set ' +
+        'and no results were supplied by the caller.\n' +
+        '  Sweeps normally run through scripts/websearch_ddg.py; if you are ' +
+        'invoking this provider directly, set BRAVE_API_KEY.'
+      );
+    }
 
     const params = new URLSearchParams({
       q: query,
@@ -229,7 +249,18 @@ export default {
     });
 
     const results = /** @type {any[]} */ (json?.web?.results || []);
+    return mapResults(results, entry);
+  },
+};
 
+/**
+ * Filters and normalizes raw search results, whichever backend produced
+ * them. Both Brave and websearch_ddg.py hand over {url, title,
+ * description}, so nothing below needs to know which one ran.
+ * @param {any[]} results
+ * @param {any} entry
+ */
+function mapResults(results, entry) {
     return results
       .filter(r => r.url && r.title && isJobUrl(r.url) && isDirectJobTitle(r.title))
       .map(r => {
@@ -256,8 +287,7 @@ export default {
           _promotedPortal: recognizedProvider ? { provider: recognizedProvider, url: r.url } : null
         };
       });
-  },
-};
+}
 
 /**
  * @param {string} rawUrl

@@ -193,6 +193,11 @@ class TestFetchAtsJobs(unittest.TestCase):
                 "enabled": True,
                 "scan_query": "site:boards.greenhouse.io marketing remote",
                 "_isSweep": True,
+                # Default backend is DuckDuckGo (Brave only when a key is
+                # set), and its results ride along on the entry for
+                # websearch.mjs to filter. Empty here because the
+                # no-network test guard short-circuits the real search.
+                "_results": [],
             },
         )
 
