@@ -24,6 +24,32 @@ Measured against Buffalo NY on 2026-08-21:
 So this module deliberately scrapes ONE site. The others are not
 commented-out options waiting to be enabled; they did not work.
 
+The three failures were re-tested against JobSpy's own documented
+guidance and then CONTROLLED, because "we called it wrong" and "the site
+blocks it" call for very different responses:
+
+  * Glassdoor requires country_indeed (passed) and USA is a supported
+    country. It still answered 400 "location not parsed" for every
+    format tried, including the README's own example location
+    ("San Francisco, CA") and a bare state.
+  * Google's README says to paste the exact string from Google's jobs
+    search box. Its own verbatim example
+    ("software engineer jobs near San Francisco, CA since yesterday")
+    also returned 0.
+  * ZipRecruiter uses only `location`, per its docs. Still 403, which is
+    Cloudflare; JobSpy's FAQ answer for that is rotating residential
+    proxies -- a paid dependency to reach a board Indeed already covers.
+
+In the SAME run, Indeed with identical settings returned results. That
+control is the point: the harness, the network, and the call pattern are
+all fine, so these three are upstream failures, not usage errors. 1.1.82
+was the newest release when this was written, so there is no version to
+upgrade into either.
+
+Re-check by running those three against the README examples again. If
+they start working, adding one is a small change -- the normalization
+below is site-agnostic.
+
 Indeed matters because it is the largest US job board and the only free
 source found so far that returns tailoring-grade text for LOCAL roles.
 The aggregators reachable by API (jooble ~275 chars, adzuna exactly 500)
