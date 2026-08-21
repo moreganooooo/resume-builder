@@ -21,3 +21,4 @@ pdfminer.six
 pypdf>=6.16.1
 odfpy
 openpyxl
+python-jobspy
