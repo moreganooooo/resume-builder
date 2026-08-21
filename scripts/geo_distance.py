@@ -92,6 +92,36 @@ _STATE_CODES = set(_STATE_NAMES.values())
 
 _ZIP_RE = re.compile(r"\b(\d{5})(?:-\d{4})?\b")
 
+# Metro shorthand a posting uses instead of a city name. Deliberately
+# short: these are the abbreviations that appear as a WHOLE location
+# field ("Onsite - NYC"), where the alternative is resolving nothing and
+# waving the posting through as unknown. This is not a general metro
+# gazetteer -- regional phrases like "Greater Austin Area" or "Tri-State"
+# still return None, since their real extent is a bounding box rather
+# than a point.
+_METRO_ALIASES = {
+    "nyc": "New York, NY",
+    "new york city": "New York, NY",
+    "la": "Los Angeles, CA",
+    "sf": "San Francisco, CA",
+    "sfo": "San Francisco, CA",
+    "bay area": "San Francisco, CA",
+    "sf bay area": "San Francisco, CA",
+    "dc": "Washington, DC",
+    "washington dc": "Washington, DC",
+    "d.c.": "Washington, DC",
+    "philly": "Philadelphia, PA",
+    "atx": "Austin, TX",
+    "chi": "Chicago, IL",
+    "atl": "Atlanta, GA",
+    "bos": "Boston, MA",
+    "sea": "Seattle, WA",
+    "pdx": "Portland, OR",
+    "phx": "Phoenix, AZ",
+    "dfw": "Dallas, TX",
+    "nola": "New Orleans, LA",
+}
+
 
 def haversine_distance_miles(
     lat1: float, lon1: float, lat2: float, lon2: float
@@ -183,6 +213,10 @@ def resolve_location(text: str) -> list | None:
     if not text or not str(text).strip():
         return None
     raw = str(text).strip()
+
+    alias = _METRO_ALIASES.get(raw.lower().strip(" .,"))
+    if alias:
+        raw = alias
 
     # A ZIP is unambiguous, so prefer it wherever it appears.
     centroid = get_zip_centroid(raw)

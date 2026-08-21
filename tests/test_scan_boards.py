@@ -47,6 +47,28 @@ class TestTitleFilter(unittest.TestCase):
 
 
 class TestLocationFilter(unittest.TestCase):
+    """The keyword fallback path, pinned to an explicit config.
+
+    These assert always_allow/block semantics, which only apply when no
+    `location:` block is configured. Read from the real profile they
+    would instead exercise the radius path and pass or fail on where the
+    machine's owner lives -- test_location_filter.py covers that path
+    deliberately, with its own fixed origin.
+    """
+
+    def setUp(self):
+        patcher = patch.object(
+            scan_boards,
+            "_load_filters",
+            return_value={
+                "location_filter": {
+                    "always_allow": ["Remote"],
+                    "block": ["Onsite", "Hybrid"],
+                }
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_empty_location_passes(self):
         self.assertTrue(scan_boards._passes_location_filter(""))
@@ -66,9 +88,22 @@ class TestLocationFilter(unittest.TestCase):
 
 class TestFetchBoardJobs(unittest.TestCase):
 
+    # Pinned to an explicit keyword config rather than reading the real
+    # profile's scan_filters.yml: with a `location:` block configured,
+    # this case's outcome would otherwise depend on how far the machine's
+    # owner happens to live from NYC.
+    @patch(
+        "scan_boards._load_filters",
+        return_value={
+            "title_filter": {"positive": ["Marketing"], "negative": ["Warehouse"]},
+            "location_filter": {"always_allow": ["Remote"], "block": ["Onsite"]},
+        },
+    )
     @patch("scan_boards._fetch_posting_text", return_value="full posting text")
     @patch("scan_boards._run_node_provider")
-    def test_normalizes_and_filters_raw_listings(self, mock_run, mock_fetch_text):
+    def test_normalizes_and_filters_raw_listings(
+        self, mock_run, mock_fetch_text, mock_filters
+    ):
         mock_run.return_value = [
             {
                 "title": "Lifecycle Marketing Manager",

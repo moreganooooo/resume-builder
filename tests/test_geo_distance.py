@@ -152,3 +152,65 @@ class TestBundledData(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSuburbCoverage(unittest.TestCase):
+    """The city index merges the gazetteer with USPS names for a reason.
+
+    The postal file's place names are USPS mailing names and omit many
+    real municipalities -- "Amherst, NY" (~130k residents) is absent from
+    it entirely because its ZIPs are labeled Buffalo/Williamsville.
+    Deriving cities from ZIP labels alone silently failed to resolve
+    whole suburbs, which is exactly where commutable on-site jobs are.
+    """
+
+    def test_suburbs_absent_from_the_postal_file_resolve(self):
+        for city, state in (
+            ("Amherst", "NY"),
+            ("Williamsville", "NY"),
+            ("Clarence", "NY"),
+        ):
+            with self.subTest(city=city):
+                self.assertIsNotNone(geo_distance.get_city_centroid(city, state))
+
+    def test_small_unincorporated_places_still_resolve(self):
+        # The gazetteer layer is filtered to populated places, so the
+        # USPS layer has to stay to cover hamlets like this one.
+        self.assertIsNotNone(geo_distance.get_city_centroid("Getzville", "NY"))
+
+    def test_suburb_distances_are_plausible(self):
+        miles = geo_distance.distance_between("Getzville, NY", "Buffalo, NY")
+        self.assertLess(miles, 20)
+
+
+class TestMetroAliases(unittest.TestCase):
+    """Shorthand a posting uses instead of a city name.
+
+    Without these, "Onsite - NYC" resolves to nothing and is waved
+    through as unknown -- the failure mode is silent and permissive,
+    which is the worst combination for a filter.
+    """
+
+    def test_common_abbreviations_resolve(self):
+        for value in ("NYC", "LA", "SF", "DC", "ATX", "PHX"):
+            with self.subTest(value=value):
+                self.assertIsNotNone(geo_distance.resolve_location(value))
+
+    def test_alias_matches_the_full_name(self):
+        self.assertEqual(
+            geo_distance.resolve_location("NYC"),
+            geo_distance.resolve_location("New York, NY"),
+        )
+
+    def test_case_and_punctuation_tolerated(self):
+        self.assertEqual(
+            geo_distance.resolve_location("nyc."),
+            geo_distance.resolve_location("NYC"),
+        )
+
+    def test_regional_phrases_still_return_none(self):
+        # These name an area, not a point; a bounding box is the honest
+        # representation and this module does not do bounding boxes.
+        for value in ("Greater Austin Area", "Tri-State", "DMV"):
+            with self.subTest(value=value):
+                self.assertIsNone(geo_distance.resolve_location(value))
