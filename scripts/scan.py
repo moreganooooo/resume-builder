@@ -223,6 +223,30 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                         result["skipped"] += 1
                         continue
 
+                    # A posting with no body text at all is not a lead,
+                    # it is a permanent dead end: nothing downstream can
+                    # evaluate or tailor against it, and writing it makes
+                    # the emptiness STICKY -- job_key_known() will skip
+                    # the same posting on every future scan, so the good
+                    # version never lands. Better to miss it this run and
+                    # catch it next one.
+                    #
+                    # Only workday produces these in practice (27 of 615
+                    # on the 2026-08-21 scan): its listing endpoint never
+                    # carries body text, its posting page is a JS SPA so
+                    # _fetch_posting_text cannot scrape one either, and a
+                    # large board can exhaust its detail-fetch budget.
+                    if not (job.get("description") or "").strip():
+                        result["skipped"] += 1
+                        logging.warning(
+                            "scan: skipping %s @ %s -- no description available "
+                            "from %s",
+                            title,
+                            company,
+                            job.get("source_platform") or "?",
+                        )
+                        continue
+
                     dest = _write_jd_file(job)
                     jd_manager.add_to_known_jobs_index(
                         known_jobs_index,

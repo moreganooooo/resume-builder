@@ -138,6 +138,10 @@ class TestRunScanVerify(unittest.TestCase):
             "company_name": "Acme",
             "job_title": "Content Strategist",
             "source_url": "https://x.com/1",
+            # A real scanned job always carries body text: run_scan()
+            # skips postings with an empty description outright, since
+            # nothing downstream can evaluate or tailor against one.
+            "description": "Own the editorial calendar and lifecycle email program.",
         }
         with (
             patch.dict(
@@ -161,6 +165,10 @@ class TestRunScanVerify(unittest.TestCase):
             "company_name": "Acme",
             "job_title": "Content Strategist",
             "source_url": "https://x.com/1",
+            # A real scanned job always carries body text: run_scan()
+            # skips postings with an empty description outright, since
+            # nothing downstream can evaluate or tailor against one.
+            "description": "Own the editorial calendar and lifecycle email program.",
         }
         with (
             patch.dict(
@@ -182,11 +190,13 @@ class TestRunScanVerify(unittest.TestCase):
                 "company_name": "Acme",
                 "job_title": "Still Open",
                 "source_url": "https://x.com/1",
+                "description": "Own the editorial calendar and email program.",
             },
             {
                 "company_name": "Ghost Co",
                 "job_title": "Already Gone",
                 "source_url": "https://x.com/2",
+                "description": "Run lifecycle campaigns end to end.",
             },
         ]
         paths = iter(["/tmp/still-open.json", "/tmp/already-gone.json"])
@@ -352,3 +362,83 @@ class TestScanWarningCollection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEmptyDescriptionGuard(unittest.TestCase):
+    """A posting with no body text is never written.
+
+    Writing one makes the emptiness permanent: job_key_known() skips the
+    same posting on every later scan, so the good version never lands.
+    Workday produced 28 of these on the 2026-08-21 run -- its listing
+    endpoint carries no body text and its posting page is a JS SPA, so
+    _fetch_posting_text cannot recover one either.
+    """
+
+    def setUp(self):
+        patcher = patch(
+            "scan.jd_manager.build_known_jobs_index",
+            side_effect=_empty_known_jobs_index,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _run_with(self, job):
+        with (
+            patch.dict(
+                scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
+            ),
+            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json") as w,
+            patch(
+                "scan.liveness.verify_jd_paths",
+                return_value={"expired_source_paths": []},
+            ),
+            patch("scan.jd_manager.job_key_known", return_value=False),
+            patch("scan.jd_manager.JDTracker"),
+        ):
+            written = scan.run_scan(["boards"])
+        return written, w
+
+    def test_empty_description_is_not_written(self):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+            "description": "",
+            "source_platform": "workday",
+        }
+        written, writer = self._run_with(job)
+        self.assertEqual(written, 0)
+        writer.assert_not_called()
+
+    def test_whitespace_only_description_is_not_written(self):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+            "description": "   \n  ",
+            "source_platform": "workday",
+        }
+        written, writer = self._run_with(job)
+        self.assertEqual(written, 0)
+        writer.assert_not_called()
+
+    def test_missing_description_key_is_not_written(self):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+        }
+        written, writer = self._run_with(job)
+        self.assertEqual(written, 0)
+        writer.assert_not_called()
+
+    def test_a_real_description_is_written(self):
+        job = {
+            "company_name": "Acme",
+            "job_title": "Content Strategist",
+            "source_url": "https://x.com/1",
+            "description": "Own the editorial calendar and lifecycle email program.",
+        }
+        written, writer = self._run_with(job)
+        self.assertEqual(written, 1)
+        writer.assert_called_once()

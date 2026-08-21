@@ -743,7 +743,7 @@ tracked_companies:
 - name: Affinity.co
   careers_url: https://boards.greenhouse.io/affinity
   api: https://boards-api.greenhouse.io/v1/boards/affinity/jobs
-  enabled: true
+  enabled: false  # board 404s (checked 2026-08-21)
 - name: AfterShip
   careers_url: https://boards.greenhouse.io/aftership
   api: https://boards-api.greenhouse.io/v1/boards/aftership/jobs
@@ -1251,7 +1251,7 @@ tracked_companies:
 - name: Lookout
   careers_url: https://boards.greenhouse.io/lookout
   api: https://boards-api.greenhouse.io/v1/boards/lookout/jobs
-  enabled: true
+  enabled: false  # board 404s (checked 2026-08-21)
 - name: Lucid Motors
   careers_url: https://boards.greenhouse.io/lucidmotors
   api: https://boards-api.greenhouse.io/v1/boards/lucidmotors/jobs
@@ -1645,7 +1645,7 @@ tracked_companies:
 - name: Underdog
   careers_url: https://boards.greenhouse.io/underdogfantasy
   api: https://boards-api.greenhouse.io/v1/boards/underdogfantasy/jobs
-  enabled: true
+  enabled: false  # board 404s (checked 2026-08-21)
 - name: Unite Us
   careers_url: https://boards.greenhouse.io/uniteus
   api: https://boards-api.greenhouse.io/v1/boards/uniteus/jobs
@@ -1693,4 +1693,24 @@ tracked_companies:
 - name: Zwift
   careers_url: https://boards.greenhouse.io/zwift
   api: https://boards-api.greenhouse.io/v1/boards/zwift/jobs
+  enabled: true
+- name: The Hearst Corporation
+  careers_url: https://boards.greenhouse.io/hearst
+  api: https://boards-api.greenhouse.io/v1/boards/hearst/jobs
+  enabled: true
+- name: Spectrum
+  careers_url: https://boards.greenhouse.io/spectrum
+  api: https://boards-api.greenhouse.io/v1/boards/spectrum/jobs
+  enabled: true
+- name: GTI Fabrication
+  careers_url: https://jobs.lever.co/gtifabrication
+  api: https://api.lever.co/v0/postings/gtifabrication?mode=json
+  enabled: true
+- name: Saint-Gobain
+  careers_url: https://careers.smartrecruiters.com/saintgobain
+  api: https://api.smartrecruiters.com/v1/companies/saintgobain/postings
+  enabled: true
+- name: Bruegger's Bagels
+  careers_url: https://careers.smartrecruiters.com/brueggersbagels
+  api: https://api.smartrecruiters.com/v1/companies/brueggersbagels/postings
   enabled: true
