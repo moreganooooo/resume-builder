@@ -43,8 +43,28 @@ Our aggregator is designed to sweep multiple public and private channels simulta
 ### Board Scrapers & Aggregation Setup:
 * **LinkedIn Scanner:** Uses a visual, secure browser login helper (`scripts/linkedin_login.mjs`) to capture your cookie, then scrapes matching postings in the background.
 * **JobRight Scanner:** Scrapes highly targeted job feeds using persistent cookie-token headers.
+* **Indeed Scanner:** Full job descriptions for local roles via JobSpy, with no API key required. Deliberately the only JobSpy site enabled — ZipRecruiter, Glassdoor and Google Jobs were each tested and are blocked or broken upstream (see the FAQ).
+* **USAJOBS Scanner:** Federal postings with complete descriptions; needs a free key *and* your registered email.
+* **Websearch Sweeps:** Backed by DuckDuckGo (no key) since Brave's free tier became metered. Brave is still used automatically if `BRAVE_API_KEY` is set.
 * **Custom RSS Feeds:** Parses arbitrary custom RSS feeds (e.g., Y Combinator, corporate careers RSS) directly in Python.
 * **Customizing Search Queries:** In-program forms let you add, edit, or delete job board configurations, custom search queries, and keywords without opening a text editor.
+
+### 📍 Local & Commute-Aware Search:
+Configure your origin and radius under **Settings & Upkeep → Location & Commute Radius** (see the installation guide). Once set:
+* Every posting is scored against your real distance using bundled offline centroids — no API key, no network call, no per-lookup cost.
+* The parser handles the strings postings actually use: exclusion fencing (`"US Remote (Excluding CA, CO, NY)"` is rejected if you live in an excluded state), multi-hub roles scored by their **nearest** office, metro shorthand (`NYC`, `SF`, `DC`), and non-US locations.
+* A location the parser **cannot** resolve is kept and shown, never silently dropped — an unknown is cheap for you to eyeball, while a discarded commutable role is invisible.
+* In the dashboard's Jobs screen, `[w]` cycles the workplace filter and `[d]` sorts nearest-first. Rows carry a badge like `⌂ On-site · 6.2 mi`. Unmeasured rows sort to the **end**, never the top.
+
+### 🏢 Turning Aggregators Into Full-Text Sources:
+Aggregators tell you *which* employers are hiring near you, but their own text is truncated by design (Jooble ~275 characters, Adzuna exactly 500 — both flagged automatically so they are never silently tailored against). Your richest descriptions come from employers' own ATS boards.
+
+`resume discover-employers` bridges the two: it reads local postings, extracts the employer names, probes each for a public ATS board (Greenhouse, Lever, Ashby, Recruitee, SmartRecruiters), and adds confirmed hits to `tracked_companies.yml`, where the ATS scanner picks them up on the next run.
+```bash
+resume discover-employers            # preview what it would add
+resume discover-employers --apply    # write the entries (backs the file up first)
+```
+Run it with a few different `--search-term` values; yield is deliberately conservative — a board is only accepted when its **disclosed owner name matches** the employer, so a local "Evolution Dental Science" is never matched to a national board named "Evolution".
 
 ### 🟢 Liveness Checks & The Staleness Sweep:
 Job boards are notorious for keeping filled or dead listings active to inflate their numbers.

@@ -54,7 +54,43 @@ A: If a job description contains a corporate homepage URL, a background web scra
 
 ---
 
-## 🧹 4. Liveness & Staleness sweeps
+## 📍 4. Local Search, Distance & Job Sources
+
+### Q: Why do some postings show a distance and others don't?
+A distance appears only when the posting's location resolves to a single US point. Three cases produce no distance, and they mean different things:
+* **Remote roles** have no commute, so no distance is shown — correct, not missing.
+* **Unresolvable locations** ("Greater Austin Area", a bare city with no state) are **kept and shown** rather than dropped. Surfacing an unknown costs you a glance; silently discarding a commutable role is invisible and much worse.
+* **Postings with no location field at all** — common from remote-first boards.
+
+Unmeasured rows always sort to the **end** of a nearest-first sort, never the top, so they can never crowd out genuinely nearby jobs.
+
+### Q: Why are some job descriptions so short, and flagged?
+Because the aggregator that supplied them will never give you more. Measured directly:
+
+| Source | Typical description | Usable for tailoring? |
+| --- | --- | --- |
+| Greenhouse / Workday / Ashby | 6,000–9,000 chars | ✅ Yes — employers' own boards |
+| Indeed | ~4,000 chars | ✅ Yes |
+| USAJOBS | ~5,000 chars | ✅ Yes |
+| Adzuna | **exactly 500**, ends in "…" | ❌ Discovery only |
+| Jooble | ~275 chars, cut mid-word | ❌ Discovery only |
+
+Aggregators truncate on purpose — their business is the click-through to the original posting. Neither Jooble's nor Adzuna's posting pages can be fetched to recover the rest (both answer 403 to every request, browser User-Agent included). Rather than let a 500-character teaser quietly pass as a real posting, those sources tag their output so it is always reported as thin. Use them to discover **who** is hiring nearby, then let `resume discover-employers` add those employers' real ATS boards.
+
+### Q: Why isn't ZipRecruiter, Glassdoor, or Google Jobs supported?
+Each was implemented against and tested, not skipped:
+* **ZipRecruiter** — HTTP 403 (Cloudflare). TLS-impersonation via `curl_cffi` was tested and still 403s. Getting in would need rotating residential proxies, a paid dependency for a board Indeed already covers.
+* **Glassdoor** — HTTP 400, "location not parsed", including with the scraping library's own documented example location. Its two-step location handshake *does* work, but the page's data structure no longer matches any documented extraction point.
+* **Google Jobs** — returns 200 with zero job data, even using the exact search-box syntax its library documents.
+
+In the same test run, Indeed returned results with identical settings — which is how we know these are upstream failures rather than misconfiguration. The measurements live in `scripts/scan_indeed.py`'s docstring, along with how to re-check them.
+
+### Q: Do I need a Brave Search API key?
+No. The websearch sweeps now use DuckDuckGo, which needs no key or account. If `BRAVE_API_KEY` is set the sweeps use Brave instead, so an existing key keeps working.
+
+---
+
+## 🧹 5. Liveness & Staleness sweeps
 
 ### Q: How do I run a Liveness Sweep to clean out stale listings?
 A: Run **`resume liveness`** from your terminal, or select the liveness option in the main TUI menu.
@@ -63,7 +99,7 @@ A: Run **`resume liveness`** from your terminal, or select the liveness option i
 
 ---
 
-## 🎮 5. Gamification & Success Celebrations
+## 🎮 6. Gamification & Success Celebrations
 
 ### Q: What happens when the TUI detects a completed milestone?
 A: To deliver an immediate hit of career dopamine and keep you motivated, completing major milestones (like scanning your 50th job or submitting your 10th application) triggers a visual **twinkling celebration sequence** inside your terminal.
@@ -72,7 +108,7 @@ A: To deliver an immediate hit of career dopamine and keep you motivated, comple
 
 ---
 
-## 🍪 6. Session Cookies & Playwright Troubles
+## 🍪 7. Session Cookies & Playwright Troubles
 
 ### Q: How do I handle LinkedIn & JobRight Session Cookies?
 * **LinkedIn:** Automated! When running `resume scan --source linkedin`, if your session is expired, a secure visual browser opens for you to log in. Once authenticated, the script automatically captures the `li_at` session cookie, saves it to `profiles/<profile>/.linkedin_cookie`, and closes the browser.
@@ -87,7 +123,7 @@ A: To deliver an immediate hit of career dopamine and keep you motivated, comple
 
 ---
 
-## 💎 7. Premium AI Tailoring & Modern CLI Tools
+## 💎 8. Premium AI Tailoring & Modern CLI Tools
 
 ### Q: How does the new Interactive Profile Skills Screen work?
 A: It is accessible directly from your terminal under `Settings & Upkeep -> View & Manage Profile Skills`. It displays an elegant, categorised TUI dashboard of your verified skills stored in `verified_tools.json`. You can view comprehensive usage details, add new skills with autocomplete suggestions, edit confidence meters, and delete entries entirely from your keyboard without manual JSON edits.

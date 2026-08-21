@@ -34,6 +34,8 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 * **Comprehensive Provider Ecosystem:** Native ingestion for Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, Workday, LinkedIn, JobRight, Wellfound, Otta, Y Combinator (Work at a Startup), Levels.fyi, and curated remote indexes.
 * **Commercial Anti-Bot Fallbacks:** Automatic Scrape.do proxy gateway routing on Cloudflare / 403 blocks with per-site token-bucket rate limiting and millisecond randomized jitter.
 * **Deduplication Hashing & Blacklists:** SHA-256 canonical posting deduplication and crowdsourced employer blacklists.
+* **Local & Commute-Aware Search:** Offline geocoding (bundled GeoNames centroids, no API key, no network) scores every posting's real distance from your configured origin, with a 5–25 mile radius and a remote / hybrid / on-site filter you can combine. Handles the location strings postings actually use — exclusion fencing ("US Remote, excluding CA"), multi-hub roles scored by their *nearest* office, metro shorthand, and international rejection.
+* **Full-Text Sources vs. Discovery Sources:** Indeed (via JobSpy) and USAJOBS return complete descriptions; aggregators like Jooble and Adzuna serve truncated teasers by design and are flagged as such rather than silently tailored against. `resume discover-employers` mines the employers those aggregators surface near you and tracks the ones with real ATS boards, so their full postings get scraped directly.
 
 ### 2. 📊 Split-Agent Dual-Metric Intelligence
 * **Capability Fit vs. Recruiter Friction:** Isolates functional engineering depth from bureaucratic recruiter friction to eliminate LLM cognitive saturation.
@@ -98,6 +100,10 @@ resume doctor
 
 # Run a quick smoke-test against a sample job posting
 resume sample
+
+# Find local employers with public ATS boards and track them
+resume discover-employers            # preview
+resume discover-employers --apply    # write them
 
 # Scan for new jobs on LinkedIn, Wellfound, or Otta
 resume scan --source linkedin --query "Staff Software Engineer"
