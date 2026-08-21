@@ -268,9 +268,17 @@ function mapResults(results, entry) {
         const recognizedProvider = recognizeProvider(r.url);
         const snippet = r.description || r.extra_snippets?.[0] || '';
 
-        // For sweeps, prefer the URL-extracted company name.
-        // For tracked companies, use entry.name as the source of truth.
-        const companyName = (/** @type {any} */(entry)._isSweep && urlCompany) ? urlCompany : entry.name;
+        // For tracked companies, entry.name IS the employer. For sweeps
+        // it is the QUERY's descriptive name, which is not a company at
+        // all -- stamping it on a job produced employers like "Workday —
+        // Onboarding & Success remote" and defeated dedup's
+        // source_url+company_name match. So a sweep uses the URL, then
+        // the page title, and otherwise leaves it empty for a downstream
+        // step to fill rather than inventing one.
+        const isSweep = /** @type {any} */(entry)._isSweep;
+        const companyName = isSweep
+          ? (urlCompany || companyFromTitle(r.title) || '')
+          : entry.name;
 
         return {
           title: cleanTitle(r.title, companyName),
@@ -311,6 +319,15 @@ function extractCompanyFromUrl(rawUrl) {
     if (host === 'jobs.ashbyhq.com' && path.length >= 1) {
       return capitalize(path[0]);
     }
+    // Workday: <company>.wdN.myworkdayjobs.com -- the company is the
+    // leading subdomain. Without this, a sweep that surfaced a Workday
+    // posting fell through to entry.name below, stamping the SWEEP
+    // QUERY's name ("Workday — Onboarding & Success remote") onto the
+    // job as its employer.
+    if (host.endsWith('.myworkdayjobs.com')) {
+      const sub = host.split('.')[0];
+      if (sub && !/^wd\d+$/i.test(sub)) return capitalize(sub);
+    }
     // Workable: apply.workable.com/company
     if (host === 'apply.workable.com' && path.length >= 1) {
       return capitalize(path[0]);
@@ -338,12 +355,37 @@ function capitalize(str) {
  */
 function cleanTitle(raw, companyName) {
   let cleaned = raw;
+
+  // ATS page titles, which is what a web search returns. Greenhouse
+  // renders "Job Application for <role> at <company>"; a plain search
+  // result carries that verbatim, so without stripping it every sweep
+  // job was titled "Job Application for ...". Brave's own titles were
+  // already cleaned, which is why this only surfaced when the backend
+  // moved to DuckDuckGo.
+  cleaned = cleaned.replace(/^\s*Job Application for\s+/i, '');
+  cleaned = cleaned.replace(/\s+at\s+[^,|]+$/i, '');
+
   if (companyName) {
     cleaned = cleaned.replace(new RegExp(`\\s*[-|]\\s*${escapeRegex(companyName)}.*$`, 'i'), '');
   }
-  return cleaned
+  cleaned = cleaned
     .replace(/\s*[-|]\s*(Jobs|Careers|Job Board|Greenhouse|Lever|Ashby|LinkedIn|Indeed|Glassdoor|ZipRecruiter|Workable).*$/i, '')
+    // A search result is often truncated mid-phrase, leaving a dangling
+    // separator ("... | Contract | "). Trim it rather than carry it.
+    .replace(/[\s|,\-–—]+$/, '')
     .trim();
+  return cleaned;
+}
+
+/**
+ * Pulls the employer out of an ATS page title ("... at Acme").
+ * Used only when the URL itself did not identify one.
+ * @param {string} raw
+ * @returns {string}
+ */
+function companyFromTitle(raw) {
+  const match = String(raw || '').match(/\s+at\s+([^,|]+?)\s*$/i);
+  return match ? match[1].trim() : '';
 }
 
 /**

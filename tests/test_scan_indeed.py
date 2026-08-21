@@ -92,12 +92,15 @@ class TestFetchIndeedJobs(unittest.TestCase):
     def test_nan_never_reaches_a_job_field(self, _):
         # pandas yields NaN for missing cells; str(NaN) is the literal
         # "nan", which would land in a JD file as if it were real text.
-        row = dict(ROW, company=float("nan"), date_posted=float("nan"))
+        # A NaN company is a separate case -- those rows are skipped
+        # outright (see TestMissingEmployer) -- so this uses fields where
+        # empty is a legitimate value.
+        row = dict(ROW, date_posted=float("nan"), location=float("nan"))
         fake = MagicMock(return_value=frame_of([row]))
         with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
             jobs = scan_indeed.fetch_indeed_jobs()
-        self.assertEqual(jobs[0]["company_name"], "")
         self.assertEqual(jobs[0]["posted_at"], "")
+        self.assertEqual(jobs[0]["location"], "")
 
     @patch("location_settings.read_settings", return_value=SETTINGS)
     def test_rows_without_a_title_or_url_are_dropped(self, _):
@@ -156,3 +159,18 @@ class TestSourceRegistration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMissingEmployer(unittest.TestCase):
+    """Indeed returns no company at all for some postings."""
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_rows_without_a_company_are_skipped(self, _):
+        # A JD with no employer cannot be researched, addressed, or
+        # deduped, and renders as a blank dashboard row.
+        rows = [dict(ROW, company=float("nan")), dict(ROW, company=""), ROW]
+        fake = MagicMock(return_value=frame_of(rows))
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            jobs = scan_indeed.fetch_indeed_jobs()
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["company_name"], "Acme")

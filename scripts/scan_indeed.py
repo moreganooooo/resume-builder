@@ -178,10 +178,25 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
         if not title or not url:
             continue
 
+        # Indeed genuinely returns no employer for some postings -- every
+        # company_* field comes back NaN, typically on confidential or
+        # staffing listings. Skipped rather than written, because a JD
+        # with no employer cannot be researched, addressed in a cover
+        # letter, or deduped by source_url+company_name, and it renders
+        # as a blank row in the dashboard. Writing "Unknown Company"
+        # instead is the placeholder pollution scripts/purge_stub_jobs.py
+        # exists to clean up.
+        company = _clean(row.get("company"))
+        if not company:
+            logging.info(
+                f"scan_indeed: skipping {title!r} -- Indeed lists no employer."
+            )
+            continue
+
         description = _clean(row.get("description"))
         job = {
             "job_title": title,
-            "company_name": _clean(row.get("company")),
+            "company_name": company,
             "source_platform": "indeed",
             "source_job_id": _clean(row.get("id")) or None,
             "source_url": url,
