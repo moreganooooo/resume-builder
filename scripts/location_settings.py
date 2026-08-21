@@ -29,6 +29,17 @@ import yaml
 # roughly 1.2-1.4x these numbers in a US metro.
 RADIUS_CHOICES = (5, 10, 15, 20, 25)
 
+REMOTE_MODE, HYBRID_MODE, ONSITE_MODE = "remote", "hybrid", "onsite"
+
+# The three real modes, for the multi-select. "any" is not listed: it is
+# what selecting all three (or none) means, rather than a fourth option
+# that could be checked alongside them and contradict them.
+SELECTABLE_WORKPLACES = (
+    (REMOTE_MODE, "Remote"),
+    (HYBRID_MODE, "Hybrid"),
+    (ONSITE_MODE, "On-site (within the radius)"),
+)
+
 WORKPLACE_CHOICES = (
     ("any", "Any -- remote, hybrid, and on-site within the radius"),
     ("remote", "Remote only"),
@@ -69,7 +80,19 @@ def render_block(settings: dict) -> str:
             # 01002 would otherwise load as the integer 1002.
             lines.append(f'  {key}: "{value}"' if key == "zip" else f"  {key}: {value}")
     lines.append(f"  radius_miles: {int(settings.get('radius_miles') or 25)}")
-    lines.append(f"  workplace_mode: {settings.get('workplace_mode') or 'any'}")
+    mode = settings.get("workplace_mode") or "any"
+    if isinstance(mode, (list, tuple, set)):
+        modes = [str(m).strip().lower() for m in mode if str(m).strip()]
+        if len(modes) == 1:
+            lines.append(f"  workplace_mode: {modes[0]}")
+        elif modes:
+            # Inline list: readable, and yaml.safe_load reads it back as
+            # the list location_filter.wanted_workplaces() expects.
+            lines.append(f"  workplace_mode: [{', '.join(sorted(modes))}]")
+        else:
+            lines.append("  workplace_mode: any")
+    else:
+        lines.append(f"  workplace_mode: {mode}")
     return "\n".join(lines) + "\n"
 
 
@@ -111,10 +134,15 @@ def describe(settings: dict) -> str:
     origin = settings.get("zip") or ", ".join(
         p for p in (settings.get("city"), settings.get("state")) if p
     )
-    mode = settings.get("workplace_mode") or "any"
-    if mode == "remote":
+    raw = settings.get("workplace_mode") or "any"
+    modes = raw if isinstance(raw, (list, tuple, set)) else [raw]
+    modes = sorted(str(m).strip().lower() for m in modes if str(m).strip())
+    label = "any" if (not modes or "any" in modes) else "+".join(modes)
+
+    # Radius is only meaningful when something commutable is wanted.
+    if label == "remote":
         return f"{origin or 'no origin'} -- remote only"
-    return f"{origin or 'no origin'} -- {settings.get('radius_miles', 25)} mi, {mode}"
+    return f"{origin or 'no origin'} -- {settings.get('radius_miles', 25)} mi, {label}"
 
 
 def validate_origin(city: str, state: str, zip_code: str) -> tuple:
@@ -130,6 +158,35 @@ def validate_origin(city: str, state: str, zip_code: str) -> tuple:
             return True, ""
         return False, f"Could not resolve {city.strip()}, {state.strip()}."
     return False, "Enter either a ZIP code, or a city and state."
+
+
+def _prompt_workplace_modes(current) -> list | None:
+    """Asks which workplace types to keep, allowing a combination.
+
+    A checkbox rather than a single select because the useful answer is
+    often two of three -- happy to work remotely OR to commute in, but
+    not to be on a hybrid schedule -- which no single value can say.
+    Selecting all three (or none) is stored as "any".
+    """
+    import questionary
+
+    raw = current if isinstance(current, (list, tuple, set)) else [current]
+    selected = {str(m).strip().lower() for m in raw if str(m).strip()}
+    if "any" in selected or not selected:
+        selected = {REMOTE_MODE, HYBRID_MODE, ONSITE_MODE}
+
+    choices = [
+        questionary.Choice(label, value=value, checked=value in selected)
+        for value, label in SELECTABLE_WORKPLACES
+    ]
+    picked = cli_art.checkbox(
+        "Which types of roles should scans keep? (space to toggle)", choices=choices
+    )
+    if picked is None:
+        return None
+    if not picked or set(picked) == {REMOTE_MODE, HYBRID_MODE, ONSITE_MODE}:
+        return ["any"]
+    return sorted(picked)
 
 
 def _radius_choices(current: int) -> list:
@@ -213,19 +270,13 @@ def run_location_settings() -> None:
                 f"{cli_art.WARNING} Set a location first.", soft_wrap=True
             )
             return
-        mode = cli_art.select(
-            "Which roles should scans keep?",
-            choices=[
-                questionary.Choice(label, value=value)
-                for value, label in WORKPLACE_CHOICES
-            ],
-        )
+        mode = _prompt_workplace_modes(current.get("workplace_mode"))
         if mode is None:
             return
         current["workplace_mode"] = mode
         write_settings(current, path)
         cli_art.console.print(
-            f"{cli_art.SUCCESS} Workplace type set to {mode}.", soft_wrap=True
+            f"{cli_art.SUCCESS} Workplace filter: {describe(current)}.", soft_wrap=True
         )
         return
 
@@ -259,12 +310,7 @@ def run_location_settings() -> None:
     )
     if miles is None:
         return
-    mode = cli_art.select(
-        "Which roles should scans keep?",
-        choices=[
-            questionary.Choice(label, value=value) for value, label in WORKPLACE_CHOICES
-        ],
-    )
+    mode = _prompt_workplace_modes(current.get("workplace_mode"))
     if mode is None:
         return
 
