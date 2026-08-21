@@ -305,9 +305,7 @@ def best_match(
     job, score, reasons = scored[0]
     if len(scored) > 1 and scored[1][1] >= score - 0.1:
         score = min(score, CONFIRM - 0.01)
-        reasons.append(
-            f"ambiguous: {len(scored)} roles at this company score alike"
-        )
+        reasons.append(f"ambiguous: {len(scored)} roles at this company score alike")
     return job, score, reasons
 
 

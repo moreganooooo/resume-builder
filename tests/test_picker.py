@@ -259,7 +259,6 @@ class TestListAllEvaluatedJds(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-
     @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")

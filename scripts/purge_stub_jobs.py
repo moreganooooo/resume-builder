@@ -137,7 +137,10 @@ def main() -> int:
     print(f"  kept     {stats['kept']} rows with real job content")
     for title, count in stats["by_title"].most_common():
         print(f"    title {title!r:<18} {count}")
-    print("  by status: " + ", ".join(f"{s}={n}" for s, n in stats["by_status"].most_common()))
+    print(
+        "  by status: "
+        + ", ".join(f"{s}={n}" for s, n in stats["by_status"].most_common())
+    )
     if not args.apply and stats["stubs"]:
         print("\n  dry run -- re-run with --apply to delete these rows.")
     return 0

@@ -105,9 +105,7 @@ def _tailor(jd_path: str, jobs_path: str) -> int:
             jd_path = jd_source.materialize_permanently(jd_path)
         except LookupError as exc:
             print(f"tailor failed: {exc}", file=sys.stderr)
-            _user_error(
-                "Couldn't find this job's details, so no resume was built."
-            )
+            _user_error("Couldn't find this job's details, so no resume was built.")
             return 1
 
     completed, _failed = orchestrator.run_pipeline(jd_path=jd_path)
