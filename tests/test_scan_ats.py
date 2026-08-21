@@ -477,3 +477,60 @@ class TestNormalizeRawJobAndLoaders(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConcurrentCompanyFetching(unittest.TestCase):
+    """The company loop runs in a thread pool; the sweep loop must not."""
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_ats._load_search_queries", return_value=[])
+    @patch("scan_ats._load_tracked_companies")
+    @patch("scan_boards._run_node_provider")
+    def test_all_companies_are_fetched(self, mock_run, mock_companies, *_):
+        mock_companies.return_value = [
+            {"name": f"Co{i}", "provider": "greenhouse", "enabled": True}
+            for i in range(12)
+        ]
+        mock_run.return_value = [
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://x.com/1",
+                "location": "Remote",
+                "company": "Acme",
+            }
+        ]
+        jobs = scan_ats.fetch_ats_jobs()
+        # Every company fetched exactly once, and nothing lost in the
+        # concurrent collection.
+        self.assertEqual(mock_run.call_count, 12)
+        self.assertEqual(len(jobs), 12)
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_ats._load_search_queries", return_value=[])
+    @patch("scan_ats._load_tracked_companies")
+    @patch("scan_boards._run_node_provider")
+    def test_one_failing_company_does_not_abort_scan(
+        self, mock_run, mock_companies, *_
+    ):
+        mock_companies.return_value = [
+            {"name": f"Co{i}", "provider": "greenhouse", "enabled": True}
+            for i in range(4)
+        ]
+
+        def flaky(provider_id, company):
+            if company["name"] == "Co2":
+                raise RuntimeError("host unreachable")
+            return [
+                {
+                    "title": "Marketing Coordinator",
+                    "url": f"https://x.com/{company['name']}",
+                    "location": "Remote",
+                    "company": company["name"],
+                }
+            ]
+
+        mock_run.side_effect = flaky
+        jobs = scan_ats.fetch_ats_jobs()
+        # The three healthy hosts still return; only the bad one is lost.
+        self.assertEqual(len(jobs), 3)
+        self.assertNotIn("Co2", [j["company_name"] for j in jobs])
