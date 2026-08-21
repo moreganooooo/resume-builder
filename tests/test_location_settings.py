@@ -148,3 +148,45 @@ class TestRadiusChoices(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMultiSelectRendering(_TempFilters):
+    """A list of modes must survive the YAML round-trip."""
+
+    def test_list_renders_and_reads_back(self):
+        ls.write_settings(
+            {
+                "zip": "14068",
+                "radius_miles": 25,
+                "workplace_mode": ["remote", "onsite"],
+            },
+            self.path,
+        )
+        self.assertEqual(
+            sorted(ls.read_settings(self.path)["workplace_mode"]), ["onsite", "remote"]
+        )
+
+    def test_single_item_list_renders_as_a_plain_string(self):
+        ls.write_settings(
+            {"zip": "14068", "radius_miles": 25, "workplace_mode": ["remote"]},
+            self.path,
+        )
+        self.assertEqual(ls.read_settings(self.path)["workplace_mode"], "remote")
+
+    def test_empty_list_falls_back_to_any(self):
+        ls.write_settings(
+            {"zip": "14068", "radius_miles": 25, "workplace_mode": []}, self.path
+        )
+        self.assertEqual(ls.read_settings(self.path)["workplace_mode"], "any")
+
+    def test_describe_joins_a_combination(self):
+        text = ls.describe(
+            {"zip": "14068", "radius_miles": 25, "workplace_mode": ["remote", "onsite"]}
+        )
+        self.assertIn("onsite+remote", text)
+
+    def test_selectable_workplaces_excludes_any(self):
+        # "any" is what selecting all three means, not a fourth checkbox
+        # that could be ticked alongside them and contradict them.
+        values = [v for v, _ in ls.SELECTABLE_WORKPLACES]
+        self.assertEqual(values, ["remote", "hybrid", "onsite"])
