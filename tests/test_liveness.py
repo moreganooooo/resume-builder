@@ -646,3 +646,87 @@ class TestDatabaseCandidatesAreGuardedInTests(unittest.TestCase):
     def test_liveness_recency_helper_tolerates_junk(self):
         for value in (None, {}, {"checked_at": "not-a-date"}, {"checked_at": None}):
             self.assertFalse(liveness._liveness_is_recent(value))
+
+
+class TestProgressStreamRecovery(unittest.TestCase):
+    """An unreadable final blob must not discard a completed sweep.
+
+    The child prints one JSON blob after the browser closes. On
+    2026-08-21 an 812-candidate sweep ran ~50 minutes, checked every URL,
+    then threw all of it away because stdout came back empty while the
+    child still exited 0. Every verdict had already been streamed as a
+    progress event.
+    """
+
+    CANDIDATES = [
+        {"job_key": "k1", "source_file": "k1", "url": "https://x.com/1"},
+        {"job_key": "k2", "source_file": "k2", "url": "https://x.com/2"},
+    ]
+    EVENTS = [
+        {
+            "type": "progress",
+            "source_file": "k1",
+            "result": "active",
+            "code": "apply_control_visible",
+            "reason": None,
+        },
+        {
+            "type": "progress",
+            "source_file": "k2",
+            "result": "expired",
+            "code": "gone",
+            "reason": "404",
+        },
+    ]
+
+    def test_rebuilds_every_result(self):
+        rebuilt = liveness._results_from_progress(self.EVENTS, self.CANDIDATES)
+        self.assertEqual(len(rebuilt), 2)
+        self.assertEqual(rebuilt[0]["result"], "active")
+        self.assertEqual(rebuilt[1]["result"], "expired")
+
+    def test_carries_job_key_and_url_from_the_candidate(self):
+        # The event does not contain either; both are needed to persist
+        # the verdict and to move an expired posting.
+        rebuilt = liveness._results_from_progress(self.EVENTS, self.CANDIDATES)
+        self.assertEqual(rebuilt[0]["job_key"], "k1")
+        self.assertEqual(rebuilt[0]["url"], "https://x.com/1")
+
+    def test_events_for_unknown_candidates_are_ignored(self):
+        events = self.EVENTS + [
+            {"type": "progress", "source_file": "ghost", "result": "active"}
+        ]
+        self.assertEqual(
+            len(liveness._results_from_progress(events, self.CANDIDATES)), 2
+        )
+
+    def test_events_without_a_verdict_are_ignored(self):
+        events = [{"type": "progress", "source_file": "k1"}]
+        self.assertEqual(liveness._results_from_progress(events, self.CANDIDATES), [])
+
+    def test_empty_inputs_are_safe(self):
+        self.assertEqual(liveness._results_from_progress([], self.CANDIDATES), [])
+        self.assertEqual(liveness._results_from_progress(self.EVENTS, []), [])
+        self.assertEqual(liveness._results_from_progress(None, None), [])
+
+
+class TestDatabaseRowLabels(unittest.TestCase):
+    """Database-only roles are keyed by a content hash, not a path."""
+
+    HASH = "b2f8b2f87da79ce73e6db058af8d950cbfecc5507a511abdc7b07226ba3f32ed"
+
+    def test_falls_back_to_the_raw_key_without_metadata(self):
+        # The old behavior, and why the sweep printed 64-char hashes.
+        self.assertEqual(liveness._styled_jd_label(self.HASH), self.HASH)
+
+    def test_uses_metadata_when_supplied(self):
+        meta = {
+            self.HASH: {"title": "Lifecycle Marketing Manager", "company": "Acme Corp"}
+        }
+        label = liveness._styled_jd_label(self.HASH, meta)
+        self.assertIn("Acme Corp", label)
+        self.assertIn("Lifecycle Marketing Manager", label)
+        self.assertNotIn(self.HASH, label)
+
+    def test_missing_entry_does_not_raise(self):
+        self.assertEqual(liveness._styled_jd_label(self.HASH, {}), self.HASH)

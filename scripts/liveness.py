@@ -215,7 +215,21 @@ def _gather_db_candidates() -> list:
         if _liveness_is_recent(data.get("_liveness")):
             continue
 
-        candidates.append({"job_key": job_id, "source_file": job_id, "url": url})
+        # Title and company ride along because there is no file to read
+        # them back from later. Without them _styled_jd_label() falls
+        # through to os.path.basename(job_id) and the sweep prints a raw
+        # 64-character content hash as the row -- which is what most of
+        # the list looked like, since the majority of pending roles are
+        # database-only.
+        candidates.append(
+            {
+                "job_key": job_id,
+                "source_file": job_id,
+                "url": url,
+                "title": data.get("job_title") or data.get("title") or "",
+                "company": data.get("company_name") or data.get("company") or "",
+            }
+        )
     return candidates
 
 
@@ -243,11 +257,49 @@ def _gather_candidates(pending_paths: list) -> list:
     return candidates
 
 
-def _styled_jd_label(source_file: str | None) -> str:
-    """Styled version of _jd_label with Rich markup for terminal display."""
+def _results_from_progress(events: list, candidates: list) -> list:
+    """Rebuilds the result rows from streamed progress events.
+
+    A progress event carries the verdict (result/code/reason) and the
+    source_file it belongs to, but not job_key or url -- those come from
+    the candidate the caller already has in hand.
+    """
+    by_source = {
+        c.get("source_file"): c for c in (candidates or []) if c.get("source_file")
+    }
+    rebuilt = []
+    for event in events or []:
+        candidate = by_source.get(event.get("source_file"))
+        if not candidate or not event.get("result"):
+            continue
+        rebuilt.append(
+            {
+                **candidate,
+                "result": event.get("result"),
+                "code": event.get("code"),
+                "reason": event.get("reason"),
+            }
+        )
+    return rebuilt
+
+
+def _styled_jd_label(source_file: str | None, meta: dict | None = None) -> str:
+    """Styled version of _jd_label with Rich markup for terminal display.
+
+    `meta` maps source_file -> {"title", "company"} for candidates whose
+    metadata cannot be read back off disk. Database-only roles are keyed
+    by a content hash rather than a path, so extract_job_meta() has
+    nothing to open and the label degraded to the bare hash.
+    """
     if not source_file:
         return "(unknown)"
-    title, company = jd_manager.extract_job_meta(source_file)
+
+    entry = (meta or {}).get(source_file) or {}
+    title = entry.get("title") or ""
+    company = entry.get("company") or ""
+    if not (title or company):
+        title, company = jd_manager.extract_job_meta(source_file)
+
     if title or company:
         company_str = company or "?"
         title_str = title or "?"
@@ -323,6 +375,20 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 # has already exited -- the progress "indicator" was
                 # replaying a finished transcript, not showing live
                 # progress (B21).
+                # Every progress event carries this candidate's verdict,
+                # so the run's work is already in hand by the time the
+                # final blob is read. Kept so an unparseable blob costs
+                # the formatting, not the results -- see the fallback
+                # below.
+                streamed_results = []
+                candidate_meta = {
+                    c["source_file"]: {
+                        "title": c.get("title") or "",
+                        "company": c.get("company") or "",
+                    }
+                    for c in candidates
+                    if c.get("source_file")
+                }
                 with _resolve_activity(activity) as resolved_activity:
                     resolved_activity.start_source(len(candidates), label="Checking")
                     for line in proc.stderr:
@@ -333,10 +399,13 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                         except json.JSONDecodeError:
                             pass
                         if isinstance(event, dict) and event.get("type") == "progress":
+                            streamed_results.append(event)
                             icon_name = _LIVENESS_ICON_BY_RESULT.get(
                                 event.get("result"), "warning"
                             )
-                            message = _styled_jd_label(event.get("source_file"))
+                            message = _styled_jd_label(
+                                event.get("source_file"), candidate_meta
+                            )
                             resolved_activity.step(
                                 icon_name, "Verify", message, preserve_markup=True
                             )
@@ -392,19 +461,38 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         try:
             results = json.loads(stdout_data)
         except json.JSONDecodeError:
-            cli_art.console.print(
-                f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}",
-                soft_wrap=True,
-            )
-            return {
-                "active": 0,
-                "likely_active": 0,
-                "expired": 0,
-                "uncertain": 0,
-                "moved": 0,
-                "expired_source_paths": [],
-                "error": True,
-            }
+            # The child prints one final JSON blob after the browser
+            # closes. When that blob is missing or truncated, every
+            # verdict is STILL known -- each was streamed as a progress
+            # event while the sweep ran. Rebuilding from those turns a
+            # total loss into a complete result set.
+            #
+            # This is not hypothetical: an 812-candidate sweep on
+            # 2026-08-21 ran for ~50 minutes, checked every URL, and then
+            # discarded all of it because stdout came back empty while
+            # the child still exited 0.
+            results = _results_from_progress(streamed_results, candidates)
+            if results:
+                cli_art.console.print(
+                    f"\n  {theme.colorize_icon('warning')}  Liveness output was "
+                    f"unreadable; recovered {len(results)} result(s) from the "
+                    "progress stream.",
+                    soft_wrap=True,
+                )
+            else:
+                cli_art.console.print(
+                    f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}",
+                    soft_wrap=True,
+                )
+                return {
+                    "active": 0,
+                    "likely_active": 0,
+                    "expired": 0,
+                    "uncertain": 0,
+                    "moved": 0,
+                    "expired_source_paths": [],
+                    "error": True,
+                }
     finally:
         for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
             if os.path.exists(path):
