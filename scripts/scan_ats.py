@@ -51,6 +51,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import cli_art
 import profile_paths
 import scan_boards
+import websearch_ddg
 import yaml
 
 # Brave Search's free tier is 1 req/sec (see providers/websearch.mjs's own
@@ -359,6 +360,21 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
             "scan_query": query.get("query", ""),
             "_isSweep": True,
         }
+        # Brave's free tier became metered, so DuckDuckGo is the default
+        # backend and Brave is used only when a key is still configured.
+        # The search happens HERE, in Python, because DuckDuckGo answers a
+        # plain Node fetch with an empty HTTP 202 challenge page after the
+        # first request or two; websearch_ddg.py uses a library that does
+        # the token handshake. The results are handed to websearch.mjs,
+        # which still does all the filtering -- see its own note on why
+        # that logic is not duplicated over here.
+        if not os.environ.get("BRAVE_API_KEY"):
+            entry["_results"] = websearch_ddg.search(entry["scan_query"])
+        # Handed to Node even when the search came back empty. Skipping
+        # the call would save a process per barren query, but it also
+        # skips this loop's pacing and error reporting, which are what
+        # make a run legible -- and websearch.mjs maps an empty list to
+        # an empty result perfectly well.
         raw_jobs = scan_boards._run_node_provider("websearch", entry)
         logging.info(
             f"scan_ats: sweep '{query.get('name')}' returned {len(raw_jobs)} raw listing(s)."
