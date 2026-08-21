@@ -104,6 +104,57 @@ def cli(ctx, profile, verbose):
         menu.run_interactive_menu()
 
 
+@cli.command(name="discover-employers")
+@click.option(
+    "--apply",
+    "apply_",
+    is_flag=True,
+    default=False,
+    help="Write the entries (default: dry run)",
+)
+@click.option("--limit", default=60, help="Max employers to probe")
+@click.option("--search-term", default=None, help="What to search locally")
+def discover_employers_cmd(apply_, limit, search_term):
+    """Find local employers with public ATS boards and track them.
+
+    Aggregators (Indeed/Adzuna/Jooble) say WHICH employers are hiring
+    near you; their own text is teaser-only. This finds those employers'
+    real ATS boards so scan_ats.py scrapes the full descriptions.
+    """
+    import discover_local_employers
+
+    cli_art.display_banner("Discover Local Employers")
+    hits = discover_local_employers.discover(limit=limit, search_term=search_term)
+    path = discover_local_employers.tracked_companies_path()
+    if not hits:
+        cli_art.console.print(
+            "\n  No new local employers with public ATS boards found.\n",
+            soft_wrap=True,
+        )
+        return
+    cli_art.console.print(
+        f"\n  Found [cyan]{len(hits)}[/cyan] local employer(s) with a public board:\n",
+        soft_wrap=True,
+    )
+    for hit in hits:
+        cli_art.console.print(
+            f"    {hit['name']}  [dim]{hit['provider']} · "
+            f"{hit['postings']} open role(s)[/dim]",
+            soft_wrap=True,
+        )
+    if not apply_:
+        cli_art.console.print(
+            "\n  Dry run -- nothing written. Re-run with --apply to track these.\n",
+            soft_wrap=True,
+        )
+        return
+    backup = discover_local_employers.append_entries(hits, path)
+    cli_art.console.print(
+        f"\n  {cli_art.SUCCESS} Added {len(hits)} employer(s). Backup: {backup}\n",
+        soft_wrap=True,
+    )
+
+
 @cli.command(name="bootstrap")
 def bootstrap_cmd():
     """New-user setup: ingest source documents, draft your profile, then
