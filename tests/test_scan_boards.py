@@ -350,7 +350,10 @@ class TestFlagThinDescription(unittest.TestCase):
 
     @patch("scan_boards._scan_warning")
     def test_long_enough_description_is_left_alone(self, mock_warn):
-        job = {"description": "x" * 300}
+        # Sized off the constant, not a literal -- this test previously
+        # hardcoded 300, which stopped meaning "long enough" the moment
+        # MIN_DESCRIPTION_CHARS moved.
+        job = {"description": "x" * (scan_boards.MIN_DESCRIPTION_CHARS + 50)}
         scan_boards._flag_thin_description(job, "greenhouse", "https://x.com/1")
         self.assertNotIn("_scan", job)
         mock_warn.assert_not_called()
@@ -364,14 +367,17 @@ class TestTeaserDescriptions(unittest.TestCase):
     """A provider that knows its text is a blurb outranks the length check."""
 
     def test_long_teaser_is_still_flagged_thin(self):
-        # Jooble's snippet runs ~275 chars -- over MIN_DESCRIPTION_CHARS --
-        # while being a truncated blurb whose full text is unreachable.
-        job = {"description": "x" * 275, "description_is_teaser": True}
+        # A teaser long enough to clear the threshold must still be
+        # flagged -- length is not evidence of completeness.
+        job = {
+            "description": "x" * (scan_boards.MIN_DESCRIPTION_CHARS + 50),
+            "description_is_teaser": True,
+        }
         scan_boards._flag_thin_description(job, "jooble", "https://x.com/1")
         self.assertTrue(job["_scan"]["thin_description"])
 
     def test_long_real_description_is_not_flagged(self):
-        job = {"description": "x" * 275}
+        job = {"description": "x" * (scan_boards.MIN_DESCRIPTION_CHARS + 50)}
         scan_boards._flag_thin_description(job, "greenhouse", "https://x.com/1")
         self.assertNotIn("_scan", job)
 
@@ -393,7 +399,7 @@ class TestTeaserDescriptions(unittest.TestCase):
                 "url": "https://x.com/1",
                 "company": "Acme",
                 "location": "Buffalo, NY",
-                "description": "x" * 275,
+                "description": "x" * (scan_boards.MIN_DESCRIPTION_CHARS + 50),
                 "description_is_teaser": True,
             }
         ]
