@@ -3,8 +3,8 @@ import io
 import json
 import os
 import shutil
-import tempfile
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -92,9 +92,7 @@ class TestStatus(JDFileTestCase):
     def test_valid_status_refreshes_export_and_returns_zero(
         self, mock_save, mock_export
     ):
-        code = dashboard_actions._status(
-            self.jd_path, "Applied", "/tmp/jobs.json"
-        )
+        code = dashboard_actions._status(self.jd_path, "Applied", "/tmp/jobs.json")
         mock_save.assert_called_once_with(self.jd_path, "Applied")
         mock_export.assert_called_once_with("/tmp/jobs.json")
         self.assertEqual(code, 0)

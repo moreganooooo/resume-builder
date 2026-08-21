@@ -58,8 +58,10 @@ def file_locations(jds_dir: str) -> Dict[str, str]:
     """Maps each JD basename to the status implied by its directory."""
     locations = {}
     for subdir, status in DIR_STATUS.items():
-        pattern = os.path.join(jds_dir, subdir, "*.json") if subdir else os.path.join(
-            jds_dir, "*.json"
+        pattern = (
+            os.path.join(jds_dir, subdir, "*.json")
+            if subdir
+            else os.path.join(jds_dir, "*.json")
         )
         for path in glob.glob(pattern):
             locations[os.path.basename(path)] = status
@@ -71,8 +73,10 @@ def key_locations(jds_dir: str) -> Dict[str, str]:
     stored under a content hash rather than a filename."""
     locations = {}
     for subdir, status in DIR_STATUS.items():
-        pattern = os.path.join(jds_dir, subdir, "*.json") if subdir else os.path.join(
-            jds_dir, "*.json"
+        pattern = (
+            os.path.join(jds_dir, subdir, "*.json")
+            if subdir
+            else os.path.join(jds_dir, "*.json")
         )
         for path in glob.glob(pattern):
             try:
@@ -157,9 +161,10 @@ def main() -> int:
     for transition, count in stats["transitions"].most_common():
         print(f"      {transition:<28} {count}")
     if args.apply:
-        print("\n  status now: " + ", ".join(
-            f"{s}={n}" for s, n in stats["status_after"].most_common()
-        ))
+        print(
+            "\n  status now: "
+            + ", ".join(f"{s}={n}" for s, n in stats["status_after"].most_common())
+        )
     else:
         print("\n  dry run -- re-run with --apply to write.")
     return 0
