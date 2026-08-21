@@ -12,6 +12,7 @@ import sys
 import batch_evaluate
 import cli_art
 import jd_manager
+import location_filter
 import questionary
 import theme
 
@@ -363,6 +364,48 @@ def pick_and_process(
     return (completed, failed)
 
 
+def _read_location_settings() -> dict:
+    """The profile's configured origin/radius, or {} when unconfigured.
+
+    Imported lazily: location_settings pulls in cli_art, and cli_art
+    imports picker back (lazily, inside a function) -- keeping this one
+    lazy too means neither module can be dragged into an import cycle by
+    a future edit that makes cli_art's import eager.
+    """
+    try:
+        import location_settings
+
+        return location_settings.read_settings()
+    except Exception:
+        return {}
+
+
+def _location_fields(data: dict, settings: dict) -> dict:
+    """Location, workplace mode, and distance for one JD's export row.
+
+    Computed at export time rather than stored on the JD, because the
+    answer depends on the CURRENT radius setting -- a JD saved last month
+    should reflect the origin configured today, and changing the radius
+    must not require rewriting a thousand files.
+
+    distance_miles stays None when the location cannot be resolved. The
+    Go side renders that as "no distance", never as 0, so an unknown can
+    never sort as if it were next door.
+    """
+    location = (data.get("location") or "").strip()
+    verdict = location_filter.evaluate_location(
+        location,
+        settings,
+        is_remote=data.get("is_remote"),
+        work_model=data.get("work_model") or "",
+    )
+    return {
+        "location": location,
+        "workplace": verdict.workplace,
+        "distance_miles": verdict.distance_miles,
+    }
+
+
 def list_all_evaluated_jds(statuses: list | None = None) -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
     each as {"path", "status" ("Pending"/"Completed"), "evaluation",
@@ -377,6 +420,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     makes sense against one status (e.g. tailoring only applies to
     Pending, a cover letter only to Completed)."""
     statuses = statuses or ["Pending", "Completed"]
+    location_settings_block = _read_location_settings()
     rows = []
     if "Pending" in statuses:
         for path in jd_manager.get_pending_jds():
@@ -407,6 +451,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "skills": jd_data.get("skills") or [],
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
+                    **_location_fields(jd_data, location_settings_block),
                 }
             )
     if "Completed" in statuses:
@@ -438,16 +483,17 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "skills": jd_data.get("skills") or [],
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
+                    **_location_fields(jd_data, location_settings_block),
                 }
             )
     if "Pending" in statuses:
-        rows.extend(_database_only_rows(rows))
+        rows.extend(_database_only_rows(rows, location_settings_block))
 
     rows.sort(key=lambda r: -(r["evaluation"].get("composite_score") or 0))
     return rows
 
 
-def _database_only_rows(file_rows: list) -> list:
+def _database_only_rows(file_rows: list, settings: dict = None) -> list:
     """Evaluated jobs that live only in data.db, in the same dict shape.
 
     Most pending jobs have no JD file -- the filesystem-to-database
@@ -523,6 +569,7 @@ def _database_only_rows(file_rows: list) -> list:
                 "skills": data.get("skills") or [],
                 "research": data.get("_research"),
                 "coverage": data.get("_coverage"),
+                **_location_fields(data, settings or {}),
             }
         )
     return extra
