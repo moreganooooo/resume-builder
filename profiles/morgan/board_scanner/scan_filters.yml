@@ -13,6 +13,36 @@
 # (always_allow/block properly nested under location_filter) so it's not
 # ported broken. Worth a fix upstream in career-ops too, separately.
 
+# ---------------------------------------------------------------------
+# Optional radius/workplace filter (scripts/location_filter.py).
+#
+# Uncommenting this block CHANGES how location filtering works: the
+# keyword always_allow/block lists below stop being consulted, and every
+# posting is judged instead on workplace mode and real distance from the
+# origin here. That is deliberate -- the `block:` list rejects "Onsite"
+# and "Hybrid" outright, so it has to stand down at exactly the moment a
+# radius exists to take its place. Leave it commented to keep the
+# historical keyword-only behavior.
+#
+#   zip           preferred origin; unambiguous where a city name needs a
+#                 state to mean anything. Falls back to city + state.
+#   radius_miles  straight-line, not driving. Road mileage in US metros
+#                 runs ~1.2-1.4x, so 25 here is about a 30-mile drive.
+#   workplace_mode  remote | hybrid | onsite | any
+#                 A posting whose mode cannot be determined is NEVER
+#                 dropped on mode alone -- providers often omit the field.
+#
+# Unresolvable locations ("Greater Austin Area") are kept for review
+# rather than dropped: surfacing an unknown is cheap to eyeball, while
+# silently discarding a commutable role is not.
+#
+# location:
+#   city: Kansas City
+#   state: MO
+#   zip: "64111"
+#   radius_miles: 25
+#   workplace_mode: any
+
 location_filter:
   always_allow:
       - "Remote"
