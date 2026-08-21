@@ -267,6 +267,32 @@ def classify_workplace(
     return UNKNOWN
 
 
+def wanted_workplaces(config: dict) -> set:
+    """The workplace modes a config accepts, as a set.
+
+    `workplace_mode` takes either a single value ("remote") or a list
+    (["remote", "onsite"]). The list form exists for the combination a
+    single value cannot express: willing to work remotely OR to commute
+    in, but not to be on a hybrid schedule. The string form is still
+    written by anything that only needs one, and still read here, so no
+    existing config has to change.
+
+    An empty result means "no restriction", which is also what ANY means.
+    """
+    raw = (config or {}).get("workplace_mode")
+    if raw is None:
+        return set()
+    values = raw if isinstance(raw, (list, tuple, set)) else [raw]
+    modes = set()
+    for value in values:
+        cleaned = str(value).strip().lower()
+        if cleaned == ANY:
+            return set()
+        if cleaned in (REMOTE, HYBRID, ONSITE):
+            modes.add(cleaned)
+    return modes
+
+
 def _normalize_state(token: str) -> str | None:
     """Maps 'CA' / 'California' to an uppercase state code."""
     cleaned = token.strip().strip(".").lower()
@@ -361,7 +387,7 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
     (`is_remote`, `work_model`) when they have them.
     """
     config = config or {}
-    mode = str(config.get("workplace_mode") or ANY).strip().lower()
+    modes = wanted_workplaces(config)
     radius = config.get("radius_miles")
     origin = origin_from_config(config)
 
@@ -383,12 +409,13 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
     if home_state and home_state in excluded_states(location):
         return LocationVerdict(False, workplace, None, f"posting excludes {home_state}")
 
-    if mode not in (ANY, REMOTE, HYBRID, ONSITE):
-        mode = ANY
-
-    if mode != ANY and workplace != UNKNOWN and workplace != mode:
+    # An undetermined workplace is never dropped on mode alone --
+    # providers routinely omit the field, and "unknown" is not evidence
+    # of anything.
+    if modes and workplace != UNKNOWN and workplace not in modes:
+        wanted = "/".join(sorted(modes))
         return LocationVerdict(
-            False, workplace, None, f"workplace is {workplace}, wanted {mode}"
+            False, workplace, None, f"workplace is {workplace}, wanted {wanted}"
         )
 
     if workplace == REMOTE:

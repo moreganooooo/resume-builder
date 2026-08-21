@@ -257,3 +257,58 @@ class TestScanBoardsDelegation(unittest.TestCase):
             self.assertFalse(
                 self.scan_boards._passes_location_filter("Austin, TX", is_remote=False)
             )
+
+
+class TestMultiSelectWorkplaceModes(unittest.TestCase):
+    """workplace_mode accepts a list, for combinations one value cannot say."""
+
+    def test_single_string_still_works(self):
+        self.assertEqual(lf.wanted_workplaces({"workplace_mode": "remote"}), {"remote"})
+
+    def test_any_means_no_restriction(self):
+        self.assertEqual(lf.wanted_workplaces({"workplace_mode": "any"}), set())
+        self.assertEqual(lf.wanted_workplaces({}), set())
+
+    def test_list_form(self):
+        self.assertEqual(
+            lf.wanted_workplaces({"workplace_mode": ["remote", "onsite"]}),
+            {"remote", "onsite"},
+        )
+
+    def test_any_inside_a_list_wins(self):
+        # "any" alongside others is a contradiction; the permissive
+        # reading is the safe one.
+        self.assertEqual(
+            lf.wanted_workplaces({"workplace_mode": ["remote", "any"]}), set()
+        )
+
+    def test_unknown_values_ignored(self):
+        self.assertEqual(
+            lf.wanted_workplaces({"workplace_mode": ["remote", "nonsense"]}),
+            {"remote"},
+        )
+
+    def test_remote_or_onsite_excludes_hybrid(self):
+        # The case that motivated this: willing to work remotely OR to
+        # commute in, but not to be on a hybrid schedule.
+        config = cfg(workplace_mode=["remote", "onsite"])
+        self.assertTrue(lf.evaluate_location("Remote (US)", config).passes)
+        self.assertTrue(
+            lf.evaluate_location("Onsite - Overland Park, KS", config).passes
+        )
+        self.assertFalse(
+            lf.evaluate_location("Hybrid - Overland Park, KS", config).passes
+        )
+
+    def test_unknown_workplace_survives_a_multi_select(self):
+        # Same rule as the single-mode case: providers omit the field,
+        # and "unknown" is not evidence of anything.
+        config = cfg(workplace_mode=["remote", "onsite"])
+        self.assertTrue(lf.evaluate_location("Overland Park, KS", config).passes)
+
+    def test_rejection_reason_names_every_wanted_mode(self):
+        verdict = lf.evaluate_location(
+            "Hybrid - Overland Park, KS", cfg(workplace_mode=["remote", "onsite"])
+        )
+        self.assertIn("onsite", verdict.reason)
+        self.assertIn("remote", verdict.reason)
