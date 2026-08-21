@@ -48,6 +48,7 @@ import re
 import subprocess
 
 import cli_art
+import location_filter
 import profile_paths
 import requests
 import yaml
@@ -141,9 +142,35 @@ def _passes_title_filter(title: str) -> bool:
     return True
 
 
-def _passes_location_filter(location: str) -> bool:
-    """Python port of scan.mjs's buildLocationFilter(): empty/missing
-    location always passes; always_allow beats block; block rejects."""
+def _passes_location_filter(location: str, **posting) -> bool:
+    """The single location gate for BOTH scanners -- scan_ats.py routes
+    through this function too, so anything added here covers both.
+
+    Two behaviors, selected by config:
+
+    * With a `location:` block in scan_filters.yml, delegates to
+      location_filter.evaluate_location() for the tiered verdict
+      (exclusion fencing, compound hubs, radius, international).
+    * Without one, keeps the historical keyword behavior byte for byte:
+      empty/missing location always passes; always_allow beats block;
+      block rejects.
+
+    The fallback is what makes the radius work safe to adopt. The keyword
+    `block:` list rejects "Onsite"/"Hybrid" outright, so relaxing it
+    before a radius exists would let a nationwide flood of on-site
+    postings into the corpus. Configuring `location:` is the same switch
+    that relaxes the block and supplies the radius replacing it -- they
+    cannot drift apart.
+
+    `**posting` carries optional provider-supplied hints (`is_remote`,
+    `work_model`) for callers that have them.
+    """
+    location_config = _load_filters().get("location") or {}
+    if location_config:
+        return location_filter.evaluate_location(
+            location, location_config, **posting
+        ).passes
+
     if not location or not location.strip():
         return True
     lf = _load_filters().get("location_filter", {})
