@@ -94,6 +94,14 @@ BOARD_PROVIDERS = [
 ]
 
 NODE_TIMEOUT_SECONDS = 30
+
+# Providers that legitimately need longer than the default. Workday is
+# the only one: it drives Playwright to paginate a JS board and then
+# fetches each posting's description over a separate budget, so 30s cut
+# it off mid-run and produced JDs with empty descriptions. Its own module
+# bounds itself to ~45s of real work; this leaves headroom over that
+# rather than racing it.
+PROVIDER_TIMEOUT_SECONDS = {"workday": 105}
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
 # Raised from 200 on 2026-08-21, calibrated against this profile's own
@@ -278,7 +286,7 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
             ["node", RUN_PROVIDER_SCRIPT, provider_id, json.dumps(entry)],
             capture_output=True,
             text=True,
-            timeout=NODE_TIMEOUT_SECONDS,
+            timeout=PROVIDER_TIMEOUT_SECONDS.get(provider_id, NODE_TIMEOUT_SECONDS),
             env=_child_env(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
