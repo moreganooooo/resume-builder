@@ -182,6 +182,49 @@ def _location_filter_label() -> str:
         return ""
 
 
+def _handle_discover_employers() -> bool:
+    """Settings & Upkeep -> Discover Local Employers with ATS Boards.
+
+    Aggregators say WHICH employers are hiring nearby but return only
+    teasers; this finds those employers' own ATS boards, which is where
+    the full job text lives. Always previews before writing.
+    """
+    import discover_local_employers
+
+    hits = discover_local_employers.discover()
+    if not hits:
+        cli_art.console.print(
+            f"\n  {cli_art.WARNING} No new local employers with public ATS "
+            "boards found.\n",
+            soft_wrap=True,
+        )
+        _pause_and_return()
+        return True
+
+    cli_art.console.print(
+        f"\n  Found [cyan]{len(hits)}[/cyan] local employer(s) with a public "
+        "board:\n",
+        soft_wrap=True,
+    )
+    for hit in hits:
+        cli_art.console.print(
+            f"    {hit['name']}  [dim]{hit['provider']} · "
+            f"{hit['postings']} open role(s)[/dim]",
+            soft_wrap=True,
+        )
+
+    if cli_art.confirm(f"\nTrack these {len(hits)} employer(s)?", default=True):
+        path = discover_local_employers.tracked_companies_path()
+        backup = discover_local_employers.append_entries(hits, path)
+        cli_art.console.print(
+            f"\n  {cli_art.SUCCESS} Added {len(hits)}. Backup: {backup}\n"
+            "  They are scanned on the next run.\n",
+            soft_wrap=True,
+        )
+    _pause_and_return()
+    return True
+
+
 def _handle_manage_location() -> bool:
     """Settings & Upkeep -> Location & Commute Radius."""
     import location_settings
@@ -218,6 +261,10 @@ def _build_settings_upkeep_choices() -> list:
                 "location", f"↳ Location & Commute Radius {_location_filter_label()}"
             ),
             value="manage_location",
+        ),
+        questionary.Choice(
+            title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
+            value="discover_employers",
         ),
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
@@ -1577,6 +1624,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_location":
             _handle_manage_location()
+            continue
+        if choice == "discover_employers":
+            _handle_discover_employers()
             continue
         if choice == "build_sample":
             _handle_build_sample()
