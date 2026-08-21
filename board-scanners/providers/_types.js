@@ -30,6 +30,14 @@
  *                                work at all against a JS-rendered posting
  *                                page (see B36, docs/review/phase-9-backlog.md).
  * @property {string} [posted_at] Optional. ISO 8601 when available.
+ * @property {boolean} [description_is_teaser] Set by a provider that knows its
+ *                                `description` is a truncated blurb rather than the
+ *                                real posting -- e.g. an aggregator returning a
+ *                                snippet whose full text is unreachable. Honored by
+ *                                scan_boards._flag_thin_description(), which then
+ *                                marks the posting thin REGARDLESS of character
+ *                                count, so a teaser long enough to clear
+ *                                MIN_DESCRIPTION_CHARS cannot pass as complete.
  */
 
 /**
@@ -46,6 +54,11 @@
  * @property {string}             [careers_url]    Public listing URL; consumed by detect().
  * @property {string}             [provider]       Explicit provider id — bypasses detect().
  * @property {('http')}           [transport]      Default: 'http'. Reserved for future transports.
+ * @property {string}             [location]       "City, ST" origin, from scan_filters.yml's
+ *                                                 `location:` block. Only location-aware
+ *                                                 providers read it; the rest ignore it.
+ * @property {number}             [radius_miles]   Search radius to pair with `location`, for
+ *                                                 providers whose API filters by distance.
  */
 
 /**
