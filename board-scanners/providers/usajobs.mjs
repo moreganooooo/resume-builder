@@ -16,10 +16,22 @@ export default {
     return null;
   },
   async fetch(entry, ctx) {
-    const apiKey = process.env.USAJOBS_API_KEY;
+    // USAJOBS_APP_KEY is accepted as an alias: it is the name USAJOBS'
+    // own registration email uses for the value, so it is the name people
+    // naturally save it under.
+    const apiKey = process.env.USAJOBS_API_KEY || process.env.USAJOBS_APP_KEY;
+    // Not optional and not a courtesy header -- USAJOBS authenticates on
+    // the registered email being sent as the User-Agent, and rejects the
+    // request without it.
     const email = process.env.USAJOBS_EMAIL;
-    if (!apiKey || !email) {
-      throw new Error('missing USAJOBS_API_KEY / USAJOBS_EMAIL environment variables');
+    if (!apiKey) {
+      throw new Error('missing USAJOBS_API_KEY (or USAJOBS_APP_KEY) environment variable');
+    }
+    if (!email) {
+      throw new Error(
+        'missing USAJOBS_EMAIL -- USAJOBS requires the email you registered with, '
+        + 'sent as the User-Agent header, alongside the API key'
+      );
     }
     const headers = {
       Host: 'data.usajobs.gov',
