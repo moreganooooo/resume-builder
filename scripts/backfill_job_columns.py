@@ -139,9 +139,14 @@ def backfill(db_path: str, apply_changes: bool) -> dict:
         with conn:
             for job_id, fixes in updates:
                 assignments = ", ".join(f"{col} = ?" for col in fixes)
+                # nosec B608 -- `assignments` interpolates COLUMN NAMES
+                # only, and every one is a hardcoded literal set above
+                # ("title", "company", "location", and the three score
+                # columns). No caller-supplied text reaches the SQL
+                # string; every VALUE is bound as a parameter below.
                 conn.execute(
                     f"UPDATE jobs SET {assignments}, updated_at = CURRENT_TIMESTAMP"
-                    " WHERE id = ?",
+                    " WHERE id = ?",  # nosec B608
                     (*fixes.values(), job_id),
                 )
 

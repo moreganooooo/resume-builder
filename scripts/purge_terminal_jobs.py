@@ -58,20 +58,23 @@ def purge(db_path: str, jds_dir: str, apply_changes: bool) -> dict:
     freed = sum(os.path.getsize(p) for p in files if os.path.exists(p))
 
     conn = sqlite3.connect(db_path)
+    # `placeholders` is a run of "?" characters sized to a module
+    # constant -- it carries no data, and the statuses themselves are
+    # bound as parameters. The three # nosec B608 markers below say so.
     placeholders = ",".join("?" * len(TERMINAL_STATUSES))
     rows = conn.execute(
-        f"SELECT COUNT(*) FROM jobs WHERE status IN ({placeholders})",
+        f"SELECT COUNT(*) FROM jobs WHERE status IN ({placeholders})",  # nosec B608
         TERMINAL_STATUSES,
     ).fetchone()[0]
     remaining = conn.execute(
-        f"SELECT COUNT(*) FROM jobs WHERE status NOT IN ({placeholders})",
+        f"SELECT COUNT(*) FROM jobs WHERE status NOT IN ({placeholders})",  # nosec B608
         TERMINAL_STATUSES,
     ).fetchone()[0]
 
     if apply_changes:
         with conn:
             conn.execute(
-                f"DELETE FROM jobs WHERE status IN ({placeholders})",
+                f"DELETE FROM jobs WHERE status IN ({placeholders})",  # nosec B608
                 TERMINAL_STATUSES,
             )
         conn.execute("VACUUM")
