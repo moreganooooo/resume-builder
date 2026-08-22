@@ -425,7 +425,7 @@ High Enjoyment
 FOR each user_skill:
     enjoyment_score = user_rating (1-10)
     competence_score = user_rating (1-10)
-    
+
     IF enjoyment >= 7 AND competence >= 7:
         zone = "STAR"
         recommendation = "Seek roles requiring this skill"

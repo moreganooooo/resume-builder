@@ -4,11 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sync_dashboard_theme import (
-    SUPPORTED_THEMES,
-    get_active_theme,
-    set_active_theme,
-)
+from sync_dashboard_theme import SUPPORTED_THEMES, get_active_theme, set_active_theme
 
 
 class TestSyncDashboardTheme(unittest.TestCase):

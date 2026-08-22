@@ -2,10 +2,7 @@
 
 import unittest
 
-from mission_control import (
-    get_mission_control_summary,
-    render_mission_control_ascii,
-)
+from mission_control import get_mission_control_summary, render_mission_control_ascii
 
 
 class TestMissionControl(unittest.TestCase):

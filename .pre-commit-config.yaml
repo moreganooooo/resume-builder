@@ -66,7 +66,7 @@ repos:
         args:
           [
             "--skip=*.json,*.csv,*.db,*.pyc",
-            "--ignore-words-list=unparseable,ist",
+            "--ignore-words-list=unparseable,ist,coo",
           ]
 
   # General linting

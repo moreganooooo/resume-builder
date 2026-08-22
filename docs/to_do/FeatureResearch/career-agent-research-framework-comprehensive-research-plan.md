@@ -271,7 +271,7 @@ All features **can be built at $0 cost** using free APIs, open-source libraries,
 
 ### Phase 2: Deep Dive (Week 2-3)
 - **Goal:** Extract actionable insights and data from primary sources
-- **Approach:** 
+- **Approach:**
   - Read full papers/studies (not just abstracts)
   - Cross-reference findings across sources
   - Identify contradictions and gaps

@@ -227,8 +227,8 @@ FOR each job application:
 
 **Talk Track Framework:**
 ```
-"My role was eliminated in [Month/Year] as part of a [company-wide/restructuring/skills realignment]. 
-Since then, I've been [specific activity: upskilling in X, consulting in Y, freelancing in Z]. 
+"My role was eliminated in [Month/Year] as part of a [company-wide/restructuring/skills realignment].
+Since then, I've been [specific activity: upskilling in X, consulting in Y, freelancing in Z].
 I'm now seeking opportunities where I can apply my [relevant skills] to [specific value proposition]."
 ```
 
@@ -296,8 +296,8 @@ Based on recruiter surveys and hiring psychology research, the primary concerns 
 
 **Talk Track Framework:**
 ```
-"I'm excited about this opportunity because [specific reason related to company/mission/role]. 
-While I have experience at higher levels, I'm particularly drawn to [specific aspect of this role] 
+"I'm excited about this opportunity because [specific reason related to company/mission/role].
+While I have experience at higher levels, I'm particularly drawn to [specific aspect of this role]
 because [personal connection]. I'm looking for a role where I can [contribute X, learn Y, grow in Z]."
 ```
 
@@ -391,8 +391,8 @@ While I need to conduct deeper research on O*NET specifically, the **Skills Tran
 
 **Talk Track Framework:**
 ```
-"My background in [Old Industry] has given me deep experience in [Transferable Skill 1], [Transferable Skill 2], and [Transferable Skill 3]. 
-These skills directly apply to [New Role] because [specific connection]. 
+"My background in [Old Industry] has given me deep experience in [Transferable Skill 1], [Transferable Skill 2], and [Transferable Skill 3].
+These skills directly apply to [New Role] because [specific connection].
 For example, when I [Old Industry Example], I was really doing [New Industry Equivalent]."
 ```
 
