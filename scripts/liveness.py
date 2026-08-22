@@ -41,11 +41,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Maps check-liveness.mjs's structured progress-event `result` field to
 # this codebase's existing theme.py icon keys (success/warning/error --
 # there's no "likely_active"-specific icon, so it shares "warning" with
-# "uncertain").
+# "uncertain"). "blocked" takes "skip": an anti-bot interstitial or login
+# wall means the page was never shown to us, which is closer to "not
+# checked" than to a verdict we reached.
 _LIVENESS_ICON_BY_RESULT = {
     "active": "success",
     "likely_active": "warning",
     "expired": "error",
+    "blocked": "skip",
     "uncertain": "warning",
 }
 
@@ -363,7 +366,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     check-liveness.mjs, persists each result via jd_manager.save_liveness(),
     moves any 'expired' result's file to jds/expired/, prints the same
     progress/summary check_liveness_check() always has, and returns a
-    dict with keys active/likely_active/expired/uncertain/moved/
+    dict with keys active/likely_active/expired/blocked/uncertain/moved/
     expired_source_paths (plus error=True on a failure path).
     expired_source_paths deliberately holds each moved file's pre-move
     path, not where it now lives in jds/expired/ -- that's the identity
@@ -382,6 +385,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
             "active": 0,
             "likely_active": 0,
             "expired": 0,
+            "blocked": 0,
             "uncertain": 0,
             "moved": 0,
             "expired_source_paths": [],
@@ -510,6 +514,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "active": 0,
                     "likely_active": 0,
                     "expired": 0,
+                    "blocked": 0,
                     "uncertain": 0,
                     "moved": 0,
                     "expired_source_paths": [],
@@ -539,6 +544,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 "active": 0,
                 "likely_active": 0,
                 "expired": 0,
+                "blocked": 0,
                 "uncertain": 0,
                 "moved": 0,
                 "expired_source_paths": [],
@@ -577,6 +583,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "active": 0,
                     "likely_active": 0,
                     "expired": 0,
+                    "blocked": 0,
                     "uncertain": 0,
                     "moved": 0,
                     "expired_source_paths": [],
@@ -615,6 +622,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         "active": [],
         "likely_active": [],
         "expired": [],
+        "blocked": [],
         "uncertain": [],
     }
     for r in results:
@@ -666,6 +674,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         "active": counts.get("active", 0),
         "likely_active": counts.get("likely_active", 0),
         "expired": counts.get("expired", 0),
+        "blocked": counts.get("blocked", 0),
         "uncertain": counts.get("uncertain", 0),
         "moved": moved,
         "expired_source_paths": expired_source_paths,
@@ -723,6 +732,7 @@ def run_liveness_check(refresh: bool = False) -> dict:
             "active": 0,
             "likely_active": 0,
             "expired": 0,
+            "blocked": 0,
             "uncertain": 0,
             "skipped": skipped,
             "recently_checked": len(recently_checked),
@@ -751,6 +761,14 @@ def run_liveness_check(refresh: bool = False) -> dict:
         )
         cli_art.console.print(
             f"  {theme.colorize_icon('warning')} Uncertain (left):       {result['uncertain']}",
+            soft_wrap=True,
+        )
+        # Reported separately from Uncertain on purpose: a blocked page is
+        # one we were never shown (bot wall, login wall), not one we read
+        # and could not judge. Folding the two together made the checker
+        # look 23% indecisive when much of it was simply denied access.
+        cli_art.console.print(
+            f"  {theme.colorize_icon('skip')} Blocked (bot/login wall): {result.get('blocked', 0)}",
             soft_wrap=True,
         )
         cli_art.console.print(

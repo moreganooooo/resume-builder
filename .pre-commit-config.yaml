@@ -46,7 +46,14 @@ repos:
     rev: v2.2.6
     hooks:
       - id: codespell
-        args: ["--skip=*.json,*.csv,*.db,*.pyc"]
+        # "unparseable" is this codebase's own spelling (liveness.py's
+        # failure message, quoted in CLAUDE.md); "ist" is German, from
+        # liveness-core.mjs's expired-posting patterns.
+        args:
+          [
+            "--skip=*.json,*.csv,*.db,*.pyc",
+            "--ignore-words-list=unparseable,ist",
+          ]
 
   # General linting
   - repo: https://github.com/pre-commit/pre-commit-hooks

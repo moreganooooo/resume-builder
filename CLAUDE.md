@@ -388,6 +388,26 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `source_url` to check. Note `cli_art` imports `picker` lazily inside
   the function: `picker` imports `cli_art`, so a module-level import is
   circular.
+- **The backlog has one definition too, and it is a WORK LIST, not just a
+  count: `picker.unevaluated_roles()`.** It returns
+  `(file_paths, database_only_job_ids)`;
+  `count_unevaluated_roles()` reports its size and
+  `batch_evaluate.evaluate_all_pending()` does the work, so the number
+  the banner promises is exactly what gets evaluated. That pairing is the
+  point: "Evaluate ALL Pending Roles" used to build its work list from
+  `jd_manager.get_pending_jds()`, which lists FILES, while most pending
+  jobs are database-only hash-keyed scan rows -- so 627 of a 1,337
+  backlog were counted, displayed, and silently skipped. Database ids are
+  evaluated through `jd_source.resolved_jd()` (temp file, synced back on
+  exit). Two consequences: the database half FAILS CLOSED under
+  `unittest` when the profile is not isolated (`db._is_unisolated_test_write`,
+  the same guard `liveness._gather_db_candidates` uses) -- unguarded, a
+  test that patches only the filesystem list pulls the developer's real
+  pending rows into a work list that would spend real API calls; and a
+  `Skip` verdict on a database-only job must call `jd_source.set_status()`
+  AFTER the `resolved_jd()` block, because leaving that block runs
+  `sync_back()`, which writes the payload's status over the row and
+  silently reverts the archive.
 - **`JDTracker` resolves its CSV path per instance, never from the
   module-level `TRACKER_CSV`.** That constant is computed once at import,
   so it survived both a profile switch and any test redirecting
@@ -517,6 +537,21 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   disclose no owner, so there the strict slug is the only evidence.
   Detection also requires a NON-EMPTY posting list: SmartRecruiters
   returns 200 with `totalFound: 0` for slugs that do not exist at all.
+- **A liveness verdict distinguishes "could not tell" from "was never
+  shown the page."** `blocked` (`liveness-core.mjs`) covers anti-bot
+  interstitials and login walls, checked AFTER the expired patterns so a
+  genuinely closed posting behind a wall still reports `expired`, and
+  after the apply-control check so a readable page is never called
+  blocked. It was measured, not guessed: of 364 `uncertain` verdicts, 121
+  were withheld pages (48 Indeed, 29 LinkedIn) and 208 were
+  `insufficient_content` -- JS-rendered aggregators and Workday SPAs that
+  had not painted their body before `liveness-browser.mjs`'s fixed
+  1,200 ms wait elapsed. That wait now polls
+  (`readRenderedBodyText`) only for pages that come up short of
+  `MIN_CONTENT_CHARS`, which is exported from `liveness-core.mjs` so the
+  reader and the classifier cannot disagree about the threshold. A fast
+  page pays nothing; raising the fixed wait for every URL would have
+  added minutes to a sweep already running 15.
 - **A JD with no description is never written (`scan.run_scan`).**
   Writing one makes the emptiness permanent -- `job_key_known()` skips
   that posting on every later scan, so the good version never lands.

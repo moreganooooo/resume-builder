@@ -42,8 +42,8 @@ class TestEvaluateBatchMode(unittest.TestCase):
                 return_value=["jds/a.json", "jds/b.json"],
             ),
             patch(
-                "cli.batch_evaluate.split_evaluated",
-                return_value=(["jds/a.json"], ["jds/b.json"]),
+                "cli.picker.unevaluated_roles",
+                return_value=(["jds/b.json"], []),
             ),
             patch("cli_art.questionary.confirm") as mock_confirm,
             patch(
@@ -61,9 +61,7 @@ class TestEvaluateBatchMode(unittest.TestCase):
         runner = CliRunner()
         with (
             patch("cli.jd_manager.get_pending_jds", return_value=["jds/a.json"]),
-            patch(
-                "cli.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], [])
-            ),
+            patch("cli.picker.unevaluated_roles", return_value=([], [])),
             patch("cli_art.questionary.confirm") as mock_confirm,
             patch("cli.batch_evaluate.evaluate_all_pending") as mock_evaluate,
         ):
@@ -72,6 +70,28 @@ class TestEvaluateBatchMode(unittest.TestCase):
         self.assertIn("Nothing new to evaluate", result.output)
         mock_confirm.assert_not_called()
         mock_evaluate.assert_not_called()
+
+    def test_database_only_roles_are_evaluated_too(self):
+        """Most pending jobs are database-only scan rows with no JD file.
+        Building the work list from get_pending_jds() alone counted them
+        in the banner and then skipped them here."""
+        runner = CliRunner()
+        with (
+            patch("cli.jd_manager.get_pending_jds", return_value=["jds/b.json"]),
+            patch(
+                "cli.picker.unevaluated_roles",
+                return_value=(["jds/b.json"], ["hash-only-row"]),
+            ),
+            patch("cli_art.questionary.confirm") as mock_confirm,
+            patch(
+                "cli.batch_evaluate.evaluate_all_pending", return_value=[]
+            ) as mock_evaluate,
+        ):
+            mock_confirm.return_value.ask.return_value = True
+            runner.invoke(cli.cli, ["evaluate"])
+        mock_evaluate.assert_called_once_with(
+            ["jds/b.json", "hash-only-row"], skip_evaluated=False
+        )
 
     def test_refresh_flag_forces_reevaluation(self):
         runner = CliRunner()

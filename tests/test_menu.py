@@ -317,13 +317,17 @@ class TestHandleLiveness(unittest.TestCase):
 
 class TestHandleEvaluateAll(unittest.TestCase):
 
+    @patch("menu.picker.unevaluated_roles", return_value=([], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=[])
-    def test_returns_false_when_no_pending(self, mock_pending):
+    def test_returns_false_when_no_pending(self, mock_pending, mock_unevaluated):
         self.assertFalse(menu._handle_evaluate_all())
 
     @patch("menu.picker.should_proceed", return_value=False)
+    @patch("menu.picker.unevaluated_roles", return_value=(["jds/a.json"], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
-    def test_returns_false_when_declined(self, mock_pending, mock_proceed):
+    def test_returns_false_when_declined(
+        self, mock_pending, mock_unevaluated, mock_proceed
+    ):
         with patch("menu.batch_evaluate.evaluate_all_pending") as mock_eval:
             self.assertFalse(menu._handle_evaluate_all())
         mock_eval.assert_not_called()
@@ -331,24 +335,22 @@ class TestHandleEvaluateAll(unittest.TestCase):
     @patch("menu.cli_art.render_fit_table")
     @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[{"error": False}])
     @patch("menu.picker.should_proceed", return_value=True)
+    @patch("menu.picker.unevaluated_roles", return_value=(["jds/a.json"], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
     def test_returns_true_when_results_returned(
-        self, mock_pending, mock_proceed, mock_eval, mock_table
+        self, mock_pending, mock_unevaluated, mock_proceed, mock_eval, mock_table
     ):
         self.assertTrue(menu._handle_evaluate_all())
 
     @patch("menu.cli_art.render_fit_table")
     @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[])
     @patch("menu.picker.should_proceed", return_value=True)
-    @patch(
-        "menu.batch_evaluate.split_evaluated",
-        return_value=(["jds/a.json"], ["jds/b.json"]),
-    )
+    @patch("menu.picker.unevaluated_roles", return_value=(["jds/b.json"], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"])
     def test_confirms_against_and_evaluates_only_unscored(
         self,
         mock_pending,
-        mock_split,
+        mock_unevaluated,
         mock_proceed,
         mock_eval,
         mock_table,
@@ -357,10 +359,36 @@ class TestHandleEvaluateAll(unittest.TestCase):
         mock_proceed.assert_called_once_with(1, skip_confirm=False)
         mock_eval.assert_called_once_with(["jds/b.json"], skip_evaluated=False)
 
-    @patch("menu.batch_evaluate.split_evaluated", return_value=(["jds/a.json"], []))
+    @patch("menu.cli_art.render_fit_table")
+    @patch("menu.batch_evaluate.evaluate_all_pending", return_value=[])
+    @patch("menu.picker.should_proceed", return_value=True)
+    @patch(
+        "menu.picker.unevaluated_roles",
+        return_value=(["jds/b.json"], ["hash-only-row"]),
+    )
+    @patch("menu.jd_manager.get_pending_jds", return_value=["jds/b.json"])
+    def test_evaluates_database_only_roles_too(
+        self,
+        mock_pending,
+        mock_unevaluated,
+        mock_proceed,
+        mock_eval,
+        mock_table,
+    ):
+        """Most pending jobs are database-only scan rows with no JD file.
+        Building the work list from get_pending_jds() counted them in the
+        banner and then silently skipped them here -- 627 of a 1,337
+        backlog for this profile."""
+        menu._handle_evaluate_all()
+        mock_proceed.assert_called_once_with(2, skip_confirm=False)
+        mock_eval.assert_called_once_with(
+            ["jds/b.json", "hash-only-row"], skip_evaluated=False
+        )
+
+    @patch("menu.picker.unevaluated_roles", return_value=([], []))
     @patch("menu.jd_manager.get_pending_jds", return_value=["jds/a.json"])
     def test_nothing_new_to_evaluate_returns_false_without_confirming(
-        self, mock_pending, mock_split
+        self, mock_pending, mock_unevaluated
     ):
         with patch("menu.picker.should_proceed") as mock_proceed:
             self.assertFalse(menu._handle_evaluate_all())
