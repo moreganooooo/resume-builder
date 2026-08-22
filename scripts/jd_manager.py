@@ -1095,12 +1095,17 @@ def get_pending_jds() -> list:
     os.makedirs(COMPLETED_DIR, exist_ok=True)
     tracker = JDTracker(TRACKER_CSV)
 
+    # startswith, not ==: reset_resume_counter.py archives the log by
+    # RENAMING it in place to "<tracker>.archived-<stamp>", which an exact
+    # match misses. That left 28 KB of tracker history sitting in the scan
+    # directory as a pending "JD", queued to be sent to Gemini as if it
+    # were a job description.
     tracker_filename = os.path.basename(TRACKER_CSV)
     root_files = sorted(
         os.path.join(JDS_DIR, name)
         for name in os.listdir(JDS_DIR)
         if os.path.isfile(os.path.join(JDS_DIR, name))
-        and name != tracker_filename
+        and not name.startswith(tracker_filename)
         and not name.startswith(".")  # skip hidden files like macOS's .DS_Store
     )
 

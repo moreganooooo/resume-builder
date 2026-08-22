@@ -449,6 +449,20 @@ class TestGetPendingJds(unittest.TestCase):
 
         self.assertEqual([os.path.basename(p) for p in pending], ["stays.txt"])
 
+    def test_ignores_an_archived_tracker_log(self):
+        """reset_resume_counter.py archives the tracker by RENAMING it in
+        place to "<tracker>.archived-<stamp>", in the same directory
+        get_pending_jds() scans. An exact-name exclusion missed that, so
+        28 KB of real tracker history sat in the pending list queued to be
+        sent to Gemini as if it were a job description."""
+        self._write("tracker.csv", "job_key,status\n")
+        self._write("tracker.csv.archived-20260820-154754", "job_key,status\n")
+        self._write("posting.txt", "A plain-text JD.")
+
+        pending = jd_manager.get_pending_jds()
+
+        self.assertEqual([os.path.basename(p) for p in pending], ["posting.txt"])
+
     def test_ignores_hidden_files_like_ds_store(self):
         # Real .DS_Store files are binary and not valid UTF-8 -- writing one
         # with invalid bytes here reproduces the actual crash this guards
