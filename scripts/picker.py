@@ -590,6 +590,61 @@ def count_active_roles() -> int:
     return len(list_all_evaluated_jds(statuses=["Pending"]))
 
 
+def count_unevaluated_roles() -> int:
+    """How many pending roles have never been evaluated -- the backlog.
+
+    The companion to count_active_roles(), and for the same reason: one
+    definition every surface calls. The banner reporting only the
+    evaluated count (399) and saying nothing about the ~1,300 awaiting
+    evaluation is what made those two true numbers read as a bug.
+
+    Counts the same universe count_active_roles() does -- pending JD
+    files plus pending database-only rows, deduped by job key the way
+    _database_only_rows() dedupes -- but keeps the rows WITHOUT an
+    _evaluation instead of the rows with one. Deliberately lighter than
+    list_all_evaluated_jds(): it needs a count, not a row, so it never
+    reads liveness, research, or coverage.
+    """
+    seen = set()
+    unevaluated = 0
+    for path in jd_manager.get_pending_jds():
+        seen.add(os.path.basename(path))
+        try:
+            seen.add(jd_manager.compute_job_key(path))
+        except (OSError, ValueError):
+            pass
+        if not jd_manager.read_evaluation(path):
+            unevaluated += 1
+
+    try:
+        import db
+
+        conn = db.get_db()
+    except Exception:
+        return unevaluated
+
+    try:
+        records = conn.execute(
+            "SELECT id, metadata_json FROM jobs WHERE status = 'pending'"
+        ).fetchall()
+    except Exception:
+        return unevaluated
+    finally:
+        conn.close()
+
+    for record in records:
+        job_id = str(record["id"])
+        if job_id in seen or os.path.basename(job_id) in seen:
+            continue
+        try:
+            data = json.loads(record["metadata_json"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+        if not isinstance(data, dict) or not data.get("_evaluation"):
+            unevaluated += 1
+    return unevaluated
+
+
 def browse_and_select_jds(
     statuses: list | None = None, page_size: int = _PAGE_SIZE
 ) -> list:

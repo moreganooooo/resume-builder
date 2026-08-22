@@ -152,6 +152,10 @@ def run(profile: str = None) -> tuple[bool, str]:
 
     jobs_path = _write_jobs_export(profile)
     active_profile = profile or profile_paths.active_profile()
+    # The export carries evaluated jobs only, so the Jobs screen cannot
+    # see the unevaluated backlog. Same number, same function, as the CLI
+    # banner -- one definition, so the two surfaces cannot disagree.
+    backlog = picker.count_unevaluated_roles()
 
     # Pass profile-specific UI settings to the Go dashboard environment
     env = os.environ.copy()
@@ -179,6 +183,8 @@ def run(profile: str = None) -> tuple[bool, str]:
                 profile_paths.PROJECT_ROOT,
                 "-profile",
                 active_profile or "morgan",
+                "-backlog",
+                str(backlog),
             ]
         else:
             cmd = [
@@ -195,6 +201,8 @@ def run(profile: str = None) -> tuple[bool, str]:
                 profile_paths.PROJECT_ROOT,
                 "-profile",
                 active_profile or "morgan",
+                "-backlog",
+                str(backlog),
             ]
         result = subprocess.run(cmd, cwd=DASHBOARD_DIR, env=env)
     finally:

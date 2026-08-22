@@ -115,8 +115,9 @@ class TestDisplayMainBanner(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
     @patch("picker.count_active_roles", return_value=2)
+    @patch("picker.count_unevaluated_roles", return_value=0)
     def test_runs_without_error_in_non_terminal_mode(
-        self, mock_pending, mock_completed
+        self, mock_backlog, mock_pending, mock_completed
     ):
         console = Console(record=True, width=100, force_terminal=False)
         original = cli_art.console
@@ -135,7 +136,10 @@ class TestDisplayMainBanner(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
     @patch("picker.count_active_roles", return_value=1)
-    def test_stats_are_computed_once_not_per_frame(self, mock_pending, mock_completed):
+    @patch("picker.count_unevaluated_roles", return_value=0)
+    def test_stats_are_computed_once_not_per_frame(
+        self, mock_backlog, mock_pending, mock_completed
+    ):
         """B2: the stats line is constant for the length of the reveal, but was
         recomputed on all 31 frames -- each call walks the whole JD corpus, which
         turned a 1.6s animation into ~27s. Pin the hoist, since the symptom is
@@ -156,8 +160,9 @@ class TestDisplayStatsLine(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)
     @patch("picker.count_active_roles", return_value=1)
+    @patch("picker.count_unevaluated_roles", return_value=0)
     def test_prints_real_pending_and_tailored_counts(
-        self, mock_pending, mock_completed
+        self, mock_backlog, mock_pending, mock_completed
     ):
         console = Console(record=True, width=100)
         original = cli_art.console
@@ -169,6 +174,25 @@ class TestDisplayStatsLine(unittest.TestCase):
         output = console.export_text()
         self.assertIn("1 Roles Currently Awaiting Resume Creation", output)
         self.assertIn("2 Resumes Customized All-Time", output)
+        self.assertNotIn("Awaiting Evaluation", output)
+
+    @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)
+    @patch("picker.count_active_roles", return_value=1)
+    @patch("picker.count_unevaluated_roles", return_value=1351)
+    def test_reports_the_unevaluated_backlog_when_there_is_one(
+        self, mock_backlog, mock_pending, mock_completed
+    ):
+        """The banner reporting only the evaluated count while ~1,300
+        roles sat unevaluated is what made two true numbers read as a
+        bug. The backlog line is the fix, so pin it."""
+        console = Console(record=True, width=100)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_stats_line()
+        finally:
+            cli_art.console = original
+        self.assertIn("1351 Roles Awaiting Evaluation", console.export_text())
 
 
 class TestDisplayTip(unittest.TestCase):
