@@ -212,6 +212,40 @@ class TestMenuProfileGate(unittest.TestCase):
         self.assertEqual(os.environ.get("RESUME_GUEST_MODE"), "1")
         self.assertIsNone(os.environ.get("RESUME_PROFILE"))
 
+    def test_env_profile_skips_prompt_when_valid(self):
+        os.environ["RESUME_PROFILE"] = "testuser"
+        with patch("questionary.select") as mock_select:
+            result = menu._confirm_active_profile()
+        self.assertTrue(result)
+        mock_select.assert_not_called()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "testuser")
+
+    def test_env_profile_case_insensitive_match_skips_prompt(self):
+        os.environ["RESUME_PROFILE"] = "TESTUSER"
+        with patch("questionary.select") as mock_select:
+            result = menu._confirm_active_profile()
+        self.assertTrue(result)
+        mock_select.assert_not_called()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "testuser")
+
+    def test_env_profile_prompts_when_invalid(self):
+        os.environ["RESUME_PROFILE"] = "nonexistent_profile"
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.return_value = "testuser"
+            result = menu._confirm_active_profile()
+        self.assertTrue(result)
+        mock_select.assert_called_once()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "testuser")
+
+    def test_force_flag_prompts_even_if_env_profile_is_valid(self):
+        os.environ["RESUME_PROFILE"] = "testuser"
+        with patch("questionary.select") as mock_select:
+            mock_select.return_value.ask.return_value = "test_profile"
+            result = menu._confirm_active_profile(force=True)
+        self.assertTrue(result)
+        mock_select.assert_called_once()
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "test_profile")
+
 
 class TestGuestModeBlocksRealActions(unittest.TestCase):
 
@@ -227,21 +261,21 @@ class TestGuestModeBlocksRealActions(unittest.TestCase):
 
     def test_non_bootstrap_choice_is_blocked_in_guest_mode(self):
         with (
-            patch("menu.questionary.select") as mock_select,
+            patch("cli_art.select", side_effect=["evaluate_all", "exit"]),
             patch("menu._run_with_chain") as mock_run,
             patch("menu._confirm_active_profile"),
+            patch("cli_art.display_main_banner"),
         ):
-            mock_select.return_value.ask.side_effect = ["evaluate_all", "exit"]
             menu.run_interactive_menu()
         mock_run.assert_not_called()
 
     def test_bootstrap_choice_is_allowed_in_guest_mode(self):
         with (
-            patch("menu.questionary.select") as mock_select,
+            patch("cli_art.select", side_effect=["bootstrap", "exit"]),
             patch("menu._run_with_chain") as mock_run,
             patch("menu._confirm_active_profile"),
+            patch("cli_art.display_main_banner"),
         ):
-            mock_select.return_value.ask.side_effect = ["bootstrap", "exit"]
             menu.run_interactive_menu()
         mock_run.assert_called_once_with("bootstrap", unittest.mock.ANY)
 
@@ -252,7 +286,7 @@ class TestRunInteractiveMenuExitsOnProfileGateCancel(unittest.TestCase):
         with (
             patch("menu._confirm_active_profile", return_value=False),
             patch("menu._confirm_icon_set") as mock_icon_set,
-            patch("menu.questionary.select") as mock_select,
+            patch("cli_art.select") as mock_select,
             patch("menu.cli_art.display_exit_footer") as mock_footer,
         ):
             menu.run_interactive_menu()

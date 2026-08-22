@@ -13,7 +13,7 @@
 
 This research informs the **"Situation Room"** feature (Tough-Spot Navigator / Career Confidant AI) that helps users with:
 - Unemployment gaps & layoffs
-- Career switches & non-linear journeys  
+- Career switches & non-linear journeys
 - Overqualification / title downgrades
 - Salary & negotiation scripts
 

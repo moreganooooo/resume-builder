@@ -96,13 +96,13 @@ print(f"TTR: {type_token_ratio(text):.3f}")  # Output: 1.000 (all unique)
 def moving_average_ttr(text, window_size=100):
     words = text.split()
     ttr_values = []
-    
+
     for i in range(len(words) - window_size + 1):
         window = words[i:i + window_size]
         unique = len(set(window))
         ttr = unique / len(window)
         ttr_values.append(ttr)
-    
+
     return np.mean(ttr_values)
 ```
 
@@ -133,12 +133,12 @@ def yules_k(text):
     words = text.split()
     word_counts = Counter(words)
     N = len(words)
-    
+
     sum_ni_squared = sum(count ** 2 for count in word_counts.values())
-    
+
     if N == 0:
         return 0
-    
+
     k = 10000 * (sum_ni_squared - N) / (N ** 2)
     return k
 
@@ -169,10 +169,10 @@ def simpsons_d(text):
     words = text.split()
     word_counts = Counter(words)
     N = len(words)
-    
+
     if N <= 1:
         return 0
-    
+
     sum_term = sum(count * (count - 1) for count in word_counts.values())
     d = 1 - (sum_term / (N * (N - 1)))
     return d
@@ -201,10 +201,10 @@ def honores_r(text):
     word_counts = Counter(words)
     N = len(words)
     V1 = sum(1 for count in word_counts.values() if count == 1)
-    
+
     if N == 0 or V1 == N:
         return 0
-    
+
     r = 100 * math.log(N) / (1 - (V1 / N))
     return r
 ```
@@ -224,12 +224,12 @@ import re
 def avg_sentence_length(text):
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
-    
+
     word_counts = [len(s.split()) for s in sentences]
-    
+
     if not word_counts:
         return 0
-    
+
     return sum(word_counts) / len(word_counts)
 ```
 
@@ -255,33 +255,33 @@ Std Dev = sqrt(Variance)
 def sentence_length_variance(text):
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
-    
+
     word_counts = [len(s.split()) for s in sentences]
-    
+
     if len(word_counts) < 2:
         return 0
-    
+
     mean = sum(word_counts) / len(word_counts)
     variance = sum((x - mean) ** 2 for x in word_counts) / len(word_counts)
     std_dev = variance ** 0.5
-    
+
     return std_dev
 
 # Burstiness Index (normalized variance)
 def burstiness(text):
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
-    
+
     if len(sentences) < 2:
         return 0
-    
+
     word_counts = [len(s.split()) for s in sentences]
     mean = sum(word_counts) / len(word_counts)
-    
+
     # Calculate coefficient of variation
     std_dev = (sum((x - mean) ** 2 for x in word_counts) / len(word_counts)) ** 0.5
     cv = std_dev / mean if mean > 0 else 0
-    
+
     return cv
 ```
 
@@ -372,23 +372,23 @@ nlp = spacy.load("en_core_web_sm")
 
 def active_passive_ratio(text):
     doc = nlp(text)
-    
+
     active_count = 0
     passive_count = 0
-    
+
     for token in doc:
         if token.dep_ == "auxpass":
             passive_count += 1
         elif token.pos_ == "VERB" and token.dep_ != "auxpass":
             active_count += 1
-    
+
     total = active_count + passive_count
     if total == 0:
         return 0, 0, 0
-    
+
     active_ratio = active_count / total
     passive_ratio = passive_count / total
-    
+
     return active_ratio, passive_ratio, active_count / passive_count if passive_count > 0 else float('inf')
 
 # Example:
@@ -443,27 +443,27 @@ def punctuation_frequency(text):
         '"': 'Quotation',
         "'": 'Apostrophe/Quote'
     }
-    
+
     # Count each punctuation mark
     counts = {}
     total_chars = len(text)
-    
+
     for mark, name in punctuation_marks.items():
         count = text.count(mark)
         counts[name] = {
             'count': count,
             'per_1000': (count / total_chars) * 1000 if total_chars > 0 else 0
         }
-    
+
     # Calculate Oxford Comma usage (comma before "and" in lists)
     oxford_comma_pattern = r'\s*,\s*and\s+'
     oxford_matches = len(re.findall(oxford_comma_pattern, text))
-    
+
     # Calculate average words per sentence
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
     avg_words_per_sentence = sum(len(s.split()) for s in sentences) / len(sentences) if sentences else 0
-    
+
     return {
         'punctuation': counts,
         'oxford_comma_count': oxford_matches,
@@ -502,10 +502,10 @@ PDI = (Number of Unique Punctuation Marks Used) / (Total Punctuation Marks)
 def punctuation_diversity(text):
     punctuation_marks = set(re.findall(r'[.,;:—–!?()"\']', text))
     total_punctuation = len(re.findall(r'[.,;:—–!?()"\']', text))
-    
+
     if total_punctuation == 0:
         return 0
-    
+
     return len(punctuation_marks) / total_punctuation
 ```
 
@@ -536,26 +536,26 @@ def punctuation_diversity(text):
 def rhetorical_stance(text):
     assertive_verbs = ['drove', 'engineered', 'mandated', 'led', 'built', 'created', 'developed', 'managed', 'directed', 'executed']
     collaborative_verbs = ['partnered', 'facilitated', 'navigated', 'supported', 'contributed', 'assisted', 'helped', 'participated', 'collaborated']
-    
+
     doc = nlp(text)
-    
+
     assertive_count = 0
     collaborative_count = 0
-    
+
     for token in doc:
         if token.lemma_.lower() in assertive_verbs:
             assertive_count += 1
         elif token.lemma_.lower() in collaborative_verbs:
             collaborative_count += 1
-    
+
     total = assertive_count + collaborative_count
     if total == 0:
         return 0, 0, 0
-    
+
     assertive_ratio = assertive_count / total
     collaborative_ratio = collaborative_count / total
     stance_score = assertive_ratio - collaborative_ratio  # Positive = assertive, Negative = collaborative
-    
+
     return assertive_ratio, collaborative_ratio, stance_score
 ```
 
@@ -591,20 +591,20 @@ def rhetorical_stance(text):
 def modality_analysis(text):
     certainty_words = ['will', 'must', 'definitely', 'absolutely', 'always', 'certainly', 'without doubt']
     hedging_words = ['might', 'could', 'may', 'possibly', 'perhaps', 'in my opinion', 'I believe', 'I think', 'maybe']
-    
+
     doc = nlp(text.lower())
-    
+
     certainty_count = sum(1 for token in doc if token.text in certainty_words)
     hedging_count = sum(1 for token in doc if token.text in hedging_words)
-    
+
     total = certainty_count + hedging_count
     if total == 0:
         return 0, 0, 0
-    
+
     certainty_ratio = certainty_count / total
     hedging_ratio = hedging_count / total
     modality_score = certainty_ratio - hedging_ratio
-    
+
     return certainty_ratio, hedging_ratio, modality_score
 ```
 
@@ -670,7 +670,7 @@ voice_fingerprint = {
         'unique_words': 245,
         'total_words': 545,
     },
-    
+
     # Sentence Structure
     'sentence_structure': {
         'avg_sentence_length': 18.2,
@@ -679,7 +679,7 @@ voice_fingerprint = {
         'sentences': 30,
         'avg_words_per_sentence': 18.2,
     },
-    
+
     # Syntactic Complexity
     'syntactic_complexity': {
         'flesch_reading_ease': 62.4,
@@ -690,7 +690,7 @@ voice_fingerprint = {
         'active_passive_ratio': 0.72,
         'passive_ratio': 0.28,
     },
-    
+
     # Punctuation Signature
     'punctuation': {
         'period_per_1000': 45.2,
@@ -705,7 +705,7 @@ voice_fingerprint = {
         'oxford_comma_count': 5,
         'punctuation_diversity': 0.65,
     },
-    
+
     # Rhetorical Stance
     'rhetorical_stance': {
         'assertive_ratio': 0.65,
@@ -715,14 +715,14 @@ voice_fingerprint = {
         'hedging_ratio': 0.45,
         'modality_score': 0.10,
     },
-    
+
     # Sentiment & Tone
     'sentiment': {
         'polarity': 0.25,  # -1 (negative) to +1 (positive)
         'subjectivity': 0.45,  # 0 (objective) to 1 (subjective)
         'tone': 'professional_enthusiastic',
     },
-    
+
     # Metadata
     'metadata': {
         'text_length': 545,
@@ -753,11 +753,11 @@ nlp = spacy.load("en_core_web_sm")
 class StylometryAnalyzer:
     """
     Complete stylometric analysis engine for voice fingerprinting.
-    
+
     Analyzes writing style across 50+ dimensions to create a
     mathematical fingerprint of a writer's voice.
     """
-    
+
     def __init__(self):
         self.punctuation_marks = {
             '.': 'Period',
@@ -773,25 +773,25 @@ class StylometryAnalyzer:
             '"': 'Quotation',
             "'": 'Apostrophe'
         }
-        
-        self.assertive_verbs = ['drive', 'engineer', 'mandate', 'lead', 'build', 
+
+        self.assertive_verbs = ['drive', 'engineer', 'mandate', 'lead', 'build',
                                 'create', 'develop', 'manage', 'direct', 'execute']
-        self.collaborative_verbs = ['partner', 'facilitate', 'navigate', 'support', 
-                                    'contribute', 'assist', 'help', 'participate', 
+        self.collaborative_verbs = ['partner', 'facilitate', 'navigate', 'support',
+                                    'contribute', 'assist', 'help', 'participate',
                                     'collaborate']
-        self.certainty_words = ['will', 'must', 'definitely', 'absolutely', 
+        self.certainty_words = ['will', 'must', 'definitely', 'absolutely',
                                 'always', 'certainly']
-        self.hedging_words = ['might', 'could', 'may', 'possibly', 'perhaps', 
+        self.hedging_words = ['might', 'could', 'may', 'possibly', 'perhaps',
                               'in my opinion', 'i believe', 'i think', 'maybe']
-    
+
     def analyze(self, text, sample_type=None):
         """
         Perform complete stylometric analysis on a text.
-        
+
         Args:
             text (str): The text to analyze
             sample_type (str, optional): Type of sample (email, slack, document, etc.)
-        
+
         Returns:
             dict: Complete stylometric fingerprint
         """
@@ -810,34 +810,34 @@ class StylometryAnalyzer:
                 'timestamp': None  # Set by caller
             }
         }
-    
+
     def _lexical_richness(self, text):
         """Calculate lexical richness metrics."""
         words = text.split()
         word_counts = Counter(words)
         N = len(words)
-        
+
         # Type-Token Ratio
         ttr = len(set(words)) / N if N > 0 else 0
-        
+
         # Yule's K
         sum_ni_squared = sum(count ** 2 for count in word_counts.values())
         yules_k = 10000 * (sum_ni_squared - N) / (N ** 2) if N > 0 else 0
-        
+
         # Simpson's D
         if N <= 1:
             simpsons_d = 0
         else:
             sum_term = sum(count * (count - 1) for count in word_counts.values())
             simpsons_d = 1 - (sum_term / (N * (N - 1)))
-        
+
         # Honore's R
         V1 = sum(1 for count in word_counts.values() if count == 1)
         if N == 0 or V1 == N:
             honores_r = 0
         else:
             honores_r = 100 * math.log(N) / (1 - (V1 / N))
-        
+
         return {
             'type_token_ratio': ttr,
             'yules_k': yules_k,
@@ -847,12 +847,12 @@ class StylometryAnalyzer:
             'total_words': N,
             'vocabulary_size': len(word_counts)
         }
-    
+
     def _sentence_structure(self, text):
         """Calculate sentence structure metrics."""
         sentences = re.split(r'[.!?]+', text)
         sentences = [s.strip() for s in sentences if s.strip()]
-        
+
         if not sentences:
             return {
                 'avg_sentence_length': 0,
@@ -860,14 +860,14 @@ class StylometryAnalyzer:
                 'burstiness': 0,
                 'sentences': 0
             }
-        
+
         word_counts = [len(s.split()) for s in sentences]
         avg_length = sum(word_counts) / len(word_counts)
         std_dev = np.std(word_counts) if len(word_counts) > 1 else 0
-        
+
         # Burstiness (coefficient of variation)
         burstiness = std_dev / avg_length if avg_length > 0 else 0
-        
+
         return {
             'avg_sentence_length': avg_length,
             'sentence_length_std': std_dev,
@@ -876,32 +876,32 @@ class StylometryAnalyzer:
             'min_sentence_length': min(word_counts) if word_counts else 0,
             'max_sentence_length': max(word_counts) if word_counts else 0
         }
-    
+
     def _syntactic_complexity(self, text):
         """Calculate syntactic complexity metrics."""
         doc = nlp(text)
-        
+
         # Active/Passive ratio
         active_count = 0
         passive_count = 0
-        
+
         for token in doc:
             if token.dep_ == "auxpass":
                 passive_count += 1
             elif token.pos_ == "VERB" and token.dep_ != "auxpass":
                 active_count += 1
-        
+
         total_verbs = active_count + passive_count
         active_ratio = active_count / total_verbs if total_verbs > 0 else 0
         passive_ratio = passive_count / total_verbs if total_verbs > 0 else 0
-        
+
         # Readability metrics
         flesch_reading_ease = textstat.flesch_reading_ease(text)
         flesch_kincaid_grade = textstat.flesch_kincaid_grade(text)
         gunning_fog = textstat.gunning_fog(text)
         smog_index = textstat.smog_index(text)
         coleman_liau = textstat.coleman_liau_index(text)
-        
+
         return {
             'flesch_reading_ease': flesch_reading_ease,
             'flesch_kincaid_grade': flesch_kincaid_grade,
@@ -912,39 +912,39 @@ class StylometryAnalyzer:
             'passive_ratio': passive_ratio,
             'active_passive_balance': active_ratio / passive_ratio if passive_ratio > 0 else float('inf')
         }
-    
+
     def _punctuation_analysis(self, text):
         """Calculate punctuation signature."""
         total_chars = len(text)
         counts = {}
-        
+
         for mark, name in self.punctuation_marks.items():
             count = text.count(mark)
             counts[name] = {
                 'count': count,
                 'per_1000': (count / total_chars) * 1000 if total_chars > 0 else 0
             }
-        
+
         # Oxford Comma detection
         oxford_comma_pattern = r'\s*,\s*and\s+'
         oxford_matches = len(re.findall(oxford_comma_pattern, text))
-        
+
         # Punctuation diversity
         punctuation_chars = set(re.findall(r'[.,;:—–!?()"\']', text))
         total_punctuation = len(re.findall(r'[.,;:—–!?()"\']', text))
         pdi = len(punctuation_chars) / total_punctuation if total_punctuation > 0 else 0
-        
+
         return {
             'punctuation': counts,
             'oxford_comma_count': oxford_matches,
             'punctuation_diversity': pdi,
             'total_punctuation': total_punctuation
         }
-    
+
     def _rhetorical_stance(self, text):
         """Analyze rhetorical stance and modality."""
         doc = nlp(text.lower())
-        
+
         # Assertive vs Collaborative
         assertive_count = sum(1 for token in doc if token.lemma_ in self.assertive_verbs)
         collaborative_count = sum(1 for token in doc if token.lemma_ in self.collaborative_verbs)
@@ -952,7 +952,7 @@ class StylometryAnalyzer:
         assertive_ratio = assertive_count / total_stance if total_stance > 0 else 0
         collaborative_ratio = collaborative_count / total_stance if total_stance > 0 else 0
         stance_score = assertive_ratio - collaborative_ratio
-        
+
         # Certainty vs Hedging
         certainty_count = sum(1 for token in doc if token.text in self.certainty_words)
         hedging_count = sum(1 for token in doc if token.text in self.hedging_words)
@@ -960,7 +960,7 @@ class StylometryAnalyzer:
         certainty_ratio = certainty_count / total_modality if total_modality > 0 else 0
         hedging_ratio = hedging_count / total_modality if total_modality > 0 else 0
         modality_score = certainty_ratio - hedging_ratio
-        
+
         return {
             'assertive_ratio': assertive_ratio,
             'collaborative_ratio': collaborative_ratio,
@@ -969,14 +969,14 @@ class StylometryAnalyzer:
             'hedging_ratio': hedging_ratio,
             'modality_score': modality_score
         }
-    
+
     def _sentiment_analysis(self, text):
         """Analyze sentiment and tone."""
         blob = TextBlob(text)
-        
+
         polarity = blob.sentiment.polarity  # -1 to +1
         subjectivity = blob.sentiment.subjectivity  # 0 to 1
-        
+
         # Determine tone based on metrics
         if polarity > 0.3:
             tone = 'positive_enthusiastic'
@@ -988,17 +988,17 @@ class StylometryAnalyzer:
             tone = 'negative_pessimistic'
         else:
             tone = 'neutral_objective'
-        
+
         return {
             'polarity': polarity,
             'subjectivity': subjectivity,
             'tone': tone
         }
-    
+
     def _readability_metrics(self, text):
         """Calculate all readability metrics."""
         metrics = {}
-        
+
         # All textstat metrics
         readability_functions = [
             'flesch_reading_ease', 'flesch_kincaid_grade', 'smog_index',
@@ -1006,21 +1006,21 @@ class StylometryAnalyzer:
             'dale_chall_readability_score', 'difficult_words',
             'linsear_write_formula', 'gunning_fog'
         ]
-        
+
         for func_name in readability_functions:
             try:
                 func = getattr(textstat, func_name)
                 metrics[func_name] = func(text)
             except:
                 metrics[func_name] = None
-        
+
         return metrics
 
 # Usage Example:
 analyzer = StylometryAnalyzer()
 text = """
-I'm a Senior Product Manager with 8+ years experience in SaaS. 
-I specialize in user acquisition, retention, and monetization. 
+I'm a Senior Product Manager with 8+ years experience in SaaS.
+I specialize in user acquisition, retention, and monetization.
 At Acme Corp, I led a team that increased ARR by 300%.
 """
 
@@ -1054,22 +1054,22 @@ print(fingerprint)
 def generate_voice_conditioned_prompt(fingerprint, task):
     """
     Generate a system prompt that conditions Gemini to write in a specific voice.
-    
+
     Args:
         fingerprint (dict): Stylometric fingerprint from analyzer
         task (str): The writing task (cover letter, email, etc.)
-    
+
     Returns:
         str: System prompt for Gemini
     """
-    
+
     # Extract key stylometric features
     lr = fingerprint['lexical_richness']
     ss = fingerprint['sentence_structure']
     sc = fingerprint['syntactic_complexity']
     rs = fingerprint['rhetorical_stance']
     punct = fingerprint['punctuation']
-    
+
     # Build the system message
     system_message = f"""
 You are a professional writing assistant. Write in the following style:
@@ -1092,7 +1092,7 @@ TONE: {fingerprint['sentiment']['tone']}
 
 Now, {task}
 """
-    
+
     return system_message
 ```
 
@@ -1127,23 +1127,23 @@ Now, write a cover letter for a Senior Product Manager role.
 def generate_few_shot_prompt(fingerprint, task, examples):
     """
     Generate a few-shot prompt with examples of the desired style.
-    
+
     Args:
         fingerprint (dict): Stylometric fingerprint
         task (str): The writing task
         examples (list): List of (input, output) pairs demonstrating the style
-    
+
     Returns:
         str: Few-shot prompt for Gemini
     """
-    
+
     # Build the system message
     system_message = f"""
 You are a professional writing assistant. Your responses should match the following style:
 
 STYLE EXAMPLES:
 """
-    
+
     # Add examples
     for i, (input_text, output_text) in enumerate(examples, 1):
         system_message += f"""
@@ -1151,14 +1151,14 @@ Example {i}:
 Input: {input_text}
 Output: {output_text}
 """
-    
+
     system_message += f"""
 
 Now, {task}
 
 Remember to match the style, tone, and structure of the examples above.
 """
-    
+
     return system_message
 ```
 
@@ -1175,8 +1175,8 @@ examples = [
     ),
     (
         "Write a summary for a Product Manager resume",
-        "Senior Product Manager with 8+ years experience driving growth for SaaS companies. 
-Specialized in user acquisition, retention, and monetization strategies. 
+        "Senior Product Manager with 8+ years experience driving growth for SaaS companies.
+Specialized in user acquisition, retention, and monetization strategies.
 Built and scaled product teams from 0 to 20+ people."
     )
 ]
@@ -1193,34 +1193,34 @@ def generate_hybrid_prompt(fingerprint, task, examples):
     """
     Generate a hybrid prompt with both stylometric constraints and examples.
     """
-    
+
     # Stylometric constraints
     constraints = generate_voice_conditioned_prompt(fingerprint, task)
-    
+
     # Few-shot examples
     few_shot = generate_few_shot_prompt(fingerprint, task, examples)
-    
+
     # Combine them
     hybrid_prompt = f"""
 {constraints}
 
 STYLE EXAMPLES TO EMULATE:
 """
-    
+
     for i, (input_text, output_text) in enumerate(examples, 1):
         hybrid_prompt += f"""
 Example {i}:
 Input: {input_text}
 Output: {output_text}
 """
-    
+
     hybrid_prompt += f"""
 
 Now, {task}
 
 Match BOTH the stylometric constraints above AND the style of the examples.
 """
-    
+
     return hybrid_prompt
 ```
 
@@ -1235,7 +1235,7 @@ def generate_json_voice_profile(fingerprint):
     """
     Generate a JSON voice profile for maximum precision.
     """
-    
+
     voice_profile = {
         'voice_fingerprint': {
             'lexical_richness': {
@@ -1270,14 +1270,14 @@ def generate_json_voice_profile(fingerprint):
             'Write at the specified readability level'
         ]
     }
-    
+
     return voice_profile
 
 # Usage with Gemini:
 voice_profile = generate_json_voice_profile(fingerprint)
 
 system_prompt = f"""
-You are a professional writing assistant. 
+You are a professional writing assistant.
 
 VOICE PROFILE (strictly follow these constraints):
 {json.dumps(voice_profile, indent=2)}
@@ -1324,15 +1324,15 @@ class SampleExtractor:
     """
     Extracts optimal writing samples from various sources.
     """
-    
+
     def __init__(self):
         self.analyzer = StylometryAnalyzer()
-    
+
     def extract_from_email(self, email_text):
         """Extract the most stylistically revealing parts of an email."""
         # Remove headers, signatures, quoted text
         lines = email_text.split('\n')
-        
+
         # Filter out non-content lines
         content_lines = []
         for line in lines:
@@ -1344,22 +1344,22 @@ class SampleExtractor:
             if line.startswith('>'):  # Quoted text
                 continue
             content_lines.append(line)
-        
+
         content = '\n'.join(content_lines)
-        
+
         # Take the first 500 words (most likely to be authentic voice)
         words = content.split()[:500]
         return ' '.join(words)
-    
+
     def extract_from_slack(self, slack_messages):
         """Extract from Slack message history."""
         # Combine messages, filter out short ones
         combined = ' '.join([m for m in slack_messages if len(m.split()) > 5])
-        
+
         # Take up to 300 words
         words = combined.split()[:300]
         return ' '.join(words)
-    
+
     def extract_from_document(self, document_text):
         """Extract from a longer document."""
         # Take a random 1000-word sample
@@ -1367,66 +1367,66 @@ class SampleExtractor:
         if len(words) > 1000:
             start = np.random.randint(0, len(words) - 1000)
             words = words[start:start + 1000]
-        
+
         return ' '.join(words)
-    
+
     def extract_from_resume(self, resume_text):
         """Extract bullet points from a resume."""
         # Extract bullet points (most likely to show achievement voice)
         lines = resume_text.split('\n')
         bullet_points = [line.strip() for line in lines if line.strip().startswith(('-', '•', '*'))]
-        
+
         # Combine and take up to 200 words
         combined = ' '.join(bullet_points)
         words = combined.split()[:200]
         return ' '.join(words)
-    
+
     def create_voice_profile(self, samples):
         """
         Create a comprehensive voice profile from multiple samples.
-        
+
         Args:
             samples (dict): {'email': text, 'slack': text, 'document': text}
-        
+
         Returns:
             dict: Aggregated voice fingerprint
         """
         fingerprints = []
-        
+
         for sample_type, text in samples.items():
             if text:
                 fp = self.analyzer.analyze(text, sample_type=sample_type)
                 fingerprints.append(fp)
-        
+
         if not fingerprints:
             return None
-        
+
         # Aggregate fingerprints
         aggregated = self._aggregate_fingerprints(fingerprints)
-        
+
         return {
-            'samples': [{'type': fp['metadata']['sample_type'], 'length': fp['metadata']['word_count']} 
+            'samples': [{'type': fp['metadata']['sample_type'], 'length': fp['metadata']['word_count']}
                        for fp in fingerprints],
             'voice_fingerprint': aggregated,
             'confidence': self._calculate_confidence(fingerprints)
         }
-    
+
     def _aggregate_fingerprints(self, fingerprints):
         """Average all fingerprints for each metric."""
         aggregated = {}
-        
+
         # Aggregate each top-level category
         for category in fingerprints[0].keys():
             if category == 'metadata':
                 continue
-            
+
             if isinstance(fingerprints[0][category], dict):
                 aggregated[category] = {}
                 for metric in fingerprints[0][category].keys():
                     # Get all values for this metric
-                    values = [fp[category][metric] for fp in fingerprints 
+                    values = [fp[category][metric] for fp in fingerprints
                              if metric in fp[category]]
-                    
+
                     # Average them (skip None values)
                     valid_values = [v for v in values if v is not None]
                     if valid_values:
@@ -1435,14 +1435,14 @@ class SampleExtractor:
                         aggregated[category][metric] = None
             else:
                 aggregated[category] = fingerprints[0][category]
-        
+
         return aggregated
-    
+
     def _calculate_confidence(self, fingerprints):
         """Calculate confidence based on sample diversity and length."""
         total_words = sum(fp['metadata']['word_count'] for fp in fingerprints)
         sample_types = set(fp['metadata']['sample_type'] for fp in fingerprints)
-        
+
         # Base confidence on word count
         if total_words >= 1500:
             base_confidence = 0.95
@@ -1452,7 +1452,7 @@ class SampleExtractor:
             base_confidence = 0.80
         else:
             base_confidence = 0.60
-        
+
         # Boost for diverse sample types
         if len(sample_types) >= 3:
             diversity_boost = 0.10
@@ -1460,7 +1460,7 @@ class SampleExtractor:
             diversity_boost = 0.05
         else:
             diversity_boost = 0
-        
+
         return min(base_confidence + diversity_boost, 0.99)
 
 # Usage:
@@ -1496,10 +1496,10 @@ Candidates often **inconsistently** present themselves across:
 def calculate_consistency_score(fingerprint1, fingerprint2):
     """
     Calculate how consistent two writing samples are.
-    
+
     Returns a score from 0 (completely different) to 1 (identical).
     """
-    
+
     # Compare key metrics
     metrics_to_compare = [
         ('lexical_richness', 'type_token_ratio'),
@@ -1512,18 +1512,18 @@ def calculate_consistency_score(fingerprint1, fingerprint2):
         ('rhetorical_stance', 'modality_score'),
         ('punctuation', 'punctuation_diversity')
     ]
-    
+
     differences = []
-    
+
     for category, metric in metrics_to_compare:
         try:
             val1 = fingerprint1[category][metric]
             val2 = fingerprint2[category][metric]
-            
+
             if val1 is not None and val2 is not None:
                 # Normalize difference to 0-1 range
                 diff = abs(val1 - val2)
-                
+
                 # Estimate max expected difference for this metric
                 if metric == 'type_token_ratio':
                     max_diff = 0.3
@@ -1545,19 +1545,19 @@ def calculate_consistency_score(fingerprint1, fingerprint2):
                     max_diff = 0.5
                 else:
                     max_diff = 1.0
-                
+
                 normalized_diff = diff / max_diff
                 differences.append(normalized_diff)
         except (KeyError, TypeError):
             pass
-    
+
     if not differences:
         return 0
-    
+
     # Consistency score is inverse of average difference
     avg_diff = np.mean(differences)
     consistency_score = 1 - avg_diff
-    
+
     return max(0, min(1, consistency_score))
 
 # Usage:
@@ -1578,7 +1578,7 @@ def generate_consistency_recommendations(fingerprint1, fingerprint2):
     Generate specific recommendations to improve consistency.
     """
     recommendations = []
-    
+
     # Compare TTR
     ttr1 = fingerprint1['lexical_richness']['type_token_ratio']
     ttr2 = fingerprint2['lexical_richness']['type_token_ratio']
@@ -1595,7 +1595,7 @@ def generate_consistency_recommendations(fingerprint1, fingerprint2):
                 f"than your {fingerprint1['metadata']['sample_type']} (TTR: {ttr1:.3f}). "
                 "Try to use more varied word choices in the first."
             )
-    
+
     # Compare sentence length
     avg1 = fingerprint1['sentence_structure']['avg_sentence_length']
     avg2 = fingerprint2['sentence_structure']['avg_sentence_length']
@@ -1612,7 +1612,7 @@ def generate_consistency_recommendations(fingerprint1, fingerprint2):
                 f"than your {fingerprint1['metadata']['sample_type']} ({avg1:.1f} words). "
                 "Try to match sentence lengths for consistency."
             )
-    
+
     # Compare active/passive ratio
     active1 = fingerprint1['syntactic_complexity']['active_ratio']
     active2 = fingerprint2['syntactic_complexity']['active_ratio']
@@ -1629,7 +1629,7 @@ def generate_consistency_recommendations(fingerprint1, fingerprint2):
                 f"than your {fingerprint1['metadata']['sample_type']} ({active1:.0%}). "
                 "Consider using more active voice in the first for consistency."
             )
-    
+
     # Compare punctuation
     em_dash1 = fingerprint1['punctuation']['punctuation']['Em-dash']['per_1000']
     em_dash2 = fingerprint2['punctuation']['punctuation']['Em-dash']['per_1000']
@@ -1646,7 +1646,7 @@ def generate_consistency_recommendations(fingerprint1, fingerprint2):
                 f"({em_dash2:.1f}/1000 chars) than your {fingerprint1['metadata']['sample_type']} "
                 f"({em_dash1:.1f}/1000 chars). Consider matching em-dash usage."
             )
-    
+
     return recommendations
 ```
 
@@ -2046,7 +2046,7 @@ This research gives you **everything you need** to build a **world-class voice a
 ✅ **Consistency checking**
 ✅ **Charm TUI integration plan**
 
-**The Voice Studio feature is ready to build!** 
+**The Voice Studio feature is ready to build!**
 
 Would you like me to:
 1. **Generate the complete Python code** for the StylometryAnalyzer?

@@ -243,7 +243,7 @@ Each archetype has **natural career fits**, but also **shadow sides** (potential
 **Implementation:**
 ```
 FOR each user:
-    1. Adminster archetype assessment
+    1. Administer archetype assessment
     2. Identify top 2-3 archetypes
     3. Map to career fits
     4. Generate voice recommendations
@@ -533,8 +533,8 @@ Senior Product Manager | SaaS Growth | San Francisco, CA
 jane@email.com | (555) 123-4567 | linkedin.com/in/janedoe
 
 PROFESSIONAL SUMMARY
-Senior Product Manager with 8+ years experience driving growth for SaaS companies. 
-Specialized in user acquisition, retention, and monetization strategies. Built and scaled 
+Senior Product Manager with 8+ years experience driving growth for SaaS companies.
+Specialized in user acquisition, retention, and monetization strategies. Built and scaled
 product teams from 0 to 20+ people. Increased ARR by 300% at Acme Corp.
 
 KEY SKILLS
@@ -562,8 +562,8 @@ Product Strategy • User Research • A/B Testing • Roadmapping • Agile •
 
 **Summary Formula:**
 ```
-[Title] with [X] years experience in [industry/field]. 
-Specialized in [key skills]. [Achievement 1] and [Achievement 2]. 
+[Title] with [X] years experience in [industry/field].
+Specialized in [key skills]. [Achievement 1] and [Achievement 2].
 Seeking to leverage [unique value] to [help company achieve X].
 ```
 
@@ -637,16 +637,16 @@ Seeking to leverage [unique value] to [help company achieve X].
 
 **Example:**
 ```
-When I joined Acme Corp as their first Product Manager, we were struggling with 
-low user retention. Within 6 months, I led a cross-functional team to redesign 
+When I joined Acme Corp as their first Product Manager, we were struggling with
+low user retention. Within 6 months, I led a cross-functional team to redesign
 the onboarding experience, which increased 30-day retention by 40%.
 
-I'm excited about the Senior Product Manager role at your company because 
-[specific reason related to their product/mission]. My experience in [relevant 
+I'm excited about the Senior Product Manager role at your company because
+[specific reason related to their product/mission]. My experience in [relevant
 skill] directly addresses [specific problem from JD]. At Acme, I [achievement].
 Additionally, at Beta Corp, I [achievement].
 
-I'd love to discuss how I can help your team [specific goal]. You can reach 
+I'd love to discuss how I can help your team [specific goal]. You can reach
 me at (555) 123-4567 or jane@email.com. I look forward to speaking with you.
 
 Best regards,
@@ -926,21 +926,21 @@ Jane Doe
 8. **voice-anchors.md** (Auto-generated)
    ```markdown
    # My Professional Voice & Brand
-   
+
    ## Positioning Statement
    [Your 1-2 sentence value proposition]
-   
+
    ## Voice Directives
    - Tone: [Professional, Conversational, etc.]
    - Style: [Direct, Story-driven, etc.]
    - Pacing: [Concise, Detailed, etc.]
    - Forbidden Buzzwords: [List]
-   
+
    ## Personal Why Pillars
    - [Pillar 1]
    - [Pillar 2]
    - [Pillar 3]
-   
+
    ## Anti-Brand
    - What I won't do: [List]
    - My boundaries: [List]

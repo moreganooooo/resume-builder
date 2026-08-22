@@ -660,8 +660,11 @@ def split_batch_jds(jd_path: str) -> list:
     If jd_path is anything else (single JSON object, plain text, invalid
     JSON), returns [jd_path] unchanged.
     """
-    with open(jd_path, "r", encoding="utf-8") as f:
-        raw = f.read()
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except (FileNotFoundError, OSError):
+        return [jd_path] if os.path.exists(jd_path) else []
 
     try:
         data = json.loads(raw)

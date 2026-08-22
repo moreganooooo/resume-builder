@@ -66,14 +66,70 @@ _resume_ensure_profile() {
   names="$(cd "$profiles_dir" && ls -d */ 2>/dev/null | sed 's#/$##')"
   local count
   count="$(printf '%s\n' "$names" | grep -c .)"
+  if [ "$count" -eq 1 ]; then
+    export RESUME_PROFILE="$(printf '%s\n' "$names" | head -1)"
+    return
+  fi
   [ "$count" -gt 1 ] || return
 
   local default
-  default="$(printf '%s\n' "$names" | head -1)"
-  local choice
-  if command -v gum >/dev/null 2>&1; then
-    choice="$(printf '%s\n' "$names" | gum choose --header "✦ Which profile for this terminal session?")"
+  if printf '%s\n' "$names" | grep -qi '^morgan$'; then
+    default="$(printf '%s\n' "$names" | grep -i '^morgan$' | head -1)"
   else
+    default="$(printf '%s\n' "$names" | head -1)"
+  fi
+  local choice=""
+  local prompt_bin="$_RESUME_BUILDER_DIR/dashboard/bin/prompt"
+
+  # 1. Prefer Go Charm prompt binary if available / compilable
+  if [ ! -x "$prompt_bin" ] && command -v go >/dev/null 2>&1; then
+    (cd "$_RESUME_BUILDER_DIR/dashboard" && go build -o bin/prompt ./cmd/prompt >/dev/null 2>&1)
+  fi
+
+  if [ -x "$prompt_bin" ]; then
+    local opts=""
+    local first=1
+    while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      [ $first -eq 0 ] && opts="$opts,"
+      opts="$opts{\"label\":\"$n\",\"value\":\"$n\"}"
+      first=0
+    done <<< "$names"
+    local spec="{\"type\":\"select\",\"message\":\"Which profile for this terminal session?\",\"options\":[$opts],\"default_value\":\"$default\"}"
+    local out
+    out="$("$prompt_bin" "$spec")"
+    local prompt_rc=$?
+    if [ $prompt_rc -eq 0 ] && [ -n "$out" ]; then
+      choice="$(printf '%s' "$out" | sed -E 's/.*"value"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+    elif [ $prompt_rc -eq 130 ]; then
+      return 130
+    fi
+  fi
+
+  # 2. Fallback to Python venv charm_prompt
+  if [ -z "$choice" ] && [ -x "$_RESUME_BUILDER_DIR/.venv/bin/python" ]; then
+    choice="$("$_RESUME_BUILDER_DIR/.venv/bin/python" -c "
+import sys
+sys.path.insert(0, '$_RESUME_BUILDER_DIR/scripts')
+try:
+    import charm_prompt
+    names = sys.argv[1:]
+    default = '$default'
+    selected = charm_prompt.select('Which profile for this terminal session?', choices=names, default=default)
+    if selected:
+        print(selected)
+except Exception:
+    pass
+" $names 2>/dev/null)"
+  fi
+
+  # 3. Fallback to gum
+  if [ -z "$choice" ] && command -v gum >/dev/null 2>&1; then
+    choice="$(printf '%s\n' "$names" | gum choose --header "✦ Which profile for this terminal session?")"
+  fi
+
+  # 4. Fallback to text prompt
+  if [ -z "$choice" ]; then
     printf "\n${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
     printf "  ${_RB_BOLD}${_RB_BRAND}◈ RESUME-BUILDER PROFILE SELECTOR${_RB_RESET}\n"
     printf "${_RB_BOLD}${_RB_BRAND}✦ ────────────────────────────────────────────────────────────── ✦${_RB_RESET}\n"
@@ -88,7 +144,9 @@ _resume_ensure_profile() {
     printf "\n  ${_RB_BOLD}Which profile for this session?${_RB_RESET} [${_RB_ACCENT}%s${_RB_RESET}]: " "$default"
     read -r choice
   fi
+
   choice="${choice:-$default}"
+  [ -n "$choice" ] || return 0
   export RESUME_PROFILE="$choice"
   printf "  ${_RB_SUCCESS}✓ Active profile:${_RB_RESET} ${_RB_BOLD}${_RB_ACCENT}%s${_RB_RESET} ${_RB_MUTED}(session only)${_RB_RESET}\n\n" "$RESUME_PROFILE"
 }
@@ -184,4 +242,3 @@ resume() {
 # CLI Aliases
 alias rb="resume"
 alias jobkit="resume"
-

@@ -167,5 +167,3 @@ func TestClipboard_OSC52Sequence(t *testing.T) {
 		t.Fatalf("expected valid OSC 52 sequence, got %q", seq)
 	}
 }
-
-

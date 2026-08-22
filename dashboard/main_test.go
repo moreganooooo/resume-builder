@@ -83,4 +83,3 @@ func TestAppModel_MobileTerminal(t *testing.T) {
 		t.Errorf("expected 45x20 to NOT trigger compact warning in mobile mode, got:\n%s", mobileView)
 	}
 }
-

@@ -216,10 +216,10 @@ Recommendation: HIGH PRIORITY
   ```
   [Your Name]
   [Target Role] | [Key Skill 1] | [Key Skill 2]
-  
+
   PROFESSIONAL SUMMARY
   [3-4 lines positioning you for target role]
-  
+
   CORE COMPETENCIES
   ├── Skill Category 1
   │   ├── Specific Skill A
@@ -228,7 +228,7 @@ Recommendation: HIGH PRIORITY
   └── Skill Category 2
       ├── Specific Skill X
       └── Specific Skill Y
-  
+
   PROFESSIONAL EXPERIENCE
   [Company] | [Dates]
   - Achievement framed for NEW industry
@@ -403,14 +403,14 @@ ELSE:
 ```python
 def detect_multi_author(resume_text):
     sections = split_resume_into_sections(resume_text)
-    
+
     stylometric_scores = []
     for section in sections:
         score = calculate_stylometric_fingerprint(section)
         stylometric_scores.append(score)
-    
+
     variance = calculate_variance(stylometric_scores)
-    
+
     if variance > 0.20:  # 20% threshold
         return {
             'multi_author': True,
@@ -964,11 +964,11 @@ class OverqualificationCoach:
                 "counter": "I've successfully partnered with {example} to deliver {result}"
             }
         }
-    
+
     def generate_response(self, user_profile):
         # Detect seniority level
         seniority = self.detect_seniority(user_profile)
-        
+
         # Generate tailored responses
         responses = {}
         for risk, data in self.risks.items():
@@ -981,7 +981,7 @@ class OverqualificationCoach:
                 min=user_profile.target_salary_min,
                 max=user_profile.target_salary_max
             )
-        
+
         return responses
 ```
 
@@ -998,7 +998,7 @@ class CareerPivotPredictor:
         "seniority_downgrade": 0.775,
         "entrepreneurship_to_corporate": 0.675
     }
-    
+
     INDUSTRY_ADJUSTMENTS = {
         "technology": +0.05,
         "marketing": +0.075,
@@ -1007,23 +1007,23 @@ class CareerPivotPredictor:
         "manufacturing": -0.025,
         "nonprofit": -0.05
     }
-    
+
     def predict_success(self, user_profile, target_role):
         # Calculate base success rate
         pivot_type = self.detect_pivot_type(user_profile, target_role)
         base_rate = self.BASE_SUCCESS_RATES[pivot_type]
-        
+
         # Adjust for target industry
         industry = target_role.industry
         industry_adjustment = self.INDUSTRY_ADJUSTMENTS.get(industry, 0)
-        
+
         # Adjust for skill overlap
         skill_overlap = self.calculate_skill_overlap(user_profile, target_role)
         skill_adjustment = 0.1 if skill_overlap > 0.6 else 0.0
-        
+
         # Final prediction
         success_rate = min(0.95, base_rate + industry_adjustment + skill_adjustment)
-        
+
         return {
             "success_rate": success_rate,
             "pivot_type": pivot_type,
@@ -1065,11 +1065,11 @@ class ATSOptimizer:
             "timeline": "60-90 days"
         }
     }
-    
+
     def optimize(self, resume, job_posting):
         industry = self.detect_industry(job_posting)
         profile = self.INDUSTRY_PROFILES.get(industry, self.INDUSTRY_PROFILES["technology"])
-        
+
         optimizations = {
             "format": profile["recommended_format"],
             "keyword_strategy": "aggressive" if profile["keyword_weight"] > 0.7 else "balanced",
@@ -1077,7 +1077,7 @@ class ATSOptimizer:
             "semantic_optimization": profile["semantic_matching"],
             "timeline_expectation": profile["timeline"]
         }
-        
+
         return optimizations
 ```
 
@@ -1130,7 +1130,7 @@ class ATSOptimizer:
 
 ## 🚀 The Path Forward
 
-**Research is COMPLETE.** 
+**Research is COMPLETE.**
 
 We now have **100% coverage** of all open questions with **evidence-backed answers** or **actionable hypotheses**. The remaining work is **pure implementation** and **validation**.
 

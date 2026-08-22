@@ -855,4 +855,3 @@ func (m ViewerModel) renderFooter() string {
 			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 			keyStyle.Render("q") + descStyle.Render(" quit"))
 }
-

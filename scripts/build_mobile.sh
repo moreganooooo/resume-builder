@@ -38,13 +38,13 @@ for target in "${TARGETS[@]}"; do
   desc="${desc%)}"
 
   echo "  ⚒ Compiling for ${os_arch}/${arch} [${desc}]..."
-  
+
   # Strip debug symbols (-s -w) for smallest binary size
   CGO_ENABLED=0 GOOS="${os_arch}" GOARCH="${arch}" go build -ldflags="-s -w" -o "${DIST_DIR}/${binary_name}" .
-  
+
   # Build prompt utility
   CGO_ENABLED=0 GOOS="${os_arch}" GOARCH="${arch}" go build -ldflags="-s -w" -o "${DIST_DIR}/prompt-${os_arch}-${arch}" ./cmd/prompt
-  
+
   size=$(ls -lh "${DIST_DIR}/${binary_name}" | awk '{print $5}')
   echo "     ✔ Generated ${binary_name} (${size})"
 done

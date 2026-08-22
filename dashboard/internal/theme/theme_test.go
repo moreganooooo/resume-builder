@@ -154,4 +154,3 @@ func TestTheme_WCAGContrastCompliance(t *testing.T) {
 		}
 	}
 }
-

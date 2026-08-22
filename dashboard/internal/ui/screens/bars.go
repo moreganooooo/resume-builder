@@ -704,5 +704,3 @@ func FormatOSC52Copy(text string) string {
 	b64 := base64.StdEncoding.EncodeToString([]byte(text))
 	return fmt.Sprintf("\x1b]52;c;%s\x07", b64)
 }
-
-
