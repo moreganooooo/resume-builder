@@ -326,4 +326,3 @@ func TestViewer_SearchAndJump(t *testing.T) {
 		}
 	}
 }
-

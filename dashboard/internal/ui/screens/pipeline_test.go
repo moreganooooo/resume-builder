@@ -591,4 +591,3 @@ func TestPipeline_EmptyStateContextual(t *testing.T) {
 		t.Fatalf("expected view to reflect zero applications or empty state")
 	}
 }
-

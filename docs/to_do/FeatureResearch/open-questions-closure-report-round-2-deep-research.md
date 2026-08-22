@@ -68,7 +68,7 @@ This report addresses **49 open questions** identified across all domain researc
 
 **Question:** How should candidates frame gaps **verbally** in interviews?
 
-**Answer:** 
+**Answer:**
 - **30-Second Rule:** Prepare a **concise, honest, forward-focused** explanation (30 seconds max)
 - **Structure:** "I [brief context], which allowed me to [skill-building activity]. Now I'm excited to bring [relevant skills] to [target role]."
 - **Layoffs:** Name directly - "I was part of the January 2024 layoffs at [Company]" (complete explanation)
@@ -232,7 +232,7 @@ This report addresses **49 open questions** identified across all domain researc
 
 - **LinkedIn Economic Graph:** Updates >5M times per minute
 - **Industry trends:** Tech evolves fastest (monthly), Healthcare/Finance (quarterly)
-- **Implementation:** 
+- **Implementation:**
   - **Monthly:** Tech, Startups, Digital roles
   - **Quarterly:** Healthcare, Finance, Manufacturing
   - **Annually:** Traditional industries (Education, Government)

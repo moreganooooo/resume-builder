@@ -21,7 +21,7 @@ async function run() {
   });
   const page = await context.newPage();
   await page.goto(`file://${inputHtml}`);
-  
+
   // Wait for body to render
   const element = await page.$('body');
   if (element) {

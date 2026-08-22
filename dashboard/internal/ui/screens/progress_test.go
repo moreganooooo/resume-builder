@@ -89,5 +89,3 @@ func TestProgressModel_Update_KeyPressMsg(t *testing.T) {
 		t.Errorf("expected showHelp=true after '?'")
 	}
 }
-
-

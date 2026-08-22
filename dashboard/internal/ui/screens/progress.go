@@ -604,4 +604,3 @@ func RenderBlockBar(width int, fraction float64) string {
 	}
 	return sb.String()
 }
-

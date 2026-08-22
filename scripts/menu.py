@@ -413,21 +413,20 @@ def _build_scan_source_choices() -> list:
     ]
 
 
-def _confirm_active_profile() -> bool:
-    """Startup gate -- always runs, so nobody silently inherits whoever's
-    shell last set RESUME_PROFILE on a shared computer. A self-identified
-    new person chooses between jumping into real setup now or browsing
-    the menu first as a guest (see run_interactive_menu()'s guest-mode
-    guard for what "browsing" actually allows).
+def _confirm_active_profile(force: bool = False) -> bool:
+    """Startup gate -- verifies or prompts for the active profile so
+    sessions don't silently inherit an incorrect profile on a shared
+    computer. If RESUME_PROFILE is already set in the environment to a
+    valid profile directory (e.g. chosen via the shell wrapper on startup
+    or `resume activate`), it uses that profile directly without
+    re-prompting. A self-identified new person chooses between jumping
+    into real setup now or browsing the menu first as a guest (see
+    run_interactive_menu()'s guest-mode guard for what "browsing" actually
+    allows).
 
     Returns False if the user cancelled (Ctrl-C/Esc) at either prompt here,
     True otherwise -- run_interactive_menu() exits immediately on False,
-    the same as Ctrl-C on the main menu's own select() does. Previously
-    None from .ask() (Ctrl-C) fell through both `if`s uncaught: the first
-    prompt's cancel silently became "I'm new here", and the second
-    prompt's cancel silently became "Look around the main menu first"
-    (guest mode) -- the one moment a user would most expect Ctrl-C to just
-    quit instead routed them into onboarding/guest flows they never chose."""
+    the same as Ctrl-C on the main menu's own select() does."""
     import profile_paths
 
     names = sorted(
@@ -435,34 +434,35 @@ def _confirm_active_profile() -> bool:
         for n in os.listdir(profile_paths.PROFILES_DIR)
         if os.path.isdir(os.path.join(profile_paths.PROFILES_DIR, n))
     )
-    # profile_paths.active_profile() falls back to a hardcoded "morgan"
-    # (lowercase) when RESUME_PROFILE is unset -- a real folder renamed to
-    # different casing (e.g. profiles/Morgan/) then makes `current in
-    # names` fail on this case-sensitive string comparison, even though
-    # profiles/morgan and profiles/Morgan are the SAME directory on
-    # macOS's case-insensitive-but-preserving filesystem. Resolving
-    # against a lowercased lookup first means the picker's default
-    # selection (and its "currently: X" display) tracks whatever a
-    # profile is actually named on disk right now, automatically, rather
-    # than needing this hardcoded elsewhere to be kept in sync by hand
-    # every time a profile folder is renamed.
-    current_raw = profile_paths.active_profile()
+
+    env_profile = os.environ.get("RESUME_PROFILE")
+    if not force and env_profile:
+        name_map = {n.lower(): n for n in names}
+        if env_profile.lower() in name_map:
+            matched = name_map[env_profile.lower()]
+            profile_paths.set_active_profile(matched)
+            return True
+
+    if env_profile and env_profile.lower() in {n.lower(): n for n in names}:
+        current_raw = env_profile
+    else:
+        try:
+            current_raw = profile_paths.active_profile()
+        except ValueError:
+            current_raw = names[0] if names else "morgan"
+
     current = {n.lower(): n for n in names}.get(current_raw.lower(), current_raw)
-    # cli_art.select() is a thin wrapper around questionary.select().ask()
-    # (bakes in QUESTIONARY_STYLE) -- it still returns raw None on Ctrl-C/
-    # Esc exactly like the direct .ask() call this replaced, so the
-    # `choice is None` check below (the actual Ctrl-C-fallthrough fix,
-    # see this function's docstring) keeps working unchanged.
+
     choice = cli_art.select(
         f"Who's using resume-builder? (currently: {current})",
         choices=names + ["I'm new here", "Manage profiles..."],
-        default=current if current in names else names[0],
+        default=current if current in names else (names[0] if names else None),
         erase_when_done=True,
     )
 
     if choice == "Manage profiles...":
         _handle_manage_profiles()
-        return _confirm_active_profile()
+        return _confirm_active_profile(force=True)
 
     if choice in names:
         profile_paths.set_active_profile(choice)

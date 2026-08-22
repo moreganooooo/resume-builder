@@ -1,7 +1,7 @@
 # ✦ Mobile Termux & Visual Inspection Guide ✧
 
-**Repository**: `moreganooooo/resume-builder`  
-**Date**: August 18, 2026  
+**Repository**: `moreganooooo/resume-builder`
+**Date**: August 18, 2026
 
 ---
 
