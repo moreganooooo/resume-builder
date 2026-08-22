@@ -590,23 +590,25 @@ def count_active_roles() -> int:
     return len(list_all_evaluated_jds(statuses=["Pending"]))
 
 
-def count_unevaluated_roles() -> int:
-    """How many pending roles have never been evaluated -- the backlog.
+def unevaluated_roles() -> tuple:
+    """The pending roles that have never been evaluated, as
+    (file_paths, database_only_job_ids).
 
-    The companion to count_active_roles(), and for the same reason: one
-    definition every surface calls. The banner reporting only the
-    evaluated count (399) and saying nothing about the ~1,300 awaiting
-    evaluation is what made those two true numbers read as a bug.
+    One definition serving two callers: count_unevaluated_roles() reports
+    its size, and batch_evaluate.evaluate_all_pending() does the work.
+    Keeping the count and the work list on the same function is what
+    stops the banner from promising a backlog the evaluator cannot
+    actually reach -- "Evaluate ALL Pending Roles" used to walk JD FILES
+    only, so the ~627 database-only rows were counted, displayed, and
+    never evaluable.
 
-    Counts the same universe count_active_roles() does -- pending JD
-    files plus pending database-only rows, deduped by job key the way
-    _database_only_rows() dedupes -- but keeps the rows WITHOUT an
-    _evaluation instead of the rows with one. Deliberately lighter than
-    list_all_evaluated_jds(): it needs a count, not a row, so it never
-    reads liveness, research, or coverage.
+    Deliberately lighter than list_all_evaluated_jds(): these are
+    identifiers, not rows, so nothing reads liveness, research, or
+    coverage. Database ids are deduped against file-backed twins exactly
+    the way _database_only_rows() dedupes them.
     """
     seen = set()
-    unevaluated = 0
+    file_paths = []
     for path in jd_manager.get_pending_jds():
         seen.add(os.path.basename(path))
         try:
@@ -614,24 +616,37 @@ def count_unevaluated_roles() -> int:
         except (OSError, ValueError):
             pass
         if not jd_manager.read_evaluation(path):
-            unevaluated += 1
+            file_paths.append(path)
 
     try:
         import db
+    except ImportError:
+        return file_paths, []
 
+    # Fails closed under tests, the same way liveness._gather_db_candidates
+    # does and for the same reason: dozens of tests patch the filesystem JD
+    # list and know nothing about a database source, so an unguarded read
+    # pulls the developer's real ~1,300 pending rows into their
+    # assertions -- and, for the evaluate paths, into a work list that
+    # would spend real API calls on them.
+    if db._is_unisolated_test_write():
+        return file_paths, []
+
+    try:
         conn = db.get_db()
     except Exception:
-        return unevaluated
+        return file_paths, []
 
     try:
         records = conn.execute(
             "SELECT id, metadata_json FROM jobs WHERE status = 'pending'"
         ).fetchall()
     except Exception:
-        return unevaluated
+        return file_paths, []
     finally:
         conn.close()
 
+    job_ids = []
     for record in records:
         job_id = str(record["id"])
         if job_id in seen or os.path.basename(job_id) in seen:
@@ -641,8 +656,20 @@ def count_unevaluated_roles() -> int:
         except (json.JSONDecodeError, TypeError):
             data = {}
         if not isinstance(data, dict) or not data.get("_evaluation"):
-            unevaluated += 1
-    return unevaluated
+            job_ids.append(job_id)
+    return file_paths, job_ids
+
+
+def count_unevaluated_roles() -> int:
+    """How many pending roles have never been evaluated -- the backlog.
+
+    The companion to count_active_roles(), and for the same reason: one
+    definition every surface calls. The banner reporting only the
+    evaluated count (399) and saying nothing about the ~1,300 awaiting
+    evaluation is what made those two true numbers read as a bug.
+    """
+    file_paths, job_ids = unevaluated_roles()
+    return len(file_paths) + len(job_ids)
 
 
 def browse_and_select_jds(

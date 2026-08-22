@@ -575,6 +575,10 @@ def _liveness_cell(liveness: dict | None) -> str:
         "active": theme.SUCCESS,
         "likely_active": theme.SUCCESS,
         "expired": theme.ERROR,
+        # Not a warning about the ROLE -- it means the page was never
+        # shown to us (bot wall, login wall), so it reads as muted rather
+        # than as something wrong with the posting.
+        "blocked": theme.MUTED,
     }.get(result, theme.WARNING)
     return f"[{color}]{result or '?'}[/{color}] ({date})"
 

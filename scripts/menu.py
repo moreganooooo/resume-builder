@@ -903,6 +903,7 @@ def _handle_liveness() -> bool:
         summary["active"]
         + summary["likely_active"]
         + summary["expired"]
+        + summary.get("blocked", 0)
         + summary["uncertain"]
     )
     return checked > 0
@@ -918,23 +919,31 @@ def _print_no_pending_jds_hint(action: str = "tailor") -> None:
 
 
 def _handle_evaluate_all() -> bool:
-    pending = jd_manager.get_pending_jds()
-    if not pending:
-        _print_no_pending_jds_hint("evaluate")
-        return False
-    already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
+    # unevaluated_roles(), not get_pending_jds(): the latter lists FILES,
+    # and most pending jobs are database-only scan rows with no file, so
+    # "Evaluate ALL Pending Roles" used to quietly skip the larger half of
+    # the backlog the banner had just reported. It also returns only the
+    # UNSCORED roles, which is why there is no split_evaluated() call
+    # here any more.
+    file_paths, database_only = picker.unevaluated_roles()
+    to_evaluate = file_paths + database_only
     if not to_evaluate:
-        cli_art.console.print(
-            f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a score."
-        )
+        if not jd_manager.get_pending_jds():
+            _print_no_pending_jds_hint("evaluate")
+        else:
+            cli_art.console.print(
+                "Nothing new to evaluate -- every pending role already has a score."
+            )
         return False
+    if database_only:
+        # Named explicitly because these have no JD file: seeing the count
+        # exceed what is visible in jds/ would otherwise look wrong.
+        cli_art.console.print(
+            f"({len(file_paths)} with a JD file, {len(database_only)} from board scans.)"
+        )
     if not picker.should_proceed(len(to_evaluate), skip_confirm=False):
         cli_art.console.print("Aborted.")
         return False
-    if already_evaluated:
-        cli_art.console.print(
-            f"({len(already_evaluated)} already-evaluated JD(s) will be skipped.)"
-        )
     results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
     cli_art.render_fit_table(results)
     return bool(results)

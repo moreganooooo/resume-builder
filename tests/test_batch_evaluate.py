@@ -1,5 +1,8 @@
+import json
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +12,9 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import batch_evaluate  # noqa: E402
+import db  # noqa: E402
+import jd_source  # noqa: E402
+import profile_paths  # noqa: E402
 
 
 class TestSortKey(unittest.TestCase):
@@ -282,3 +288,93 @@ class TestSplitEvaluated(unittest.TestCase):
         )
         self.assertEqual(already, [])
         self.assertEqual(unevaluated, ["jds/a.json", "jds/b.json"])
+
+
+class TestEvaluateDatabaseOnlyJobs(unittest.TestCase):
+    """A database-only job -- a board-scan row keyed by content hash, with
+    no JD file -- must be evaluable. Most pending jobs are these, and the
+    file-only loop counted them in the banner and then skipped them.
+
+    The profile is redirected at a temp directory so this owns a real but
+    empty data.db: the write has to actually land for the sync-back to be
+    worth asserting on.
+    """
+
+    def setUp(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
+        for patcher in (
+            patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        conn = db.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO jobs (id, title, company, status, raw_text,"
+                " metadata_json) VALUES (?, ?, ?, 'pending', '', ?)",
+                (
+                    "hash-only-row",
+                    "Content Designer",
+                    "Acme",
+                    json.dumps({"description": "A real posting body."}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _row_metadata(self) -> dict:
+        conn = db.get_db()
+        try:
+            raw = conn.execute(
+                "SELECT metadata_json FROM jobs WHERE id = 'hash-only-row'"
+            ).fetchone()["metadata_json"]
+        finally:
+            conn.close()
+        return json.loads(raw or "{}")
+
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_evaluation_is_synced_back_into_the_row(self, mock_engine_cls):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.2,
+            "recommendation": "Strong pursue",
+        }
+
+        results = batch_evaluate.evaluate_all_pending(
+            ["hash-only-row"], skip_evaluated=False
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0]["error"])
+        self.assertEqual(results[0]["composite_score"], 4.2)
+        self.assertEqual(results[0]["company_name"], "Acme")
+        # The temp file is gone; the score must have survived in the row.
+        self.assertEqual(self._row_metadata()["_evaluation"]["composite_score"], 4.2)
+
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_a_skip_archives_the_row_rather_than_moving_a_temp_file(
+        self, mock_engine_cls
+    ):
+        """archive_jd() moves a FILE. For a database-only job that file is
+        a temp one, so archiving through it would deposit a stray JD in
+        jds/archived/ -- exactly the on-disk clutter jd_source exists to
+        avoid. set_status() is the right disposal."""
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 1.1,
+            "recommendation": "Skip",
+        }
+
+        with patch("batch_evaluate.jd_manager.archive_jd") as mock_archive:
+            batch_evaluate.evaluate_all_pending(["hash-only-row"], skip_evaluated=False)
+
+        mock_archive.assert_not_called()
+        row = jd_source.lookup_job("hash-only-row")
+        self.assertEqual(row["status"], "archived")
+
+
+if __name__ == "__main__":
+    unittest.main()
