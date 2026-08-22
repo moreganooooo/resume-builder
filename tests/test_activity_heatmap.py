@@ -6,10 +6,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from activity_heatmap import (
-    get_daily_application_counts,
-    render_heatmap_ascii,
-)
+from activity_heatmap import get_daily_application_counts, render_heatmap_ascii
 
 
 class TestActivityHeatmap(unittest.TestCase):
