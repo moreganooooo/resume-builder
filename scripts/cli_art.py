@@ -237,7 +237,14 @@ def _stats_line_text() -> str:
 
     pending = picker.count_active_roles()
     tailored = jd_manager.count_completed_resumes()
-    return f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
+    line = f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
+    # Second line only when there IS a backlog: reporting "0 Awaiting
+    # Evaluation" is noise, while staying silent about 1,351 unevaluated
+    # roles is what made the evaluated count look wrong.
+    backlog = picker.count_unevaluated_roles()
+    if backlog:
+        line += f"\n{backlog} Roles Awaiting Evaluation"
+    return line
 
 
 def display_main_banner(reveal: bool = True) -> None:

@@ -1002,3 +1002,21 @@ func TestJobs_SituationalRoleTriggerBadge(t *testing.T) {
 
 
 
+
+// The Jobs header reports only evaluated jobs, because the export it
+// reads carries only those. Staying silent about the unevaluated backlog
+// is what made the evaluated count read as wrong, so pin both the
+// readout and its absence when there is no backlog.
+func TestJobsHeaderShowsUnevaluatedBacklog(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 200, 30).WithBacklog(1337)
+	if !strings.Contains(m.renderHeader(), "1337 awaiting evaluation") {
+		t.Errorf("header omitted the backlog readout: %q", m.renderHeader())
+	}
+}
+
+func TestJobsHeaderHidesBacklogWhenZero(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 200, 30)
+	if strings.Contains(m.renderHeader(), "awaiting evaluation") {
+		t.Errorf("header showed an empty backlog: %q", m.renderHeader())
+	}
+}
