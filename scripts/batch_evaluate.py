@@ -7,11 +7,13 @@ was upgraded to). See
 docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 
+import contextlib
 import os
 import time
 
 import cli_art
 import jd_manager
+import jd_source
 import orchestrator
 import theme
 
@@ -53,12 +55,112 @@ def split_evaluated(pending_paths: list) -> tuple:
     return already_evaluated, unevaluated
 
 
+def _result_row(identifier, job_key, job_title, company_name, evaluation) -> dict:
+    """One row of evaluate_all_pending()'s return list. evaluation=None is
+    the errored shape -- every score key present but empty, so callers
+    (cli_art.render_fit_table) never have to special-case it."""
+    evaluation = evaluation or {}
+    return {
+        "job_key": job_key,
+        "source_file": identifier,
+        "company_name": company_name or "unknown",
+        "job_title": job_title or "unknown",
+        "composite_score": evaluation.get("composite_score"),
+        "fit_score": evaluation.get("fit_score"),
+        "interview_odds_score": evaluation.get("interview_odds_score"),
+        "practical_pursue_score": evaluation.get("practical_pursue_score"),
+        "recommendation": evaluation.get("recommendation"),
+        "why": evaluation.get("why") or "",
+        "hard_blockers": evaluation.get("hard_blockers") or [],
+        "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
+        "posting_age_days": evaluation.get("posting_age_days"),
+        "error": not evaluation,
+    }
+
+
+@contextlib.contextmanager
+def _resolved(identifier: str):
+    """jd_source.resolved_jd(), but a totally unknown identifier is handed
+    back unchanged instead of raising.
+
+    An entry that is neither a file on disk nor a row in the database is
+    a JD that moved or a row that was deleted between building the work
+    list and reaching it. The old file-only loop let evaluate_fit() fail
+    on it and recorded one errored row; raising here would instead end
+    the batch over a single stale entry.
+    """
+    try:
+        context = jd_source.resolved_jd(identifier)
+    except LookupError:
+        yield identifier, False
+        return
+    try:
+        with context as resolved:
+            yield resolved
+    except LookupError:
+        yield identifier, False
+
+
+def _evaluate_one(engine, identifier: str, on_label=None) -> dict:
+    """Scores a single JD, whether it is a file path or a database-only
+    job id, and returns one _result_row().
+
+    jd_source.resolved_jd() is what makes the second case work: it hands
+    back a temp file for a database row and syncs the saved _evaluation
+    back into that row on exit, so every file-oriented call below
+    (extract_job_meta, evaluate_fit, save_evaluation, compute_job_key)
+    stays unchanged.
+    """
+    with _resolved(identifier) as (path, is_database_backed):
+        job_title, company_name = jd_manager.extract_job_meta(path)
+        # Reported back rather than returned, because the caller wants it
+        # on the progress bar BEFORE the (slow) evaluate_fit call below,
+        # not after the row comes back.
+        if on_label:
+            on_label(company_name or os.path.basename(path))
+        evaluation = engine.evaluate_fit(path)
+        if not evaluation:
+            return _result_row(
+                identifier,
+                jd_manager.compute_job_key(path),
+                job_title,
+                company_name,
+                None,
+            )
+
+        job_key = jd_manager.compute_job_key(path)
+        jd_manager.save_evaluation(path, evaluation)
+
+        # A JD Morgan's already said no to (Skip) shouldn't sit in the
+        # pending list forever -- archive it immediately rather than
+        # waiting for a manual pass. archive_jd() moves the file, so this
+        # has to happen after compute_job_key()/save_evaluation() above,
+        # both of which need it still at its original path. A
+        # database-only job takes set_status() instead: archive_jd()
+        # would move its TEMP file into jds/archived/ and leave exactly
+        # the stray JD jd_source exists to avoid.
+        skipped = evaluation.get("recommendation") == "Skip"
+        source = identifier if is_database_backed else path
+        if skipped and not is_database_backed:
+            source = jd_manager.archive_jd(path)
+
+    # Outside the context ON PURPOSE. Leaving the block runs sync_back(),
+    # which writes the temp file's payload over the row -- including its
+    # status. Archiving inside the block therefore set "archived" and had
+    # it immediately reset to "pending", silently leaving every skipped
+    # scan row in the pending list.
+    if skipped and is_database_backed:
+        jd_source.set_status(identifier, "archived")
+
+    return _result_row(source, job_key, job_title, company_name, evaluation)
+
+
 def evaluate_all_pending(
     pending_paths: list = None, skip_evaluated: bool = True
 ) -> list:
     """
-    Runs ResumeEngine.evaluate_fit() over every path in pending_paths
-    (defaults to jd_manager.get_pending_jds() if None). Returns a list of
+    Runs ResumeEngine.evaluate_fit() over every entry in pending_paths --
+    each a JD file path OR a database-only job id -- and returns a list of
     {job_key, source_file, company_name, job_title, composite_score,
     recommendation, hard_blockers, error} sorted via _sort_key() --
     highest score first, errored entries always last. A JD that fails to
@@ -70,7 +172,17 @@ def evaluate_all_pending(
     scores.
     """
     if pending_paths is None:
-        pending_paths = jd_manager.get_pending_jds()
+        # Both halves of the backlog, not just the file-backed one.
+        # get_pending_jds() lists FILES, and most pending jobs are
+        # database-only hash-keyed scan rows with no file -- defaulting to
+        # it meant "evaluate every pending JD" silently skipped the larger
+        # half (627 of 1,337 for this profile). picker.unevaluated_roles()
+        # is the same function the banner counts with, so what the banner
+        # promises is what actually gets evaluated.
+        import picker
+
+        file_paths, job_ids = picker.unevaluated_roles()
+        pending_paths = file_paths + job_ids
 
     if skip_evaluated:
         already_evaluated, pending_paths = split_evaluated(pending_paths)
@@ -86,68 +198,17 @@ def evaluate_all_pending(
         task = progress.add_task(
             f"[bold {theme.BRAND}]Evaluating JDs...", total=len(pending_paths)
         )
-        for i, path in enumerate(pending_paths):
+        for i, identifier in enumerate(pending_paths):
             if i > 0:
                 time.sleep(SECONDS_BETWEEN_CALLS)
-            job_title, company_name = jd_manager.extract_job_meta(path)
-            label = company_name or os.path.basename(path)
-            progress.update(
-                task,
-                description=f"[{i + 1}/{len(pending_paths)}] Weighing the fit for {label}...",
-            )
-            evaluation = engine.evaluate_fit(path)
 
-            if not evaluation:
-                results.append(
-                    {
-                        "job_key": jd_manager.compute_job_key(path),
-                        "source_file": path,
-                        "company_name": company_name or "unknown",
-                        "job_title": job_title or "unknown",
-                        "composite_score": None,
-                        "fit_score": None,
-                        "interview_odds_score": None,
-                        "practical_pursue_score": None,
-                        "recommendation": None,
-                        "why": "",
-                        "hard_blockers": [],
-                        "posting_legitimacy": "",
-                        "posting_age_days": None,
-                        "error": True,
-                    }
+            def label(name, index=i):
+                progress.update(
+                    task,
+                    description=f"[{index + 1}/{len(pending_paths)}] Weighing the fit for {name}...",
                 )
-                progress.advance(task)
-                continue
 
-            job_key = jd_manager.compute_job_key(path)
-            jd_manager.save_evaluation(path, evaluation)
-
-            # A JD Morgan's already said no to (Skip) shouldn't sit in the
-            # pending list forever -- archive it immediately rather than
-            # waiting for a manual pass. archive_jd() moves the file, so this
-            # has to happen after compute_job_key()/save_evaluation() above,
-            # both of which need it still at its original path.
-            if evaluation.get("recommendation") == "Skip":
-                path = jd_manager.archive_jd(path)
-
-            results.append(
-                {
-                    "job_key": job_key,
-                    "source_file": path,
-                    "company_name": company_name or "unknown",
-                    "job_title": job_title or "unknown",
-                    "composite_score": evaluation.get("composite_score"),
-                    "fit_score": evaluation.get("fit_score"),
-                    "interview_odds_score": evaluation.get("interview_odds_score"),
-                    "practical_pursue_score": evaluation.get("practical_pursue_score"),
-                    "recommendation": evaluation.get("recommendation"),
-                    "why": evaluation.get("why") or "",
-                    "hard_blockers": evaluation.get("hard_blockers") or [],
-                    "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
-                    "posting_age_days": evaluation.get("posting_age_days"),
-                    "error": False,
-                }
-            )
+            results.append(_evaluate_one(engine, identifier, on_label=label))
             progress.advance(task)
 
     results.sort(key=_sort_key)

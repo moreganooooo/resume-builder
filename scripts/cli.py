@@ -461,16 +461,20 @@ def build_cmd(ctx, **kwargs):
 def evaluate(jd_file, yes, refresh):
     """Score a JD's fit (go/no-go) without building a resume. Omit JD_FILE to evaluate every pending JD."""
     if jd_file is None:
+        # Files AND database-only rows. get_pending_jds() alone lists only
+        # files, which is the larger half of the backlog missing.
+        unevaluated_files, database_only = picker.unevaluated_roles()
         pending = jd_manager.get_pending_jds()
-        if not pending:
+        if not pending and not database_only:
             cli_art.console.print("Nothing to evaluate -- no pending JDs.")
             return
 
         if refresh:
-            to_evaluate = pending
+            to_evaluate = pending + database_only
             already_evaluated = []
         else:
-            already_evaluated, to_evaluate = batch_evaluate.split_evaluated(pending)
+            already_evaluated = [p for p in pending if p not in unevaluated_files]
+            to_evaluate = unevaluated_files + database_only
             if not to_evaluate:
                 cli_art.console.print(
                     f"Nothing new to evaluate -- all {len(pending)} pending JD(s) already have a "

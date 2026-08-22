@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test node --test board-scanners/providers/*.test.mjs"
+    "test": "NODE_ENV=test node --test board-scanners/providers/*.test.mjs scripts/*.test.mjs"
   },
   "repository": {
     "type": "git",
