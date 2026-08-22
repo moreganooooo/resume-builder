@@ -388,7 +388,6 @@ func (m appModel) View() tea.View {
 	return v
 }
 
-
 // generateJobsExport writes a JD evaluation export to a temp file by
 // invoking the same Python bridge scripts/dashboard.py uses, and returns
 // its path. Used only as the startup fallback when -jobs-path was not
@@ -423,13 +422,13 @@ func generateJobsExport(pythonPath, projectRoot string) (string, error) {
 	return path, nil
 }
 
-
 func main() {
 	pathFlag := flag.String("path", ".", "Path to career-ops directory")
 	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
 	pythonPathFlag := flag.String("python-path", "python3", "Path to the Python interpreter for dashboard actions (see scripts/dashboard.py)")
 	projectRootFlag := flag.String("project-root", ".", "Path to the resume-builder project root (for locating scripts/dashboard_actions.py)")
 	profileFlag := flag.String("profile", "morgan", "Active user profile name")
+	backlogFlag := flag.Int("backlog", 0, "Pending roles not yet evaluated (see picker.count_unevaluated_roles); 0 hides the readout")
 	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
 	flag.Parse()
 
@@ -444,7 +443,6 @@ func main() {
 			jobsPath = generated
 		}
 	}
-
 
 	var jobRows []model.JobRow
 	if jobsPath != "" {
@@ -495,7 +493,7 @@ func main() {
 	// the binary (`dashboard -profile morgan`) has no such flag, and used
 	// to render a permanently empty Jobs screen with no indication why.
 	// Generate our own export in that case rather than showing nothing.
-	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(jobsPath, *pythonPathFlag, *projectRootFlag)
+	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(jobsPath, *pythonPathFlag, *projectRootFlag).WithBacklog(*backlogFlag)
 
 	// Load Knowledge Base assets
 	kbDir := filepath.Join(*projectRootFlag, "profiles", *profileFlag, "knowledge_base")

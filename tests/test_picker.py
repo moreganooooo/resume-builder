@@ -330,6 +330,94 @@ class TestListAllEvaluatedJds(unittest.TestCase):
         self.assertEqual([r["path"] for r in rows], ["jds/high.json", "jds/low.json"])
 
 
+class TestCountUnevaluatedRoles(unittest.TestCase):
+    """The backlog counter. Same temp-profile redirection as
+    TestListAllEvaluatedJds: without it the real data.db's ~1,300 pending
+    rows land in every assertion."""
+
+    def setUp(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
+
+        for patcher in (
+            patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    @patch("picker.jd_manager.compute_job_key", side_effect=OSError)
+    @patch("picker.jd_manager.read_evaluation")
+    @patch(
+        "picker.jd_manager.get_pending_jds",
+        return_value=["jds/done.json", "jds/todo.json", "jds/todo2.json"],
+    )
+    def test_counts_only_pending_files_without_an_evaluation(
+        self, mock_pending, mock_read, mock_key
+    ):
+        mock_read.side_effect = lambda path: (
+            {"composite_score": 4.0} if path == "jds/done.json" else None
+        )
+
+        self.assertEqual(picker.count_unevaluated_roles(), 2)
+
+    @patch("picker.jd_manager.compute_job_key", side_effect=OSError)
+    @patch("picker.jd_manager.read_evaluation", return_value=None)
+    @patch("picker.jd_manager.get_pending_jds", return_value=[])
+    def test_counts_database_only_rows_and_skips_evaluated_ones(
+        self, mock_pending, mock_read, mock_key
+    ):
+        import db
+
+        conn = db.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO jobs (id, title, company, status, raw_text, metadata_json)"
+                " VALUES (?, ?, ?, 'pending', '', ?)",
+                ("hash-unevaluated", "Role", "Acme", "{}"),
+            )
+            conn.execute(
+                "INSERT INTO jobs (id, title, company, status, raw_text, metadata_json)"
+                " VALUES (?, ?, ?, 'pending', '', ?)",
+                (
+                    "hash-evaluated",
+                    "Role",
+                    "Acme",
+                    '{"_evaluation": {"composite_score": 4.0}}',
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        self.assertEqual(picker.count_unevaluated_roles(), 1)
+
+    @patch("picker.jd_manager.compute_job_key", return_value="hash-dupe")
+    @patch("picker.jd_manager.read_evaluation", return_value=None)
+    @patch("picker.jd_manager.get_pending_jds", return_value=["jds/dupe.json"])
+    def test_does_not_double_count_a_row_that_has_a_file(
+        self, mock_pending, mock_read, mock_key
+    ):
+        """A database row and its file-backed twin are one role. Counting
+        both is exactly the kind of inflated number this line exists to
+        stop producing."""
+        import db
+
+        conn = db.get_db()
+        try:
+            conn.execute(
+                "INSERT INTO jobs (id, title, company, status, raw_text, metadata_json)"
+                " VALUES (?, ?, ?, 'pending', '', ?)",
+                ("hash-dupe", "Role", "Acme", "{}"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        self.assertEqual(picker.count_unevaluated_roles(), 1)
+
+
 def _row(path, score, recommendation, status="Pending", title=None, company=None):
     return {
         "path": path,
