@@ -50,7 +50,12 @@ type JobsModel struct {
 	width, height int
 	theme         theme.Theme
 
-	jobsPath         string
+	jobsPath string
+	// Pending roles that have never been evaluated. They are NOT in
+	// jobRows -- the export carries evaluated jobs only -- so without
+	// this the header reports 399 and says nothing about the ~1,300
+	// waiting behind it, which is what made the count read as a bug.
+	backlog          int
 	pythonPath       string
 	projectRoot      string
 	actionInProgress string // "", "liveness", "tailor", "status"
@@ -174,6 +179,15 @@ func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsMod
 // (liveness/tailor/status via dashboard_actions.py). Separate from
 // NewJobsModel so existing callers/tests that don't exercise actions
 // don't need updating.
+// WithBacklog sets the count of pending-but-unevaluated roles, shown in
+// the header beside the evaluated count. Supplied by the Python launcher
+// (picker.count_unevaluated_roles) via the -backlog flag; zero when
+// unknown, in which case nothing is rendered.
+func (m JobsModel) WithBacklog(n int) JobsModel {
+	m.backlog = n
+	return m
+}
+
 func (m JobsModel) WithActionConfig(jobsPath, pythonPath, projectRoot string) JobsModel {
 	m.jobsPath = jobsPath
 	m.pythonPath = pythonPath
@@ -1216,6 +1230,9 @@ func (m JobsModel) renderHeader() string {
 	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	info := countStyle.Render(fmt.Sprintf("%d job(s) ", len(m.filtered))) +
 		filterStyle.Render("⏺ "+filterLabel)
+	if m.backlog > 0 {
+		info += countStyle.Render(fmt.Sprintf("  %d awaiting evaluation", m.backlog))
+	}
 
 	// Only shown once engaged. A permanent "Workplace: All / Sort: Score"
 	// readout would spend header width restating the defaults; these
