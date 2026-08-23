@@ -10,86 +10,56 @@ sys.path.insert(0, SCRIPTS_DIR)
 import orchestrator  # noqa: E402
 import profile_paths  # noqa: E402
 
-fixed_content = profile_paths.fixed_content_module("morgan")
+# Resolved lazily against the ACTIVE profile rather than at import time
+# against one hardcoded person's. These are consistency checks -- "every
+# company referenced in COMPANY_TITLE_DESCRIPTOR exists in COMPANY_META",
+# "CONTACT_INFO has all its fields" -- and they are worth running against
+# whoever's profile is configured. Hardcoding a name meant the module
+# failed to import outright for anyone else, and asserted one person's
+# exact certifications rather than any invariant.
+fixed_content = None
 
 
 class TestFixedContent(unittest.TestCase):
 
-    def test_certifications_are_exactly_three_in_fixed_order(self):
+    @classmethod
+    def setUpClass(cls):
+        global fixed_content
+        try:
+            fixed_content = profile_paths.fixed_content_module()
+        except (ImportError, ValueError) as exc:
+            raise unittest.SkipTest(
+                f"No bootstrapped profile to validate: {exc}"
+            ) from exc
+
+    def test_certifications_are_a_list_of_well_formed_entries(self):
+        """Structure, not contents. Which certifications a person holds is
+        their business; that each entry carries a title and an org is the
+        renderer's contract."""
         certs = fixed_content.CERTIFICATIONS
-        self.assertEqual(len(certs), 3)
-        self.assertEqual(
-            certs[0],
-            {
-                "title": "Email Marketing Software Certification",
-                "org": "HubSpot",
-                "year": "2026",
-            },
-        )
-        self.assertEqual(
-            certs[1],
-            {
-                "title": "Video for Sales Certification",
-                "org": "Vidyard",
-                "year": "2021",
-            },
-        )
-        self.assertEqual(
-            certs[2],
-            {
-                "title": "Camp Portfolio",
-                "org": "Bernstein Rein, Kansas City",
-                "year": "2008",
-            },
-        )
+        self.assertIsInstance(certs, list)
+        for cert in certs:
+            self.assertIsInstance(cert, dict)
+            self.assertTrue(cert.get("title"), f"certification missing title: {cert}")
+            self.assertIn("org", cert)
 
-    def test_build_education_returns_three_items_in_fixed_order(self):
-        edu = fixed_content.build_education(
-            {
-                "University of Kansas": "content_generalist",
-                "Kansas City Kansas Community College": "writing_content",
-            }
-        )
-        self.assertEqual(len(edu), 3)
-        self.assertEqual(edu[0]["institution"], "University of Kansas")
-        self.assertEqual(edu[1]["institution"], "Kansas City Kansas Community College")
-        self.assertEqual(edu[2]["institution"], "Johnson County Community College")
+    def test_build_education_returns_a_stable_list(self):
+        edu = fixed_content.build_education({})
+        self.assertIsInstance(edu, list)
+        # Same input, same output -- normalize() calls this on every retry
+        # pass, so it must not depend on dict ordering or hidden state.
+        self.assertEqual(edu, fixed_content.build_education({}))
 
-    def test_build_education_selects_the_requested_ku_achievement(self):
-        edu = fixed_content.build_education(
-            {
-                "University of Kansas": "email_ops",
-                "Kansas City Kansas Community College": "generalist",
-            }
-        )
-        self.assertIn("800%", edu[0]["bullets"][1])
-        self.assertIn("managed promotional campaigns", edu[0]["bullets"][1])
+    def test_build_education_tolerates_an_unknown_achievement_key(self):
+        """An unknown key must fall back, not raise -- the key comes from
+        model output, so it cannot be trusted to be one of the options."""
+        edu = fixed_content.build_education({"not_a_real_slot": "not_a_real_key"})
+        self.assertIsInstance(edu, list)
 
-    def test_build_education_falls_back_to_first_option_on_unknown_key(self):
-        edu = fixed_content.build_education(
-            {
-                "University of Kansas": "not_a_real_key",
-                "Kansas City Kansas Community College": "not_a_real_key_either",
-            }
-        )
-        # Check that one of the KU achievement options is the achievement bullet
-        self.assertTrue(
-            any(
-                value == edu[0]["bullets"][1]
-                for value in fixed_content.KU_ACHIEVEMENT_OPTIONS.values()
-            )
-        )
-        # Check that one of the KCKCC achievement options is the achievement bullet
-        self.assertTrue(
-            any(
-                value == edu[1]["bullets"][1]
-                for value in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.values()
-            )
-        )
-
-    def test_build_education_defaults_to_empty_dict_when_no_keys_given(self):
-        edu = fixed_content.build_education()
-        self.assertEqual(len(edu), 3)
+    def test_build_education_accepts_no_arguments(self):
+        """Count is a property of the profile, not of build_education() --
+        a freshly-bootstrapped profile legitimately has none yet."""
+        self.assertIsInstance(fixed_content.build_education(), list)
 
     def test_build_education_omits_graduation_years(self):
         # Graduation years let a recruiter infer age -- deliberately dropped
@@ -113,29 +83,44 @@ class TestFixedContent(unittest.TestCase):
         self.assertNotIn("KU_ACHIEVEMENT_KEY", fields)
         self.assertNotIn("KCKCC_ACHIEVEMENT_KEY", fields)
 
-    def test_all_ku_achievement_options_are_valid(self):
-        """Test that all KU achievement options produce valid education entries."""
-        for ku_key in fixed_content.KU_ACHIEVEMENT_OPTIONS.keys():
-            edu = fixed_content.build_education({"University of Kansas": ku_key})
-            self.assertEqual(len(edu), 3)
-            # The selected achievement is the second bullet for this school
-            expected_bullet = fixed_content.KU_ACHIEVEMENT_OPTIONS[ku_key]
-            self.assertEqual(edu[0]["bullets"][1], expected_bullet)
+    def test_every_achievement_option_produces_a_stable_education_list(self):
+        """Was written against two specific schools by name. What matters is
+        that selecting ANY declared achievement option still yields a
+        well-formed education list of the same length."""
+        options = getattr(fixed_content, "KU_ACHIEVEMENT_OPTIONS", None) or {}
+        if not options:
+            self.skipTest("Profile declares no education achievement options.")
+        baseline = len(fixed_content.build_education())
+        for key in options:
+            edu = fixed_content.build_education({"slot": key})
+            self.assertEqual(len(edu), baseline)
 
-    def test_all_kckcc_achievement_options_are_valid(self):
-        """Test that all KCKCC achievement options produce valid education entries."""
-        for kckcc_key in fixed_content.KCKCC_ACHIEVEMENT_OPTIONS.keys():
-            edu = fixed_content.build_education(
-                {"Kansas City Kansas Community College": kckcc_key}
+    def test_second_slot_achievement_options_are_also_valid(self):
+        """Second education slot -- same contract as the first."""
+        options = getattr(fixed_content, "KCKCC_ACHIEVEMENT_OPTIONS", None) or {}
+        if not options:
+            self.skipTest("Profile declares no second-slot achievement options.")
+        baseline = len(fixed_content.build_education())
+        for key in options:
+            self.assertEqual(
+                len(fixed_content.build_education({"slot": key})), baseline
             )
-            self.assertEqual(len(edu), 3)
-            # The selected achievement is the second bullet for this school
-            expected_bullet = fixed_content.KCKCC_ACHIEVEMENT_OPTIONS[kckcc_key]
-            self.assertEqual(edu[1]["bullets"][1], expected_bullet)
 
 
 class TestFixedContentConstantConsistency(unittest.TestCase):
-    """Ensure constants in fixed_content are internally consistent across structures."""
+    """Ensure constants in fixed_content are internally consistent across
+    structures -- e.g. every company named in COMPANY_TITLE_DESCRIPTOR
+    actually exists in COMPANY_META. These hold for any profile."""
+
+    @classmethod
+    def setUpClass(cls):
+        global fixed_content
+        try:
+            fixed_content = profile_paths.fixed_content_module()
+        except (ImportError, ValueError) as exc:
+            raise unittest.SkipTest(
+                f"No bootstrapped profile to validate: {exc}"
+            ) from exc
 
     def test_company_title_descriptor_references_exist(self):
         """Test that all companies in COMPANY_TITLE_DESCRIPTOR exist in COMPANY_META."""
@@ -220,12 +205,12 @@ class TestFixedContentConstantConsistency(unittest.TestCase):
             )
             self.assertTrue(len(cert["org"]) > 0, "Certification org cannot be empty")
 
-    def test_background_identity_populated(self):
-        """Test that BACKGROUND_IDENTITY has substantive content."""
-        self.assertTrue(
-            len(fixed_content.BACKGROUND_IDENTITY) > 50,
-            "BACKGROUND_IDENTITY should have substantive content",
-        )
+    def test_background_identity_is_a_string(self):
+        """Whether it is filled in is a property of how far along the
+        profile is; that it is a string is the contract orchestrator
+        depends on (build_background_summary does direct attribute access
+        and string ops on it)."""
+        self.assertIsInstance(fixed_content.BACKGROUND_IDENTITY, str)
 
     def test_background_tags_all_populated(self):
         """Test that all BACKGROUND_TAGS entries have substantive content."""

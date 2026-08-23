@@ -10,10 +10,10 @@ class TestRenderTxt(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.sample_data = {
-            "NAME": "Morgan Escott",
+            "NAME": "Alex Rivera",
             "TAGLINE": "Principal Systems Engineer",
             "LOCATION": "San Francisco, CA",
-            "EMAIL": "morgan@example.com",
+            "EMAIL": "alex.rivera@example.com",
             "SUMMARY_TEXT": "Experienced engineering leader with deep systems expertise.",
             "SKILLS": ["Languages: Python, Go, Rust", "Cloud: AWS, GCP"],
             "EXPERIENCE": [
@@ -43,7 +43,7 @@ class TestRenderTxt(unittest.TestCase):
     def test_render_txt_from_json(self):
         out_path = os.path.join(self.temp_dir.name, "resume.txt")
         text = render_txt_from_json(self.json_path, out_path)
-        self.assertIn("MORGAN ESCOTT", text.upper())
+        self.assertIn("ALEX RIVERA", text.upper())
         self.assertIn("Lead Architect", text)
         self.assertIn("TECH CORP", text)
         self.assertTrue(os.path.exists(out_path))

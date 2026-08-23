@@ -22,8 +22,8 @@ import scan_indeed  # noqa: E402
 
 SETTINGS = {
     "city": "Springfield",
-    "state": "NY",
-    "zip": "62704",
+    "state": "IL",
+    "zip": "62701",
     "radius_miles": 25,
     "workplace_mode": "any",
 }
@@ -51,11 +51,11 @@ ROW = {
 
 class TestOriginResolution(unittest.TestCase):
     def test_prefers_city_state(self):
-        self.assertEqual(scan_indeed._origin_from_settings(SETTINGS), "Springfield, NY")
+        self.assertEqual(scan_indeed._origin_from_settings(SETTINGS), "Springfield, IL")
 
     def test_falls_back_to_zip(self):
         # Unlike Jooble's API, Indeed resolves a bare postal code fine.
-        self.assertEqual(scan_indeed._origin_from_settings({"zip": "62704"}), "62704")
+        self.assertEqual(scan_indeed._origin_from_settings({"zip": "62701"}), "62701")
 
     def test_empty_settings(self):
         self.assertEqual(scan_indeed._origin_from_settings({}), "")
@@ -68,7 +68,7 @@ class TestFetchIndeedJobs(unittest.TestCase):
         with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
             scan_indeed.fetch_indeed_jobs()
         kwargs = fake.call_args.kwargs
-        self.assertEqual(kwargs["location"], "Springfield, NY")
+        self.assertEqual(kwargs["location"], "Springfield, IL")
         self.assertEqual(kwargs["distance"], 25)
         self.assertEqual(kwargs["site_name"], ["indeed"])
 

@@ -27,10 +27,10 @@ class TestPackageHUD(unittest.TestCase):
                 "weight_tier": "enterprise_high",
             },
             "output_paths": {
-                "resume_pdf": "output/morgan/pdf/MorganEscott_Spotify_Resume.pdf",
-                "resume_docx": "output/morgan/docx/MorganEscott_Spotify_Resume.docx",
-                "coverletter_pdf": "output/morgan/pdf/MorganEscott_Spotify_CoverLetter.pdf",
-                "coverletter_docx": "output/morgan/docx/MorganEscott_Spotify_CoverLetter.docx",
+                "resume_pdf": "output/testprofile/pdf/AlexRivera_Spotify_Resume.pdf",
+                "resume_docx": "output/testprofile/docx/AlexRivera_Spotify_Resume.docx",
+                "coverletter_pdf": "output/testprofile/pdf/AlexRivera_Spotify_CoverLetter.pdf",
+                "coverletter_docx": "output/testprofile/docx/AlexRivera_Spotify_CoverLetter.docx",
             },
         }
         with patch.object(cli_art.console, "print") as mock_print:

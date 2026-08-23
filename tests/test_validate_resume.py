@@ -213,7 +213,7 @@ class TestValidateResume(unittest.TestCase):
 
     def test_skills_widow_message_computes_targets_from_the_rules(self):
         # The two targets must be derived, not hardcoded, or they silently
-        # go stale the moment either rule is retuned.
+        # go stale the moment either rule is re-tuned.
         rules = {"skills_section": {"line_max_chars": 60, "widow_min_chars": 10}}
         resume = {"SKILLS": ["X" * 65]}
         message = validate_resume._check_skills_line_lengths(resume, rules)[0]
@@ -276,7 +276,7 @@ class TestValidateResume(unittest.TestCase):
         # "She specializes in..." is as much a violation as "I specialize in...".
         resume = _valid_resume()
         resume["SUMMARY_TEXT"] = (
-            "<strong>Morgan is a lifecycle marketer.</strong> She leads CRM strategy."
+            "<strong>Alex is a lifecycle marketer.</strong> She leads CRM strategy."
         )
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("pronoun" in v.lower() for v in violations))

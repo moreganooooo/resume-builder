@@ -51,7 +51,43 @@ def _get_api_key() -> str:
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
 
+# Tests that genuinely mean to hit the live API set RESUME_ALLOW_TEST_NETWORK=1.
+# Everything else fails closed. Same guard shape as websearch_ddg.py's
+# _TEST_NETWORK_ENV and liveness._gather_db_candidates -- see CLAUDE.md.
+_TEST_NETWORK_ENV = "RESUME_ALLOW_TEST_NETWORK"
+
+
+class TestNetworkBlockedError(RuntimeError):
+    """Raised when a test reaches the live Gemini API without opting in."""
+
+
+def _blocked_under_test() -> bool:
+    import sys
+
+    return "unittest" in sys.modules and not os.environ.get(_TEST_NETWORK_ENV)
+
+
 def _get_auth_headers() -> dict:
+    """Builds the per-call auth header -- and is the single chokepoint
+    where a test can be stopped from reaching the real API.
+
+    Every requests.post() in this module goes through here, which is why
+    the guard lives at this level rather than being repeated at each call
+    site. Without it the suite made 78 live calls to
+    generativelanguage.googleapis.com on every full run: real spend, real
+    429s, and a wall-clock that swung between 127s and 274s depending on
+    rate limiting.
+
+    Fails CLOSED (raises) rather than returning a canned response. A guard
+    that silently handed back an empty result would leave those tests
+    green while asserting nothing at all, which is worse than the
+    original bug -- the same reasoning behind db._is_unisolated_test_write
+    dropping the write instead of faking one."""
+    if _blocked_under_test():
+        raise TestNetworkBlockedError(
+            "A test tried to call the live Gemini API. Mock the client for this "
+            f"test, or set {_TEST_NETWORK_ENV}=1 if it genuinely needs the network."
+        )
     return {"x-goog-api-key": _get_api_key()}
 
 

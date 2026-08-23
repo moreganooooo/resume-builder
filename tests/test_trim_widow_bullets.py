@@ -113,7 +113,7 @@ class TestBulletRemovalTrimInstruction(unittest.TestCase):
     """
     Regression tests for the last-resort bullet-removal trim step, which
     used to hardcode "Inside Sales Team, then Treering Yearbooks" and a
-    specific protected-bullet phrase -- both Morgan-specific and a silent
+    specific protected-bullet phrase -- both Alex-specific and a silent
     no-op for any profile whose companies/protected content differ.
     """
 

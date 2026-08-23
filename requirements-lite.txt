@@ -1,0 +1,48 @@
+# Lite Mode dependencies -- Android/Termux, or a desktop that only needs
+# to tailor and sync rather than render PDFs locally.
+#
+# This file exists because install.sh used to carry the lite package list
+# inline as a hand-typed `pip install a b c ...` line. That list silently
+# omitted python-docx, which bootstrap_extractors.py imports to read a
+# .docx resume -- so Lite Mode installed cleanly and then could not
+# ingest the user's own resume, which is the first thing onboarding asks
+# for. A second hand-maintained list also drifts from requirements.txt
+# every time a dependency is added there.
+#
+# Rule of thumb for what belongs here: anything on the path from
+# "user drops a source document in" to "tailored resume JSON exists".
+# Rendering, scraping, and analysis extras stay in requirements.txt.
+
+# --- core runtime ---
+pyyaml
+pydantic
+requests
+python-dotenv
+click
+rich
+questionary
+beautifulsoup4
+
+# --- Gemini ---
+google-generativeai
+google-genai
+
+# --- document ingestion (bootstrap reads these; NOT optional) ---
+# bootstrap_extractors.py imports docx to parse a .docx resume, and the
+# PDF path needs a text extractor. Omitting either one breaks onboarding
+# at its very first step.
+python-docx
+pdfminer.six
+pypdf>=6.16.1
+
+# Deliberately NOT here, and why:
+#   pandas, numpy         -- only python-jobspy/Indeed scanning needs them
+#                            (jobspy hard-pins numpy==1.26.3; heavy to build
+#                            on Termux)
+#   selenium, browser_cookie3, linkedin-jobs-scraper
+#                         -- LinkedIn scraping; needs a real browser
+#   Pillow, python-pptx, odfpy, openpyxl
+#                         -- export formats beyond docx/pdf
+#   ddgs                  -- websearch sweeps
+#   playwright (npm)      -- local PDF rendering; the mobile story is to
+#                            sync JSON to a desktop and render there

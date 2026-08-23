@@ -12,7 +12,7 @@ from scripts.patch_engine import (
 class TestPatchEngine(unittest.TestCase):
     def setUp(self):
         self.doc = {
-            "name": "Morgan Escott",
+            "name": "Alex Rivera",
             "experience": [
                 {
                     "company": "Acme Corp",
@@ -55,11 +55,11 @@ class TestPatchEngine(unittest.TestCase):
 
     def test_test_operation(self):
         valid_patch = [
-            {"op": "test", "path": "/name", "value": "Morgan Escott"},
-            {"op": "replace", "path": "/name", "value": "M. Escott"},
+            {"op": "test", "path": "/name", "value": "Alex Rivera"},
+            {"op": "replace", "path": "/name", "value": "A. Rivera"},
         ]
         patched = apply_patch(self.doc, valid_patch)
-        self.assertEqual(patched["name"], "M. Escott")
+        self.assertEqual(patched["name"], "A. Rivera")
 
         invalid_patch = [
             {"op": "test", "path": "/name", "value": "Wrong Name"},

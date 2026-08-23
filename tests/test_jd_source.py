@@ -36,8 +36,17 @@ class JDSourceTestCase(unittest.TestCase):
         profiles_dir = os.path.join(self.tmp, "profiles")
         os.makedirs(os.path.join(profiles_dir, "testprofile"), exist_ok=True)
 
+        # JDS_ROOT/OUTPUT_ROOT/DATA_ROOT as well as PROFILES_DIR: patching
+        # jd_manager.JDS_DIR only redirects that one module-level constant,
+        # so anything calling profile_paths.jds_dir() fresh still resolved
+        # into the real checkout and created jds/testprofile there.
         for patcher in (
             patch.object(profile_paths, "PROFILES_DIR", profiles_dir),
+            patch.object(profile_paths, "JDS_ROOT", os.path.join(self.tmp, "jds")),
+            patch.object(
+                profile_paths, "OUTPUT_ROOT", os.path.join(self.tmp, "output")
+            ),
+            patch.object(profile_paths, "DATA_ROOT", os.path.join(self.tmp, "data")),
             patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
             patch.object(jd_manager, "JDS_DIR", os.path.join(self.tmp, "jds")),
         ):

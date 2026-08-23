@@ -6,6 +6,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from docx import Document  # noqa: E402
 from render_coverletter_docx import render_coverletter_docx  # noqa: E402
@@ -29,11 +30,18 @@ def _minimal_letter_data(**overrides):
 class TestRenderCoverletterDocx(unittest.TestCase):
 
     def setUp(self):
+        # See test_render_coverletter.py: sandboxed so these assert on the
+        # renderer, not on the operator's own contact details.
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
         self.out_path = os.path.join(
             os.path.dirname(__file__), "_tmp_coverletter_docx_test.docx"
         )
 
     def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
         if os.path.exists(self.out_path):
             os.remove(self.out_path)
 
@@ -48,8 +56,8 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         render_coverletter_docx(_minimal_letter_data(), self.out_path)
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
-        self.assertIn("Morgan Escott", texts)
-        contact_line = next(t for t in texts if "escott.morgan@gmail.com" in t)
+        self.assertIn("Alex Rivera", texts)
+        contact_line = next(t for t in texts if "alex.rivera@example.com" in t)
         self.assertIn("PRODUCT MANAGER | GROWTH", contact_line)
 
     def test_recipient_block_uses_hiring_team_when_no_contact_name(self):
@@ -90,7 +98,7 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
         self.assertIn("Sincerely,", texts)
-        self.assertIn("Morgan Escott", texts)
+        self.assertIn("Alex Rivera", texts)
         # Confirms the ATS-optimized "no signature image" design decision
         # (spec: docs/superpowers/specs/2026-08-17-docx-exporter-design.md) --
         # a real signature-image build would add an inline_shapes entry.
@@ -134,7 +142,7 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         render_coverletter_docx(data, self.out_path)
         doc = Document(self.out_path)
         texts = self._paragraph_texts(doc)
-        self.assertIn("Morgan Escott", texts)
+        self.assertIn("Alex Rivera", texts)
 
     def test_main_cli_execution(self):
         import json
