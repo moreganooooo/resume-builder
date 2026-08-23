@@ -7,6 +7,29 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# `patch("menu.os.listdir", return_value=[...])` patches the attribute on
+# the real os module, so it answers for EVERY caller -- including
+# profile_paths.available_profiles(). That made _default_profile() see zero
+# profiles, fall back to the legacy name, and report the profile as not set
+# up, so _handle_update_knowledge() returned at its first gate and none of
+# these tests exercised what they claim to. It only passed where a profile
+# with the legacy name happened to exist.
+#
+# Scope the stub to the source-documents directory and let every other
+# lookup through.
+_REAL_LISTDIR = os.listdir
+
+
+def _listdir_only_source_docs(names):
+    def _stub(path):
+        if "source_documents" in str(path):
+            return list(names)
+        return _REAL_LISTDIR(path)
+
+    return _stub
+
 
 import bullet_bank_menu  # noqa: E402
 import menu  # noqa: E402
@@ -40,9 +63,19 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
         self.assertIn("New User? Start Here!", printed)
 
     @patch("menu._print_source_docs_instructions")
-    @patch("menu.os.listdir", return_value=[])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs([]))
     @patch("menu.os.makedirs")
-    @patch("menu.os.path.exists", return_value=False)
+    # Selective rather than a blanket False: _profile_is_set_up() now also
+    # requires a real knowledge-base artifact (an empty scaffolded profile
+    # used to report "set up"), so a blanket exists=False would mean "this
+    # profile genuinely has no content" and lock the handler out for the
+    # right reason -- masking what this test is actually about. The
+    # checkpoint stays absent; a populated profile.yml stands in for the
+    # real content an established profile has.
+    @patch(
+        "menu.os.path.exists",
+        side_effect=lambda p: str(p).endswith("profile.yml"),
+    )
     @patch("menu.os.path.isdir", return_value=True)
     def test_configured_profile_without_a_bootstrap_checkpoint_is_not_locked_out(
         self,
@@ -53,7 +86,7 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
         mock_instructions,
     ):
         """B7: this gated on bootstrap/checkpoint.json -- evidence of *how* a
-        profile was created -- so Morgan's own 628-bullet, 1,144-JD profile was
+        profile was created -- so a large, long-established profile was
         told it hadn't been set up. os.path.exists is forced False here to stand
         in for the absent checkpoint; the handler must get past the gate anyway
         and reach the source-documents step."""
@@ -66,9 +99,24 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
 
 class TestProfileIsSetUp(unittest.TestCase):
 
+    def test_true_when_profile_has_real_knowledge_base_content(self):
+        """Directories existing is no longer enough -- create_new_profile()
+        makes knowledge_base/ immediately, so an empty scaffolded profile
+        used to report "set up" and unlock the whole menu. A real KB
+        artifact is now required."""
+        with (
+            patch("menu.os.path.isdir", return_value=True),
+            patch(
+                "menu.os.path.exists",
+                side_effect=lambda p: str(p).endswith("profile.yml"),
+            ),
+        ):
+            self.assertTrue(menu._profile_is_set_up("testprofile"))
+
+    @patch("menu.os.path.exists", return_value=False)
     @patch("menu.os.path.isdir", return_value=True)
-    def test_true_when_profile_dir_and_kb_both_exist(self, mock_isdir):
-        self.assertTrue(menu._profile_is_set_up("morgan"))
+    def test_false_when_directories_exist_but_are_empty(self, mock_isdir, mock_exists):
+        self.assertFalse(menu._profile_is_set_up("testprofile"))
 
     @patch("menu.os.path.isdir", return_value=False)
     def test_false_when_neither_exists(self, mock_isdir):
@@ -81,8 +129,17 @@ class TestProfileIsSetUp(unittest.TestCase):
 
 class TestHandleUpdateKnowledgeEmptyFolder(unittest.TestCase):
 
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
     @patch("menu._print_source_docs_instructions")
-    @patch("menu.os.listdir", return_value=[])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs([]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_returns_false_and_shows_instructions_when_no_new_files(
@@ -101,6 +158,15 @@ class TestHandleUpdateKnowledgeEmptyFolder(unittest.TestCase):
 
 class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
 
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
     def _patches(self, checked_values):
         mock_checkbox_q = MagicMock()
         mock_checkbox_q.ask.return_value = checked_values
@@ -113,7 +179,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
-    @patch("menu.os.listdir", return_value=["new_cert.pdf"])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs(["new_cert.pdf"]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_both_selected_runs_scope_both(
@@ -143,7 +209,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
-    @patch("menu.os.listdir", return_value=["new_cert.pdf"])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs(["new_cert.pdf"]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_only_bullets_selected_runs_scope_bullets(
@@ -171,7 +237,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
-    @patch("menu.os.listdir", return_value=["new_cert.pdf"])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs(["new_cert.pdf"]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_only_profile_selected_runs_scope_profile(
@@ -197,7 +263,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.subprocess.run")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
-    @patch("menu.os.listdir", return_value=["new_cert.pdf"])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs(["new_cert.pdf"]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_nothing_checked_returns_false_without_running(
@@ -218,7 +284,7 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
     @patch("menu.charm_prompt.confirm")
     @patch("menu.questionary.checkbox")
     @patch("menu.os.path.isfile", return_value=True)
-    @patch("menu.os.listdir", return_value=["new_cert.pdf"])
+    @patch("menu.os.listdir", side_effect=_listdir_only_source_docs(["new_cert.pdf"]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
     def test_declining_final_confirm_returns_false_without_running(

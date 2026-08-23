@@ -10,6 +10,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import jd_manager  # noqa: E402
 
@@ -1377,9 +1378,17 @@ class TestProfileScopedPaths(unittest.TestCase):
 
     def setUp(self):
         self._orig = os.environ.get("RESUME_PROFILE")
-        os.environ["RESUME_PROFILE"] = "morgan"
+        # The profile has to actually exist: active_profile() raises for an
+        # unknown RESUME_PROFILE, and these assertions are about path
+        # SHAPE, so a sandboxed profile serves as well as a real one --
+        # and does not depend on who is operating the checkout.
+        import persona
+
+        self._sandbox = persona.sandbox_profile("testprofile")
+        self._sandbox.__enter__()
 
     def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
         if self._orig is None:
             os.environ.pop("RESUME_PROFILE", None)
         else:
@@ -1389,7 +1398,7 @@ class TestProfileScopedPaths(unittest.TestCase):
         import importlib
 
         importlib.reload(jd_manager)
-        self.assertTrue(jd_manager.JDS_DIR.endswith(os.path.join("jds", "morgan")))
+        self.assertTrue(jd_manager.JDS_DIR.endswith(os.path.join("jds", "testprofile")))
 
     def test_applications_md_is_profile_scoped(self):
         import importlib
@@ -1397,7 +1406,7 @@ class TestProfileScopedPaths(unittest.TestCase):
         importlib.reload(jd_manager)
         self.assertTrue(
             jd_manager.APPLICATIONS_MD.endswith(
-                os.path.join("data", "morgan", "applications.md")
+                os.path.join("data", "testprofile", "applications.md")
             )
         )
 
@@ -1407,7 +1416,7 @@ class TestProfileScopedPaths(unittest.TestCase):
         importlib.reload(jd_manager)
         self.assertTrue(
             jd_manager.TRACKER_CSV.endswith(
-                os.path.join("jds", "morgan", "jd_tracker_log.csv")
+                os.path.join("jds", "testprofile", "jd_tracker_log.csv")
             )
         )
 

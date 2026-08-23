@@ -1,10 +1,22 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-import geo_distance
+# This module used to import geo_distance/location_* with no path setup of
+# its own, so it only worked when some OTHER test module happened to be
+# imported first and inserted scripts/. That made it unimportable in
+# isolation (`python -m unittest tests.test_location_enricher`).
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+    ),
+)
+
+import geo_distance  # noqa: E402
 import location_enricher
 import location_filter
 
@@ -16,45 +28,47 @@ class TestLocationEnricher(unittest.TestCase):
     # -------------------------------------------------------------------------
 
     def test_extract_valid_local_zip(self):
-        text = "Join our fast-growing engineering team in Amherst, NY 14228!"
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        text = "Join our fast-growing engineering team in Springfield, IL 62702!"
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNotNone(res)
-        self.assertEqual(res["zip"], "14228")
+        self.assertEqual(res["zip"], "62702")
         self.assertEqual(res["source"], "jd_text")
 
     def test_extract_street_address_block(self):
-        text = "The position is located at 500 Audubon Pkwy, Amherst, NY 14228 on-site."
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        text = (
+            "The position is located at 500 Monroe St, Springfield, IL 62702 on-site."
+        )
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNotNone(res)
-        self.assertEqual(res["zip"], "14228")
-        self.assertIn("500 Audubon Pkwy", res["address"])
+        self.assertEqual(res["zip"], "62702")
+        self.assertIn("500 Monroe St", res["address"])
 
     def test_rejects_salary_numbers(self):
         text = "Annual compensation: ,000 - ,000 per year plus equity and bonus."
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNone(res)
 
     def test_rejects_job_requisition_ids(self):
         text = (
-            "Job Requisition ID: 14202. Please reference this number during interview."
+            "Job Requisition ID: 62704. Please reference this number during interview."
         )
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNone(res)
 
     def test_rejects_dates_and_timestamps(self):
         text = "Posted on 2026-08-14 14:22:00 UTC by talent acquisition."
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNone(res)
 
     def test_rejects_statutory_and_eeo_codes(self):
-        text = "Compliant with Section 14221 of municipal labor regulations."
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        text = "Compliant with Section 62703 of municipal labor regulations."
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNone(res)
 
     def test_validates_zip_against_gazetteer(self):
         # 14099 is a fictional / non-existent postal code
-        text = "Located in Amherst, NY 14099."
-        res = location_enricher.extract_jd_address(text, state_code="NY")
+        text = "Located in Springfield, IL 99999."
+        res = location_enricher.extract_jd_address(text, state_code="IL")
         self.assertIsNone(res)
 
     # -------------------------------------------------------------------------
@@ -63,17 +77,17 @@ class TestLocationEnricher(unittest.TestCase):
 
     def test_corroborated_match(self):
         discovery = {
-            "address": "Williamsville, NY 14221",
-            "zip": "14221",
-            "lat": 42.96,
-            "lon": -78.74,
+            "address": "Springfield, IL 62702",
+            "zip": "62703",
+            "lat": 39.736,
+            "lon": -89.6363,
             "source": "osm_nominatim",
         }
         jd_text = {
-            "address": "Williamsville, NY 14221",
-            "zip": "14221",
-            "lat": 42.96,
-            "lon": -78.74,
+            "address": "Springfield, IL 62702",
+            "zip": "62703",
+            "lat": 39.736,
+            "lon": -89.6363,
             "source": "jd_text",
         }
         winning, status, corr = location_enricher.reconcile_address(discovery, jd_text)
@@ -83,63 +97,63 @@ class TestLocationEnricher(unittest.TestCase):
 
     def test_jd_overrides_conflict(self):
         discovery = {
-            "address": "250 Delaware Ave, Buffalo, NY 14202",
-            "zip": "14202",
-            "lat": 42.89,
-            "lon": -78.87,
+            "address": "250 Delaware Ave, Williamsville, IL 62704",
+            "zip": "62704",
+            "lat": 39.666,
+            "lon": -89.7663,
             "source": "osm_nominatim",
         }
         jd_text = {
-            "address": "500 Audubon Pkwy, Amherst, NY 14228",
-            "zip": "14228",
-            "lat": 42.99,
-            "lon": -78.78,
+            "address": "500 Monroe St, Springfield, IL 62702",
+            "zip": "62702",
+            "lat": 39.766,
+            "lon": -89.6763,
             "source": "jd_text",
         }
         winning, status, corr = location_enricher.reconcile_address(discovery, jd_text)
         self.assertEqual(status, "resolved")
         self.assertEqual(winning["source"], "jd_text_override")
-        self.assertEqual(winning["zip"], "14228")
+        self.assertEqual(winning["zip"], "62702")
         self.assertFalse(corr["match"])
 
     def test_discovery_only(self):
         discovery = {
-            "address": "Main St, Amherst, NY 14226",
-            "zip": "14226",
-            "lat": 42.96,
-            "lon": -78.80,
+            "address": "Main St, Springfield, IL 62704",
+            "zip": "62704",
+            "lat": 39.736,
+            "lon": -89.6963,
             "source": "osm_nominatim",
         }
         winning, status, corr = location_enricher.reconcile_address(discovery, None)
         self.assertEqual(status, "resolved")
         self.assertEqual(winning["source"], "osm_nominatim")
-        self.assertEqual(winning["zip"], "14226")
+        self.assertEqual(winning["zip"], "62704")
 
     def test_jd_only(self):
         jd_text = {
-            "address": "Williamsville, NY 14221",
-            "zip": "14221",
-            "lat": 42.96,
-            "lon": -78.74,
+            "address": "Springfield, IL 62702",
+            "zip": "62703",
+            "lat": 39.736,
+            "lon": -89.6363,
             "source": "jd_text",
         }
         winning, status, corr = location_enricher.reconcile_address(None, jd_text)
         self.assertEqual(status, "resolved")
         self.assertEqual(winning["source"], "jd_text")
-        self.assertEqual(winning["zip"], "14221")
+        self.assertEqual(winning["zip"], "62703")
 
     def test_gemini_ultra_backup(self):
         mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.text = '{"found": true, "address": "300 Tech Dr, Amherst, NY 14228", "zip": "14228"}'
+        mock_response.text = '{"found": true, "address": "300 Tech Dr, Springfield, IL 62702", "zip": "62702"}'
         mock_client.generate_content_with_search.return_value = mock_response
 
         with patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"}):
             res = location_enricher.lookup_gemini_search_backup(
-                "Acme Corp", "Amherst", "NY", client=mock_client
+                "Acme Corp", "Springfield", "IL", client=mock_client
             )
             self.assertIsNotNone(res)
-            self.assertEqual(res["zip"], "14228")
+            self.assertEqual(res["zip"], "62702")
             self.assertEqual(res["source"], "gemini_search")
 
     def test_unresolved_graceful_fallback(self):
@@ -157,14 +171,17 @@ class TestLocationEnricher(unittest.TestCase):
 
     def test_client_mention_skips_discovery(self):
         jd_text = (
-            "On behalf of our client in Williamsville, NY we are seeking an engineer."
+            "On behalf of our client in Williamsville, IL we are seeking an engineer."
         )
         self.assertTrue(
             location_enricher.is_staffing_agency("Unknown Staffing", jd_text=jd_text)
         )
 
     def test_unresolved_agency_kept(self):
-        discovery = {"address": "Downtown Agency HQ, Buffalo, NY 14202", "zip": "14202"}
+        discovery = {
+            "address": "Downtown Agency HQ, Williamsville, IL 62704",
+            "zip": "62704",
+        }
         winning, status, corr = location_enricher.reconcile_address(
             discovery, None, is_agency=True
         )
@@ -172,10 +189,12 @@ class TestLocationEnricher(unittest.TestCase):
         self.assertEqual(status, "unresolved_agency")
 
     def test_confidential_company_skips(self):
-        res = location_enricher.lookup_osm_nominatim("Confidential", "Buffalo", "NY")
+        res = location_enricher.lookup_osm_nominatim(
+            "Confidential", "Springfield", "IL"
+        )
         self.assertIsNone(res)
         res_stealth = location_enricher.lookup_osm_nominatim(
-            "Unknown Company", "Buffalo", "NY"
+            "Unknown Company", "Springfield", "IL"
         )
         self.assertIsNone(res_stealth)
 
@@ -184,30 +203,30 @@ class TestLocationEnricher(unittest.TestCase):
     # -------------------------------------------------------------------------
 
     def test_selects_closest_branch(self):
-        origin = "14068"  # Getzville, NY
+        origin = "62701"  # Springfield, IL
         branches = [
             {
-                "address": "Downtown Branch, Buffalo, NY 14202",
-                "zip": "14202",
-                "lat": 42.891,
-                "lon": -78.877,
+                "address": "Downtown Branch, Williamsville, IL 62704",
+                "zip": "62704",
+                "lat": 39.667,
+                "lon": -89.7733,
             },  # ~11.2 mi
             {
-                "address": "Cheektowaga Branch, NY 14225",
-                "zip": "14225",
-                "lat": 42.924,
-                "lon": -78.761,
+                "address": "Cheektowaga Branch, IL 62703",
+                "zip": "62703",
+                "lat": 39.7,
+                "lon": -89.6573,
             },  # ~7.5 mi
             {
-                "address": "Amherst Branch, NY 14228",
-                "zip": "14228",
-                "lat": 42.996,
-                "lon": -78.788,
+                "address": "Amherst Branch, IL 62702",
+                "zip": "62702",
+                "lat": 39.772,
+                "lon": -89.6843,
             },  # ~1.8 mi
         ]
         chosen = location_enricher.select_closest_branch(branches, origin)
         self.assertIsNotNone(chosen)
-        self.assertEqual(chosen["zip"], "14228")
+        self.assertEqual(chosen["zip"], "62702")
 
     # -------------------------------------------------------------------------
     # E. Caching & Dynamic Distance Math (3 Tests)
@@ -215,16 +234,21 @@ class TestLocationEnricher(unittest.TestCase):
 
     def test_cache_hit_prevents_network(self):
         cache = {
-            "acme corp::ny": {
-                "address": "Amherst, NY 14228",
-                "zip": "14228",
-                "lat": 42.99,
-                "lon": -78.78,
+            "acme corp::il": {
+                "address": "Springfield, IL 62702",
+                "zip": "62702",
+                "lat": 39.766,
+                "lon": -89.6763,
                 "source": "osm_nominatim",
             }
         }
-        job = {"company": "Acme Corp", "location": "Buffalo, NY", "raw_text": ""}
-        settings = {"city": "Buffalo", "state": "NY", "zip": "14068", "radius_miles": 5}
+        job = {"company": "Acme Corp", "location": "Williamsville, IL", "raw_text": ""}
+        settings = {
+            "city": "Springfield",
+            "state": "IL",
+            "zip": "62701",
+            "radius_miles": 5,
+        }
 
         with patch("location_enricher.lookup_osm_nominatim") as mock_osm:
             res = location_enricher.enrich_job_location(
@@ -232,45 +256,45 @@ class TestLocationEnricher(unittest.TestCase):
             )
             mock_osm.assert_not_called()
             self.assertEqual(res["status"], "resolved")
-            self.assertEqual(res["resolved_zip"], "14228")
+            self.assertEqual(res["resolved_zip"], "62702")
 
     def test_cache_stores_points_not_miles(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_file = os.path.join(tmpdir, "company_locations.json")
             cache = {
-                "test_co::ny": {
+                "test_co::il": {
                     "address": "123 Main",
-                    "zip": "14228",
-                    "lat": 42.99,
-                    "lon": -78.78,
+                    "zip": "62702",
+                    "lat": 39.766,
+                    "lon": -89.6763,
                 }
             }
             with open(cache_file, "w") as f:
                 json.dump(cache, f)
             with open(cache_file, "r") as f:
                 loaded = json.load(f)
-            entry = loaded["test_co::ny"]
+            entry = loaded["test_co::il"]
             self.assertIn("lat", entry)
             self.assertIn("lon", entry)
             self.assertNotIn("distance_miles", entry)
 
     def test_distance_recalculates_on_origin_change(self):
-        job = {"company": "Acme Corp", "location": "Buffalo, NY"}
+        job = {"company": "Acme Corp", "location": "Williamsville, IL"}
         cache = {
-            "acme corp::ny": {
-                "address": "Amherst, NY 14228",
-                "zip": "14228",
-                "lat": 42.996,
-                "lon": -78.788,
+            "acme corp::il": {
+                "address": "Springfield, IL 62702",
+                "zip": "62702",
+                "lat": 39.8317,
+                "lon": -89.6465,
                 "source": "osm_nominatim",
             }
         }
 
-        # Origin 1: 14068 (Getzville) -> ~1.8 miles
+        # Origin 1: 62701 (downtown Springfield) -> ~2.2 miles
         settings_1 = {
-            "city": "Getzville",
-            "state": "NY",
-            "zip": "14068",
+            "city": "Springfield",
+            "state": "IL",
+            "zip": "62701",
             "radius_miles": 5,
         }
         res_1 = location_enricher.enrich_job_location(
@@ -280,11 +304,13 @@ class TestLocationEnricher(unittest.TestCase):
         self.assertIsNotNone(dist_1)
         self.assertLess(dist_1, 3.0)
 
-        # Origin 2: 14202 (Downtown Buffalo) -> ~8.0 miles
+        # Origin 2: a nearby town, same cached job point -> ~8.3 miles.
+        # The point of the test is that the distance is recomputed from the
+        # CURRENT origin rather than cached alongside the address.
         settings_2 = {
-            "city": "Buffalo",
-            "state": "NY",
-            "zip": "14202",
+            "city": "Rochester",
+            "state": "IL",
+            "zip": "62563",
             "radius_miles": 15,
         }
         res_2 = location_enricher.enrich_job_location(
@@ -303,7 +329,9 @@ class TestLocationEnricher(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertTrue(location_enricher._blocked_under_tests())
             self.assertIsNone(
-                location_enricher.lookup_osm_nominatim("Real Company", "Buffalo", "NY")
+                location_enricher.lookup_osm_nominatim(
+                    "Real Company", "Springfield", "IL"
+                )
             )
             self.assertEqual(
                 location_enricher.scrape_company_locations("https://example.com", "NY"),
@@ -311,7 +339,7 @@ class TestLocationEnricher(unittest.TestCase):
             )
             self.assertIsNone(
                 location_enricher.lookup_gemini_search_backup(
-                    "Real Company", "Buffalo", "NY"
+                    "Real Company", "Springfield", "IL"
                 )
             )
 
@@ -321,7 +349,12 @@ class TestLocationEnricher(unittest.TestCase):
             "location": "Anywhere, US (Remote)",
             "is_remote": True,
         }
-        settings = {"city": "Buffalo", "state": "NY", "zip": "14068", "radius_miles": 5}
+        settings = {
+            "city": "Springfield",
+            "state": "IL",
+            "zip": "62701",
+            "radius_miles": 5,
+        }
         with patch("location_enricher.lookup_osm_nominatim") as mock_osm:
             res = location_enricher.enrich_job_location(job, settings=settings)
             mock_osm.assert_not_called()
@@ -333,7 +366,7 @@ class TestLocationEnricher(unittest.TestCase):
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = (
-            '{"found": true, "address": "Buffalo, NY 14202", "zip": "14202"}'
+            '{"found": true, "address": "Williamsville, IL 62704", "zip": "62704"}'
         )
         mock_client.generate_content_with_search.return_value = mock_response
 
@@ -351,7 +384,7 @@ class TestLocationEnricher(unittest.TestCase):
                         "id": f"job_{i}",
                         "title": "Eng",
                         "company": f"Co_{i}",
-                        "location": "Buffalo, NY",
+                        "location": "Williamsville, IL",
                         "raw_text": "",
                         "metadata_json": "{}",
                     }
@@ -369,8 +402,8 @@ class TestLocationEnricher(unittest.TestCase):
                         "location_settings.read_settings",
                         return_value={
                             "city": "Buffalo",
-                            "state": "NY",
-                            "zip": "14068",
+                            "state": "IL",
+                            "zip": "62701",
                             "radius_miles": 5,
                         },
                     ),
@@ -407,7 +440,7 @@ class TestLocationEnricher(unittest.TestCase):
                         "id": f"job_fail_{i}",
                         "title": "Eng",
                         "company": f"ObscureCo_{i}",
-                        "location": "Buffalo, NY",
+                        "location": "Williamsville, IL",
                         "raw_text": "",
                         "metadata_json": "{}",
                     }
@@ -425,8 +458,8 @@ class TestLocationEnricher(unittest.TestCase):
                         "location_settings.read_settings",
                         return_value={
                             "city": "Buffalo",
-                            "state": "NY",
-                            "zip": "14068",
+                            "state": "IL",
+                            "zip": "62701",
                             "radius_miles": 5,
                         },
                     ),
@@ -456,8 +489,8 @@ class TestLocationEnricher(unittest.TestCase):
         data = {
             "title": "Software Engineer",
             "company": "Local Innovators",
-            "location": "Buffalo, NY",
-            "raw_text": "Work at our headquarters at 175 Hampton Pkwy, Amherst, NY 14228.",
+            "location": "Williamsville, IL",
+            "raw_text": "Work at our headquarters at 175 Hampton Pkwy, Springfield, IL 62702.",
         }
         with open(jd_file, "w", encoding="utf-8") as f:
             json.dump(data, f)
@@ -476,8 +509,8 @@ class TestLocationEnricher(unittest.TestCase):
                     "location_settings.read_settings",
                     return_value={
                         "city": "Buffalo",
-                        "state": "NY",
-                        "zip": "14068",
+                        "state": "IL",
+                        "zip": "62701",
                         "radius_miles": 5,
                     },
                 ),
@@ -492,7 +525,7 @@ class TestLocationEnricher(unittest.TestCase):
                 persisted = jd_manager.read_location_enrichment(jd_file)
                 self.assertIsNotNone(persisted)
                 self.assertEqual(persisted["status"], "resolved")
-                self.assertEqual(persisted["resolved_zip"], "14228")
+                self.assertEqual(persisted["resolved_zip"], "62702")
                 self.assertEqual(persisted["source"], "jd_text")
 
 

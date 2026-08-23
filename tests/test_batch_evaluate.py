@@ -305,7 +305,13 @@ class TestEvaluateDatabaseOnlyJobs(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
         for patcher in (
+            # All four roots, not just PROFILES_DIR: create_new_profile()/
+            # write_sync_ignore_files() makedirs jds/, output/ and data/ too,
+            # which otherwise land in the real checkout.
             patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.object(profile_paths, "JDS_ROOT", os.path.join(tmp, "_jds")),
+            patch.object(profile_paths, "OUTPUT_ROOT", os.path.join(tmp, "_output")),
+            patch.object(profile_paths, "DATA_ROOT", os.path.join(tmp, "_data")),
             patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
         ):
             patcher.start()

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -22,13 +23,76 @@ class TestActiveProfile(unittest.TestCase):
         else:
             os.environ["RESUME_PROFILE"] = self._orig
 
-    def test_defaults_to_morgan_when_unset(self):
+    def test_defaults_to_the_only_profile_when_unset(self):
+        """With one profile on disk, that is unambiguously the answer --
+        whatever it is named. This used to assert a hardcoded "morgan",
+        which was only correct on one person's machine and silently handed
+        everyone else a path to a profile that does not exist."""
         os.environ.pop("RESUME_PROFILE", None)
-        self.assertEqual(profile_paths.active_profile(), "morgan")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "dominick"))
+            with patch.object(profile_paths, "PROFILES_DIR", tmp):
+                self.assertEqual(profile_paths.active_profile(), "dominick")
+
+    def test_defaults_to_legacy_name_when_no_profiles_exist(self):
+        os.environ.pop("RESUME_PROFILE", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(profile_paths, "PROFILES_DIR", tmp):
+                self.assertEqual(
+                    profile_paths.active_profile(),
+                    profile_paths._LEGACY_DEFAULT_PROFILE,
+                )
+
+    def test_several_profiles_resolve_deterministically(self):
+        os.environ.pop("RESUME_PROFILE", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            for n in ("zoe", "alice", "bob"):
+                os.makedirs(os.path.join(tmp, n))
+            with patch.object(profile_paths, "PROFILES_DIR", tmp):
+                # No legacy default present -> first alphabetically, so the
+                # answer never depends on directory iteration order.
+                self.assertEqual(profile_paths.active_profile(), "alice")
 
     def test_returns_explicit_profile_when_directory_exists(self):
-        os.environ["RESUME_PROFILE"] = "morgan"
-        self.assertEqual(profile_paths.active_profile(), "morgan")
+        # Isolated against a temp PROFILES_DIR rather than the checkout's
+        # own profiles/: active_profile() now returns the DIRECTORY's
+        # spelling, and the real directory's casing differs by machine
+        # (macOS resolves profiles/Morgan and profiles/morgan to the
+        # same file, git tracks one spelling, a Linux CI box gets the other).
+        # Asserting against the live checkout made this test's result
+        # depend on which machine ran it.
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "morgan"))
+            with patch.object(profile_paths, "PROFILES_DIR", tmp):
+                os.environ["RESUME_PROFILE"] = "morgan"
+                self.assertEqual(profile_paths.active_profile(), "morgan")
+
+    def test_falls_back_to_case_insensitive_match_when_name_does_not_resolve(self):
+        """A name that does not resolve as spelled is matched against the
+        real on-disk listing before failing. macOS resolves profiles/Morgan
+        and profiles/morgan to the same directory, so a profile created on
+        a Mac can carry a casing that fails outright on a Linux Syncthing
+        peer whose checkout has the other spelling.
+
+        os.path.isdir is forced False here because on a case-insensitive
+        filesystem the direct check would succeed and this fallback would
+        never be exercised -- the test would then silently pass on macOS
+        while testing nothing.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "morgan"))
+            # available_profiles() also calls isdir -- on PROFILES_DIR
+            # itself and on each entry -- so the stub must keep those
+            # truthful while making the mis-cased lookup miss.
+            with (
+                patch.object(profile_paths, "PROFILES_DIR", tmp),
+                patch(
+                    "os.path.isdir",
+                    side_effect=lambda p: p == tmp or p.endswith("morgan"),
+                ),
+            ):
+                os.environ["RESUME_PROFILE"] = "MORGAN"
+                self.assertEqual(profile_paths.active_profile(), "morgan")
 
     def test_raises_on_unknown_profile(self):
         os.environ["RESUME_PROFILE"] = "nonexistent_profile_xyz"
@@ -100,6 +164,14 @@ class TestPathHelpers(unittest.TestCase):
 class TestSyncRoots(unittest.TestCase):
 
     def setUp(self):
+        # write_sync_ignore_files() makedirs all four sync roots, so this
+        # class used to create profiles/, jds/, output/ and data/ entries
+        # in the real checkout and rely on tearDown to remove them -- which
+        # leaves them behind whenever a test errors before tearDown runs.
+        # isolate_for_tests() redirects all four at once instead.
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
         self.profile = "test_sync_roots_xyz"
         self.dirs = [
             profile_paths.profile_root(self.profile),
@@ -109,10 +181,8 @@ class TestSyncRoots(unittest.TestCase):
         ]
 
     def tearDown(self):
-        import shutil
-
-        for d in self.dirs:
-            shutil.rmtree(d, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
 
     def test_sync_roots_names_the_four_operational_directories(self):
         roots = dict(profile_paths.sync_roots(self.profile))
@@ -197,27 +267,43 @@ class TestSetActiveProfileReloadsStaleModules(unittest.TestCase):
 
     def setUp(self):
         self._orig = os.environ.get("RESUME_PROFILE")
+        # Sandboxed: this created profiles/test_reload_profile_xyz in the
+        # real checkout and removed it in tearDown, which leaves it behind
+        # on any error before that point.
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
         self.second_profile = "test_reload_profile_xyz"
-        os.makedirs(
-            os.path.join(profile_paths.PROFILES_DIR, self.second_profile), exist_ok=True
-        )
+        # Both profiles must exist inside the sandbox: this class switches
+        # AWAY from whatever profile is ambient, so that one has to resolve
+        # against the redirected PROFILES_DIR too.
+        self._ambient = self._orig or profile_paths._LEGACY_DEFAULT_PROFILE
+        for name in {self._ambient, self.second_profile}:
+            os.makedirs(os.path.join(profile_paths.PROFILES_DIR, name), exist_ok=True)
 
         import jd_manager
 
         self.jd_manager = jd_manager
 
     def tearDown(self):
-        import shutil
-
-        shutil.rmtree(
-            os.path.join(profile_paths.PROFILES_DIR, self.second_profile),
-            ignore_errors=True,
-        )
+        # Restore RESUME_PROFILE *before* leaving the sandbox. The tests in
+        # this class call set_active_profile(), so the variable is left
+        # pointing at a profile that only exists inside the temp dir --
+        # and once the sandbox is gone, every later test in the run
+        # resolves against a profile that no longer exists. Dropping this
+        # restore cost 129 cascading errors in a second user's run while
+        # passing on a machine where RESUME_PROFILE is always exported.
         if self._orig is None:
             os.environ.pop("RESUME_PROFILE", None)
         else:
             os.environ["RESUME_PROFILE"] = self._orig
-        profile_paths.set_active_profile(self._orig or "morgan")
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
+        import importlib
+        import sys
+
+        if "jd_manager" in sys.modules:
+            importlib.reload(sys.modules["jd_manager"])
 
     def test_jd_manager_jds_dir_updates_after_switch(self):
         profile_paths.set_active_profile(self.second_profile)

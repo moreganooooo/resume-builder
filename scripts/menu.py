@@ -20,6 +20,14 @@ import shutil
 import subprocess
 import sys
 
+# MUST run before the imports below: cli_art -> jd_manager resolves
+# JDS_DIR at module level, so an unresolvable RESUME_PROFILE aborts with a
+# raw traceback before the profile gate can offer any recovery.
+import profile_paths as _profile_paths_preflight  # noqa: E402
+
+if __name__ == "__main__" and not _profile_paths_preflight.preflight_profile():
+    sys.exit(2)
+
 import batch_evaluate
 import bootstrap_bullet_bank
 import bootstrap_menu
@@ -612,11 +620,82 @@ def _profile_is_set_up(profile: str = None) -> bool:
         name = profile or profile_paths.active_profile()
         p_dir = os.path.join(profile_paths.PROFILES_DIR, name)
         k_dir = profile_paths.kb_dir(name)
-        return (os.path.isdir(p_dir) or os.path.exists(p_dir)) and (
-            os.path.isdir(k_dir) or os.path.exists(k_dir)
+        if not (os.path.isdir(p_dir) and os.path.isdir(k_dir)):
+            return False
+        # The directories existing is not enough. create_new_profile()
+        # makes knowledge_base/ the moment a profile is named, so a
+        # brand-new, completely empty profile reported "set up" -- which
+        # lifted the guest-mode guard and offered the full menu (tailoring,
+        # scanning) against an empty bullet bank.
+        #
+        # Require at least one real knowledge-base artifact instead. Kept
+        # deliberately broad -- ANY of these means someone has content --
+        # because a profile that was hand-assembled, restored from a
+        # Syncthing peer, or migrated from another machine is just as set
+        # up as a bootstrapped one, and must not be told otherwise.
+        return any(
+            os.path.exists(os.path.join(k_dir, artifact))
+            for artifact in (
+                "profile.yml",
+                "cv.md",
+                "bullet-bank-clean.csv",
+                "bullet-bank-keepers.csv",
+            )
         )
     except ValueError:
         return False
+
+
+# The bootstrap wizard's Go module lives in dashboard/, not the project
+# root -- there is no root go.mod, so `go run ./dashboard/cmd/bootstrap`
+# from the root fails outright with "cannot find main module". That broke
+# "New User? Start Here!" on every machine that HAS Go installed, since
+# the questionary fallback below was gated on Go being absent.
+_BOOTSTRAP_GO_CANCELLED = 130
+
+
+def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
+    """Runs the Huh onboarding wizard and returns (ok, data).
+
+    ok=False means the caller should fall back to the questionary wizard;
+    (True, None) means the user deliberately cancelled and nothing should
+    run. cmd/bootstrap/main.go exits 130 on huh.ErrUserAborted precisely
+    so those two cases can be told apart -- treating a cancel as an error
+    is what made backing out of the wizard look like a crash."""
+    import shutil
+    import subprocess
+
+    dashboard_dir = os.path.join(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "dashboard"
+    )
+    if shutil.which("go") is None or not os.path.isdir(dashboard_dir):
+        return False, None
+
+    # Prefer a compiled binary over `go run`, which recompiles on every
+    # launch -- same pattern as dashboard.py/charm_prompt.py.
+    bin_path = os.path.join(dashboard_dir, "bin", "bootstrap")
+    if not os.path.exists(bin_path):
+        os.makedirs(os.path.dirname(bin_path), exist_ok=True)
+        build = subprocess.run(
+            ["go", "build", "-o", bin_path, "./cmd/bootstrap"],
+            cwd=dashboard_dir,
+            capture_output=True,
+            text=True,
+        )
+        if build.returncode != 0:
+            return False, None
+
+    result = subprocess.run(
+        [bin_path], cwd=dashboard_dir, capture_output=True, text=True
+    )
+    if result.returncode == _BOOTSTRAP_GO_CANCELLED:
+        return True, None
+    if result.returncode != 0:
+        return False, None
+    try:
+        return True, json.loads(result.stdout.strip())
+    except json.JSONDecodeError:
+        return False, None
 
 
 def _handle_bootstrap() -> bool:
@@ -627,12 +706,18 @@ def _handle_bootstrap() -> bool:
     is_existing = _profile_is_set_up()
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
-        # Run the Go wizard binary that presents the new-user onboarding
-        # UI if Go is installed. Otherwise, fall back to Python-native questionary.
-        if shutil.which("go") is None:
+        # Try the Go wizard first; fall back to the Python-native
+        # questionary flow on ANY failure (Go missing, build broken,
+        # unparseable output) rather than only when Go is absent.
+        go_ok, go_data = _run_go_bootstrap_wizard()
+        if go_ok and go_data is None:
+            return False  # user cancelled the wizard
+        if go_ok:
+            data = go_data
+        else:
             cli_art.console.print()
             cli_art.console.print(
-                f"[{theme.BRAND}]✦ Go not found -- Falling back to terminal wizard ✦[/{theme.BRAND}]"
+                f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
             )
 
             profile_name = questionary.text(
@@ -684,27 +769,6 @@ def _handle_bootstrap() -> bool:
                 "ingest_path": ingest_path,
                 "create_bullet": bool(create_bullet),
             }
-        else:
-            result = subprocess.run(
-                ["go", "run", "./dashboard/cmd/bootstrap"],
-                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                cli_art.friendly_subprocess_error(
-                    result.stderr, "starting the setup wizard"
-                )
-                return False
-            try:
-                data = json.loads(result.stdout.strip())
-            except json.JSONDecodeError as exc:
-                cli_art.friendly_error(
-                    exc,
-                    "reading the setup wizard's answers",
-                    fix="Run `resume doctor`, then try New User Setup again.",
-                )
-                return False
 
         name = data.get("profile_name")
         if name:
@@ -715,6 +779,20 @@ def _handle_bootstrap() -> bool:
                     exc,
                     "creating the new profile",
                     fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
+                )
+                return False
+            except FileExistsError as exc:
+                # create_new_profile() refuses to overwrite an existing
+                # profile. Only ValueError was caught here, so retyping a
+                # name that already exists crashed the whole menu.
+                cli_art.friendly_error(
+                    exc,
+                    "creating the new profile",
+                    fix=(
+                        "That profile already exists. Pick a different name, or "
+                        "restart and choose it from the profile picker instead of "
+                        "creating it again."
+                    ),
                 )
                 return False
             profile_paths.set_active_profile(name)
@@ -2056,18 +2134,43 @@ def _handle_manage_profiles():
 
         elif choice == "rename":
             new_name = questionary.text(f"New name for '{target}':").ask()
-            if not new_name or new_name in names:
-                cli_art.display_error("Invalid or duplicate name.")
+            if not new_name:
+                continue
+            new_name = new_name.strip()
+
+            # Resolved BEFORE the rename. This used to be checked after the
+            # directories had already moved, at which point
+            # active_profile() can no longer find profiles/<target>/ and
+            # raises ValueError -- uncaught, straight out of the menu.
+            try:
+                was_active = target == profile_paths.active_profile()
+            except ValueError:
+                was_active = False
+
+            cli_art.console.print()
+            for topic, text in profile_paths.rename_side_effects(target, new_name):
+                cli_art.console.print(
+                    f"[{theme.WARNING}]{topic}:[/{theme.WARNING}] {text}",
+                    soft_wrap=True,
+                )
+                cli_art.console.print()
+            if not cli_art.confirm(
+                f"Rename '{target}' to '{new_name}' anyway?", default=False
+            ):
+                cli_art.cli_info("Left it alone.")
                 continue
 
-            for _label, path in profile_paths.sync_roots(target):
-                if os.path.exists(path):
-                    parent = os.path.dirname(path)
-                    new_path = os.path.join(parent, new_name)
-                    os.rename(path, new_path)
+            try:
+                moved = profile_paths.rename_profile(target, new_name)
+            except (ValueError, FileExistsError) as exc:
+                cli_art.display_error(str(exc))
+                continue
 
-            cli_art.display_success(f"Profile '{target}' renamed to '{new_name}'.")
-            if target == profile_paths.active_profile():
+            cli_art.display_success(
+                f"Profile '{target}' renamed to '{new_name}' "
+                f"({len(moved)} director{'y' if len(moved) == 1 else 'ies'} moved)."
+            )
+            if was_active:
                 profile_paths.set_active_profile(new_name)
 
 

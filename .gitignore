@@ -65,9 +65,21 @@ MorganEscott_*.pdf
 # profile's knowledge base and data/ is personal by default; the board_scanner
 # YAML below is the one deliberately-tracked exception (committed scaffold,
 # no PII), so it needs both the directory re-included and the file re-included.
-profiles/*/
+# profiles/*/* (contents), NOT profiles/*/ (the directory). Git cannot
+# re-include a file whose PARENT DIRECTORY is excluded, so with the
+# directory-form pattern both negations below were dead: a new or renamed
+# profile's board_scanner YAML was silently ignored and could never be
+# committed. morgan/'s three files only survived because they were already
+# tracked, and gitignore does not apply to tracked files -- which is why
+# this went unnoticed. Verified with `git check-ignore -v --no-index`.
+profiles/*/*
 !profiles/*/board_scanner/
 !profiles/*/board_scanner/*.yml
+# Timestamped backups the ledger/company-discovery scripts write next to
+# the file they are editing (tracked_companies.yml.bak-20260821-131134).
+# Only visible once the pattern above started working; they are local
+# safety copies, never something to commit.
+profiles/*/board_scanner/*.bak-*
 data/*/
 
 

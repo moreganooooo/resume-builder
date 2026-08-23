@@ -9,6 +9,8 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+# tests/ itself, so `import persona` works when run standalone.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import orchestrator  # noqa: E402
 import polish  # noqa: E402
@@ -35,17 +37,17 @@ class TestStemFromJsonPath(unittest.TestCase):
 
     def test_resume_stem(self):
         stem = polish.stem_from_json_path(
-            "output/json/MorganEscott_Title_Company_Resume.json",
+            "output/json/AlexRivera_Title_Company_Resume.json",
             "resume",
         )
-        self.assertEqual(stem, "MorganEscott_Title_Company")
+        self.assertEqual(stem, "AlexRivera_Title_Company")
 
     def test_coverletter_stem(self):
         stem = polish.stem_from_json_path(
-            "output/json/MorganEscott_Title_Company_CoverLetter.json",
+            "output/json/AlexRivera_Title_Company_CoverLetter.json",
             "coverletter",
         )
-        self.assertEqual(stem, "MorganEscott_Title_Company")
+        self.assertEqual(stem, "AlexRivera_Title_Company")
 
 
 class TestDiffDocuments(unittest.TestCase):
@@ -76,7 +78,7 @@ class TestDiffDocuments(unittest.TestCase):
         self.assertNotIn("TAGLINE", block)
 
     def test_field_outside_keys_is_never_reported(self):
-        old = {"TAGLINE": "OLD", "NAME": "Morgan Escott"}
+        old = {"TAGLINE": "OLD", "NAME": "Alex Rivera"}
         new = {"TAGLINE": "OLD", "NAME": "Someone Else"}
         lines = polish.diff_documents(old, new, ["TAGLINE"])
         self.assertEqual(lines, [])
@@ -128,6 +130,14 @@ class TestDiffDocuments(unittest.TestCase):
 class TestGenerateCandidate(unittest.TestCase):
 
     def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.engine = orchestrator.ResumeEngine()
 
     @patch("polish.GeminiClient.generate")
@@ -166,12 +176,18 @@ class TestGenerateCandidate(unittest.TestCase):
             "TAGLINE": "OLD TAGLINE",
             "_recommendation_actions": {"applied": ["x"], "skipped": []},
         }
-        candidate = polish.generate_candidate(
-            original_doc,
-            "punch up the tagline",
-            "resume",
-            self.engine,
-        )
+        # Sandboxed: normalize() injects the ACTIVE profile's CONTACT_INFO,
+        # so without this the assertion below was about whoever happened to
+        # be operating the checkout.
+        import persona
+
+        with persona.sandbox_profile():
+            candidate = polish.generate_candidate(
+                original_doc,
+                "punch up the tagline",
+                "resume",
+                self.engine,
+            )
 
         self.assertIsNotNone(candidate)
         # normalize_resume.normalize() upper-cases TAGLINE
@@ -181,7 +197,7 @@ class TestGenerateCandidate(unittest.TestCase):
             candidate["_recommendation_actions"], {"applied": ["x"], "skipped": []}
         )
         # normalize() injects fixed_content.CONTACT_INFO
-        self.assertEqual(candidate["NAME"], "Morgan Escott")
+        self.assertEqual(candidate["NAME"], persona.FULL_NAME)
 
     @patch("polish.GeminiClient.generate")
     def test_resume_path_with_no_recommendation_actions_does_not_add_one(
@@ -241,10 +257,10 @@ class TestSaveAndRender(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_save")
         os.makedirs(self.tmp_dir, exist_ok=True)
         self.resume_json_path = os.path.join(
-            self.tmp_dir, "MorganEscott_Title_Company_Resume.json"
+            self.tmp_dir, "AlexRivera_Title_Company_Resume.json"
         )
         self.coverletter_json_path = os.path.join(
-            self.tmp_dir, "MorganEscott_Title_Company_CoverLetter.json"
+            self.tmp_dir, "AlexRivera_Title_Company_CoverLetter.json"
         )
 
         self._real_html_dir = polish.OUTPUT_HTML_DIR
@@ -273,10 +289,10 @@ class TestSaveAndRender(unittest.TestCase):
 
         self.assertTrue(os.path.exists(self.resume_json_path))
         expected_html = os.path.join(
-            polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_Resume.html"
+            polish.OUTPUT_HTML_DIR, "AlexRivera_Title_Company_Resume.html"
         )
         expected_pdf = os.path.join(
-            polish.OUTPUT_PDF_DIR, "MorganEscott_Title_Company_Resume.pdf"
+            polish.OUTPUT_PDF_DIR, "AlexRivera_Title_Company_Resume.pdf"
         )
         self.assertEqual(
             result,
@@ -371,7 +387,7 @@ class TestSaveAndRender(unittest.TestCase):
         )
 
         expected_html = os.path.join(
-            polish.OUTPUT_HTML_DIR, "MorganEscott_Title_Company_CoverLetter.html"
+            polish.OUTPUT_HTML_DIR, "AlexRivera_Title_Company_CoverLetter.html"
         )
         mock_render.assert_called_once_with({"greeting": "Hi,"}, expected_html)
         self.assertEqual(result["html"], expected_html)
@@ -454,7 +470,7 @@ class TestRunPolishSession(unittest.TestCase):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_session")
         os.makedirs(self.tmp_dir, exist_ok=True)
         self.json_path = os.path.join(
-            self.tmp_dir, "MorganEscott_Title_Company_Resume.json"
+            self.tmp_dir, "AlexRivera_Title_Company_Resume.json"
         )
         with open(self.json_path, "w") as f:
             json.dump({"TAGLINE": "OLD"}, f)

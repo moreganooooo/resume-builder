@@ -71,7 +71,7 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
 
     def test_contact_row_has_no_portfolio_and_linkedin_is_not_a_hyperlink(self):
         data = _minimal_resume_data(
-            LINKEDIN_DISPLAY="linkedin.com/in/morganescott",
+            LINKEDIN_DISPLAY="linkedin.com/in/alexrivera",
             PORTFOLIO_URL="https://example.com/portfolio",
             PORTFOLIO_DISPLAY="example.com/portfolio",
         )
@@ -79,7 +79,7 @@ class TestContactRowAndEducationFormatting(unittest.TestCase):
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
         self.assertNotIn("example.com/portfolio", html)
-        self.assertIn("linkedin.com/in/morganescott", html)
+        self.assertIn("linkedin.com/in/alexrivera", html)
         self.assertNotIn('<a href="https://linkedin.com', html)
 
     def test_tagline_pipe_is_wrapped_in_its_own_gray_separator_span(self):

@@ -10,12 +10,12 @@ class TestRenderTypst(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.sample_data = {
-            "NAME": "Morgan Escott",
+            "NAME": "Alex Rivera",
             "TAGLINE": "Principal Systems Engineer",
             "PHONE": "555-0199",
-            "EMAIL": "morgan@example.com",
+            "EMAIL": "alex.rivera@example.com",
             "LOCATION": "San Francisco, CA",
-            "LINKEDIN": "linkedin.com/in/morganescott",
+            "LINKEDIN": "linkedin.com/in/alexrivera",
             "SUMMARY_TEXT": "Experienced engineering leader.",
             "SKILLS": ["Python", "Go", "Distributed Systems"],
             "EXPERIENCE": [
@@ -44,7 +44,7 @@ class TestRenderTypst(unittest.TestCase):
 
     def test_generate_typst_markup_standard(self):
         markup = generate_typst_markup(self.sample_data, template="standard")
-        self.assertIn("Morgan Escott", markup)
+        self.assertIn("Alex Rivera", markup)
         self.assertIn("Principal Systems Engineer", markup)
         self.assertIn("Acme Corp", markup)
         self.assertIn("Stanford University", markup)

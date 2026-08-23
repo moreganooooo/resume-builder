@@ -49,9 +49,9 @@ class TestReadWrite(_TempFilters):
 
     def test_write_then_read_roundtrip(self):
         settings = {
-            "city": "Getzville",
-            "state": "NY",
-            "zip": "14068",
+            "city": "Springfield",
+            "state": "IL",
+            "zip": "62701",
             "radius_miles": 15,
             "workplace_mode": "any",
         }
@@ -61,20 +61,20 @@ class TestReadWrite(_TempFilters):
     def test_comments_are_preserved(self):
         # The whole reason this module edits text instead of round-tripping
         # yaml: safe_dump() would drop every comment in the file.
-        ls.write_settings({"zip": "14068", "radius_miles": 25}, self.path)
+        ls.write_settings({"zip": "62701", "radius_miles": 25}, self.path)
         body = self.read()
         self.assertIn("Vendored from career-ops", body)
         self.assertIn("load-bearing", body)
 
     def test_other_blocks_are_untouched(self):
-        ls.write_settings({"zip": "14068", "radius_miles": 25}, self.path)
+        ls.write_settings({"zip": "62701", "radius_miles": 25}, self.path)
         data = yaml.safe_load(self.read())
         self.assertEqual(data["title_filter"]["positive"], ["Marketing"])
         self.assertEqual(data["location_filter"]["block"], ["Onsite"])
 
     def test_rewrite_replaces_rather_than_appends(self):
-        ls.write_settings({"zip": "14068", "radius_miles": 25}, self.path)
-        ls.write_settings({"zip": "14068", "radius_miles": 5}, self.path)
+        ls.write_settings({"zip": "62701", "radius_miles": 25}, self.path)
+        ls.write_settings({"zip": "62701", "radius_miles": 5}, self.path)
         self.assertEqual(self.read().count("location:\n"), 1)
         self.assertEqual(ls.read_settings(self.path)["radius_miles"], 5)
 
@@ -84,7 +84,7 @@ class TestReadWrite(_TempFilters):
         self.assertEqual(ls.read_settings(self.path)["zip"], "01002")
 
     def test_clear_removes_block_and_keeps_the_rest(self):
-        ls.write_settings({"zip": "14068", "radius_miles": 25}, self.path)
+        ls.write_settings({"zip": "62701", "radius_miles": 25}, self.path)
         ls.clear_settings(self.path)
         self.assertEqual(ls.read_settings(self.path), {})
         self.assertIn("Vendored from career-ops", self.read())
@@ -94,17 +94,17 @@ class TestReadWrite(_TempFilters):
         path = os.path.join(self.dir.name, "bare.yml")
         with open(path, "w", encoding="utf-8") as handle:
             handle.write('title_filter:\n  positive:\n      - "Marketing"\n')
-        ls.write_settings({"zip": "14068", "radius_miles": 10}, path)
+        ls.write_settings({"zip": "62701", "radius_miles": 10}, path)
         with open(path, "r", encoding="utf-8") as handle:
             self.assertEqual(yaml.safe_load(handle)["location"]["radius_miles"], 10)
 
 
 class TestValidateOrigin(unittest.TestCase):
     def test_valid_zip(self):
-        self.assertTrue(ls.validate_origin("", "", "14068")[0])
+        self.assertTrue(ls.validate_origin("", "", "62701")[0])
 
     def test_valid_city_state(self):
-        self.assertTrue(ls.validate_origin("Getzville", "NY", "")[0])
+        self.assertTrue(ls.validate_origin("Springfield", "IL", "")[0])
 
     def test_unknown_zip_rejected(self):
         ok, message = ls.validate_origin("", "", "00000")
@@ -128,14 +128,14 @@ class TestDescribe(unittest.TestCase):
 
     def test_radius_summary(self):
         text = ls.describe(
-            {"zip": "14068", "radius_miles": 15, "workplace_mode": "any"}
+            {"zip": "62701", "radius_miles": 15, "workplace_mode": "any"}
         )
-        self.assertIn("14068", text)
+        self.assertIn("62701", text)
         self.assertIn("15 mi", text)
 
     def test_remote_only_omits_radius(self):
         text = ls.describe(
-            {"zip": "14068", "radius_miles": 15, "workplace_mode": "remote"}
+            {"zip": "62701", "radius_miles": 15, "workplace_mode": "remote"}
         )
         self.assertIn("remote only", text)
         self.assertNotIn("15 mi", text)
@@ -156,7 +156,7 @@ class TestMultiSelectRendering(_TempFilters):
     def test_list_renders_and_reads_back(self):
         ls.write_settings(
             {
-                "zip": "14068",
+                "zip": "62701",
                 "radius_miles": 25,
                 "workplace_mode": ["remote", "onsite"],
             },
@@ -168,20 +168,20 @@ class TestMultiSelectRendering(_TempFilters):
 
     def test_single_item_list_renders_as_a_plain_string(self):
         ls.write_settings(
-            {"zip": "14068", "radius_miles": 25, "workplace_mode": ["remote"]},
+            {"zip": "62701", "radius_miles": 25, "workplace_mode": ["remote"]},
             self.path,
         )
         self.assertEqual(ls.read_settings(self.path)["workplace_mode"], "remote")
 
     def test_empty_list_falls_back_to_any(self):
         ls.write_settings(
-            {"zip": "14068", "radius_miles": 25, "workplace_mode": []}, self.path
+            {"zip": "62701", "radius_miles": 25, "workplace_mode": []}, self.path
         )
         self.assertEqual(ls.read_settings(self.path)["workplace_mode"], "any")
 
     def test_describe_joins_a_combination(self):
         text = ls.describe(
-            {"zip": "14068", "radius_miles": 25, "workplace_mode": ["remote", "onsite"]}
+            {"zip": "62701", "radius_miles": 25, "workplace_mode": ["remote", "onsite"]}
         )
         self.assertIn("onsite+remote", text)
 

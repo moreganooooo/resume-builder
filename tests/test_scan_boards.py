@@ -8,6 +8,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import scan_boards  # noqa: E402
 
@@ -32,6 +33,29 @@ class TestChildEnv(unittest.TestCase):
 
 
 class TestTitleFilter(unittest.TestCase):
+    """Reads the ACTIVE profile's board_scanner/scan_filters.yml. A fresh
+    profile scaffolds that EMPTY, and empty is permissive by design -- so
+    without a populated fixture these assert nothing on any machine but
+    the original author's."""
+
+    def setUp(self):
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        import importlib
+
+        import scan_boards as sb
+
+        importlib.reload(sb)
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
+        import importlib
+
+        import scan_boards as sb
+
+        importlib.reload(sb)
 
     def test_positive_keyword_passes(self):
         self.assertTrue(scan_boards._passes_title_filter("Lifecycle Marketing Manager"))
@@ -57,6 +81,15 @@ class TestLocationFilter(unittest.TestCase):
     """
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         patcher = patch.object(
             scan_boards,
             "_load_filters",
@@ -87,6 +120,15 @@ class TestLocationFilter(unittest.TestCase):
 
 
 class TestFetchBoardJobs(unittest.TestCase):
+
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
 
     # Pinned to an explicit keyword config rather than reading the real
     # profile's scan_filters.yml: with a `location:` block configured,
@@ -417,9 +459,9 @@ class TestProviderOriginEntry(unittest.TestCase):
     def test_origin_passed_as_city_state(self, mock_filters, mock_run, _):
         mock_filters.return_value = {
             "location": {
-                "city": "Getzville",
-                "state": "NY",
-                "zip": "14068",
+                "city": "Springfield",
+                "state": "IL",
+                "zip": "62701",
                 "radius_miles": 25,
             }
         }
@@ -427,7 +469,7 @@ class TestProviderOriginEntry(unittest.TestCase):
         entry = mock_run.call_args[0][1]
         # City/state, NOT the ZIP: Jooble's API answers 200 with zero
         # results for a bare ZIP.
-        self.assertEqual(entry["location"], "Getzville, NY")
+        self.assertEqual(entry["location"], "Springfield, IL")
         self.assertEqual(entry["radius_miles"], 25)
 
     @patch("scan_boards._fetch_posting_text", return_value="")
@@ -447,6 +489,6 @@ class TestProviderOriginEntry(unittest.TestCase):
         # Without a city the label would be meaningless to Jooble, so it
         # is omitted and the provider fails loudly rather than silently
         # returning nothing.
-        mock_filters.return_value = {"location": {"zip": "14068", "radius_miles": 25}}
+        mock_filters.return_value = {"location": {"zip": "62701", "radius_miles": 25}}
         scan_boards.fetch_board_jobs(sources=["jooble"])
         self.assertNotIn("location", mock_run.call_args[0][1])

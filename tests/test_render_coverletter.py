@@ -7,6 +7,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import render_coverletter as render_coverletter_module  # noqa: E402
 from render_coverletter import render_coverletter  # noqa: E402
@@ -29,9 +30,17 @@ def _minimal_letter_data(**overrides):
 class TestRenderCoverLetter(unittest.TestCase):
 
     def setUp(self):
+        # Rendered against whoever's profile happened to be active, so the
+        # assertions below were about one real person's contact details.
+        # A throwaway persona profile makes them about the RENDERER.
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
         self.out_path = os.path.join(os.path.dirname(__file__), "_tmp_coverletter.html")
 
     def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
         if os.path.exists(self.out_path):
             os.remove(self.out_path)
 
@@ -99,18 +108,18 @@ class TestRenderCoverLetter(unittest.TestCase):
         render_coverletter(_minimal_letter_data(), self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
-        self.assertIn("Morgan Escott", html)
-        self.assertIn("escott.morgan@gmail.com", html)
+        self.assertIn("Alex Rivera", html)
+        self.assertIn("alex.rivera@example.com", html)
 
     @patch(
         "render_coverletter.profile_paths.signature_path",
-        return_value="/x/profiles/morgan/signature.png",
+        return_value="/x/profiles/testprofile/signature.png",
     )
     def test_signature_image_rendered_as_absolute_file_url_when_present(self, mock_sig):
         render_coverletter(_minimal_letter_data(), self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
-        self.assertIn('src="file:///x/profiles/morgan/signature.png"', html)
+        self.assertIn('src="file:///x/profiles/testprofile/signature.png"', html)
         self.assertIn('class="signature-img"', html)
 
     @patch("render_coverletter.profile_paths.signature_path", return_value=None)
@@ -126,7 +135,7 @@ class TestRenderCoverLetter(unittest.TestCase):
         render_coverletter(_minimal_letter_data(company_name=""), self.out_path)
         with open(self.out_path, "r", encoding="utf-8") as f:
             html = f.read()
-        self.assertIn("<title>Cover Letter - Morgan Escott</title>", html)
+        self.assertIn("<title>Cover Letter - Alex Rivera</title>", html)
 
 
 class TestBuildSignatureBlockHtml(unittest.TestCase):
@@ -148,6 +157,15 @@ class TestBuildSignatureBlockHtml(unittest.TestCase):
 
 
 class TestBuildRecipientBlockHtml(unittest.TestCase):
+
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
 
     def test_no_contact_no_location(self):
         html = render_coverletter_module.build_recipient_block_html("Acme Corp")
