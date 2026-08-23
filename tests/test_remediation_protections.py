@@ -51,7 +51,10 @@ class TestRemediationProtections(unittest.TestCase):
         """Verify upsert_job opens and closes SQLite connection cleanly without leaks."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_file = os.path.join(tmpdir, "data.db")
-            with patch("scripts.profile_paths.profile_root", return_value=tmpdir):
+            with (
+                patch("profile_paths.profile_root", return_value=tmpdir),
+                patch("scripts.profile_paths.profile_root", return_value=tmpdir),
+            ):
                 conn = db.get_db("test_profile")
                 self.assertIsNotNone(conn)
                 conn.close()
