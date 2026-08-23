@@ -2219,33 +2219,29 @@ def display_success_celebration(title: str, subtitle: str) -> None:
         return
 
     sparkles = ["✦", "✧", "★", "◆", "◈", "•", "◇", "✢"]
-    sys.stdout.write("\x1b[?25l")  # Hide cursor
-    sys.stdout.flush()
 
-    try:
-        for frame in range(12):
-            sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
-            sys.stdout.flush()
+    from rich.console import Group
+    from rich.live import Live
 
-            console.print()
-            sparkle_row_1 = "   " + " ".join(random.choices(sparkles, k=8))
-            console.print(
-                make_gradient_text(sparkle_row_1, theme.BRAND_ACCENT, theme.BRAND)
-            )
-            console.print()
-            console.print(panel)
-            console.print()
-            sparkle_row_2 = "   " + " ".join(random.choices(sparkles, k=8))
-            console.print(
-                make_gradient_text(sparkle_row_2, theme.BRAND, theme.BRAND_ACCENT)
-            )
+    def generate_frame():
+        sparkle_row_1 = "   " + " ".join(random.choices(sparkles, k=8))
+        sparkle_row_2 = "   " + " ".join(random.choices(sparkles, k=8))
+        return Group(
+            Text(),
+            make_gradient_text(sparkle_row_1, theme.BRAND_ACCENT, theme.BRAND),
+            Text(),
+            panel,
+            Text(),
+            make_gradient_text(sparkle_row_2, theme.BRAND, theme.BRAND_ACCENT),
+        )
+
+    with Live(
+        generate_frame(), console=console, refresh_per_second=10, transient=True
+    ) as live:
+        for _ in range(12):
+            live.update(generate_frame())
             time.sleep(0.1)
-    finally:
-        sys.stdout.write("\x1b[?25h")  # Restore cursor
-        sys.stdout.flush()
 
-    sys.stdout.write("\x1b[2J\x1b[H")  # Clear screen
-    sys.stdout.flush()
     console.print()
     console.print(panel)
     console.print()
