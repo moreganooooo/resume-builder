@@ -43,9 +43,8 @@ location:
   city: Getzville
   state: NY
   zip: "14068"
-  radius_miles: 25
+  radius_miles: 5
   workplace_mode: any
-
 location_filter:
   always_allow:
       - "Remote"

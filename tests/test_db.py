@@ -3,6 +3,7 @@ so db.get_db() resolves to a temp directory -- never the real
 profiles/<name>/data.db (see F4's cleanup story in
 docs/review/master_audit_document.md for why that isolation matters)."""
 
+import json
 import os
 import shutil
 import sys
@@ -326,6 +327,36 @@ class TestDbSchema(unittest.TestCase):
         conn.close()
         self.assertTrue(clean_report["healthy"])
         self.assertEqual(clean_report["orphaned_application_logs"], 0)
+
+    def test_metadata_json_stores_location_enrichment(self):
+        conn = db.get_db("isolated")
+        enrichment = {
+            "status": "resolved",
+            "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
+            "resolved_zip": "14228",
+            "lat": 42.996,
+            "lon": -78.788,
+            "source": "jd_text_override",
+        }
+        db.upsert_job(
+            {
+                "id": "job_enriched",
+                "title": "Software Engineer",
+                "company": "Tech Corp",
+                "status": "pending",
+                "location": "Buffalo, NY",
+                "_location_enrichment": enrichment,
+            },
+            conn=conn,
+        )
+
+        rows = db.get_jobs_by_status("pending", conn=conn)
+        conn.close()
+        self.assertEqual(len(rows), 1)
+        meta = json.loads(rows[0]["metadata_json"])
+        self.assertIn("_location_enrichment", meta)
+        self.assertEqual(meta["_location_enrichment"]["status"], "resolved")
+        self.assertEqual(meta["_location_enrichment"]["resolved_zip"], "14228")
 
 
 if __name__ == "__main__":

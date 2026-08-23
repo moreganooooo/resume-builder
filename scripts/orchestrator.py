@@ -230,24 +230,13 @@ KB_ALLOWLIST = sorted(
 
 
 def get_active_kb_files(kb_dir: str) -> list:
-    """Dynamically discovers Knowledge Base files in kb_dir while
-    preserving KB_ALLOWLIST, excluding oversized raw dumps like
-    bullet-bank-keepers-audited.csv, detective-findings.csv, and hidden files."""
+    """Returns the sorted list of curated KB_ALLOWLIST files present in kb_dir,
+    guaranteeing deterministic, prompt-cacheable context and preventing token overflow.
+    """
     if not os.path.isdir(kb_dir):
         return sorted(KB_ALLOWLIST)
 
-    EXCLUDED_FILES = {"bullet-bank-keepers-audited.csv", "detective-findings.csv"}
-    VALID_EXTS = {".md", ".txt", ".json", ".yaml", ".yml", ".csv"}
-
-    discovered = set(KB_ALLOWLIST)
-    for name in os.listdir(kb_dir):
-        if name.startswith(".") or name in EXCLUDED_FILES:
-            continue
-        ext = os.path.splitext(name)[1].lower()
-        if ext in VALID_EXTS:
-            discovered.add(name)
-
-    return sorted(discovered)
+    return [f for f in sorted(KB_ALLOWLIST) if os.path.isfile(os.path.join(kb_dir, f))]
 
 
 # --- TIER 2 FILTERING CONSTANTS ---
@@ -681,6 +670,23 @@ def _is_bullet_widow_violation(violation: str) -> bool:
     return violation.startswith("Bullet is") and "widow" in violation
 
 
+def _condensed_violation(violation: str, max_len: int = 100) -> str:
+    """Truncates a validator violation message for on-screen display only.
+
+    The full message -- exact char counts, the illegal dead-band, the
+    complete quoted bullet -- is written for the model reading it out of
+    fix_contents, and callers must keep passing the untouched original
+    there. Printed to the terminal verbatim on every retry attempt, that
+    same verbosity is what a live run got complained about as "a wall of
+    text" (2026-08-22): 8-20 violations, each a full instructional
+    sentence plus a 100+ char quoted bullet, repeated on every attempt.
+    """
+    violation = violation.split("\n")[0]
+    if len(violation) <= max_len:
+        return violation
+    return violation[: max_len - 1].rstrip() + "…"
+
+
 def _needs_metric_inventory(violations: list[str]) -> bool:
     """True when the retry prompt should carry the full list of metrics
     already used in the CV.
@@ -1021,15 +1027,30 @@ def compute_practical_pursue_score(practical_pursue_subscores: dict) -> float:
     return _weighted_score(practical_pursue_subscores, PRACTICAL_PURSUE_WEIGHTS)
 
 
+def calibrate_commute_quality(
+    distance_miles: float = None, radius_miles: float = 5.0
+) -> float:
+    """Scores commute convenience on a 1-5 scale for local jobs within radius:
+    0.0 - 1.0 mi -> 5.0 (walking/ultra-local)
+    Down to 3.0 at exactly radius_miles limit."""
+    if distance_miles is None or radius_miles is None or radius_miles <= 0:
+        return 5.0
+    ratio = min(max(float(distance_miles) / float(radius_miles), 0.0), 1.0)
+    return round(max(3.0, 5.0 - 2.0 * ratio), 2)
+
+
 def fit_composite_score(
     fit_score: float,
     interview_odds_score: float,
     practical_pursue_score: float,
     posting_age_days: int = None,
+    distance_miles: float = None,
+    radius_miles: float = None,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
-    COMPOSITE_SCORE_WEIGHTS, minus an age penalty for postings older than
-    STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
+    COMPOSITE_SCORE_WEIGHTS, plus a proximity boost for local commutable jobs
+    (closer = higher, up to +0.50 score boost at 0 mi), minus an age penalty for
+    postings older than STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
     for how posting_age_days is derived -- None means no age signal at
     all, so no penalty is applied rather than assuming staleness)."""
     base = (
@@ -1037,6 +1058,14 @@ def fit_composite_score(
         + interview_odds_score * COMPOSITE_SCORE_WEIGHTS["interview_odds_score"]
         + practical_pursue_score * COMPOSITE_SCORE_WEIGHTS["practical_pursue_score"]
     )
+    proximity_bonus = 0.0
+    if distance_miles is not None and radius_miles and radius_miles > 0:
+        if distance_miles <= radius_miles:
+            # Closer jobs get up to +0.50 score boost (e.g. 0 mi -> +0.50, 2.5 mi in 5 mi radius -> +0.25)
+            proximity_bonus = max(
+                0.0, 0.50 * (1.0 - (float(distance_miles) / float(radius_miles)))
+            )
+
     penalty = 0.0
     if posting_age_days is not None and posting_age_days > STALE_POSTING_THRESHOLD_DAYS:
         penalty = min(
@@ -1044,7 +1073,161 @@ def fit_composite_score(
             * STALE_POSTING_PENALTY_PER_DAY,
             STALE_POSTING_MAX_PENALTY,
         )
-    return round(max(base - penalty, 0.0), 2)
+    return round(max(min(base + proximity_bonus - penalty, 5.0), 0.0), 2)
+
+
+def is_spurious_commute_blocker(blocker: str) -> bool:
+    """Returns True if a hard blocker is merely a routine onsite/hybrid requirement
+    or local commute prompt that is resolved because the job is within the candidate's
+    local commute radius, while strictly preserving genuine non-local travel or vehicle duties.
+    """
+    b = (blocker or "").strip()
+    b_lower = b.lower()
+
+    # If it specifies external travel, field visits, client visits, or non-local destinations, preserve it!
+    non_commute_markers = [
+        "client",
+        "customer site",
+        "field",
+        "territory",
+        "travel",
+        "traveling",
+        "overnight",
+        "multi-site",
+        "driver's license",
+        "drivers license",
+        "personal vehicle for",
+        "vehicle for client",
+        "fleet",
+        "airline",
+    ]
+    if any(m in b_lower for m in non_commute_markers):
+        return False
+
+    # 1. Exact auto-generated Python override string
+    if b.startswith("Onsite/hybrid signal detected"):
+        return True
+
+    # 2. ATS / Indeed commute prompt (e.g. "Ability to Commute: Buffalo, NY 14228 (Required)")
+    if re.match(r"^ability to commute\b", b_lower):
+        return True
+
+    # 3. Routine onsite/hybrid presence requirements
+    if re.match(r"^(on-?site|hybrid|in-office)\b", b_lower):
+        return True
+
+    return False
+
+
+def rescore_evaluation_with_location(
+    evaluation: dict,
+    distance_miles: float = None,
+    radius_miles: float = 5.0,
+    workplace_mode: str = "any",
+    remote_required: bool = False,
+    posting_age_days: int = None,
+) -> dict:
+    """Recalculates an evaluation dict incorporating local commute distance:
+    1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
+    2. Clears spurious onsite/commute blockers if commutable local.
+    3. Recomputes composite_score with proximity boost.
+    4. Recalculates recommendation and estimated interview odds."""
+    if not evaluation:
+        return evaluation
+
+    ev = dict(evaluation)
+    subs = dict(ev.get("practical_pursue_subscores", {}))
+    blockers = list(ev.get("hard_blockers", []))
+
+    is_commutable_local = (
+        radius_miles
+        and distance_miles is not None
+        and distance_miles <= radius_miles
+        and (workplace_mode in ("any", "onsite", "hybrid") or not remote_required)
+    )
+
+    if is_commutable_local:
+        # Clear only spurious routine onsite/commute blockers; preserve travel/vehicle duties
+        blockers = [b for b in blockers if not is_spurious_commute_blocker(b)]
+
+        # Calibrate commute quality (closer = higher score, 3.0 to 5.0)
+        commute_val = calibrate_commute_quality(distance_miles, radius_miles)
+        subs["remote_quality"] = commute_val
+        ev["practical_pursue_subscores"] = subs
+        ev["hard_blockers"] = blockers
+    else:
+        # Remote required check for non-commutable jobs
+        remote_val = subs.get("remote_quality", 5)
+        if remote_required and remote_val < 5:
+            msg = (
+                f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
+            )
+            if msg not in blockers:
+                blockers.append(msg)
+            ev["hard_blockers"] = blockers
+
+    fit_score = compute_fit_score(ev.get("fit_subscores", {}))
+    interview_odds_score = compute_interview_odds_score(
+        ev.get("interview_odds_subscores", {})
+    )
+    practical_pursue_score = compute_practical_pursue_score(subs)
+
+    ev["fit_score"] = fit_score
+    ev["interview_odds_score"] = interview_odds_score
+    ev["practical_pursue_score"] = practical_pursue_score
+
+    if blockers:
+        ev["recommendation"] = "Skip"
+        ev["why"] = (
+            f"Application skipped due to triggered deal-breakers: {', '.join(blockers)}"
+        )
+        ev["composite_score"] = 0.00
+        ev["estimated_interview_probability"] = 0.0
+    else:
+        comp = fit_composite_score(
+            fit_score,
+            interview_odds_score,
+            practical_pursue_score,
+            posting_age_days=(
+                posting_age_days
+                if posting_age_days is not None
+                else ev.get("posting_age_days")
+            ),
+            distance_miles=distance_miles if is_commutable_local else None,
+            radius_miles=radius_miles if is_commutable_local else None,
+        )
+        ev["composite_score"] = comp
+
+        # Derived recommendation if was Skip due to cleared onsite blocker
+        rec = ev.get("recommendation")
+        if is_commutable_local and (rec == "Skip" or not rec):
+            if comp >= 3.8:
+                ev["recommendation"] = "Strong pursue"
+            elif comp >= 3.2:
+                ev["recommendation"] = "Pursue"
+            elif comp >= 2.5:
+                ev["recommendation"] = "Selective pursue"
+            else:
+                ev["recommendation"] = "Low-priority pursue" if comp > 1.5 else "Skip"
+
+        # Estimated interview odds
+        x = interview_odds_score
+        points = [(1.0, 0.2), (2.0, 2.0), (3.0, 5.0), (4.0, 12.0), (5.0, 25.0)]
+        if x <= 1.0:
+            estimated_prob = 0.2
+        elif x >= 5.0:
+            estimated_prob = 25.0
+        else:
+            estimated_prob = 0.0
+            for i in range(len(points) - 1):
+                x0, y0 = points[i]
+                x1, y1 = points[i + 1]
+                if x0 <= x <= x1:
+                    estimated_prob = round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
+                    break
+        ev["estimated_interview_probability"] = estimated_prob
+
+    return ev
 
 
 def _parse_jd_data(jd_text: str) -> dict:
@@ -3003,68 +3186,66 @@ class ResumeEngine:
                 funnel_friction_score + 1, 5
             )
 
-        # 6. Compute base weighted subscores
-        fit_score = compute_fit_score(evaluation["fit_subscores"])
-        interview_odds_score = compute_interview_odds_score(
-            evaluation["interview_odds_subscores"]
-        )
-        practical_pursue_score = compute_practical_pursue_score(
-            evaluation["practical_pursue_subscores"]
-        )
+        # 6. Resolve Commute / Location distance for local scoring
+        loc_dist = None
+        try:
+            import location_settings
+
+            loc_settings = location_settings.read_settings()
+        except Exception:
+            loc_settings = {}
+
+        radius_miles = loc_settings.get("radius_miles")
+        workplace_mode = loc_settings.get("workplace_mode", "any")
+
+        jd_data = _parse_jd_data(jd_text)
+        enrichment = jd_data.get("_location_enrichment")
+        if (
+            isinstance(enrichment, dict)
+            and enrichment.get("distance_miles") is not None
+        ):
+            loc_dist = enrichment.get("distance_miles")
+        elif radius_miles and (jd_data.get("location") or jd_text):
+            try:
+                import location_enricher
+
+                job_data = {
+                    "id": os.path.basename(jd_path),
+                    "title": jd_data.get("job_title", ""),
+                    "company": jd_data.get("company_name", ""),
+                    "location": jd_data.get("location", ""),
+                    "raw_text": jd_text,
+                    "company_website": jd_data.get("company_website", ""),
+                    "is_remote": jd_data.get("is_remote"),
+                    "work_model": jd_data.get("work_model"),
+                }
+                cache = location_enricher.load_locations_cache()
+                enr = location_enricher.enrich_job_location(
+                    job_data,
+                    settings=loc_settings,
+                    allow_search_backup=False,
+                    cache=cache,
+                )
+                if enr.get("distance_miles") is not None:
+                    loc_dist = enr.get("distance_miles")
+            except Exception:
+                pass
+
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
+        evaluation["posting_age_days"] = posting_age_days
 
-        # 7. Apply Generic, Profile-Driven Hard-Stops & Skip Overrides in Python
-        triggered_by_profile_filters = False
-        blockers_triggered = list(evaluation["hard_blockers"])
+        # 7. Apply Location-Aware Rescoring & Profile Deal-Breaker Overrides
+        evaluation = rescore_evaluation_with_location(
+            evaluation=evaluation,
+            distance_miles=loc_dist,
+            radius_miles=radius_miles,
+            workplace_mode=workplace_mode,
+            remote_required=remote_required,
+            posting_age_days=posting_age_days,
+        )
 
-        # A. Remote required verification
-        remote_val = evaluation["practical_pursue_subscores"].get("remote_quality", 5)
-        if remote_required and remote_val < 5:
-            triggered_by_profile_filters = True
-            msg = (
-                f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
-            )
-            if msg not in blockers_triggered:
-                blockers_triggered.append(msg)
-
-        # B. Profile-level deal-breaker validation
-        if blockers_triggered:
-            triggered_by_profile_filters = True
-            evaluation["hard_blockers"] = blockers_triggered
-
-        # C. Apply Overrides
-        if triggered_by_profile_filters:
-            evaluation["recommendation"] = "Skip"
-            evaluation["why"] = (
-                f"Application skipped due to triggered deal-breakers: {', '.join(blockers_triggered)}"
-            )
-            composite = 0.00
-            estimated_prob = 0.0
-        else:
-            composite = fit_composite_score(
-                fit_score,
-                interview_odds_score,
-                practical_pursue_score,
-                posting_age_days,
-            )
-            # D. Empirical Score Calibration Converter
-            # Maps 1-5 subscore to calibrated estimated response rate percentage (0.2% - 25.0%)
-            x = interview_odds_score
-            points = [(1.0, 0.2), (2.0, 2.0), (3.0, 5.0), (4.0, 12.0), (5.0, 25.0)]
-            if x <= 1.0:
-                estimated_prob = 0.2
-            elif x >= 5.0:
-                estimated_prob = 25.0
-            else:
-                for i in range(len(points) - 1):
-                    x0, y0 = points[i]
-                    x1, y1 = points[i + 1]
-                    if x0 <= x <= x1:
-                        estimated_prob = round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
-                        break
-
-        # E. Heuristic Ghost Job Probability Calculator
-        red_flags_count = len(evaluation["ghost_job_red_flags"])
+        # 8. Heuristic Ghost Job Probability Calculator
+        red_flags_count = len(evaluation.get("ghost_job_red_flags", []))
         ghost_score = 0.0
         if posting_age_days is not None:
             if posting_age_days > 30:
@@ -3073,13 +3254,6 @@ class ResumeEngine:
                 ghost_score += 0.20
         ghost_score += min(red_flags_count * 0.20, 0.50)
         evaluation["ghost_job_probability"] = round(min(ghost_score * 100.0, 95.0), 1)
-
-        evaluation["posting_age_days"] = posting_age_days
-        evaluation["fit_score"] = fit_score
-        evaluation["interview_odds_score"] = interview_odds_score
-        evaluation["practical_pursue_score"] = practical_pursue_score
-        evaluation["composite_score"] = composite
-        evaluation["estimated_interview_probability"] = estimated_prob
 
         return evaluation
 
@@ -3422,7 +3596,8 @@ class ResumeEngine:
             )
             for v in violations:
                 cli_art.detail(
-                    f"    - {cli_art._escape_markup(str(v))}", level=cli_art.NORMAL
+                    f"    - {cli_art._escape_markup(_condensed_violation(str(v)))}",
+                    level=cli_art.NORMAL,
                 )
             fix_contents = (
                 f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
@@ -3886,14 +4061,56 @@ class ResumeEngine:
             # cost one turn instead of destroying all prior progress.
             best_resume_data = resume_data
             best_violations = violations
+            # Tracks consecutive fix attempts that failed to beat best_violations.
+            # When best never advances, the next attempt re-sends the identical
+            # fix_contents (same resume_data, same violations) -- so at
+            # temperature=0.0 it is GUARANTEED to reproduce the exact same
+            # failed output, burning the remaining attempts on repeats of one
+            # failure rather than distinct tries. Escalating temperature on a
+            # stall breaks the determinism trap without touching the first,
+            # most-likely-to-succeed attempt.
+            #
+            # A modest linear bump (0.2/0.4/0.6) was tried first and observed
+            # live 2026-08-22 NOT to be enough on its own: for a bullet/skills
+            # line the model has decided is "already fine" (usually because it
+            # can't reliably count characters the way the validator does), the
+            # next-token probabilities for reproducing that exact text are so
+            # close to 1.0 that a small temperature increase barely perturbs
+            # them -- 4 attempts came back byte-identical even as temperature
+            # rose from 0.0 to 0.4. Real fix has two parts: escalate harder
+            # once a stall is confirmed (not gradually), and explicitly tell
+            # the model its last output was unchanged -- the arithmetic hint
+            # alone wasn't enough to make it realize it hadn't acted on it.
+            stall_streak = 0
+            prev_round_violations = None
             while violations and fix_attempt < max_fix_attempts:
                 fix_attempt += 1
                 resume_data, violations = best_resume_data, best_violations
-                cli_art.print_literal(
-                    f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:"
+                exact_repeat = (
+                    prev_round_violations is not None
+                    and violations == prev_round_violations
                 )
-                for v in violations:
-                    cli_art.print_literal(f"    - {v}")
+                fix_temperature = (
+                    0.0
+                    if stall_streak == 0
+                    else min(0.4 + 0.2 * (stall_streak - 1), 0.9)
+                )
+                if exact_repeat:
+                    # Full detail was already printed once for this exact
+                    # set of violations -- reprinting it verbatim on every
+                    # stalled retry is exactly the noise that made this
+                    # section unreadable live. One compact line instead.
+                    cli_art.print_literal(
+                        f"  Validator: same {len(violations)} issue(s) as last attempt "
+                        f"(unresolved), attempt {fix_attempt}/{max_fix_attempts}, "
+                        f"retrying at temperature {fix_temperature:.1f}."
+                    )
+                else:
+                    cli_art.print_literal(
+                        f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:"
+                    )
+                    for v in violations:
+                        cli_art.print_literal(f"    - {_condensed_violation(v)}")
                 fix_contents = (
                     f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
                     f"=== REFINED BULLETS (source material if an issue requires populating "
@@ -4002,6 +4219,23 @@ class ResumeEngine:
                         f"lengthen a bullet for the widow fix above, the number used must not "
                         f"already appear anywhere in this list.\n\n"
                     )
+                if exact_repeat:
+                    # The arithmetic hints above (exact char counts, the
+                    # illegal dead-band) were already present last round and
+                    # weren't enough on their own -- the model's most common
+                    # failure mode here isn't ignoring the rule, it's judging
+                    # the existing text as already compliant and passing it
+                    # through unedited. Name that explicitly, since "here's
+                    # the same math again" doesn't fix a problem that was
+                    # never a math problem in the first place.
+                    fix_contents += (
+                        f"=== YOUR LAST ATTEMPT DID NOT CHANGE THIS TEXT ===\n"
+                        f"The issue(s) below are byte-for-byte identical to what you returned "
+                        f"last attempt -- the text was not edited at all. Whatever you believe "
+                        f"about its current length, it still measures as a violation. You must "
+                        f"produce genuinely different wording for every line listed below, not "
+                        f"re-affirm the same text.\n\n"
+                    )
                 fix_contents += (
                     f"=== ISSUES TO FIX (change nothing else) ===\n"
                     + "\n".join(f"- {v}" for v in violations)
@@ -4013,7 +4247,7 @@ class ResumeEngine:
                     response_schema=TemplateSchema,
                     extra_schema_properties=edu_schema_properties,
                     extra_required=edu_schema_required,
-                    temperature=0.0,
+                    temperature=fix_temperature,
                 )
                 _log_cache_stats(fix_usage, 0, 0)
                 fixed = GeminiClient.parse_json(fix_text or "")
@@ -4038,6 +4272,10 @@ class ResumeEngine:
                 )
                 if len(violations) < len(best_violations):
                     best_resume_data, best_violations = resume_data, violations
+                    stall_streak = 0
+                else:
+                    stall_streak += 1
+                prev_round_violations = violations
 
             resume_data, violations = best_resume_data, best_violations
 

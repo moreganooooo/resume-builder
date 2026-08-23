@@ -263,6 +263,37 @@ def read_coverage(jd_path: str) -> dict | None:
     return data.get("_coverage")
 
 
+def save_location_enrichment(jd_path: str, enrichment: dict) -> None:
+    """Persists a location enrichment result into the JD's own JSON file under
+    a _location_enrichment key, following the same underscore-prefixed metadata
+    pattern as _evaluation/_liveness/_application."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_location_enrichment"] = dict(enrichment)
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
+
+def read_location_enrichment(jd_path: str) -> dict | None:
+    """Reads back a persisted _location_enrichment (see save_location_enrichment()), or None
+    if the JD isn't a JSON dict or has never had its location enriched."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_location_enrichment")
+
+
 def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     """Persists a liveness result into the JD's own JSON file under a
     _liveness key (result, reason, checked_at), matching _evaluation's

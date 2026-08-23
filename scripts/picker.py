@@ -393,14 +393,20 @@ def _location_fields(data: dict, settings: dict) -> dict:
     never sort as if it were next door.
     """
     location = (data.get("location") or "").strip()
+    enrichment = data.get("_location_enrichment")
     verdict = location_filter.evaluate_location(
         location,
         settings,
         is_remote=data.get("is_remote"),
         work_model=data.get("work_model") or "",
+        _location_enrichment=enrichment,
     )
+    display_location = location
+    if isinstance(enrichment, dict) and enrichment.get("resolved_address"):
+        display_location = enrichment.get("resolved_address")
+
     return {
-        "location": location,
+        "location": display_location,
         "workplace": verdict.workplace,
         "distance_miles": verdict.distance_miles,
     }
@@ -451,6 +457,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "skills": jd_data.get("skills") or [],
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
+                    "location_enrichment": jd_manager.read_location_enrichment(path),
                     **_location_fields(jd_data, location_settings_block),
                 }
             )
@@ -483,6 +490,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "skills": jd_data.get("skills") or [],
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
+                    "location_enrichment": jd_manager.read_location_enrichment(path),
                     **_location_fields(jd_data, location_settings_block),
                 }
             )
@@ -526,7 +534,7 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
 
     try:
         records = conn.execute(
-            "SELECT id, title, company, status, metadata_json"
+            "SELECT id, title, company, location, status, metadata_json"
             " FROM jobs WHERE status = 'pending'"
         ).fetchall()
     except Exception:
@@ -551,6 +559,9 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
         if not evaluation:
             continue
 
+        if record["location"] and not data.get("location"):
+            data["location"] = record["location"]
+
         extra.append(
             {
                 "path": job_id,
@@ -569,6 +580,7 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
                 "skills": data.get("skills") or [],
                 "research": data.get("_research"),
                 "coverage": data.get("_coverage"),
+                "location_enrichment": data.get("_location_enrichment"),
                 **_location_fields(data, settings or {}),
             }
         )

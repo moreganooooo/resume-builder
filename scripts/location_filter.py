@@ -429,6 +429,36 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
     # On-site and hybrid roles are worth seeing only within commuting
     # range, which is the whole point of configuring an origin.
     if origin and radius:
+        enrichment = posting.get("_location_enrichment") or posting.get("enrichment")
+        if isinstance(enrichment, dict) and enrichment.get("status") == "resolved":
+            dest_lat = enrichment.get("lat")
+            dest_lon = enrichment.get("lon")
+            if dest_lat is not None and dest_lon is not None:
+                origin_point = geo_distance.resolve_location(origin)
+                if origin_point:
+                    miles = geo_distance.haversine_distance_miles(
+                        origin_point[0], origin_point[1], dest_lat, dest_lon
+                    )
+                    addr = (
+                        enrichment.get("resolved_address")
+                        or enrichment.get("resolved_zip")
+                        or location
+                    )
+                    src = enrichment.get("source") or "enriched"
+                    if miles > float(radius):
+                        return LocationVerdict(
+                            False,
+                            workplace,
+                            miles,
+                            f"{miles:.0f} mi exceeds {radius} mi radius",
+                        )
+                    label = (
+                        f"{miles:.1f} mi ({addr} via {src})"
+                        if src != "discovery"
+                        else f"{miles:.1f} mi ({addr})"
+                    )
+                    return LocationVerdict(True, workplace, miles, label)
+
         miles, hub = nearest_hub_distance(location, origin)
         if miles is None:
             # Unresolvable is NOT far. Surfacing an unknown location is a

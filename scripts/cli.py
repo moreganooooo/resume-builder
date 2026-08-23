@@ -604,6 +604,52 @@ def polish(file):
     polish_module.run(file)
 
 
+@cli.group(name="location")
+def location_group():
+    """Manage location settings, commute radius, and company address enrichment."""
+    pass
+
+
+@location_group.command(name="enrich")
+@click.option(
+    "--all",
+    "all_statuses",
+    is_flag=True,
+    default=False,
+    help="Enrich all job statuses, not just pending",
+)
+@click.option(
+    "--allow-search-backup",
+    is_flag=True,
+    default=False,
+    help="Allow Gemini Search Grounding ultra-backup",
+)
+@click.option(
+    "--limit",
+    "-n",
+    type=int,
+    default=None,
+    help="Maximum number of job postings to process",
+)
+def location_enrich(all_statuses, allow_search_backup, limit):
+    """Enrich company work facility addresses for precise commute filtering."""
+    import location_enricher
+
+    cli_art.display_banner("Enriching Company Locations")
+    statuses = (
+        ["pending", "active", "applied", "interviewing"]
+        if all_statuses
+        else ["pending"]
+    )
+    results = location_enricher.enrich_profile_locations(
+        statuses=statuses, allow_search_backup=allow_search_backup, limit=limit
+    )
+    cli_art.display_success(
+        f"Enriched {results['total_processed']} jobs: {results['resolved']} resolved facility addresses "
+        f"({results['search_calls_used']} search calls used)."
+    )
+
+
 @cli.command(name="sample")
 def sample_cmd():
     """Builds a resume + cover letter against the permanent fixtures/sample_jd.txt

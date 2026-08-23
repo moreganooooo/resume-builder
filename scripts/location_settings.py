@@ -226,12 +226,29 @@ def run_location_settings() -> None:
             questionary.Choice("Change commute radius only", value="radius"),
             questionary.Choice("Change workplace type only", value="mode"),
             questionary.Choice(
+                "Enrich & verify local company addresses", value="enrich"
+            ),
+            questionary.Choice(
                 "Turn off distance filtering (keyword only)", value="clear"
             ),
             questionary.Choice("Back", value="back"),
         ],
     )
     if action in (None, "back"):
+        return
+
+    if action == "enrich":
+        import location_enricher
+
+        cli_art.console.print(
+            "\n  [bold cyan]Enriching company addresses and facility locations...[/bold cyan]\n",
+            soft_wrap=True,
+        )
+        results = location_enricher.enrich_profile_locations()
+        cli_art.console.print(
+            f"\n{cli_art.SUCCESS} Processed {results['total_processed']} jobs: {results['resolved']} resolved facility addresses.",
+            soft_wrap=True,
+        )
         return
 
     if action == "clear":

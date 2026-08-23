@@ -101,6 +101,11 @@ def situational_roles_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "situational_roles.yaml")
 
 
+def company_locations_cache_path(profile: str = None) -> str:
+    """profiles/<name>/company_locations.json -- cached geocoded employer points."""
+    return os.path.join(profile_root(profile), "company_locations.json")
+
+
 def _make_fallback_fixed_content():
     import types
 
