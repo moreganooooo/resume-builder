@@ -666,6 +666,17 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   disclose no owner, so there the strict slug is the only evidence.
   Detection also requires a NON-EMPTY posting list: SmartRecruiters
   returns 200 with `totalFound: 0` for slugs that do not exist at all.
+- **A liveness sweep's temp files must be per-run, never a fixed path.**
+  `liveness._run_temp_paths()` generates a unique input/output pair for
+  every `check-liveness.mjs` spawn. They used to be two module-level
+  constants shared by every sweep of a profile, and `open(path, "w")`
+  truncates -- so an overlapping run, or an orphaned Node child from a run
+  killed mid-check, destroyed a live run's results while both children
+  exited 0. Never reintroduce a shared temp path here: the child writes
+  its whole result blob once, at exit, so a truncation is a total loss of
+  that sweep, and the failure is silent (exit 0 plus an unreadable file).
+  `leftover_temp_files()` finds residue from killed runs, and is what the
+  cleanup tests assert on rather than hardcoding generated names.
 - **A liveness verdict distinguishes "could not tell" from "was never
   shown the page."** `blocked` (`liveness-core.mjs`) covers anti-bot
   interstitials and login walls, checked AFTER the expired patterns so a

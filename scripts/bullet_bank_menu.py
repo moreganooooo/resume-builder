@@ -21,8 +21,6 @@ import subprocess
 import sys
 
 import cli_art
-import numpy as np
-import pandas as pd
 import questionary
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -93,6 +91,9 @@ def _audit_progress():
 
 
 def _rewrite_progress():
+    # Lazy pandas -- Lite Mode omits it; see requirements-lite.txt (F20).
+    import pandas as pd
+
     if not os.path.exists(CLUSTER_MAP_CSV):
         return None
     df = pd.read_csv(CLUSTER_MAP_CSV)
@@ -159,6 +160,9 @@ def _audit_keepers_progress():
 
 
 def _embed_progress():
+    # Lazy numpy -- Lite Mode omits it; see requirements-lite.txt (F20).
+    import numpy as np
+
     if not os.path.exists(EMBED_CHECKPOINT_PATH):
         # No checkpoint means either never run or fully complete (the
         # final .npy is only ever written once, after the full batch loop
@@ -351,6 +355,9 @@ def _stage_status(stage: dict) -> tuple:
 
 
 def _checkpoint_progress_status(checkpoint_path: str) -> tuple:
+    # Lazy numpy -- Lite Mode omits it; see requirements-lite.txt (F20).
+    import numpy as np
+
     data = np.load(checkpoint_path, allow_pickle=False)
     next_index = int(data["next_index"])
     total = int(data["total"])

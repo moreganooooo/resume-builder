@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 import subprocess
+import uuid
 
 import cli_art
 import jd_manager
@@ -67,18 +68,63 @@ def _resolve_activity(activity):
             yield local_activity
 
 
-# Profile-scoped: this used to land at the repo root's output/, outside
-# profile_paths.sync_roots(). It's cleaned up in a finally block, so it only
-# persisted when the process was killed mid-check -- but a stray temp file
-# from one profile sitting in a shared path is still the wrong shape.
-LIVENESS_INPUT_PATH = os.path.join(
-    profile_paths.output_dir(), "liveness_input_tmp.json"
-)
-# check-liveness.mjs's results JSON goes to a real file, not a pipe --
-# see _verify_candidates()'s Popen call for why (B21).
-LIVENESS_OUTPUT_PATH = os.path.join(
-    profile_paths.output_dir(), "liveness_output_tmp.json"
-)
+# Profile-scoped: these used to land at the repo root's output/, outside
+# profile_paths.sync_roots(). A stray temp file from one profile sitting in
+# a shared path is the wrong shape even though the finally block removes it
+# on every path except an outright kill.
+_LIVENESS_TMP_GLOB = "liveness_*_tmp_*.json"
+
+
+def leftover_temp_files() -> list:
+    """Any liveness temp files still on disk for the active profile.
+
+    Every run removes its own pair in a finally block, so a non-empty
+    result means some run was killed outright. Exposed so the cleanup
+    tests can assert on "no temp residue" without knowing the per-run
+    names _run_temp_paths() generates.
+    """
+    import glob
+
+    return sorted(
+        glob.glob(os.path.join(profile_paths.output_dir(), _LIVENESS_TMP_GLOB))
+    )
+
+
+def _run_temp_paths() -> tuple[str, str]:
+    """Per-run input/output temp paths for one `check-liveness.mjs` spawn.
+
+    These used to be two fixed module-level constants shared by every
+    sweep of a profile. `open(path, "w")` truncates, so any second writer
+    destroyed the first one's data:
+
+    * two sweeps of the same profile overlapping, or
+    * far more likely, an orphaned Node child from a run that was killed
+      mid-check -- see leftover_temp_files() for why those survive --
+      still holding the old fd and writing its final blob at
+      its own (large) offset into the file a new run had just truncated.
+
+    Demonstrated, not theorised: two runs sharing the path, one destroys
+    the other's results while both children exit 0.
+
+    Whether this was the trigger for the unexplained 812-candidate loss on
+    2026-08-21 (docs/to_do/HANDOFF-2026-08-21.md -- child exited 0, output
+    file unreadable) is NOT proven; that exact ordering was not reproduced.
+    It is a mechanism that can produce that signature, and it is a real
+    data-loss bug either way. If the symptom recurs after this, the shared
+    path was not the cause and the next place to look is the child's
+    `finally` in check-liveness.mjs, where the final blob is printed after
+    `await browser.close()`.
+
+    A unique suffix per spawn means a stale writer can only ever corrupt
+    its own dead run's file.
+    """
+    unique = f"{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    out_dir = profile_paths.output_dir()
+    return (
+        os.path.join(out_dir, f"liveness_input_tmp_{unique}.json"),
+        os.path.join(out_dir, f"liveness_output_tmp_{unique}.json"),
+    )
+
 
 # How recently a JD needs to have been checked (or scanned -- see
 # scan.py's seeding of _liveness at write time) to skip re-checking it by
@@ -412,8 +458,9 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         c["source_file"]: c for c in candidates if c.get("source_file")
     }
 
-    os.makedirs(os.path.dirname(LIVENESS_INPUT_PATH), exist_ok=True)
-    with open(LIVENESS_INPUT_PATH, "w", encoding="utf-8") as f:
+    input_path, output_path = _run_temp_paths()
+    os.makedirs(os.path.dirname(input_path), exist_ok=True)
+    with open(input_path, "w", encoding="utf-8") as f:
         json.dump(candidates, f)
 
     cli_art.print_literal()
@@ -434,9 +481,9 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         # below would risk the classic subprocess deadlock (child blocks
         # writing a full stdout pipe, parent blocks reading stderr, or
         # vice versa).
-        with open(LIVENESS_OUTPUT_PATH, "w", encoding="utf-8") as stdout_file:
+        with open(output_path, "w", encoding="utf-8") as stdout_file:
             proc = subprocess.Popen(
-                ["node", script, "--json-file", LIVENESS_INPUT_PATH],
+                ["node", script, "--json-file", input_path],
                 stdout=stdout_file,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -551,7 +598,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 "error": True,
             }
 
-        with open(LIVENESS_OUTPUT_PATH, "r", encoding="utf-8") as f:
+        with open(output_path, "r", encoding="utf-8") as f:
             stdout_data = f.read()
         try:
             results = json.loads(stdout_data)
@@ -590,7 +637,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "error": True,
                 }
     finally:
-        for path in (LIVENESS_INPUT_PATH, LIVENESS_OUTPUT_PATH):
+        for path in (input_path, output_path):
             if os.path.exists(path):
                 os.remove(path)
 

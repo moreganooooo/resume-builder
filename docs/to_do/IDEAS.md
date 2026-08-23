@@ -39,18 +39,20 @@ real capability worth having eventually, just not part of this ordering.
 
 ## Easy
 
-### Rename the `resume` CLI alias
+### Rename the `resume` CLI alias -- RESOLVED BY ALIAS, 2026-08-23
 
-"Resume" is ambiguous in a way that's mildly confusing in context --
-`resume tailor`, `resume run`, etc. read fine on their own, but the name
-overloads with "resume [a paused process]" (e.g. "This process is
-paused. Would you like to resume?"). The shell wrapper
-(`scripts/resume-cli.sh`, sourced from `~/.zshrc`/`~/.bashrc`) and every
-reference to it in `README.md`/`CLAUDE.md` would need updating to the new
-name. Mechanically small -- the only open question is picking the actual
-name. Candidates floated 2026-07-16: `rb` (short for resume-builder),
-`rbuild`, `jobkit`. Pull this into a real change the moment a name is
-chosen.
+"Resume" is ambiguous in context -- it overloads with "resume [a paused
+process]". The open question was only ever *which* name to switch to;
+candidates floated 2026-07-16 were `rb`, `rbuild`, `jobkit`.
+
+**Settled differently than planned: both surviving candidates now ship as
+aliases rather than as a rename.** `scripts/resume-cli.sh:243-244` defines
+`rb` and `jobkit`, with `resume` kept as the canonical name. That gets the
+disambiguation without breaking every existing doc, muscle-memory command,
+and `README`/`CLAUDE.md` reference -- the cost that made the rename
+unattractive in the first place. Nothing further to build. Left here rather
+than archived only because the reasoning is worth keeping; move it to
+`IDEAS_ARCHIVE.md` on the next tidy-up.
 
 ## Medium
 
@@ -73,24 +75,31 @@ on the existing 78 rows (read source material, fill in the existing
 columns, verify attribution before adding a row). Non-essential, no
 deadline -- whenever Morgan wants to supply more material.
 
-### Explicit context caching for the audit loop's system prompts
+### Explicit context caching for the audit loop -- SHIPPED, 2026-08-23
 
 Raised 2026-08-05 (`docs/review/phase-5-modernization.md` #2): `orchestrator.py`'s
-audit loop sends the same fixed system instruction (the rules files --
-`hard_failures.yaml`, `truthfulness_rules.yaml`, `style_rules.yaml`,
-`formatting_rules.yaml`, `verb_taxonomy.yaml`, etc., concatenated into the
-prompt) on every JD processed. Implicit caching is on by default for
-2.5+ models and may already be capturing some of this for free (90%
-discount on a hit, 1,024-2,048 token minimum) -- nobody has measured the
-actual hit rate yet. Explicit caching (32,768-token minimum, same 90%
-discount, deterministic instead of opportunistic) is the more reliable
-lever at this call volume, but building it is real work: cache lifecycle
-management, storage cost accounting, and confirming the cached content is
-actually static across the loop rather than subtly JD-dependent.
-**Before building anything:** instrument one run to see whether implicit
-caching is already firing (Gemini responses include cache-hit token
-counts) -- cheap experiment, and it tells you whether this is "wire up
-explicit caching" or "already free, do nothing."
+audit loop resends the same fixed rules-file system instruction on every JD, and
+explicit caching (90% discount, deterministic rather than opportunistic) is the
+reliable lever at this call volume. The entry advised measuring implicit caching
+before building anything.
+
+**It was built.** `gemini_client._get_or_create_cache()` creates real
+`cachedContent` blocks over the REST API, keyed by a SHA-256 of
+model + system instruction, with a 20-minute TTL, an in-process
+`_cache_map`, and a `_cache_unavailable_models` set so a model that
+refuses caching is not re-attempted (and does not eat a 30s timeout) on
+every later call. The handle is attached at the request site as
+`body["cachedContent"]`.
+
+**One thing left to verify, and it is cheap.** The trigger is
+`len(system_instruction) < 15000` characters -- roughly 3.5-4k tokens. Gemini's
+documented minimum for *explicit* caching is 32,768 tokens, which is far higher.
+If creation is being refused for that reason, every call silently falls into the
+`_cache_unavailable_models` path and pays full price while looking like it is
+cached. Instrument one real run and read the cache-hit token counts off the
+responses before assuming this is saving anything. That is the same
+"measure first" advice the original entry gave, just pointed at the
+implementation instead of at the decision.
 
 ### Batch Mode for unattended `resume run` sweeps
 

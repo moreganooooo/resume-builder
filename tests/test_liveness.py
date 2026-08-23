@@ -20,7 +20,7 @@ def _mock_popen(returncode=0, stdout="", stderr_lines=None, timeout=False):
     """Builds a subprocess.Popen side_effect matching liveness.py's real
     usage: stdout is written into the real file handle passed as the
     stdout= kwarg (not captured on the returned object, see
-    LIVENESS_OUTPUT_PATH's docstring for why), stderr is an iterable of
+    _run_temp_paths()'s docstring for why), stderr is an iterable of
     lines (the code iterates proc.stderr live), and poll()/wait() model
     a process that's already finished by the time wait() is called --
     unless timeout=True, in which case wait() raises TimeoutExpired and
@@ -246,8 +246,7 @@ class TestLiveness(unittest.TestCase):
 
         liveness.run_liveness_check()
 
-        self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
-        self.assertFalse(os.path.exists(liveness.LIVENESS_OUTPUT_PATH))
+        self.assertEqual(liveness.leftover_temp_files(), [])
 
     @patch("liveness.jd_manager.get_pending_jds")
     @patch("liveness.subprocess.Popen")
@@ -259,8 +258,7 @@ class TestLiveness(unittest.TestCase):
 
         liveness.run_liveness_check()
 
-        self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
-        self.assertFalse(os.path.exists(liveness.LIVENESS_OUTPUT_PATH))
+        self.assertEqual(liveness.leftover_temp_files(), [])
 
     @patch("liveness.os.killpg")
     @patch("liveness.jd_manager.get_pending_jds")
@@ -284,8 +282,41 @@ class TestLiveness(unittest.TestCase):
         self.assertTrue(summary.get("error"))
         self.assertEqual(len(created_procs), 1)
         created_procs[0].kill.assert_called_once()
-        self.assertFalse(os.path.exists(liveness.LIVENESS_INPUT_PATH))
-        self.assertFalse(os.path.exists(liveness.LIVENESS_OUTPUT_PATH))
+        self.assertEqual(liveness.leftover_temp_files(), [])
+
+
+class TestRunTempPaths(unittest.TestCase):
+    """_run_temp_paths() -- the fix for the unexplained 812-candidate loss.
+
+    The input/output temp paths used to be two fixed module constants
+    shared by every sweep of a profile, so a second writer -- an
+    overlapping run, or an orphaned Node child from a killed one -- either
+    truncated a live run's output or wrote into it at a stale offset. The
+    new run's child then exited 0 with an unreadable output file, which is
+    exactly the reported signature.
+    """
+
+    def test_two_runs_never_share_a_path(self):
+        first_in, first_out = liveness._run_temp_paths()
+        second_in, second_out = liveness._run_temp_paths()
+
+        self.assertNotEqual(first_in, second_in)
+        self.assertNotEqual(first_out, second_out)
+        # An input path must never collide with an output path either --
+        # the child truncates one while the parent reads the other.
+        self.assertEqual(len({first_in, first_out, second_in, second_out}), 4)
+
+    def test_paths_are_matched_by_the_leftover_glob(self):
+        """A killed run's residue has to be findable, or it accumulates
+        silently in the profile's output dir."""
+        input_path, output_path = liveness._run_temp_paths()
+        import fnmatch
+
+        for path in (input_path, output_path):
+            self.assertTrue(
+                fnmatch.fnmatch(os.path.basename(path), liveness._LIVENESS_TMP_GLOB),
+                f"{path} would be invisible to leftover_temp_files()",
+            )
 
 
 class TestVerifyJdPaths(unittest.TestCase):
