@@ -126,6 +126,15 @@ class _ConsecutiveFailuresDescriptor:
 class GeminiClient:
 
     _cache_map = {}
+    # Models where a cache-creation call has already come back with a
+    # permanent "this API key's tier allows zero cache storage" error
+    # (TotalCachedContentStorageTokensPerModelFreeTier limit=0) -- as
+    # opposed to an ordinary transient 429. That's a property of the
+    # account/tier, not the request, so it won't succeed on retry within
+    # this process. Without this, every call with a >=15k-char system
+    # instruction re-attempts cache creation, eating a 30s timeout and
+    # printing a warning, even though the outcome is already known.
+    _cache_unavailable_models = set()
 
     @classmethod
     def _get_or_create_cache(cls, model: str, system_instruction: str) -> str | None:
@@ -144,6 +153,9 @@ class GeminiClient:
         base_model = model.split(":")[0]
         if not base_model.startswith("models/"):
             base_model = f"models/{base_model}"
+
+        if base_model in cls._cache_unavailable_models:
+            return None
 
         key = hashlib.sha256(
             f"{base_model}:{system_instruction}".encode("utf-8")
@@ -199,10 +211,19 @@ class GeminiClient:
                 )
                 return cache_name
             else:
-                cli_art.console.print(
-                    f"    {cli_art.WARNING} Context cache creation failed (HTTP {resp.status_code}): {resp.text[:200]}",
-                    soft_wrap=True,
-                )
+                if "CachedContentStorageTokensPerModelFreeTier" in resp.text:
+                    cls._cache_unavailable_models.add(base_model)
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} {base_model} is on a tier with no context-cache "
+                        "storage quota -- disabling cache attempts for this model for the rest "
+                        "of the run (falling back to full-prompt sends).",
+                        soft_wrap=True,
+                    )
+                else:
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Context cache creation failed (HTTP {resp.status_code}): {resp.text[:200]}",
+                        soft_wrap=True,
+                    )
                 return None
         except Exception as e:
             cli_art.console.print(

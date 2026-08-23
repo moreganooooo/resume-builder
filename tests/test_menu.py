@@ -1454,11 +1454,19 @@ class TestRunWithChain(unittest.TestCase):
             menu._run_with_chain("first", {})
         self.assertEqual(calls, ["first", "second"])
 
+    # Both scroll-region tests below force _should_use_alt_screen() to
+    # False -- that's the fallback path (small terminal, or
+    # RESUME_ALT_SCREEN=0) where the DECSTBM clamp is still the only
+    # pinned-footer mechanism available and the tailor_pick/coverletter_pick
+    # skip-set still matters. When alt-screen IS active (the common case),
+    # _run_with_chain() suspends it instead of clamping -- see
+    # TestBatchActionsSuspendAltScreen below.
+    @patch("menu._should_use_alt_screen", return_value=False)
     @patch("menu.cli_art.display_execution_footer")
     @patch("menu.cli_art.display_compact_banner")
     @patch("menu.sys.stdout")
     def test_tailor_pick_and_coverletter_pick_skip_the_scroll_region_clamp(
-        self, mock_stdout, mock_banner, mock_footer
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
     ):
         # Regression: menu.py's _run_with_chain() sets a DECSTBM scroll
         # region (\x1b[5;{rows-1}r) around every leaf action's banner --
@@ -1479,16 +1487,86 @@ class TestRunWithChain(unittest.TestCase):
             )
             mock_banner.assert_called()
 
+    @patch("menu._should_use_alt_screen", return_value=False)
     @patch("menu.cli_art.display_execution_footer")
     @patch("menu.cli_art.display_compact_banner")
     @patch("menu.sys.stdout")
     def test_other_scroll_region_actions_are_unaffected(
-        self, mock_stdout, mock_banner, mock_footer
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
     ):
         with patch.dict(menu._HANDLERS, {"evaluate_all": lambda: False}, clear=False):
             menu._run_with_chain("evaluate_all", {})
         writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
         self.assertIn("\x1b[5;", writes)
+
+
+class TestBatchActionsSuspendAltScreen(unittest.TestCase):
+    """The alternate screen buffer (entered once for the whole menu session)
+    has no real scrollback in virtually any terminal emulator, so a
+    log-heavy batch action (tailor_all, scan, evaluate_all, ...) running
+    inside it loses anything that scrolls past the top of the viewport.
+    _run_with_chain() now drops to the primary screen buffer for the
+    duration of these handlers -- real scrollback -- and re-enters
+    alt-screen right after, before the "what's next" prompt, so menu
+    navigation keeps its existing full-screen look. Regression covering
+    the 2026-08-22 fix."""
+
+    @patch("menu._should_use_alt_screen", return_value=True)
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.sys.stdout")
+    def test_evaluate_all_suspends_and_restores_alt_screen(
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
+    ):
+        with patch.dict(menu._HANDLERS, {"evaluate_all": lambda: False}, clear=False):
+            menu._run_with_chain("evaluate_all", {})
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertIn(
+            "\x1b[?1049l", writes, "did not exit alt-screen for the batch action"
+        )
+        self.assertIn("\x1b[?1049h", writes, "did not re-enter alt-screen afterward")
+        self.assertLess(
+            writes.index("\x1b[?1049l"),
+            writes.index("\x1b[?1049h"),
+            "exit must happen before the handler, re-entry after",
+        )
+        self.assertNotIn(
+            "\x1b[5;",
+            writes,
+            "scroll region clamp would break the real scrollback we just enabled",
+        )
+        mock_footer.assert_not_called()
+
+    @patch("menu._should_use_alt_screen", return_value=True)
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.sys.stdout")
+    def test_tailor_pick_also_suspends_alt_screen(
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
+    ):
+        with patch.dict(menu._HANDLERS, {"tailor_pick": lambda: False}, clear=False):
+            menu._run_with_chain("tailor_pick", {})
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertIn("\x1b[?1049l", writes)
+        self.assertIn("\x1b[?1049h", writes)
+
+    @patch("menu._should_use_alt_screen", return_value=True)
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.sys.stdout")
+    def test_interactive_actions_do_not_touch_alt_screen(
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
+    ):
+        # career_dashboard etc. are single-screen pickers that already ran
+        # entirely inside alt-screen before this fix -- they must keep
+        # doing so, since they never produce scrolling log output.
+        with patch.dict(
+            menu._HANDLERS, {"career_dashboard": lambda: False}, clear=False
+        ):
+            menu._run_with_chain("career_dashboard", {})
+        writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
+        self.assertNotIn("\x1b[?1049l", writes)
+        self.assertNotIn("\x1b[?1049h", writes)
 
 
 class TestRunInteractiveMenuClearsProfilePickerLeftovers(unittest.TestCase):
