@@ -8,6 +8,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import orchestrator  # noqa: E402
 
@@ -41,6 +42,15 @@ def _fail_critique_json():
 class TestAuditResume(unittest.TestCase):
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.engine = orchestrator.ResumeEngine()
         self.bullet_tuples = [
             ("Grew revenue 20% via new outbound program.", "CompanyA", "sales"),
@@ -162,6 +172,15 @@ class TestAuditResume(unittest.TestCase):
 class TestAuditResumeRewritePath(unittest.TestCase):
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.engine = orchestrator.ResumeEngine()
         self.bullet_tuples = [("Managed stuff.", "CompanyA", "sales")]
         self.static_prefix = "STATIC PREFIX FOR TEST"

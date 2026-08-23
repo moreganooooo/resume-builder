@@ -7,6 +7,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import scan_ats  # noqa: E402
 
@@ -128,6 +129,30 @@ class TestClassifyAts(unittest.TestCase):
 
 
 class TestFetchAtsJobs(unittest.TestCase):
+    """The title/location filter test reads the ACTIVE profile's
+    board_scanner/scan_filters.yml. A freshly bootstrapped profile
+    scaffolds that EMPTY, and empty is permissive by design -- so the
+    filter assertion held only on a profile that already had real
+    keywords in it."""
+
+    def setUp(self):
+        import importlib
+
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        import scan_boards
+
+        importlib.reload(scan_boards)
+
+    def tearDown(self):
+        import importlib
+
+        self._sandbox.__exit__(None, None, None)
+        import scan_boards
+
+        importlib.reload(scan_boards)
 
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_boards._run_node_provider")
@@ -366,6 +391,16 @@ class TestWebsearchPacing(unittest.TestCase):
 
 
 class TestNormalizeRawJobAndLoaders(unittest.TestCase):
+
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
     def test_normalize_raw_job_invalid_titles_and_urls(self):
         self.assertIsNone(scan_ats._normalize_raw_job({}, "greenhouse", "Acme"))
         self.assertIsNone(
@@ -485,6 +520,16 @@ if __name__ == "__main__":
 
 
 class TestConcurrentCompanyFetching(unittest.TestCase):
+
+    def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
     """The company loop runs in a thread pool; the sweep loop must not."""
 
     @patch("scan_boards._fetch_posting_text", return_value="")

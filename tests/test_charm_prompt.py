@@ -485,14 +485,14 @@ class TestRealBinaryOverAPty(unittest.TestCase):
                 "type": "select",
                 "message": "Pick one",
                 "options": [
-                    {"label": "morgan", "value": "morgan"},
+                    {"label": "testprofile", "value": "testprofile"},
                     {"label": "test_profile", "value": "test_profile"},
                 ],
             }
         )
         self.assertTrue(rendered, "nothing was ever written to the pty (hang)")
         self.assertEqual(returncode, 0)
-        self.assertEqual(json.loads(stdout), {"value": "morgan"})
+        self.assertEqual(json.loads(stdout), {"value": "testprofile"})
 
 
 if __name__ == "__main__":

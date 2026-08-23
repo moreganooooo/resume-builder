@@ -123,17 +123,22 @@ class TestHelpers(unittest.TestCase):
 
 
 class TestMainWritesSuccessMessage(unittest.TestCase):
-    """main() derives project_root from __file__, so this exercises it
-    against a disposable profile under the real repo root rather than
-    monkeypatching Path.resolve (which would patch pathlib.Path globally,
-    not just this module's usage of it)."""
+    """main() now resolves its paths through profile_paths instead of
+    hand-rolling them off __file__, so this runs fully sandboxed. It used
+    to have to create jds/_test_sync_jd_tmp_profile and
+    data/_test_sync_jd_tmp_profile under the real repo root and remove them
+    in tearDown -- which left them behind on any error before that point."""
 
     PROFILE = "_test_sync_jd_tmp_profile"
 
     def setUp(self):
-        project_root = Path(sync_jd.__file__).resolve().parents[1]
-        self.jds_dir = project_root / "jds" / self.PROFILE
-        self.data_dir = project_root / "data" / self.PROFILE
+        import profile_paths
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
+        self.jds_dir = Path(profile_paths.jds_dir(self.PROFILE))
+        self.data_dir = Path(profile_paths.data_dir(self.PROFILE))
         self.jds_dir.mkdir(parents=True)
         (self.jds_dir / "a.json").write_text(
             json.dumps({"date": "2026-08-01", "company": "Acme", "role": "Engineer"}),
@@ -141,8 +146,8 @@ class TestMainWritesSuccessMessage(unittest.TestCase):
         )
 
     def tearDown(self):
-        shutil.rmtree(self.jds_dir, ignore_errors=True)
-        shutil.rmtree(self.data_dir, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
 
     def test_success_message_has_no_bracket_tag_and_no_double_prefix(self):
         with (

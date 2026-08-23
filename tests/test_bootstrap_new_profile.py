@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import tempfile
 import unittest
 
 SCRIPTS_DIR = os.path.join(
@@ -16,18 +17,18 @@ import profile_paths  # noqa: E402
 class TestCreateNewProfile(unittest.TestCase):
 
     def setUp(self):
+        # Sandboxed rather than created in the real checkout and swept up
+        # afterwards: a tearDown-based cleanup leaves all four directories
+        # behind whenever the test errors before reaching it.
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
         self.test_profile = "test_profile_xyz"
         self.profile_path = os.path.join(profile_paths.PROFILES_DIR, self.test_profile)
 
     def tearDown(self):
-        if os.path.isdir(self.profile_path):
-            shutil.rmtree(self.profile_path)
-        for path in (
-            profile_paths.jds_dir(self.test_profile),
-            profile_paths.output_dir(self.test_profile),
-            profile_paths.data_dir(self.test_profile),
-        ):
-            shutil.rmtree(path, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
 
     def test_creates_profile_directory_structure(self):
         result = bootstrap_bullet_bank.create_new_profile(self.test_profile)

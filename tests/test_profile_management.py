@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import tempfile
 import unittest
 
 SCRIPTS_DIR = os.path.join(
@@ -14,19 +15,20 @@ import profile_paths  # noqa: E402
 class TestProfileManagement(unittest.TestCase):
 
     def setUp(self):
+        # This class exercises the real rename/delete flows across all four
+        # sync roots, so it used to create and remove directories directly
+        # in the developer's checkout -- leaving them behind whenever a test
+        # errored before tearDown. isolate_for_tests() gives it a sandbox
+        # with the same shape instead.
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
         self.test_profile = "temp_test_profile_99"
         self.target_rename = "temp_test_profile_100"
 
-        # Clean up any leftover test directories
-        for p in [self.test_profile, self.target_rename]:
-            for _, path in profile_paths.sync_roots(p):
-                shutil.rmtree(path, ignore_errors=True)
-
     def tearDown(self):
-        # Clean up
-        for p in [self.test_profile, self.target_rename]:
-            for _, path in profile_paths.sync_roots(p):
-                shutil.rmtree(path, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
 
     def test_rename_profile_directories(self):
         # Create directories for self.test_profile

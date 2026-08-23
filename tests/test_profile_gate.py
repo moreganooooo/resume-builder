@@ -31,9 +31,9 @@ class TestCliProfileFlag(unittest.TestCase):
         runner = CliRunner()
         with patch("cli.tailor.callback"):
             runner.invoke(
-                cli.cli, ["--profile", "morgan", "tailor", "jds/dummy_jd.txt"]
+                cli.cli, ["--profile", "testprofile", "tailor", "jds/dummy_jd.txt"]
             )
-        self.assertEqual(os.environ.get("RESUME_PROFILE"), "morgan")
+        self.assertEqual(os.environ.get("RESUME_PROFILE"), "testprofile")
 
     def test_no_profile_flag_leaves_env_var_untouched(self):
         os.environ.pop("RESUME_PROFILE", None)
@@ -47,8 +47,8 @@ class TestMenuProfileGate(unittest.TestCase):
     # Isolated from the real profiles/ directory via a temp dir patched
     # onto profile_paths.PROFILES_DIR -- these tests used to list()
     # whatever profiles actually exist on the machine running them and
-    # assert against a hardcoded "morgan", which broke the moment the
-    # real profile folder was renamed to different casing ("Morgan").
+    # assert against a hardcoded "testprofile", which broke the moment the
+    # real profile folder was renamed to different casing.
     # A fixture directory means these tests can never again depend on
     # what any real profile is named, on this machine or any other.
 
@@ -58,17 +58,19 @@ class TestMenuProfileGate(unittest.TestCase):
         os.environ.pop("RESUME_PROFILE", None)
         os.environ.pop("RESUME_GUEST_MODE", None)
 
-        self._tmp_profiles_dir = tempfile.mkdtemp()
+        # isolate_for_tests redirects jds/, output/ and data/ as well as
+        # profiles/ -- patching PROFILES_DIR alone left the gate's own
+        # profile-creation path writing jds/testuser into the real checkout.
+        self._sandbox = tempfile.mkdtemp()
+        self._iso = profile_paths.isolate_for_tests(self._sandbox)
+        self._iso.__enter__()
+        self._tmp_profiles_dir = profile_paths.PROFILES_DIR
         os.makedirs(os.path.join(self._tmp_profiles_dir, "testuser"))
         os.makedirs(os.path.join(self._tmp_profiles_dir, "test_profile"))
-        self._profiles_dir_patcher = patch.object(
-            profile_paths, "PROFILES_DIR", self._tmp_profiles_dir
-        )
-        self._profiles_dir_patcher.start()
 
     def tearDown(self):
-        self._profiles_dir_patcher.stop()
-        shutil.rmtree(self._tmp_profiles_dir, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        shutil.rmtree(self._sandbox, ignore_errors=True)
         for var, orig in (
             ("RESUME_PROFILE", self._orig_profile),
             ("RESUME_GUEST_MODE", self._orig_guest),
@@ -120,7 +122,7 @@ class TestMenuProfileGate(unittest.TestCase):
 
     def test_default_selection_matches_active_profile_regardless_of_case(self):
         # Regression: profile_paths.active_profile() falls back to a
-        # hardcoded "morgan" (lowercase) when RESUME_PROFILE is unset. A
+        # default profile name when RESUME_PROFILE is unset. A
         # real profile folder renamed to different casing used to make
         # `current in names` fail, silently falling back to names[0]
         # (alphabetically-first, not necessarily the active profile) as
@@ -155,9 +157,10 @@ class TestMenuProfileGate(unittest.TestCase):
     def test_im_new_here_then_start_setup_marks_guest_mode_before_bootstrap_runs(self):
         # RESUME_PROFILE is unset at this point, so without an explicit
         # signal, _handle_bootstrap()'s own active_profile() call resolves
-        # to "morgan" -- whose profile always exists -- and would skip the
-        # new-profile prompt entirely, routing a real new user's documents
-        # into her knowledge_base/ instead of creating their own. This was
+        # to the default profile -- which always exists -- and would skip
+        # the new-profile prompt entirely, routing a real new user's
+        # documents into THAT profile's knowledge_base/ instead of creating
+        # their own. This was
         # a real, shipped bug: _confirm_active_profile() called
         # _handle_bootstrap() with neither RESUME_PROFILE nor
         # RESUME_GUEST_MODE set.

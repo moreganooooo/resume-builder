@@ -34,7 +34,17 @@ class TestApplicationPackage(unittest.TestCase):
         os.makedirs(os.path.join(tmp_profiles, "testprofile"), exist_ok=True)
 
         for patcher in (
+            # All four roots, not just PROFILES_DIR: create_new_profile()/
+            # write_sync_ignore_files() makedirs jds/, output/ and data/ too,
+            # which otherwise land in the real checkout.
             patch.object(profile_paths, "PROFILES_DIR", tmp_profiles),
+            patch.object(profile_paths, "JDS_ROOT", os.path.join(tmp_profiles, "_jds")),
+            patch.object(
+                profile_paths, "OUTPUT_ROOT", os.path.join(tmp_profiles, "_output")
+            ),
+            patch.object(
+                profile_paths, "DATA_ROOT", os.path.join(tmp_profiles, "_data")
+            ),
             patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
         ):
             patcher.start()

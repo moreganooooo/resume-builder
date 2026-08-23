@@ -11,6 +11,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import jd_manager  # noqa: E402
 import orchestrator  # noqa: E402
@@ -23,6 +24,15 @@ class TestCoverLetterDocxExport(unittest.TestCase):
     failure does."""
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(
             os.path.dirname(__file__), "_tmp_jd_coverletter_docx_export.json"
@@ -138,6 +148,15 @@ class TestResumeDocxExport(unittest.TestCase):
     way a PDF failure does."""
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self._roster_patch = patch(
             "orchestrator._required_role_roster", return_value=[]
         )

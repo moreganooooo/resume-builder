@@ -6,6 +6,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import validate_coverletter  # noqa: E402
 
@@ -79,11 +80,17 @@ class TestValidateCoverLetter(unittest.TestCase):
         self.assertTrue(any("Expected 2-4 body paragraphs" in v for v in violations))
 
     def test_flags_third_person_slip(self):
+        """The detector looks for the ACTIVE profile's own first name, so
+        this has to run against a known profile rather than whichever one
+        the operator happens to have configured."""
+        import persona
+
         letter = _valid_letter()
         letter["body_paragraphs"][
             0
-        ] = "Morgan has years of experience in content strategy."
-        violations = validate_coverletter.validate(letter, STYLE_RULES)
+        ] = f"{persona.FIRST_NAME} has years of experience in content strategy."
+        with persona.sandbox_profile():
+            violations = validate_coverletter.validate(letter, STYLE_RULES)
         self.assertTrue(any("Third-person self-reference" in v for v in violations))
 
     def test_flags_cliched_openers(self):
@@ -91,7 +98,7 @@ class TestValidateCoverLetter(unittest.TestCase):
             "I am writing to express my interest in the Content Strategist role.",
             "I was excited to see your job opening.",
             "I am thrilled to apply for this job.",
-            "My name is Morgan and I am writing...",
+            "My name is Alex and I am writing...",
             "Please accept this letter as my official application.",
             "With great enthusiasm, I submit my candidacy.",
         ]

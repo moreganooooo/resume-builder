@@ -53,29 +53,36 @@ class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
 
 
 class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
-    """A real, shipped bug: RESUME_PROFILE unset resolves to "morgan" (whose
-    profile always exists), so without an explicit signal, a genuine new
-    user reaching _handle_bootstrap() via "Start new user setup now" would
-    skip the name prompt entirely and have their documents routed into
-    Morgan's own knowledge_base/ instead of creating their own profile."""
+    """A real, shipped bug: RESUME_PROFILE unset used to resolve to a
+    hardcoded default profile (which always exists), so without an explicit
+    signal a genuine new user reaching _handle_bootstrap() via "Start new
+    user setup now" would skip the name prompt entirely and have their
+    documents routed into the EXISTING profile's knowledge_base/ instead of
+    creating their own."""
 
     def setUp(self):
+        import tempfile
+
+        import profile_paths
+
         self._orig_profile = os.environ.get("RESUME_PROFILE")
         self._orig_guest = os.environ.get("RESUME_GUEST_MODE")
         os.environ.pop("RESUME_PROFILE", None)
         self.test_profile_name = "test_guest_trigger_profile_xyz"
+        # Sandbox all four roots up front rather than sweeping them out of
+        # the real checkout afterwards -- the tearDown cleanup below only
+        # runs when the test gets that far.
+        self._tmp = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self._tmp.name)
+        self._iso.__enter__()
 
     def tearDown(self):
         import shutil
 
         import profile_paths
 
-        # Iterate sync_roots() rather than removing profiles/<name>/ alone.
-        # create_new_profile() seeds all four, so removing one left
-        # jds/, output/ and data/ test_guest_trigger_profile_xyz/ orphaned in
-        # the repo -- each with a stray .stignore -- since 2026-07-22.
-        for _label, path in profile_paths.sync_roots(self.test_profile_name):
-            shutil.rmtree(path, ignore_errors=True)
+        self._iso.__exit__(None, None, None)
+        self._tmp.cleanup()
         for var, orig in (
             ("RESUME_PROFILE", self._orig_profile),
             ("RESUME_GUEST_MODE", self._orig_guest),
@@ -87,9 +94,25 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
         # set_active_profile() reloads jd_manager against whatever
         # RESUME_PROFILE ends up restored to, so jd_manager isn't left
         # pointed at the now-deleted test profile for later tests.
+        #
+        # Restore ONLY what was actually there. This used to fall back to a
+        # hardcoded profile name when nothing was set, which raises inside
+        # set_active_profile() on any machine where that profile does not
+        # exist -- and because the raise happens in tearDown, RESUME_PROFILE
+        # is left pointing at the bogus name and every subsequent test in
+        # the run fails too. It passed only where the developer always had
+        # the variable exported; a second user saw 231 cascading errors.
+        import importlib
+        import sys
+
         import profile_paths as pp
 
-        pp.set_active_profile(self._orig_profile or "morgan")
+        if self._orig_profile:
+            pp.set_active_profile(self._orig_profile)
+        else:
+            os.environ.pop("RESUME_PROFILE", None)
+            if "jd_manager" in sys.modules:
+                importlib.reload(sys.modules["jd_manager"])
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.subprocess.run")
@@ -137,7 +160,7 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
     ):
         # RESUME_GUEST_MODE unset, profile already set up -> should NOT
         # shell out to the Go wizard (this is the normal, unchanged
-        # Morgan-daily-use path, and the exact regression this test guards).
+        # normal daily-use path, and the exact regression this test guards).
         os.environ.pop("RESUME_GUEST_MODE", None)
 
         menu._handle_bootstrap()

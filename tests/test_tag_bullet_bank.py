@@ -6,6 +6,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import tag_bullet_bank  # noqa: E402
 
@@ -16,9 +17,29 @@ class TestTagBulletBankReadsProfileYaml(unittest.TestCase):
     constants here, duplicating (and, by 2026-07-17, already drifted from)
     orchestrator.py's/rewrite_bullets.py's own separate copies of the same
     marketing-specific taxonomy. Both tag_keywords() and fallback_tag() now
-    read profile.yml's tags: instead -- these confirm the real (Morgan)
-    profile still produces sane, unbroken tagging.
+    read profile.yml's tags: instead -- these confirm a populated taxonomy
+    still produces sane, unbroken tagging.
+
+    Runs against tests/persona.py's taxonomy rather than whichever profile
+    the operator happens to have configured: a freshly bootstrapped profile
+    declares no tags at all, so these asserted nothing for anyone but the
+    original author.
     """
+
+    def setUp(self):
+        import importlib
+
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        importlib.reload(tag_bullet_bank)
+
+    def tearDown(self):
+        import importlib
+
+        self._sandbox.__exit__(None, None, None)
+        importlib.reload(tag_bullet_bank)
 
     def test_assigns_a_confident_single_tag_on_a_unique_keyword_hit(self):
         tag_str, needs_review = tag_bullet_bank.assign_tags(

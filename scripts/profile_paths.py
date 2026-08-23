@@ -7,11 +7,24 @@ profile's personalization data lives, and jds/<name>/, output/<name>/,
 data/<name>/ become the one place a profile's operational data lives --
 with zero risk of two profiles colliding in the same checkout.
 
-RESUME_PROFILE unset defaults to "morgan" (backward compatible with every
-existing workflow). RESUME_PROFILE set to a name with no matching
-profiles/<name>/ directory is a hard failure, not a silent fallback --
-silently reading the wrong profile's data on a typo is exactly the bug
-this module exists to prevent.
+RESUME_PROFILE unset resolves through _default_profile(), which reads what
+is actually on disk: the only profile when there is exactly one, otherwise
+the legacy name if present, else the first alphabetically. It used to
+return a hardcoded "morgan" unconditionally, which silently handed anyone
+whose profile is named something else a path to a directory that does not
+exist on their machine.
+
+RESUME_PROFILE set to a name with no matching profiles/<name>/ directory
+is a hard failure, not a silent fallback -- silently reading the wrong
+profile's data on a typo is exactly the bug this module exists to prevent.
+The one accommodation is a case-insensitive match against the real
+listing, since macOS and Linux disagree about whether profiles/Morgan and
+profiles/morgan are the same directory.
+
+Entry points should call preflight_profile() before importing anything
+profile-scoped: jd_manager resolves its path constants at MODULE level, so
+an unresolvable name otherwise aborts the process with a raw traceback
+before any recovery flow can run.
 """
 
 import importlib.util
@@ -21,19 +34,264 @@ import yaml
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+# The four roots a profile's data lives under. These are separate module
+# constants -- rather than joined off PROJECT_ROOT at call time -- because
+# a test that isolates itself by patching PROFILES_DIR alone is only
+# ONE-QUARTER isolated: profiles/ is redirected while jds/, output/, and
+# data/ still resolve into the real checkout. create_new_profile() calls
+# write_sync_ignore_files(), which os.makedirs() every one of these, so a
+# half-patched test silently creates jds/<name>/, output/<name>/, and
+# data/<name>/ in the developer's own tree. That is how jds/testprofile,
+# jds/testuser, and friends accumulated there. Use isolate_for_tests()
+# instead of patching any of these individually.
 PROFILES_DIR = os.path.join(PROJECT_ROOT, "profiles")
+JDS_ROOT = os.path.join(PROJECT_ROOT, "jds")
+OUTPUT_ROOT = os.path.join(PROJECT_ROOT, "output")
+DATA_ROOT = os.path.join(PROJECT_ROOT, "data")
+
+
+def rename_profile(old: str, new: str) -> list:
+    """Renames a profile across ALL FOUR of its sync roots.
+
+    Centralized here, next to sync_roots(), so the rule "a profile is four
+    directories" has one owner. The menu's inline version validated only
+    that the new name was non-empty and not a duplicate -- so a name
+    containing "/" or ".." reached os.rename() and could move a profile
+    anywhere on disk. create_new_profile() has rejected those since it was
+    written; rename had no such check.
+
+    Returns [(label, old_path, new_path), ...] for what actually moved, so
+    the caller can report it. Raises ValueError on a bad name and
+    FileExistsError if any destination already exists -- checked for ALL
+    roots BEFORE moving any of them, so a half-renamed profile is not
+    possible.
+
+    Callers must still tell the user about the two things this function
+    cannot fix: Syncthing folder paths and git tracking. See
+    rename_side_effects() for that text.
+    """
+    import bootstrap_bullet_bank
+
+    if not bootstrap_bullet_bank._VALID_PROFILE_NAME.match(new or ""):
+        raise ValueError(
+            f"Invalid profile name {new!r} -- use only letters, digits, "
+            "underscores, and hyphens."
+        )
+    if old == new:
+        raise ValueError("The new name is the same as the old one.")
+
+    planned = []
+    for label, path in sync_roots(old):
+        if not os.path.exists(path):
+            continue
+        new_path = os.path.join(os.path.dirname(path), new)
+        # Case-insensitive filesystems (macOS) resolve profiles/morgan and
+        # profiles/Morgan to the same directory, so a pure case change is
+        # a legitimate rename whose destination "already exists".
+        if os.path.exists(new_path) and old.lower() != new.lower():
+            raise FileExistsError(
+                f"{new_path} already exists -- refusing to overwrite it."
+            )
+        planned.append((label, path, new_path))
+
+    for _label, path, new_path in planned:
+        os.rename(path, new_path)
+    return planned
+
+
+def rename_side_effects(old: str, new: str) -> list:
+    """The things a rename cannot do for the user, as (topic, text) pairs.
+
+    Kept beside rename_profile() rather than inline in the menu because
+    both are consequences of the same fact -- a profile is four real
+    directories that other tools point at by absolute path."""
+    return [
+        (
+            "Syncthing",
+            "Each of this profile's four directories is a SEPARATE Syncthing "
+            "folder, configured by absolute path on every paired device. "
+            "Renaming them here does NOT rename them in Syncthing: the old "
+            "paths are now missing, and Syncthing may treat that as a "
+            "deletion and propagate it to your other machines. Before you "
+            "let those devices sync, pause the four folders in Syncthing on "
+            "every device, repoint each to the new path, then resume.",
+        ),
+        (
+            "git",
+            f"profiles/{new}/board_scanner/*.yml are tracked files. Git sees "
+            f"this rename as deleting profiles/{old}/board_scanner/ and "
+            "adding an untracked copy, so commit it with:\n"
+            f"    git add -A profiles/{old} profiles/{new}",
+        ),
+        (
+            "your shell",
+            "RESUME_PROFILE is exported per terminal session by "
+            "scripts/resume-cli.sh, so any OTHER open terminal still has the "
+            f"old name. Run `export RESUME_PROFILE={new}` in those, or just "
+            "open a new terminal.",
+        ),
+    ]
+
+
+def isolate_for_tests(root: str):
+    """Context manager redirecting ALL FOUR profile-data roots into
+    `root`, for tests that create or write profiles.
+
+    Use this instead of patching PROFILES_DIR by hand. Patching that one
+    constant looks like isolation but leaves jds/, output/, and data/
+    pointing at the real checkout, so create_new_profile() ->
+    write_sync_ignore_files() quietly makedirs jds/<name>/,
+    output/<name>/, and data/<name>/ in the developer's own tree. Every
+    stray jds/testprofile, jds/testuser, output/temp_empty and friend in
+    this repo got there that way.
+
+    Yields the root so callers can assert against it:
+
+        with profile_paths.isolate_for_tests(tmp) as sandbox:
+            bootstrap_bullet_bank.create_new_profile("alice")
+    """
+    import contextlib
+    import sys
+    from unittest.mock import patch
+
+    me = sys.modules[__name__]
+
+    @contextlib.contextmanager
+    def _cm():
+        with (
+            patch.object(me, "PROFILES_DIR", os.path.join(root, "profiles")),
+            patch.object(me, "JDS_ROOT", os.path.join(root, "jds")),
+            patch.object(me, "OUTPUT_ROOT", os.path.join(root, "output")),
+            patch.object(me, "DATA_ROOT", os.path.join(root, "data")),
+        ):
+            os.makedirs(os.path.join(root, "profiles"), exist_ok=True)
+            yield root
+
+    return _cm()
+
+
+def available_profiles() -> list:
+    """Every profiles/<name>/ directory actually on disk, sorted."""
+    if not os.path.isdir(PROFILES_DIR):
+        return []
+    return sorted(
+        n
+        for n in os.listdir(PROFILES_DIR)
+        if os.path.isdir(os.path.join(PROFILES_DIR, n))
+    )
+
+
+#: Legacy default, kept only as the last resort when no profile exists at
+#: all (a fresh clone). It is NOT an assumption that the operator is this
+#: person -- see _default_profile().
+_LEGACY_DEFAULT_PROFILE = "morgan"
+
+
+def _default_profile() -> str:
+    """Which profile to use when RESUME_PROFILE is unset.
+
+    Returning a hardcoded "morgan" unconditionally meant that anyone whose
+    profile is named anything else -- a second person sharing the checkout,
+    or a stranger who cloned it from GitHub -- silently got paths pointing
+    at a profile directory that does not exist on their machine. Nothing
+    raised; every derived path was simply wrong.
+
+    Resolution order:
+      1. Exactly one profile on disk -- use it. Unambiguous for everyone,
+         and the common case for a fresh single-user setup.
+      2. Several profiles -- prefer the legacy default if it is one of
+         them (so existing setups are untouched), else the first
+         alphabetically, so the answer is at least deterministic. The
+         shell wrapper already prompts in this situation; this only
+         governs a direct `python scripts/...` invocation.
+      3. No profiles at all -- the legacy name, so the "profiles/morgan/
+         does not exist" message downstream still reads sensibly.
+    """
+    names = available_profiles()
+    if len(names) == 1:
+        return names[0]
+    if names:
+        by_lower = {n.lower(): n for n in names}
+        return by_lower.get(_LEGACY_DEFAULT_PROFILE, sorted(names)[0])
+    return _LEGACY_DEFAULT_PROFILE
 
 
 def active_profile() -> str:
     name = os.environ.get("RESUME_PROFILE")
     if name is None:
-        return "morgan"
-    if not os.path.isdir(os.path.join(PROFILES_DIR, name)):
-        raise ValueError(
-            f"RESUME_PROFILE is set to {name!r}, but profiles/{name}/ does not exist. "
-            "Check for a typo, or create it via the bootstrap 'New Profile' flow."
+        return _default_profile()
+    if os.path.isdir(os.path.join(PROFILES_DIR, name)):
+        return name
+    # The name did not resolve as spelled. Before failing, try the real
+    # on-disk listing case-insensitively: macOS resolves profiles/Morgan
+    # and profiles/morgan to the same directory, so a name that works on
+    # the machine a profile was created on can fail outright on a Linux
+    # Syncthing peer whose checkout has the other spelling. This is the
+    # same resolve-against-the-listing rule menu._confirm_active_profile()
+    # already follows.
+    #
+    # Deliberately a FALLBACK, not the primary path: normalizing every
+    # lookup to the directory's spelling would propagate whichever casing
+    # one machine happens to have into every derived path, which is a
+    # behaviour change for profiles that already resolve correctly.
+    match = {n.lower(): n for n in available_profiles()}.get(name.lower())
+    if match:
+        return match
+    raise ValueError(
+        f"RESUME_PROFILE is set to {name!r}, but profiles/{name}/ does not exist. "
+        "Check for a typo, or create it via the bootstrap 'New Profile' flow."
+    )
+
+
+def preflight_profile(stream=None) -> bool:
+    """Entry-point guard: turns an unresolvable RESUME_PROFILE into an
+    actionable message instead of an import-time traceback.
+
+    jd_manager.py resolves JDS_DIR = jds_dir() at MODULE level, and
+    cli_art imports jd_manager -- so a typo'd RESUME_PROFILE killed
+    `resume`, the menu, and `resume doctor` with a raw ValueError before
+    any gate, handler, or recovery flow could run. The old error text even
+    pointed at the bootstrap 'New Profile' flow, which was unreachable by
+    definition. Worse, resume-cli.sh EXPORTS the variable, so the broken
+    state persisted for the whole terminal session.
+
+    Call this before importing anything that touches profile paths.
+    Returns True if the profile resolves (or is unset); False if the
+    caller should stop. Never raises."""
+    import sys
+
+    out = stream or sys.stderr
+    name = os.environ.get("RESUME_PROFILE")
+    if name is None:
+        return True
+    try:
+        active_profile()
+        return True
+    except ValueError:
+        pass
+
+    names = available_profiles()
+    print(
+        f"\n  RESUME_PROFILE is set to {name!r}, but profiles/{name}/ does not exist.",
+        file=out,
+    )
+    if names:
+        print(f"  Available profiles: {', '.join(names)}", file=out)
+        print(f"\n  Fix it with one of:", file=out)
+        print(f"    unset RESUME_PROFILE            # use the default", file=out)
+        print(
+            f"    export RESUME_PROFILE={names[0]}   # pick an existing one", file=out
         )
-    return name
+    else:
+        print("  No profiles exist yet.", file=out)
+        print("\n  Fix it with:", file=out)
+        print(
+            "    unset RESUME_PROFILE && resume    # then choose 'New User? Start Here!'",
+            file=out,
+        )
+    print("", file=out)
+    return False
 
 
 # Modules that compute profile-scoped paths as module-level constants
@@ -106,201 +364,6 @@ def company_locations_cache_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "company_locations.json")
 
 
-def _make_fallback_fixed_content():
-    import types
-
-    mod = types.ModuleType("fixed_content_fallback")
-    mod.CONTACT_INFO = {
-        "NAME": "Morgan Escott",
-        "PHONE": "716-352-9050",
-        "EMAIL": "escott.morgan@gmail.com",
-        "LINKEDIN_DISPLAY": "linkedin.com/in/morganescott",
-        "LOCATION": "Getzville, NY (Buffalo Area)",
-    }
-    mod.COMPANY_META = {
-        "Mercor": {
-            "size_revenue": "~800 employees; $75M+ revenue",
-            "location": "Short-Term Contract | Remote",
-        },
-        "Treering Yearbooks": {
-            "size_revenue": "~120 employees; $17M+ revenue",
-            "location": "Remote",
-        },
-        "Inside Sales Team": {
-            "size_revenue": "~150 employees; ~$21M revenue",
-            "location": "Buffalo, NY",
-        },
-        "Element 8 / Strategy LLC": {
-            "size_revenue": "~10–15 employees; ~$1M+ revenue",
-            "location": "Lenexa, KS",
-        },
-        "VML": {
-            "size_revenue": "~600+ employees; ~$75M+ revenue",
-            "location": "Kansas City, MO",
-        },
-        "Callahan Creek": {
-            "size_revenue": "~30 employees; ~$5M revenue",
-            "location": "Lawrence, KS",
-        },
-        "Humane Society of Greater Kansas City": {"location": "Kansas City, MO"},
-        "Unisource Document Products": {},
-        "Kansas Colloquies": {"location": "Bonner Springs, KS"},
-        "KU Payroll Office": {"location": "Lawrence, KS"},
-        "DeJoy, Knauff & Blood": {"location": "Rochester, NY"},
-        "USitek": {},
-    }
-    mod.COMPANY_TITLE_DESCRIPTOR = {
-        "Mercor": "AI Training",
-        "Treering Yearbooks": "SaaS/EdTech",
-        "Inside Sales Team": "Outbound/Agency",
-        "Element 8 / Strategy LLC": "Design/Agency/Startup",
-        "VML": "Agency/Digital/Brand",
-        "Callahan Creek": "Agency/Creative/Brand",
-        "Humane Society of Greater Kansas City": "Nonprofit/Animal Welfare",
-        "Unisource Document Products": "Print/Document Solutions",
-        "Kansas Colloquies": "Student Journalism",
-        "KU Payroll Office": "Higher Ed/Payroll",
-        "DeJoy, Knauff & Blood": "Tax/Accounting",
-        "USitek": "Clerical/Graphic Design",
-    }
-    mod.CLIENTS = {
-        "VML": {
-            "list": "SAP, Equinix, HughesNet, The Children's Place, Welch Allyn, Waste Management, Carlson Hotels, Gatorade",
-            "essential": True,
-        },
-        "Callahan Creek": {
-            "list": "Hill's Pet Nutrition, CommunityAmerica Credit Union, Sprint, Dave Ramsey, Free State Brewery, KC Ad Club",
-            "essential": True,
-        },
-    }
-    mod.COMPANY_RENAME_NOTE = {
-        "Inside Sales Team": "Alleyoop",
-        "Callahan Creek": "BarkleyOKRP",
-    }
-    mod.COMPANY_FIXED_TITLE = {
-        "Element 8 / Strategy LLC": "Design Assistant → Lead Designer",
-    }
-    mod.CAREER_NOTE = (
-        "After a fulfilling run at Treering, I took time in 2024–25 to support a loved one's "
-        "health and invest in my professional growth. I'm excited to return to work with "
-        "renewed focus."
-    )
-    mod.CAREER_NOTE_COMPANY = "Treering Yearbooks"
-    mod.CAREER_BREAK_ENTRY = {
-        "company": "Career Break — Professional Development & Retraining",
-        "title": "SaaS Strategy, Data Analytics, & Automation",
-        "period": "08/2024 - 08/2025",
-        "location": "Remote",
-        "achievements": [
-            "Completed comprehensive certifications in Google Data Analytics and HubSpot Lifecycle Marketing Software.",
-            "Developed personal data pipelines and campaign flow automation projects applying Python and SQL to campaign databases.",
-            "Managed family transition logistics and personal caregiving responsibilities with structured weekly timelines.",
-        ],
-    }
-    mod.CERTIFICATIONS = [
-        {
-            "title": "Email Marketing Software Certification",
-            "org": "HubSpot",
-            "year": "2026",
-        },
-        {"title": "Video for Sales Certification", "org": "Vidyard", "year": "2021"},
-        {
-            "title": "Camp Portfolio",
-            "org": "Bernstein Rein, Kansas City",
-            "year": "2008",
-        },
-    ]
-    mod.CV_SECTION_KEYWORDS = [
-        (["treering", "tree ring", "yearbook"], "Treering Yearbooks"),
-        (["inside sales", "alleyoop", "ist"], "Inside Sales Team"),
-        (["usitek"], "USitek"),
-        (["element 8", "strategy llc"], "Element 8 / Strategy LLC"),
-        (["vml"], "VML"),
-        (["callahan"], "Callahan Creek"),
-        (["unisource", "udp"], "Unisource Document Products"),
-        (["humane society"], "Humane Society of Greater Kansas City"),
-        (["mercor"], "Mercor"),
-    ]
-    mod.KU_ACHIEVEMENT_OPTIONS = {
-        "content_generalist": "Marketing Intern, Lied Center of Performing Arts, drove 800% social media follower growth through organic content strategy and audience engagement",
-        "email_ops": "Marketing Intern, Lied Center of Performing Arts, managed promotional campaigns and digital channels, growing social media following by 800%",
-        "content": "Marketing Intern, Lied Center of Performing Arts, produced editorial and promotional content across channels, built early instinct for audience-specific messaging",
-    }
-    mod.KCKCC_ACHIEVEMENT_OPTIONS = {
-        "writing_content": "Editor-in-Chief, student newspaper for 1.5 years, assigned coverage, led editorial team, and managed weekly publication from story conception through print",
-        "enablement_mgmt": "Editor-in-Chief, student newspaper, led a team of reporters and columnists, managed editorial calendar, and upheld writing and voice standards across all content",
-        "generalist": "Editor-in-Chief, Kansas Colloquies student newspaper, managed publication end-to-end for 1.5 years while maintaining a full academic scholarship",
-    }
-    mod.BACKGROUND_IDENTITY = """
-Morgan is a creative and strategic marketer with 10+ years of experience spanning journalism,
-design, agency work, sales, CRM, and lifecycle content. She is the rare combination: writes
-campaigns that perform AND operates the stack (Salesforce + Outreach.io). She brings structure
-to creative work and energy to technical systems. She is seeking fully remote IC roles — not
-management. She has consistently been the person companies come back to: Callahan Creek extended
-her from intern to freelance; Element 8's CEO recruited her to lead Strategy LLC branding;
-Treering headhunted her directly from IST.
-""".strip()
-    mod.BACKGROUND_TAGS = {}
-
-    def _build_education(achievement_keys: dict = None) -> list:
-        achievement_keys = achievement_keys or {}
-        ku_achievement_key = achievement_keys.get("University of Kansas", "")
-        kckcc_achievement_key = achievement_keys.get(
-            "Kansas City Kansas Community College", ""
-        )
-
-        ku_options = getattr(mod, "KU_ACHIEVEMENT_OPTIONS", {})
-        kckcc_options = getattr(mod, "KCKCC_ACHIEVEMENT_OPTIONS", {})
-
-        if ku_achievement_key not in ku_options:
-            print(
-                f"  ⚠  WARNING: unrecognized KU achievement key {ku_achievement_key!r}, falling back to first option."
-            )
-        ku_bullet = ku_options.get(
-            ku_achievement_key,
-            next(iter(ku_options.values())) if ku_options else "",
-        )
-        if kckcc_achievement_key not in kckcc_options:
-            print(
-                f"  ⚠  WARNING: unrecognized KCKCC achievement key {kckcc_achievement_key!r}, falling back to first option."
-            )
-        kckcc_bullet = kckcc_options.get(
-            kckcc_achievement_key,
-            next(iter(kckcc_options.values())) if kckcc_options else "",
-        )
-        return [
-            {
-                "degree": "BS, Journalism + Strategic Communication",
-                "institution": "University of Kansas",
-                "location": "Lawrence, KS",
-                "bullets": [
-                    "3.56 GPA, Phi Theta Kappa Scholarship recipient",
-                    ku_bullet,
-                ],
-            },
-            {
-                "degree": "AA, Journalism",
-                "institution": "Kansas City Kansas Community College",
-                "location": "Kansas City, KS",
-                "bullets": [
-                    "3.75 GPA, Full academic scholarship, Graduated with honors",
-                    kckcc_bullet,
-                ],
-            },
-            {
-                "degree": "Coursework, Graphic Design",
-                "institution": "Johnson County Community College",
-                "location": "Overland Park, KS",
-                "bullets": [
-                    "3.86 GPA, studied color theory, typography, illustration, 3D concepts, desktop publishing, and film photography",
-                ],
-            },
-        ]
-
-    mod.build_education = _build_education
-    return mod
-
-
 def fixed_content_module(profile: str = None):
     """Dynamically imports profiles/<profile>/fixed_content.py and returns
     the loaded module object -- the per-profile replacement for a static
@@ -308,294 +371,54 @@ def fixed_content_module(profile: str = None):
     name = profile or active_profile()
     path = os.path.join(profile_root(name), "fixed_content.py")
     if not os.path.exists(path):
-        if name == "morgan" or profile is None:
-            return _make_fallback_fixed_content()
         raise ImportError(
-            f"profiles/{name}/fixed_content.py not found -- has this profile been bootstrapped?"
+            f"profiles/{name}/fixed_content.py not found -- has this profile "
+            'been bootstrapped? Run `resume` -> "New User? Start Here!" '
+            "(or `resume bootstrap`) to set this profile up."
         )
     spec = importlib.util.spec_from_file_location(f"fixed_content_{name}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    _fill_contact_info_from_profile_yaml(module, name)
     return module
 
 
-def _make_fallback_profile_yaml() -> dict:
-    return {
-        "candidate": {
-            "full_name": "Morgan Escott",
-            "first_name": "Morgan",
-            "last_name": "Escott",
-            "email": "escott.morgan@gmail.com",
-            "phone": "+1-716-352-9050",
-            "location": "Getzville, NY (Buffalo Area)",
-            "linkedin": "linkedin.com/in/morganescott",
-            "portfolio_url": "https://escottmorgan.myportfolio.com",
-            "process_map_url": "https://escottmorgan.wixsite.com/processmap",
-            "pronouns": ["she", "her", "hers"],
-        },
-        "location": {
-            "remote_required": True,
-            "candidate_location": "Getzville, NY (Buffalo Area)",
-        },
-        "fixed_credentials": {
-            "certifications": [
-                {
-                    "name": "Email Marketing Software Certification",
-                    "issuer": "HubSpot",
-                    "year": 2026,
-                },
-                {
-                    "name": "Video for Sales Certification",
-                    "issuer": "Vidyard",
-                    "year": 2021,
-                },
-                {
-                    "name": "Camp Portfolio",
-                    "issuer": "Bernstein Rein, Kansas City",
-                    "year": 2008,
-                },
-            ],
-            "education": [
-                {
-                    "institution": "University of Kansas",
-                    "credential": "BS, Journalism + Strategic Communication",
-                    "bullet_count": 2,
-                    "achievement_options": {
-                        "content_generalist": "broad audience-growth framing",
-                        "email_ops": "campaign/channel management framing",
-                        "content": "editorial/content-production framing",
-                    },
-                },
-                {
-                    "institution": "Kansas City Kansas Community College",
-                    "credential": "AA, Journalism",
-                    "bullet_count": 2,
-                    "achievement_options": {
-                        "writing_content": "editorial/writing framing",
-                        "enablement_mgmt": "team leadership/enablement framing",
-                        "generalist": "balanced ownership framing",
-                    },
-                },
-                {
-                    "institution": "Johnson County Community College",
-                    "credential": "Coursework, Graphic Design",
-                    "bullet_count": 1,
-                },
-            ],
-        },
-        "roles": [
-            {
-                "name": "Mercor",
-                "min_bullets": 2,
-                "target_bullets": 3,
-                "page": 1,
-                "flex_priority": 2,
-            },
-            {
-                "name": "Treering Yearbooks",
-                "min_bullets": 6,
-                "target_bullets": 7,
-                "page": 1,
-                "flex_priority": 1,
-            },
-            {
-                "name": "Inside Sales Team",
-                "min_bullets": 4,
-                "target_bullets": 5,
-                "page": 1,
-                "flex_priority": 1,
-                "must_fit_page_1": True,
-            },
-            {
-                "name": "Element 8 / Strategy LLC",
-                "min_bullets": 3,
-                "target_bullets": 4,
-                "page": 2,
-                "flex_priority": 2,
-            },
-            {
-                "name": "VML",
-                "min_bullets": 3,
-                "target_bullets": 4,
-                "page": 2,
-                "flex_priority": 2,
-            },
-            {
-                "name": "Callahan Creek",
-                "min_bullets": 3,
-                "target_bullets": 4,
-                "page": 2,
-                "flex_priority": 2,
-            },
-        ],
-        "protected_bullets": [
-            "Outreach.io full platform ownership (vendor eval, Salesforce integration, migration, adoption training, ongoing stewardship)",
-            "CRM scrub: scale (thousands of accounts), systematic audit, verified $3M pipeline recovery",
-            "Content Committee: founded and chaired, 100+ assets, 129 sequences, QA process, voice/tone guidelines",
-            "SDR Process Map: 8-step website used as official onboarding asset years after creation",
-        ],
-        "voice_calibration_example": "It felt like more than an opportunity -- it felt like alignment.",
-        "tags": [
-            {
-                "name": "email",
-                "persona_description": "email marketing, lifecycle marketing, or CRM/ESP campaign roles",
-                "keywords": [
-                    "email",
-                    "open rate",
-                    "reply rate",
-                    "sequence",
-                    "outreach",
-                    "campaign",
-                    "pta",
-                    "hot zone",
-                    "mailchimp",
-                    "persistiq",
-                ],
-            },
-            {
-                "name": "ops",
-                "persona_description": "marketing operations, RevOps, CRM, automation, or analytics roles",
-                "keywords": [
-                    "salesforce",
-                    "crm",
-                    "pipeline",
-                    "territory",
-                    "hygiene",
-                    "data",
-                    "hot zone",
-                    "import",
-                    "outreach",
-                    "integration",
-                ],
-            },
-            {
-                "name": "content",
-                "persona_description": "content marketing, editorial strategy, brand voice, or copywriting roles",
-                "keywords": [
-                    "content",
-                    "committee",
-                    "asset",
-                    "library",
-                    "governance",
-                    "voice",
-                    "sequence",
-                    "playbook",
-                    "onboarding",
-                    "training",
-                ],
-            },
-            {
-                "name": "enablement",
-                "persona_description": "sales enablement, training/onboarding design, or content-governance roles",
-                "keywords": [
-                    "training",
-                    "onboarding",
-                    "playbook",
-                    "sdr",
-                    "enablement",
-                    "committee",
-                    "process map",
-                    "coaching",
-                ],
-            },
-            {
-                "name": "mgmt",
-                "persona_description": "team leadership, coaching, or people-management roles",
-                "keywords": [
-                    "team",
-                    "coach",
-                    "manage",
-                    "sdr",
-                    "direct report",
-                    "training",
-                ],
-            },
-            {
-                "name": "writing",
-                "persona_description": "copywriting, editorial, or long-form content-writing roles",
-                "keywords": [
-                    "copy",
-                    "writing",
-                    "email",
-                    "sequence",
-                    "campaign",
-                    "authored",
-                ],
-            },
-            {
-                "name": "brand",
-                "persona_description": "brand marketing, creative direction, or agency roles",
-                "keywords": [
-                    "brand",
-                    "voice",
-                    "tone",
-                    "agency",
-                    "campaign",
-                    "creative",
-                ],
-            },
-            {
-                "name": "design",
-                "persona_description": "graphic design, visual identity, or UX/UI roles",
-                "keywords": [
-                    "design",
-                    "deck",
-                    "slide",
-                    "flyer",
-                    "illustrator",
-                    "canva",
-                ],
-            },
-            {
-                "name": "generalist",
-                "persona_description": "general marketing or cross-functional roles",
-                "keywords": [],
-            },
-        ],
-        "deep_evidence_keywords": ["Treering Yearbooks"],
-        "target_roles": {
-            "primary": [
-                "Marketing Manager",
-                "Customer Marketing Manager",
-                "Content Marketing Manager",
-                "Email Marketing Specialist",
-                "Lifecycle Marketing Specialist",
-                "Sales Enablement Specialist",
-                "Onboarding Specialist",
-                "Implementation Specialist",
-            ],
-            "secondary": [
-                "Customer Education Specialist",
-                "Customer Adoption Specialist",
-                "Content Operations Specialist",
-                "Revenue Enablement Specialist",
-                "B2B Content Strategist",
-                "Campaign Specialist",
-                "Campaign Manager",
-                "CRM Marketing Specialist",
-                "Marketing Operations Specialist",
-                "Content Writer",
-                "Copywriter",
-                "Marketing Communications Specialist",
-            ],
-        },
-        "archetypes": {
-            "archetypes": [
-                {
-                    "name": "Customer Marketing Manager",
-                    "level": "Mid-Senior",
-                    "fit": "primary",
-                    "notes": "Customer engagement, onboarding, retention campaigns, advocacy, adoption programs, customer communications, and lifecycle journey design.",
-                },
-                {
-                    "name": "Lifecycle Marketing Specialist",
-                    "level": "Mid-Senior",
-                    "fit": "primary",
-                    "notes": "Lifecycle email sequences, automated journeys, user onboarding flows, segmentation, retention triggers, and ESP/CRM tooling.",
-                },
-            ]
-        },
-    }
+# profile.yml's candidate block is the single source of truth for identity
+# -- bootstrap_profile.run_profile_setup() writes it, and nothing has ever
+# written fixed_content.py's CONTACT_INFO after create_new_profile()
+# scaffolds it with five empty strings. Every bootstrapped profile
+# therefore rendered a nameless resume until this mapping existed.
+_CONTACT_INFO_FROM_CANDIDATE = {
+    "NAME": "full_name",
+    "PHONE": "phone",
+    "EMAIL": "email",
+    "LOCATION": "location",
+    "LINKEDIN_DISPLAY": "linkedin",
+}
+
+
+def _fill_contact_info_from_profile_yaml(module, profile: str) -> None:
+    """Fills any missing/blank CONTACT_INFO key from profile.yml's
+    candidate block. Deliberately fill-only, never override: an
+    explicitly-set value in fixed_content.py wins, because the two stores
+    legitimately disagree on formatting -- an established profile's
+    profile.yml may carry a fully-qualified '+1-XXX-XXX-XXXX' phone while
+    every resume it has ever rendered shows the shorter CONTACT_INFO form.
+    Overriding would silently change existing output; filling only blanks
+    is a provable no-op for a populated profile and the entire fix for a
+    freshly bootstrapped one.
+
+    Also guarantees all five keys exist on the returned module:
+    render_coverletter.py reads contact["NAME"]/["PHONE"]/["EMAIL"]/
+    ["LINKEDIN_DISPLAY"]/["LOCATION"] by direct subscript, so a missing
+    key is a KeyError mid-render rather than a blank line."""
+    contact = dict(getattr(module, "CONTACT_INFO", None) or {})
+    candidate = (profile_yaml(profile) or {}).get("candidate") or {}
+    for key, candidate_key in _CONTACT_INFO_FROM_CANDIDATE.items():
+        if str(contact.get(key) or "").strip():
+            continue
+        contact[key] = str(candidate.get(candidate_key) or "").strip()
+    module.CONTACT_INFO = contact
 
 
 def profile_yaml(profile: str = None) -> dict:
@@ -606,8 +429,6 @@ def profile_yaml(profile: str = None) -> dict:
     name = profile or active_profile()
     path = os.path.join(kb_dir(name), "profile.yml")
     if not os.path.exists(path):
-        if name == "morgan" or profile is None:
-            return _make_fallback_profile_yaml()
         return {}
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
@@ -683,11 +504,11 @@ def signature_path(profile: str = None) -> str | None:
 
 
 def jds_dir(profile: str = None) -> str:
-    return os.path.join(PROJECT_ROOT, "jds", profile or active_profile())
+    return os.path.join(JDS_ROOT, profile or active_profile())
 
 
 def output_dir(profile: str = None) -> str:
-    return os.path.join(PROJECT_ROOT, "output", profile or active_profile())
+    return os.path.join(OUTPUT_ROOT, profile or active_profile())
 
 
 def checkpoints_dir(profile: str = None) -> str:
@@ -695,7 +516,7 @@ def checkpoints_dir(profile: str = None) -> str:
 
 
 def data_dir(profile: str = None) -> str:
-    return os.path.join(PROJECT_ROOT, "data", profile or active_profile())
+    return os.path.join(DATA_ROOT, profile or active_profile())
 
 
 def applications_md_path(profile: str = None) -> str:

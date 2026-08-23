@@ -1899,3 +1899,22 @@ Reuses `bullet_bank_menu.STAGES`/`_stage_status()`/`_handle_choice()` directly f
 Fixed a related real bug found along the way: `bootstrap_bullet_bank.py`, `bootstrap_profile.py`, and `bullet_bank_menu.py` all compute profile-scoped path constants at module level but weren't in `profile_paths._RELOAD_ON_PROFILE_SWITCH` -- meaning right after creating a brand-new profile mid-session, they'd have silently kept pointing at the old profile's paths. All three are now in that reload list.
 
 `scripts/menu.py`'s `_handle_bootstrap()` shrank to just the profile-creation/guest-mode gate, then delegates to `bootstrap_menu.run_bootstrap_menu()`. Test coverage: new `tests/test_bootstrap_menu.py`; `tests/test_menu_bootstrap.py`'s now-obsolete subprocess-flow tests replaced with delegation tests.
+
+### Rotate across multiple API keys on rate-limit errors
+
+Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
+<-> gemma) on sustained failure (`gemini_client.py`'s `MODEL_FALLBACKS`),
+but has no concept of multiple *keys* for the same model -- one
+`GEMINI_API_KEY` in `.env`, full stop. The ask: support a list of keys
+(e.g. `GEMINI_API_KEYS=key1,key2,key3` alongside or instead of the
+singular var) and rotate to the next one specifically on a 429/rate-limit
+response, the same way `MODEL_FALLBACKS` already rotates models on
+sustained failure -- likely the same retry/backoff machinery
+(`RETRYABLE`/`HIGH_DEMAND_STATUS` in `gemini_client.py`) extended with a
+key index instead of (or alongside) a model swap. Real, but scoped --
+mostly touches `GeminiClient.generate()`'s retry loop; the main design
+question is whether key rotation and model-fallback rotation compose
+cleanly (try every key on the current model before swapping models, or
+interleave) rather than needing a genuinely new mechanism.
+
+**Update:** Implemented! `GeminiClient` now rotates API keys via `GEMINI_API_KEYS` on rate-limits.

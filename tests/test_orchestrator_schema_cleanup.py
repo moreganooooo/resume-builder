@@ -6,6 +6,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import orchestrator  # noqa: E402
 from gemini_client import GeminiClient  # noqa: E402
@@ -36,8 +37,14 @@ class TestSchemaCleanup(unittest.TestCase):
         defeating archetype selection. An actual `enum` key survives
         sanitize_schema, so the constraint reaches the model.
         """
-        engine = orchestrator.ResumeEngine()
-        properties, required = engine.build_education_achievement_schema_fields()
+        # Sandboxed: the slot count comes from the ACTIVE profile's
+        # fixed_credentials.education, so on a freshly bootstrapped profile
+        # there are zero slots and this asserted nothing.
+        import persona
+
+        with persona.sandbox_profile():
+            engine = orchestrator.ResumeEngine()
+            properties, required = engine.build_education_achievement_schema_fields()
         self.assertEqual(required, ["EDU_ACHIEVEMENT_KEY_1", "EDU_ACHIEVEMENT_KEY_2"])
 
         raw_schema = orchestrator.TemplateSchema.model_json_schema()
@@ -46,18 +53,20 @@ class TestSchemaCleanup(unittest.TestCase):
         sanitized = GeminiClient.sanitize_schema(raw_schema)
         props = sanitized["properties"]
 
-        ku_field = props["EDU_ACHIEVEMENT_KEY_1"]
-        self.assertIn("enum", ku_field)
-        self.assertEqual(
-            set(ku_field["enum"]), {"content_generalist", "email_ops", "content"}
-        )
+        # Expected option keys come from the persona profile the schema was
+        # built against, rather than being restated here -- restating them
+        # meant the test encoded one person's education choices and had to
+        # be edited whenever those changed.
+        education = persona.fixed_credentials()["education"]
+        slots = [e for e in education if e.get("achievement_options")]
 
-        kckcc_field = props["EDU_ACHIEVEMENT_KEY_2"]
-        self.assertIn("enum", kckcc_field)
-        self.assertEqual(
-            set(kckcc_field["enum"]),
-            {"writing_content", "enablement_mgmt", "generalist"},
-        )
+        first = props["EDU_ACHIEVEMENT_KEY_1"]
+        self.assertIn("enum", first)
+        self.assertEqual(set(first["enum"]), set(slots[0]["achievement_options"]))
+
+        second = props["EDU_ACHIEVEMENT_KEY_2"]
+        self.assertIn("enum", second)
+        self.assertEqual(set(second["enum"]), set(slots[1]["achievement_options"]))
 
     def test_experience_entry_required_fields_survive_ref_resolution_and_sanitize(self):
         """

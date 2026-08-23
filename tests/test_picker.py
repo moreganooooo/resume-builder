@@ -254,7 +254,13 @@ class TestListAllEvaluatedJds(unittest.TestCase):
         os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
 
         for patcher in (
+            # All four roots, not just PROFILES_DIR: create_new_profile()/
+            # write_sync_ignore_files() makedirs jds/, output/ and data/ too,
+            # which otherwise land in the real checkout.
             patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.object(profile_paths, "JDS_ROOT", os.path.join(tmp, "_jds")),
+            patch.object(profile_paths, "OUTPUT_ROOT", os.path.join(tmp, "_output")),
+            patch.object(profile_paths, "DATA_ROOT", os.path.join(tmp, "_data")),
             patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
         ):
             patcher.start()
@@ -342,7 +348,13 @@ class TestCountUnevaluatedRoles(unittest.TestCase):
         os.makedirs(os.path.join(tmp, "testprofile"), exist_ok=True)
 
         for patcher in (
+            # All four roots, not just PROFILES_DIR: create_new_profile()/
+            # write_sync_ignore_files() makedirs jds/, output/ and data/ too,
+            # which otherwise land in the real checkout.
             patch.object(profile_paths, "PROFILES_DIR", tmp),
+            patch.object(profile_paths, "JDS_ROOT", os.path.join(tmp, "_jds")),
+            patch.object(profile_paths, "OUTPUT_ROOT", os.path.join(tmp, "_output")),
+            patch.object(profile_paths, "DATA_ROOT", os.path.join(tmp, "_data")),
             patch.dict(os.environ, {"RESUME_PROFILE": "testprofile"}),
         ):
             patcher.start()
@@ -594,16 +606,18 @@ class TestLocationFields(unittest.TestCase):
     """The location/workplace/distance columns added to the export."""
 
     SETTINGS = {
-        "city": "Getzville",
-        "state": "NY",
-        "zip": "14068",
+        "city": "Springfield",
+        "state": "IL",
+        "zip": "62701",
         "radius_miles": 25,
         "workplace_mode": "any",
     }
 
     def test_nearby_onsite_gets_a_distance(self):
-        fields = picker._location_fields({"location": "Buffalo, NY"}, self.SETTINGS)
-        self.assertEqual(fields["location"], "Buffalo, NY")
+        fields = picker._location_fields(
+            {"location": "Williamsville, IL"}, self.SETTINGS
+        )
+        self.assertEqual(fields["location"], "Williamsville, IL")
         self.assertIsNotNone(fields["distance_miles"])
         self.assertLess(fields["distance_miles"], 25)
 
@@ -634,9 +648,9 @@ class TestLocationFields(unittest.TestCase):
     def test_unconfigured_profile_yields_no_distance(self):
         # With no location: block, distance is not computed at all --
         # every row still exports the columns, just empty.
-        fields = picker._location_fields({"location": "Buffalo, NY"}, {})
+        fields = picker._location_fields({"location": "Williamsville, IL"}, {})
         self.assertIsNone(fields["distance_miles"])
-        self.assertEqual(fields["location"], "Buffalo, NY")
+        self.assertEqual(fields["location"], "Williamsville, IL")
 
     def test_reader_degrades_to_empty_on_failure(self):
         with patch.dict("sys.modules", {"location_settings": None}):
@@ -644,17 +658,19 @@ class TestLocationFields(unittest.TestCase):
 
     def test_enriched_location_overrides_display_and_distance(self):
         jd_data = {
-            "location": "Buffalo, NY",
+            "location": "Williamsville, IL",
             "_location_enrichment": {
                 "status": "resolved",
-                "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
-                "lat": 42.996,
-                "lon": -78.788,
+                "resolved_address": "1200 S Grand Ave E, Springfield, IL 62702",
+                "lat": 39.772,
+                "lon": -89.6843,
                 "source": "jd_text_override",
             },
         }
         fields = picker._location_fields(jd_data, self.SETTINGS)
-        self.assertEqual(fields["location"], "500 Audubon Pkwy, Amherst, NY 14228")
+        self.assertEqual(
+            fields["location"], "1200 S Grand Ave E, Springfield, IL 62702"
+        )
         self.assertIsNotNone(fields["distance_miles"])
         self.assertLess(fields["distance_miles"], 3.0)
 
@@ -662,17 +678,17 @@ class TestLocationFields(unittest.TestCase):
         # Verify picker database rows with _location_enrichment parse correctly
         db_meta = {
             "_evaluation": {"composite_score": 4.5},
-            "location": "Buffalo, NY",
+            "location": "Williamsville, IL",
             "_location_enrichment": {
                 "status": "resolved",
-                "resolved_address": "Williamsville, NY 14221",
-                "lat": 42.964,
-                "lon": -78.737,
+                "resolved_address": "Springfield, IL 62702",
+                "lat": 39.74,
+                "lon": -89.6333,
                 "source": "osm_nominatim",
             },
         }
         fields = picker._location_fields(db_meta, self.SETTINGS)
-        self.assertEqual(fields["location"], "Williamsville, NY 14221")
+        self.assertEqual(fields["location"], "Springfield, IL 62702")
         self.assertIsNotNone(fields["distance_miles"])
 
     def test_file_based_row_loads_persisted_enrichment_from_disk(self):
@@ -683,13 +699,13 @@ class TestLocationFields(unittest.TestCase):
         data = {
             "title": "Software Engineer",
             "company": "Local Tech",
-            "location": "Buffalo, NY",
+            "location": "Williamsville, IL",
             "_evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
             "_location_enrichment": {
                 "status": "resolved",
-                "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
-                "lat": 42.996,
-                "lon": -78.788,
+                "resolved_address": "1200 S Grand Ave E, Springfield, IL 62702",
+                "lat": 39.772,
+                "lon": -89.6843,
                 "source": "jd_text_override",
             },
         }
@@ -705,7 +721,9 @@ class TestLocationFields(unittest.TestCase):
             rows = picker.list_all_evaluated_jds(statuses=["Pending"])
             self.assertEqual(len(rows), 1)
             row = rows[0]
-            self.assertEqual(row["location"], "500 Audubon Pkwy, Amherst, NY 14228")
+            self.assertEqual(
+                row["location"], "1200 S Grand Ave E, Springfield, IL 62702"
+            )
             self.assertIsNotNone(row["distance_miles"])
             self.assertLess(row["distance_miles"], 3.0)
             self.assertIsNotNone(row.get("location_enrichment"))

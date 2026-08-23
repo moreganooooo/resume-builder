@@ -12,7 +12,7 @@ import scan_linkedin  # noqa: E402
 
 
 class TestFetchPersonalizedExtrasPacing(unittest.TestCase):
-    """P7F10: _fetch_personalized_extras() carries Morgan's real li_at
+    """P7F10: _fetch_personalized_extras() carries the operator's real li_at
     session cookie on every call and used to fire back-to-back with no
     pacing -- the one place in this subsystem with real account-ban risk.
     These tests prove the fix (a time.sleep() matching the scraper's own

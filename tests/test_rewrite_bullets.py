@@ -10,6 +10,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rewrite_bullets import (  # noqa: E402
     KB_DIR,
@@ -144,6 +145,15 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # KnowledgeBase() resolves the ACTIVE profile, so this class needed
+        # one to already exist. The fixtures below override every value it
+        # actually asserts on, but construction still has to succeed.
+        import persona
+
+        cls._persona_sandbox = persona.sandbox_profile()
+        cls._persona_sandbox.__enter__()
+        cls.addClassCleanup(cls._persona_sandbox.__exit__, None, None, None)
+
         cls.kb = KnowledgeBase()
         if not cls.kb.static_prefix:
             cls.kb.static_prefix = "STATIC PREFIX " * 20
@@ -375,6 +385,14 @@ class TestFilterProjectsByEmployer(unittest.TestCase):
 class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
     def setUp(self):
+        # Resolves the ACTIVE profile, so this class required one to already
+        # exist -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.kb = KnowledgeBase()
         self.kb.static_prefix = "FULL STATIC PREFIX WITH EXTRA CONTEXT " * 10
         self.kb.gemma_static_prefix = "GEMMA PREFIX"

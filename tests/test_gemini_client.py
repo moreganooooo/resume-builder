@@ -17,6 +17,35 @@ from gemini_client import (  # noqa: E402
     SustainedFailureError,
 )
 
+_ORIG_ALLOW_NETWORK = None
+
+
+def setUpModule():
+    """Opt this module past gemini_client's test-network guard.
+
+    Every test in this file patches requests.post, so nothing here reaches
+    the wire -- but _get_auth_headers() is evaluated as an ARGUMENT to that
+    mocked call, and the guard lives there (the one point all four post
+    sites funnel through). Without this the guard fires on tests that never
+    intended to touch the network.
+
+    This is the narrow, deliberate exemption the RESUME_ALLOW_TEST_NETWORK
+    escape hatch exists for: a module that exercises the client itself with
+    a mocked transport. Verified with an instrumented run -- outbound calls
+    from the full suite are zero. If you add a test here that does NOT mock
+    requests.post, it will make a real, billable API call.
+    """
+    global _ORIG_ALLOW_NETWORK
+    _ORIG_ALLOW_NETWORK = os.environ.get(gemini_client._TEST_NETWORK_ENV)
+    os.environ[gemini_client._TEST_NETWORK_ENV] = "1"
+
+
+def tearDownModule():
+    if _ORIG_ALLOW_NETWORK is None:
+        os.environ.pop(gemini_client._TEST_NETWORK_ENV, None)
+    else:
+        os.environ[gemini_client._TEST_NETWORK_ENV] = _ORIG_ALLOW_NETWORK
+
 
 def _success_response():
     resp = MagicMock()

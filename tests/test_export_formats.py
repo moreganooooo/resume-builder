@@ -13,12 +13,12 @@ import export_formats  # noqa: E402
 
 def _sample_resume():
     return {
-        "NAME": "Morgan Scott",
+        "NAME": "Alex Rivera",
         "TAGLINE": "CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING",
-        "EMAIL": "morgan@example.com",
+        "EMAIL": "alex.rivera@example.com",
         "PHONE": "(555) 123-4567",
         "LOCATION": "San Francisco, CA",
-        "LINKEDIN": "linkedin.com/in/morganscott",
+        "LINKEDIN": "linkedin.com/in/alexrivera",
         "SUMMARY_TEXT": "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> Scaled outreach to 50,000+ contacts monthly.",
         "SKILLS": [
             "**Lifecycle Marketing:** Email Automation, Segmentation, Drip Campaigns",
@@ -51,7 +51,7 @@ class TestExportFormats(unittest.TestCase):
     def test_render_markdown(self):
         data = _sample_resume()
         md = export_formats.render_markdown(data)
-        self.assertIn("# Morgan Scott", md)
+        self.assertIn("# Alex Rivera", md)
         self.assertIn("## Professional Summary", md)
         self.assertIn("## Core Competencies & Skills", md)
         self.assertIn("### Lifecycle Marketing Manager — Treering", md)
@@ -62,7 +62,7 @@ class TestExportFormats(unittest.TestCase):
     def test_render_plaintext(self):
         data = _sample_resume()
         text = export_formats.render_plaintext(data)
-        self.assertIn("MORGAN SCOTT", text)
+        self.assertIn("ALEX RIVERA", text)
         self.assertIn("PROFESSIONAL SUMMARY", text)
         self.assertIn("CORE COMPETENCIES & TECHNICAL SKILLS", text)
         self.assertIn("TREERING | Lifecycle Marketing Manager", text)
@@ -75,12 +75,12 @@ class TestExportFormats(unittest.TestCase):
         schema = export_formats.render_json_ld(data)
         self.assertEqual(schema["@context"], "https://schema.org")
         self.assertEqual(schema["@type"], "Person")
-        self.assertEqual(schema["name"], "Morgan Scott")
+        self.assertEqual(schema["name"], "Alex Rivera")
         self.assertEqual(
             schema["jobTitle"], "CAMPAIGN & CRM STRATEGIST | LIFECYCLE MARKETING"
         )
         self.assertIn("Lifecycle marketer with 8 years", schema["description"])
-        self.assertEqual(schema["email"], "morgan@example.com")
+        self.assertEqual(schema["email"], "alex.rivera@example.com")
         self.assertEqual(schema["address"]["addressLocality"], "San Francisco, CA")
         self.assertEqual(len(schema["hasOccupation"]), 1)
         self.assertEqual(schema["hasOccupation"][0]["worksFor"]["name"], "Treering")
@@ -92,7 +92,7 @@ class TestExportFormats(unittest.TestCase):
         data = _sample_resume()
         json_str = export_formats.render_json_ld_string(data)
         parsed = json.loads(json_str)
-        self.assertEqual(parsed["name"], "Morgan Scott")
+        self.assertEqual(parsed["name"], "Alex Rivera")
 
 
 if __name__ == "__main__":

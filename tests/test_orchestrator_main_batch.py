@@ -10,6 +10,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import orchestrator  # noqa: E402
 
@@ -306,9 +307,17 @@ class TestResumeEnginePathsAreProfileScoped(unittest.TestCase):
 
     def setUp(self):
         self._orig = os.environ.get("RESUME_PROFILE")
-        os.environ["RESUME_PROFILE"] = "morgan"
+        # The profile has to actually exist: active_profile() raises for an
+        # unknown RESUME_PROFILE, and these assertions are about path
+        # SHAPE, so a sandboxed profile serves as well as a real one --
+        # and does not depend on who is operating the checkout.
+        import persona
+
+        self._sandbox = persona.sandbox_profile("testprofile")
+        self._sandbox.__enter__()
 
     def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
         if self._orig is None:
             os.environ.pop("RESUME_PROFILE", None)
         else:
@@ -317,7 +326,9 @@ class TestResumeEnginePathsAreProfileScoped(unittest.TestCase):
     def test_kb_dir_is_profile_scoped(self):
         engine = orchestrator.ResumeEngine()
         self.assertTrue(
-            engine.kb_dir.endswith(os.path.join("profiles", "morgan", "knowledge_base"))
+            engine.kb_dir.endswith(
+                os.path.join("profiles", "testprofile", "knowledge_base")
+            )
         )
 
     def test_engine_dir_stays_shared(self):

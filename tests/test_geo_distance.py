@@ -176,10 +176,14 @@ class TestSuburbCoverage(unittest.TestCase):
     def test_small_unincorporated_places_still_resolve(self):
         # The gazetteer layer is filtered to populated places, so the
         # USPS layer has to stay to cover hamlets like this one.
-        self.assertIsNotNone(geo_distance.get_city_centroid("Getzville", "NY"))
+        # (Eggertsville is an unincorporated hamlet, which is the property
+        # under test -- not anyone's home town.)
+        self.assertIsNotNone(geo_distance.get_city_centroid("Eggertsville", "NY"))
 
     def test_suburb_distances_are_plausible(self):
-        miles = geo_distance.distance_between("Getzville, NY", "Buffalo, NY")
+        # Both endpoints are suburbs of the same metro, which is what makes
+        # "under 20 miles" the right assertion.
+        miles = geo_distance.distance_between("Amherst, NY", "Buffalo, NY")
         self.assertLess(miles, 20)
 
 

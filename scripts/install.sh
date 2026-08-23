@@ -73,12 +73,31 @@ fi
 # 4. Virtual Environment Creation
 printf "\n[ ${BOLD}${BRAND}WAIT${RESET} ] Creating isolated virtual environment in ${BOLD}.venv/${RESET}...\n"
 cd "$PROJECT_ROOT" || exit 1
+# Never delete an existing environment without asking. This used to
+# rm -rf .venv unconditionally, so re-running the installer for any reason
+# (to add Node, to repair one package) destroyed a working environment.
 if [ -d ".venv" ]; then
-    printf "[ ${BOLD}${INFO}INFO${RESET} ] Existing .venv/ found. Cleaning up for clean reinstall...\n"
-    rm -rf .venv
+    printf "[ ${BOLD}${WARNING}WARN${RESET} ] An existing ${BOLD}.venv/${RESET} was found.\n"
+    printf "  ${BOLD}1. Keep it${RESET} and install/upgrade packages into it (recommended)\n"
+    printf "  2. Delete and rebuild it from scratch\n"
+    printf "\nWhich would you like? [1/2] (Default: 1): "
+    read -r venv_choice
+    venv_choice="${venv_choice:-1}"
+    if [ "$venv_choice" = "2" ]; then
+        printf "[ ${BOLD}${INFO}INFO${RESET} ] Removing existing .venv/ for a clean rebuild...\n"
+        rm -rf .venv
+    else
+        printf "[ ${BOLD}${INFO}INFO${RESET} ] Keeping existing .venv/.\n"
+    fi
 fi
-python3 -m venv .venv
-if [ $? -eq 0 ]; then
+
+if [ -d ".venv" ]; then
+    venv_rc=0
+else
+    python3 -m venv .venv
+    venv_rc=$?
+fi
+if [ "$venv_rc" -eq 0 ]; then
     printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Virtual environment provisioned successfully.\n"
 else
     printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Failed to create virtual environment.\n"
@@ -89,16 +108,26 @@ fi
 source .venv/bin/activate
 printf "\n[ ${BOLD}${BRAND}WAIT${RESET} ] Installing dependencies in .venv/...\n"
 
-if { [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" -eq 1 ]; } || { [ "$IS_MOBILE" -eq 0 ] && [ "$mode_choice" -eq 2 ]; }; then
+# pip's OWN exit status, captured immediately. This used to be checked
+# with a bare `$?` after the whole if/else block, where the last command
+# was `npx playwright install chromium` (or a printf) -- so a failed
+# `pip install -r requirements.txt` was reported as
+# "PASS Python dependencies installed cleanly" and the installer carried
+# on to tell the user everything worked.
+pip_rc=0
+if { [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" = "1" ]; } || { [ "$IS_MOBILE" -eq 0 ] && [ "$mode_choice" = "2" ]; }; then
     # Lite Mode dependency list
     printf "[ ${BOLD}${INFO}INFO${RESET} ] Installing distilled, pure-Python Lite Package List (~15MB space)...\n"
     pip install --upgrade pip
-    pip install pyyaml pydantic requests python-dotenv google-genai click rich beautifulsoup4 questionary pypdf
+    pip install -r requirements-lite.txt || pip_rc=$?
+    printf "[ ${BOLD}${INFO}INFO${RESET} ] Lite Mode installed. Onboarding and tailoring work;\n"
+    printf "         local PDF rendering, LinkedIn/Indeed scanning, and the extra export\n"
+    printf "         formats need full mode (see requirements-lite.txt for the split).\n"
 else
     # Full Desktop/Mobile dependency list
     printf "[ ${BOLD}${INFO}INFO${RESET} ] Installing complete requirements list (~250MB)...\n"
     pip install --upgrade pip
-    pip install -r requirements.txt
+    pip install -r requirements.txt || pip_rc=$?
 
     # Check for node/npm to compile Playwright
     if command -v npm >/dev/null 2>&1; then
@@ -111,22 +140,36 @@ else
     fi
 fi
 
-if [ $? -eq 0 ]; then
+if [ "$pip_rc" -eq 0 ]; then
     printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Python dependencies installed cleanly.\n"
 else
-    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Dependency installation encountered errors.\n"
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Dependency installation failed (pip exit ${pip_rc}).\n"
+    printf "         Re-run this installer, or activate .venv/ and run pip install by hand to see the error.\n"
     exit 1
 fi
 
 # 6. Provisioning Shell Shortcuts
 printf "\n[ ${BOLD}${BRAND}WAIT${RESET} ] Registering global shell shortcuts...\n"
+# Pick the rc file for the user's ACTUAL login shell first. This script
+# runs under bash (see the shebang), so $ZSH_VERSION is never set here and
+# the old first branch collapsed to "does ~/.zshrc exist" -- which installs
+# the shortcut into zsh's rc for someone whose login shell is bash, where
+# they would never see it. $SHELL is the login shell regardless of what is
+# interpreting this file.
 SHELL_RC=""
-if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
-    SHELL_RC="$HOME/.zshrc"
-elif [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
-    SHELL_RC="$HOME/.bashrc"
-elif [ -f "$HOME/.termux/shell.profile" ]; then
-    SHELL_RC="$HOME/.termux/shell.profile"
+case "$(basename "${SHELL:-}")" in
+    zsh)  [ -e "$HOME/.zshrc" ]  || touch "$HOME/.zshrc";  SHELL_RC="$HOME/.zshrc" ;;
+    bash) [ -e "$HOME/.bashrc" ] || touch "$HOME/.bashrc"; SHELL_RC="$HOME/.bashrc" ;;
+esac
+if [ -z "$SHELL_RC" ]; then
+    # Unknown or unset $SHELL -- fall back to whichever rc file exists.
+    if [ -f "$HOME/.zshrc" ]; then
+        SHELL_RC="$HOME/.zshrc"
+    elif [ -f "$HOME/.bashrc" ]; then
+        SHELL_RC="$HOME/.bashrc"
+    elif [ -f "$HOME/.termux/shell.profile" ]; then
+        SHELL_RC="$HOME/.termux/shell.profile"
+    fi
 fi
 
 if [ -n "$SHELL_RC" ]; then
@@ -190,15 +233,22 @@ EOF
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Applied Catppuccin color profile.\n"
 
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Configuring Termux Clipboard API...\n"
-        pkg install termux-api -y >/dev/null 2>&1
-        printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Clipboard sync package registered.\n"
+        # Report what actually happened. Output was discarded and the result
+        # unchecked, so a failed install still printed PASS.
+        if pkg install termux-api -y >/dev/null 2>&1; then
+            printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Clipboard sync package installed.\n"
+        else
+            printf "[ ${BOLD}${WARNING}WARN${RESET} ] Could not install termux-api. Clipboard sync\n"
+            printf "         will be unavailable; run 'pkg install termux-api' by hand to retry.\n"
+        fi
 
         printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Provisioning extra navigation keys...\n"
-        # Set Termux properties for extra keys
+        # One line, no continuations. In a QUOTED heredoc a trailing
+        # backslash is NOT a line continuation -- it is written to the file
+        # verbatim, so termux.properties ended up containing literal
+        # backslashes and Termux failed to parse the extra-keys row.
         cat << 'EOF' > "$HOME/.termux/termux.properties"
-extra-keys = [ \
-  ['ESC','TAB','CTRL','ALT','UP','DOWN','LEFT','RIGHT'] \
-]
+extra-keys = [['ESC','TAB','CTRL','ALT','UP','DOWN','LEFT','RIGHT']]
 EOF
         printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Terminal touch navigation panel provisioned.\n"
 
@@ -225,7 +275,10 @@ printf "${BOLD}${BRAND}✦ ─────────────────�
 printf "       ✦  ${BOLD}${SUCCESS}INSTALLATION COMPLETED SUCCESSFULLY!${RESET}  ✦\n"
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n\n"
 
-if [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" -eq 1 ]; then
+# String comparison, not -eq: `[ "$x" -eq 1 ]` aborts with "integer
+# expression expected" if the user typed anything non-numeric at the mode
+# prompt.
+if [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" = "1" ]; then
     printf "${BOLD}${ACCENT}▯ MOBILE SYNCING COMPANION STRATEGY ACTIVATED:${RESET}\n"
     printf "  1. Install ${BOLD}Syncthing${RESET} on your Desktop and your Pixel 10.\n"
     printf "  2. Pair devices and share your active profile directories:\n"
@@ -240,8 +293,17 @@ if [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" -eq 1 ]; then
 fi
 
 printf "${BOLD}${BRAND}Next Steps:${RESET}\n"
-printf "  1. Open a new terminal session (or run: ${BOLD}source $SHELL_RC${RESET})\n"
+if [ -n "$SHELL_RC" ]; then
+    printf "  1. Open a new terminal session (or run: ${BOLD}source $SHELL_RC${RESET})\n"
+else
+    printf "  1. Run: ${BOLD}source $PROJECT_ROOT/scripts/resume-cli.sh${RESET}\n"
+fi
 printf "  2. Start the interactive console by typing: ${BOLD}resume${RESET}\n"
-printf "  3. Verify everything is perfect by running: ${BOLD}resume doctor${RESET}\n\n"
+# Naming the actual first action. "Next Steps" used to stop at `resume`
+# and `resume doctor`, so a brand-new user was never told that creating a
+# profile is the thing they need to do first.
+printf "  3. Choose ${BOLD}${ACCENT}\"--> New User? Start Here!\"${RESET} to create your profile and\n"
+printf "     load your resume. You'll need a free Gemini API key from Google AI Studio.\n"
+printf "  4. Verify everything is set up by running: ${BOLD}resume doctor${RESET}\n\n"
 
 printf "${BOLD}${BRAND}✦ ────────────────────────────────────────────────────────────── ✦${RESET}\n"

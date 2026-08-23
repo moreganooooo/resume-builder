@@ -136,7 +136,7 @@ class TestApplicationGate(unittest.TestCase):
     def test_rent_reminder_is_rejected(self):
         self.assertFalse(
             inbox_sync.is_job_application_mail(
-                "Flex <no-reply@getflex.com>", "Morgan: your rent, your schedule"
+                "Flex <no-reply@getflex.com>", "Alex: your rent, your schedule"
             )
         )
 
@@ -285,7 +285,7 @@ class TestOfferRequiresAnActualOffer(unittest.TestCase):
 
     def test_recruiter_pitch_is_not_an_offer(self):
         intent = classify_email_intent(
-            "Morgan, are you available?",
+            "Alex, are you available?",
             "are you available to talk about my Sales Consultant job offer",
         )
         self.assertNotEqual(intent, "offer")
@@ -328,7 +328,7 @@ class TestTrustedLabelFolders(unittest.TestCase):
         messages = [
             {
                 "from": "recruiter@artech.com",
-                "subject": "RE: ArtechOBGC//IBM_Amex//Morgan Escott",
+                "subject": "RE: ArtechOBGC//IBM_Amex//Alex Rivera",
                 "body": "Following up on the role we discussed.",
                 "date": "",
             }

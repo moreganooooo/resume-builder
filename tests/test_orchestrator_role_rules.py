@@ -6,6 +6,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import orchestrator  # noqa: E402
 import profile_paths  # noqa: E402
@@ -83,16 +84,47 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("A test quote.", block)
 
-    def test_real_morgan_profile_produces_nonempty_block(self):
-        profile_path = os.path.join(self.engine.kb_dir, "profile.yml")
-        if os.path.exists(profile_path):
-            profile_data = self.engine.load_yaml(self.engine.kb_dir, "profile.yml")
-        else:
-            profile_data = profile_paths.profile_yaml("morgan")
-        block = self.engine.build_role_rules_block(profile_data)
-        self.assertIn("Mercor", block)
-        self.assertIn("Treering Yearbooks", block)
-        self.assertIn("Outreach.io", block)
+    def test_a_real_profile_produces_a_nonempty_block(self):
+        """Asserted "Mercor"/"Treering Yearbooks"/"Outreach.io" appeared in
+        the block -- three facts about one person's career, so the test only
+        meant anything on that person's machine. What actually matters is
+        that a populated profile.yml yields a non-empty rules block naming
+        the roles it declares."""
+        import persona
+
+        with persona.sandbox_profile():
+            profile_data = {
+                "roles": [
+                    {
+                        "name": persona.EMPLOYER_WITH_META,
+                        "min_bullets": 2,
+                        "target_bullets": 3,
+                        "page": 1,
+                        "flex_priority": 1,
+                    },
+                    {
+                        "name": persona.EMPLOYER_LONG_TENURE,
+                        "min_bullets": 3,
+                        "target_bullets": 4,
+                        "page": 1,
+                        "flex_priority": 2,
+                    },
+                ],
+                "fixed_credentials": {
+                    "certifications": [
+                        {
+                            "name": "Lifecycle Marketing Certification",
+                            "issuer": "Example Org",
+                            "year": 2026,
+                        }
+                    ]
+                },
+            }
+            block = self.engine.build_role_rules_block(profile_data)
+
+        self.assertTrue(block.strip(), "a populated profile produced an empty block")
+        self.assertIn(persona.EMPLOYER_WITH_META, block)
+        self.assertIn(persona.EMPLOYER_LONG_TENURE, block)
 
 
 if __name__ == "__main__":

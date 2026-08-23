@@ -9,6 +9,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import jd_manager  # noqa: E402
 import orchestrator  # noqa: E402
@@ -60,6 +61,15 @@ class TestResolveCompanyLocation(unittest.TestCase):
 class TestReadMatchingResumeTagline(unittest.TestCase):
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.resume_dir = os.path.join(profile_paths.output_dir(), "json")
         os.makedirs(self.resume_dir, exist_ok=True)
         self.resume_path = os.path.join(
@@ -96,6 +106,15 @@ class TestCoverLetterEnrichmentWiring(unittest.TestCase):
     company_location, and contact fallback into the saved letter_data."""
 
     def setUp(self):
+        # ResumeEngine()/profile lookups resolve the ACTIVE profile, so this
+        # class required one to already exist. A persona sandbox supplies a
+        # complete profile of its own -- see tests/persona.py.
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
         self.engine = orchestrator.ResumeEngine()
         self.jd_path = os.path.join(
             os.path.dirname(__file__), "_tmp_jd_enrichment.json"

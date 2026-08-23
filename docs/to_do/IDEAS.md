@@ -54,22 +54,6 @@ chosen.
 
 ## Medium
 
-### Rotate across multiple API keys on rate-limit errors
-
-Raised 2026-07-17: `GeminiClient` already does model-fallback (flash-lite
-<-> gemma) on sustained failure (`gemini_client.py`'s `MODEL_FALLBACKS`),
-but has no concept of multiple *keys* for the same model -- one
-`GEMINI_API_KEY` in `.env`, full stop. The ask: support a list of keys
-(e.g. `GEMINI_API_KEYS=key1,key2,key3` alongside or instead of the
-singular var) and rotate to the next one specifically on a 429/rate-limit
-response, the same way `MODEL_FALLBACKS` already rotates models on
-sustained failure -- likely the same retry/backoff machinery
-(`RETRYABLE`/`HIGH_DEMAND_STATUS` in `gemini_client.py`) extended with a
-key index instead of (or alongside) a model swap. Real, but scoped --
-mostly touches `GeminiClient.generate()`'s retry loop; the main design
-question is whether key rotation and model-fallback rotation compose
-cleanly (try every key on the current model before swapping models, or
-interleave) rather than needing a genuinely new mechanism.
 
 ### Strengthen evidence-guide.csv for cover letters
 

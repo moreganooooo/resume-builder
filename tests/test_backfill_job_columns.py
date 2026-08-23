@@ -216,7 +216,7 @@ class TestRealProfileWriteGuard(unittest.TestCase):
     def test_write_into_the_real_profiles_dir_is_dropped_under_test(self):
         import profile_paths
 
-        real_root = os.path.join(profile_paths.PROFILES_DIR, "morgan")
+        real_root = os.path.join(profile_paths.PROFILES_DIR, "testprofile")
         with patch.object(profile_paths, "profile_root", return_value=real_root):
             self.assertTrue(db._is_unisolated_test_write())
             # No connection is opened at all, so this cannot touch the file.
@@ -243,7 +243,7 @@ class TestRealProfileWriteGuard(unittest.TestCase):
         must not be silently no-opped."""
         import profile_paths
 
-        real_root = os.path.join(profile_paths.PROFILES_DIR, "morgan")
+        real_root = os.path.join(profile_paths.PROFILES_DIR, "testprofile")
         with tempfile.TemporaryDirectory() as tmp:
             conn = _make_db(os.path.join(tmp, "data.db"))
             with patch.object(profile_paths, "profile_root", return_value=real_root):

@@ -136,9 +136,16 @@ def format_row(idx: int, data: dict, preserved_notes: str | None) -> str:
 
 
 def main(profile: str = "morgan"):
-    project_root = Path(__file__).resolve().parents[1]
-    jds_dir = project_root / "jds" / profile
-    data_dir = project_root / "data" / profile
+    # Routed through profile_paths rather than hand-rolled off __file__.
+    # Hand-rolling meant this module could not be redirected at all, so its
+    # tests had to write into the real checkout (jds/_test_sync_jd_tmp_profile,
+    # data/_test_sync_jd_tmp_profile) and sweep up afterwards -- a cleanup
+    # that does not run when the test errors first. It also made this one of
+    # the few places that bypassed the single-source-of-truth rule.
+    import profile_paths
+
+    jds_dir = Path(profile_paths.jds_dir(profile))
+    data_dir = Path(profile_paths.data_dir(profile))
     md_path = data_dir / "applications.md"
 
     # Load existing notes (if any) to preserve manual edits

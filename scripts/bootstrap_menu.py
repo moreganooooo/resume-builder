@@ -19,6 +19,7 @@ import bootstrap_bullet_bank
 import bootstrap_profile
 import bullet_bank_menu
 import cli_art
+import profile_paths
 import questionary
 import theme
 
@@ -211,12 +212,32 @@ def _run_express_setup(interactive: bool = True) -> bool:
 
     secrets = bootstrap_profile.collect_secrets()
     if not secrets["gemini_key_set"]:
+        # Name the exact file rather than "your profile's .env" -- the path
+        # is profile-scoped (profiles/<name>/.env) and a new user has no way
+        # to guess it. Offer the interactive prompt once more before giving
+        # up: collect_secrets() already knows how to walk them through it,
+        # so dead-ending here just made them restart the whole wizard.
+        env_file = profile_paths.env_path()
         cli_art.console.print(
-            f"\n{theme.colorize_icon('warning')}  Skipping express setup -- GEMINI_API_KEY isn't set yet. "
-            "Add it to your profile's .env, then try again.",
+            f"\n{theme.colorize_icon('warning')}  Express setup needs a Gemini API key "
+            "and this profile doesn't have one yet.",
             soft_wrap=True,
         )
-        return False
+        cli_art.console.print(f"    Key file: {env_file}")
+        cli_art.console.print(
+            "    Free keys: https://aistudio.google.com/apikey", soft_wrap=True
+        )
+        retry = cli_art.confirm("Enter your Gemini API key now?", default=True)
+        if retry:
+            secrets = bootstrap_profile.collect_secrets()
+        if not secrets["gemini_key_set"]:
+            cli_art.console.print(
+                f"\n{theme.colorize_icon('warning')}  Skipping express setup. Add a line "
+                f"GEMINI_API_KEY=... to {env_file} (create the file if needed), then run "
+                "this again.",
+                soft_wrap=True,
+            )
+            return False
 
     if interactive:
         confirm = questionary.confirm(
@@ -242,16 +263,22 @@ def _run_express_setup(interactive: bool = True) -> bool:
     sys.stdout.flush()
     scroll_region_modified = True
 
+    # Tracks which stage is live so the except handler can name it.
+    _stage = {"name": "startup"}
+
     try:
+        _stage["name"] = "Stage 1 of 8 (ingesting source documents)"
         cli_art.print_literal("Stage 1 of 8: Processing source documents...")
         summary = bootstrap_bullet_bank.run_ingestion()
         bootstrap_bullet_bank.print_ingestion_summary(summary)
 
+        _stage["name"] = "Stage 2 of 8 (drafting your profile)"
         cli_art.print_literal(
             "\nStage 2 of 8: Drafting your profile (identity, tags, cv.md)..."
         )
         bootstrap_profile.run_profile_setup()
 
+        _stage["name"] = "Stages 3-8 (bullet bank pipeline)"
         cli_art.print_literal(
             "\nStages 3-8: Running the six-stage bullet bank pipeline (unattended)..."
         )
@@ -261,8 +288,32 @@ def _run_express_setup(interactive: bool = True) -> bool:
             f"\n{theme.colorize_icon('success')} All done! Express setup complete. Your profile and bullet bank are fully prepared!"
         )
     except Exception as e:
+        # Express setup is 8 unattended stages of LLM work. A bare str(e)
+        # with no stage attribution and no traceback made a failure here
+        # effectively undiagnosable -- and it fails with partial state on
+        # disk, so knowing WHICH stage died is the whole question. The
+        # traceback goes to a file rather than the terminal because the
+        # scroll region below is still clamped at this point.
+        import traceback
+
+        log_path = os.path.join(profile_paths.profile_root(), "bootstrap-error.log")
+        try:
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(f"Express setup failed during: {_stage['name']}\n\n")
+                f.write(traceback.format_exc())
+        except OSError:
+            log_path = None
+
         cli_art.print_literal(
-            f"\n{theme.colorize_icon('warning')} Express setup encountered an error: {e}"
+            f"\n{theme.colorize_icon('warning')} Express setup failed during "
+            f"{_stage['name']}: {type(e).__name__}: {e}"
+        )
+        if log_path:
+            cli_art.print_literal(f"   Full traceback: {log_path}")
+        cli_art.print_literal(
+            "   Your profile still exists -- fix the problem and re-run setup to "
+            "resume from where it stopped."
         )
         return False
     finally:
