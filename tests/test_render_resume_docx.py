@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 
 SCRIPTS_DIR = os.path.join(
@@ -46,13 +47,11 @@ def _minimal_resume_data(**overrides):
 class TestRenderResumeDocx(unittest.TestCase):
 
     def setUp(self):
-        self.out_path = os.path.join(
-            os.path.dirname(__file__), "_tmp_resume_docx_test.docx"
-        )
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.out_path = os.path.join(self._temp_dir.name, "test_resume.docx")
 
     def tearDown(self):
-        if os.path.exists(self.out_path):
-            os.remove(self.out_path)
+        self._temp_dir.cleanup()
 
     def _paragraph_texts(self, doc):
         return [p.text for p in doc.paragraphs]

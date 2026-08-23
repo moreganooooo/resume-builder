@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -345,20 +346,20 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
 
     def setUp(self):
         self.engine = orchestrator.ResumeEngine()
-        self.jd_path = os.path.join(
-            os.path.dirname(__file__), "_tmp_jd_ats_classification.json"
-        )
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.jd_path = os.path.join(self._temp_dir.name, "jd_ats_classification.json")
         self.job_key = None
         self.stem = None
 
     def tearDown(self):
-        for path in (self.jd_path, self.json_out_path(), self.html_out_path()):
+        for path in (self.json_out_path(), self.html_out_path()):
             if path and os.path.exists(path):
                 os.remove(path)
         if self.job_key:
             checkpoint_path = jd_manager._checkpoint_path(self.job_key)
             if os.path.exists(checkpoint_path):
                 os.remove(checkpoint_path)
+        self._temp_dir.cleanup()
 
     def json_out_path(self):
         return (
