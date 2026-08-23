@@ -46,7 +46,6 @@ CV_DRAFT_CHECKPOINT_PATH = os.path.join(KB_DIR, "bootstrap", "cv_draft_checkpoin
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import cli_art  # noqa: E402
-import pandas as pd
 import theme  # noqa: E402
 from rewrite_bullets import (  # noqa: E402
     RULES_DIR,
@@ -860,6 +859,9 @@ def _polish_bullet(
     write_cv_md() resumable: an interrupted run just picks up where it
     left off on the next call, rather than losing every polish already
     paid for."""
+    # Lazy pandas -- Lite Mode omits it; see requirements-lite.txt (F20).
+    import pandas as pd
+
     checkpoint = checkpoint if checkpoint is not None else {}
     key = _cv_draft_checkpoint_key(role_company, bullet)
     if key in checkpoint:

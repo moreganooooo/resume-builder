@@ -153,3 +153,9 @@ resume-builder-conversations-perplexity/
 /scripts/local-webkit-test.sh
 /scripts/local-webkit-test.Containerfile
 .aider*
+
+# Throwaway analysis/triage files. `scratch/*` (contents), not `scratch/`
+# (the directory) -- same reason as the profiles/*/* rule above. Anything
+# already tracked here (scratch/rewrite.py) is unaffected: gitignore does
+# not apply to tracked files.
+scratch/*

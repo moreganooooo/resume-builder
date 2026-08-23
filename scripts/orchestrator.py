@@ -6,11 +6,24 @@ import re
 import shutil
 import subprocess
 import time
-from typing import List, Literal, Tuple
+from typing import TYPE_CHECKING, List, Literal, Tuple
+
+if TYPE_CHECKING:  # annotations only -- see the lazy imports below
+    import pandas as pd
+
+# _LAZY_HEAVY_DEPS -- why pandas and numpy are NOT imported here.
+# Lite Mode (requirements-lite.txt, for Android/Termux and for desktops
+# that only tailor and sync rather than render) deliberately omits both:
+# they are heavy to build on Termux and only python-jobspy needs them.
+# But orchestrator.py is imported by every entry point, including cli.py,
+# so a module-level `import numpy` meant a Lite install died at
+# `ModuleNotFoundError: No module named 'numpy'` when the user ran plain
+# `resume` -- before any pipeline logic, and before any message that could
+# explain what was wrong. Both are now imported inside the seven functions
+# that actually use them. Keep it that way: anything imported at this level
+# becomes a hard dependency of the whole CLI. (master_audit_document F20.)
 
 import company_research
-import numpy as np
-import pandas as pd
 import questionary
 import requests
 import situational_roles
@@ -341,8 +354,11 @@ def _claim_tag_keywords_map() -> dict:
 
 
 def filter_claims_by_tags(
-    df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS
-) -> pd.DataFrame:
+    df_claims: "pd.DataFrame", tags: str, max_rows: int = MAX_CLAIMS_ROWS
+) -> "pd.DataFrame":
+    # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS note at the top of this module.
+    import pandas as pd
+
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
@@ -410,7 +426,10 @@ def build_background_summary(tags: str) -> str:
     return "\n\n".join(sections)
 
 
-def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
+def get_verified_claims_text(df_claims: "pd.DataFrame") -> str:
+    # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS note at the top of this module.
+    import pandas as pd
+
     if df_claims.empty:
         return ""
     cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
@@ -1923,6 +1942,9 @@ class ResumeEngine:
         at MAX_CLAIMS_ROWS rows -- not the full unfiltered CSV/JSON dump
         this used to send on every bullet regardless of company or tag.
         """
+        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import pandas as pd
+
         sections = []
 
         cv_path = os.path.join(self.kb_dir, "cv.md")
@@ -2025,6 +2047,9 @@ class ResumeEngine:
         verified_projects.json, dropped entirely from the Gemma static
         prefix, is added back here tag-filtered rather than as the full
         12-entry file."""
+        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import pandas as pd
+
         sections = []
 
         cv_path = os.path.join(self.kb_dir, "cv.md")
@@ -2230,6 +2255,9 @@ class ResumeEngine:
 
     @staticmethod
     def critique_composite(scores: dict) -> float:
+        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import pandas as pd
+
         numeric = sum(
             pd.to_numeric(scores.get(c, 0), errors="coerce") or 0
             for c in (
@@ -2775,6 +2803,10 @@ class ResumeEngine:
         this a company's guaranteed minimum could fill entirely with
         near-identical bullets about the same underlying achievement.
         """
+        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import numpy as np
+        import pandas as pd
+
         cli_art.detail("\nMining bullet bank...", level=cli_art.NORMAL)
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
@@ -3476,6 +3508,10 @@ class ResumeEngine:
         otherwise. Returns the filled cover letter dict plus _output_paths
         (json/html/pdf), or {} on failure.
         """
+        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import numpy as np
+        import pandas as pd
+
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:

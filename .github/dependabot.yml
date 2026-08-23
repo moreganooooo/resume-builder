@@ -9,11 +9,54 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Wait out the window in which a freshly published version is most likely
+    # to be a compromised or yanked release before proposing it.
+    cooldown:
+      default-days: 7
+    ignore:
+      # numpy is NOT ours to bump. `python-jobspy` (the Indeed scanner, see
+      # scripts/scan_indeed.py) hard-pins `numpy==1.26.3`, so every Dependabot
+      # numpy PR resolves to a version pip cannot install alongside it and
+      # lands unmergeable. Revisit only when jobspy relaxes its own pin.
+      - dependency-name: "numpy"
+
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    # Wait out the window in which a freshly published version is most likely
+    # to be a compromised or yanked release before proposing it.
+    cooldown:
+      default-days: 7
+    ignore:
+      # Playwright is pinned to an exact 1.61.1 on purpose -- this project is
+      # developed on macOS 12, and Playwright >= 1.62 dropped macOS 12 support:
+      # `npx playwright install chromium` fails with "Playwright does not
+      # support chromium on mac12", so every PDF render dies at
+      # chromium.launch() with a missing-executable error. 1.61.1 is the last
+      # release that both supports macOS 12 and pins Chromium 1228. Patch
+      # bumps within 1.61.x are still allowed; minor/major are not.
+      - dependency-name: "playwright"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+
   - package-ecosystem: "gomod"
     directory: "/dashboard"
     schedule:
       interval: "weekly"
+    # Wait out the window in which a freshly published version is most likely
+    # to be a compromised or yanked release before proposing it.
+    cooldown:
+      default-days: 7
+
+  # The workflows in .github/workflows/ pin their actions by tag; without this
+  # ecosystem those pins silently rot and never get a security bump.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Wait out the window in which a freshly published version is most likely
+    # to be a compromised or yanked release before proposing it.
+    cooldown:
+      default-days: 7
