@@ -90,6 +90,12 @@ class TestPathHelpers(unittest.TestCase):
         expected = os.path.join(profile_paths.data_dir("morgan"), "kb_snapshots")
         self.assertEqual(profile_paths.kb_snapshot_dir("morgan"), expected)
 
+    def test_company_locations_cache_path_resolves_under_profile_root(self):
+        expected = os.path.join(
+            profile_paths.PROFILES_DIR, "morgan", "company_locations.json"
+        )
+        self.assertEqual(profile_paths.company_locations_cache_path("morgan"), expected)
+
 
 class TestSyncRoots(unittest.TestCase):
 

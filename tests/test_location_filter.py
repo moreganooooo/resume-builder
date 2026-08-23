@@ -312,3 +312,56 @@ class TestMultiSelectWorkplaceModes(unittest.TestCase):
         )
         self.assertIn("onsite", verdict.reason)
         self.assertIn("remote", verdict.reason)
+
+    def test_evaluate_location_uses_enriched_address(self):
+        # 14068 origin with 5 mile radius. Buffalo centroid is 11.4 mi, but Amherst point is ~1.8 mi.
+        config = {"city": "Getzville", "state": "NY", "zip": "14068", "radius_miles": 5}
+        enrichment = {
+            "status": "resolved",
+            "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
+            "resolved_zip": "14228",
+            "lat": 42.996,
+            "lon": -78.788,
+            "source": "jd_text_override",
+        }
+        verdict = lf.evaluate_location(
+            "Buffalo, NY", config, _location_enrichment=enrichment
+        )
+        self.assertTrue(verdict.passes)
+        self.assertLess(verdict.distance_miles, 3.0)
+
+    def test_evaluate_location_reason_formatting(self):
+        config = {"city": "Getzville", "state": "NY", "zip": "14068", "radius_miles": 5}
+        enrichment = {
+            "status": "resolved",
+            "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
+            "resolved_zip": "14228",
+            "lat": 42.996,
+            "lon": -78.788,
+            "source": "jd_text_override",
+        }
+        verdict = lf.evaluate_location(
+            "Buffalo, NY", config, _location_enrichment=enrichment
+        )
+        self.assertIn("via jd_text_override", verdict.reason)
+
+    def test_hybrid_workplace_with_enriched_address(self):
+        config = {
+            "city": "Getzville",
+            "state": "NY",
+            "zip": "14068",
+            "radius_miles": 5,
+            "workplace_mode": "hybrid",
+        }
+        enrichment = {
+            "status": "resolved",
+            "resolved_address": "Williamsville, NY 14221",
+            "lat": 42.964,
+            "lon": -78.737,
+            "source": "osm_nominatim",
+        }
+        verdict = lf.evaluate_location(
+            "Hybrid - Williamsville, NY", config, _location_enrichment=enrichment
+        )
+        self.assertTrue(verdict.passes)
+        self.assertEqual(verdict.workplace, lf.HYBRID)
