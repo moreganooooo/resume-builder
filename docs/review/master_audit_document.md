@@ -6,6 +6,63 @@
 
 ---
 
+## ⛳ RESOLUTION STATUS — verified 2026-08-23 (read this before acting on anything below)
+
+Every finding below was re-checked against live code on 2026-08-23. **This
+document is a 2026-08-16 snapshot; most of it is closed.** It had already
+caused two rounds of duplicated re-triage because nothing recorded that.
+
+| Status | Findings |
+|---|---|
+| ✅ **Closed** | F2 · F3 · F4 · F5 · F6 · F9 · F10 · **F11** · F13 · F14 · F15 · F16 · F17 · F18 · **F20** · F22 |
+| ⬜ **Open** | **F1** (god module) · F12 (minor) · F19 · F21 |
+| 🚫 **Won't fix, by design** | F7 (POSIX-only locking) · F8 (no keyring) |
+
+**Notable closures, with the evidence:**
+- **F11 (the only Critical)** — fixed *and* pinned. `vector_store.py`'s
+  row-count branch now re-embeds instead of returning early, and
+  `test_remediation_protections.py::test_vector_store_row_count_mismatch_triggers_reembed`
+  names F11 in its docstring.
+- **F9 / F22** — the grader is no longer arithmetically unpassable.
+  `_check_bullet_star_quality` gained `QUALITATIVE_EVIDENCE_PHRASES` and a
+  graduated penalty: no metric *and* no qualitative evidence costs 40, but
+  qualitative evidence with no number costs only 15, so such a bullet scores
+  85 and passes.
+- **F10** — `company_research._extract_visible_text()` now strips
+  `_BOILERPLATE_TAGS` and `_BOILERPLATE_SELECTORS`.
+- **F6** — `db.py` has an explicit `wal_checkpoint(TRUNCATE)` whose docstring
+  names the Syncthing staleness gap this finding raised.
+- **F18** — both instances closed. `test_star_quality_grader.py` now covers
+  the middle case (strong verb + outcome, no metric) it structurally missed.
+
+**F20 was closed on 2026-08-23, and it had gone live in the meantime.** The
+audit filed it as "aspirational, not shipped" because mobile Lite Mode did not
+exist yet. `requirements-lite.txt` has since shipped and deliberately omits
+pandas/numpy — while `orchestrator.py` still imported both at module level, and
+every entry point imports `orchestrator`. A Lite install therefore died on plain
+`resume` with `ModuleNotFoundError: No module named 'numpy'`, before printing
+anything. Both imports are now lazy in the seven functions that use them (plus
+`rewrite_bullets.py`, `bullet_bank_menu.py`, `bootstrap_profile.py`, all reached
+transitively), `pd.DataFrame` annotations are quoted so they do not evaluate at
+def time, and `tests/test_lite_mode_imports.py` blocks both packages at import
+and asserts every entry point still loads. **That test is the only thing
+standing between a future module-level `import pandas` and a wholly broken Lite
+Mode — the failure is invisible on a normal desktop, where both are installed.**
+
+**Still open, and why:**
+- **F1** — `orchestrator.py` was 4,205 lines at audit time and is now
+  **5,507**. The only Major left, and it grew. Needs a planned decomposition,
+  not a patch.
+- **F12** — Minor. Re-embedding prints progress via `cli_art` now, but the call
+  is still synchronous.
+- **F19 / F21** — documentation integrity in `docs/gemini_files/`, not code.
+  `refactoring_plan.md` still carries 22 `[COMPLETED]` markers including the two
+  this audit disproved (the icon default, and pandas/numpy removal — the second
+  is now *half* true: removed from the import path, still used inside
+  functions), and still contradicts `audit_report.md` on mobile compatibility.
+
+---
+
 ## How to read this document
 
 Each finding has:

@@ -78,11 +78,20 @@ import re
 import sys
 import time
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import pandas as pd
+# _LAZY_HEAVY_DEPS -- pandas is imported inside the functions that use it,
+# not here. orchestrator.py reaches this module via bullet_feedback on every
+# entry point, so a module-level `import pandas` reintroduced the Lite Mode
+# crash that removing it from orchestrator.py was meant to fix: plain
+# `resume` died at ModuleNotFoundError before printing anything.
+# requirements-lite.txt (Android/Termux) omits pandas on purpose.
+# (master_audit_document F20.)
 import yaml
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:  # annotations only -- pandas is imported lazily per function
+    import pandas as pd
 
 # ---------------------------------------------------------------------------
 # PATH RESOLUTION
@@ -656,7 +665,10 @@ def trim_profile_yml(raw: str) -> str:
     return "\n".join(result).strip()
 
 
-def load_verified_claims(path: str) -> pd.DataFrame:
+def load_verified_claims(path: str) -> "pd.DataFrame":
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     try:
         df = pd.read_csv(path)
         if "Use in Resume?" in df.columns:
@@ -675,6 +687,9 @@ def load_verified_claims(path: str) -> pd.DataFrame:
 
 
 def load_screenshot_metrics(path: str) -> str:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     try:
         df = pd.read_csv(path)
         content = df.to_csv(index=False)
@@ -691,7 +706,10 @@ def load_screenshot_metrics(path: str) -> str:
         return ""
 
 
-def get_verified_claims_text(df_claims: pd.DataFrame) -> str:
+def get_verified_claims_text(df_claims: "pd.DataFrame") -> str:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     if df_claims.empty:
         return ""
     cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
@@ -741,8 +759,11 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
 
 
 def filter_claims_by_tags(
-    df_claims: pd.DataFrame, tags: str, max_rows: int = MAX_CLAIMS_ROWS
-) -> pd.DataFrame:
+    df_claims: "pd.DataFrame", tags: str, max_rows: int = MAX_CLAIMS_ROWS
+) -> "pd.DataFrame":
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     if df_claims.empty:
         return df_claims
     tags_lower = tags.lower() if isinstance(tags, str) else ""
@@ -1102,7 +1123,10 @@ class KnowledgeBase:
         tag_list = re.findall(r"\[([^\]]+)\]", tags_str)
         return "".join(f"[{tag}]" for tag in sorted(tag_list))
 
-    def warm_segment_cache(self, df: pd.DataFrame) -> None:
+    def warm_segment_cache(self, df: "pd.DataFrame") -> None:
+        # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import pandas as pd
+
         self._segment_cache = {}
         self._gemma_segment_cache = {}
         raw_pairs = df[["Role / Company", "Tags"]].drop_duplicates()
@@ -1361,6 +1385,9 @@ def score_bullet(
     role_company: str = "",
     dry_run: bool = False,
 ) -> dict:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     if dry_run:
         return {
             "accuracy_score": 90,
@@ -1407,6 +1434,9 @@ def _is_meaningful_weakness(text: str) -> bool:
 
 
 def decide_action(scores: dict) -> str:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     mgr = str(scores.get("manager_test", "")).strip().upper()
     accuracy = pd.to_numeric(scores.get("accuracy_score"), errors="coerce")
     believability = pd.to_numeric(scores.get("believability_score"), errors="coerce")
@@ -1455,6 +1485,9 @@ def best_version(
     rewritten_scores: dict,
 ) -> tuple:
     def composite(s):
+        # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+        import pandas as pd
+
         vals = [
             pd.to_numeric(s.get(c, 0), errors="coerce") or 0
             for c in [
@@ -1496,7 +1529,10 @@ KEEPER_COLS = [
 ]
 
 
-def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
+def load_or_init_keepers(path: str, df_map: "pd.DataFrame") -> "pd.DataFrame":
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     if os.path.exists(path):
         cli_art.console.print(
             f"   {theme.colorize_icon('hint')} Loading existing keepers: {path}",
@@ -1534,7 +1570,10 @@ def load_or_init_keepers(path: str, df_map: pd.DataFrame) -> pd.DataFrame:
     return df_keepers
 
 
-def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFrame:
+def append_keeper(df_keepers: "pd.DataFrame", row: dict, path: str) -> "pd.DataFrame":
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     new_row = {col: row.get(col, "") for col in KEEPER_COLS}
     new_row["rewrite_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     df_keepers = pd.concat([df_keepers, pd.DataFrame([new_row])], ignore_index=True)
@@ -1548,6 +1587,9 @@ def append_keeper(df_keepers: pd.DataFrame, row: dict, path: str) -> pd.DataFram
 
 
 def _safe_str(v) -> str:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     if v is None:
         return ""
     if isinstance(v, float) and pd.isna(v):
@@ -1556,10 +1598,16 @@ def _safe_str(v) -> str:
 
 
 def _safe_numeric(v):
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     return pd.to_numeric(v, errors="coerce")
 
 
-def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+def ensure_writable_dtypes(df: "pd.DataFrame") -> "pd.DataFrame":
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     object_cols = [
         "Bullet Point",
         "Role / Company",
@@ -1583,6 +1631,9 @@ def ensure_writable_dtypes(df: pd.DataFrame) -> pd.DataFrame:
 def load_already_processed(
     output_path: str, keepers_path: str, retry_manual: bool = False
 ) -> set:
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     done = set()
     skip_statuses = {"KEEP"} if retry_manual else DONE_STATUSES
 
@@ -1628,7 +1679,7 @@ def load_already_processed(
 
 
 def process_bullet(
-    row: pd.Series,
+    row: "pd.Series",
     kb: KnowledgeBase,
     rewrite_system: str,
     rewrite_system_gemma: str,
@@ -1642,6 +1693,9 @@ def process_bullet(
     bullets already known to need it (e.g. audit_keepers.py's
     --auto-rewrite queue, which only ever contains bullets that already
     failed a first Gemma-led pass)."""
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     original_bullet = str(row["Bullet Point"]).strip()
     tags = str(row.get("Tags", ""))
     weaknesses = str(row.get("weaknesses", ""))
@@ -1821,6 +1875,9 @@ def process_bullet(
 
 
 def main():
+    # Lazy pandas -- see _LAZY_HEAVY_DEPS at the top of this module.
+    import pandas as pd
+
     parser = argparse.ArgumentParser(description="Agentic bullet rewriter")
     parser.add_argument(
         "--limit", type=int, default=None, help="Max bullets to process"
