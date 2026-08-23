@@ -12,6 +12,7 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import jd_manager  # noqa: E402
 import orchestrator  # noqa: E402
@@ -39,10 +40,22 @@ def _pass_critique_json():
 class TestBuildCheckpointResume(unittest.TestCase):
 
     def setUp(self):
-        # These fixtures build a synthetic 1-company resume against the live
-        # profile, whose roster declares six. B60's roster check is correct to
-        # reject that, but it isn't what any test in this class is about --
-        # _check_role_roster has its own coverage in test_validate_resume.py.
+        # ResumeEngine() resolves the ACTIVE profile, so this whole class
+        # required one to already exist -- 23 errors on a checkout that has
+        # not been bootstrapped yet, which is exactly the state a new user
+        # is in when `resume doctor` runs the suite for them. A persona
+        # sandbox supplies a complete profile of its own.
+        import persona
+
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        self.addCleanup(self._sandbox.__exit__, None, None, None)
+
+        # These fixtures build a synthetic 1-company resume against the
+        # profile, whose roster declares several. B60's roster check is
+        # correct to reject that, but it isn't what any test in this class
+        # is about -- _check_role_roster has its own coverage in
+        # test_validate_resume.py.
         self._roster_patch = patch(
             "orchestrator._required_role_roster", return_value=[]
         )
@@ -1624,7 +1637,13 @@ class TestBuildCheckpointResume(unittest.TestCase):
             returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
 
-        with patch.object(self.engine, "mine_bullet_bank"):
+        # Sandboxed: the EDU_ACHIEVEMENT_KEY_<n> schema fields asserted in
+        # generate_side_effect are derived from the ACTIVE profile's
+        # fixed_credentials.education, so on a freshly bootstrapped profile
+        # there are none and the B40 guard above silently checks nothing.
+        import persona
+
+        with persona.sandbox_profile(), patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
                 jd_path=self.jd_path,
                 master_resume={},

@@ -333,9 +333,9 @@ class TestDbSchema(unittest.TestCase):
         enrichment = {
             "status": "resolved",
             "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
-            "resolved_zip": "14228",
-            "lat": 42.996,
-            "lon": -78.788,
+            "resolved_zip": "62702",
+            "lat": 39.772,
+            "lon": -89.6843,
             "source": "jd_text_override",
         }
         db.upsert_job(
@@ -356,7 +356,7 @@ class TestDbSchema(unittest.TestCase):
         meta = json.loads(rows[0]["metadata_json"])
         self.assertIn("_location_enrichment", meta)
         self.assertEqual(meta["_location_enrichment"]["status"], "resolved")
-        self.assertEqual(meta["_location_enrichment"]["resolved_zip"], "14228")
+        self.assertEqual(meta["_location_enrichment"]["resolved_zip"], "62702")
 
 
 if __name__ == "__main__":

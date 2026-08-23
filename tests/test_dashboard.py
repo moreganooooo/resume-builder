@@ -10,6 +10,8 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+# tests/ itself, so `import persona` works when run standalone.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import dashboard  # noqa: E402
 
@@ -27,16 +29,28 @@ class TestGoAvailable(unittest.TestCase):
 
 class TestRun(unittest.TestCase):
 
+    def setUp(self):
+        # dashboard.run(<profile>) resolves that profile's real paths, so the
+        # profile has to exist. A persona sandbox gives it one without
+        # depending on whoever is operating this checkout.
+        import persona
+
+        self._sandbox = persona.sandbox_profile("testprofile")
+        self._sandbox.__enter__()
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
+
     @patch("dashboard.go_available", return_value=False)
     def test_returns_false_with_install_hint_when_go_missing(self, mock_go):
-        success, message = dashboard.run("morgan")
+        success, message = dashboard.run("testprofile")
         self.assertFalse(success)
         self.assertIn("Go isn't installed", message)
 
     @patch("dashboard.os.path.exists", return_value=False)
     @patch("dashboard.go_available", return_value=True)
     def test_returns_false_when_no_applications_logged_yet(self, mock_go, mock_exists):
-        success, message = dashboard.run("morgan")
+        success, message = dashboard.run("testprofile")
         self.assertFalse(success)
         self.assertIn("No applications logged yet", message)
 
@@ -48,9 +62,9 @@ class TestRun(unittest.TestCase):
         self, mock_go, mock_exists, mock_subproc, mock_list
     ):
         mock_subproc.return_value = MagicMock(returncode=0)
-        success, message = dashboard.run("morgan")
+        success, message = dashboard.run("testprofile")
         self.assertTrue(success)
-        expected_data_dir = dashboard.profile_paths.data_dir("morgan")
+        expected_data_dir = dashboard.profile_paths.data_dir("testprofile")
         args = mock_subproc.call_args[0][0]
         self.assertEqual(args[0], "go")
         self.assertEqual(args[1], "run")
@@ -76,7 +90,7 @@ class TestRun(unittest.TestCase):
         self, mock_go, mock_exists, mock_subproc, mock_list
     ):
         mock_subproc.return_value = MagicMock(returncode=1)
-        success, message = dashboard.run("morgan")
+        success, message = dashboard.run("testprofile")
         self.assertFalse(success)
         self.assertIn("exited with an error", message)
 
@@ -102,7 +116,7 @@ class TestWriteJobsExport(unittest.TestCase):
     def test_writes_valid_json_matching_picker_rows(self, mock_list):
         rows = [
             {
-                "path": "jds/morgan/a.json",
+                "path": "jds/testprofile/a.json",
                 "status": "Pending",
                 "title": "T",
                 "company": "C",
@@ -146,6 +160,18 @@ class TestWriteJobsExport(unittest.TestCase):
 
 class TestRunCleansUpJobsExport(unittest.TestCase):
 
+    def setUp(self):
+        # dashboard.run(<profile>) resolves that profile's real paths, so the
+        # profile has to exist. A persona sandbox gives it one without
+        # depending on whoever is operating this checkout.
+        import persona
+
+        self._sandbox = persona.sandbox_profile("testprofile")
+        self._sandbox.__enter__()
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
+
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
     @patch("dashboard.subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
@@ -154,7 +180,7 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
         self, mock_go, mock_exists, mock_subproc, mock_list
     ):
         mock_subproc.return_value = MagicMock(returncode=0)
-        dashboard.run("morgan")
+        dashboard.run("testprofile")
         jobs_path = mock_subproc.call_args[0][0][6]
         # os.path.isfile, not os.path.exists -- dashboard.os IS the real os
         # module object, so the @patch("dashboard.os.path.exists", ...)
@@ -170,7 +196,7 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
         self, mock_go, mock_exists, mock_subproc, mock_list
     ):
         mock_subproc.return_value = MagicMock(returncode=1)
-        dashboard.run("morgan")
+        dashboard.run("testprofile")
         jobs_path = mock_subproc.call_args[0][0][6]
         # os.path.isfile, not os.path.exists -- dashboard.os IS the real os
         # module object, so the @patch("dashboard.os.path.exists", ...)
@@ -180,6 +206,18 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
 
 
 class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
+
+    def setUp(self):
+        # dashboard.run(<profile>) resolves that profile's real paths, so the
+        # profile has to exist. A persona sandbox gives it one without
+        # depending on whoever is operating this checkout.
+        import persona
+
+        self._sandbox = persona.sandbox_profile("testprofile")
+        self._sandbox.__enter__()
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
     @patch("dashboard.subprocess.run")
@@ -195,11 +233,11 @@ class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
             "theme_mode": "catppuccin-latte",
         }
         mock_subproc.return_value = MagicMock(returncode=0)
-        success, _ = dashboard.run("morgan")
+        success, _ = dashboard.run("testprofile")
         self.assertTrue(success)
         env = mock_subproc.call_args[1].get("env")
         self.assertIsNotNone(env)
-        self.assertEqual(env.get("RESUME_BUILDER_PROFILE"), "morgan")
+        self.assertEqual(env.get("RESUME_BUILDER_PROFILE"), "testprofile")
         self.assertEqual(env.get("RESUME_BUILDER_ICONS"), "unicode")
         self.assertEqual(env.get("RESUME_BUILDER_MOTION"), "reduced")
 

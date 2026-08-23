@@ -453,6 +453,135 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 - **Embedded ACID SQLite Store (`db.py`):** `profiles/<profile>/data.db` manages connection pooling, schema initialization, and database queries for job postings, application funnel status transitions, and bullet bank achievements with transaction safety and indexed query performance.
 - **Dynamic Credentials Shield (`gemini_client.py`):** `gemini_client.py` calculates API authorization headers dynamically per call via `_get_auth_headers()`, ensuring profile switches immediately adopt the active profile's `GEMINI_API_KEY`.
 - **Typst Vector PDF Engine (`render_typst.py`):** Provides sub-second vector PDF generation directly from structured `.typ` document templates without headless browser overhead.
+- **Tests must not depend on who is operating the checkout.** Use
+  `tests/persona.py` for any identity a test needs, and
+  `persona.sandbox_profile()` for a complete throwaway profile (identity,
+  fictional employers, education, situational roles, tag taxonomy,
+  scanner filters). `tests/test_no_operator_identity.py` enforces this by
+  reading the ACTIVE profile's `profile.yml` at runtime and failing if
+  those values appear anywhere in `tests/` -- so it protects whoever runs
+  it, not one fixed person. A test that hardcodes the operator's name,
+  employers, or profile name either passes only on their machine or
+  asserts facts about one resume rather than about the pipeline.
+  Measured: a second user's run went from **233 failures to 7**.
+  Two traps worth knowing: a `tearDown` that falls back to a hardcoded
+  profile name raises inside `set_active_profile()` for anyone who lacks
+  that profile AND leaves `RESUME_PROFILE` poisoned for every later test
+  (129 cascading errors from one line); and `active_profile()` returning a
+  hardcoded default when `RESUME_PROFILE` is unset silently handed other
+  users paths to a nonexistent profile -- `_default_profile()` now
+  resolves against what is actually on disk.
+- **Renaming a profile moves four directories that other tools track by
+  absolute path.** `profile_paths.rename_profile()` is the one place that
+  does it: it applies the same name validation `create_new_profile()`
+  uses (rename previously accepted `/` and `..`), checks every
+  destination BEFORE moving any of them, and resolves "is this the active
+  profile?" before the move rather than after (afterwards
+  `active_profile()` can no longer find it and raises out of the menu).
+  `rename_side_effects()` carries the three things it cannot fix, and the
+  menu shows them before confirming: **Syncthing** (each root is a
+  separate folder configured by path on every device -- the old paths go
+  missing and may propagate as a deletion; pause, repoint, resume),
+  **git** (`board_scanner/*.yml` are tracked, so it reads as a delete plus
+  an untracked add), and **the shell** (`RESUME_PROFILE` is exported per
+  terminal by `resume-cli.sh`).
+- **`.gitignore` must exclude `profiles/*/*`, never `profiles/*/`.** Git
+  cannot re-include a file whose PARENT DIRECTORY is excluded, so the
+  directory-form pattern made both `!profiles/*/board_scanner/` negations
+  dead and a new or renamed profile's board_scanner YAML silently
+  un-committable. `profiles/morgan/`'s files survived only because they
+  were already tracked, and gitignore does not apply to tracked files --
+  which is exactly why it went unnoticed. Verify any change here with
+  `git check-ignore -v --no-index <path>` (without `--no-index`, tracked
+  files report "not ignored" regardless of the rules and you learn
+  nothing).
+- **`gemini_client._get_auth_headers()` is the test-network chokepoint,
+  and it fails CLOSED.** All four `requests.post()` sites in that module
+  build their headers through it, which is why the guard lives there
+  rather than at each call site. Without it the suite made **78 live
+  calls to `generativelanguage.googleapis.com` on every full run** --
+  real spend, real 429s, and a wall-clock that swung between 127s and
+  274s depending on rate limiting. Under `unittest` it now raises
+  `TestNetworkBlockedError` unless `RESUME_ALLOW_TEST_NETWORK=1` is set
+  (same escape hatch as `websearch_ddg.py`'s `_TEST_NETWORK_ENV`).
+  Raising rather than returning a canned response is deliberate: a guard
+  that degraded silently would leave those tests green while asserting
+  nothing, which is worse than the original bug -- the same reasoning as
+  `db._is_unisolated_test_write` dropping a write instead of faking one.
+  `tests/test_gemini_client.py` opts in via `setUpModule()` because every
+  test there mocks `requests.post` and only trips the guard through
+  argument evaluation; a test added there WITHOUT that mock will make a
+  real billable call. Verify with an instrumented run (patch
+  `requests.Session.request` and `httpx.Client.send`), not by reading.
+- **A profile has FOUR roots, and isolating one is not isolating the
+  profile.** `profile_paths` exposes `PROFILES_DIR`, `JDS_ROOT`,
+  `OUTPUT_ROOT`, and `DATA_ROOT` as separate module constants.
+  `create_new_profile()` calls `write_sync_ignore_files()`, which
+  `os.makedirs()` all four -- so a test that patched only `PROFILES_DIR`
+  was one-quarter isolated and silently created `jds/<name>/`,
+  `output/<name>/`, and `data/<name>/` in the developer's own checkout.
+  That is how `jds/testprofile`, `jds/testuser`, `output/temp_empty`,
+  `profiles/test_profile` and friends accumulated. Use
+  `profile_paths.isolate_for_tests(tmpdir)` -- it redirects all four at
+  once, so isolation cannot be half-applied. Do NOT create real
+  directories and sweep them up in `tearDown`: that cleanup does not run
+  when the test errors first, which is exactly when it matters. Audit
+  with an `os.makedirs`/`os.replace` instrumented run rather than by
+  reading, since `atomic_write` renames into place and never `open()`s
+  the destination.
+- **`profile.yml`'s `candidate` block is the single source of truth for
+  identity; `CONTACT_INFO` derives from it, fill-only.**
+  `create_new_profile()` scaffolds `fixed_content.py` with five empty
+  contact strings, and `bootstrap_profile.run_profile_setup()` writes
+  `profile.yml` but has never written `fixed_content.py` -- so every
+  bootstrapped profile rendered a nameless resume.
+  `profile_paths._fill_contact_info_from_profile_yaml()` now fills any
+  missing/blank key from `candidate` at load time. It is deliberately
+  **fill-only, never override**: the two stores legitimately disagree on
+  formatting (a fully-qualified phone in `profile.yml` vs. the shorter
+  rendered form in `CONTACT_INFO`), so overriding would silently change
+  an established profile's output. It also guarantees all five keys
+  exist, because `render_coverletter.py` reads them by direct subscript
+  -- a missing key is a `KeyError` mid-render, not a blank line. Add a
+  new contact field by extending `_CONTACT_INFO_FROM_CANDIDATE`, not by
+  hand-writing it into a profile.
+- **There is no identity fallback, by design.** `fixed_content_module()`
+  and `profile_yaml()` used to fall back to ~250 lines of the original
+  author's real name, phone, email, and career history hardcoded in
+  `profile_paths.py`, guarded by `if name == "morgan" or profile is
+  None`. All nine call sites use the zero-arg form, so `profile is None`
+  was always true and the guard NEVER fired -- any new user's rendered
+  resume and cover letter carried someone else's PII. Both functions and
+  the fallback data are gone; an unbootstrapped profile now raises
+  `ImportError` naming the profile. Never reintroduce a "sensible
+  default" identity: failing loudly is the only safe behaviour when the
+  alternative is silently attributing one person's contact details to
+  another. `tests/test_bootstrap_first_run.py` is the permanent guard.
+- **Entry points must preflight the profile before importing anything
+  profile-scoped.** `jd_manager.py` resolves `JDS_DIR` at MODULE level
+  and `cli_art` imports `jd_manager`, so an unresolvable
+  `RESUME_PROFILE` aborted `resume`, the menu, AND `resume doctor` with a
+  raw traceback -- the error text pointed at a bootstrap flow that was
+  unreachable by definition, and `resume-cli.sh` EXPORTS the variable so
+  the broken state persisted for the whole terminal session. `cli.py` and
+  `menu.py` call `profile_paths.preflight_profile()` before their heavy
+  imports; it prints available profiles and the exact command to fix
+  things, and never raises. `active_profile()` also falls back to a
+  case-insensitive match against the real on-disk listing before failing
+  (macOS resolves `profiles/Morgan` and `profiles/morgan` to one
+  directory; a Linux Syncthing peer does not) -- a fallback, not the
+  primary path, so profiles that already resolve keep their exact
+  spelling.
+- **The Go bootstrap wizard runs from `dashboard/`, not the project
+  root.** There is no root `go.mod`, so `go run ./dashboard/cmd/bootstrap`
+  from the root fails with "cannot find main module" -- and the
+  questionary fallback was gated on Go being ABSENT, so having Go
+  installed guaranteed the broken path and never the working one. That
+  silently broke "New User? Start Here!" for every Go-equipped machine.
+  `menu._run_go_bootstrap_wizard()` builds/runs `dashboard/bin/bootstrap`
+  with `cwd=dashboard/`, treats exit code 130 as user-cancelled (per
+  `cmd/bootstrap/main.go`), and falls back to the questionary wizard on
+  ANY failure, not just missing Go.
 - **Every interactive prompt (confirm/select/checkbox/text) is routed
   through the Go/huh binary (`scripts/charm_prompt.py` →
   `dashboard/cmd/prompt`), not raw `questionary`, outside of tests and a

@@ -6,18 +6,30 @@ SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
+# tests/ itself, so `import persona` works when run standalone.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import normalize_resume  # noqa: E402
+import persona  # noqa: E402
 import profile_paths  # noqa: E402
 
-fixed_content = profile_paths.fixed_content_module("morgan")
+# Resolved per-test inside the persona sandbox, NOT at import time against
+# profiles/morgan/. Reading one real person's fixed_content.py here meant
+# the whole module failed to import for anyone else -- and every assertion
+# below described that person's actual employers rather than normalize()'s
+# behaviour.
+fixed_content = None
 
 
 class TestNormalizeResume(unittest.TestCase):
 
     def setUp(self):
+        global fixed_content
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        fixed_content = profile_paths.fixed_content_module()
         self.raw = {
-            "NAME": "Morgan Escott",
+            "NAME": "Alex Rivera",
             "TAGLINE": "lifecycle marketing manager and crm strategist",
             # Numbered per profile_paths.education_achievement_slots()'s
             # order -- EDU_ACHIEVEMENT_KEY_1 is University of Kansas (the
@@ -27,12 +39,15 @@ class TestNormalizeResume(unittest.TestCase):
             "EDU_ACHIEVEMENT_KEY_2": "writing_content",
         }
 
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
+
     def test_injects_company_meta_for_known_companies(self):
         data = dict(self.raw)
         data["EXPERIENCE"] = [
             {
                 "title": "X",
-                "company": "Mercor",
+                "company": persona.EMPLOYER_WITH_META,
                 "period": "08/2025 – 08/2025",
                 "achievements": [],
             }
@@ -63,7 +78,7 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "Sales/Marketing Strategy + QA Expert",
-                "company": "Mercor",
+                "company": persona.EMPLOYER_WITH_META,
                 "period": "08/2025 – 08/2025",
                 "achievements": [],
             }
@@ -79,7 +94,7 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "Sales/Marketing Strategy + QA Expert (AI Training)",
-                "company": "Mercor",
+                "company": persona.EMPLOYER_WITH_META,
                 "period": "08/2025 – 08/2025",
                 "achievements": [],
             }
@@ -95,14 +110,18 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "X",
-                "company": "Treering Yearbooks",
+                "company": persona.EMPLOYER_LONG_TENURE,
                 "period": "08/2016 – 08/2024",
                 "achievements": [],
                 "career_note": "something the builder made up",
             }
         ]
         result = normalize_resume.normalize(data)
-        treering = next(j for j in result["EXPERIENCE"] if "Treering" in j["company"])
+        treering = next(
+            j
+            for j in result["EXPERIENCE"]
+            if persona.EMPLOYER_LONG_TENURE in j["company"]
+        )
         self.assertEqual(treering["career_note"], fixed_content.CAREER_NOTE)
 
     def test_does_not_add_career_note_for_other_companies(self):
@@ -110,7 +129,7 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "X",
-                "company": "Mercor",
+                "company": persona.EMPLOYER_WITH_META,
                 "period": "08/2025 – 08/2025",
                 "achievements": [],
             }
@@ -123,14 +142,15 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "X",
-                "company": "Inside Sales Team",
+                "company": persona.EMPLOYER_RENAMED,
                 "period": "10/2015 – 08/2016",
                 "achievements": [],
             }
         ]
         result = normalize_resume.normalize(data)
         self.assertEqual(
-            result["EXPERIENCE"][0]["company"], "Inside Sales Team (Now Alleyoop)"
+            result["EXPERIENCE"][0]["company"],
+            f"{persona.EMPLOYER_RENAMED} (Now Larkspur)",
         )
 
     def test_forces_fixed_title_for_element_8_regardless_of_builder_output(self):
@@ -138,7 +158,7 @@ class TestNormalizeResume(unittest.TestCase):
         data["EXPERIENCE"] = [
             {
                 "title": "Whatever The Builder Made Up",
-                "company": "Element 8 / Strategy LLC",
+                "company": persona.EMPLOYER_WITH_FIXED_TITLE,
                 "period": "01/2011 – 10/2011",
                 "achievements": [],
             }
@@ -146,7 +166,7 @@ class TestNormalizeResume(unittest.TestCase):
         result = normalize_resume.normalize(data)
         # The fixed title still gets the usual industry descriptor appended,
         # same as every other company's title.
-        expected = f'{fixed_content.COMPANY_FIXED_TITLE["Element 8 / Strategy LLC"]} (Design/Agency/Startup)'
+        expected = f"{fixed_content.COMPANY_FIXED_TITLE[persona.EMPLOYER_WITH_FIXED_TITLE]} (Design/Agency/Startup)"
         self.assertEqual(result["EXPERIENCE"][0]["title"], expected)
 
     def test_renormalizing_an_already_renamed_company_stays_idempotent(self):
@@ -154,12 +174,12 @@ class TestNormalizeResume(unittest.TestCase):
         # validator-fix and trim retry loops -- a naive rename-append that
         # used the already-mutated "company" field as its own lookup key
         # would silently stop matching COMPANY_META/CLIENTS/etc. on the 2nd+
-        # pass, since "Callahan Creek (Now BarkleyOKRP)" isn't a dict key.
+        # pass, since the renamed string isn't a dict key.
         data = dict(self.raw)
         data["EXPERIENCE"] = [
             {
                 "title": "X",
-                "company": "Callahan Creek",
+                "company": persona.EMPLOYER_WITH_CLIENTS,
                 "period": "05/2009 – 05/2010",
                 "achievements": [],
             }
@@ -167,15 +187,16 @@ class TestNormalizeResume(unittest.TestCase):
         once = normalize_resume.normalize(data)
         twice = normalize_resume.normalize(once)
         self.assertEqual(
-            twice["EXPERIENCE"][0]["company"], "Callahan Creek (Now BarkleyOKRP)"
+            twice["EXPERIENCE"][0]["company"],
+            f"{persona.EMPLOYER_WITH_CLIENTS} (Now Harborworks)",
         )
         self.assertEqual(
             twice["EXPERIENCE"][0]["clients"],
-            fixed_content.CLIENTS["Callahan Creek"]["list"],
+            fixed_content.CLIENTS[persona.EMPLOYER_WITH_CLIENTS]["list"],
         )
         self.assertEqual(
             twice["EXPERIENCE"][0]["size_revenue"],
-            fixed_content.COMPANY_META["Callahan Creek"]["size_revenue"],
+            fixed_content.COMPANY_META[persona.EMPLOYER_WITH_CLIENTS]["size_revenue"],
         )
 
     def test_injects_fixed_contact_info(self):
@@ -249,21 +270,19 @@ class TestNormalizeResume(unittest.TestCase):
 
 
 class TestNormalizeUsesActiveProfilesFixedContent(unittest.TestCase):
+    """Ran against the operator's own profiles/morgan/ and asserted that
+    person's real name and email, so it only meant anything on one
+    machine. It now builds a throwaway profile from tests/persona.py --
+    the behaviour under test is "normalize pulls contact info from the
+    ACTIVE profile", which is true for any profile."""
 
-    def setUp(self):
-        self._orig = os.environ.get("RESUME_PROFILE")
-        os.environ["RESUME_PROFILE"] = "morgan"
+    def test_normalize_applies_the_active_profiles_contact_info(self):
+        import persona
 
-    def tearDown(self):
-        if self._orig is None:
-            os.environ.pop("RESUME_PROFILE", None)
-        else:
-            os.environ["RESUME_PROFILE"] = self._orig
-
-    def test_normalize_applies_morgans_contact_info(self):
-        result = normalize_resume.normalize({})
-        self.assertEqual(result["NAME"], "Morgan Escott")
-        self.assertEqual(result["EMAIL"], "escott.morgan@gmail.com")
+        with persona.sandbox_profile():
+            result = normalize_resume.normalize({})
+        self.assertEqual(result["NAME"], persona.FULL_NAME)
+        self.assertEqual(result["EMAIL"], persona.EMAIL)
 
 
 if __name__ == "__main__":
