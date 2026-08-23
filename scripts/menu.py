@@ -84,19 +84,56 @@ def _build_choices() -> list:
         ),
         questionary.Separator(" "),
         questionary.Choice(
-            title=_icon_title("discovery", "Find Jobs"), value="find_jobs"
+            title=[
+                *_icon_title("discovery", "Find Jobs  "),
+                (
+                    "class:description",
+                    "(Search job boards or paste a job link you want to apply for)",
+                ),
+            ],
+            value="find_jobs",
         ),
         questionary.Choice(
-            title=_icon_title("build", "Build Documents"), value="build_documents"
+            title=[
+                *_icon_title("build", "Build Documents  "),
+                (
+                    "class:description",
+                    "(Generate tailored resumes & cover letters for specific roles)",
+                ),
+            ],
+            value="build_documents",
         ),
         questionary.Choice(
-            title=_icon_title("bullet_bank", "Bullet Bank"), value="bullet_bank"
+            title=[
+                *_icon_title(
+                    "bullet_bank", "Bullet Bank (Master Accomplishment Vault)  "
+                ),
+                (
+                    "class:description",
+                    "(Your master career wins, tailored automatically for each job)",
+                ),
+            ],
+            value="bullet_bank",
         ),
         questionary.Choice(
-            title=_icon_title("evaluate", "Track & Follow Up"), value="track_followup"
+            title=[
+                *_icon_title("evaluate", "Track & Follow Up  "),
+                (
+                    "class:description",
+                    "(See your active applications, match odds & interview reminders)",
+                ),
+            ],
+            value="track_followup",
         ),
         questionary.Choice(
-            title=_icon_title("utility", "Settings & Upkeep"), value="settings_upkeep"
+            title=[
+                *_icon_title("utility", "Settings & Upkeep  "),
+                (
+                    "class:description",
+                    "(Profile settings, health checks & system updates)",
+                ),
+            ],
+            value="settings_upkeep",
         ),
         questionary.Separator(" "),
         questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
@@ -320,6 +357,37 @@ def _handle_find_jobs(session_stats: dict) -> None:
 
 
 def _handle_build_documents(session_stats: dict) -> None:
+    # picker.count_active_roles() is THE definition of "how many roles do I
+    # have" (see CLAUDE.md) -- every banner and dashboard screen uses it.
+    # jd_manager.get_pending_jds() lists FILES only, and most pending roles
+    # are database-only hash-keyed scan rows with no file, so gating on it
+    # would announce "No pending jobs found" while the banner one line above
+    # reported hundreds. Two true numbers measuring different things is the
+    # exact bug that definition exists to prevent.
+    import picker
+
+    if not picker.count_active_roles():
+        if _should_use_alt_screen():
+            sys.stdout.write("\x1b[2J\x1b[H")
+            sys.stdout.flush()
+            cli_art.display_main_banner(reveal=False)
+            cli_art.display_footer_commands()
+
+        choice = cli_art.select(
+            "No pending jobs found. What would you like to do?",
+            choices=[
+                questionary.Choice(title="Scan for new jobs now", value="scan"),
+                questionary.Choice(
+                    title="Paste a job link or description manually",
+                    value="add_manual_jd",
+                ),
+                questionary.Choice(title="Back to Main Menu", value="back"),
+            ],
+        )
+        if choice and choice != "back":
+            _run_with_chain(choice, session_stats)
+        return
+
     _run_leaf_submenu("Build Documents", _build_build_documents_choices, session_stats)
 
 

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import unittest
 from unittest.mock import patch
@@ -230,6 +231,33 @@ class TestChoicesAndHandlers(unittest.TestCase):
                     f"{seen.get(icon)!r}",
                 )
                 seen[icon] = c.value
+
+
+class TestBuildDocumentsEmptyStateBreadcrumb(unittest.TestCase):
+    """The "never get stuck" prompt shown when there are no roles to build
+    from. Both of its options dispatch through _run_with_chain, which does
+    a bare `_HANDLERS[value]()` -- an unrecognised value is a KeyError in
+    the user's face, not a no-op, and nothing else in the suite would catch
+    a typo'd action name."""
+
+    def test_every_breadcrumb_choice_maps_to_a_real_handler(self):
+        import inspect
+
+        src = inspect.getsource(menu._handle_build_documents)
+        values = re.findall(r'value="([a-z_]+)"', src)
+        self.assertTrue(
+            values, "breadcrumb choices not found -- did the empty state move?"
+        )
+        for value in values:
+            if value == "back":
+                continue
+            self.assertIn(
+                value,
+                menu._HANDLERS,
+                f"_handle_build_documents offers {value!r}, which is not a "
+                f"_HANDLERS key -- _run_with_chain would raise KeyError. "
+                f"Valid keys include 'scan' and 'add_manual_jd'.",
+            )
 
 
 class TestHandleScan(unittest.TestCase):
