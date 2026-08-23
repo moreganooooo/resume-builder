@@ -174,27 +174,58 @@
   },
   "_research": {
     "_research_source": "website",
-    "overall_tone_adjective": "confident and mission-driven",
+    "overall_tone_adjective": "bold and mission-driven",
     "tone_register": "mixed",
     "pronoun_framing": "we-centric",
     "sentence_style": "short and punchy",
-    "jargon_density": "high",
+    "jargon_density": "moderate",
     "recurring_keywords": [
-      "behavioral",
       "AI-native",
-      "autonomous"
+      "behavior",
+      "trust"
     ],
     "company_facts": [
-      "Abnormal Security provides a behavioral security platform that uses AI to analyze human behavior and stop cyberattacks.",
-      "The company was founded in 2018 by former adtech professionals to apply anomaly-based decision-making to cybersecurity.",
-      "The platform operates autonomously to triage threats and make security decisions on behalf of enterprise customers."
+      "Abnormal Security provides a behavioral AI platform designed to stop cyberattacks by modeling human behavior.",
+      "The company was founded in 2018 by experts with backgrounds in adtech and AI.",
+      "The platform integrates via API in 60 seconds without requiring MX record changes."
     ],
     "company_hq_location": "",
     "notable_highlights": [
       "Protects more than 25% of the Fortune 500.",
-      "Utilizes AI agents across all internal departments including Product, CS, and Finance."
+      "Prevents billions in financial losses for customers."
     ],
     "vocabulary_substitutions": [],
-    "researched_at": "2026-08-16T13:04:45"
+    "researched_at": "2026-08-22T15:51:07"
+  },
+  "_ats_classification": {
+    "provider_id": "greenhouse",
+    "weight_tier": "startup_zero",
+    "classified_at": "2026-08-22T13:29:40"
+  },
+  "_coverage": {
+    "score": 65,
+    "band": "weak_match",
+    "matched": [
+      "ChatGPT",
+      "CMS platforms",
+      "Content marketing",
+      "B2B SaaS",
+      "Campaign messaging",
+      "AI-assisted workflows",
+      "Content repurposing",
+      "Integrated marketing",
+      "Content Strategy",
+      "Campaign Execution",
+      "Workflow Optimization"
+    ],
+    "missing": [
+      "Claude",
+      "Asana",
+      "Cybersecurity",
+      "Editorial judgment",
+      "Content Transformation",
+      "Content Distribution"
+    ],
+    "checked_at": "2026-08-22T15:51:02"
   }
 }

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sys
@@ -640,3 +641,72 @@ class TestLocationFields(unittest.TestCase):
     def test_reader_degrades_to_empty_on_failure(self):
         with patch.dict("sys.modules", {"location_settings": None}):
             self.assertEqual(picker._read_location_settings(), {})
+
+    def test_enriched_location_overrides_display_and_distance(self):
+        jd_data = {
+            "location": "Buffalo, NY",
+            "_location_enrichment": {
+                "status": "resolved",
+                "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
+                "lat": 42.996,
+                "lon": -78.788,
+                "source": "jd_text_override",
+            },
+        }
+        fields = picker._location_fields(jd_data, self.SETTINGS)
+        self.assertEqual(fields["location"], "500 Audubon Pkwy, Amherst, NY 14228")
+        self.assertIsNotNone(fields["distance_miles"])
+        self.assertLess(fields["distance_miles"], 3.0)
+
+    def test_database_rows_with_enrichment(self):
+        # Verify picker database rows with _location_enrichment parse correctly
+        db_meta = {
+            "_evaluation": {"composite_score": 4.5},
+            "location": "Buffalo, NY",
+            "_location_enrichment": {
+                "status": "resolved",
+                "resolved_address": "Williamsville, NY 14221",
+                "lat": 42.964,
+                "lon": -78.737,
+                "source": "osm_nominatim",
+            },
+        }
+        fields = picker._location_fields(db_meta, self.SETTINGS)
+        self.assertEqual(fields["location"], "Williamsville, NY 14221")
+        self.assertIsNotNone(fields["distance_miles"])
+
+    def test_file_based_row_loads_persisted_enrichment_from_disk(self):
+        # Create a real temp JD JSON file on disk with _location_enrichment and _evaluation
+        tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp_dir, ignore_errors=True)
+        file_path = os.path.join(tmp_dir, "job.json")
+        data = {
+            "title": "Software Engineer",
+            "company": "Local Tech",
+            "location": "Buffalo, NY",
+            "_evaluation": {"composite_score": 4.5, "recommendation": "Strong pursue"},
+            "_location_enrichment": {
+                "status": "resolved",
+                "resolved_address": "500 Audubon Pkwy, Amherst, NY 14228",
+                "lat": 42.996,
+                "lon": -78.788,
+                "source": "jd_text_override",
+            },
+        }
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        with (
+            patch("picker.jd_manager.get_pending_jds", return_value=[file_path]),
+            patch("picker.jd_manager.get_completed_jds", return_value=[]),
+            patch("picker._database_only_rows", return_value=[]),
+            patch("picker._read_location_settings", return_value=self.SETTINGS),
+        ):
+            rows = picker.list_all_evaluated_jds(statuses=["Pending"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertEqual(row["location"], "500 Audubon Pkwy, Amherst, NY 14228")
+            self.assertIsNotNone(row["distance_miles"])
+            self.assertLess(row["distance_miles"], 3.0)
+            self.assertIsNotNone(row.get("location_enrichment"))
+            self.assertEqual(row["location_enrichment"]["source"], "jd_text_override")

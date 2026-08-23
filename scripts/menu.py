@@ -2612,23 +2612,48 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     title = action_titles.get(value)
 
     scroll_region_modified = False
+    suspended_alt_screen = False
 
     if not is_interactive and title:
+        # The alternate screen buffer (entered once for the whole menu
+        # session in run_interactive_menu()) has no real scrollback in
+        # virtually any terminal emulator -- content that scrolls past the
+        # top of the visible viewport while inside it is just gone, no
+        # matter how tall the scrollback history normally is. That's fine
+        # for the menu's own single-screen pickers, but these actions
+        # (tailor_all, scan, evaluate_all, polish, ...) can print hundreds
+        # of lines of real log output the user needs to scroll back
+        # through afterward. Drop to the primary screen buffer for the
+        # duration of the handler so the terminal's native scrollback
+        # works, then re-enter alt-screen right after (before the "what's
+        # next" prompt) so menu navigation keeps its existing full-screen
+        # look. _should_use_alt_screen() is deterministic for the session
+        # (env var or terminal size, same call other sites in this module
+        # already repeat rather than thread through as state).
+        if _should_use_alt_screen():
+            sys.stdout.write("\x1b[?1049l")
+            sys.stdout.flush()
+            suspended_alt_screen = True
+
         # Clear screen and draw the compact banner!
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
         cli_art.display_compact_banner(title)
 
-        # Draw the gorgeous execution footer static at the bottom row (row = rows)
-        cli_art.display_execution_footer()
+        if not suspended_alt_screen:
+            # A pinned footer only stays pinned via the DECSTBM clamp
+            # below, and that clamp is exactly what breaks scrollback --
+            # so only draw either of them when we're still inside
+            # alt-screen (no real scrollback to protect there anyway).
+            cli_art.display_execution_footer()
 
-        if value not in _skip_scroll_region:
-            # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
-            columns, rows = shutil.get_terminal_size()
-            sys.stdout.write(f"\x1b[5;{rows-1}r")
-            sys.stdout.write("\x1b[5;1H")
-            sys.stdout.flush()
-            scroll_region_modified = True
+            if value not in _skip_scroll_region:
+                # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+                columns, rows = shutil.get_terminal_size()
+                sys.stdout.write(f"\x1b[5;{rows-1}r")
+                sys.stdout.write("\x1b[5;1H")
+                sys.stdout.flush()
+                scroll_region_modified = True
 
     try:
         did_something = _HANDLERS[value]()
@@ -2636,6 +2661,9 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         if scroll_region_modified:
             # Clean up: restore the scroll region back to the entire screen window
             sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
             sys.stdout.flush()
 
     if did_something:
