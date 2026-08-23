@@ -40,16 +40,21 @@
 
 const API_HOST = 'https://jooble.org/api';
 
+const HTML_ENTITIES = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&apos;': "'",
+};
+
 /** Strips the HTML fragments Jooble embeds in `snippet`. */
 function cleanSnippet(snippet) {
   return String(snippet || '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&(?:nbsp|amp|lt|gt|quot|#39|apos);/g, (match) => HTML_ENTITIES[match] || match)
     .replace(/\s+/g, ' ')
     .trim();
 }

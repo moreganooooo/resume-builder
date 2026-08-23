@@ -135,7 +135,7 @@ class TestFindAtsBoard(unittest.TestCase):
         # Ashby exposes no company name, so the strict slug is the only
         # evidence there is.
         def fake_get(url, **_):
-            if "ashbyhq.com" in url:
+            if url.startswith("https://api.ashbyhq.com/"):
                 return self._response(200, {"jobs": [{}]})
             return self._response(404)
 

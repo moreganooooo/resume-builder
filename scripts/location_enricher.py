@@ -749,13 +749,13 @@ def enrich_profile_locations(
 
             status = enrichment.get("status", "unknown")
             source = enrichment.get("source", "none")
-            addr = enrichment.get("resolved_address", "")
+            resolved_office = str(enrichment.get("resolved_address") or "")
             company_display = item.get("company") or "Unknown"
             if status == "resolved":
                 resolved_count += 1
-                addr_str = f" → {addr}" if addr else ""
+                loc_display_str = f" → {resolved_office}" if resolved_office else ""
                 print(
-                    f"  [{idx}/{total_to_process}] ✓ {company_display}: resolved via {source}{addr_str}"
+                    f"  [{idx}/{total_to_process}] ✓ {company_display}: resolved via {source}{loc_display_str}"
                 )
             elif status.startswith("bypassed"):
                 print(

@@ -26,12 +26,24 @@ export default {
       const name = match[1].trim();
       const url = match[2].trim();
 
-      if (
-        !url.includes('github.com') &&
-        !url.includes('twitter.com') &&
-        !url.includes('linkedin.com') &&
-        name.length > 2
-      ) {
+      let hostname = '';
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch {
+        continue;
+      }
+
+      const isSocialOrRepo =
+        hostname === 'github.com' ||
+        hostname.endsWith('.github.com') ||
+        hostname === 'twitter.com' ||
+        hostname.endsWith('.twitter.com') ||
+        hostname === 'x.com' ||
+        hostname.endsWith('.x.com') ||
+        hostname === 'linkedin.com' ||
+        hostname.endsWith('.linkedin.com');
+
+      if (!isSocialOrRepo && name.length > 2) {
         results.push({
           title: `Remote Engineering at ${name}`,
           company: name,
