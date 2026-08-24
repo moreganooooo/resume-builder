@@ -13,7 +13,7 @@ dependencies = [
     "pyyaml",
     "pydantic",
     "requests",
-    "idna==3.15",
+    "idna==3.18",
     "python-dotenv",
     "google-generativeai",
     "click",
