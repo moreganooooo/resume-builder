@@ -113,8 +113,8 @@ func glamourStyle(t Theme) ansi.StyleConfig {
 			StylePrimitive: ansi.StylePrimitive{
 				Color: strPtr(colorToHex(t.Text)),
 			},
-			Indent:       uintPtr(0),
-			IndentToken:  strPtr(""),
+			Indent:      uintPtr(0),
+			IndentToken: strPtr(""),
 		},
 
 		Text: ansi.StylePrimitive{
@@ -170,7 +170,7 @@ func glamourStyle(t Theme) ansi.StyleConfig {
 		},
 
 		Table: ansi.StyleTable{
-			StyleBlock: ansi.StyleBlock{},
+			StyleBlock:      ansi.StyleBlock{},
 			CenterSeparator: strPtr("─"),
 			ColumnSeparator: strPtr("│"),
 			RowSeparator:    strPtr("─"),

@@ -22,24 +22,24 @@ import (
 const cancelExitCode = 130
 
 func main() {
-    // Match dashboard/main.go's own default (-theme resume-builder) rather
-    // than falling back to generic Catppuccin auto-detection -- this
-    // binary is launched standalone by scripts/menu.py with no --theme
-    // flag, so "" here would otherwise put a new user's first-ever screen
-    // off-brand while every screen after it is on-brand.
-    t := theme.NewTheme("resume-builder")
-    data, err := bootstrap.Run(t)
-    if err != nil {
-        // Previously any cancellation (Esc/Ctrl-C) hit log.Fatalf just like
-        // a real error, exiting 1 -- indistinguishable to a caller from an
-        // actual failure. cmd/prompt/main.go already made this distinction
-        // for huh.ErrUserAborted; this wraps the same huh form library, so
-        // it gets the same treatment.
-        if errors.Is(err, huh.ErrUserAborted) {
-            os.Exit(cancelExitCode)
-        }
-        log.Fatalf("bootstrap wizard errored: %v", err)
-    }
-    // Emit JSON for the Python side to consume.
-    fmt.Println(data.ToJSON())
+	// Match dashboard/main.go's own default (-theme resume-builder) rather
+	// than falling back to generic Catppuccin auto-detection -- this
+	// binary is launched standalone by scripts/menu.py with no --theme
+	// flag, so "" here would otherwise put a new user's first-ever screen
+	// off-brand while every screen after it is on-brand.
+	t := theme.NewTheme("resume-builder")
+	data, err := bootstrap.Run(t)
+	if err != nil {
+		// Previously any cancellation (Esc/Ctrl-C) hit log.Fatalf just like
+		// a real error, exiting 1 -- indistinguishable to a caller from an
+		// actual failure. cmd/prompt/main.go already made this distinction
+		// for huh.ErrUserAborted; this wraps the same huh form library, so
+		// it gets the same treatment.
+		if errors.Is(err, huh.ErrUserAborted) {
+			os.Exit(cancelExitCode)
+		}
+		log.Fatalf("bootstrap wizard errored: %v", err)
+	}
+	// Emit JSON for the Python side to consume.
+	fmt.Println(data.ToJSON())
 }
