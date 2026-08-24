@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-
 	"charm.land/bubbles/v2/progress"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -160,13 +159,20 @@ func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, wi
 }
 
 // renderEmptyDetailPane renders the "nothing selected" state of the detail
-// pane -- byte-for-byte identical between jobs.go and pipeline.go.
-func renderEmptyDetailPane(t theme.Theme, width, height int) string {
+// pane, shared by jobs.go and pipeline.go.
+//
+// hintLines carries the actionable body of the card and MUST come from the
+// calling screen: the two screens bind different keys to the same letters
+// (on Pipeline "s" cycles the sort mode, while on Jobs it starts a scan),
+// so a hardcoded shortcut here is wrong on one screen by construction --
+// which is exactly how this card once told Jobs users to press "a" to add
+// a role when "a" archives one. Pass nil for a bare card with no hints.
+func renderEmptyDetailPane(t theme.Theme, width, height int, hintLines []string) string {
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Overlay).
-		Width(width - 2).
-		Height(height - 2).
+		Width(width-2).
+		Height(height-2).
 		Padding(0, 0)
 
 	innerWidth := width - 4
@@ -183,12 +189,12 @@ func renderEmptyDetailPane(t theme.Theme, width, height int) string {
 		grid[y] = make([]string, innerWidth)
 		for x := 0; x < innerWidth; x++ {
 			// Deterministic pseudo-random generation of stars using a 2D coordinate hash
-			hash := math.Sin(float64(x)*12.9898+float64(y)*78.233)*43758.5453123
+			hash := math.Sin(float64(x)*12.9898+float64(y)*78.233) * 43758.5453123
 			hash = hash - math.Floor(hash)
 
 			// Sparse distribution: ~6.5% density
 			if hash < 0.065 {
-				starType := int(hash * 100) % 3
+				starType := int(hash*100) % 3
 				twinkleFreq := 1.5 + (hash * 3.0) // 1.5 to 4.5 rad/s
 				phase := hash * 10.0
 
@@ -224,30 +230,66 @@ func renderEmptyDetailPane(t theme.Theme, width, height int) string {
 		}
 	}
 
-	// Centered label block: "Select an item to view details"
-	labelText := "  ✦ Select an item to view details ✧  "
-	labelLen := len(labelText)
-	if innerWidth > labelLen {
-		midY := innerHeight / 2
-		startX := (innerWidth - labelLen) / 2
+	// Centered multiline card block
+	cardLines := append([]string{"✦ No active selection ✧", ""}, hintLines...)
 
-		labelStyle := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(t.Text).
-			Background(t.Surface)
+	cardHeight := len(cardLines)
+	if innerWidth > 40 && innerHeight > cardHeight+2 {
+		midY := (innerHeight - cardHeight) / 2
+		cardWidth := 40
+		startX := (innerWidth - cardWidth) / 2
 
-		labelRendered := labelStyle.Render(labelText)
-		var rowText strings.Builder
-		for x := 0; x < innerWidth; x++ {
-			if x >= startX && x < startX+labelLen {
-				if x == startX {
-					rowText.WriteString(labelRendered)
-				}
-			} else {
-				rowText.WriteString(grid[midY][x])
+		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve).Background(t.Surface)
+		textStyle := lipgloss.NewStyle().Foreground(t.Text).Background(t.Surface)
+		keyStyle := lipgloss.NewStyle().Foreground(t.Peach).Background(t.Surface)
+		mutedStyle := lipgloss.NewStyle().Foreground(t.Subtext).Background(t.Surface)
+
+		for i, line := range cardLines {
+			y := midY + i
+			var renderedLine string
+
+			// Center align each line text
+			padLen := cardWidth - lipgloss.Width(line)
+			if padLen < 0 {
+				padLen = 0
 			}
+			padding := padLen / 2
+			rightPad := padLen - padding
+			paddedLine := strings.Repeat(" ", padding) + line + strings.Repeat(" ", rightPad)
+
+			if i == 0 {
+				renderedLine = titleStyle.Render(paddedLine)
+			} else if strings.Contains(line, "[") && strings.Contains(line, "]") {
+				parts := strings.SplitN(paddedLine, "[", 2)
+				if len(parts) == 2 {
+					subParts := strings.SplitN(parts[1], "]", 2)
+					if len(subParts) == 2 {
+						renderedLine = textStyle.Render(parts[0]) + keyStyle.Render("["+subParts[0]+"]") + textStyle.Render(subParts[1])
+					} else {
+						renderedLine = textStyle.Render(paddedLine)
+					}
+				} else {
+					renderedLine = textStyle.Render(paddedLine)
+				}
+			} else if i == cardHeight-1 {
+				renderedLine = mutedStyle.Render(paddedLine)
+			} else {
+				renderedLine = textStyle.Render(paddedLine)
+			}
+
+			// Replace grid row segment
+			var rowText strings.Builder
+			for x := 0; x < innerWidth; x++ {
+				if x >= startX && x < startX+cardWidth {
+					if x == startX {
+						rowText.WriteString(renderedLine)
+					}
+				} else {
+					rowText.WriteString(grid[y][x])
+				}
+			}
+			grid[y] = []string{rowText.String()}
 		}
-		grid[midY] = []string{rowText.String()}
 	}
 
 	// Flatten grid rows

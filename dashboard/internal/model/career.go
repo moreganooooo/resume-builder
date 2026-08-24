@@ -59,6 +59,11 @@ type ProgressMetrics struct {
 	TopScore    float64
 	TotalOffers int
 	ActiveApps  int // not skip/rejected/discarded
+
+	// Heatmap & Sparkline data
+	DailyActivity map[string]int
+	ScoreTrend    []int
+	VolumeTrend   []int
 }
 
 // FunnelStage represents one stage of the application funnel.

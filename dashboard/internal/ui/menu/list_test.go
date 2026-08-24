@@ -3,11 +3,13 @@ package menu
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 func pressKey(s string) tea.KeyPressMsg {
@@ -214,5 +216,49 @@ func TestMenuModel_HasNoReportsEntry(t *testing.T) {
 		if entry, ok := item.(MenuItem); ok && entry.title == "Reports" {
 			t.Fatal("the Reports menu entry is back; it opens an empty viewer")
 		}
+	}
+}
+
+func TestMenuModel_MouseInteraction(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m.Resize(80, 24)
+
+	// Render view to populate zones
+	_ = m.View()
+
+	// Mouse wheel down moves cursor
+	origIdx := m.list.Index()
+	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	if m.list.Index() != origIdx+1 {
+		t.Errorf("expected cursor index %d after wheel down, got %d", origIdx+1, m.list.Index())
+	}
+
+	// Mouse wheel up moves cursor back
+	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	if m.list.Index() != origIdx {
+		t.Errorf("expected cursor index %d after wheel up, got %d", origIdx, m.list.Index())
+	}
+}
+
+func TestMenuModel_MouseClick(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	m := NewMenuModel(th)
+	m.Resize(80, 24)
+
+	// Render and scan view to populate zones
+	_ = zone.Scan(m.View())
+
+	// Test bounds click on item 1
+	info := zone.WaitFor("menu_item_1", 2*time.Second)
+	if info == nil {
+		t.Fatalf("zone menu_item_1 never registered after Scan -- the click path is untested if this is skipped")
+	}
+	m, cmd := m.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
+	if m.list.Index() != 1 {
+		t.Errorf("expected cursor index 1 after click, got %d", m.list.Index())
+	}
+	if cmd == nil {
+		t.Errorf("expected non-nil cmd from clicking menu item")
 	}
 }

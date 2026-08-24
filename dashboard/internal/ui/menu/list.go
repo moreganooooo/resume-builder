@@ -2,7 +2,9 @@
 package menu
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
@@ -12,6 +14,7 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/screens"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 type MenuItem struct {
@@ -78,6 +81,16 @@ func (m MenuModel) SparkleActive() bool {
 	return m.sparkleActive
 }
 
+type zoneMenuDelegate struct {
+	list.DefaultDelegate
+}
+
+func (d zoneMenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var buf bytes.Buffer
+	d.DefaultDelegate.Render(&buf, m, index, item)
+	fmt.Fprint(w, zone.Mark(fmt.Sprintf("menu_item_%d", index), buf.String()))
+}
+
 // NewMenuModel builds a list of top‑level commands using the token palette.
 func NewMenuModel(t theme.Theme) MenuModel {
 	items := []list.Item{
@@ -89,7 +102,7 @@ func NewMenuModel(t theme.Theme) MenuModel {
 	}
 
 	// Width/height are arbitrary – the list will be resized by the parent view.
-	delegate := list.NewDefaultDelegate()
+	baseDelegate := list.NewDefaultDelegate()
 
 	// Selected row: left-border '┃' indicator in Mauve, matching sidebar hover language.
 	// 1 border char + 1 padding char = 2 cells total, aligning with unselected rows (padding 2).
@@ -99,11 +112,12 @@ func NewMenuModel(t theme.Theme) MenuModel {
 	normalTitle := lipgloss.NewStyle().Bold(true).Foreground(t.Token.Text).PaddingLeft(2)
 	normalDesc := lipgloss.NewStyle().Foreground(t.Token.Subtext).PaddingLeft(2)
 
-	delegate.Styles.SelectedTitle = selectedTitle
-	delegate.Styles.SelectedDesc = selectedDesc
-	delegate.Styles.NormalTitle = normalTitle
-	delegate.Styles.NormalDesc = normalDesc
+	baseDelegate.Styles.SelectedTitle = selectedTitle
+	baseDelegate.Styles.SelectedDesc = selectedDesc
+	baseDelegate.Styles.NormalTitle = normalTitle
+	baseDelegate.Styles.NormalDesc = normalDesc
 
+	delegate := zoneMenuDelegate{DefaultDelegate: baseDelegate}
 	l := list.New(items, delegate, 30, 15)
 
 	l.SetShowTitle(false)
@@ -128,8 +142,27 @@ func (m MenuModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles key presses.
+// Update handles key presses and mouse interactions.
 func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		for i, it := range m.list.Items() {
+			if zone.InBoundsClick(fmt.Sprintf("menu_item_%d", i), msg) {
+				m.list.Select(i)
+				if sel, ok := it.(MenuItem); ok {
+					return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
+				}
+			}
+		}
+	case tea.MouseWheelMsg:
+		if msg.Y < 0 {
+			m.list.CursorUp()
+		} else {
+			m.list.CursorDown()
+		}
+		return m, nil
+	}
+
 	var keyStr string
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:

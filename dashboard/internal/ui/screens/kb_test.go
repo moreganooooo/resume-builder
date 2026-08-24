@@ -3,11 +3,13 @@ package screens
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 func sampleKBItems() []data.KBItem {
@@ -138,5 +140,45 @@ func TestKBModel_CloseAndQuit(t *testing.T) {
 	closeMsg, ok = msg.(KBCloseMsg)
 	if !ok || closeMsg.Quit {
 		t.Errorf("expected KBCloseMsg with Quit=false on 'Esc', got %v", msg)
+	}
+}
+
+func TestKBModel_MouseInteractions(t *testing.T) {
+	th := theme.NewTheme("modern")
+	items := sampleKBItems()
+	m := NewKBModel(th, items, 100, 30)
+
+	// Initial cursor is 0
+	if m.cursor != 0 {
+		t.Fatalf("expected initial cursor 0, got %d", m.cursor)
+	}
+
+	// Mouse wheel down moves cursor
+	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	if m.cursor != 1 {
+		t.Errorf("expected cursor 1 after wheel down, got %d", m.cursor)
+	}
+
+	// Mouse wheel up moves cursor back
+	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	if m.cursor != 0 {
+		t.Errorf("expected cursor 0 after wheel up, got %d", m.cursor)
+	}
+}
+
+func TestKBModel_MouseClick(t *testing.T) {
+	th := theme.NewTheme("modern")
+	items := sampleKBItems()
+	m := NewKBModel(th, items, 100, 30)
+
+	_ = zone.Scan(m.View())
+
+	info := zone.WaitFor("kb_item_1", 2*time.Second)
+	if info == nil {
+		t.Fatalf("zone kb_item_1 never registered after Scan -- the click path is untested if this is skipped")
+	}
+	m, _ = m.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
+	if m.cursor != 1 {
+		t.Errorf("expected cursor 1 after clicking kb item 1, got %d", m.cursor)
 	}
 }

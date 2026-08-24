@@ -20,6 +20,7 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/menu"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/screens"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 type viewState int
@@ -383,8 +384,9 @@ func (m appModel) View() tea.View {
 			content = strings.Join(lines[:revealed], "\n")
 		}
 	}
-	v := tea.NewView(content)
+	v := tea.NewView(zone.Scan(content))
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
