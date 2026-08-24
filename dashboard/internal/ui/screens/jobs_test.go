@@ -14,8 +14,8 @@ import (
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
-
 
 func pressKey(s string) tea.KeyPressMsg {
 	if len(s) == 1 {
@@ -178,7 +178,7 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 		// Human label (theme.SubscoreLabels["functional_alignment"]), not
 		// the raw snake_case schema key -- guards the P1 fix for internal-
 		// jargon leakage in formatSubscores.
-		"Functional: 5",
+		"Functional", "5.0",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected detail pane to contain %q, got %q", want, rendered)
@@ -1000,9 +1000,6 @@ func TestJobs_SituationalRoleTriggerBadge(t *testing.T) {
 	}
 }
 
-
-
-
 // The Jobs header reports only evaluated jobs, because the export it
 // reads carries only those. Staying silent about the unevaluated backlog
 // is what made the evaluated count read as wrong, so pin both the
@@ -1018,5 +1015,66 @@ func TestJobsHeaderHidesBacklogWhenZero(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 200, 30)
 	if strings.Contains(m.renderHeader(), "awaiting evaluation") {
 		t.Errorf("header showed an empty backlog: %q", m.renderHeader())
+	}
+}
+
+func TestJobsModel_MouseInteractions(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	// Initial cursor is 0
+	if m.cursor != 0 {
+		t.Fatalf("expected initial cursor 0, got %d", m.cursor)
+	}
+
+	// Mouse wheel down moves cursor
+	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	if m.cursor != 1 {
+		t.Errorf("expected cursor 1 after wheel down, got %d", m.cursor)
+	}
+
+	// Mouse wheel up moves cursor back
+	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	if m.cursor != 0 {
+		t.Errorf("expected cursor 0 after wheel up, got %d", m.cursor)
+	}
+
+	// Mouse wheel over the detail pane must not retarget the sidebar.
+	m, _ = m.Update(tea.MouseWheelMsg{X: 80, Y: 1})
+	if m.cursor != 0 {
+		t.Errorf("expected cursor to remain 0 when scrolling detail pane, got %d", m.cursor)
+	}
+	// This job's detail fits the pane, so there is nothing to scroll and
+	// the offset must stay pinned at 0. Letting it climb anyway is what
+	// forced the user to scroll back up through dead notches before the
+	// pane would move again.
+	if m.detailScrollOffset != 0 {
+		t.Errorf("expected detailScrollOffset to stay 0 for content that fits, got %d", m.detailScrollOffset)
+	}
+
+	// With content longer than the pane, the same wheel event scrolls.
+	rows := testJobRows()
+	rows[0].Description = strings.Repeat("a long line of job description text\n", 200)
+	tall := NewJobsModel(theme.NewTheme("catppuccin-mocha"), rows, 100, 30)
+	tall, _ = tall.Update(tea.MouseWheelMsg{X: 80, Y: 1})
+	if tall.detailScrollOffset != 1 {
+		t.Errorf("expected detailScrollOffset 1 for scrollable content, got %d", tall.detailScrollOffset)
+	}
+	if tall.cursor != 0 {
+		t.Errorf("expected cursor to remain 0, got %d", tall.cursor)
+	}
+}
+
+func TestJobsModel_MouseClick(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	_ = zone.Scan(m.View())
+
+	info := zone.WaitFor("jobs_row_1", 2*time.Second)
+	if info == nil {
+		t.Fatalf("zone jobs_row_1 never registered after Scan -- the click path is untested if this is skipped")
+	}
+	m, _ = m.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
+	if m.cursor != 1 {
+		t.Errorf("expected cursor 1 after clicking jobs row 1, got %d", m.cursor)
 	}
 }
