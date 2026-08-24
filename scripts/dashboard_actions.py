@@ -384,6 +384,8 @@ def _matrix(jd_path: str, jobs_path: str) -> int:
                     _user_error_from_exception(e, "embedding JD skills via Gemini API")
                     return 1
 
+            reference = _coverage_reference(embs)
+
             skill_matrix = []
             for name, vec in zip(skill_names, skill_vecs):
                 if vec:
@@ -391,9 +393,7 @@ def _matrix(jd_path: str, jobs_path: str) -> int:
                         np.array(vec, dtype=np.float32), embs
                     )
                     max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
-                    # Rescale from raw [0.50, 0.85] cosine range to 0-100%
-                    rescaled = (max_score - 0.50) / (0.85 - 0.50)
-                    coverage_pct = max(0.0, min(100.0, rescaled * 100.0))
+                    coverage_pct = _coverage_percentile(max_score, reference)
                     skill_matrix.append(
                         {
                             "skill": name,
@@ -409,6 +409,44 @@ def _matrix(jd_path: str, jobs_path: str) -> int:
         return 1
 
     return _export(jobs_path)
+
+
+# Coverage is a RANK, not a raw cosine, and that is deliberate.
+#
+# Gemini text embeddings occupy a narrow cone: measured over this profile's
+# own 844-bullet corpus on 2026-08-24, the similarity between two RANDOMLY
+# CHOSEN bullets had a median of 0.727, and 5% of unrelated pairs already
+# exceeded 0.85. Because the matrix scores a skill by its MAX similarity
+# over the whole bank, an affine rescale of raw cosine is degenerate: the
+# earlier (x - 0.50) / 0.35 mapping pinned 95% of queries at 100% and never
+# returned less than 63.9%, so the bar could not express a gap -- the one
+# thing a "Skills Gap Matrix" exists to show.
+#
+# Ranking against the corpus's own best-match distribution sidesteps the
+# problem: it needs no hand-tuned constants, and it re-calibrates itself as
+# the bullet bank grows or the embedding model changes.
+def _coverage_reference(embs):
+    """Distribution of best-match similarity within the bullet bank itself.
+
+    Each bullet's similarity to its nearest OTHER bullet -- i.e. what a
+    strong match looks like in this corpus. A skill is then scored by where
+    its own best match falls in that distribution.
+    """
+    import numpy as np
+
+    sims = embs @ embs.T
+    np.fill_diagonal(sims, -1.0)
+    return np.sort(sims.max(axis=1))
+
+
+def _coverage_percentile(max_score: float, reference) -> float:
+    """Percent of the reference distribution that max_score meets or beats."""
+    import numpy as np
+
+    if reference is None or len(reference) == 0:
+        return 0.0
+    rank = int(np.searchsorted(reference, max_score, side="right"))
+    return round(100.0 * rank / len(reference), 1)
 
 
 if __name__ == "__main__":

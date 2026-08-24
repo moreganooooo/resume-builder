@@ -427,3 +427,57 @@ class TestUserErrorContract(JDFileTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCoveragePercentile(unittest.TestCase):
+    """Coverage is a rank against the bullet bank's own best-match
+    distribution, not a rescaled cosine.
+
+    Gemini embeddings sit in a narrow cone -- measured on the real
+    844-bullet corpus, two RANDOM bullets had median similarity 0.727 and
+    5% of unrelated pairs already cleared 0.85. Since a skill is scored by
+    its MAX similarity over the whole bank, the previous affine mapping
+    ((x - 0.50) / 0.35) pinned 95% of queries at 100% and never dropped
+    below 63.9%, so the bar could not show a gap at all."""
+
+    def _reference(self):
+        rng = np.random.default_rng(0)
+        embs = rng.normal(size=(64, 32)).astype(np.float32)
+        embs /= np.linalg.norm(embs, axis=1, keepdims=True)
+        return dashboard_actions._coverage_reference(embs)
+
+    def test_reference_is_sorted_and_one_entry_per_bullet(self):
+        ref = self._reference()
+        self.assertEqual(len(ref), 64)
+        self.assertTrue(np.all(np.diff(ref) >= 0), "reference must be sorted")
+
+    def test_reference_excludes_self_match(self):
+        """Without the diagonal masked, every bullet's best match is
+        itself at 1.0 and the whole scale collapses to a constant."""
+        ref = self._reference()
+        self.assertLess(float(np.max(ref)), 0.999)
+
+    def test_score_is_monotonic_in_similarity(self):
+        ref = self._reference()
+        scores = [
+            dashboard_actions._coverage_percentile(s, ref)
+            for s in (-1.0, 0.0, 0.25, 0.5, 1.0)
+        ]
+        self.assertEqual(scores, sorted(scores))
+
+    def test_strong_and_weak_matches_land_at_opposite_ends(self):
+        ref = self._reference()
+        self.assertEqual(dashboard_actions._coverage_percentile(-1.0, ref), 0.0)
+        self.assertEqual(dashboard_actions._coverage_percentile(1.0, ref), 100.0)
+
+    def test_scale_is_not_degenerate(self):
+        """The regression that motivated this: a scale where nearly every
+        query pins to the ceiling reports no gaps and is useless."""
+        ref = self._reference()
+        scored = [dashboard_actions._coverage_percentile(float(s), ref) for s in ref]
+        pinned = sum(1 for s in scored if s >= 99.99) / len(scored)
+        self.assertLess(pinned, 0.10, f"{pinned:.0%} of queries pinned at 100%")
+        self.assertLess(abs(float(np.median(scored)) - 50.0), 10.0)
+
+    def test_empty_reference_scores_zero_rather_than_dividing_by_zero(self):
+        self.assertEqual(dashboard_actions._coverage_percentile(0.9, np.array([])), 0.0)
