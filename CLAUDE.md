@@ -731,6 +731,23 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `RESUME_ALLOW_TEST_NETWORK` is set, because every scan_ats test that
   exercises the sweep loop reaches it and the suite otherwise fires real
   queries (the same shape as the liveness/Playwright regression above).
+- **Skill-matrix coverage is a RANK, not a cosine.** Gemini text
+  embeddings occupy a narrow cone: measured 2026-08-24 over this
+  profile's own 844-bullet corpus, two RANDOMLY chosen bullets had a
+  median cosine of 0.727, and 5% of unrelated pairs already exceeded
+  0.85. Because `dashboard_actions._matrix()` scores a skill by its MAX
+  similarity across the whole bank, any affine rescale of raw cosine is
+  degenerate -- the original `(x - 0.50) / 0.35` mapping pinned 95% of
+  queries at 100% and never returned below 63.9%, so the bar could not
+  express a gap, which is the only thing a "Skills Gap Matrix" exists to
+  show. `_coverage_percentile()` instead ranks the skill's best match
+  against `_coverage_reference()`, the distribution of each bullet's
+  similarity to its nearest OTHER bullet (the diagonal MUST be masked --
+  unmasked, every bullet's best match is itself at 1.0 and the scale
+  collapses to a constant). This needs no hand-tuned constants and
+  re-calibrates itself as the bank grows or the embedding model changes.
+  Do not reintroduce a fixed band; if you want one, measure it against
+  real skill-phrase embeddings first, not bullet-to-bullet similarity.
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a
