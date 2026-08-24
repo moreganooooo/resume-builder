@@ -100,7 +100,7 @@ func TestViewerEmptyContentRendersPlaceholder(t *testing.T) {
 	}
 
 	body := ansi.Strip(m.renderBody())
-	if !strings.Contains(body, "(empty file)") {
+	if !strings.Contains(body, "Document is") {
 		t.Fatalf("expected empty placeholder, got %q", body)
 	}
 }
@@ -253,7 +253,7 @@ func TestViewerZeroByteAndExtremeBounds(t *testing.T) {
 	}
 	m.rebuildRender()
 	view := m.View()
-	if !strings.Contains(view, "(empty file)") && !strings.Contains(view, "empty") {
+	if !strings.Contains(view, "Document is") && !strings.Contains(view, "empty") {
 		t.Errorf("expected empty file notice in view, got: %s", view)
 	}
 
@@ -295,7 +295,6 @@ func TestViewer_SearchAndJump(t *testing.T) {
 		theme:      theme.NewTheme("catppuccin-mocha"),
 	}
 	m.rebuildRender()
-
 
 	// Press '/' to start search
 	m, _ = m.Update(pressKey("/"))

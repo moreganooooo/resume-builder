@@ -16,7 +16,13 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
+
+// pipelineSidebarRatio is the fraction of the width given to the sidebar.
+// The mouse hit-test must split where the renderer splits; two copies of
+// 0.35 can drift apart silently.
+const pipelineSidebarRatio = 0.35
 
 // PipelineClosedMsg is emitted when the pipeline screen is dismissed.
 // Quit distinguishes "q" (exit the whole app) from "esc" (back to the
@@ -126,18 +132,19 @@ var statusGroupOrder = []string{"interview", "offer", "responded", "applied", "e
 
 // PipelineModel implements the career pipeline dashboard screen.
 type PipelineModel struct {
-	apps          []model.CareerApplication
-	filtered      []model.CareerApplication
-	metrics       model.PipelineMetrics
-	cursor        int
-	scrollOffset  int
-	sortMode      string
-	activeTab     int
-	viewMode      string // "grouped" or "flat"
-	width, height int
-	theme         theme.Theme
-	careerOpsPath string
-	reportCache   map[string]reportSummary
+	apps               []model.CareerApplication
+	filtered           []model.CareerApplication
+	metrics            model.PipelineMetrics
+	cursor             int
+	scrollOffset       int
+	detailScrollOffset int
+	sortMode           string
+	activeTab          int
+	viewMode           string // "grouped" or "flat"
+	width, height      int
+	theme              theme.Theme
+	careerOpsPath      string
+	reportCache        map[string]reportSummary
 	// Status picker sub-state
 	statusPicker bool
 	statusCursor int
@@ -170,7 +177,6 @@ type StatusChangeAction struct {
 	PrevStatus string
 	NewStatus  string
 }
-
 
 type animationMsg struct{}
 
@@ -317,6 +323,72 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	case PipelineURLOpenFailedMsg:
 		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)
 		return m, nil
+	case tea.MouseClickMsg:
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		if m.notice != "" {
+			m.notice = ""
+			return m, nil
+		}
+		for i := range pipelineTabs {
+			if zone.InBoundsClick(fmt.Sprintf("pipeline_tab_%d", i), msg) {
+				m.activeTab = i
+				m.applyFilterAndSort()
+				m.cursor = 0
+				m.scrollOffset = 0
+				return m, m.loadCurrentReport()
+			}
+		}
+		for i := range m.filtered {
+			if zone.InBoundsClick(fmt.Sprintf("pipeline_row_%d", i), msg) {
+				m.cursor = i
+				m.adjustScroll()
+				return m, m.loadCurrentReport()
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		// Hit-test against the same split the renderer uses: scrolling over
+		// the detail pane must scroll the detail pane, not retarget the
+		// sidebar selection.
+		leftWidth := int(float64(m.width) * pipelineSidebarRatio)
+		if msg.X >= leftWidth {
+			if msg.Y < 0 {
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset--
+				}
+			} else {
+				m.detailScrollOffset++
+				m.clampDetailScroll()
+			}
+			return m, nil
+		}
+		if len(m.filtered) > 0 {
+			oldCursor := m.cursor
+			if msg.Y < 0 {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = 0
+				}
+			} else {
+				m.cursor++
+				if m.cursor >= len(m.filtered) {
+					m.cursor = len(m.filtered) - 1
+				}
+			}
+			// Only reload when the selection actually moved -- a wheel held
+			// at either end would otherwise fire a report read per notch.
+			if m.cursor != oldCursor {
+				m.detailScrollOffset = 0
+				m.adjustScroll()
+				return m, m.loadCurrentReport()
+			}
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		if m.showHelp {
 			switch msg.String() {
@@ -482,7 +554,6 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 			}
 		}
 		m.notice = "Nothing to undo"
-
 
 	case "g":
 		if len(m.filtered) > 0 {
@@ -852,7 +923,7 @@ func (m PipelineModel) View() string {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, notice)
 	}
 
-	leftWidth := int(float64(m.width) * 0.35)
+	leftWidth := int(float64(m.width) * pipelineSidebarRatio)
 	rightWidth := m.width - leftWidth
 
 	availHeight := m.height - m.chromeRowsFixed()
@@ -866,7 +937,14 @@ func (m PipelineModel) View() string {
 	if app, ok := m.CurrentApp(); ok {
 		rightPane = m.renderJobDetailPane(app, rightWidth, availHeight)
 	} else {
-		rightPane = renderEmptyDetailPane(m.theme, rightWidth, availHeight)
+		// Pipeline bindings, NOT the Jobs ones: here "s" cycles the sort
+		// mode and "b" is unbound. See renderEmptyDetailPane.
+		rightPane = renderEmptyDetailPane(m.theme, rightWidth, availHeight, []string{
+			"To change which applications show, press [ f ]",
+			"To search by company or role, press [ / ]",
+			"",
+			"To reload from disk, press [ r ]",
+		})
 	}
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
@@ -914,7 +992,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 
 		selected := i == m.cursor
 		line := renderSidebarRow(m.theme, app.Score, app.Company, app.Role, width-4, selected)
-		lines = append(lines, line)
+		lines = append(lines, zone.Mark(fmt.Sprintf("pipeline_row_%d", i), line))
 	}
 
 	body := strings.Join(lines, "\n")
@@ -962,7 +1040,11 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 	return borderStyle.Render(content)
 }
 
-func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, height int) string {
+// pipelineDetailContentLines builds the detail pane's content before any
+// scroll offset is applied, so clampDetailScroll can measure what it is
+// about to scroll. See JobsModel.clampDetailScroll for why the renderer
+// cannot do the clamping itself.
+func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, width, height int) []string {
 	styles := newDetailPaneStyles(m.theme, width, height)
 
 	var content []string
@@ -1030,9 +1112,52 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 		content = append(content, styles.Subtext.Render(truncateRunes(app.Notes, width-6)))
 	}
 
-	// Make sure we fill out the string
-	joined := strings.Join(content, "\n")
+	return content
+}
+
+func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, height int) string {
+	styles := newDetailPaneStyles(m.theme, width, height)
+	content := m.pipelineDetailContentLines(app, width, height)
+
+	// Clamp rather than ignore an over-scrolled offset: slicing only while
+	// offset < len(lines) silently rendered from the TOP once the offset
+	// ran past the end, so scrolling down far enough snapped back to the
+	// start of the pane.
+	lines := content
+	if m.detailScrollOffset > 0 {
+		start := m.detailScrollOffset
+		if maxScroll := detailMaxScrollFor(len(lines), height); start > maxScroll {
+			start = maxScroll
+		}
+		if start > 0 && start < len(lines) {
+			lines = lines[start:]
+		}
+	}
+	joined := strings.Join(lines, "\n")
 	return styles.Border.Render(joined)
+}
+
+// clampDetailScroll pins detailScrollOffset to the selected application's
+// real content length.
+func (m *PipelineModel) clampDetailScroll() {
+	if m.detailScrollOffset <= 0 {
+		m.detailScrollOffset = 0
+		return
+	}
+	app, ok := m.CurrentApp()
+	if !ok {
+		m.detailScrollOffset = 0
+		return
+	}
+	leftWidth := int(float64(m.width) * pipelineSidebarRatio)
+	height := m.height - m.chromeRowsFixed()
+	if height < 5 {
+		height = 5
+	}
+	lines := m.pipelineDetailContentLines(app, m.width-leftWidth, height)
+	if maxScroll := detailMaxScrollFor(len(lines), height); m.detailScrollOffset > maxScroll {
+		m.detailScrollOffset = maxScroll
+	}
 }
 
 // renderSearchBar returns an empty string when there is no active or in-progress
@@ -1103,7 +1228,7 @@ func (m PipelineModel) renderHeader() string {
 	avg := fmt.Sprintf("%.1f", m.metrics.AvgScore)
 	info := right.Render(fmt.Sprintf("%d offers | Avg %s/5", m.metrics.Total, avg))
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Pipeline + "  ") +
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Pipeline+"  ") +
 		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ CAREER PIPELINE ✧", m.theme.Blue, m.theme.Mauve))
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 
@@ -1124,13 +1249,13 @@ func (m PipelineModel) renderTabs() string {
 				Bold(true).
 				Foreground(m.theme.Blue).
 				Padding(0, 0)
-			tabs = append(tabs, style.Render(label))
+			tabs = append(tabs, zone.Mark(fmt.Sprintf("pipeline_tab_%d", i), style.Render(label)))
 			underParts = append(underParts, strings.Repeat("━", lipgloss.Width(label)))
 		} else {
 			style := lipgloss.NewStyle().
 				Foreground(m.theme.Subtext).
 				Padding(0, 0)
-			tabs = append(tabs, style.Render(label))
+			tabs = append(tabs, zone.Mark(fmt.Sprintf("pipeline_tab_%d", i), style.Render(label)))
 			underParts = append(underParts, strings.Repeat("─", lipgloss.Width(label)))
 		}
 	}

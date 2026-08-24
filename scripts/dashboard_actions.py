@@ -174,6 +174,45 @@ def _export(jobs_path: str) -> int:
     return 0
 
 
+def _scan(jobs_path: str) -> int:
+    try:
+        import scan
+
+        scan.run_scan()
+        dashboard._export_jobs_to(jobs_path)
+        return 0
+    except Exception as exc:
+        print(f"scan failed: {exc}", file=sys.stderr)
+        _user_error_from_exception(exc, "scanning job postings")
+        return 1
+
+
+def _batch_evaluate(jobs_path: str) -> int:
+    try:
+        import batch_evaluate
+
+        batch_evaluate.evaluate_all_pending()
+        dashboard._export_jobs_to(jobs_path)
+        return 0
+    except Exception as exc:
+        print(f"batch evaluate failed: {exc}", file=sys.stderr)
+        _user_error_from_exception(exc, "batch evaluating job postings")
+        return 1
+
+
+def _sweep_stale(jobs_path: str) -> int:
+    try:
+        import liveness
+
+        liveness.run_liveness_check()
+        dashboard._export_jobs_to(jobs_path)
+        return 0
+    except Exception as exc:
+        print(f"liveness sweep failed: {exc}", file=sys.stderr)
+        _user_error_from_exception(exc, "sweeping stale postings")
+        return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -195,6 +234,19 @@ def main() -> int:
     archive_parser.add_argument("jd_path")
     archive_parser.add_argument("--jobs-path", required=True)
 
+    matrix_parser = subparsers.add_parser("matrix")
+    matrix_parser.add_argument("jd_path")
+    matrix_parser.add_argument("--jobs-path", required=True)
+
+    scan_parser = subparsers.add_parser("scan")
+    scan_parser.add_argument("--jobs-path", required=True)
+
+    batch_eval_parser = subparsers.add_parser("batch_evaluate")
+    batch_eval_parser.add_argument("--jobs-path", required=True)
+
+    sweep_parser = subparsers.add_parser("sweep_stale")
+    sweep_parser.add_argument("--jobs-path", required=True)
+
     # Unlike the actions above, "export" takes no jd_path: it writes the
     # whole evaluation export. The Go dashboard calls this at startup when
     # it was launched without -jobs-path (a bare `dashboard -profile X`
@@ -213,6 +265,14 @@ def main() -> int:
         return _status(args.jd_path, args.new_status, args.jobs_path)
     if args.command == "archive":
         return _archive(args.jd_path, args.jobs_path)
+    if args.command == "matrix":
+        return _matrix(args.jd_path, args.jobs_path)
+    if args.command == "scan":
+        return _scan(args.jobs_path)
+    if args.command == "batch_evaluate":
+        return _batch_evaluate(args.jobs_path)
+    if args.command == "sweep_stale":
+        return _sweep_stale(args.jobs_path)
     if args.command == "export":
         return _export(args.jobs_path)
     return 1
@@ -225,6 +285,10 @@ _ACTION_CONTEXTS = {
     "tailor": "building a tailored resume for this job",
     "status": "updating this job's application status",
     "archive": "archiving this job posting",
+    "matrix": "computing the skills gap matrix",
+    "scan": "scanning job postings",
+    "batch_evaluate": "batch evaluating job postings",
+    "sweep_stale": "sweeping stale postings",
     "export": "loading your evaluated jobs",
 }
 
@@ -259,6 +323,92 @@ def _run() -> int:
         )
         _user_error_from_exception(exc, context)
         return 1
+
+
+def _matrix(jd_path: str, jobs_path: str) -> int:
+    import json
+    import os
+
+    import jd_manager
+    import jd_source
+    import numpy as np
+    import profile_paths
+    from embed_bullet_bank import BATCH_SIZE, embed_batch
+    from vector_store import cosine_similarity_matrix
+
+    try:
+        try:
+            resolved_ctx = jd_source.resolved_jd(jd_path)
+        except LookupError as exc:
+            print(f"matrix lookup failed for {jd_path}: {exc}", file=sys.stderr)
+            _user_error(
+                "Couldn't find this job's details to compute the skills gap matrix."
+            )
+            return 1
+
+        with resolved_ctx as (path, _is_db):
+            evaluation = jd_manager.read_evaluation(path)
+            if not evaluation:
+                _user_error("JD must be evaluated first.")
+                return 1
+
+            with open(path, "r", encoding="utf-8") as f:
+                jd_data = json.load(f)
+
+            skills = jd_data.get("skills") or []
+            if not skills:
+                _user_error("No skills found for this JD.")
+                return 1
+
+            kb_dir = profile_paths.kb_dir()
+            emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
+            if not os.path.exists(emb_npy):
+                _user_error(
+                    "Missing bullet bank embeddings. Run `resume doctor` to check your setup."
+                )
+                return 1
+
+            embs = np.load(emb_npy)
+            skill_names = [s.get("skill", "") for s in skills if s.get("skill")]
+            if not skill_names:
+                _user_error("No named skills extracted for this JD.")
+                return 1
+
+            skill_vecs = []
+            for i in range(0, len(skill_names), BATCH_SIZE):
+                batch = skill_names[i : i + BATCH_SIZE]
+                try:
+                    vecs = embed_batch(batch)
+                    skill_vecs.extend(vecs)
+                except Exception as e:
+                    _user_error_from_exception(e, "embedding JD skills via Gemini API")
+                    return 1
+
+            skill_matrix = []
+            for name, vec in zip(skill_names, skill_vecs):
+                if vec:
+                    scores = cosine_similarity_matrix(
+                        np.array(vec, dtype=np.float32), embs
+                    )
+                    max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
+                    # Rescale from raw [0.50, 0.85] cosine range to 0-100%
+                    rescaled = (max_score - 0.50) / (0.85 - 0.50)
+                    coverage_pct = max(0.0, min(100.0, rescaled * 100.0))
+                    skill_matrix.append(
+                        {
+                            "skill": name,
+                            "coverage": coverage_pct,
+                        }
+                    )
+
+            skill_matrix.sort(key=lambda x: x["coverage"])
+            evaluation["skill_matrix"] = skill_matrix
+            jd_manager.save_evaluation(path, evaluation)
+    except Exception as e:
+        _user_error_from_exception(e, "computing the skills gap matrix")
+        return 1
+
+    return _export(jobs_path)
 
 
 if __name__ == "__main__":

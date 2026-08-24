@@ -102,6 +102,11 @@ func (s *Spring) Target() float64 {
 	return s.target
 }
 
+// SetTarget updates the target position.
+func (s *Spring) SetTarget(target float64) {
+	s.target = target
+}
+
 // Particle represents an individual celebration or sparkle particle.
 type Particle struct {
 	X, Y     float64

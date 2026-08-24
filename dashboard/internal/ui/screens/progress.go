@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -69,6 +70,19 @@ func (m *ProgressModel) Resize(width, height int) {
 // Update handles input for the progress screen.
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseWheelMsg:
+		if msg.Y < 0 {
+			if m.scrollOffset > 0 {
+				m.scrollOffset -= 2
+				if m.scrollOffset < 0 {
+					m.scrollOffset = 0
+				}
+			}
+		} else {
+			m.scrollOffset += 2
+			m.clampScrollOffset()
+		}
+		return m, nil
 	case tea.KeyPressMsg:
 		return m.handleKeyString(msg.String())
 	case tea.KeyMsg:
@@ -122,6 +136,7 @@ func (m ProgressModel) renderBody() string {
 	scores := m.renderScoreDistribution()
 	rates := m.renderRates()
 	weekly := m.renderWeeklyActivity()
+	missionControl := m.renderMissionControl()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		funnel,
@@ -131,6 +146,8 @@ func (m ProgressModel) renderBody() string {
 		rates,
 		"",
 		weekly,
+		"",
+		missionControl,
 	)
 }
 
@@ -219,7 +236,7 @@ func (m ProgressModel) renderHeader() string {
 		Width(m.width)
 	style = theme.PadHorizontal(style)
 
-	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Background(m.theme.Surface).Render(m.theme.Icons.Progress + "  ") +
+	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Background(m.theme.Surface).Render(m.theme.Icons.Progress+"  ") +
 		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ SEARCH PROGRESS ✧", m.theme.Peach, m.theme.Pink))
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
@@ -427,6 +444,186 @@ func (m ProgressModel) renderRates() string {
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
 	))
 	lines = append(lines, padStyle.Render(m.truncateRow(activeInfo)))
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderMissionControl() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render("Mission Control (Heatmap & Trends)")))
+	lines = append(lines, "")
+
+	// 1. Calendar Heatmap
+	lines = append(lines, m.renderHeatmap())
+	lines = append(lines, "")
+
+	// 2. Sparklines
+	trendLines := m.renderSparklines()
+	lines = append(lines, trendLines)
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderHeatmap() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+
+	if len(m.metrics.DailyActivity) == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		return padStyle.Render(dimStyle.Render("No activity data for heatmap"))
+	}
+
+	// Determine max count for color scaling
+	maxCount := 0
+	for _, count := range m.metrics.DailyActivity {
+		if count > maxCount {
+			maxCount = count
+		}
+	}
+
+	// Calculate date range: show last 24 weeks (~6 months) based on width
+	cols := (m.width - 15) / 2 // each column is 2 chars, 15 chars for labels/margins
+	if cols > 52 {
+		cols = 52
+	}
+	if cols < 4 {
+		cols = 4
+	}
+
+	// End on the most recent Saturday or today? Let's just end on today.
+	endDate := time.Now()
+	// Find the Sunday of the week cols-weeks ago
+	daysToSubtract := int(endDate.Weekday()) + (cols-1)*7
+	startDate := endDate.AddDate(0, 0, -daysToSubtract)
+
+	// Colors
+	cEmpty := lipgloss.NewStyle().Foreground(m.theme.Surface)
+	cLow := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+	cMed := lipgloss.NewStyle().Foreground(m.theme.Blue)
+	cHigh := lipgloss.NewStyle().Foreground(m.theme.Peach)
+	cMax := lipgloss.NewStyle().Foreground(m.theme.Green)
+
+	getColor := func(count int) lipgloss.Style {
+		if count == 0 {
+			return cEmpty
+		}
+		if maxCount <= 1 {
+			return cMax
+		}
+		pct := float64(count) / float64(maxCount)
+		switch {
+		case pct > 0.75:
+			return cMax
+		case pct > 0.50:
+			return cHigh
+		case pct > 0.25:
+			return cMed
+		default:
+			return cLow
+		}
+	}
+
+	block := "■ "
+	var rows [7]strings.Builder
+
+	// Day labels
+	labels := []string{"Sun ", "Mon ", "Tue ", "Wed ", "Thu ", "Fri ", "Sat "}
+
+	for i := 0; i < 7; i++ {
+		rows[i].WriteString(lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(labels[i]))
+	}
+
+	curr := startDate
+	for {
+		if curr.After(endDate) {
+			break
+		}
+
+		d := curr.Format("2006-01-02")
+		count := m.metrics.DailyActivity[d]
+
+		weekday := int(curr.Weekday())
+		rows[weekday].WriteString(getColor(count).Render(block))
+
+		curr = curr.AddDate(0, 0, 1)
+	}
+
+	var lines []string
+	for i := 0; i < 7; i++ {
+		lines = append(lines, padStyle.Render(rows[i].String()))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func downsampleSparkline(vals []int, maxLen int) []int {
+	if maxLen <= 0 {
+		return nil
+	}
+	if len(vals) <= maxLen {
+		return vals
+	}
+	res := make([]int, maxLen)
+	chunkSize := float64(len(vals)) / float64(maxLen)
+	for i := 0; i < maxLen; i++ {
+		start := int(float64(i) * chunkSize)
+		end := int(float64(i+1) * chunkSize)
+		if end > len(vals) {
+			end = len(vals)
+		}
+		if start >= end {
+			start = end - 1
+		}
+		sum := 0
+		count := 0
+		for j := start; j < end; j++ {
+			sum += vals[j]
+			count++
+		}
+		if count > 0 {
+			res[i] = sum / count
+		} else {
+			res[i] = vals[start]
+		}
+	}
+	return res
+}
+
+func (m ProgressModel) renderSparklines() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(15)
+	sparkStyle := lipgloss.NewStyle().Foreground(m.theme.Mauve)
+	volStyle := lipgloss.NewStyle().Foreground(m.theme.Blue)
+
+	maxSparkW := m.width - 25
+	if maxSparkW < 10 {
+		maxSparkW = 10
+	}
+	if maxSparkW > 60 {
+		maxSparkW = 60
+	}
+
+	var lines []string
+
+	// Score Trend
+	if len(m.metrics.ScoreTrend) > 0 {
+		downsampled := downsampleSparkline(m.metrics.ScoreTrend, maxSparkW)
+		scoreStr := RenderSparkline(downsampled)
+		lines = append(lines, padStyle.Render(labelStyle.Render("Score Trend")+sparkStyle.Render(scoreStr)))
+	} else {
+		lines = append(lines, padStyle.Render(labelStyle.Render("Score Trend")+lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("No data")))
+	}
+
+	// Volume Trend
+	if len(m.metrics.VolumeTrend) > 0 {
+		downsampled := downsampleSparkline(m.metrics.VolumeTrend, maxSparkW)
+		volStr := RenderSparkline(downsampled)
+		lines = append(lines, padStyle.Render(labelStyle.Render("Weekly Volume")+volStyle.Render(volStr)))
+	} else {
+		lines = append(lines, padStyle.Render(labelStyle.Render("Weekly Volume")+lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("No data")))
+	}
 
 	return strings.Join(lines, "\n")
 }

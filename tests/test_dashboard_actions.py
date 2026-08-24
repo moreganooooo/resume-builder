@@ -8,12 +8,20 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import numpy as np
+
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
 )
 sys.path.insert(0, SCRIPTS_DIR)
 
 import dashboard_actions  # noqa: E402
+
+# A throwaway jobs-export path for tests. Every call site below mocks
+# dashboard._export_jobs_to, so nothing is actually written here -- but a
+# literal "/tmp/..." is both a bandit B108 finding and a shared path that
+# would collide between concurrent runs if a mock were ever dropped.
+FAKE_JOBS_PATH = os.path.join(tempfile.gettempdir(), "dashboard_actions_test_jobs.json")
 
 
 class JDFileTestCase(unittest.TestCase):
@@ -47,9 +55,9 @@ class TestLiveness(JDFileTestCase):
             "uncertain": 0,
             "moved": 0,
         }
-        code = dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._liveness(self.jd_path, FAKE_JOBS_PATH)
         mock_verify.assert_called_once_with([self.jd_path])
-        mock_export.assert_called_once_with("/tmp/jobs.json")
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
         self.assertEqual(code, 0)
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
@@ -58,7 +66,7 @@ class TestLiveness(JDFileTestCase):
         self, mock_verify, mock_export
     ):
         mock_verify.return_value = {"error": True}
-        code = dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._liveness(self.jd_path, FAKE_JOBS_PATH)
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
@@ -69,9 +77,9 @@ class TestTailor(JDFileTestCase):
     @patch("dashboard_actions.orchestrator.run_pipeline")
     def test_success_refreshes_export_and_returns_zero(self, mock_run, mock_export):
         mock_run.return_value = (1, 0)
-        code = dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._tailor(self.jd_path, FAKE_JOBS_PATH)
         mock_run.assert_called_once_with(jd_path=self.jd_path)
-        mock_export.assert_called_once_with("/tmp/jobs.json")
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
         self.assertEqual(code, 0)
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
@@ -80,7 +88,7 @@ class TestTailor(JDFileTestCase):
         self, mock_run, mock_export
     ):
         mock_run.return_value = (0, 1)
-        code = dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._tailor(self.jd_path, FAKE_JOBS_PATH)
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
@@ -92,17 +100,15 @@ class TestStatus(JDFileTestCase):
     def test_valid_status_refreshes_export_and_returns_zero(
         self, mock_save, mock_export
     ):
-        code = dashboard_actions._status(self.jd_path, "Applied", "/tmp/jobs.json")
+        code = dashboard_actions._status(self.jd_path, "Applied", FAKE_JOBS_PATH)
         mock_save.assert_called_once_with(self.jd_path, "Applied")
-        mock_export.assert_called_once_with("/tmp/jobs.json")
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
         self.assertEqual(code, 0)
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("dashboard_actions.jd_manager.save_application_status")
     def test_invalid_status_rejected_without_saving(self, mock_save, mock_export):
-        code = dashboard_actions._status(
-            self.jd_path, "NotARealStatus", "/tmp/jobs.json"
-        )
+        code = dashboard_actions._status(self.jd_path, "NotARealStatus", FAKE_JOBS_PATH)
         self.assertEqual(code, 1)
         mock_save.assert_not_called()
         mock_export.assert_not_called()
@@ -114,9 +120,9 @@ class TestArchive(JDFileTestCase):
     @patch("dashboard_actions.jd_manager.archive_jd")
     def test_success_refreshes_export_and_returns_zero(self, mock_archive, mock_export):
         mock_archive.return_value = "archived/a.json"
-        code = dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._archive(self.jd_path, FAKE_JOBS_PATH)
         mock_archive.assert_called_once_with(self.jd_path)
-        mock_export.assert_called_once_with("/tmp/jobs.json")
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
         self.assertEqual(code, 0)
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
@@ -125,7 +131,7 @@ class TestArchive(JDFileTestCase):
         self, mock_archive, mock_export
     ):
         mock_archive.side_effect = Exception("OS Error")
-        code = dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
+        code = dashboard_actions._archive(self.jd_path, FAKE_JOBS_PATH)
         self.assertEqual(code, 1)
         mock_export.assert_not_called()
 
@@ -163,7 +169,173 @@ class TestExport(unittest.TestCase):
             argv = ["dashboard_actions.py", "export", "--jobs-path", out]
             with patch.object(sys, "argv", argv):
                 with patch("picker.list_all_evaluated_jds", return_value=[]):
-                    dashboard_actions.main()  # must not SystemExit
+                    self.assertEqual(dashboard_actions.main(), 0)
+            self.assertTrue(os.path.exists(out))
+
+
+class TestScan(unittest.TestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("scan.run_scan")
+    def test_scan_success(self, mock_scan, mock_export):
+        mock_scan.return_value = {}
+        code = dashboard_actions._scan(FAKE_JOBS_PATH)
+        mock_scan.assert_called_once()
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("scan.run_scan")
+    def test_scan_failure(self, mock_scan, mock_export):
+        mock_scan.side_effect = Exception("network down")
+        code = dashboard_actions._scan(FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+        mock_export.assert_not_called()
+
+
+class TestBatchEvaluate(unittest.TestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("batch_evaluate.evaluate_all_pending")
+    def test_batch_evaluate_success(self, mock_eval, mock_export):
+        mock_eval.return_value = []
+        code = dashboard_actions._batch_evaluate(FAKE_JOBS_PATH)
+        mock_eval.assert_called_once()
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("batch_evaluate.evaluate_all_pending")
+    def test_batch_evaluate_failure(self, mock_eval, mock_export):
+        mock_eval.side_effect = Exception("eval failed")
+        code = dashboard_actions._batch_evaluate(FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+        mock_export.assert_not_called()
+
+
+class TestSweepStale(unittest.TestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("liveness.run_liveness_check")
+    def test_sweep_stale_success(self, mock_sweep, mock_export):
+        mock_sweep.return_value = {}
+        code = dashboard_actions._sweep_stale(FAKE_JOBS_PATH)
+        mock_sweep.assert_called_once()
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("liveness.run_liveness_check")
+    def test_sweep_stale_failure(self, mock_sweep, mock_export):
+        mock_sweep.side_effect = Exception("sweep failed")
+        code = dashboard_actions._sweep_stale(FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+        mock_export.assert_not_called()
+
+
+class TestMatrix(JDFileTestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("embed_bullet_bank.embed_batch")
+    @patch("numpy.load")
+    @patch("os.path.exists")
+    def test_matrix_file_backed_success(
+        self, mock_exists, mock_load, mock_embed, mock_export
+    ):
+        mock_exists.return_value = True
+        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_embed.return_value = [
+            np.ones(768, dtype=np.float32).tolist(),
+            np.ones(768, dtype=np.float32).tolist(),
+        ]
+
+        jd_data = {
+            "title": "Staff Engineer",
+            "skills": [{"skill": "Python"}, {"skill": "Go"}],
+            "_evaluation": {"composite_score": 90},
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+        with open(self.jd_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        eval_data = saved.get("_evaluation", {})
+        self.assertIn("skill_matrix", eval_data)
+        self.assertEqual(len(eval_data["skill_matrix"]), 2)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("embed_bullet_bank.embed_batch")
+    @patch("numpy.load")
+    @patch("os.path.exists")
+    @patch("jd_source.resolved_jd")
+    def test_matrix_database_backed_success(
+        self, mock_resolved, mock_exists, mock_load, mock_embed, mock_export
+    ):
+        mock_exists.return_value = True
+        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_embed.return_value = [np.ones(768, dtype=np.float32).tolist()]
+
+        jd_data = {
+            "title": "Staff Engineer",
+            "skills": [{"skill": "Python"}],
+            "_evaluation": {"composite_score": 85},
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+
+        @contextlib.contextmanager
+        def fake_resolved(identifier):
+            yield self.jd_path, True
+
+        mock_resolved.side_effect = fake_resolved
+
+        code = dashboard_actions._matrix("db_job_123", FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+    @patch("dashboard_actions.jd_source.resolved_jd")
+    def test_matrix_lookup_error_returns_nonzero(self, mock_resolved):
+        mock_resolved.side_effect = LookupError("Not in database")
+        code = dashboard_actions._matrix("missing_id", FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+
+    def test_matrix_unevaluated_jd_returns_nonzero(self):
+        jd_data = {"title": "Staff Engineer", "skills": [{"skill": "Python"}]}
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("embed_bullet_bank.embed_batch")
+    @patch("numpy.load")
+    @patch("os.path.exists")
+    def test_matrix_batches_large_skill_lists(
+        self, mock_exists, mock_load, mock_embed, mock_export
+    ):
+        mock_exists.return_value = True
+        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_embed.side_effect = [
+            [np.ones(768, dtype=np.float32).tolist()] * 20,
+            [np.ones(768, dtype=np.float32).tolist()] * 5,
+        ]
+
+        skills = [{"skill": f"Skill_{i}"} for i in range(25)]
+        jd_data = {
+            "title": "Staff Engineer",
+            "skills": skills,
+            "_evaluation": {"composite_score": 90},
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_embed.call_count, 2)
 
 
 class TestUserErrorContract(JDFileTestCase):
@@ -192,7 +364,7 @@ class TestUserErrorContract(JDFileTestCase):
     def test_invalid_status_puts_marker_on_the_last_line(self):
         err = self._capture_stderr(
             lambda: dashboard_actions._status(
-                self.jd_path, "NotARealStatus", "/tmp/jobs.json"
+                self.jd_path, "NotARealStatus", FAKE_JOBS_PATH
             )
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
@@ -204,7 +376,7 @@ class TestUserErrorContract(JDFileTestCase):
     def test_archive_failure_puts_marker_on_the_last_line(self, mock_archive):
         mock_archive.side_effect = Exception("OS Error")
         err = self._capture_stderr(
-            lambda: dashboard_actions._archive(self.jd_path, "/tmp/jobs.json")
+            lambda: dashboard_actions._archive(self.jd_path, FAKE_JOBS_PATH)
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 
@@ -212,7 +384,7 @@ class TestUserErrorContract(JDFileTestCase):
     def test_liveness_failure_puts_marker_on_the_last_line(self, mock_verify):
         mock_verify.return_value = {"error": "connection refused"}
         err = self._capture_stderr(
-            lambda: dashboard_actions._liveness(self.jd_path, "/tmp/jobs.json")
+            lambda: dashboard_actions._liveness(self.jd_path, FAKE_JOBS_PATH)
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
         self.assertIn("connection refused", err)
@@ -221,7 +393,7 @@ class TestUserErrorContract(JDFileTestCase):
     def test_tailor_failure_puts_marker_on_the_last_line(self, mock_run):
         mock_run.return_value = (0, 1)
         err = self._capture_stderr(
-            lambda: dashboard_actions._tailor(self.jd_path, "/tmp/jobs.json")
+            lambda: dashboard_actions._tailor(self.jd_path, FAKE_JOBS_PATH)
         )
         self.assertTrue(self._last_nonempty(err).startswith("USER_ERROR:"))
 

@@ -24,14 +24,14 @@ type ViewerClosedMsg struct{ Quit bool }
 
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
-	lines          []string
-	rawContent     string
-	renderedLines  []string
-	title          string
-	scrollOffset   int
-	width          int
-	height         int
-	theme          theme.Theme
+	lines         []string
+	rawContent    string
+	renderedLines []string
+	title         string
+	scrollOffset  int
+	width         int
+	height        int
+	theme         theme.Theme
 	// showHelp toggles the `?` categorized keybinding overlay (see
 	// bars.go's renderHelpOverlay) over this screen's normal body.
 	showHelp       bool
@@ -56,7 +56,6 @@ var viewerHelpCategories = []helpCategory{
 		{"q", "Quit dashboard"},
 	}},
 }
-
 
 // NewViewerModel creates a new file viewer for the given path.
 func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
@@ -187,6 +186,26 @@ func (m *ViewerModel) jumpPrevMatch() {
 
 // Update handles input for the viewer screen.
 func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.MouseWheelMsg:
+		if msg.Y < 0 {
+			m.scrollOffset -= 3
+			if m.scrollOffset < 0 {
+				m.scrollOffset = 0
+			}
+		} else {
+			maxScroll := len(m.renderedLines) - m.bodyHeight()
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			m.scrollOffset += 3
+			if m.scrollOffset > maxScroll {
+				m.scrollOffset = maxScroll
+			}
+		}
+		return m, nil
+	}
+
 	var keyStr string
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -299,7 +318,6 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	return m, nil
 }
 
-
 func (m ViewerModel) bodyHeight() int {
 	h := m.height - 4 // header + footer + padding
 	if h < 3 {
@@ -360,8 +378,22 @@ func (m ViewerModel) renderBody() string {
 	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
 
 	if len(m.renderedLines) == 0 {
-		emptyStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-		return padStyle.Render(emptyStyle.Render("(empty file)"))
+		cardContent := lipgloss.JoinVertical(lipgloss.Center,
+			lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Render("✦ Document is Empty ✧"),
+			"",
+			lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("If you were expecting a resume or cover letter here,"),
+			lipgloss.NewStyle().Foreground(m.theme.Subtext).Render("run the build command first:"),
+			"",
+			lipgloss.NewStyle().Foreground(m.theme.Peach).Render("resume build <jd_file>"),
+		)
+		cardStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(m.theme.Overlay).
+			Padding(1, 3).
+			Align(lipgloss.Center).
+			Width(40)
+
+		return padStyle.Render("\n\n" + cardStyle.Render(cardContent))
 	}
 
 	end := m.scrollOffset + bh

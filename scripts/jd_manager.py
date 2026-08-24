@@ -161,6 +161,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "interview_odds_subscores": evaluation.get("interview_odds_subscores") or {},
         "practical_pursue_subscores": evaluation.get("practical_pursue_subscores")
         or {},
+        "skill_matrix": evaluation.get("skill_matrix") or [],
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }

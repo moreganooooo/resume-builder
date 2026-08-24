@@ -10,6 +10,7 @@ import (
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 // KBCloseMsg indicates the user wants to leave the Knowledge Base explorer.
@@ -79,11 +80,46 @@ func (m KBModel) visibleItems() []data.KBItem {
 
 // Update handles UI events.
 func (m KBModel) Update(msg tea.Msg) (KBModel, tea.Cmd) {
-	if kp, ok := msg.(tea.KeyPressMsg); ok {
-		return m.handleKey(kp.String(), kp.Text)
-	}
-	if km, ok := msg.(tea.KeyMsg); ok {
-		return m.handleKey(km.String(), "")
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if m.searching {
+			return m, nil
+		}
+		for i, cat := range m.categories {
+			if zone.InBoundsClick(fmt.Sprintf("kb_cat_%d", i), msg) {
+				m.activeCategory = cat
+				m.cursor = 0
+				return m, nil
+			}
+		}
+		vis := m.visibleItems()
+		for i := range vis {
+			if zone.InBoundsClick(fmt.Sprintf("kb_item_%d", i), msg) {
+				m.cursor = i
+				return m, nil
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		vis := m.visibleItems()
+		if len(vis) > 0 {
+			if msg.Y < 0 {
+				if m.cursor > 0 {
+					m.cursor--
+				}
+			} else {
+				if m.cursor < len(vis)-1 {
+					m.cursor++
+				}
+			}
+		}
+		return m, nil
+
+	case tea.KeyPressMsg:
+		return m.handleKey(msg.String(), msg.Text)
+	case tea.KeyMsg:
+		return m.handleKey(msg.String(), "")
 	}
 	return m, nil
 }
@@ -211,19 +247,21 @@ func (m KBModel) View() string {
 	var tabRenders []string
 	for i, cat := range m.categories {
 		numStr := fmt.Sprintf("%d:", i+1)
+		var renderedTab string
 		if cat == m.activeCategory {
-			tabRenders = append(tabRenders, lipgloss.NewStyle().
+			renderedTab = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(t.Base).
 				Background(t.Mauve).
 				Padding(0, 1).
-				Render(numStr+cat))
+				Render(numStr + cat)
 		} else {
-			tabRenders = append(tabRenders, lipgloss.NewStyle().
+			renderedTab = lipgloss.NewStyle().
 				Foreground(t.Subtext).
 				Padding(0, 1).
-				Render(numStr+cat))
+				Render(numStr + cat)
 		}
+		tabRenders = append(tabRenders, zone.Mark(fmt.Sprintf("kb_cat_%d", i), renderedTab))
 	}
 	tabsRow := lipgloss.JoinHorizontal(lipgloss.Top, tabRenders...)
 
@@ -283,19 +321,21 @@ func (m KBModel) View() string {
 			}
 
 			lineContent := fmt.Sprintf("%s %s", catBadge, titleTrunc)
+			var renderedItem string
 			if selected {
-				listLines = append(listLines, lipgloss.NewStyle().
+				renderedItem = lipgloss.NewStyle().
 					Bold(true).
 					Foreground(t.Base).
 					Background(t.Sky).
 					Width(leftWidth).
-					Render("▶ "+lineContent))
+					Render("▶ " + lineContent)
 			} else {
-				listLines = append(listLines, lipgloss.NewStyle().
+				renderedItem = lipgloss.NewStyle().
 					Foreground(t.Text).
 					Width(leftWidth).
-					Render("  "+lineContent))
+					Render("  " + lineContent)
 			}
+			listLines = append(listLines, zone.Mark(fmt.Sprintf("kb_item_%d", i), renderedItem))
 		}
 	}
 

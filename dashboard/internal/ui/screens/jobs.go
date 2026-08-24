@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"math"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -19,9 +20,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 // JobsClosedMsg is emitted when the jobs screen is dismissed. Quit
@@ -49,6 +52,9 @@ type JobsModel struct {
 	distanceSort  bool
 	width, height int
 	theme         theme.Theme
+
+	subscoreSprings map[string]*anim.Spring
+	animating       bool
 
 	jobsPath string
 	// Pending roles that have never been evaluated. They are NOT in
@@ -121,6 +127,19 @@ type JobsModel struct {
 var jobsApplicationStatuses = []string{"Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"}
 
 // jobsActionCompleteMsg is emitted when a dashboard_actions.py subprocess
+// jobsSidebarRatio is the fraction of the width given to the sidebar.
+// Named because the mouse hit-test must split at the same place the
+// renderer does; two copies of 0.60 can drift apart silently.
+const jobsSidebarRatio = 0.60
+
+type animTickMsg time.Time
+
+func tickAnim() tea.Cmd {
+	return tea.Tick(time.Second/60, func(t time.Time) tea.Msg {
+		return animTickMsg(t)
+	})
+}
+
 // finishes. output is stderr, used as the error message on failure
 // (matches what a human running the command directly sees).
 type jobsActionCompleteMsg struct {
@@ -476,10 +495,18 @@ func waitForActionMsg(ch chan tea.Msg) tea.Cmd {
 // separately for jobsActionCompleteMsg's error-display output, matching
 // the prior behavior's error text.
 func (m JobsModel) runAction(ctx context.Context, ch chan tea.Msg, action, jdPath string, extraArgs ...string) tea.Cmd {
-	args := append([]string{
-		filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
-		action, jdPath, "--jobs-path", m.jobsPath,
-	}, extraArgs...)
+	var args []string
+	if jdPath != "" {
+		args = append([]string{
+			filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
+			action, jdPath, "--jobs-path", m.jobsPath,
+		}, extraArgs...)
+	} else {
+		args = append([]string{
+			filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
+			action, "--jobs-path", m.jobsPath,
+		}, extraArgs...)
+	}
 	// CommandContext (not Command) so cancelling ctx -- via actionCancel,
 	// wired to the esc key while an action is in progress -- kills this
 	// subprocess instead of leaving it orphaned in the background.
@@ -724,6 +751,65 @@ func parseActionError(output string, fallbackErr error) (display, detail string)
 // actually reaches this Update() in the real app; a case for it here was
 // dead code.
 func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
+	newM, cmd := m.updateCore(msg)
+	newM.syncSprings(&cmd)
+
+	if _, ok := msg.(animTickMsg); ok {
+		if !newM.animating {
+			return newM, cmd
+		}
+		anyActive := false
+		for _, s := range newM.subscoreSprings {
+			_, settled := s.Update()
+			if !settled {
+				anyActive = true
+			}
+		}
+		if anyActive {
+			cmd = tea.Batch(cmd, tickAnim())
+		} else {
+			newM.animating = false
+		}
+	}
+	return newM, cmd
+}
+
+func (m *JobsModel) syncSprings(cmd *tea.Cmd) {
+	job, ok := m.CurrentJob()
+	if !ok {
+		return
+	}
+	if m.subscoreSprings == nil {
+		m.subscoreSprings = make(map[string]*anim.Spring)
+	}
+	eval := job.Evaluation
+
+	anyChanged := false
+	for _, group := range jobsFitGroups {
+		scores := group.get(eval)
+		for k, v := range scores {
+			target := float64(v)
+			if s, exists := m.subscoreSprings[k]; exists {
+				if s.Target() != target {
+					s.SetTarget(target)
+					anyChanged = true
+				}
+			} else {
+				spring := anim.NewSpring(anim.Organic, 0, target)
+				m.subscoreSprings[k] = &spring
+				anyChanged = true
+			}
+		}
+	}
+
+	if anyChanged && !m.animating {
+		m.animating = true
+		*cmd = tea.Batch(*cmd, tickAnim())
+	}
+}
+
+// updateCore contains the core logic for the Jobs screen.
+func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case jobsActionCompleteMsg:
 		m.actionInProgress = ""
@@ -764,6 +850,65 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		newModel, cmd := m.progress.Update(msg)
 		m.progress = newModel
 		return m, cmd
+
+	case tea.MouseClickMsg:
+		if m.actionInProgress != "" {
+			return m, nil
+		}
+		if m.actionError != "" {
+			m.actionError = ""
+			m.actionErrorDetail = ""
+			m.actionErrorExpanded = false
+			return m, nil
+		}
+		if m.notice != "" {
+			m.notice = ""
+			return m, nil
+		}
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		for i := range m.filtered {
+			if zone.InBoundsClick(fmt.Sprintf("jobs_row_%d", i), msg) {
+				m.cursor = i
+				m.adjustScroll()
+				return m, nil
+			}
+		}
+		return m, nil
+
+	case tea.MouseWheelMsg:
+		if m.actionInProgress != "" {
+			return m, nil
+		}
+		leftWidth := int(float64(m.width) * jobsSidebarRatio)
+		if msg.X >= leftWidth {
+			// Detail pane scrolling
+			if msg.Y < 0 {
+				if m.detailScrollOffset > 0 {
+					m.detailScrollOffset--
+				}
+			} else {
+				m.detailScrollOffset++
+				m.clampDetailScroll()
+			}
+			return m, nil
+		}
+		if len(m.filtered) > 0 {
+			if msg.Y < 0 {
+				if m.cursor > 0 {
+					m.cursor--
+					m.adjustScroll()
+				}
+			} else {
+				if m.cursor < len(m.filtered)-1 {
+					m.cursor++
+					m.adjustScroll()
+				}
+			}
+		}
+		return m, nil
 
 	case tea.KeyPressMsg:
 		if m.actionInProgress != "" {
@@ -907,6 +1052,27 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.distanceSort = !m.distanceSort
 			m.cursor = 0
 			m.applyFilter()
+		case "s":
+			m.actionInProgress = "scan"
+			m.actionStartedAt = time.Now()
+			m.actionChan = make(chan tea.Msg)
+			ctx, cancel := context.WithCancel(context.Background())
+			m.actionCancel = cancel
+			return m, tea.Batch(m.runAction(ctx, m.actionChan, "scan", ""), m.spinner.Tick)
+		case "b":
+			m.actionInProgress = "batch_evaluate"
+			m.actionStartedAt = time.Now()
+			m.actionChan = make(chan tea.Msg)
+			ctx, cancel := context.WithCancel(context.Background())
+			m.actionCancel = cancel
+			return m, tea.Batch(m.runAction(ctx, m.actionChan, "batch_evaluate", ""), m.spinner.Tick)
+		case "L":
+			m.actionInProgress = "sweep_stale"
+			m.actionStartedAt = time.Now()
+			m.actionChan = make(chan tea.Msg)
+			ctx, cancel := context.WithCancel(context.Background())
+			m.actionCancel = cancel
+			return m, tea.Batch(m.runAction(ctx, m.actionChan, "sweep_stale", ""), m.spinner.Tick)
 		case "l":
 			if job, ok := m.CurrentJob(); ok {
 				m.actionInProgress = "liveness"
@@ -930,6 +1096,15 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 				}
 				m.notice = fmt.Sprintf("Only Pending jobs can be tailored (this one is %s)", job.Status)
 			}
+		case "m":
+			if job, ok := m.CurrentJob(); ok {
+				m.actionInProgress = "matrix"
+				m.actionStartedAt = time.Now()
+				m.actionChan = make(chan tea.Msg)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, tea.Batch(m.runAction(ctx, m.actionChan, "matrix", job.Path), m.spinner.Tick)
+			}
 		case "u":
 			if _, ok := m.CurrentJob(); ok {
 				m.statusPicker = true
@@ -942,6 +1117,7 @@ func (m JobsModel) Update(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "J":
 			if _, ok := m.CurrentJob(); ok {
 				m.detailScrollOffset++
+				m.clampDetailScroll()
 			}
 		case "K":
 			if m.detailScrollOffset > 0 {
@@ -1014,7 +1190,11 @@ var jobsHelpCategories = []helpCategory{
 		{"PgUp / PgDn", "Page up / down"},
 	}},
 	{"Actions", []helpBinding{
+		{"s", "Scan for new job postings"},
+		{"b", "Batch evaluate pending jobs"},
+		{"L", "Sweep stale postings"},
 		{"l", "Check posting liveness"},
+		{"m", "Compute Skills Gap Matrix"},
 		{"t", "Tailor resume for this job (Pending only)"},
 		{"u", "Change application status"},
 		{"a", "Archive this job (removes from all filters)"},
@@ -1081,7 +1261,7 @@ func (m JobsModel) View() string {
 	// Wider left sidebar (job selection) makes sense for scanning a list;
 	// narrower right pane (details) is enough for truncated previews. Users
 	// can read full details by selecting; description wrapping is acceptable.
-	leftWidth := int(float64(m.width) * 0.60)
+	leftWidth := int(float64(m.width) * jobsSidebarRatio)
 	rightWidth := m.width - leftWidth
 	availHeight := m.chromeAvailHeight(m.extraRows())
 
@@ -1090,7 +1270,15 @@ func (m JobsModel) View() string {
 	if job, ok := m.CurrentJob(); ok {
 		rightPane = m.renderJobDetailPane(job, rightWidth, availHeight)
 	} else {
-		rightPane = renderEmptyDetailPane(m.theme, rightWidth, availHeight)
+		// Keys named here are Jobs-screen bindings ("s" scan, "b" batch
+		// evaluate); Pipeline binds the same letters differently and passes
+		// its own hints. See renderEmptyDetailPane.
+		rightPane = renderEmptyDetailPane(m.theme, rightWidth, availHeight, []string{
+			"To scan for new roles, press [ s ]",
+			"To batch evaluate pending, press [ b ]",
+			"",
+			"Or use the CLI: resume build <jd_file>",
+		})
 	}
 
 	splitView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
@@ -1120,8 +1308,16 @@ func (m JobsModel) View() string {
 
 func actionLabel(action string) string {
 	switch action {
+	case "scan":
+		return "Scanning job boards"
+	case "batch_evaluate":
+		return "Batch evaluating pending jobs"
+	case "sweep_stale":
+		return "Sweeping stale postings"
 	case "liveness":
 		return "Checking liveness"
+	case "matrix":
+		return "Computing skill matrix"
 	case "tailor":
 		return "Tailoring resume"
 	case "status":
@@ -1331,8 +1527,17 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		return emptyStyle.Render(msg)
 	}
 
+	maxLines := m.sidebarViewportLines(height)
+	startJob := m.scrollOffset / 2
+	maxJobs := (maxLines + 1) / 2
+	endJob := startJob + maxJobs
+	if endJob > len(m.filtered) {
+		endJob = len(m.filtered)
+	}
+
 	var lines []string
-	for i, job := range m.filtered {
+	for i := startJob; i < endJob; i++ {
+		job := m.filtered[i]
 		selected := i == m.cursor
 		// The subtitle carries the title plus, when there's room, the two
 		// layer scores behind the composite. Composed here rather than by
@@ -1340,23 +1545,12 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		// calls -- Pipeline rows are about application progress, not fit,
 		// so they have no use for these.
 		subtitle := jobSubtitleWithScores(m.theme, job, width-4)
-		lines = append(lines, renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, subtitle, width-4, selected))
+		rowContent := renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, subtitle, width-4, selected)
+		lines = append(lines, zone.Mark(fmt.Sprintf("jobs_row_%d", i), rowContent))
 	}
 
 	body := strings.Join(lines, "\n")
 	bodyLines := strings.Split(body, "\n")
-
-	// Scroll before truncating to the viewport -- otherwise a cursor past
-	// the first screenful was simply invisible with no way to reach it (see
-	// adjustScroll). Mirrors pipeline.go's renderSidebarList ordering.
-	if m.scrollOffset > 0 && m.scrollOffset < len(bodyLines) {
-		bodyLines = bodyLines[m.scrollOffset:]
-	}
-
-	// Reserve room for the status picker before truncating -- see the
-	// matching comment in pipeline.go's renderSidebarList, which has the
-	// same fixed-height overflow risk.
-	maxLines := m.sidebarViewportLines(height)
 	if len(bodyLines) > maxLines {
 		bodyLines = bodyLines[:maxLines]
 	}
@@ -1380,16 +1574,60 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 	return borderStyle.Render(content)
 }
 
-func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {
+// jobDetailContentLines builds the detail pane's content, before any
+// scroll offset or line budget is applied. Split out of
+// renderJobDetailPane so Update can measure the content it is about to
+// scroll: the renderer clamps the offset it DISPLAYS, but it runs on a
+// value receiver and cannot write that clamp back, so an unclamped
+// counter kept climbing past the end and the user then had to scroll
+// back up through the dead notches before anything moved.
+// detailVisibleBudget is how many content lines the detail pane can show
+// at a given pane height. Shared by the renderer and the scroll clamp so
+// the two can never disagree about where the bottom is.
+func detailVisibleBudget(height int) int {
+	budget := height - 6 // border + padding
+	if budget < 5 {
+		budget = 5
+	}
+	return budget
+}
+
+// detailMaxScrollFor is the largest useful scroll offset for content of
+// lineCount lines in a pane of the given height.
+func detailMaxScrollFor(lineCount, height int) int {
+	maxScroll := lineCount - detailVisibleBudget(height)
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	return maxScroll
+}
+
+// clampDetailScroll pins detailScrollOffset to the current job's actual
+// content length, using the same geometry View() renders with. Called
+// from every path that scrolls the detail pane.
+func (m *JobsModel) clampDetailScroll() {
+	if m.detailScrollOffset <= 0 {
+		m.detailScrollOffset = 0
+		return
+	}
+	job, ok := m.CurrentJob()
+	if !ok {
+		m.detailScrollOffset = 0
+		return
+	}
+	leftWidth := int(float64(m.width) * jobsSidebarRatio)
+	rightWidth := m.width - leftWidth
+	height := m.chromeAvailHeight(m.extraRows())
+	lines := strings.Split(strings.Join(m.jobDetailContentLines(job, rightWidth, height), "\n"), "\n")
+	if maxScroll := detailMaxScrollFor(len(lines), height); m.detailScrollOffset > maxScroll {
+		m.detailScrollOffset = maxScroll
+	}
+}
+
+func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []string {
 	styles := newDetailPaneStyles(m.theme, width, height)
 	// Remove the fixed Height() from the border so the pane is not clipped
 	// before we scroll -- we impose our own line-budget via detailScrollOffset.
-	scrollBorder := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(m.theme.Overlay).
-		Width(width-2).
-		Padding(1, 2)
-
 	wrapWidth := width - 10 // inner content width for wrapped text
 	if wrapWidth < 20 {
 		wrapWidth = 20
@@ -1470,12 +1708,73 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+		maxLabel := 0
 		for _, k := range keys {
 			label, ok := theme.SubscoreLabels[k]
 			if !ok {
 				label = k
 			}
-			content = append(content, fmt.Sprintf("  %s: %d", label, scores[k]))
+			if lipgloss.Width(label) > maxLabel {
+				maxLabel = lipgloss.Width(label)
+			}
+		}
+		for _, k := range keys {
+			label, ok := theme.SubscoreLabels[k]
+			if !ok {
+				label = k
+			}
+			val := float64(scores[k])
+			if s, exists := m.subscoreSprings[k]; exists {
+				val = s.Pos()
+			}
+			bar := renderSpringBar(m.theme, val, 5.0, 15)
+
+			padLen := maxLabel - lipgloss.Width(label)
+			if padLen < 0 {
+				padLen = 0
+			}
+			paddedLabel := label + strings.Repeat(" ", padLen)
+
+			// Show the numeric value formatted to 1 decimal place (makes the animation visible in text too!)
+			valStr := lipgloss.NewStyle().Foreground(m.theme.Text).Render(fmt.Sprintf("%3.1f", val))
+
+			content = append(content, fmt.Sprintf("  %s  %s  %s", styles.Subtext.Render(paddedLabel), bar, valStr))
+		}
+	}
+
+	// -- Skills Gap Matrix --
+	if len(eval.SkillMatrix) > 0 {
+		content = append(content, "")
+		content = append(content, accent.Render("Skills Gap Matrix"))
+		maxLabel := 0
+		for _, s := range eval.SkillMatrix {
+			label := s.Skill
+			if lipgloss.Width(label) > maxLabel {
+				maxLabel = lipgloss.Width(label)
+			}
+		}
+		if maxLabel > 20 {
+			maxLabel = 20
+		}
+		for _, s := range eval.SkillMatrix {
+			label := s.Skill
+			if lipgloss.Width(label) > 20 {
+				runes := []rune(label)
+				if len(runes) > 18 {
+					label = string(runes[:18]) + ".."
+				}
+			}
+			padLen := maxLabel - lipgloss.Width(label)
+			if padLen < 0 {
+				padLen = 0
+			}
+			paddedLabel := label + strings.Repeat(" ", padLen)
+
+			// Render bar (max width 15)
+			bar := renderSpringBar(m.theme, s.Coverage, 100.0, 15)
+
+			valStr := lipgloss.NewStyle().Foreground(m.theme.Text).Render(fmt.Sprintf("%3.0f%%", s.Coverage))
+			content = append(content, fmt.Sprintf("  %s  %s  %s", styles.Subtext.Render(paddedLabel), bar, valStr))
 		}
 	}
 
@@ -1656,18 +1955,23 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 		content = append(content, wrapStyle.Render(job.Description))
 	}
 
+	return content
+}
+
+func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {
+	scrollBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.theme.Overlay).
+		Width(width-2).
+		Padding(1, 2)
+
+	content := m.jobDetailContentLines(job, width, height)
+
 	// Apply detailScrollOffset: skip the first N lines
 	joined := strings.Join(content, "\n")
 	lines := strings.Split(joined, "\n")
-	visibleBudget := height - 6 // border + padding
-	if visibleBudget < 5 {
-		visibleBudget = 5
-	}
-	// Clamp scroll so we can't scroll past all content
-	maxScroll := len(lines) - visibleBudget
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	visibleBudget := detailVisibleBudget(height)
+	maxScroll := detailMaxScrollFor(len(lines), height)
 	offset := m.detailScrollOffset
 	if offset > maxScroll {
 		offset = maxScroll
@@ -1733,6 +2037,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("w") + descStyle.Render(" workplace  ") +
 			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
+			keyStyle.Render("m") + descStyle.Render(" matrix  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
 			keyStyle.Render("u") + descStyle.Render(" status  ") +
 			keyStyle.Render("a") + descStyle.Render(" archive  ") +
@@ -1769,6 +2074,43 @@ func layerScoreText(t theme.Theme, score float64) string {
 		return lipgloss.NewStyle().Foreground(t.Token.Subtext).Render("-")
 	}
 	return scoreStyle(t, score).Render(scoreIcon(t, score) + " " + layerScore(score))
+}
+
+func renderSpringBar(t theme.Theme, val float64, maxVal float64, width int) string {
+	if maxVal <= 0 {
+		maxVal = 1.0
+	}
+	if val < 0 {
+		val = 0
+	}
+	if val > maxVal {
+		val = maxVal
+	}
+	ratio := val / maxVal
+	fillCount := int(math.Round(ratio * float64(width)))
+	if fillCount > width {
+		fillCount = width
+	}
+	if fillCount < 0 {
+		fillCount = 0
+	}
+	emptyCount := width - fillCount
+
+	filledStr := strings.Repeat("█", fillCount)
+	emptyStr := strings.Repeat("░", emptyCount)
+
+	var c lipgloss.Style
+	if ratio >= 0.8 {
+		c = lipgloss.NewStyle().Foreground(t.Green)
+	} else if ratio >= 0.6 {
+		c = lipgloss.NewStyle().Foreground(t.Blue)
+	} else if ratio >= 0.4 {
+		c = lipgloss.NewStyle().Foreground(t.Yellow)
+	} else {
+		c = lipgloss.NewStyle().Foreground(t.Token.Subtext)
+	}
+
+	return c.Render(filledStr) + lipgloss.NewStyle().Foreground(t.Overlay).Render(emptyStr)
 }
 
 // jobSubtitleWithScores appends a compact "F 4.5 / O 3.9" to the row's
