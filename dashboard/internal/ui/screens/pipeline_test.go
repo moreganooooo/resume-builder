@@ -3,13 +3,14 @@ package screens
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
-
 
 func tabIndexForFilter(t *testing.T, filter string) int {
 	t.Helper()
@@ -552,8 +553,6 @@ func TestPipeline_UndoStatusChange(t *testing.T) {
 		t.Fatalf("expected status update command")
 	}
 
-
-
 	// Check undo stack
 	if len(pm.undoStack) != 1 {
 		t.Fatalf("expected 1 item on undo stack, got %d", len(pm.undoStack))
@@ -589,5 +588,109 @@ func TestPipeline_EmptyStateContextual(t *testing.T) {
 	view := pm.View()
 	if !strings.Contains(view, "No applications") && !strings.Contains(view, "0") {
 		t.Fatalf("expected view to reflect zero applications or empty state")
+	}
+}
+
+func TestPipelineModel_MouseInteractions(t *testing.T) {
+	apps := []model.CareerApplication{
+		{Company: "Acme", Role: "Dev", Status: "Evaluated", Score: 4.2},
+		{Company: "Beta", Role: "Lead", Status: "Applied", Score: 4.8},
+		{Company: "Gamma", Role: "Architect", Status: "Interview", Score: 4.9},
+	}
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		apps,
+		model.PipelineMetrics{Total: len(apps)},
+		"..",
+		120,
+		40,
+	)
+	pm.applyFilterAndSort()
+
+	// Initial cursor is 0
+	if pm.cursor != 0 {
+		t.Fatalf("expected initial cursor 0, got %d", pm.cursor)
+	}
+
+	// Mouse wheel down advances cursor
+	pm, _ = pm.Update(tea.MouseWheelMsg{Y: 1})
+	if pm.cursor != 1 {
+		t.Errorf("expected cursor 1 after wheel down, got %d", pm.cursor)
+	}
+
+	// Mouse wheel up retreats cursor
+	pm, _ = pm.Update(tea.MouseWheelMsg{Y: -1})
+	if pm.cursor != 0 {
+		t.Errorf("expected cursor 0 after wheel up, got %d", pm.cursor)
+	}
+
+	// Mouse wheel in detail pane scrolls detailScrollOffset without changing cursor
+	pm, _ = pm.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+	if pm.cursor != 0 {
+		t.Errorf("expected cursor to remain 0 when scrolling detail pane, got %d", pm.cursor)
+	}
+	// This application's detail fits the pane, so there is nothing to
+	// scroll and the offset must stay pinned at 0 -- an unclamped counter
+	// left the user scrolling back up through dead notches, and once it
+	// ran past the end the pane snapped back to the top.
+	if pm.detailScrollOffset != 0 {
+		t.Errorf("expected detailScrollOffset to stay 0 for content that fits, got %d", pm.detailScrollOffset)
+	}
+
+	// In a pane short enough that the detail overflows, the same wheel
+	// event does scroll -- and stops at the last page rather than running
+	// on forever.
+	short := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		apps,
+		model.PipelineMetrics{Total: len(apps)},
+		"..",
+		120,
+		14,
+	)
+	short.applyFilterAndSort()
+	short, _ = short.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+	if short.detailScrollOffset != 1 {
+		t.Errorf("expected detailScrollOffset 1 in a short pane, got %d", short.detailScrollOffset)
+	}
+	for i := 0; i < 200; i++ {
+		short, _ = short.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+	}
+	app, _ := short.CurrentApp()
+	height := short.height - short.chromeRowsFixed()
+	if height < 5 {
+		height = 5
+	}
+	lines := short.pipelineDetailContentLines(app, short.width-int(float64(short.width)*pipelineSidebarRatio), height)
+	want := detailMaxScrollFor(len(lines), height)
+	if short.detailScrollOffset != want {
+		t.Errorf("detail scroll ran past the end: got %d, want clamp at %d", short.detailScrollOffset, want)
+	}
+}
+
+func TestPipelineModel_MouseClick(t *testing.T) {
+	apps := []model.CareerApplication{
+		{Company: "Acme Corp", Role: "Engineer", Status: "draft"},
+		{Company: "Beta Inc", Role: "Designer", Status: "draft"},
+	}
+	pm := NewPipelineModel(
+		theme.NewTheme("catppuccin-mocha"),
+		apps,
+		model.PipelineMetrics{Total: len(apps)},
+		"..",
+		120,
+		40,
+	)
+	pm.applyFilterAndSort()
+
+	_ = zone.Scan(pm.View())
+
+	info := zone.WaitFor("pipeline_row_1", 2*time.Second)
+	if info == nil {
+		t.Fatalf("zone pipeline_row_1 never registered after Scan -- the click path is untested if this is skipped")
+	}
+	pm, _ = pm.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
+	if pm.cursor != 1 {
+		t.Errorf("expected cursor 1 after clicking pipeline row 1, got %d", pm.cursor)
 	}
 }

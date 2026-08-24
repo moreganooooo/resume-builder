@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
@@ -155,7 +156,7 @@ func TestTruncate_UsesSingleRuneEllipsis(t *testing.T) {
 func TestStarfield_NarrowSplit_ClampsInnerDimensions(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
 	// Test very small bounds (3x3), must not panic
-	rendered := renderEmptyDetailPane(th, 3, 3)
+	rendered := renderEmptyDetailPane(th, 3, 3, nil)
 	if len(rendered) == 0 {
 		t.Errorf("expected non-empty rendered detail pane for narrow dimensions")
 	}
@@ -165,5 +166,39 @@ func TestClipboard_OSC52Sequence(t *testing.T) {
 	seq := FormatOSC52Copy("https://example.com/job/123")
 	if !strings.HasPrefix(seq, "\x1b]52;c;") || !strings.HasSuffix(seq, "\x07") {
 		t.Fatalf("expected valid OSC 52 sequence, got %q", seq)
+	}
+}
+
+// The empty-state card is shared by Jobs and Pipeline, which bind the same
+// letters to different actions -- on Jobs "s" starts a scan, on Pipeline it
+// cycles the sort mode. A card that hardcodes shortcuts is therefore wrong
+// on one screen by construction, which is how it once told users to press
+// "a" to add a role when "a" archives one. These pin each screen to its own
+// hints so a future edit cannot re-share them.
+func TestEmptyDetailPaneHintsAreScreenSpecific(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+
+	jobs := NewJobsModel(th, nil, 120, 40)
+	jobsView := ansi.Strip(jobs.View())
+	for _, want := range []string{"[ s ]", "[ b ]", "resume build <jd_file>"} {
+		if !strings.Contains(jobsView, want) {
+			t.Errorf("Jobs empty pane missing %q", want)
+		}
+	}
+
+	pipeline := NewPipelineModel(th, nil, model.PipelineMetrics{}, "..", 120, 40)
+	pipeline.applyFilterAndSort()
+	pipelineView := ansi.Strip(pipeline.View())
+	for _, want := range []string{"[ f ]", "[ / ]", "[ r ]"} {
+		if !strings.Contains(pipelineView, want) {
+			t.Errorf("Pipeline empty pane missing %q", want)
+		}
+	}
+	// Pipeline must NOT inherit the Jobs shortcuts: "s" sorts here, and
+	// "b" is not bound at all.
+	for _, unwanted := range []string{"press [ s ]", "press [ b ]"} {
+		if strings.Contains(pipelineView, unwanted) {
+			t.Errorf("Pipeline empty pane advertises Jobs-only shortcut %q", unwanted)
+		}
 	}
 }

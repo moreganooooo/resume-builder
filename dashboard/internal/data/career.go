@@ -728,7 +728,9 @@ func StatusPriority(status string) int {
 
 // ComputeProgressMetrics computes progress-oriented analytics from applications.
 func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetrics {
-	pm := model.ProgressMetrics{}
+	pm := model.ProgressMetrics{
+		DailyActivity: make(map[string]int),
+	}
 
 	// Count by normalized status
 	statusCounts := make(map[string]int)
@@ -819,6 +821,7 @@ func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetric
 		if err != nil {
 			continue
 		}
+		pm.DailyActivity[t.Format("2006-01-02")]++
 		year, week := t.ISOWeek()
 		key := fmt.Sprintf("%d-W%02d", year, week)
 		weekCounts[key]++
@@ -839,6 +842,37 @@ func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetric
 			Week:  w,
 			Count: weekCounts[w],
 		})
+	}
+
+	// Populate ScoreTrend and VolumeTrend
+	var allWeeks []string
+	for w := range weekCounts {
+		allWeeks = append(allWeeks, w)
+	}
+	sort.Strings(allWeeks)
+	for _, w := range allWeeks {
+		pm.VolumeTrend = append(pm.VolumeTrend, weekCounts[w])
+	}
+
+	type dateScore struct {
+		date  time.Time
+		score float64
+	}
+	var scores []dateScore
+	for _, app := range apps {
+		if app.Score > 0 && app.Date != "" {
+			t, err := time.Parse("2006-01-02", app.Date)
+			if err == nil {
+				scores = append(scores, dateScore{t, app.Score})
+			}
+		}
+	}
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].date.Before(scores[j].date)
+	})
+	for _, s := range scores {
+		// scale score 0-5 to 0-50 for sparkline integer requirement
+		pm.ScoreTrend = append(pm.ScoreTrend, int(s.score*10))
 	}
 
 	return pm
