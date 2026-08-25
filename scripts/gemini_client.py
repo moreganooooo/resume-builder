@@ -11,6 +11,8 @@ import json
 import os
 import random
 import re
+import sys
+import threading
 import time
 
 import cli_art
@@ -89,6 +91,72 @@ def _get_auth_headers() -> dict:
             f"test, or set {_TEST_NETWORK_ENV}=1 if it genuinely needs the network."
         )
     return {"x-goog-api-key": _get_api_key()}
+
+
+class TokenBucketRateLimiter:
+    """Thread-safe token-bucket rate limiter for API requests.
+
+    Default rate is 12.0 requests per minute (0.2 tokens/sec) with a burst
+    capacity of 4.0 tokens (D11). Configurable via GEMINI_RPM_LIMIT or
+    RESUME_API_RPM env vars.
+    """
+
+    def __init__(self, rpm: float = 12.0, capacity: float = 4.0):
+        self.rpm = float(rpm)
+        self.capacity = float(capacity)
+        self.tokens = float(capacity)
+        self.refill_rate = self.rpm / 60.0  # tokens per second
+        self.last_refill_ts = time.monotonic()
+        self._lock = threading.Lock()
+
+    @classmethod
+    def from_env(cls) -> "TokenBucketRateLimiter":
+        env_val = os.environ.get("GEMINI_RPM_LIMIT") or os.environ.get("RESUME_API_RPM")
+        try:
+            rpm = float(env_val) if env_val else 12.0
+        except ValueError:
+            rpm = 12.0
+        return cls(rpm=rpm, capacity=max(1.0, rpm / 3.0))
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self.last_refill_ts
+        if elapsed > 0:
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
+            self.last_refill_ts = now
+
+    def acquire(self, tokens: float = 1.0, block: bool = True) -> float:
+        """Acquires the requested tokens. Returns the wait duration in seconds.
+        If block=True and wait > 0, sleeps for that duration (unless in test mode).
+        """
+        with self._lock:
+            self._refill()
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return 0.0
+
+            deficit = tokens - self.tokens
+            wait_time = deficit / self.refill_rate if self.refill_rate > 0 else 0.0
+
+            if not block:
+                return wait_time
+
+            self.tokens -= tokens
+
+        if wait_time > 0 and block:
+            is_under_test = (
+                "unittest" in sys.modules
+                or "pytest" in sys.modules
+                or _blocked_under_test()
+                or os.environ.get("CI") == "true"
+                or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+            )
+            if not is_under_test:
+                time.sleep(wait_time)
+        return wait_time
+
+
+rate_limiter = TokenBucketRateLimiter.from_env()
 
 
 AUTH_HEADERS = None
@@ -181,8 +249,12 @@ class GeminiClient:
         """
         if "gemini" not in model.lower():
             return None
-        # 15,000 chars is roughly 3.5k-4k tokens (above Gemini's 4,096 limit to be safe)
-        if len(system_instruction) < 15000:
+
+        # Explicit context caching on Gemini (1.5 / 2.0 / Flash / Pro) requires a minimum of
+        # 32,768 tokens (roughly 131,072 characters in English at ~4 chars/token).
+        # Calls under this limit are rejected by the REST API with HTTP 400.
+        min_chars = int(os.environ.get("GEMINI_CACHE_MIN_CHARS", "131072"))
+        if len(system_instruction) < min_chars:
             return None
 
         # Clean model name (caching needs models/ prefix)
@@ -559,6 +631,7 @@ class GeminiClient:
             if tools:
                 body["tools"] = tools
 
+            rate_limiter.acquire(1.0)
             try:
                 resp = requests.post(
                     url,
@@ -748,6 +821,7 @@ class GeminiClient:
             "content": {"parts": [{"text": text}]},
             "outputDimensionality": EMBED_DIM,
         }
+        rate_limiter.acquire(1.0)
         try:
             resp = requests.post(
                 url, json=payload, headers=_get_auth_headers(), timeout=30
