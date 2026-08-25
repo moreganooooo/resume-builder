@@ -492,3 +492,44 @@ class TestProviderOriginEntry(unittest.TestCase):
         mock_filters.return_value = {"location": {"zip": "62701", "radius_miles": 25}}
         scan_boards.fetch_board_jobs(sources=["jooble"])
         self.assertNotIn("location", mock_run.call_args[0][1])
+
+
+class TestBatchNodeProviders(unittest.TestCase):
+    """Verifies batch execution of board providers via _run_batch_node_providers."""
+
+    def test_empty_batch_returns_empty_dict(self):
+        res = scan_boards._run_batch_node_providers([])
+        self.assertEqual(res, {})
+
+    @patch("scan_boards.subprocess.run")
+    def test_batch_execution_success_and_error_isolation(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='[{"provider_id": "remoteok", "status": "fulfilled", "jobs": [{"title": "Job 1"}]}, {"provider_id": "adzuna", "status": "rejected", "error": {"kind": "auth", "message": "missing key"}}]',
+        )
+        items = [
+            {"provider_id": "remoteok", "entry": {}},
+            {"provider_id": "adzuna", "entry": {}},
+        ]
+        res = scan_boards._run_batch_node_providers(items)
+        self.assertIn("remoteok", res)
+        self.assertEqual(len(res["remoteok"]), 1)
+        self.assertEqual(res["remoteok"][0]["title"], "Job 1")
+        self.assertIn("adzuna", res)
+        self.assertEqual(res["adzuna"], [])
+
+    @patch(
+        "scan_boards.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="node", timeout=30),
+    )
+    def test_batch_timeout_recovers_empty_lists(self, mock_run):
+        items = [{"provider_id": "remoteok"}, {"provider_id": "himalayas"}]
+        res = scan_boards._run_batch_node_providers(items)
+        self.assertEqual(res, {"remoteok": [], "himalayas": []})
+
+    @patch("scan_boards.subprocess.run")
+    def test_batch_invalid_json_recovers_empty_lists(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="corrupt output")
+        items = [{"provider_id": "remoteok"}]
+        res = scan_boards._run_batch_node_providers(items)
+        self.assertEqual(res, {"remoteok": []})
