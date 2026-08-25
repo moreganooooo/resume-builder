@@ -388,6 +388,42 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
 
+        # Cancel at evidence_count
+        with (
+            patch("questionary.text") as mock_text,
+            patch("questionary.autocomplete") as mock_auto,
+            patch("questionary.select") as mock_select,
+        ):
+            mock_text.return_value.ask.side_effect = ["Python 3", None]
+            mock_auto.return_value.ask.return_value = "Dev"
+            mock_select.return_value.ask.return_value = "Expert"
+            skills_menu._edit_skill(data, "tool_001")
+            self.assertEqual(data["tools"][0]["name"], "Python")
+
+        # Cancel at use_notes
+        with (
+            patch("questionary.text") as mock_text,
+            patch("questionary.autocomplete") as mock_auto,
+            patch("questionary.select") as mock_select,
+        ):
+            mock_text.return_value.ask.side_effect = ["Python 3", "2", None]
+            mock_auto.return_value.ask.return_value = "Dev"
+            mock_select.return_value.ask.return_value = "Expert"
+            skills_menu._edit_skill(data, "tool_001")
+            self.assertEqual(data["tools"][0]["name"], "Python")
+
+        # Cancel at tr_references
+        with (
+            patch("questionary.text") as mock_text,
+            patch("questionary.autocomplete") as mock_auto,
+            patch("questionary.select") as mock_select,
+        ):
+            mock_text.return_value.ask.side_effect = ["Python 3", "2", "Notes", None]
+            mock_auto.return_value.ask.return_value = "Dev"
+            mock_select.return_value.ask.return_value = "Expert"
+            skills_menu._edit_skill(data, "tool_001")
+            self.assertEqual(data["tools"][0]["name"], "Python")
+
 
 if __name__ == "__main__":
     unittest.main()
