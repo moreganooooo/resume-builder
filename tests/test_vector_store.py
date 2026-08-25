@@ -27,7 +27,8 @@ if SCRIPTS_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from scripts import profile_paths, vector_store
+import profile_paths
+import vector_store
 
 
 class TestCosineSimilarityMatrix(unittest.TestCase):

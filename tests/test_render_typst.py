@@ -1,9 +1,16 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 
-from scripts.render_typst import generate_typst_markup, render_typst
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+from render_typst import generate_typst_markup, render_typst
 
 
 class TestRenderTypst(unittest.TestCase):

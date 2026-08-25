@@ -1,11 +1,16 @@
-"""Unit tests for export_data.py."""
-
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 
-from scripts import export_data
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+import export_data
 
 
 class TestExportData(unittest.TestCase):
