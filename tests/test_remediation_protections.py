@@ -23,7 +23,11 @@ if SCRIPTS_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from scripts import cli_art, db, jd_manager, render_typst, vector_store
+import cli_art
+import db
+import jd_manager
+import render_typst
+import vector_store
 
 
 class TestRemediationProtections(unittest.TestCase):
