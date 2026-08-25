@@ -37,7 +37,6 @@ REQUIRED_PACKAGES = {
     "linkedin-jobs-scraper": "linkedin_jobs_scraper",
     "selenium": "selenium",
     "beautifulsoup4": "bs4",
-    "browser_cookie3": "browser_cookie3",
     "questionary": "questionary",
     "python-docx": "docx",
     "python-pptx": "pptx",
