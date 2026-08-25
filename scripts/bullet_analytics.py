@@ -36,12 +36,14 @@ def analyze_bullet_tag_performance(
     )
 
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT a.status, j.title, j.description
             FROM applications a
             JOIN jobs j ON a.job_id = j.id
             WHERE a.status IS NOT NULL
-            """)
+            """
+        )
         rows = cursor.fetchall()
 
         for row in rows:
