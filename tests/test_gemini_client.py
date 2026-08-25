@@ -423,5 +423,77 @@ class TestToolsParameter(unittest.TestCase):
             )
 
 
+class TestContextCaching(unittest.TestCase):
+
+    def setUp(self):
+        GeminiClient._cache_map.clear()
+        GeminiClient._cache_unavailable_models.clear()
+
+    def tearDown(self):
+        GeminiClient._cache_map.clear()
+        GeminiClient._cache_unavailable_models.clear()
+
+    @patch("gemini_client.requests.post")
+    def test_system_instruction_under_threshold_skips_cache(self, mock_post):
+        mock_post.return_value = _success_response()
+        sys_prompt = "x" * 15000  # Less than 131072 chars (32k tokens)
+        cache_name = GeminiClient._get_or_create_cache(
+            model="gemini-2.0-flash", system_instruction=sys_prompt
+        )
+        self.assertIsNone(cache_name)
+        self.assertEqual(mock_post.call_count, 0)
+
+    @patch("gemini_client.requests.post")
+    def test_system_instruction_over_threshold_creates_cache(self, mock_post):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            "name": "cachedContents/sample-cache-123",
+            "expireTime": "2026-12-31T23:59:59Z",
+        }
+        mock_post.return_value = resp
+
+        sys_prompt = "x" * 140000
+        cache_name = GeminiClient._get_or_create_cache(
+            model="gemini-2.0-flash", system_instruction=sys_prompt
+        )
+        self.assertEqual(cache_name, "cachedContents/sample-cache-123")
+        self.assertEqual(mock_post.call_count, 1)
+        self.assertIn("cachedContents", mock_post.call_args.args[0])
+
+    @patch("gemini_client.requests.post")
+    def test_non_gemini_model_skips_cache(self, mock_post):
+        sys_prompt = "x" * 140000
+        cache_name = GeminiClient._get_or_create_cache(
+            model="claude-3-5-sonnet", system_instruction=sys_prompt
+        )
+        self.assertIsNone(cache_name)
+        self.assertEqual(mock_post.call_count, 0)
+
+    @patch("gemini_client.requests.post")
+    def test_cache_attached_to_generate_body(self, mock_post):
+        # First call is to create cache, second call is generate()
+        cache_resp = MagicMock()
+        cache_resp.status_code = 200
+        cache_resp.json.return_value = {
+            "name": "cachedContents/gen-cache-456",
+            "expireTime": "2026-12-31T23:59:59Z",
+        }
+
+        mock_post.side_effect = [cache_resp, _success_response()]
+
+        sys_prompt = "x" * 140000
+        text, usage = GeminiClient.generate(
+            model="gemini-2.0-flash",
+            system_instruction=sys_prompt,
+            contents="test prompt",
+        )
+        self.assertEqual(text, "ok")
+        self.assertEqual(mock_post.call_count, 2)
+        generate_body = mock_post.call_args_list[1].kwargs["json"]
+        self.assertEqual(generate_body["cachedContent"], "cachedContents/gen-cache-456")
+        self.assertNotIn("systemInstruction", generate_body)
+
+
 if __name__ == "__main__":
     unittest.main()
