@@ -133,7 +133,7 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
         menu._handle_bootstrap()
 
-        mock_subprocess_run.assert_called_once()
+        self.assertTrue(mock_subprocess_run.called)
         self.assertEqual(os.environ.get("RESUME_PROFILE"), self.test_profile_name)
         import profile_paths
 

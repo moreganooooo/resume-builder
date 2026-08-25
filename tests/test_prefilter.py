@@ -1,8 +1,14 @@
-"""Unit tests for prefilter.py."""
-
+import os
+import sys
 import unittest
 
-from scripts import prefilter
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+import prefilter
 
 
 class TestPrefilter(unittest.TestCase):
