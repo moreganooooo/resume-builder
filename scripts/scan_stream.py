@@ -204,7 +204,7 @@ def render_monitor_view(state: ScanMonitorState):
         badge_color = theme.INFO
         if et == "job_evaluated":
             badge_color = theme.SUCCESS if (ev.score and ev.score >= 80) else theme.INFO
-        elif et == "job_filtered" or et == "job_deduped":
+        elif et in ("job_filtered", "job_deduped"):
             badge_color = theme.MUTED
         elif et == "error":
             badge_color = theme.ERROR
