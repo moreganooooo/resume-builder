@@ -2,6 +2,13 @@
 
 > **Goal:** Complete architectural, visual, operational, and structural transformation of `resume-builder` to eliminate all technical debt, standardize TUI/UX on Charm's Go ecosystem (**Bubble Tea**, **Huh?**, **Lip Gloss**, **Glamour**) inspired by Charm **Crush CLI**, unify data storage in SQLite (`data.db`), resolve false-positive liveness bugs, and guarantee enterprise-grade reliability across macOS, Linux, Windows, and mobile devices.
 
+> [!IMPORTANT]
+> **AUDIT & RESOLUTION STATUS (Verified 2026-08-24 / Findings F19 & F21):**
+> This document represents the historical 4-phase refactoring plan. The `[COMPLETED]` section tags below reflect session milestones at the time of planning. For live ground truth and verified codebase state, consult [`docs/review/master_audit_document.md`](file:///Users/morganescott/resume-builder/docs/review/master_audit_document.md) and [`docs/gemini_files/CORRECTIONS.md`](file:///Users/morganescott/resume-builder/docs/gemini_files/CORRECTIONS.md). Specific notes:
+> 1. **Icon Default**: TUI uses Nerd Font for interactive sessions (`sys.stdin.isatty()`) and Unicode glyphs for piped/non-interactive contexts.
+> 2. **Lite Mode / Dependencies**: `pandas`/`numpy` are preserved in `requirements.txt` and lazily loaded across pipeline entry points for `requirements-lite.txt` compatibility (pinned by `tests/test_lite_mode_imports.py`).
+> 3. **LinkedIn Scraper**: Hardened with interactive Playwright login workflow and lazy guarded fallbacks.
+
 ---
 
 ## 📅 MASTER IMPLEMENTATION ROADMAP OVERVIEW
