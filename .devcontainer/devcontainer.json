@@ -1,0 +1,34 @@
+{
+  "name": "Resume Builder DevContainer",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3",
+        "python.testing.unittestEnabled": true,
+        "python.testing.unittestArgs": [
+          "-v",
+          "-s",
+          "tests",
+          "-p",
+          "test_*.py"
+        ],
+        "go.gopath": "/go",
+        "go.useLanguageServer": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "golang.go",
+        "nvarner.typst-lsp",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  },
+  "forwardPorts": [8080],
+  "postCreateCommand": "python3 scripts/doctor.py --skip-tests || true",
+  "remoteUser": "root"
+}
