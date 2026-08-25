@@ -659,6 +659,68 @@ def location_enrich(all_statuses, allow_search_backup, limit):
     )
 
 
+@cli.command(name="reconcile")
+@click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    help="Apply corrections to data.db (defaults to dry-run).",
+)
+@click.option(
+    "--profile",
+    default=None,
+    help="Profile name (defaults to active profile).",
+)
+def reconcile_cmd(apply: bool, profile: str | None):
+    """Reconciles SQLite database job statuses with actual filesystem locations.
+
+    The filesystem is the primary source of truth for job status. This command
+    detects drift and syncs data.db to match directory structure.
+    """
+    import shutil
+    from datetime import datetime
+
+    import reconcile_jd_status
+
+    target_profile = profile or profile_paths.active_profile()
+    db_path = os.path.join(profile_paths.PROFILES_DIR, target_profile, "data.db")
+    jds_dir = profile_paths.jds_dir(target_profile)
+
+    if not os.path.exists(db_path):
+        cli_art.display_error(f"No database found at {db_path}")
+        raise SystemExit(1)
+
+    if apply:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup = f"{db_path}.backup-{stamp}"
+        shutil.copy2(db_path, backup)
+        cli_art.console.print(f"✓ Database backed up to {backup}")
+
+    stats = reconcile_jd_status.reconcile(db_path, jds_dir, apply_changes=apply)
+    verb = "Corrected" if apply else "Would correct"
+
+    cli_art.display_banner("Job Status Reconciliation")
+    cli_art.console.print(f"  Database rows:      {stats['scanned']}")
+    cli_art.console.print(f"  Files on disk:      {stats['files_on_disk']}")
+    cli_art.console.print(
+        f"  No matching file:   {stats['no_file']} (scan-sourced rows left untouched)"
+    )
+    cli_art.console.print(f"  {verb}:          {stats['updates']}")
+
+    for transition, count in stats["transitions"].most_common():
+        cli_art.console.print(f"      {transition:<28} {count}")
+
+    if apply:
+        cli_art.display_success(
+            "Reconciliation complete: "
+            + ", ".join(f"{s}={n}" for s, n in stats["status_after"].most_common())
+        )
+    else:
+        cli_art.console.print(
+            "\n[yellow]Dry run only. Pass --apply to write corrections to database.[/yellow]"
+        )
+
+
 @cli.command(name="sample")
 def sample_cmd():
     """Builds a resume + cover letter against the permanent fixtures/sample_jd.txt

@@ -1284,6 +1284,34 @@ class TestSaveAndReadApplicationStatus(unittest.TestCase):
             content = f.read()
         self.assertEqual(content, "Just a plain text job posting, not JSON.")
 
+    def test_save_application_status_persists_to_sqlite_application_log(self):
+        import tempfile
+        from unittest.mock import patch
+
+        import db
+
+        with tempfile.TemporaryDirectory() as profile_tmp:
+            with patch("profile_paths.profile_root", return_value=profile_tmp):
+                path = self._write(
+                    "role.json",
+                    json.dumps(
+                        {
+                            "source_job_id": "test_job_99",
+                            "job_title": "Senior AI Architect",
+                            "company_name": "DeepTech",
+                        }
+                    ),
+                )
+                jd_manager.save_application_status(
+                    path, "Interview", notes="Passed screening round"
+                )
+                logs = db.get_application_logs(job_id="test_job_99")
+                self.assertEqual(len(logs), 1)
+                self.assertEqual(logs[0]["company"], "DeepTech")
+                self.assertEqual(logs[0]["role"], "Senior AI Architect")
+                self.assertEqual(logs[0]["status"], "Interview")
+                self.assertEqual(logs[0]["notes"], "Passed screening round")
+
 
 class TestReadJdTextStripsAnyUnderscoreKey(unittest.TestCase):
     """Regression coverage for read_jd_text() generalizing from a

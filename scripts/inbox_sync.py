@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import argparse
 import email
+import email.utils
 import imaplib
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.header import decode_header, make_header
 from typing import Any, Dict, List, Optional
 
@@ -52,8 +53,8 @@ DEFAULT_FOLDER = "INBOX"
 #
 # This matters because the gate has a real ceiling: measured against
 # these very folders, it recovers about half of them, and most of what it
-# misses is recruiter back-and-forth ("RE: ArtechOBGC//IBM_Amex//Morgan
-# Escott") that is recognisable only from conversational context. A human
+# misses is recruiter back-and-forth ("RE: ArtechOBGC//IBM_Amex//Alex
+# Mercer") that is recognisable only from conversational context. A human
 # already made that judgement; reading the label is how we inherit it.
 JOB_LABEL_FOLDERS = (
     "Job Applications",
@@ -277,7 +278,7 @@ def is_recruiter_outreach(from_header: str, subject: str, body: str = "") -> boo
 
     This is the category the phrase-based gate structurally cannot reach:
     measured against hand-labeled folders, the misses were almost all
-    staffing-agency threads ("RE: ArtechOBGC//IBM_Amex//Morgan Escott")
+    staffing-agency threads ("RE: ArtechOBGC//IBM_Amex//Alex Mercer")
     whose subjects carry no application vocabulary at all.
     """
     domain = _sender_domain(from_header)
@@ -910,6 +911,114 @@ def applications_without_replies(
     return silent
 
 
+def _parse_message_date(date_str: Optional[str]) -> Optional[datetime]:
+    """Safely parse RFC 2822 or ISO date string into a timezone-aware datetime."""
+    if not date_str:
+        return None
+    try:
+        parsed_tuple = email.utils.parsedate_tz(date_str)
+        if parsed_tuple:
+            timestamp = email.utils.mktime_tz(parsed_tuple)
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    except Exception:
+        pass
+    try:
+        iso_str = date_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def rank_silent_applications(
+    silent: List[Dict[str, Any]], now: Optional[datetime] = None
+) -> List[Dict[str, Any]]:
+    """Ages, tiers, and ranks unanswered applications.
+
+    Tiers:
+      - 'follow_up': 8 to 21 days waiting (ideal window for a polite follow-up)
+      - 'warm': 0 to 7 days waiting (standard recruiter response window)
+      - 'stale': 22+ days waiting (likely silent rejection or closed req)
+
+    Returns a sorted list of application dicts enriched with:
+      - 'days_waiting': int (default 0 if date unknown)
+      - 'tier': 'follow_up' | 'warm' | 'stale'
+      - 'tier_label': str
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    ranked = []
+    for item in silent:
+        entry = dict(item)
+        dt = _parse_message_date(item.get("date"))
+        if dt:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            days = max(0, (now - dt).days)
+        else:
+            days = 0
+
+        entry["days_waiting"] = days
+        if days <= 7:
+            entry["tier"] = "warm"
+            entry["tier_label"] = "Warm (0-7d)"
+        elif days <= 21:
+            entry["tier"] = "follow_up"
+            entry["tier_label"] = "Follow-Up Recommended (8-21d)"
+        else:
+            entry["tier"] = "stale"
+            entry["tier_label"] = "Stale (22d+)"
+
+        ranked.append(entry)
+
+    # Priority sort order: follow_up (urgent action) first by days desc, then warm by days desc, then stale
+    tier_weights = {"follow_up": 0, "warm": 1, "stale": 2}
+    ranked.sort(key=lambda x: (tier_weights.get(x["tier"], 3), -x["days_waiting"]))
+    return ranked
+
+
+def generate_follow_up_draft(
+    item: Dict[str, Any], candidate_name: Optional[str] = None
+) -> Dict[str, str]:
+    """Generates a concise, polite follow-up email subject and body for a silent application."""
+    if not candidate_name:
+        try:
+            profile_data = profile_paths.load_profile()
+            candidate_name = profile_data.get("name") or "Candidate"
+        except Exception:
+            candidate_name = "Candidate"
+
+    subject_raw = item.get("subject", "")
+    clean_sub = re.sub(
+        r"^(Re:\s*|Fwd:\s*)+", "", subject_raw, flags=re.IGNORECASE
+    ).strip()
+    if not clean_sub:
+        clean_sub = f"Application ({item.get('domain', 'Role')})"
+
+    follow_up_subject = f"Following up: {clean_sub}"
+
+    body = (
+        f"Hi Team,\n\n"
+        f"I wanted to follow up on my application ({clean_sub}). "
+        f"I remain very enthusiastic about the team's mission and would welcome the chance to discuss how my background aligns with the role.\n\n"
+        f"Please let me know if there are any additional materials or information I can provide.\n\n"
+        f"Best regards,\n"
+        f"{candidate_name}"
+    )
+
+    return {
+        "to": item.get("to", ""),
+        "domain": item.get("domain", ""),
+        "subject": follow_up_subject,
+        "body": body,
+    }
+
+
 def _load_jobs(profile: Optional[str] = None) -> List[Dict[str, Any]]:
     """All job rows for this profile, as plain dicts for matching."""
     try:
@@ -1080,7 +1189,7 @@ def _render_matches(results: List[Dict[str, Any]], apply_changes: bool) -> None:
     applied = email_matcher.apply_updates(proposals)
     skipped = len(proposals) - applied
     cli_art.print_literal(
-        f"\n  Wrote {applied} status change(s). "
+        f"\n  Wrote {applied} status change(s) to JD files and SQLite application_log. "
         f"{skipped} left for review (below the auto-apply threshold).\n"
     )
 
@@ -1119,18 +1228,80 @@ def _render_sent(received: List[Dict[str, Any]], days: int, profile) -> None:
 
     silent = applications_without_replies(sent, received)
     if silent:
+        ranked = rank_silent_applications(silent)
         cli_art.print_literal(
             f"\n  {len(silent)} application(s) with no reply from that domain "
             f"in the last {days} days of inbox:"
         )
-        for item in silent[:12]:
+        for item in ranked[:12]:
+            tier_badge = f"[{item['tier'].upper()}]"
             cli_art.print_literal(
-                f"      {item['domain'][:26]:<26} {item['subject'][:42]}"
+                f"      {item['domain'][:22]:<22} {tier_badge:<14} {item['days_waiting']:>2}d waiting   {item['subject'][:34]}"
             )
         cli_art.print_literal(
-            "      (a reply older than the inbox window will show here too -- "
-            "raise --days to be sure)"
+            "      (use `resume inbox-sync --chase` or `--sent --chase` to view follow-up email drafts)"
         )
+
+
+def _render_chase_list(
+    silent: List[Dict[str, Any]],
+    draft_top_n: int = 3,
+    candidate_name: Optional[str] = None,
+) -> None:
+    """Renders actionable chase list with tiered aging and ready-to-use email drafts."""
+    ranked = rank_silent_applications(silent)
+    if not ranked:
+        cli_art.cli_info("No silent applications found in the scanned window.")
+        return
+
+    cli_art.print_literal("\n  " + "=" * 64)
+    cli_art.print_literal("  CHASE LIST (Silence Detector & Follow-Up Action)")
+    cli_art.print_literal("  " + "=" * 64)
+
+    follow_ups = [item for item in ranked if item["tier"] == "follow_up"]
+    warms = [item for item in ranked if item["tier"] == "warm"]
+    stales = [item for item in ranked if item["tier"] == "stale"]
+
+    cli_art.print_literal(
+        f"\n  Breakdown: {len(follow_ups)} action recommended, {len(warms)} warm (0-7d), {len(stales)} stale (22d+)."
+    )
+
+    if follow_ups:
+        cli_art.print_literal("\n  [Action Recommended: 8-21 Days Waiting]")
+        for item in follow_ups:
+            cli_art.print_literal(
+                f"    • {item['domain'][:24]:<24} ({item['days_waiting']} days)  {item['subject'][:40]}"
+            )
+
+    if warms:
+        cli_art.print_literal("\n  [Warm / Recent: 0-7 Days Waiting]")
+        for item in warms:
+            cli_art.print_literal(
+                f"    • {item['domain'][:24]:<24} ({item['days_waiting']} days)  {item['subject'][:40]}"
+            )
+
+    if stales:
+        cli_art.print_literal("\n  [Stale / Likely Closed: 22+ Days Waiting]")
+        for item in stales[:5]:
+            cli_art.print_literal(
+                f"    • {item['domain'][:24]:<24} ({item['days_waiting']} days)  {item['subject'][:40]}"
+            )
+
+    candidates_to_draft = (
+        follow_ups[:draft_top_n] if follow_ups else (warms[:1] if warms else stales[:1])
+    )
+    if candidates_to_draft:
+        cli_art.print_literal("\n  " + "-" * 64)
+        cli_art.print_literal("  DRAFT FOLLOW-UP EMAILS")
+        cli_art.print_literal("  " + "-" * 64)
+        for draft_item in candidates_to_draft:
+            draft = generate_follow_up_draft(draft_item, candidate_name=candidate_name)
+            cli_art.print_literal(f"\n  To: {draft['to'] or draft['domain']}")
+            cli_art.print_literal(f"  Subject: {draft['subject']}")
+            cli_art.print_literal("  Body:")
+            for line in draft["body"].split("\n"):
+                cli_art.print_literal(f"    {line}")
+            cli_art.print_literal("  " + "-" * 64)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -1155,6 +1326,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--sent",
         action="store_true",
         help="also analyse sent mail (applications, follow-ups, and which got no reply)",
+    )
+    parser.add_argument(
+        "--chase",
+        action="store_true",
+        help="display aged chase list with drafted follow-up emails for unanswered applications",
     )
     parser.add_argument(
         "--match",
@@ -1187,11 +1363,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.match or args.apply:
         _render_matches(results, apply_changes=args.apply)
 
-    if args.sent:
+    if args.sent or args.chase:
         _render_sent(results, days=args.days, profile=None)
-    cli_art.print_literal(
-        "\n  This is a read-only report -- no application statuses were changed.\n"
-    )
+
+    if args.chase:
+        password = _get_password()
+        if password:
+            sent = scan_sent_mail(
+                days=args.days,
+                user=os.environ.get("GMAIL_USER"),
+                password=password,
+                limit=args.limit,
+            )
+            silent = applications_without_replies(sent, results)
+            _render_chase_list(silent)
+
+    if not args.apply:
+        cli_art.print_literal(
+            "\n  This is a read-only report -- no application statuses were changed.\n"
+        )
     return 0
 
 
