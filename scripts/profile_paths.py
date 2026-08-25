@@ -435,7 +435,7 @@ def profile_yaml(profile: str = None) -> dict:
 
 
 def full_name(profile: str = None) -> str:
-    """Reads candidate.full_name from profile.yml (e.g. "Morgan Escott")."""
+    """Reads candidate.full_name from profile.yml (e.g. "Alex Mercer")."""
     return (profile_yaml(profile).get("candidate") or {}).get("full_name", "")
 
 

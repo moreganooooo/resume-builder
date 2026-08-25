@@ -1369,11 +1369,11 @@ def _build_output_stem(jd_path: str) -> str:
     """Returns '<CandidateName>[_Title][_Company]' for resume/cover-letter
     output filenames, with the candidate name prefix derived from the
     active profile's profile.yml (candidate.full_name, spaces stripped --
-    e.g. "Morgan Escott" -> "MorganEscott"). Role title and company
+    e.g. "Alex Mercer" -> "AlexMercer"). Role title and company
     segments are each included only when known -- omitted entirely (not a
     placeholder like "Unknown") when missing, since a filename with a
     placeholder in it would always need fixing before sending, whereas
-    e.g. "MorganEscott_CampaignManager_Resume" is still sendable as-is."""
+    e.g. "AlexMercer_CampaignManager_Resume" is still sendable as-is."""
     job_title, company_name = jd_manager.extract_job_meta(jd_path)
     parts = [profile_paths.full_name().replace(" ", "")]
     if job_title:
