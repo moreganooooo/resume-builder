@@ -812,3 +812,72 @@ class TestSweepCheckpoint(unittest.TestCase):
             liveness.profile_paths, "checkpoints_dir", return_value="/nonexistent/x"
         ):
             liveness._save_checkpoint({"k1": {"result": "active"}})  # must not raise
+
+
+class TestVerifyCandidatesSubprocessResilience(unittest.TestCase):
+    """Verifies that _verify_candidates recovers gracefully from empty stdout
+    and non-zero exit codes when progress stream events were produced."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp_dir.cleanup)
+        self.candidate = {
+            "job_key": "k1",
+            "source_file": os.path.join(self.tmp_dir.name, "job.json"),
+            "url": "https://example.com/job/1",
+        }
+        with open(self.candidate["source_file"], "w", encoding="utf-8") as f:
+            json.dump({"job_title": "Engineer", "source_url": self.candidate["url"]}, f)
+
+    @patch("liveness.subprocess.Popen")
+    def test_recovers_when_stdout_is_empty_but_stream_has_events(self, mock_popen):
+        event = json.dumps(
+            {
+                "type": "progress",
+                "source_file": self.candidate["source_file"],
+                "result": "active",
+                "code": "apply_control_visible",
+                "reason": "apply button found",
+            }
+        )
+        mock_popen.side_effect = _mock_popen(
+            returncode=0,
+            stdout="",  # empty stdout!
+            stderr_lines=[event + "\n"],
+        )
+
+        res = liveness._verify_candidates([self.candidate])
+        self.assertFalse(res.get("error", False))
+        self.assertEqual(res["active"], 1)
+
+    @patch("liveness.subprocess.Popen")
+    def test_recovers_when_exit_code_nonzero_but_stream_has_events(self, mock_popen):
+        event = json.dumps(
+            {
+                "type": "progress",
+                "source_file": self.candidate["source_file"],
+                "result": "expired",
+                "code": "http_gone",
+                "reason": "404",
+            }
+        )
+        mock_popen.side_effect = _mock_popen(
+            returncode=1,  # process crashed or failed at the very end
+            stdout="",
+            stderr_lines=[event + "\n"],
+        )
+
+        res = liveness._verify_candidates([self.candidate])
+        self.assertFalse(res.get("error", False))
+        self.assertEqual(res["expired"], 1)
+
+    @patch("liveness.subprocess.Popen")
+    def test_fails_closed_when_exit_code_nonzero_and_stream_empty(self, mock_popen):
+        mock_popen.side_effect = _mock_popen(
+            returncode=1,
+            stdout="",
+            stderr_lines=[],
+        )
+
+        res = liveness._verify_candidates([self.candidate])
+        self.assertTrue(res.get("error"))

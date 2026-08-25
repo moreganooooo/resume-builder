@@ -582,27 +582,19 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                         pass
                 proc.wait()
 
-        if proc.returncode != 0:
-            cli_art.console.print(
-                f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).",
-                soft_wrap=True,
-            )
-            return {
-                "active": 0,
-                "likely_active": 0,
-                "expired": 0,
-                "blocked": 0,
-                "uncertain": 0,
-                "moved": 0,
-                "expired_source_paths": [],
-                "error": True,
-            }
+        results = []
+        stdout_data = ""
+        if os.path.exists(output_path):
+            with open(output_path, "r", encoding="utf-8") as f:
+                stdout_data = f.read()
+            try:
+                parsed = json.loads(stdout_data)
+                if isinstance(parsed, list):
+                    results = parsed
+            except json.JSONDecodeError:
+                results = []
 
-        with open(output_path, "r", encoding="utf-8") as f:
-            stdout_data = f.read()
-        try:
-            results = json.loads(stdout_data)
-        except json.JSONDecodeError:
+        if not results:
             # The child prints one final JSON blob after the browser
             # closes. When that blob is missing or truncated, every
             # verdict is STILL known -- each was streamed as a progress
@@ -621,6 +613,21 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "progress stream.",
                     soft_wrap=True,
                 )
+            elif proc.returncode != 0:
+                cli_art.console.print(
+                    f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).",
+                    soft_wrap=True,
+                )
+                return {
+                    "active": 0,
+                    "likely_active": 0,
+                    "expired": 0,
+                    "blocked": 0,
+                    "uncertain": 0,
+                    "moved": 0,
+                    "expired_source_paths": [],
+                    "error": True,
+                }
             else:
                 cli_art.console.print(
                     f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}",
@@ -636,6 +643,11 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "expired_source_paths": [],
                     "error": True,
                 }
+        elif proc.returncode != 0:
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('warning')}  Liveness check exited with code {proc.returncode}, but successfully parsed {len(results)} result(s).",
+                soft_wrap=True,
+            )
     finally:
         for path in (input_path, output_path):
             if os.path.exists(path):
