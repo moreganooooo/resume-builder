@@ -53,6 +53,17 @@ import theme
 import dashboard as dashboard_module
 
 
+def _display_main_banner(reveal: bool = True) -> None:
+    """Renders main banner with explicit dependency injection for role counts,
+    preventing circular/lazy imports at runtime."""
+    cli_art.display_main_banner(
+        reveal=reveal,
+        active_roles_fn=picker.count_active_roles,
+        completed_resumes_fn=jd_manager.count_completed_resumes,
+        unevaluated_roles_fn=picker.count_unevaluated_roles,
+    )
+
+
 def _icon_title(icon_name: str, label: str) -> list:
     """Build a questionary Choice title as [icon_tuple, text_tuple] so the
     icon renders in its theme color via prompt_toolkit's native styling."""
@@ -343,7 +354,7 @@ def _run_leaf_submenu(prompt: str, build_choices, session_stats: dict) -> None:
         if use_alt:
             sys.stdout.write("\x1b[2J\x1b[H")
             sys.stdout.flush()
-            cli_art.display_main_banner(reveal=False)
+            _display_main_banner(reveal=False)
             cli_art.display_footer_commands()
 
         choice = cli_art.select(prompt, choices=build_choices())
@@ -370,7 +381,7 @@ def _handle_build_documents(session_stats: dict) -> None:
         if _should_use_alt_screen():
             sys.stdout.write("\x1b[2J\x1b[H")
             sys.stdout.flush()
-            cli_art.display_main_banner(reveal=False)
+            _display_main_banner(reveal=False)
             cli_art.display_footer_commands()
 
         choice = cli_art.select(
@@ -2898,7 +2909,7 @@ def run_interactive_menu() -> None:
     ctx = _alternate_screen() if use_alt else contextlib.nullcontext()
 
     with ctx:
-        cli_art.display_main_banner()
+        _display_main_banner()
         if not _confirm_active_profile():
             # Ctrl-C/Esc at the profile gate -- exit now, same as Ctrl-C on the
             # main menu's own select() below, rather than falling through into
@@ -2920,7 +2931,7 @@ def run_interactive_menu() -> None:
             # disappear under, not a second intro.
             sys.stdout.write("\x1b[2J\x1b[H")
             sys.stdout.flush()
-            cli_art.display_main_banner(reveal=False)
+            _display_main_banner(reveal=False)
         _confirm_icon_set()
         _prompt_for_update()
         cli_art.display_tip()
@@ -2934,7 +2945,7 @@ def run_interactive_menu() -> None:
                 sys.stdout.write("\x1b[2J\x1b[H")
                 sys.stdout.flush()
                 # Draw main banner instantly (reveal=False)
-                cli_art.display_main_banner(reveal=False)
+                _display_main_banner(reveal=False)
             elif first_loop:
                 first_loop = False
             else:
