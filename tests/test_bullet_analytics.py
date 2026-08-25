@@ -19,20 +19,24 @@ class TestBulletAnalytics(unittest.TestCase):
         self.db_path = os.path.join(self.tmp_dir.name, "data.db")
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE jobs (
                 id INTEGER PRIMARY KEY,
                 title TEXT,
                 description TEXT
             )
-            """)
-        cursor.execute("""
+            """
+        )
+        cursor.execute(
+            """
             CREATE TABLE applications (
                 id INTEGER PRIMARY KEY,
                 job_id INTEGER,
                 status TEXT
             )
-            """)
+            """
+        )
         cursor.execute(
             "INSERT INTO jobs (id, title, description) VALUES (1, 'Lead Python Engineer', 'Build cloud infra and APIs')"
         )

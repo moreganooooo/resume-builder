@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/screens"
@@ -31,7 +32,14 @@ func main() {
 	}
 	jm := screens.NewJobsModel(t, jobRows, 120, 40)
 
-	tmpFile := "/tmp/sample_report.md"
+	mdFile, err := os.CreateTemp("", "sample_report_*.md")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create sample report file: %v\n", err)
+		os.Exit(1)
+	}
+	tmpFile := mdFile.Name()
+	mdFile.Close()
+	defer os.Remove(tmpFile)
 	md := strings.Join([]string{
 		"# Engineering Manager Report",
 		"",
@@ -57,6 +65,9 @@ func main() {
 
 	vm := screens.NewViewerModel(t, tmpFile, "Acme Corp — Engineering Manager", 120, 40)
 
+	progressMetrics := data.ComputeProgressMetrics(apps)
+	progressModel := screens.NewProgressModel(t, progressMetrics, 120, 40)
+
 	out, err := os.CreateTemp("", "dashboard_render_*.txt")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create render output file: %v\n", err)
@@ -66,6 +77,8 @@ func main() {
 
 	fmt.Fprintln(out, "=== PIPELINE ===")
 	_, _ = out.WriteString(pm.View())
+	_, _ = out.WriteString("\n\n=== PROGRESS ===\n")
+	_, _ = out.WriteString(progressModel.View())
 	_, _ = out.WriteString("\n\n=== JOBS ===\n")
 	_, _ = out.WriteString(jm.View())
 	_, _ = out.WriteString("\n\n=== VIEWER ===\n")

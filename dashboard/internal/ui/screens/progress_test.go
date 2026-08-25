@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -88,4 +89,58 @@ func TestProgressModel_Update_KeyPressMsg(t *testing.T) {
 	if !updatedHelp.showHelp {
 		t.Errorf("expected showHelp=true after '?'")
 	}
+}
+
+func TestProgressModel_View_RendersAnalyticsSections(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+	metrics := model.ProgressMetrics{
+		FunnelStages: []model.FunnelStage{
+			{Label: "Discovered", Count: 100, Pct: 100},
+			{Label: "Applied", Count: 40, Pct: 40},
+		},
+		PlatformStats: []model.PlatformStat{
+			{Platform: "Greenhouse", TotalRoles: 15, EvaluatedRoles: 12, AvgScore: 4.25},
+			{Platform: "LinkedIn", TotalRoles: 8, EvaluatedRoles: 5, AvgScore: 3.80},
+		},
+		CompanyStats: []model.CompanyStat{
+			{Company: "CyberCoders", TotalRoles: 6, EvaluatedRoles: 5, AvgScore: 3.65, IsAgency: true},
+			{Company: "Stripe", TotalRoles: 3, EvaluatedRoles: 3, AvgScore: 4.80, IsAgency: false},
+		},
+		Quadrants: model.QuadrantCounts{
+			ReadyToApply:        5,
+			HighFitLowCoverage:  3,
+			OverCoveredLowerFit: 2,
+			Deprioritized:       4,
+		},
+		HighFitLowCoverageRoles: []model.HighFitLowCoverageRole{
+			{Title: "Lead Architect", Company: "Stripe", Score: 4.8, Coverage: 55.0},
+		},
+	}
+
+	m := NewProgressModel(th, metrics, 100, 40)
+	view := m.View()
+
+	if view == "" {
+		t.Fatalf("expected non-empty View output")
+	}
+
+	for _, expectedHeader := range []string{
+		"Source-Platform Yield & Quality",
+		"Top Employers & Staffing Detection",
+		"Score vs. Bullet Coverage (High-ROI Gap Radar)",
+		"Greenhouse",
+		"CyberCoders",
+		"[AGENCY]",
+		"[DIRECT]",
+		"Write Bullets For (High Fit, Low Coverage):",
+		"Lead Architect",
+	} {
+		if !containsSubstring(view, expectedHeader) {
+			t.Errorf("expected View() to contain %q", expectedHeader)
+		}
+	}
+}
+
+func containsSubstring(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
