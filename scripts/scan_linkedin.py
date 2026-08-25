@@ -7,12 +7,8 @@ Differences from the original:
   bridge -- this returns a list of job dicts in the same shape
   jd_manager.py already expects from a JD file, for scan.py to dedupe and
   write straight into jds/.
-- The li_at session cookie is no longer read from a static .env value.
-  Morgan's cookie goes stale in a way that made manual copy-paste the only
-  workflow that worked for her, so this reads it live from her actual,
-  already-logged-in Chrome via browser_cookie3 on every call instead --
-  automates the exact manual step she was doing, no cookie ever stored on
-  disk.
+- The li_at session cookie is authenticated securely via Playwright visual login
+  or manually entered, and validated live before use.
 """
 
 import logging
@@ -20,7 +16,6 @@ import os
 import re
 import time
 
-import browser_cookie3
 import cli_art
 import profile_paths
 import requests
@@ -107,11 +102,11 @@ def get_li_at_cookie() -> str:
 
     cli_art.console.print()
     cli_art.console.print(
-        f"[{theme.BRAND}]✦  LINKEDIN COOKIE EXTRACTION  ✦[/{theme.BRAND}]"
+        f"[{theme.BRAND}]✦  LINKEDIN AUTHENTICATION  ✦[/{theme.BRAND}]"
     )
     cli_art.console.print(
-        "To fetch deep details (like applicant stats and full descriptions), we need an active LinkedIn session.\n"
-        "We can extract it from Chrome, manually paste it, or use Playwright to launch a secure visual login window."
+        "To fetch deep details (like applicant stats and full descriptions), an active LinkedIn session is required.\n"
+        "You can log in securely via a visual browser window (recommended) or paste an active 'li_at' cookie manually."
     )
     cli_art.console.print()
 
@@ -120,7 +115,6 @@ def get_li_at_cookie() -> str:
             "How would you like to provide your LinkedIn cookie?",
             choices=[
                 "(Recommended) Log in securely via a visual browser window (automatic capture)",
-                "Extract automatically from Google Chrome (triggers macOS Keychain prompt)",
                 "Paste 'li_at' cookie value (or a Chrome DevTools curl command) manually",
             ],
             style=cli_art.QUESTIONARY_STYLE,
@@ -153,17 +147,6 @@ def get_li_at_cookie() -> str:
             if match:
                 cookie_val = match.group(1)
                 cli_art.cli_info("Extracted 'li_at' cookie from your pasted inputs!")
-
-    elif "Extract automatically from Google Chrome" in choice:
-        try:
-            cookie_jar = browser_cookie3.chrome(domain_name="linkedin.com")
-            for cookie in cookie_jar:
-                if cookie.name == "li_at":
-                    cookie_val = cookie.value
-                    break
-        except Exception as e:
-            cli_art.cli_error(f"Could not read Chrome's cookie store: {e}")
-            return ""
 
     elif "visual browser window" in choice:
         cli_art.console.print()
