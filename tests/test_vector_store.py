@@ -211,5 +211,66 @@ class TestSearchBulletBankHappyPath(unittest.TestCase):
             self.assertEqual(tag, "")
 
 
+class TestNeedsReembedAndReembed(unittest.TestCase):
+    def test_needs_reembed_when_no_csv(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                stale, reason = vector_store.needs_reembed()
+                self.assertFalse(stale)
+                self.assertIn("No bullet bank CSV found", reason)
+
+    def test_needs_reembed_when_no_npy(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
+            with open(csv_path, "w", encoding="utf-8") as f:
+                f.write("Bullet Point\nBullet 1\n")
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                stale, reason = vector_store.needs_reembed()
+                self.assertTrue(stale)
+                self.assertIn("missing", reason)
+
+    def test_needs_reembed_when_row_counts_differ(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
+            npy_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.npy")
+            with open(csv_path, "w", encoding="utf-8") as f:
+                f.write("Bullet Point\nBullet 1\nBullet 2\n")
+            np.save(npy_path, np.zeros((1, 4)))
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                stale, reason = vector_store.needs_reembed()
+                self.assertTrue(stale)
+                self.assertIn("Row count mismatch", reason)
+
+    def test_needs_reembed_when_up_to_date(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
+            npy_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.npy")
+            meta_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.meta")
+            with open(csv_path, "w", encoding="utf-8") as f:
+                f.write("Bullet Point\nBullet 1\n")
+            np.save(npy_path, np.zeros((1, 4)))
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({"bullets_sha": vector_store.bullets_sha(["Bullet 1"])}, f)
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                stale, reason = vector_store.needs_reembed()
+                self.assertFalse(stale)
+                self.assertIn("up to date", reason)
+
+    def test_reembed_async_spawns_thread(self):
+        with patch("embed_bullet_bank.main") as mock_main:
+            thread = vector_store.reembed(blocking=False)
+            self.assertIsNotNone(thread)
+            thread.join(timeout=2.0)
+            mock_main.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
