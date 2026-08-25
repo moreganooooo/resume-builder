@@ -12,10 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # MUST run before any import below: cli_art -> jd_manager resolves
 # JDS_DIR = profile_paths.jds_dir() at module level, so an unresolvable
 # RESUME_PROFILE would otherwise abort this process with a raw traceback
-# before Click, the profile gate, or `resume doctor` ever get to run.
-import profile_paths as _profile_paths_preflight  # noqa: E402
+import profile_paths  # noqa: E402
 
-if __name__ == "__main__" and not _profile_paths_preflight.preflight_profile():
+if __name__ == "__main__" and not profile_paths.preflight_profile():
     sys.exit(2)
 
 import batch_evaluate
@@ -36,7 +35,6 @@ import menu
 import orchestrator
 import picker
 import polish as polish_module
-import profile_paths
 import scan as scan_module
 import theme
 
