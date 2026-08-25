@@ -358,6 +358,101 @@ class TestDbSchema(unittest.TestCase):
         self.assertEqual(meta["_location_enrichment"]["status"], "resolved")
         self.assertEqual(meta["_location_enrichment"]["resolved_zip"], "62702")
 
+    def test_log_application_status_and_query(self):
+        conn = db.get_db("isolated")
+        # Pre-seed a job
+        db.upsert_job(
+            {
+                "id": "job_123",
+                "title": "Backend Lead",
+                "company": "Stripe",
+                "status": "pending",
+                "jd_text": "text",
+            },
+            conn=conn,
+        )
+
+        # Log an application status change
+        log_id = db.log_application_status(
+            job_id="job_123",
+            company="Stripe",
+            role="Backend Lead",
+            status="Interview",
+            notes="Recruiter screen scheduled",
+            conn=conn,
+        )
+        self.assertGreater(log_id, 0)
+
+        # Verify application_log entry
+        logs = db.get_application_logs(job_id="job_123", conn=conn)
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0]["company"], "Stripe")
+        self.assertEqual(logs[0]["role"], "Backend Lead")
+        self.assertEqual(logs[0]["status"], "Interview")
+        self.assertEqual(logs[0]["notes"], "Recruiter screen scheduled")
+
+        # Verify job status updated in jobs table
+        job_rows = db.get_jobs_by_status("applied", conn=conn)
+        conn.close()
+        self.assertEqual(len(job_rows), 1)
+        self.assertEqual(job_rows[0]["id"], "job_123")
+
+    def test_get_job_count_active_jobs_and_completed_resumes(self):
+        conn = db.get_db("isolated")
+        db.upsert_job(
+            {
+                "id": "j_pend",
+                "title": "Dev",
+                "company": "Co A",
+                "status": "pending",
+                "jd_text": "t",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "j_eval",
+                "title": "Lead",
+                "company": "Co B",
+                "status": "evaluating",
+                "jd_text": "t",
+            },
+            conn=conn,
+        )
+        db.upsert_job(
+            {
+                "id": "j_comp",
+                "title": "Staff",
+                "company": "Co C",
+                "status": "completed",
+                "jd_text": "t",
+            },
+            conn=conn,
+        )
+        self.assertEqual(db.get_job_count(conn=conn), 3)
+        self.assertEqual(db.get_job_count("pending", conn=conn), 1)
+        self.assertEqual(db.get_job_count("completed", conn=conn), 1)
+
+        active = db.get_active_jobs(conn=conn)
+        self.assertEqual(len(active), 2)
+        active_ids = {a["id"] for a in active}
+        self.assertEqual(active_ids, {"j_pend", "j_eval"})
+
+        comp_count = db.get_completed_resumes_count(conn=conn)
+        self.assertEqual(comp_count, 1)
+
+        # Divergent sets: add application_log entry with distinct job_id
+        db.log_application_status(
+            job_id="j_app_distinct",
+            company="Co D",
+            role="Principal",
+            status="Applied",
+            conn=conn,
+        )
+        # Should now be 2 distinct jobs completed (1 from jobs table + 1 from application_log)
+        self.assertEqual(db.get_completed_resumes_count(conn=conn), 2)
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()

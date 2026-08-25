@@ -105,7 +105,8 @@ def init_db(conn: sqlite3.Connection | str) -> None:
         return
 
     with conn:
-        conn.executescript("""
+        conn.executescript(
+            """
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -180,7 +181,8 @@ def init_db(conn: sqlite3.Connection | str) -> None:
             CREATE INDEX IF NOT EXISTS idx_bullet_audit_status ON bullet_bank(audit_status);
             CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
             CREATE INDEX IF NOT EXISTS idx_verification_job ON verification_audit_log(job_id);
-        """)
+        """
+        )
 
         # Dynamic schema migrations for new columns
         existing_cols = {
@@ -198,6 +200,24 @@ def init_db(conn: sqlite3.Connection | str) -> None:
                 "ALTER TABLE jobs ADD COLUMN ghost_probability REAL DEFAULT 0.0;"
             )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_dedup ON jobs(dedup_hash);")
+
+        # Dynamic schema migrations for application_log
+        existing_app_cols = {
+            row["name"] if isinstance(row, sqlite3.Row) else row[1]
+            for row in conn.execute("PRAGMA table_info(application_log)").fetchall()
+        }
+        if "responded_at" not in existing_app_cols:
+            conn.execute(
+                "ALTER TABLE application_log ADD COLUMN responded_at TIMESTAMP;"
+            )
+        if "notes" not in existing_app_cols:
+            conn.execute("ALTER TABLE application_log ADD COLUMN notes TEXT;")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_log_job ON application_log(job_id);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_app_log_status ON application_log(status);"
+        )
 
 
 def upsert_job(
@@ -376,6 +396,76 @@ def get_jobs_by_status(
             conn.close()
 
 
+def get_job_count(
+    status: Optional[str] = None,
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> int:
+    """Returns total job count from SQLite, optionally filtered by status."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        if status:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE status = ?", (status,)
+            )
+        else:
+            cursor = conn.execute("SELECT COUNT(*) FROM jobs")
+        return cursor.fetchone()[0]
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_active_jobs(
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> List[Dict[str, Any]]:
+    """Returns all active jobs ('pending' or 'evaluating') from SQLite."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM jobs WHERE status IN ('pending', 'evaluating') ORDER BY created_at DESC"
+        )
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_completed_resumes_count(
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> int:
+    """Returns all-time count of completed resumes from SQLite by computing the
+    true distinct union of job IDs across application_log and jobs tables."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        cursor = conn.execute(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT job_id AS id FROM application_log WHERE job_id IS NOT NULL AND job_id != ''
+                UNION
+                SELECT id FROM jobs WHERE status IN ('completed', 'applied', 'interview', 'offer', 'responded')
+            )
+            """
+        )
+        row = cursor.fetchone()
+        return row[0] if row else 0
+    finally:
+        if close_conn:
+            conn.close()
+
+
 def update_job_status(
     job_id: str,
     new_status: str,
@@ -513,6 +603,115 @@ def upsert_contact(
                 ),
             )
             return contact_id
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def log_application_status(
+    job_id: Optional[str],
+    company: str,
+    role: str,
+    status: str,
+    applied_at: Optional[str] = None,
+    responded_at: Optional[str] = None,
+    notes: Optional[str] = None,
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> int:
+    """Inserts an event into application_log and updates jobs table status.
+
+    Returns the inserted application_log record ID.
+    """
+    if conn is None and _is_unisolated_test_write(profile):
+        return 0
+
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        with conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO application_log (job_id, company, role, status, applied_at, responded_at, notes)
+                VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
+                """,
+                (
+                    job_id,
+                    company,
+                    role,
+                    status,
+                    applied_at,
+                    responded_at,
+                    notes,
+                ),
+            )
+            log_id = cursor.lastrowid
+            if job_id:
+                # Update status in jobs table if the job exists
+                normalized_status = status.lower()
+                if normalized_status in (
+                    "applied",
+                    "responded",
+                    "interview",
+                    "offer",
+                    "rejected",
+                    "withdrawn",
+                ):
+                    db_status = (
+                        "applied"
+                        if normalized_status
+                        in ("applied", "responded", "interview", "offer")
+                        else (
+                            "archived"
+                            if normalized_status in ("rejected", "withdrawn")
+                            else normalized_status
+                        )
+                    )
+                    conn.execute(
+                        """
+                        UPDATE jobs
+                        SET status = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (db_status, job_id),
+                    )
+            return log_id
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def get_application_logs(
+    profile: Optional[str] = None,
+    job_id: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: Optional[int] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> List[Dict[str, Any]]:
+    """Retrieves application log history."""
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+    try:
+        query = "SELECT * FROM application_log"
+        params = []
+        clauses = []
+        if job_id:
+            clauses.append("job_id = ?")
+            params.append(job_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY id DESC"
+        if limit and limit > 0:
+            query += f" LIMIT {int(limit)}"
+        cursor = conn.execute(query, tuple(params))
+        return [dict(row) for row in cursor.fetchall()]
     finally:
         if close_conn:
             conn.close()
