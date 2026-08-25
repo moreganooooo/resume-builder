@@ -30,14 +30,12 @@ def fetch_evaluation_outcomes(
     cursor = conn.cursor()
 
     try:
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT j.id, j.score, j.title, j.company, a.status, a.applied_date
             FROM jobs j
             LEFT JOIN applications a ON j.id = a.job_id
             WHERE j.score IS NOT NULL
-            """
-        )
+            """)
         rows = [dict(r) for r in cursor.fetchall()]
     except Exception:
         rows = []

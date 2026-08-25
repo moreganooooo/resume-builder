@@ -105,8 +105,7 @@ def init_db(conn: sqlite3.Connection | str) -> None:
         return
 
     with conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -181,8 +180,7 @@ def init_db(conn: sqlite3.Connection | str) -> None:
             CREATE INDEX IF NOT EXISTS idx_bullet_audit_status ON bullet_bank(audit_status);
             CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company);
             CREATE INDEX IF NOT EXISTS idx_verification_job ON verification_audit_log(job_id);
-        """
-        )
+        """)
 
         # Dynamic schema migrations for new columns
         existing_cols = {
@@ -450,15 +448,13 @@ def get_completed_resumes_count(
         conn = get_db(profile)
         close_conn = True
     try:
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT COUNT(*) FROM (
                 SELECT job_id AS id FROM application_log WHERE job_id IS NOT NULL AND job_id != ''
                 UNION
                 SELECT id FROM jobs WHERE status IN ('completed', 'applied', 'interview', 'offer', 'responded')
             )
-            """
-        )
+            """)
         row = cursor.fetchone()
         return row[0] if row else 0
     finally:

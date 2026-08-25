@@ -109,12 +109,10 @@ def compute_source_platform_breakdown(
     """
     c, should_close = _get_active_conn(profile, conn)
     try:
-        rows = c.execute(
-            """
+        rows = c.execute("""
             SELECT id, title, company, status, capability_score, recruiter_score, final_score, metadata_json
             FROM jobs
-            """
-        ).fetchall()
+            """).fetchall()
 
         if not rows:
             return []
@@ -223,12 +221,10 @@ def compute_company_concentration(
     """
     c, should_close = _get_active_conn(profile, conn)
     try:
-        rows = c.execute(
-            """
+        rows = c.execute("""
             SELECT id, title, company, status, capability_score, recruiter_score, final_score, metadata_json
             FROM jobs
-            """
-        ).fetchall()
+            """).fetchall()
 
         if not rows:
             return []
@@ -309,12 +305,10 @@ def compute_score_vs_coverage_scatter(
     """
     c, should_close = _get_active_conn(profile, conn)
     try:
-        rows = c.execute(
-            """
+        rows = c.execute("""
             SELECT id, title, company, status, final_score, metadata_json
             FROM jobs
-            """
-        ).fetchall()
+            """).fetchall()
 
         points = []
         quadrants: Dict[str, List[Dict[str, Any]]] = {
@@ -406,14 +400,12 @@ def compute_bullet_bank_heatmap(
     c, should_close = _get_active_conn(profile, conn)
     try:
         # 1. Bullet bank category counts from DB
-        bb_rows = c.execute(
-            """
+        bb_rows = c.execute("""
             SELECT category, COUNT(*) as count
             FROM bullet_bank
             WHERE audit_status = 'CLEAN'
             GROUP BY category
-            """
-        ).fetchall()
+            """).fetchall()
 
         bullet_counts: Dict[str, int] = defaultdict(int)
         for r in bb_rows:
@@ -445,13 +437,11 @@ def compute_bullet_bank_heatmap(
             bullet_counts["Uncategorized"] = sum(r["count"] for r in bb_rows)
 
         # 2. Extract job demand across high-scoring jobs
-        job_rows = c.execute(
-            """
+        job_rows = c.execute("""
             SELECT id, title, final_score, metadata_json
             FROM jobs
             WHERE final_score >= 3.5 OR final_score IS NULL
-            """
-        ).fetchall()
+            """).fetchall()
 
         demand_counts: Dict[str, int] = defaultdict(int)
         tag_patterns = {
