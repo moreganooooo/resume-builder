@@ -412,6 +412,10 @@ class TestRunPromptDirectly(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform != "win32", "pty is POSIX-only")
 @unittest.skipUnless(charm_prompt._go_available(), "requires the go toolchain")
+@unittest.skipIf(
+    os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"),
+    "PTY real-binary test skipped in headless CI",
+)
 class TestRealBinaryOverAPty(unittest.TestCase):
     """Every test above mocks subprocess.run -- proves the JSON *contract*
     (given this stdout/stderr, _run_prompt returns that), never that the
