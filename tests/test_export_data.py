@@ -13,8 +13,7 @@ class TestExportData(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.temp_dir.name, "test.db")
         self.conn = sqlite3.connect(self.db_path)
-        self.conn.execute(
-            """
+        self.conn.execute("""
             CREATE TABLE jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
@@ -23,8 +22,7 @@ class TestExportData(unittest.TestCase):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         self.conn.execute(
             "INSERT INTO jobs (title, company, status) VALUES (?, ?, ?)",
             ("Staff Engineer", "Acme", "evaluated"),
