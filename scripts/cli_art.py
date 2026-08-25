@@ -2422,3 +2422,187 @@ def render_sparkle_celebration(
     console.print()
     console.print(panel)
     console.print()
+
+
+def render_analytics_report(
+    platform_stats: list[dict] = None,
+    company_stats: list[dict] = None,
+    scatter_stats: dict = None,
+    heatmap_stats: dict = None,
+) -> None:
+    """Renders comprehensive pipeline analytics covering source platforms,
+
+    company concentration, score-vs-coverage scatter, and bullet heatmap.
+    """
+    display_banner("Pipeline Intelligence & Market Analytics")
+
+    # 1. Source Platform Breakdown
+    if platform_stats:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Source-Platform Yield & Quality[/bold {theme.BRAND}]"
+        )
+        plat_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        plat_table.add_column("Platform", style="bold", ratio=2)
+        plat_table.add_column("Total Roles", justify="right", ratio=1)
+        plat_table.add_column("Evaluated", justify="right", ratio=1)
+        plat_table.add_column("Avg Score", justify="right", ratio=1)
+        plat_table.add_column(
+            "Bands (4.5+ / 4.0+ / 3.5+ / <3.5)", justify="center", ratio=3
+        )
+        plat_table.add_column("Top Role Match", ratio=4)
+
+        for p in platform_stats:
+            score_color = (
+                theme.SUCCESS
+                if p["avg_score"] >= 4.0
+                else theme.WARNING if p["avg_score"] >= 3.5 else theme.MUTED
+            )
+            bands = p["bands"]
+            band_str = (
+                f"[{theme.SUCCESS}]{bands['tier_4_5_plus']}[/{theme.SUCCESS}] · "
+                f"[{theme.INFO}]{bands['tier_4_0_to_4_4']}[/{theme.INFO}] · "
+                f"[{theme.WARNING}]{bands['tier_3_5_to_3_9']}[/{theme.WARNING}] · "
+                f"[{theme.MUTED}]{bands['tier_sub_3_5']}[/{theme.MUTED}]"
+            )
+            top = "-"
+            if p.get("top_role"):
+                top = f"{p['top_role']['title']} @ {p['top_role']['company']} ({p['top_role']['score']:.1f})"
+
+            plat_table.add_row(
+                p["platform"],
+                str(p["total_roles"]),
+                str(p["evaluated_roles"]),
+                (
+                    f"[{score_color}]{p['avg_score']:.2f}[/{score_color}]"
+                    if p["avg_score"] > 0
+                    else "[dim]-[/dim]"
+                ),
+                band_str,
+                _escape_markup(top),
+            )
+        console.print(plat_table)
+
+    # 2. Company Concentration & Agency Detector
+    if company_stats:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Company Concentration & Agency Intelligence[/bold {theme.BRAND}]"
+        )
+        comp_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        comp_table.add_column("Employer / Organization", style="bold", ratio=3)
+        comp_table.add_column("Type", justify="center", ratio=2)
+        comp_table.add_column("Roles", justify="right", ratio=1)
+        comp_table.add_column("Evaluated", justify="right", ratio=1)
+        comp_table.add_column("Avg Score", justify="right", ratio=1)
+        comp_table.add_column("Sample Roles", ratio=4)
+
+        for c in company_stats:
+            score_color = (
+                theme.SUCCESS
+                if c["avg_score"] >= 4.0
+                else theme.WARNING if c["avg_score"] >= 3.5 else theme.MUTED
+            )
+            type_badge = (
+                f"[{theme.WARNING}]Agency / Staffing[/{theme.WARNING}]"
+                if c["is_agency"]
+                else f"[{theme.INFO}]Direct Employer[/{theme.INFO}]"
+            )
+            roles_sample = ", ".join(c.get("roles", [])[:3])
+            if len(c.get("roles", [])) > 3:
+                roles_sample += f" (+{len(c['roles']) - 3} more)"
+
+            comp_table.add_row(
+                _escape_markup(c["company"]),
+                type_badge,
+                str(c["total_roles"]),
+                str(c["evaluated_roles"]),
+                (
+                    f"[{score_color}]{c['avg_score']:.2f}[/{score_color}]"
+                    if c["avg_score"] > 0
+                    else "[dim]-[/dim]"
+                ),
+                _escape_markup(roles_sample),
+            )
+        console.print(comp_table)
+
+    # 3. Score vs Coverage Scatter (High-ROI Bullet Gaps)
+    if scatter_stats and scatter_stats.get("total_points", 0) > 0:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Score vs. Bullet Coverage (High-ROI Gap Radar)[/bold {theme.BRAND}]"
+        )
+        quads = scatter_stats.get("quadrants", {})
+        q1 = quads.get("high_score_low_coverage", [])
+        q2 = quads.get("high_score_high_coverage", [])
+        q3 = quads.get("low_score_high_coverage", [])
+        q4 = quads.get("low_score_low_coverage", [])
+
+        summary_text = Text()
+        summary_text.append(
+            f"• Ready to Apply (Fit ≥ 4.0, Coverage ≥ 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q2)} roles\n", style=theme.SUCCESS)
+        summary_text.append(
+            f"• High-ROI Bullet Gaps (Fit ≥ 4.0, Coverage < 70%): ", style="bold"
+        )
+        summary_text.append(
+            f"{len(q1)} roles (Write bullets for these!)\n", style=theme.WARNING
+        )
+        summary_text.append(
+            f"• Over-Covered / Lower Fit (Fit < 4.0, Coverage ≥ 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q3)} roles\n", style=theme.MUTED)
+        summary_text.append(
+            f"• Deprioritized (Fit < 4.0, Coverage < 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q4)} roles\n", style=theme.MUTED)
+
+        console.print(
+            Panel(
+                summary_text,
+                title=f"[{theme.BRAND}]Quadrant Distribution ({scatter_stats['total_points']} Scored Roles)[/{theme.BRAND}]",
+                border_style=theme.BRAND,
+                box=box.ROUNDED,
+                padding=(0, 2),
+            )
+        )
+
+        if q1:
+            console.print(
+                f"\n  [bold {theme.WARNING}]Top Roles to Write Bullets For (High Fit, Low Coverage):[/bold {theme.WARNING}]"
+            )
+            for item in q1[:8]:
+                console.print(
+                    f"    • [bold]{_escape_markup(item['title'])}[/bold] @ {_escape_markup(item['company'])} "
+                    f"([green]Score: {item['score']:.1f}[/green], [yellow]Coverage: {item['coverage']:.0f}%[/yellow])"
+                )
+
+    # 4. Bullet Bank Heatmap
+    if heatmap_stats and heatmap_stats.get("categories"):
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Bullet Bank Coverage vs. Market Demand[/bold {theme.BRAND}]"
+        )
+        heat_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        heat_table.add_column("Category / Skill Domain", style="bold", ratio=4)
+        heat_table.add_column("Bullets in Bank", justify="right", ratio=2)
+        heat_table.add_column("Demand in Jobs", justify="right", ratio=2)
+        heat_table.add_column("Coverage Balance", justify="center", ratio=2)
+
+        for cat in heatmap_stats["categories"][:15]:
+            status_badge = (
+                f"[{theme.SUCCESS}]✓ Surplus[/{theme.SUCCESS}]"
+                if cat["status"] == "surplus"
+                else f"[{theme.WARNING}]⚠ Deficit[/{theme.WARNING}]"
+            )
+            heat_table.add_row(
+                _escape_markup(cat["name"]),
+                str(cat["bullets_in_bank"]),
+                str(cat["job_demand_count"]),
+                status_badge,
+            )
+        console.print(heat_table)
+    console.print()
