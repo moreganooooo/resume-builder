@@ -1,0 +1,246 @@
+--- PAGE 1 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 1 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+CONSOLIDATED 23 AUG · UPDATED 24 AUG 2026
+Resume Builder BacklogEvery planned or speciﬁed piece of work that is not yet fully built — swept from
+.gemini working docs, all of docs/ (plans, specs, audits, idea lists and the review
+programme), and IDEAS.md — deduplicated against the actual code, with the
+evidence that decided each call.
+153 tracked items across 19 sources · 50 need a decision or a commit — 1 security, 28
+feature, 9 cosmetic, 9 tech debt, 1 ops run, 2 docs
+Re-veriﬁed 23 Aug — the master audit was mostly already closed
+An earlier pass of this page marked several master-audit ﬁndings open on the strength of truncated
+greps. Every one was re-checked against the source: F6, F9, F10, F11, F18 and F22 were already
+ﬁxed — including F11, the only Critical in the whole audit.
+docs/review/master_audit_document.md now carries a veriﬁed status table at the top, so it stops
+triggering re-triage.
+One ﬁnding had quietly gone live, and is now ﬁxed. F20 was ﬁled as "aspirational" because
+mobile Lite Mode didn't exist yet. requirements-lite.txt has since shipped and deliberately
+omits pandas/numpy — while orchestrator.py still imported both at module level, and every
+entry point imports it. A Lite install died on plain resume with ModuleNotFoundError before
+printing anything. Both are now lazy across four modules, with
+39OPEN
+11PARTIAL
+0STALE DOC
+93DONE
+10WON'T DO
+--- PAGE 2 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 2 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+tests/test_lite_mode_imports.py pinning it.
+Two separate F-numbering schemes still exist. The master audit's F1–F22 and the bootstrap
+remediation spec's own F1–F16 are unrelated lists. Closing one never closed the other.
+The three *unimplemented_plans.md ﬁles are not a backlog. All three carry the identical 1,525
+unchecked boxes — three views of one scrape that counted every - [ ] in the repo as unﬁnished.
+This project never ticks checkboxes, so shipped work reads as pending. They live in Gemini's own
+session state, so they're yours to delete; this page replaces them.
+24 Aug — the Charm cockpit round landed, and a review pass closed 19 ﬁndings
+Gemini's cockpit expansion (mouse interactivity, a Skills Gap Matrix, action keybindings) is now
+committed in three commits: a gofmt sweep of ﬁve ﬁles that were already unformatted at HEAD,
+the feature work with its remediations, and the coverage-scoring ﬁx. Both suites green, all gates
+clean.
+Three of the ﬁndings were features that shipped invisible. renderMissionControl() was fully
+written and never called; the scan/batch_evaluate/sweep_stale Python subcommands had
+no Go caller; and the Skills Gap Matrix raised FileNotFoundError on database-only jobs, which is
+most of them. Passing tests said nothing about any of it.
+Two ﬁndings were tests that reported success while asserting nothing. All four mouse-click tests
+wrapped their only assertion in if info != nil, so a zone that stopped registering read as a pass.
+Separately, a time.Sleep added to zone.Scan to mask a race was hiding a real one — removing it
+made the zone test fail under -race immediately.
+The Skills Gap Matrix number was measured, not assumed. Against the real 844-bullet corpus,
+the shipped (x−0.50)/0.35 rescale pinned 95% of queries at 100% and could never display
+below 63.9% — a gap matrix structurally unable to show a gap. Coverage is now a percentile rank,
+needing no hand-tuned constants. Recorded in CLAUDE.md.
+24 Aug — widened to every plan and spec, not just the ones already being tracked
+The register previously covered 14 sources. A sweep of all ~180 markdown ﬁles under docs/
+found ﬁve more that hold planned work and had never been tracked anywhere:
+DASHBOARD_IDEAS.md, the eleven planning and audit documents in docs/gemini_files/, and
+the review programme's own three plan ﬁles. They are now in, at 19 sources / 150 items.
+The biggest thing the sweep surfaced is a gate, not an item. application_log and contacts
+are both still 0 rows — conﬁrmed against the live database, not the docs. Roughly half of
+--- PAGE 3 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 3 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+DASHBOARD_IDEAS is blocked on that one unlock: email status write-back, which inbox_sync.py
+deliberately did not do yet at the time of this sweep. Everything funnel-shaped waits behind it,
+including the funnel itself, which renders today with nothing in it. Update 24 Aug: the write-back
+capability has since shipped behind an opt-in --apply flag — see the note below.
+application_log is still 0 rows because it hasn't been run against real mail yet, not because the
+mechanism is missing.
+Two entries are marked “stale doc” rather than open or done. Four UX audits in
+docs/gemini_files/ carry zero resolution markers between them, and the TUI critique carries
+one. Some of their ﬁndings have clearly been ﬁxed since — but nothing records which, so they
+cannot honestly be called either. They need one triage pass or an explicit retirement; guessing a
+status would have put ﬁction in the register.
+Research is listed as explicitly not a backlog. ~30 deep-research reports under
+morgan_research/ and FeatureResearch/ read like plans and have twice been mistaken for
+one. They are inputs to F3/F4/F5 — recorded here so the next sweep does not re-triage them.
+24 Aug — four remediation tasks landed and independently veriﬁed
+All four conﬁrmed against the actual diffs and a live test run, not the handoff notes alone. Doc
+hygiene (F19/F21) is closed — refactoring_plan.md:4-11 now carries an Audit Status Banner
+reconciling it against CORRECTIONS.md, and master_audit_document.md shows both ﬁndings
+Closed. D11's token-bucket rate limiter is real: thread-safe, 12 RPM default, wired into both
+generate() and embed() in gemini_client.py. The full suite ran clean at 2,353 tests, 100%
+passing, matching the claim exactly.
+Two of the four are progress, not closure — marked PARTIAL, not done. The cookie-scraping
+item is hardened: scan_linkedin.py's top-level import browser_cookie3 is gone and
+extraction is now lazy with real error handling pointing at the safer Playwright login — but
+browser_cookie3 is still the mechanism when a user picks it, so the roadmap item (replace with
+safe APIs) isn't actually done. The email write-back gate is the more consequential case: db.py,
+jd_manager.py and inbox_sync.py --apply genuinely ship a tested write path, correctly
+guarded by the existing _is_unisolated_test_write pattern — but application_log was still 0
+rows in the live database at veriﬁcation time, because it hasn't been run against real mail yet. Half of
+DASHBOARD_IDEAS stays gated until someone actually runs --apply.
+One soft-fail pattern worth a conscious look, not a blocker.
+jd_manager.save_application_status() wraps its DB write in a bare except Exception:
+logging.warning(...) — reasonable since the JSON ﬁle stays the source of truth and the DB is a
+secondary index, but it's the kind of degrade-instead-of-fail-closed choice this codebase usually
+avoids (contrast gemini_client's test-network guard, which raises rather than degrades).
+--- PAGE 4 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 4 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+24 Aug — a second batch, and one of its four claims doesn't hold up
+Three of four conﬁrmed clean. The context-cache token gate is a real bug ﬁx, not just a threshold
+tweak: Gemini requires ≥32,768 tokens to cache at all, and the shipped code was triggering at
+15,000 characters — well under a third of that — so every cache attempt was likely 400ing and
+silently falling back to an uncached call. Now reads GEMINI_CACHE_MIN_CHARS (default 131,072
+chars), 4 new tests. The chase-list feature (--chase) is genuinely read-only — it parses both
+RFC2822 and ISO dates with a graceful fallback (not a crash) on the unparseable ones, buckets by
+0-7/8-21/22+ day tiers with no gap or overlap, and only drafts follow-up emails — it never sends
+one or touches application status, honoring this ﬁle's documented caution about inbox_sync.py.
+The skills_menu.py cancellation guard is also real: an Esc/Ctrl+C during skill creation or editing
+now returns cleanly instead of crashing on .strip() or leaving a half-written dict in memory. It
+wasn't previously a tracked backlog item, so there's no row above for it — recorded here instead.
+Test suite: 2,361 tests, 0 failures, conﬁrmed by a direct run — the batch message quoted two
+different counts (2,353 and 2,361) in the same message; 2,361 is correct, 2,353 was stale from
+before this batch's own tests were added.
+The fourth claim — the 5 stale UX audits are "resolved" — does not hold up, and is called out
+above rather than accepted. All ﬁve got an identical 6-line banner with no per-ﬁnding detail, which
+is a stamp, not a triage. One of them, ux_ui_review.md, is now actively self-contradictory: its new
+banner claims 8 friction points "100% resolved" while the unchanged body directly below still
+describes them as live gaps. The underlying features it would need to point to do exist in the
+codebase, but neither ﬁle is part of this diff, so the claim cites nothing checkable. Left as STALE,
+unchanged from before this batch — the actual triage this entry has asked for still hasn't happened.
+24 Aug — ux_ui_review.md got the real triage this time; the other three still haven't
+Genuine improvement, independently re-veriﬁed. The blanket banner is gone; a real per-ﬁnding
+table replaced it, and the self-contradiction called out above is resolved. All 8 friction points were
+independently checked against the running code, not the doc's own claims — direct execution
+conﬁrmed the shell-trap guidance box actually ﬁres, and reading
+menu.py/bootstrap_menu.py/dashboard.py conﬁrmed the ghost-resume ingest handling, the
+Go-toolchain fallback, the Paste-JD portal, the Express-Setup auto-pilot, the dashboard binary-
+staleness cache, and the post-build PDF viewer all genuinely exist and do what's claimed. This one
+is now DONE, split out of the four-ﬁle group above.
+One caveat kept it from an unqualiﬁed pass: 3 of the 8 ﬁndings cite a test ﬁle that either doesn't
+--- PAGE 5 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 5 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+exist or doesn't actually test that behavior (test_menu_bootstrap.py is cited for two ﬁndings it
+never touches; test_bootstrap_bullet_bank.py doesn't exist — the real ﬁle is
+test_bootstrap_bullet_bank_ingestion.py), and 2 cite the wrong line range by several hundred
+lines. The resolutions are real; the citations pointing to them aren't all trustworthy on their own — a
+future reader checking this doc's evidence column will need to re-ﬁnd the actual location rather
+than trust the line number.
+The other three — final_ux_visual_polish_pass.md, ux_deep_dive_dom.md,
+persona_review.md — are untouched and still carry only the old blanket stamp. They stay
+STALE. Whatever process produced the real triage on ux_ui_review.md hasn't been applied to
+them yet.
+24 Aug — the last three UX audits got the real triage too; this thread is closed
+All four UX audit docs are now genuinely re-triaged, not stamped. ux_deep_dive_dom.md (10-
+point table), final_ux_visual_polish_pass.md (8-point), and persona_review.md (10-point)
+all replaced their blanket banner with a real per-ﬁnding table this round. Spot-checked directly
+against source rather than trusting the doc: menu.py:2881-2891's alt-screen 24-row auto-detect
+and cli_art.py:2144's gradient-text function both match their claims exactly.
+ux_ui_review.md's earlier citation caveat (wrong test ﬁles/line ranges on 5 of 8 ﬁndings) is also
+ﬁxed — new tests were added at the exact locations now cited
+(test_menu_bootstrap.py:204,236; test_menu.py:291,1813), spot-checked and conﬁrmed
+real. Veriﬁed via a direct test-suite run rather than a full independent-agent audit this time (scoped
+down deliberately — see below): 2,369 tests, 0 failures, matching the higher of two counts quoted
+in the batch message (2,365 was mid-batch and stale, same pattern as the previous round).
+Veriﬁcation method changed for this round, on purpose. Earlier batches got a full independent-
+agent re-veriﬁcation (each one ran ~150-200k tokens on its own). This round used direct spot-
+checks — reading the diff, conﬁrming 2-3 of the most load-bearing claims against actual source,
+running the test suite once directly — instead of a full fork. Usage budget is a real constraint (Pro
+plan, not unlimited), and doc-hygiene work like this doesn't carry the same stakes as a security or
+data-loss ﬁx; a full independent audit is being reserved for changes where being wrong is expensive.
+24 Aug — the security and data-loss items from the priority list actually landed
+Cookie scraping is genuinely replaced now, not just hardened. The earlier "hardened, not
+replaced" verdict on this item is superseded — checked directly, browser_cookie3 is fully gone
+from requirements.txt, pyproject.toml, and doctor.py, _extract_chrome_cookie() no
+--- PAGE 6 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 6 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+longer exists, and a grep of the whole tree ﬁnds zero remaining runtime references. Two real
+replacements: Playwright visual login (recommended) or manual li_at/curl paste. The account-
+ban exposure this item tracked is closed.
+D10's staged-facts gate — the last open data-loss item on the whole board — is also real.
+facts_manager.py (checked directly, 486 lines) follows the exact anti-blanking pattern this
+codebase already learned the hard way with write_verified_ledger(): it raises on corrupt JSON
+instead of silently replacing curated data with an empty skeleton, dedupes staged claims against
+both staged and veriﬁed sets, and promotes through the repo's real atomic_write rather than a
+direct overwrite. 17 new tests. Every data-loss item on this board is now closed.
+The write-back gate stays partial, but for a boring, ﬁxable reason. A real --apply run was
+attempted and failed on Gmail's IMAP login — the proﬁle needs a dedicated App Password, not the
+account password, in GMAIL_APP_PASSWORD. The write path itself was integration-tested end to
+end and conﬁrmed working; checked directly, application_log is still 0 rows, consistent with the
+auth failure rather than a broken mechanism. One credential away from actually opening the gate.
+Veriﬁed via direct spot-checks again, not a full fork — the deliberate scoping from the previous
+round, extended to these higher-stakes items too since each claim was checked against real source
+(grep for removed imports, reading facts_manager.py's actual guard logic, conﬁrming the live 0-
+row count) rather than trusted from the summary. Full suite: 2,385 tests, 0 failures, matching the
+claim exactly.
+24 Aug — the App Password ﬁx, a live --apply run, and the last stale UX doc
+The write-back gate got a real live run — and stayed closed for the right reason. With the App
+Password ﬁxed, --apply connected to Gmail cleanly and classiﬁed real mail: interviews,
+rejections, acknowledgments, recruiter outreach, all correctly bucketed. Of 4 candidate status
+changes found, all 4 scored 0.40 conﬁdence — below the auto-apply threshold — because each
+matched a company but not a speciﬁc role from the email body. Checked directly:
+application_log is still 0 rows, and that's the deliberately conservative matcher declining to
+guess rather than a broken mechanism. The gate is proven end-to-end now; it just hasn't seen a
+clean enough signal yet.
+The empty-stdout bug — the one open item in the entire "not breakage" bucket — is now
+actually ﬁxed, not just narrowed. Root cause conﬁrmed by reading the code directly: a Playwright
+browser.close() throw during teardown was aborting check-liveness.mjs's finally block
+before it ever printed results, discarding every already-checked verdict on a non-zero exit. Both
+ends are now hardened — the throw is caught so results always print, and liveness.py separately
+recovers verdicts from the streamed progress events even if stdout comes back empty. Every
+tracked bug and every tracked data-loss item on this board is now closed.
+--- PAGE 7 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 7 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+tui_design_critique_and_audit.md got the same real triage as the other four — 0 stale UX
+audits remain anywhere in the repo. A genuine 15-row per-ﬁnding table replaced the banner. One
+spot-check found the same citation-drift pattern as before: the keystroke-collision ﬁx in the Go
+dashboard is real (jobs.go's searchInput flag genuinely gates every key to the search box ﬁrst),
+but the cited line range is off by ~800 lines from where the logic actually lives. Resolution real,
+citation not — same caveat as ux_ui_review.md a few rounds back.
+Veriﬁed directly again (diff read, grep for removed identity strings, one Go citation spot-check, a
+direct test run) rather than a fork. Full suite: 2,389 tests, 0 failures, matching the claim.
+Every item is now tagged by kind — and the tags say something the statuses did not
+Filter to Bug + Open and you get nothing — as of 24 Aug, that's now true without a partial asterisk:
+all 18 tracked bugs are ﬁxed, including the empty-stdout investigation, whose exact interleaving
+was ﬁnally reproduced and ﬁxed (a Playwright browser.close() throw during teardown was
+aborting the print of already-checked results). The same now holds for data-loss risks: 7 tracked, all
+7 closed — the human-in-the-loop staged_facts.json gate, the last one standing, shipped 24
+Aug as facts_manager.py.
+So what is left is not breakage. Of the 62 items still needing a decision or a commit: 29 are
+features, 12 tech debt, 9 cosmetic, 7 docs, 2 security, and 1 apiece for the bug and data-loss cases
+above. That is a backlog of things not yet built, not things quietly broken — a materially different
+position from what a flat “62 open” implies.
+Two tags worth explaining. Data loss is kept separate from Bug because it is this codebase's
+signature failure mode — the ledger overwrite, the shared liveness temp path, the tests that wrote
+into a real proﬁle — and those are worth being able to isolate in one click. Cosmetic means visual
+only: a colour, a border, an animation. Anything that changes what the user is told — an empty state
+naming the wrong key, a matrix bar that cannot express a gap — is ﬁled as UX or Bug, not cosmetic,
+because getting it wrong misinforms rather than merely looking plain.
+All Open Partial Stale doc Done Won't do
+Search items, ﬁles, evidence…
+--- PAGE 8 ---
+8/24/26, 7:40 PMResume Builder Backlog
+Page 8 of 8https://234dfc20-40f6-458d-896a-23639293e131.frame.claudeuserco…ab18c18cd8c.1787618232&__frame_v=manifest.17cb09dc36825632.json
+KINDAll Bug Data lossSecurityFeatureUX CosmeticTech debtTests
+Ops runDocs
+Showing 0 of 153
+No items match that ﬁlter.
+Statuses were decided by reading the code, not the docs — every DONE below was conﬁrmed against a ﬁle, and
+disagreements between a doc and the source were resolved in favour of the source. STALE DOC means the work
+shipped but its tracking entry still says otherwise.

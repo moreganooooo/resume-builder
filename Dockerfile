@@ -63,7 +63,13 @@ RUN fc-cache -f -v
 # 8. Copy full repository
 COPY . .
 
+# 9. Run as a non-root user -- steps above need root for system package
+# installs and font-cache registration, but the running process doesn't.
+RUN useradd --create-home --shell /bin/bash resume && \
+    chown -R resume:resume /workspace /ms-playwright
+USER resume
+
 # Setup default alias for resume CLI
-RUN echo 'alias resume="python3 /workspace/scripts/cli.py"' >> /root/.bashrc
+RUN echo 'alias resume="python3 /workspace/scripts/cli.py"' >> /home/resume/.bashrc
 
 CMD ["python3", "scripts/cli.py"]

@@ -15,7 +15,8 @@ class TestFollowupScheduler(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir.name, "test_followups.db")
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("""
+        self.conn.execute(
+            """
             CREATE TABLE jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
@@ -24,7 +25,8 @@ class TestFollowupScheduler(unittest.TestCase):
                 updated_at TEXT,
                 created_at TEXT
             )
-        """)
+        """
+        )
 
         old_date = (datetime.datetime.now() - datetime.timedelta(days=10)).isoformat()
         recent_date = (datetime.datetime.now() - datetime.timedelta(days=2)).isoformat()

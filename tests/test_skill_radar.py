@@ -15,14 +15,16 @@ class TestSkillRadar(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir.name, "radar_test.db")
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("""
+        self.conn.execute(
+            """
             CREATE TABLE jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
                 company TEXT,
                 raw_json TEXT
             )
-        """)
+        """
+        )
 
         job1_json = json.dumps(
             {"_evaluation": {"missing_skills": ["Kubernetes", "Rust", "Go"]}}

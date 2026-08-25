@@ -163,3 +163,106 @@ func TestComputeProgressMetrics_DegradedAndEmpty(t *testing.T) {
 		t.Fatalf("expected 2 active apps, got %d", pm2.ActiveApps)
 	}
 }
+
+func TestComputeProgressMetrics_PlatformAndCompanyAnalytics(t *testing.T) {
+	apps := []model.CareerApplication{
+		{
+			Company:        "CyberCoders",
+			Role:           "Senior Python Developer",
+			SourcePlatform: "indeed",
+			Score:          3.8,
+			Coverage:       85.0,
+			Status:         "evaluated",
+		},
+		{
+			Company:        "Apex Staffing Solutions",
+			Role:           "Full Stack Engineer",
+			SourcePlatform: "Indeed",
+			Score:          3.5,
+			Coverage:       65.0,
+			Status:         "evaluated",
+		},
+		{
+			Company:        "Stripe",
+			Role:           "Staff Engineer",
+			SourcePlatform: "greenhouse",
+			Score:          4.8,
+			Coverage:       55.0, // High score, low coverage -> Write bullets next!
+			Status:         "evaluated",
+		},
+		{
+			Company:        "Stripe",
+			Role:           "Principal Lead",
+			SourcePlatform: "greenhouse",
+			Score:          4.6,
+			Coverage:       80.0, // High score, high coverage -> Ready to apply
+			Status:         "applied",
+		},
+		{
+			Company:        "Acme Corp",
+			Role:           "Product Manager",
+			SourcePlatform: "", // Direct / Unknown
+			Score:          4.1,
+			Coverage:       75.0,
+			Status:         "applied",
+		},
+	}
+
+	pm := ComputeProgressMetrics(apps)
+
+	// Platform breakdown checks
+	if len(pm.PlatformStats) != 3 {
+		t.Fatalf("expected 3 platform groups, got %d", len(pm.PlatformStats))
+	}
+	gh := pm.PlatformStats[0]
+	if gh.Platform != "Greenhouse" && pm.PlatformStats[1].Platform == "Greenhouse" {
+		gh = pm.PlatformStats[1]
+	}
+	if gh.Platform != "Greenhouse" && pm.PlatformStats[2].Platform == "Greenhouse" {
+		gh = pm.PlatformStats[2]
+	}
+	if gh.TotalRoles != 2 || gh.EvaluatedRoles != 2 {
+		t.Fatalf("expected Greenhouse to have 2 total and 2 evaluated roles, got %+v", gh)
+	}
+	if gh.Tier45Plus != 2 {
+		t.Fatalf("expected 2 roles >=4.5 in Greenhouse, got %d", gh.Tier45Plus)
+	}
+
+	// Company concentration & agency detector checks
+	if len(pm.CompanyStats) != 4 {
+		t.Fatalf("expected 4 companies, got %d", len(pm.CompanyStats))
+	}
+	stripeFound := false
+	cyberFound := false
+	for _, cs := range pm.CompanyStats {
+		if cs.Company == "Stripe" {
+			stripeFound = true
+			if cs.IsAgency {
+				t.Fatalf("expected Stripe to NOT be flagged as agency")
+			}
+			if cs.TotalRoles != 2 {
+				t.Fatalf("expected Stripe to have 2 roles, got %d", cs.TotalRoles)
+			}
+		}
+		if cs.Company == "CyberCoders" {
+			cyberFound = true
+			if !cs.IsAgency {
+				t.Fatalf("expected CyberCoders to be flagged as staffing agency")
+			}
+		}
+	}
+	if !stripeFound || !cyberFound {
+		t.Fatalf("expected Stripe and CyberCoders in company stats")
+	}
+
+	// Quadrant checks
+	if pm.Quadrants.ReadyToApply != 2 { // Stripe Principal Lead (4.6, 80%), Acme Product Manager (4.1, 75%)
+		t.Fatalf("expected 2 roles ReadyToApply, got %d", pm.Quadrants.ReadyToApply)
+	}
+	if pm.Quadrants.HighFitLowCoverage != 1 { // Stripe Staff Engineer (4.8, 55%)
+		t.Fatalf("expected 1 role HighFitLowCoverage, got %d", pm.Quadrants.HighFitLowCoverage)
+	}
+	if len(pm.HighFitLowCoverageRoles) != 1 || pm.HighFitLowCoverageRoles[0].Company != "Stripe" {
+		t.Fatalf("expected HighFitLowCoverageRoles to list Stripe Staff Engineer, got %+v", pm.HighFitLowCoverageRoles)
+	}
+}

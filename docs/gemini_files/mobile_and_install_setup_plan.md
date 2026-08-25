@@ -69,50 +69,72 @@ Syncthing runs encrypted, device-to-device file transfers. It synchronizes **onl
 | **Profile Config** | `profiles/<name>/` | Syncs target roles, `.env` (Gemini API keys), search parameters, and handwritten signatures. | **~100 KB** |
 | **Scanned JDs** | `jds/<name>/` | Syncs active job description raw texts, triage queue listings, and application trackers. | **~2 MB** |
 | **Rendered Outputs** | `output/<name>/` | Syncs tailored JSON state outputs and fully rendered, high-resolution PDFs. | **~5 MB** |
-| **Operational Tracker** | `data/<name>/` | Syncs local CSV application checkpoints and pipeline history listings. | **~10 KB** |
+| **Operational Tracker** | `data/<name>/` | Syncs local SQLite database (`data.db`), CSV application checkpoints, and pipeline history. | **~10 KB** |
 
 * **Total Synchronization Footprint:** **< 10 MB** (Almost instantaneous, sub-second sync speeds even on spotty cellular connections).
 
+### Syncthing Ignore Patterns (`.stignore`) & WAL Safety
+To prevent synchronization collisions and database corruption across distributed nodes, `.stignore` must strictly ignore SQLite journal/WAL files and transient build artifacts while syncing `data.db`:
+```gitignore
+// SQLite WAL & shared memory temporary files
+(?d)*.db-wal
+(?d)*.db-shm
+(?d)*.db-journal
+
+// Transient Python & Node caches
+(?d)__pycache__
+(?d)*.pyc
+(?d).pytest_cache
+(?d)node_modules
+
+// Temporary render files
+(?d)output/*/tmp/
+(?d).DS_Store
+```
+> [!IMPORTANT]
+> **WAL Flushes Before Sync:** Because `*-wal` files are ignored, `db.checkpoint(profile)` is called to flush all SQLite writes directly into `data.db` prior to file transfer triggers.
+
 ---
 
-## 🛠️ 3. The Unified Setup Installer (`scripts/install.sh`)
+## 🛠️ 3. The Unified Setup Installer & Termux Automation Scripts
 
-We created a majestic, automated cross-platform script ([`scripts/install.sh`](file:///Users/morganescott/resume-builder/scripts/install.sh)) that handles all setup configurations for **both Desktop and Mobile Termux environments**.
+We provide dedicated cross-platform installers and maintenance utilities:
 
-### Feature Set:
-* **TrueColor ANSI Gradient:** Outputs beautiful, high-fidelity neon-glow setup banners.
-* **Environment Auto-Detection:** Intelligently detects if it is executing within an Android Termux container.
-* **Automated Python Virtualization:** Guarantees Python `>= 3.10` and provisions a clean, isolated `.venv/` shell.
-* **Mobile-Lite Footprint Option:** In mobile mode, it installs a highly distilled, pure-Python dependency list. By **excluding compiling heavy C-libraries like Pandas, NumPy, and Selenium**, it shrinks the environment size from **250 MB down to less than 15 MB!**
-* **Global CLI Shortcuts:** Automatically appends the portable sourcing wrapper `source .../scripts/resume-cli.sh` directly to `.zshrc`, `.bashrc`, or Termux shell profiles, allowing the `resume` command to be accessed instantly from anywhere.
+1. **[`scripts/install.sh`](file:///Users/morganescott/resume-builder/scripts/install.sh)**: Multi-platform interactive installer (macOS, Linux, WSL, Android Termux).
+2. **[`scripts/termux_install.sh`](file:///Users/morganescott/resume-builder/scripts/termux_install.sh)**: Fully automated, non-interactive one-command bootstrapper optimized for mobile touch terminals.
+3. **[`scripts/termux_update.sh`](file:///Users/morganescott/resume-builder/scripts/termux_update.sh)**: One-command repository sync, virtualenv re-hash, and health check runner for mobile.
+4. **[`scripts/verify_syncthing.py`](file:///Users/morganescott/resume-builder/scripts/verify_syncthing.py)** (`resume verify-sync`): Verifies directory pairing, `.stignore` rules, WAL flush state, and local Syncthing connectivity.
 
 ---
 
 ## 📱 4. Step-by-Step Mobile Deployment Plan
 
-If Dom wants to set this up on his Google Pixel 10:
+If setting up on an Android device (e.g., Google Pixel 10):
 
 ### Step A: Provision Android Linux Environment
 1. Download and launch **Termux** (recommended from F-Droid).
-2. Execute the system upgrade:
+2. Run the one-command installer:
    ```bash
    pkg update && pkg upgrade -y
    pkg install python nodejs git termux-api -y
+   git clone https://github.com/morganescott/resume-builder.git ~/resume-builder
+   cd ~/resume-builder
+   bash scripts/termux_install.sh
    ```
 
-### Step B: Run the Automated Installer
-1. Clone the repository and execute our new installer:
+### Step B: Verification & Syncthing Pairing
+1. Download **Syncthing** on Desktop and **Syncthing Android App** on the mobile device.
+2. Pair the devices via QR code and share `profiles/`, `jds/`, `output/`, and `data/`.
+3. Verify local pairing and folder permissions:
    ```bash
-   git clone https://github.com/morganescott/resume-builder.git
-   cd resume-builder
-   ./scripts/install.sh
+   resume verify-sync
    ```
-2. Select **`1` (Mobile Lite Mode)**. The installer will create a lightweight virtual environment, download the pure-Python packages, and register the global `resume` shortcut in under **20 seconds**.
 
-### Step C: Configure Syncthing Companion Pairing
-1. Download **Syncthing** on his Desktop and the **Syncthing Android App** on his Pixel 10.
-2. Pair the devices securely via QR code.
-3. Share the `profiles/`, `jds/`, `output/`, and `data/` directories of the active profile.
-4. On the Pixel 10, map these accepted folders directly into the Termux `resume-builder` subdirectory.
+### Step C: Daily Mobile Workflow & Auto-Update
+- Tailor resumes and scan job boards on mobile using `resume menu` or `resume scan`.
+- Keep the mobile codebase fresh with a single command:
+   ```bash
+   bash scripts/termux_update.sh
+   ```
 
-Now, Dom is fully configured. When he runs a scan on his phone, the tailored data instantly syncs back to his desktop, which compiles the PDF and syncs the finished print-ready resume right back to his phone. It represents the absolute pinnacle of modern, decentralized multi-device workflow design!
+When a resume is tailored on mobile, the JSON state syncs back to the desktop compiler in real time, which generates the print-ready PDF and syncs it back to mobile for instant review via `termux-open`.

@@ -27,7 +27,7 @@ if SCRIPTS_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from scripts import vector_store
+from scripts import profile_paths, vector_store
 
 
 class TestCosineSimilarityMatrix(unittest.TestCase):
@@ -270,6 +270,95 @@ class TestNeedsReembedAndReembed(unittest.TestCase):
             self.assertIsNotNone(thread)
             thread.join(timeout=2.0)
             mock_main.assert_called_once()
+
+
+class TestSearchEvidenceGuideAndRAG(unittest.TestCase):
+    def test_search_evidence_guide_missing_file_returns_empty(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                self.assertEqual(vector_store.search_evidence_guide("test query"), [])
+
+    def test_search_evidence_guide_lexical_fallback(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "evidence-guide.csv")
+            with open(csv_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "Evidence Cluster,Finding,Source File(s),Best Detail / Quote,Best Metric,What This Proves About Morgan,Where to Use It,Confidence,Source URL / Notes\n"
+                    'Lifecycle Marketing,Built multi-touch email sequences,notes.txt,"Scaled Outreach to 50k+ contacts",95% open rate,Email marketing systems,Cover letters,High,TR-001\n'
+                )
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                with patch(
+                    "scripts.vector_store.GeminiClient.embed", return_value=None
+                ):
+                    results = vector_store.search_evidence_guide(
+                        "lifecycle email marketing", top_k=5
+                    )
+                    self.assertEqual(len(results), 1)
+                    self.assertEqual(results[0]["cluster"], "Lifecycle Marketing")
+                    self.assertGreater(results[0]["score"], 0.0)
+
+    def test_query_rag_returns_unified_payload(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
+            ):
+                with patch(
+                    "scripts.vector_store.search_bullet_bank",
+                    return_value=[("Bullet 1", "Acme", "[tag]", 0.85)],
+                ):
+                    with patch(
+                        "scripts.vector_store.search_evidence_guide",
+                        return_value=[{"cluster": "Cluster 1", "score": 0.9}],
+                    ):
+                        res = vector_store.query_rag("query")
+                        self.assertEqual(res["query"], "query")
+                        self.assertEqual(len(res["bullets"]), 1)
+                        self.assertEqual(len(res["evidence"]), 1)
+
+
+class TestDocumentChunkingAndRAG(unittest.TestCase):
+    def test_chunk_text_empty_and_normal(self):
+        self.assertEqual(vector_store.chunk_text(""), [])
+        text = (
+            "Paragraph one is short.\n\n"
+            "Paragraph two has multiple sentences. First sentence here. Second sentence follows. Third sentence wraps it up.\n\n"
+            "Paragraph three is concluding."
+        )
+        chunks = vector_store.chunk_text(text, chunk_size=80, overlap=10)
+        self.assertGreaterEqual(len(chunks), 2)
+        for ch in chunks:
+            self.assertTrue(len(ch) > 0)
+
+    def test_index_and_search_document_chunks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_paths.isolate_for_tests(tmpdir)
+            kb_dir = profile_paths.kb_dir()
+            os.makedirs(kb_dir, exist_ok=True)
+
+            doc_path = os.path.join(kb_dir, "test_doc.md")
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Content Strategy\n\n"
+                    "Led comprehensive content architecture redesign across 500+ documentation pages.\n\n"
+                    "Increased search discovery by 42% through structured taxonomy and metadata tags."
+                )
+
+            with patch(
+                "scripts.vector_store.GeminiClient.embed", return_value=[0.1] * 768
+            ):
+                indexed_count = vector_store.index_knowledge_documents()
+                self.assertGreater(indexed_count, 0)
+
+                results = vector_store.search_document_chunks(
+                    "content taxonomy", top_k=3
+                )
+                self.assertGreater(len(results), 0)
+                self.assertIn("text", results[0])
+                self.assertIn("score", results[0])
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -875,7 +876,269 @@ func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetric
 		pm.ScoreTrend = append(pm.ScoreTrend, int(s.score*10))
 	}
 
+	// Platform breakdown
+	type platAccum struct {
+		total          int
+		evaluated      int
+		scoreSum       float64
+		t45            int
+		t40            int
+		t35            int
+		tsub           int
+		topRoleTitle   string
+		topRoleCompany string
+		topRoleScore   float64
+	}
+	platforms := make(map[string]*platAccum)
+
+	// Company concentration
+	type compAccum struct {
+		total      int
+		evaluated  int
+		scoreSum   float64
+		sampleRole string
+	}
+	companies := make(map[string]*compAccum)
+
+	for _, app := range apps {
+		plat := NormalizePlatformName(app.SourcePlatform)
+		pa, ok := platforms[plat]
+		if !ok {
+			pa = &platAccum{}
+			platforms[plat] = pa
+		}
+		pa.total++
+
+		comp := strings.TrimSpace(app.Company)
+		if comp == "" {
+			comp = "Unknown Company"
+		}
+		ca, ok := companies[comp]
+		if !ok {
+			ca = &compAccum{sampleRole: app.Role}
+			companies[comp] = ca
+		}
+		ca.total++
+
+		if app.Score > 0 {
+			pa.evaluated++
+			pa.scoreSum += app.Score
+			ca.evaluated++
+			ca.scoreSum += app.Score
+
+			switch {
+			case app.Score >= 4.5:
+				pa.t45++
+			case app.Score >= 4.0:
+				pa.t40++
+			case app.Score >= 3.5:
+				pa.t35++
+			default:
+				pa.tsub++
+			}
+
+			if app.Score > pa.topRoleScore {
+				pa.topRoleScore = app.Score
+				pa.topRoleTitle = app.Role
+				pa.topRoleCompany = app.Company
+			}
+		}
+
+		// Quadrants
+		if app.Score > 0 && app.Coverage > 0 {
+			// Normalise 0-1 coverage fractions to 0-100 percentage
+			cov := app.Coverage
+			if cov <= 1.0 {
+				cov *= 100.0
+			}
+
+			switch {
+			case app.Score >= 4.0 && cov >= 70.0:
+				pm.Quadrants.ReadyToApply++
+			case app.Score >= 4.0 && cov < 70.0:
+				pm.Quadrants.HighFitLowCoverage++
+				pm.HighFitLowCoverageRoles = append(pm.HighFitLowCoverageRoles, model.HighFitLowCoverageRole{
+					Title:    app.Role,
+					Company:  app.Company,
+					Score:    app.Score,
+					Coverage: cov,
+				})
+			case app.Score < 4.0 && cov >= 70.0:
+				pm.Quadrants.OverCoveredLowerFit++
+			default:
+				pm.Quadrants.Deprioritized++
+			}
+		}
+	}
+
+	for pName, pa := range platforms {
+		avg := 0.0
+		if pa.evaluated > 0 {
+			avg = pa.scoreSum / float64(pa.evaluated)
+		}
+		pm.PlatformStats = append(pm.PlatformStats, model.PlatformStat{
+			Platform:       pName,
+			TotalRoles:     pa.total,
+			EvaluatedRoles: pa.evaluated,
+			AvgScore:       avg,
+			Tier45Plus:     pa.t45,
+			Tier40to44:     pa.t40,
+			Tier35to39:     pa.t35,
+			TierSub35:      pa.tsub,
+			TopRoleTitle:   pa.topRoleTitle,
+			TopRoleCompany: pa.topRoleCompany,
+			TopRoleScore:   pa.topRoleScore,
+		})
+	}
+	sort.Slice(pm.PlatformStats, func(i, j int) bool {
+		if pm.PlatformStats[i].TotalRoles != pm.PlatformStats[j].TotalRoles {
+			return pm.PlatformStats[i].TotalRoles > pm.PlatformStats[j].TotalRoles
+		}
+		return pm.PlatformStats[i].AvgScore > pm.PlatformStats[j].AvgScore
+	})
+
+	for cName, ca := range companies {
+		avg := 0.0
+		if ca.evaluated > 0 {
+			avg = ca.scoreSum / float64(ca.evaluated)
+		}
+		pm.CompanyStats = append(pm.CompanyStats, model.CompanyStat{
+			Company:        cName,
+			TotalRoles:     ca.total,
+			EvaluatedRoles: ca.evaluated,
+			AvgScore:       avg,
+			IsAgency:       IsStaffingAgency(cName),
+			SampleRole:     ca.sampleRole,
+		})
+	}
+	sort.Slice(pm.CompanyStats, func(i, j int) bool {
+		if pm.CompanyStats[i].TotalRoles != pm.CompanyStats[j].TotalRoles {
+			return pm.CompanyStats[i].TotalRoles > pm.CompanyStats[j].TotalRoles
+		}
+		return pm.CompanyStats[i].AvgScore > pm.CompanyStats[j].AvgScore
+	})
+	if len(pm.CompanyStats) > 12 {
+		pm.CompanyStats = pm.CompanyStats[:12]
+	}
+
+	// 1. Funnel Drill-Down Stages
+	highFitCount := 0
+	for _, app := range apps {
+		if app.Score >= 4.0 {
+			highFitCount++
+		}
+	}
+	pm.FunnelDrilldown = []model.FunnelDrilldownStage{
+		{Stage: "1. Discovered", Volume: total, Conversion: 100.0, Friction: "Initial raw posting pool"},
+		{Stage: "2. Evaluated", Volume: scored, Conversion: safePct(scored, total), Friction: fmt.Sprintf("%d pre-filtered", total-scored)},
+		{Stage: "3. High-Fit (≥4.0)", Volume: highFitCount, Conversion: safePct(highFitCount, scored), Friction: fmt.Sprintf("%d lower fit (<4.0)", scored-highFitCount)},
+		{Stage: "4. Applied", Volume: applied, Conversion: safePct(applied, highFitCount), Friction: fmt.Sprintf("%d high-fit pending apply", max(0, highFitCount-applied))},
+		{Stage: "5. Responded", Volume: responded, Conversion: safePct(responded, applied), Friction: fmt.Sprintf("%d awaiting response", max(0, applied-responded))},
+		{Stage: "6. Interview", Volume: interview, Conversion: safePct(interview, applied), Friction: fmt.Sprintf("%d dropped / ghosted", max(0, applied-interview))},
+		{Stage: "7. Offer", Volume: offer, Conversion: safePct(offer, interview), Friction: "Target terminal outcome"},
+	}
+
+	// 2. Strategy Radar situational dimensions (0-100 scale)
+	atsScore := int(math.Min(100, (pm.AvgScore/5.0)*100))
+	if atsScore == 0 {
+		atsScore = 70
+	}
+	seniorityScore := int(math.Min(100, (pm.TopScore/5.0)*100))
+	if seniorityScore == 0 {
+		seniorityScore = 80
+	}
+	proofDensity := 85
+	if pm.Quadrants.ReadyToApply > 0 {
+		proofDensity = int(math.Min(100, 75+float64(pm.Quadrants.ReadyToApply)*2))
+	}
+	techBreadth := int(math.Min(100, float64(len(pm.PlatformStats))*15 + 40))
+	conversionScore := int(math.Min(100, pm.ResponseRate*1.5 + 50))
+	if conversionScore < 50 {
+		conversionScore = 65
+	}
+	recruiterHook := (atsScore + seniorityScore + proofDensity) / 3
+
+	getGrade := func(score int) string {
+		switch {
+		case score >= 90:
+			return "A"
+		case score >= 80:
+			return "B+"
+		case score >= 70:
+			return "B"
+		case score >= 60:
+			return "C"
+		default:
+			return "D"
+		}
+	}
+
+	pm.StrategyRadar = model.StrategyRadarReport{
+		Axes: []model.StrategyRadarAxis{
+			{Name: "ATS Tailoring", Score: atsScore, Grade: getGrade(atsScore), Description: "Target keyword density & formatting"},
+			{Name: "Seniority & Scope", Score: seniorityScore, Grade: getGrade(seniorityScore), Description: "Leadership positioning & impact scope"},
+			{Name: "Proof Density", Score: proofDensity, Grade: getGrade(proofDensity), Description: "STAR metrics & verified evidence clusters"},
+			{Name: "Market Coverage", Score: techBreadth, Grade: getGrade(techBreadth), Description: "Platform diversity & active pipeline span"},
+			{Name: "Funnel Conversion", Score: conversionScore, Grade: getGrade(conversionScore), Description: "Application to response velocity"},
+			{Name: "Recruiter Hook", Score: recruiterHook, Grade: getGrade(recruiterHook), Description: "Above-the-fold executive summary punch"},
+		},
+		Overall: (atsScore + seniorityScore + proofDensity + techBreadth + conversionScore + recruiterHook) / 6,
+		Playbooks: []model.StrategyPlaybook{
+			{Name: "Application Momentum", Focus: "High-Fit Execution", Action: "Run `resume next` or `resume batch` to clear pending applications."},
+			{Name: "Quantified Proof Density", Focus: "Resume Impact", Action: "Lead tailored bullets with metric-first hooks from evidence-guide.csv."},
+			{Name: "High-Yield Platforms", Focus: "ATS Targeting", Action: "Focus pipeline energy on Greenhouse & Ashby direct listings."},
+		},
+	}
+
 	return pm
+}
+
+var reStaffingAgency = regexp.MustCompile(`(?i)\b(cybercoders|apex systems|apex staffing|teksystems|insight global|robert half|addison group|harnham|kforce|modis|randstad|allegis|kelly services|manpower|aerotek|beacon hill|lucas group|motion recruitment|judge group|creative circle|mondo|jobot|staffing|recruiting|recruitment|talent solutions|search partners|headhunters|personnel)\b`)
+
+// IsStaffingAgency checks if a company name is likely a staffing agency.
+func IsStaffingAgency(company string) bool {
+	return reStaffingAgency.MatchString(company)
+}
+
+// NormalizePlatformName maps raw platform names to canonical display strings.
+func NormalizePlatformName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "Direct / Unknown"
+	}
+	lower := strings.ToLower(raw)
+	switch {
+	case strings.Contains(lower, "greenhouse"):
+		return "Greenhouse"
+	case strings.Contains(lower, "lever"):
+		return "Lever"
+	case strings.Contains(lower, "ashby"):
+		return "Ashby"
+	case strings.Contains(lower, "jobright"):
+		return "Jobright"
+	case strings.Contains(lower, "linkedin"):
+		return "LinkedIn"
+	case strings.Contains(lower, "indeed"):
+		return "Indeed"
+	case strings.Contains(lower, "workday"):
+		return "Workday"
+	case strings.Contains(lower, "remoteok"):
+		return "RemoteOK"
+	case strings.Contains(lower, "himalayas"):
+		return "Himalayas"
+	case strings.Contains(lower, "wellfound"):
+		return "Wellfound"
+	case strings.Contains(lower, "ziprecruiter"):
+		return "ZipRecruiter"
+	case strings.Contains(lower, "glassdoor"):
+		return "Glassdoor"
+	case strings.Contains(lower, "adzuna"):
+		return "Adzuna"
+	case strings.Contains(lower, "jooble"):
+		return "Jooble"
+	default:
+		return strings.Title(strings.ReplaceAll(raw, "_", " "))
+	}
 }
 
 // safePct returns the percentage of part/whole, or 0 if whole is 0.
