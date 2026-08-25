@@ -511,3 +511,43 @@ class RecommendationApplySchema(TemplateSchema):
             "here so Morgan can address it herself (e.g. via `resume polish`)."
         ),
     )
+
+
+class FactItemSchema(BaseModel):
+    """A single factual career claim extracted for staging and human verification."""
+
+    label: str = Field(
+        description="Short, descriptive label for this factual claim or initiative"
+    )
+    claim: str = Field(
+        description="Concrete, verifiable claim detailing what was built, led, or achieved"
+    )
+    source: str = Field(
+        default="",
+        description="Source document name, meeting note reference, or artifact ID",
+    )
+    confidence: Literal["High", "Medium", "Low"] = Field(
+        default="High",
+        description="Confidence level in factual accuracy based on source evidence",
+    )
+    use_in_resume: bool = Field(
+        default=True,
+        description="Whether this fact is suitable for inclusion in resume bullets",
+    )
+    caveat: str = Field(
+        default="",
+        description="Specific boundaries, co-author splits, or caveats for external presentation",
+    )
+    category: str = Field(
+        default="general",
+        description="Functional category (e.g., leadership, platform_ops, enablement, content)",
+    )
+
+
+class StagedFactsExtractionSchema(BaseModel):
+    """Collection of candidate facts extracted from career documents for the D10 staging gate."""
+
+    facts: List[FactItemSchema] = Field(
+        default_factory=list,
+        description="Extracted candidate factual claims awaiting human review",
+    )
