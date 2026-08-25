@@ -6,7 +6,7 @@ exclude: '^(resume-engine/archive/|resume-engine/prompts/archive/|docs/archive/)
 repos:
   # Code formatting
   - repo: https://github.com/psf/black
-    rev: 24.1.1
+    rev: 26.5.1
     hooks:
       - id: black
 

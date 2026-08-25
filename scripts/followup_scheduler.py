@@ -29,14 +29,12 @@ def get_pending_followups(
 
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT id, title, company, status, updated_at, created_at
             FROM jobs
             WHERE status IN ('applied', 'submitted', 'pending')
             ORDER BY updated_at ASC
-        """
-        )
+        """)
         rows = cursor.fetchall()
         now = datetime.datetime.now()
 

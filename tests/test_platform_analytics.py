@@ -291,15 +291,13 @@ class TestBulletBankHeatmap(TestPlatformAnalyticsIsolatedBase):
         import platform_analytics
 
         # Insert bullet bank rows
-        self.conn.execute(
-            """
+        self.conn.execute("""
             INSERT INTO bullet_bank (id, company, title, raw_bullet, category, audit_status)
             VALUES
                 ('b1', 'Treering', 'Lead', 'Spearheaded enterprise lifecycle campaigns', 'Lifecycle Marketing', 'CLEAN'),
                 ('b2', 'Treering', 'Lead', 'Engineered custom Outreach variables', 'Marketing Ops', 'CLEAN'),
                 ('b3', 'Treering', 'Lead', 'Optimized CRM segmentation in Salesforce', 'Sales Ops', 'CLEAN')
-            """
-        )
+            """)
         self.conn.commit()
 
         # Insert jobs with skills/keywords
