@@ -108,6 +108,13 @@ def _test_files():
         yield name, os.path.join(TESTS_DIR, name)
 
 
+def _script_files():
+    for name in sorted(os.listdir(SCRIPTS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        yield name, os.path.join(SCRIPTS_DIR, name)
+
+
 class NoOperatorIdentityInTests(unittest.TestCase):
 
     def setUp(self):
@@ -135,6 +142,26 @@ class NoOperatorIdentityInTests(unittest.TestCase):
             "The operator's own identity is hardcoded in these test files. "
             "Use tests/persona.py instead -- a test needs *an* identity, not "
             "*this* identity:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_no_script_file_contains_the_operators_identity(self):
+        offenders = []
+        for name, path in _script_files():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    body = f.read()
+            except OSError:
+                continue
+            for label, value in self.values.items():
+                if re.search(re.escape(value), body, re.IGNORECASE):
+                    offenders.append(f"{name}: contains {label} ({value!r})")
+
+        self.assertEqual(
+            [],
+            offenders,
+            "The operator's own identity is hardcoded in these script files. "
+            "Scripts must read identity from profile.yml at runtime:\n  "
+            + "\n  ".join(offenders),
         )
 
 

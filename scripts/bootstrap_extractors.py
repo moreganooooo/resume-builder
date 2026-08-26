@@ -884,3 +884,86 @@ def extract_ledger_entries_chunked(
                 projects.append(p)
 
     return LedgerExtraction(metrics=metrics, tools=tools, projects=projects)
+
+
+_FACTS_PROMPT = """
+You are extracting candidate factual career claims from the candidate's achievements,
+documents, and narrative evidence.
+
+For each distinct achievement, initiative, leadership role, or major system built,
+extract:
+- label: short, crisp title (e.g. "SDR Process Map Website — Built and Maintained", "Content Committee — Founded and Chaired")
+- claim: concrete, detailed factual description of what the candidate did, built, led, or managed
+- source: attribution or document name where this evidence originated, if known
+- confidence: "High" if explicitly documented, "Medium" if inferred from context
+- use_in_resume: true if strong evidence for resume bullet points
+- caveat: any known boundaries, caveats, or co-author splits
+- category: one of "leadership", "platform_ops", "enablement", "content", "general"
+
+Only extract claims grounded in the actual input text. Do not invent facts, employers, or metrics.
+"""
+
+
+def extract_candidate_facts(
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    dry_run: bool = False,
+) -> list[dict]:
+    """Extracts candidate career facts for human-in-the-loop staging (D10).
+
+    Returns a list of raw fact dictionaries awaiting human review.
+    """
+    from schemas import StagedFactsExtractionSchema
+
+    if (text is None) == (upload_path is None):
+        raise ValueError(
+            "extract_candidate_facts requires exactly one of text or upload_path"
+        )
+
+    if dry_run:
+        cli_art.print_literal("[DRY RUN] would extract candidate career facts.")
+        return []
+
+    if upload_path is not None:
+        raw = _generate_from_upload(
+            upload_path, _FACTS_PROMPT, StagedFactsExtractionSchema
+        )
+    else:
+        raw, _ = GeminiClient.generate(
+            model=EXTRACTION_MODEL,
+            system_instruction=_FACTS_PROMPT,
+            contents=text,
+            response_schema=StagedFactsExtractionSchema,
+            temperature=0.0,
+        )
+    data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
+    facts = data.get("facts", []) if isinstance(data, dict) else []
+    return [
+        f if isinstance(f, dict) else getattr(f, "model_dump", lambda: dict(f))()
+        for f in facts
+    ]
+
+
+def extract_and_stage_facts(
+    *,
+    text: str | None = None,
+    upload_path: str | None = None,
+    profile: str | None = None,
+    source: str = "ai_extraction",
+    dry_run: bool = False,
+) -> int:
+    """Extracts candidate facts and routes them directly to staged_facts.json (D10 gate).
+
+    Guarantees verified_facts.json is untouched until explicit human review.
+    """
+    candidate_facts = extract_candidate_facts(
+        text=text, upload_path=upload_path, dry_run=dry_run
+    )
+    if not candidate_facts:
+        return 0
+    import facts_manager
+
+    return facts_manager.stage_facts(
+        candidate_facts=candidate_facts, profile=profile, source=source
+    )

@@ -329,6 +329,76 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
         return []
 
 
+def _run_batch_node_providers(items: list, timeout: int | None = None) -> dict:
+    """Executes multiple board providers concurrently in a single Node process
+    via run_provider.mjs --batch. Returns a mapping from provider_id -> job list.
+    Failed providers log appropriate warnings and return an empty list."""
+    if not items:
+        return {}
+
+    effective_timeout = timeout or (NODE_TIMEOUT_SECONDS * 2)
+    try:
+        result = subprocess.run(
+            ["node", RUN_PROVIDER_SCRIPT, "--batch", json.dumps(items)],
+            capture_output=True,
+            text=True,
+            timeout=effective_timeout,
+            env=_child_env(),
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        for item in items:
+            pid = item.get("provider_id") or item.get("provider") or "unknown"
+            _scan_warning(
+                f"scan_boards: batch runner failed -- {e}",
+                kind=(
+                    "network" if isinstance(e, subprocess.TimeoutExpired) else "config"
+                ),
+                provider_id=pid,
+                reason=type(e).__name__,
+            )
+        return {
+            (item.get("provider_id") or item.get("provider") or "unknown"): []
+            for item in items
+        }
+
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError) as e:
+        for item in items:
+            pid = item.get("provider_id") or item.get("provider") or "unknown"
+            _scan_warning(
+                f"scan_boards: batch runner returned invalid JSON -- {e}",
+                kind="provider_failed",
+                provider_id=pid,
+                reason="invalid JSON output",
+            )
+        return {
+            (item.get("provider_id") or item.get("provider") or "unknown"): []
+            for item in items
+        }
+
+    out = {}
+    if isinstance(data, list):
+        for res in data:
+            if not isinstance(res, dict):
+                continue
+            pid = res.get("provider_id") or "unknown"
+            if res.get("status") == "fulfilled":
+                out[pid] = res.get("jobs") or []
+            else:
+                err = res.get("error") or {}
+                kind = err.get("kind", "provider_failed")
+                msg = err.get("message", "unknown error")
+                _scan_warning(
+                    f"scan_boards: batch provider {pid} failed -- {msg}",
+                    kind=kind,
+                    provider_id=pid,
+                    reason=msg,
+                )
+                out[pid] = []
+    return out
+
+
 def _html_to_text(markup: str) -> str:
     """Strips markup down to plain text (handles plain text passed through
     unchanged too, since BeautifulSoup finds no tags to strip). Joins on

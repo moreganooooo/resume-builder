@@ -194,6 +194,27 @@ class TestDisplayStatsLine(unittest.TestCase):
             cli_art.console = original
         self.assertIn("1351 Roles Awaiting Evaluation", console.export_text())
 
+    def test_registered_stats_providers_used_without_picker_imports(self):
+        cli_art.register_stats_providers(
+            active_roles_fn=lambda: 42,
+            completed_resumes_fn=lambda: 99,
+            unevaluated_roles_fn=lambda: 7,
+        )
+        try:
+            line = cli_art._stats_line_text()
+            self.assertIn("42 Roles Currently Awaiting Resume Creation", line)
+            self.assertIn("99 Resumes Customized All-Time", line)
+            self.assertIn("7 Roles Awaiting Evaluation", line)
+        finally:
+            cli_art.register_stats_providers(
+                active_roles_fn=None,
+                completed_resumes_fn=None,
+                unevaluated_roles_fn=None,
+            )
+            cli_art._STATS_PROVIDERS["active_roles"] = None
+            cli_art._STATS_PROVIDERS["completed_resumes"] = None
+            cli_art._STATS_PROVIDERS["unevaluated_roles"] = None
+
 
 class TestDisplayTip(unittest.TestCase):
 
@@ -789,6 +810,25 @@ class TestSparkleBannerAndCelebration(unittest.TestCase):
         self.assertIn("What to do next:", output)
         self.assertIn("Review in dashboard", output)
         self.assertIn("Apply to job", output)
+
+
+class TestGradientTextAndSuccessCelebration(unittest.TestCase):
+
+    def test_make_gradient_text(self):
+        text = cli_art.make_gradient_text("TEST GRADIENT", "#8B75FF", "#FF60FF")
+        self.assertEqual(text.plain, "TEST GRADIENT")
+        self.assertEqual(len(text.spans), 13)
+
+    def test_display_success_celebration_non_interactive(self):
+        with patch.dict(os.environ, {"CI": "true"}):
+            output = _rendered(
+                cli_art.display_success_celebration,
+                "Resume Customized & Polished!",
+                "All bullets adapted for this specific role.",
+            )
+            self.assertIn("HECK YEAH!", output)
+            self.assertIn("RESUME CUSTOMIZED & POLISHED!", output)
+            self.assertIn("ACHIEVEMENT UNLOCKED", output)
 
 
 if __name__ == "__main__":

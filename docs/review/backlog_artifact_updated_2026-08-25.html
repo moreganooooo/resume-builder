@@ -1,0 +1,1719 @@
+<!doctype html><html><head><!-- frame-runtime --><base href="/_f/1787625062-444e/"><script>window.__FRAME_PREAMBLE={"capabilities":{"artifact":"artifact.oqIe8shs.js","assets":"assets.DBUJcvq_.js","comments":"comments.GLuHR3zP.js","db":"db.CRhVHzSt.js","downloads":"downloads.C3GSvEDP.js","embed":"embed.CZsbekoQ.js","mcp":"mcp.Bvma3qD7.js","network":"network.B5UA9Su4.js","permissions":"permissions.BNySkLV5.js","room":"room.DE7EMui-.js","sample":"sample.BW2Uysoh.js","self":"artifact.oqIe8shs.js","user":"user.BpKav-Rf.js"},"transforms":"_transforms.h3_8GSUa.js","comments":"_comments.BOgkE6qU.js","translate":"_translate.5HCW4BJh.js"}</script><script>(function(){"use strict";var Y=["light","dark","system"],X=/^[A-Za-z0-9_-]{1,64}$/,D=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,G=new Set(["class","hidden","value","checked"]);function V(e){const t=e.toLowerCase();return t.startsWith("data-")||t.startsWith("aria-")||G.has(t)}var be="http://www.w3.org/1999/xhtml",Z="http://www.w3.org/2000/svg",J=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),Q=new Set(["script","style"]);function ee(e){const t=e.localName.toLowerCase();return e.namespaceURI==="http://www.w3.org/1999/xhtml"?!J.has(t):e.namespaceURI===Z?!Q.has(t):!1}var te=new Set(["html","head","body","frameset"]);function re(e){return e.namespaceURI==="http://www.w3.org/1999/xhtml"&&te.has(e.localName)}function ne(e){if(e===null||typeof e!="object")return!1;const t=e;if(typeof t.target!="string"||!X.test(t.target)||t.text!==void 0&&typeof t.text!="string")return!1;if(t.attrsSet!==void 0){if(t.attrsSet===null||typeof t.attrsSet!="object")return!1;for(const[n,s]of Object.entries(t.attrsSet))if(!D.test(n)||typeof s!="string")return!1}if(t.attrsRemoved!==void 0){if(!Array.isArray(t.attrsRemoved))return!1;for(const n of t.attrsRemoved)if(typeof n!="string"||!D.test(n))return!1}return!0}function se(e,t){if(e===null||typeof e!="object")return!1;const{seq:n,elements:s}=e;if(typeof n!="number"||!Number.isSafeInteger(n)||!Array.isArray(s)||s.length===0||s.length>64)return!1;for(let o=0;o<s.length;o++)if(!t(s[o]))return!1;return!0}function ae(e){return e===null||typeof e!="object"?!1:se(e.__frame_patch,ne)}function oe(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function ie(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function le(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const n=t.theme;return typeof n=="string"&&Y.includes(n)}var O="__frame_scroll",ce=150,ue=310,fe=160,pe=3e4;function de(){let e=0,t=!1,n=!1,s=!1,o=0,l=null;const c=i=>{try{sessionStorage.setItem(O,JSON.stringify({y:i}))}catch{}},f=()=>{if(clearTimeout(e),l===null)return;const i=l;l=null,c(i)},S=()=>{if(t){t=!1;return}n=!0,l=scrollY,clearTimeout(e),e=setTimeout(f,ce)};try{addEventListener("scroll",S,{passive:!0}),addEventListener("pagehide",f)}catch{}const v=()=>{let i;try{i=sessionStorage.getItem(O)}catch{return null}if(i===null)return null;let d;try{d=JSON.parse(i)}catch{d=null}const u=d?.y;if(!(typeof u=="number"&&Number.isFinite(u)&&u>=0)){try{sessionStorage.removeItem(O)}catch{}return null}return u};let b=!1;const m=i=>{try{const d=scrollY;scrollTo({top:i,left:0,behavior:"instant"}),o=i,s=!0,clearTimeout(e),l=null,c(i);const u=scrollY;u!==d&&(t=!0),u!==i&&!b&&(b=!0,addEventListener("load",()=>{try{if(scrollY===u){const h=v();m(h!==null?h:o)}}catch{}},{once:!0}))}catch{}},y=()=>{try{return!!location.hash}catch{return!0}};let g=!1;const E=()=>{try{if(g||innerWidth>ue||innerHeight>fe)return;g=!0;const i=Date.now(),d=()=>{try{removeEventListener("resize",d)}catch{}if(Date.now()-i>pe||n||y())return;const u=v();m(u!==null?u:o)};addEventListener("resize",d)}catch{}};let r=!1,p=!1;return{restore(){if(r||(r=!0,y()))return;const i=v();i!==null&&(m(i),E())},promoted(){if(p||(p=!0,y()))return;const i=v();i!==null?(m(i),E()):s&&m(o)}}}var Ee="modulepreload",Ae=function(e){return"/"+e},Re={},me=function(t,n,s){let o=Promise.resolve();function l(c){const f=new Event("vite:preloadError",{cancelable:!0});if(f.payload=c,window.dispatchEvent(f),!f.defaultPrevented)throw c}return o.then(c=>{for(const f of c||[])f.status==="rejected"&&l(f.reason);return t().catch(l)})};(function(){const e=Object.defineProperty,t=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let s=0;for(let o=0;o<n.length;o++){const l=n[o];try{e(t,l,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[l]}catch{}try{e(t,l,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[l]=="function"&&s++}if(s&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:s},"*")}catch{}})();var he=1e4,_e=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function F(e){for(const t of _e)if(t.endsWith(":*"))try{const n=new URL(e);if(`${n.protocol}//${n.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var M=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),j=window.__FRAME_PREAMBLE?.transforms,N=window.__FRAME_PREAMBLE?.comments,I=window.__FRAME_PREAMBLE?.translate,L=/^[\w.-]+\.js$/;function T(e){return me(()=>import("/_runtime/"+e),void 0)}function z(e,t){return{contract:e.contract,changes:new Set(e.changes??[]),flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:new Map,shellOrigin:t,mount:W,pipe:()=>({wrap:(n,s)=>(...o)=>{try{return s(...o)}catch(l){return Promise.reject(l)}}})}}var P=null,w=null;function q(e,t,n){try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var B=!1;function ve(e,t){const n=[];for(const s of e.elements){const o=document.querySelector(`[data-id="${s.target}"]`);if(!o){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}if([...Object.keys(s.attrsSet??{}),...s.attrsRemoved??[]].some(l=>!V(l))){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}if(s.text!==void 0&&(!ee(o)||re(o))){parent.postMessage({__frame_patch_miss:{seq:e.seq}},t);return}for(const[l,c]of Object.entries(s.attrsSet??{}))if(!$(o,l)){try{o.setAttribute(l,c)}catch{}H(o,l,c)}for(const l of s.attrsRemoved??[])$(o,l)||(o.removeAttribute(l),H(o,l,null));typeof s.text=="string"&&(o.textContent=s.text),n.push(s.target)}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:e.seq,targets:n}}))}catch{}}function H(e,t,n){if(!(e instanceof HTMLInputElement))return;const s=t.toLowerCase();s==="checked"?e.checked=n!==null:s==="value"&&e.type!=="file"&&(e.value=n??"")}function $(e,t){const n=t.toLowerCase(),s=e;return n==="data-id"||(n==="value"||n==="checked")&&(s.__artifactSecret===!0||/^(password|hidden|file)$/.test(s.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${e.getAttribute("autocomplete")??""} ${s.autocomplete??""}`))}function K(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,B=!0):B&&(delete t.dataset.theme,t.style.colorScheme="",B=!1)}var R=new Map;function ye(){let e;const t={u:new Promise(n=>{e=n}),r:n=>{t.done=!0,e(n)},done:!1,nulled:!1};return t}var ge=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),W=(e,t)=>{const n=R.get(e);if(!n||n.done){n?.nulled&&w&&parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:e}},w);return}const s=typeof t=="function"?Object.setPrototypeOf(t,ge):Object.assign(Object.create(null),t);typeof s.then=="function"&&delete s.then,n.r(Object.freeze(s))},U=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(U&&U.writable===!1)){const e=j&&L.test(j)?T(j).catch(()=>{}):Promise.resolve(void 0),t=r=>{if(r.type==="auxclick"&&r.button!==1)return;const p=r.target,i=p&&p.closest?p.closest("a[href],area[href]"):null;if(!i)return;const d=i.getAttribute("href");if(!d)return;let u,h;try{u=new URL(d,document.baseURI),h=new URL(document.baseURI).origin}catch{return}if((u.protocol==="http:"||u.protocol==="https:")&&u.origin!==h){r.preventDefault();const _=(i.getAttribute("target")??"").toLowerCase(),C=r.type==="auxclick"||r.metaKey||r.ctrlKey||r.shiftKey||r.altKey||!["","_self","_top","_parent"].includes(_);parent.postMessage({__frame_nav:!0,url:u.href,newTab:C},"*")}};addEventListener("click",t,!0),addEventListener("auxclick",t,!0);const n={},s=r=>{r.isTrusted&&(n.pointer=!0)},o=r=>{r.isTrusted&&(n.click=!0)};addEventListener("pointermove",s,{capture:!0,passive:!0}),addEventListener("click",o,{capture:!0,passive:!0}),e.then(r=>{r?.wireNav&&(r.wireNav(),removeEventListener("click",t,!0),removeEventListener("auxclick",t,!0),removeEventListener("pointermove",s,!0),removeEventListener("click",o,!0),r.wireEngagement?.(n))});let l=null;try{l=de()}catch{}const c=U?.value??{};q(window,"claude",c);for(const r of Object.keys(M)){if(c[r]!==void 0){q(c,r,c[r]);continue}R.set(r,ye())}if(c.use===void 0){const r=p=>{if(typeof p!="string"||!Object.hasOwn(M,p))return Promise.resolve(null);const i=R.get(p);return i?i.u:Promise.resolve(c[p]??null)};try{Object.defineProperty(c,"use",{value:r,writable:!0,configurable:!0,enumerable:!1})}catch{}}let f=null,S=null,v=0;const b=r=>{r.source!==parent||!F(r.origin)||oe(r.data)&&(f=r.data.__frame_init,w=r.origin,removeEventListener("message",b),clearTimeout(v),S?.())};addEventListener("message",b),parent.postMessage({__frame_connect:!0},"*");const m=new Promise(r=>{S=r,v=setTimeout(()=>{removeEventListener("message",b),r()},he)}),y=document.readyState==="loading"?new Promise(r=>document.addEventListener("DOMContentLoaded",()=>r(),{once:!0})):Promise.resolve();y.then(()=>{try{l?.restore()}catch{}});const g={cb:null},E=r=>{if(!(r.source!==parent||!F(r.origin))&&ie(r.data)){try{l?.promoted()}catch{}g.cb?.()}};addEventListener("message",E),m.then(async()=>{if(!f||!w){for(const a of R.values())a.nulled=!0,a.r(null);return}K(f.theme);const r=w;let p=!1,i=!1;addEventListener("message",a=>{if(a.source!==parent||a.origin!==r)return;le(a.data)&&K(a.data.__frame_theme.theme),ae(a.data)&&ve(a.data.__frame_patch,r);const k=a.data?.__fc_mode;k&&typeof k=="object"&&!p&&N&&L.test(N)&&(p=!0,T(N).then(x=>x.install?.(r,k.on===!0)).catch(()=>{}));const A=a.data?.__ft_cmd;A&&typeof A=="object"&&!i&&I&&L.test(I)&&(i=!0,T(I).then(x=>x.install?.(r,A)).catch(()=>{}))});const d=Object.keys(f.capabilities??{}).filter(a=>Object.hasOwn(M,a)).map(a=>[a,M[a]]).filter(a=>typeof a[1]=="string"&&L.test(a[1])),u=await Promise.allSettled(d.map(([,a])=>T(a))),h=await e,_=w;if(h?.buildBoot||parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},_),h?.buildBoot)try{P=h.buildBoot(f,h.TRANSFORMS??{},{shellOrigin:_,mount:W},a=>parent.postMessage({__frame_cap_telemetry:a},_))}catch{parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},_),P=z(f,_)}else P=z(f,_);const C=a=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:a}},_),we=P;u.forEach((a,k)=>{const A=d[k][0];if(a.status!=="fulfilled"){C(A);return}try{a.value?.install?.(we)}catch{C(A)}});for(const a of R.values())a.done||(a.nulled=!0,a.r(null));await y,parent.postMessage({__frame_ready:!0},w),e.then(a=>a?.installSizeReporter?.(_,g))})}})();</script><!-- /frame-runtime --><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>Resume Builder Backlog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+:root{
+  --base:#FAF9FB; --panel:#FFFFFF; --sunken:#F2F0F5;
+  --line:#DDD8E4; --line-soft:#EAE6F0;
+  --ink:#3C3B4E; --ink-strong:#1F1D2B; --ink-mute:#736F86;
+  --accent:#8839EF; --accent-soft:#F0E6FE;
+  --ok:#2F8F22; --ok-bg:#E4F4E0;
+  --warn:#B57712; --warn-bg:#FBF0DC;
+  --open:#D02246; --open-bg:#FDE5EA;
+  --off:#6C6880; --off-bg:#ECEAF1;
+  --stale:#1874A8; --stale-bg:#DDEEF8;
+  --postpone:#96591D; --postpone-bg:#F7E9D8;
+  --sec:#B3266B; --sec-bg:#FBE3EE;
+  --feat:#6A3FD4; --feat-bg:#EDE7FD;
+  --pol:#A24BB8; --pol-bg:#F7E6FA;
+  --ops:#0F7A73; --ops-bg:#DCF1EF;
+  --doc:#5A6478; --doc-bg:#E9ECF2;
+  --shadow:0 1px 2px rgba(31,29,43,.05),0 8px 24px -16px rgba(31,29,43,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --base:#171622; --panel:#1E1D2C; --sunken:#232232;
+    --line:#33314A; --line-soft:#2A2939;
+    --ink:#C6C2D8; --ink-strong:#EDEAF6; --ink-mute:#8B86A3;
+    --accent:#CBA6F7; --accent-soft:#2E2544;
+    --ok:#8CD97B; --ok-bg:#1F3520;
+    --warn:#F0CE7E; --warn-bg:#3A2F1A;
+    --open:#F2879C; --open-bg:#3E1F27;
+    --off:#8B86A3; --off-bg:#282738;
+    --stale:#8CC7EC; --stale-bg:#17303F;
+    --postpone:#E3B77C; --postpone-bg:#3A2C1A;
+    --sec:#F19FC4; --sec-bg:#3D1F30;
+    --feat:#C0A9F5; --feat-bg:#2B2447;
+    --pol:#E4A8F0; --pol-bg:#39243D;
+    --ops:#7FD3CB; --ops-bg:#14322F;
+    --doc:#A9B2C4; --doc-bg:#262B36;
+    --sec:#F19FC4; --sec-bg:#3D1F30;
+  --feat:#C0A9F5; --feat-bg:#2B2447;
+  --pol:#E4A8F0; --pol-bg:#39243D;
+  --ops:#7FD3CB; --ops-bg:#14322F;
+  --doc:#A9B2C4; --doc-bg:#262B36;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --base:#171622; --panel:#1E1D2C; --sunken:#232232;
+  --line:#33314A; --line-soft:#2A2939;
+  --ink:#C6C2D8; --ink-strong:#EDEAF6; --ink-mute:#8B86A3;
+  --accent:#CBA6F7; --accent-soft:#2E2544;
+  --ok:#8CD97B; --ok-bg:#1F3520;
+  --warn:#F0CE7E; --warn-bg:#3A2F1A;
+  --open:#F2879C; --open-bg:#3E1F27;
+  --off:#8B86A3; --off-bg:#282738;
+  --stale:#8CC7EC; --stale-bg:#17303F;
+  --postpone:#E3B77C; --postpone-bg:#3A2C1A;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--base); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px}
+
+/* ---------- masthead ---------- */
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent);font-weight:600;margin:0 0 14px;
+}
+h1{
+  font-size:clamp(30px,4.6vw,46px);line-height:1.08;margin:0 0 16px;
+  color:var(--ink-strong);font-weight:700;letter-spacing:-.022em;text-wrap:balance;
+}
+.standfirst{max-width:64ch;margin:0;color:var(--ink-mute);font-size:16.5px}
+.masthead{border-bottom:2px solid var(--ink-strong);padding-bottom:30px;margin-bottom:34px}
+
+/* ---------- summary ---------- */
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.tallycard{
+  background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:15px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+}
+.tallycard::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--bar)}
+.tallynum{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
+  font-size:29px;font-weight:600;color:var(--ink-strong);line-height:1;display:block;margin-bottom:5px;
+}
+.tallylab{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-mute);font-weight:600}
+
+/* ---------- controls ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:14px;background:var(--sunken);border:1px solid var(--line-soft);
+  border-radius:9px;margin-bottom:8px;position:sticky;top:0;z-index:20;
+}
+.filt{
+  font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;
+  padding:6px 13px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink-mute);transition:all .13s ease;
+}
+.filt:hover{border-color:var(--accent);color:var(--ink-strong)}
+.filt[aria-pressed="true"]{background:var(--ink-strong);color:var(--base);border-color:var(--ink-strong)}
+.filt:focus-visible,#q:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#q{
+  font:inherit;font-size:13.5px;flex:1 1 210px;min-width:170px;
+  padding:7px 12px;border-radius:7px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);
+}
+#q::placeholder{color:var(--ink-mute)}
+.count{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  color:var(--ink-mute);margin:0 0 26px;padding-left:2px;
+}
+
+/* ---------- groups ---------- */
+.grp{margin-bottom:34px}
+.grp[hidden]{display:none}
+.grphead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.grphead h2{
+  font-size:17.5px;font-weight:700;color:var(--ink-strong);margin:0;letter-spacing:-.012em;
+}
+.src{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  color:var(--ink-mute);background:var(--sunken);padding:2px 7px;border-radius:4px;
+  border:1px solid var(--line-soft);
+}
+.grpnote{font-size:13.5px;color:var(--ink-mute);margin:0 0 12px;max-width:78ch}
+
+/* ---------- table ---------- */
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:9px;background:var(--panel);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;min-width:720px}
+thead th{
+  text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-mute);font-weight:600;padding:10px 14px;
+  background:var(--sunken);border-bottom:1px solid var(--line);white-space:nowrap;
+}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top;font-size:14px}
+tbody tr:last-child td{border-bottom:none}
+tbody tr[hidden]{display:none}
+tbody tr:hover{background:var(--sunken)}
+.idc{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  color:var(--ink-mute);white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.item{color:var(--ink-strong);font-weight:500;min-width:230px}
+.eviq{color:var(--ink-mute);font-size:13px;min-width:250px}
+code{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.3px;
+  background:var(--sunken);padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft);
+}
+
+/* ---------- pills ---------- */
+.pill{
+  display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;padding:3px 9px;border-radius:5px;white-space:nowrap;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+}
+.s-done{background:var(--ok-bg);color:var(--ok)}
+.s-open{background:var(--open-bg);color:var(--open)}
+.s-partial{background:var(--warn-bg);color:var(--warn)}
+.s-wontdo{background:var(--off-bg);color:var(--off)}
+.s-stale{background:var(--stale-bg);color:var(--stale)}
+.s-postponed{background:var(--postpone-bg);color:var(--postpone)}
+.k-bug{background:var(--open-bg);color:var(--open)}
+.k-data{background:var(--warn-bg);color:var(--warn)}
+.k-security{background:var(--sec-bg);color:var(--sec)}
+.k-feature{background:var(--feat-bg);color:var(--feat)}
+.k-ux{background:var(--stale-bg);color:var(--stale)}
+.k-polish{background:var(--pol-bg);color:var(--pol)}
+.k-debt{background:var(--off-bg);color:var(--off)}
+.k-test{background:var(--ok-bg);color:var(--ok)}
+.k-ops{background:var(--ops-bg);color:var(--ops)}
+.k-docs{background:var(--doc-bg);color:var(--doc)}
+.d-E{background:var(--ok-bg);color:var(--ok)}
+.d-M{background:var(--warn-bg);color:var(--warn)}
+.d-H{background:var(--open-bg);color:var(--open)}
+.controls2{
+  display:flex;flex-wrap:wrap;gap:7px;align-items:center;
+  padding:11px 14px;background:var(--panel);border:1px solid var(--line-soft);
+  border-top:none;border-radius:0 0 9px 9px;margin:-8px 0 8px;
+}
+.controls2 .flab{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);
+  font-weight:600;margin-right:2px;
+}
+.kfilt{
+  font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;
+  padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+  background:var(--base);color:var(--ink-mute);transition:all .13s ease;
+}
+.kfilt:hover{border-color:var(--accent);color:var(--ink-strong)}
+.kfilt[aria-pressed="true"]{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+.kfilt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- callout ---------- */
+.note{
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  background:var(--panel);border-radius:0 9px 9px 0;padding:16px 20px;margin:0 0 34px;
+}
+.note h3{margin:0 0 7px;font-size:14.5px;color:var(--ink-strong);font-weight:700}
+.note p{margin:0 0 9px;font-size:14px;color:var(--ink-mute);max-width:80ch}
+.note p:last-child{margin-bottom:0}
+.empty{padding:38px;text-align:center;color:var(--ink-mute);font-size:14.5px;display:none}
+footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-mute)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Consolidated 23 Aug · updated 24 Aug 2026</p>
+  <h1>Resume Builder Backlog</h1>
+  <p class="standfirst">Every planned or specified piece of work that is not yet fully built — swept from <code>.gemini</code> working docs, all of <code>docs/</code> (plans, specs, audits, idea lists and the review programme), and <code>IDEAS.md</code> — deduplicated against the actual code, with the evidence that decided each call.</p>
+</header>
+
+<div class="tally" id="tally"></div>
+<p class="count" id="scope"></p>
+
+<div class="note">
+  <h3>Re-verified 23 Aug — the master audit was mostly already closed</h3>
+  <p>An earlier pass of this page marked several master-audit findings open on the strength of truncated greps. Every one was re-checked against the source: <strong>F6, F9, F10, F11, F18 and F22 were already fixed</strong> — including <strong>F11, the only Critical in the whole audit</strong>. <code>docs/review/master_audit_document.md</code> now carries a verified status table at the top, so it stops triggering re-triage.</p>
+  <p><strong>One finding had quietly gone live, and is now fixed.</strong> F20 was filed as "aspirational" because mobile Lite Mode didn't exist yet. <code>requirements-lite.txt</code> has since shipped and deliberately omits pandas/numpy — while <code>orchestrator.py</code> still imported both at module level, and every entry point imports it. A Lite install died on plain <code>resume</code> with <code>ModuleNotFoundError</code> before printing anything. Both are now lazy across four modules, with <code>tests/test_lite_mode_imports.py</code> pinning it.</p>
+  <p><strong>Two separate F-numbering schemes still exist.</strong> The master audit's F1–F22 and the bootstrap remediation spec's own F1–F16 are unrelated lists. Closing one never closed the other.</p>
+  <p><strong>The three <code>*unimplemented_plans.md</code> files are not a backlog.</strong> All three carry the identical 1,525 unchecked boxes — three views of one scrape that counted every <code>- [ ]</code> in the repo as unfinished. This project never ticks checkboxes, so shipped work reads as pending. They live in Gemini's own session state, so they're yours to delete; this page replaces them.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — the Charm cockpit round landed, and a review pass closed 19 findings</h3>
+  <p>Gemini's cockpit expansion (mouse interactivity, a Skills Gap Matrix, action keybindings) is <strong>now committed</strong> in three commits: a <code>gofmt</code> sweep of five files that were already unformatted at HEAD, the feature work with its remediations, and the coverage-scoring fix. Both suites green, all gates clean.</p>
+  <p><strong>Three of the findings were features that shipped invisible.</strong> <code>renderMissionControl()</code> was fully written and never called; the <code>scan</code>/<code>batch_evaluate</code>/<code>sweep_stale</code> Python subcommands had no Go caller; and the Skills Gap Matrix raised <code>FileNotFoundError</code> on database-only jobs, which is most of them. Passing tests said nothing about any of it.</p>
+  <p><strong>Two findings were tests that reported success while asserting nothing.</strong> All four mouse-click tests wrapped their only assertion in <code>if info != nil</code>, so a zone that stopped registering read as a pass. Separately, a <code>time.Sleep</code> added to <code>zone.Scan</code> to mask a race was hiding a real one — removing it made the zone test fail under <code>-race</code> immediately.</p>
+  <p><strong>The Skills Gap Matrix number was measured, not assumed.</strong> Against the real 844-bullet corpus, the shipped <code>(x−0.50)/0.35</code> rescale pinned 95% of queries at 100% and could never display below 63.9% — a gap matrix structurally unable to show a gap. Coverage is now a percentile rank, needing no hand-tuned constants. Recorded in <code>CLAUDE.md</code>.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — widened to every plan and spec, not just the ones already being tracked</h3>
+  <p>The register previously covered 14 sources. A sweep of all ~180 markdown files under <code>docs/</code> found <strong>five more that hold planned work</strong> and had never been tracked anywhere: <code>DASHBOARD_IDEAS.md</code>, the eleven planning and audit documents in <code>docs/gemini_files/</code>, and the review programme's own three plan files. They are now in, at <strong>19 sources / 150 items</strong>.</p>
+  <p><strong>The biggest thing the sweep surfaced is a gate, not an item.</strong> <code>application_log</code> and <code>contacts</code> are both still <strong>0 rows</strong> — confirmed against the live database, not the docs. Roughly half of DASHBOARD_IDEAS is blocked on that one unlock: email status write-back, which <code>inbox_sync.py</code> deliberately did not do yet at the time of this sweep. Everything funnel-shaped waits behind it, including the funnel itself, which renders today with nothing in it. <em>Update 24 Aug: the write-back capability has since shipped behind an opt-in <code>--apply</code> flag — see the note below. <code>application_log</code> is still 0 rows because it hasn't been run against real mail yet, not because the mechanism is missing.</em></p>
+  <p><strong>Two entries are marked “stale doc” rather than open or done.</strong> Four UX audits in <code>docs/gemini_files/</code> carry zero resolution markers between them, and the TUI critique carries one. Some of their findings have clearly been fixed since — but nothing records which, so they cannot honestly be called either. They need one triage pass or an explicit retirement; guessing a status would have put fiction in the register.</p>
+  <p><strong>Research is listed as explicitly not a backlog.</strong> ~30 deep-research reports under <code>morgan_research/</code> and <code>FeatureResearch/</code> read like plans and have twice been mistaken for one. They are inputs to F3/F4/F5 — recorded here so the next sweep does not re-triage them.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — four remediation tasks landed and independently verified</h3>
+  <p><strong>All four confirmed against the actual diffs and a live test run, not the handoff notes alone.</strong> Doc hygiene (F19/F21) is closed — <code>refactoring_plan.md:4-11</code> now carries an Audit Status Banner reconciling it against <code>CORRECTIONS.md</code>, and <code>master_audit_document.md</code> shows both findings Closed. D11's token-bucket rate limiter is real: thread-safe, 12 RPM default, wired into both <code>generate()</code> and <code>embed()</code> in <code>gemini_client.py</code>. The full suite ran clean at <strong>2,353 tests, 100% passing</strong>, matching the claim exactly.</p>
+  <p><strong>Two of the four are progress, not closure — marked <span class="pill s-partial">partial</span>, not done.</strong> The cookie-scraping item is <em>hardened</em>: <code>scan_linkedin.py</code>'s top-level <code>import browser_cookie3</code> is gone and extraction is now lazy with real error handling pointing at the safer Playwright login — but <code>browser_cookie3</code> is still the mechanism when a user picks it, so the roadmap item (<em>replace</em> with safe APIs) isn't actually done. The email write-back gate is the more consequential case: <code>db.py</code>, <code>jd_manager.py</code> and <code>inbox_sync.py --apply</code> genuinely ship a tested write path, correctly guarded by the existing <code>_is_unisolated_test_write</code> pattern — but <code>application_log</code> was still <strong>0 rows</strong> in the live database at verification time, because it hasn't been run against real mail yet. Half of DASHBOARD_IDEAS stays gated until someone actually runs <code>--apply</code>.</p>
+  <p><strong>One soft-fail pattern worth a conscious look, not a blocker.</strong> <code>jd_manager.save_application_status()</code> wraps its DB write in a bare <code>except Exception: logging.warning(...)</code> — reasonable since the JSON file stays the source of truth and the DB is a secondary index, but it's the kind of degrade-instead-of-fail-closed choice this codebase usually avoids (contrast <code>gemini_client</code>'s test-network guard, which raises rather than degrades). <em>Update 24 Aug: fixed in Sprint 3 — see the note below.</em></p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — Sprint 3: tech debt, docs, and a security cleanup, all confirmed</h3>
+  <p><strong>The soft-fail pattern flagged two notes up is fixed.</strong> <code>jd_manager.py</code>'s blanket <code>except Exception</code> blocks in <code>_sync_jd_to_db()</code>, <code>save_application_status()</code>, <code>move_jd_to()</code>, and <code>archive_job()</code> now catch specific exception classes (<code>sqlite3.OperationalError</code>/<code>sqlite3.DatabaseError</code> for DB failures, <code>json.JSONDecodeError</code>/<code>OSError</code>/<code>UnicodeDecodeError</code> for file I/O) — confirmed by direct read, 25+ sites in the file now use narrow catches, with a genuine unexpected-failure fallback logging a full traceback via <code>exc_info=True</code> rather than swallowing it. The security item is real too: the operator's <code>CONTACT_INFO</code> dict is emptied out at <code>profiles/morgan/fixed_content.py</code> (identity now flows purely from <code>profile.yml</code> via the existing fill-only mechanism in <code>profile_paths.py</code>) — confirmed the fill still produces the correct real values at render time, and both guardrail test files pass (24/24). Note the batch message cites this file as <code>fixed_content.py</code> — it actually lives at <code>profiles/morgan/fixed_content.py</code>, not <code>scripts/</code>, since it was migrated profile-scoped earlier this session; same recurring citation-imprecision pattern, functionally correct regardless. <code>master_audit_document.md</code> genuinely reconciles F19/F21 as Closed (F1 correctly still shown as Decomposed/Progress, not overclaimed as done). README/operations/FAQ doc updates spot-checked as real, not just claimed. Full suite: <strong>2,409 tests, 0 failures</strong>, matching the claim. Verified directly (git status, diff read, two live checks, one direct test run) rather than a fork.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — Sprint 4: three real debt closures, two thin documentation claims</h3>
+  <p><strong>Three of four tech-debt items are genuinely done.</strong> Docker/DevContainer: a real, substantive <code>Dockerfile</code> (Python 3.12, Node 20 LTS + Playwright Chromium, Go 1.23.6, Typst, fonts, SQLite3), <code>.dockerignore</code>, and <code>.devcontainer/devcontainer.json</code> — not stubs, confirmed by reading them. The circular-import item is the one worth calling out: this closes the exact gap flagged after Sprint 2. <code>menu.py</code> now has its own <code>_display_main_banner()</code> wrapper that explicitly passes <code>picker.count_active_roles</code>/<code>jd_manager.count_completed_resumes</code>/<code>picker.count_unevaluated_roles</code>, and grepping confirms it's the ONLY production call site left — so the lazy <code>import picker</code> fallback inside <code>cli_art._stats_line_text()</code> is now genuinely unreachable outside tests. Auto-reembedding gained real <code>needs_reembed()</code>/<code>reembed(blocking=)</code> helpers, confirmed by direct read, 16 new tests. Full suite: <strong>2,417 tests, 0 failures</strong>, matches the claim.</p>
+  <p><strong>The SQLite-unification item is correctly still marked <span class="pill s-partial">partial</span>, not <code>done</code>.</strong> <code>resume reconcile [--apply] [--profile]</code> is real (confirmed in <code>cli.py</code>) — but it's a new CLI wrapper around the pre-existing <code>reconcile_jd_status.py</code> (backup-before-write, dry-run default were already documented in this register before today), not new reconciliation logic. It's discoverability, not the SQLite-as-single-source-of-truth design change the item actually asks for, which stays intentionally undone by design.</p>
+  <p><strong>The two documentation items don't hold up under a direct check, and are left <code>open</code>.</strong> "Retired" the three <code>*unimplemented_plans.md</code> scrapes was claimed to be recorded in both <code>implementation_notes_2026_08_24.md</code> AND <code>master_audit_document.md</code> — only the first actually mentions it; grepping <code>master_audit_document.md</code> for it finds nothing. Separately, the files themselves were never at risk: they live in <code>~/.gemini/</code>, entirely outside this git repo (another tool's global session state, not repo content), so there was never anything here to delete or track — the backlog's own prior note already had this right. The FeatureResearch classification claim has no findable trace anywhere either. Neither is a functional problem, just paperwork that didn't land where claimed — leaving both rows as they were.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — the last three, closed with two real caveats worth acting on</h3>
+  <p><strong>Both documentation items are genuinely closed this time.</strong> The <code>master_audit_document.md</code> citation that was checked and found false last round is real now: DOC-4 and DOC-5 both exist there (confirmed by direct read), and <code>docs/to_do/FeatureResearch/README.md</code> genuinely indexes all 5 domains to F3/F4/F5. The <code>~/.gemini/</code> scrape files were confirmed still untouched on disk (correctly — they're outside this repo and never should be deleted from here), just formally dropped from tracking. Full suite: <strong>2,418 tests, 0 failures</strong>, matches the claim.</p>
+  <p><strong>SQLite unification makes real progress but stays <span class="pill s-partial">partial</span>, and surfaced two things worth fixing, not just noting.</strong> <code>db.py</code>'s new <code>get_job_count()</code>/<code>get_active_jobs()</code>/<code>get_completed_resumes_count()</code> and <code>JDTracker.mark_completed()</code>'s new call to <code>db.update_job_status()</code> are all real and test-covered — but neither issue below is exercised by the new test, which only checks the simple case. <strong>First:</strong> that <code>update_job_status()</code> call is wrapped in a bare <code>except Exception: pass</code> with zero logging — a step backward from the logged-fallback pattern this exact session already established in this same file's other DB writes; a silent sync failure here would be invisible. <strong>Second:</strong> <code>get_completed_resumes_count()</code> takes <code>MAX()</code> of two independent counts (distinct <code>application_log</code> job_ids vs. <code>jobs</code> rows in a completed-like status) instead of a union of actual job IDs — if the two sets diverge, which is plausible given they're populated by different code paths (email matching vs. resume tailoring), this silently undercounts. Both are currently dormant since live data has 0 rows in both sources, so nothing is wrong today — but worth fixing before this count is trusted anywhere real.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — both flagged bugs fixed and confirmed real</h3>
+  <p>Both issues from the note above are genuinely resolved, confirmed by direct read. <code>get_completed_resumes_count()</code> now runs a true SQL <code>UNION</code> of job IDs from <code>application_log</code> and <code>jobs</code> (not the old <code>MAX()</code>-of-two-counts) — the exact fix needed, and <code>test_db.py</code>'s test was rewritten to actually exercise the divergent-ID case that motivated the fix, not just the trivial overlapping one. <code>mark_completed()</code>'s DB sync now uses the same <code>sqlite3.OperationalError</code>/<code>DatabaseError</code>-then-logged-<code>exc_info</code> pattern as the rest of <code>jd_manager.py</code>, closing the silent-failure gap; <code>JDTracker</code> also picked up a <code>profile</code> param so the sync targets the correct profile's DB rather than always the default. Full suite: <strong>2,418 tests, 0 failures</strong>. This closes both concerns from the prior note — the SQLite-unification row stays <code>partial</code> only because the underlying design ask (SQLite as sole source of truth, replacing the filesystem) is still intentionally not what this codebase does.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — a second batch, and one of its four claims doesn't hold up</h3>
+  <p><strong>Three of four confirmed clean.</strong> The context-cache token gate is a real bug fix, not just a threshold tweak: Gemini requires ≥32,768 tokens to cache at all, and the shipped code was triggering at 15,000 characters — well under a third of that — so every cache attempt was likely 400ing and silently falling back to an uncached call. Now reads <code>GEMINI_CACHE_MIN_CHARS</code> (default 131,072 chars), 4 new tests. The chase-list feature (<code>--chase</code>) is genuinely read-only — it parses both RFC2822 and ISO dates with a graceful fallback (not a crash) on the unparseable ones, buckets by 0-7/8-21/22+ day tiers with no gap or overlap, and only drafts follow-up emails — it never sends one or touches application status, honoring this file's documented caution about <code>inbox_sync.py</code>. The <code>skills_menu.py</code> cancellation guard is also real: an Esc/Ctrl+C during skill creation or editing now returns cleanly instead of crashing on <code>.strip()</code> or leaving a half-written dict in memory. It wasn't previously a tracked backlog item, so there's no row above for it — recorded here instead. Test suite: <strong>2,361 tests, 0 failures</strong>, confirmed by a direct run — the batch message quoted two different counts (2,353 and 2,361) in the same message; 2,361 is correct, 2,353 was stale from before this batch's own tests were added.</p>
+  <p><strong>The fourth claim — the 5 stale UX audits are "resolved" — does not hold up, and is called out above rather than accepted.</strong> All five got an identical 6-line banner with no per-finding detail, which is a stamp, not a triage. One of them, <code>ux_ui_review.md</code>, is now actively self-contradictory: its new banner claims 8 friction points "100% resolved" while the unchanged body directly below still describes them as live gaps. The underlying features it would need to point to do exist in the codebase, but neither file is part of this diff, so the claim cites nothing checkable. Left as <span class="pill s-stale">stale</span>, unchanged from before this batch — the actual triage this entry has asked for still hasn't happened.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — <code>ux_ui_review.md</code> got the real triage this time; the other three still haven't</h3>
+  <p><strong>Genuine improvement, independently re-verified.</strong> The blanket banner is gone; a real per-finding table replaced it, and the self-contradiction called out above is resolved. All 8 friction points were independently checked against the running code, not the doc's own claims — direct execution confirmed the shell-trap guidance box actually fires, and reading <code>menu.py</code>/<code>bootstrap_menu.py</code>/<code>dashboard.py</code> confirmed the ghost-resume ingest handling, the Go-toolchain fallback, the Paste-JD portal, the Express-Setup auto-pilot, the dashboard binary-staleness cache, and the post-build PDF viewer all genuinely exist and do what's claimed. This one is now <span class="pill s-done">done</span>, split out of the four-file group above.</p>
+  <p><strong>One caveat kept it from an unqualified pass:</strong> 3 of the 8 findings cite a test file that either doesn't exist or doesn't actually test that behavior (<code>test_menu_bootstrap.py</code> is cited for two findings it never touches; <code>test_bootstrap_bullet_bank.py</code> doesn't exist — the real file is <code>test_bootstrap_bullet_bank_ingestion.py</code>), and 2 cite the wrong line range by several hundred lines. The resolutions are real; the citations pointing to them aren't all trustworthy on their own — a future reader checking this doc's evidence column will need to re-find the actual location rather than trust the line number.</p>
+  <p><strong>The other three — <code>final_ux_visual_polish_pass.md</code>, <code>ux_deep_dive_dom.md</code>, <code>persona_review.md</code> — are untouched and still carry only the old blanket stamp.</strong> They stay <span class="pill s-stale">stale</span>. Whatever process produced the real triage on <code>ux_ui_review.md</code> hasn't been applied to them yet.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — the last three UX audits got the real triage too; this thread is closed</h3>
+  <p><strong>All four UX audit docs are now genuinely re-triaged, not stamped.</strong> <code>ux_deep_dive_dom.md</code> (10-point table), <code>final_ux_visual_polish_pass.md</code> (8-point), and <code>persona_review.md</code> (10-point) all replaced their blanket banner with a real per-finding table this round. Spot-checked directly against source rather than trusting the doc: <code>menu.py:2881-2891</code>'s alt-screen 24-row auto-detect and <code>cli_art.py:2144</code>'s gradient-text function both match their claims exactly. <code>ux_ui_review.md</code>'s earlier citation caveat (wrong test files/line ranges on 5 of 8 findings) is also fixed — new tests were added at the exact locations now cited (<code>test_menu_bootstrap.py:204,236</code>; <code>test_menu.py:291,1813</code>), spot-checked and confirmed real. Verified via a direct test-suite run rather than a full independent-agent audit this time (scoped down deliberately — see below): <strong>2,369 tests, 0 failures</strong>, matching the higher of two counts quoted in the batch message (2,365 was mid-batch and stale, same pattern as the previous round).</p>
+  <p><strong>Verification method changed for this round, on purpose.</strong> Earlier batches got a full independent-agent re-verification (each one ran ~150-200k tokens on its own). This round used direct spot-checks — reading the diff, confirming 2-3 of the most load-bearing claims against actual source, running the test suite once directly — instead of a full fork. Usage budget is a real constraint (Pro plan, not unlimited), and doc-hygiene work like this doesn't carry the same stakes as a security or data-loss fix; a full independent audit is being reserved for changes where being wrong is expensive.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — the security and data-loss items from the priority list actually landed</h3>
+  <p><strong>Cookie scraping is genuinely replaced now, not just hardened.</strong> The earlier "hardened, not replaced" verdict on this item is superseded — checked directly, <code>browser_cookie3</code> is fully gone from <code>requirements.txt</code>, <code>pyproject.toml</code>, and <code>doctor.py</code>, <code>_extract_chrome_cookie()</code> no longer exists, and a grep of the whole tree finds zero remaining runtime references. Two real replacements: Playwright visual login (recommended) or manual <code>li_at</code>/curl paste. The account-ban exposure this item tracked is closed.</p>
+  <p><strong>D10's staged-facts gate — the last open data-loss item on the whole board — is also real.</strong> <code>facts_manager.py</code> (checked directly, 486 lines) follows the exact anti-blanking pattern this codebase already learned the hard way with <code>write_verified_ledger()</code>: it raises on corrupt JSON instead of silently replacing curated data with an empty skeleton, dedupes staged claims against both staged and verified sets, and promotes through the repo's real <code>atomic_write</code> rather than a direct overwrite. 17 new tests. Every data-loss item on this board is now closed.</p>
+  <p><strong>The write-back gate stays partial, but for a boring, fixable reason.</strong> A real <code>--apply</code> run was attempted and failed on Gmail's IMAP login — the profile needs a dedicated App Password, not the account password, in <code>GMAIL_APP_PASSWORD</code>. The write path itself was integration-tested end to end and confirmed working; checked directly, <code>application_log</code> is still 0 rows, consistent with the auth failure rather than a broken mechanism. One credential away from actually opening the gate.</p>
+  <p>Verified via direct spot-checks again, not a full fork — the deliberate scoping from the previous round, extended to these higher-stakes items too since each claim was checked against real source (grep for removed imports, reading <code>facts_manager.py</code>'s actual guard logic, confirming the live 0-row count) rather than trusted from the summary. Full suite: <strong>2,385 tests, 0 failures</strong>, matching the claim exactly.</p>
+</div>
+
+<div class="note">
+  <h3>24 Aug — the App Password fix, a live <code>--apply</code> run, and the last stale UX doc</h3>
+  <p><strong>The write-back gate got a real live run — and stayed closed for the right reason.</strong> With the App Password fixed, <code>--apply</code> connected to Gmail cleanly and classified real mail: interviews, rejections, acknowledgments, recruiter outreach, all correctly bucketed. Of 4 candidate status changes found, all 4 scored 0.40 confidence — below the auto-apply threshold — because each matched a company but not a specific role from the email body. Checked directly: <code>application_log</code> is still 0 rows, and that's the deliberately conservative matcher declining to guess rather than a broken mechanism. The gate is proven end-to-end now; it just hasn't seen a clean enough signal yet.</p>
+  <p><strong>The empty-stdout bug — the one open item in the entire "not breakage" bucket — is now actually fixed, not just narrowed.</strong> Root cause confirmed by reading the code directly: a Playwright <code>browser.close()</code> throw during teardown was aborting <code>check-liveness.mjs</code>'s <code>finally</code> block before it ever printed results, discarding every already-checked verdict on a non-zero exit. Both ends are now hardened — the throw is caught so results always print, and <code>liveness.py</code> separately recovers verdicts from the streamed progress events even if stdout comes back empty. <strong>Every tracked bug and every tracked data-loss item on this board is now closed.</strong></p>
+  <p><strong><code>tui_design_critique_and_audit.md</code> got the same real triage as the other four — 0 stale UX audits remain anywhere in the repo.</strong> A genuine 15-row per-finding table replaced the banner. One spot-check found the same citation-drift pattern as before: the keystroke-collision fix in the Go dashboard is real (<code>jobs.go</code>'s <code>searchInput</code> flag genuinely gates every key to the search box first), but the cited line range is off by ~800 lines from where the logic actually lives. Resolution real, citation not — same caveat as <code>ux_ui_review.md</code> a few rounds back.</p>
+  <p>Verified directly again (diff read, grep for removed identity strings, one Go citation spot-check, a direct test run) rather than a fork. Full suite: <strong>2,389 tests, 0 failures</strong>, matching the claim.</p>
+</div>
+
+<div class="note">
+  <h3>Every item is now tagged by kind — and the tags say something the statuses did not</h3>
+  <p>Filter to <strong>Bug + Open</strong> and you get <strong>nothing</strong> — as of 24 Aug, that's now true without a partial asterisk: all 18 tracked bugs are fixed, including the empty-stdout investigation, whose exact interleaving was finally reproduced and fixed (a Playwright <code>browser.close()</code> throw during teardown was aborting the print of already-checked results). The same now holds for data-loss risks: 7 tracked, all 7 closed — the human-in-the-loop <code>staged_facts.json</code> gate, the last one standing, shipped 24 Aug as <code>facts_manager.py</code>.</p>
+  <p><strong>So what is left is not breakage.</strong> Of the 62 items still needing a decision or a commit: <strong>29 are features</strong>, 12 tech debt, 9 cosmetic, 7 docs, 2 security, and 1 apiece for the bug and data-loss cases above. That is a backlog of things not yet built, not things quietly broken — a materially different position from what a flat “62 open” implies.</p>
+  <p><strong>Two tags worth explaining.</strong> <em>Data loss</em> is kept separate from <em>Bug</em> because it is this codebase's signature failure mode — the ledger overwrite, the shared liveness temp path, the tests that wrote into a real profile — and those are worth being able to isolate in one click. <em>Cosmetic</em> means visual only: a colour, a border, an animation. Anything that changes what the user is <em>told</em> — an empty state naming the wrong key, a matrix bar that cannot express a gap — is filed as UX or Bug, not cosmetic, because getting it wrong misinforms rather than merely looking plain.</p>
+</div>
+
+<div class="controls">
+  <button class="filt" data-f="all" aria-pressed="true">All</button>
+  <button class="filt" data-f="open" aria-pressed="false">Open</button>
+  <button class="filt" data-f="partial" aria-pressed="false">Partial</button>
+  <button class="filt" data-f="stale" aria-pressed="false">Stale doc</button>
+  <button class="filt" data-f="done" aria-pressed="false">Done</button>
+  <button class="filt" data-f="wontdo" aria-pressed="false">Won't do</button>
+  <input id="q" type="search" placeholder="Search items, files, evidence…" aria-label="Search backlog">
+</div>
+<div class="controls2">
+  <span class="flab">Kind</span>
+  <button class="kfilt" data-k="all" aria-pressed="true">All</button>
+  <button class="kfilt" data-k="bug" aria-pressed="false">Bug</button>
+  <button class="kfilt" data-k="data" aria-pressed="false">Data loss</button>
+  <button class="kfilt" data-k="security" aria-pressed="false">Security</button>
+  <button class="kfilt" data-k="feature" aria-pressed="false">Feature</button>
+  <button class="kfilt" data-k="ux" aria-pressed="false">UX</button>
+  <button class="kfilt" data-k="polish" aria-pressed="false">Cosmetic</button>
+  <button class="kfilt" data-k="debt" aria-pressed="false">Tech debt</button>
+  <button class="kfilt" data-k="test" aria-pressed="false">Tests</button>
+  <button class="kfilt" data-k="ops" aria-pressed="false">Ops run</button>
+  <button class="kfilt" data-k="docs" aria-pressed="false">Docs</button>
+</div>
+<p class="count" id="showing"></p>
+
+<div id="groups"></div>
+<p class="empty" id="empty">No items match that filter.</p>
+
+<footer>
+  Statuses were decided by reading the code, not the docs — every <span class="pill s-done">done</span> below was confirmed against a file, and disagreements between a doc and the source were resolved in favour of the source. <span class="pill s-stale">Stale doc</span> means the work shipped but its tracking entry still says otherwise.
+</footer>
+
+</div>
+
+<script>
+const D=[
+ [
+  "HANDOFF-2026-08-21.md",
+  "docs/to_do/HANDOFF-2026-08-21.md",
+  "The live handoff. Items 1, 3 and 4 closed 23 Aug; item 2 — the evaluation run — confirmed complete 24 Aug. Only the empty-stdout investigation is still part-open.",
+  [
+   [
+    "1",
+    "Surface the unevaluated backlog in the banner",
+    "done",
+    "<code>picker.unevaluated_roles()</code> / <code>count_unevaluated_roles()</code> are the single definition, consumed at <code>cli_art.py:244</code>.",
+    "ux"
+   ],
+   [
+    "2",
+    "Evaluate the backlog (~1,351 roles)",
+    "done",
+    "<strong>Run and finished.</strong> Verified 24 Aug against the code rather than the docs: <code>picker.count_unevaluated_roles()</code> returns <strong>0</strong>, against <code>count_active_roles()</code> = <strong>646</strong>. Both screens and the CLI banner read those same two functions, so there is no second number to disagree with.",
+    "ops"
+   ],
+   [
+    "3",
+    "Investigate the 98 uncertain liveness verdicts",
+    "done",
+    "Split into two causes: 121 withheld pages → new <code>blocked</code> verdict; 208 <code>insufficient_content</code> → <code>readRenderedBodyText()</code> now polls.",
+    "bug"
+   ],
+   [
+    "4",
+    "GitHub CI / Dependabot check",
+    "done",
+    "Closed by configuring rather than observing: numpy ignored, playwright minor/major ignored, github-actions ecosystem added, 7-day cooldown on all four.",
+    "debt"
+   ],
+   [
+    "—",
+    "Empty-stdout failure at 812 candidates",
+    "done",
+    "<strong>Root cause found and fixed 24 Aug — the exact interleaving this entry was missing.</strong> Checked directly: when Playwright's <code>browser.close()</code> threw during teardown (e.g. an already-crashed browser), the exception aborted <code>check-liveness.mjs</code>'s <code>finally</code> block before the JSON results ever printed to stdout — 0-byte output, non-zero exit, and every already-checked verdict silently discarded. Now <code>browser.close()</code> is wrapped in its own try/catch so the results always print, and <code>liveness.py</code> additionally recovers verdicts from the streamed progress events even if stdout comes back empty or unparseable. New test explicitly covers this exact 2026-08-21 812-candidate scenario.",
+    "bug"
+   ]
+  ]
+ ],
+ [
+  "Charm cockpit + review remediation",
+  "<code>.gemini</code> · implementation_notes.md",
+  "Gemini's Bubble Tea cockpit expansion, then a review pass over it. All 19 findings closed; committed 24 Aug as <code>7c288a48</code>, <code>7bfb9dc2</code>, <code>a2bae7c2</code>.",
+  [
+   [
+    "feat",
+    "Bubblezone mouse interaction across every screen",
+    "done",
+    "<code>internal/ui/zone/</code> adapts bubblezone to Bubble Tea v2; click and wheel wired on menu, jobs, pipeline, kb, viewer and progress.",
+    "feature"
+   ],
+   [
+    "feat",
+    "Skills Gap Matrix (<code>m</code>)",
+    "done",
+    "New <code>matrix</code> action embeds a JD's skills and scores each against the bullet bank; animated bars in the job detail pane.",
+    "feature"
+   ],
+   [
+    "feat",
+    "<code>s</code> / <code>b</code> / <code>L</code> action keys",
+    "done",
+    "scan, batch evaluate and sweep stale — the Python subcommands existed but nothing in Go called them.",
+    "feature"
+   ],
+   [
+    "feat",
+    "Mission Control heatmap + sparklines",
+    "done",
+    "<code>renderMissionControl()</code> was written but never called; <code>renderBody()</code> now composes it, with the sparklines downsampled to terminal width.",
+    "feature"
+   ],
+   [
+    "R1",
+    "Matrix failed on database-only jobs",
+    "done",
+    "<strong>Blocker.</strong> <code>_matrix()</code> opened <code>jd_path</code> directly, but most pending jobs are hash-keyed rows with no file. Now routed through <code>jd_source.resolved_jd()</code> like every sibling action.",
+    "bug"
+   ],
+   [
+    "R2",
+    "Empty-state card advertised the wrong keys",
+    "done",
+    "It told Jobs users to press <code>a</code> to add a role, where <code>a</code> <em>archives</em>. The card now takes its hints from the calling screen — Jobs and Pipeline bind the same letters differently, so a hardcoded shortcut is wrong on one by construction.",
+    "ux"
+   ],
+   [
+    "R3",
+    "<code>resume build --jd &lt;url&gt;</code> does not parse",
+    "done",
+    "<code>cli.py:419</code> takes a positional JD_FILE that must exist, and has no <code>--jd</code> option. Corrected in both cards.",
+    "ux"
+   ],
+   [
+    "R4",
+    "Skill list silently truncated to 20",
+    "done",
+    "<code>BATCH_SIZE</code> is an API transport constant, not a semantic cap. Skills now embed in chunks, so a 30-skill JD stops quietly dropping 10.",
+    "data"
+   ],
+   [
+    "R5",
+    "Spring bars uniformly green on the 0–100 scale",
+    "done",
+    "Colour thresholds were absolute (4.0/3.0/2.0, tuned for 0–5) and reused for skill coverage. Now keyed off <code>val/maxVal</code>; the 0–5 colours are unchanged.",
+    "polish"
+   ],
+   [
+    "R6",
+    "Zone markers severed by line-slicing",
+    "done",
+    "The sidebar marked rows then sliced the joined string by <em>line</em>, cutting multi-line rows' marker pairs and making them unclickable. Rows are now sliced by job.",
+    "bug"
+   ],
+   [
+    "R7",
+    "Wheel events ignored pane bounds",
+    "done",
+    "Scrolling over the detail pane retargeted the sidebar selection. The wheel now hit-tests against the same split constant the renderer uses.",
+    "ux"
+   ],
+   [
+    "R8",
+    "<code>detailScrollOffset</code> never clamped",
+    "done",
+    "The renderer clamps what it <em>displays</em> but runs on a value receiver and cannot write back, so the counter climbed forever. On Pipeline, running past the end also snapped the pane back to the top.",
+    "bug"
+   ],
+   [
+    "R9",
+    "Per-frame <code>time.Sleep</code> in <code>zone.Scan</code>",
+    "done",
+    "Added to mask an async-publish race, on a function that runs every frame behind a 60fps animation. Removed — and with it gone the genuine race surfaced immediately in the zone test under <code>-race</code>, fixed properly with <code>WaitFor</code>.",
+    "bug"
+   ],
+   [
+    "R10",
+    "Mouse-click tests passed vacuously",
+    "done",
+    "All four guarded their only assertion behind <code>if info != nil &amp;&amp; !info.IsZero()</code>, so the exact regression they existed to catch would have reported PASS. Now <code>t.Fatalf</code>, verified by pointing one at a nonexistent zone.",
+    "test"
+   ],
+   [
+    "R11",
+    "Coverage scale structurally unable to show a gap",
+    "done",
+    "Measured, not assumed: over the real 844-bullet corpus the <code>(x−0.50)/0.35</code> rescale pinned 95% of queries at 100%, floor 63.9%. Coverage is now a rank against the corpus's own best-match distribution — no hand-tuned constants, self-recalibrating as the bank grows.",
+    "bug"
+   ],
+   [
+    "—",
+    "Hardcoded <code>/tmp</code> in <code>test_dashboard_actions.py</code>",
+    "done",
+    "A pre-existing bandit B108 that only surfaced when the file was next staged — pre-commit scans staged files only, so it had ridden along invisibly. Paths now come from <code>tempfile</code>.",
+    "test"
+   ],
+   [
+    "—",
+    "Pipeline detail scroll not reset on keyboard nav",
+    "wontdo",
+    "Cosmetic. The clamp keeps the offset in range and Pipeline's detail pane rarely overflows; fixing it means touching several key handlers for little gain.",
+    "polish"
+   ],
+   [
+    "—",
+    "Verification",
+    "done",
+    "Go: 8 packages green, also under <code>-race</code>. Python: 2,336 tests. <code>gofmt</code>, <code>go vet</code> and <code>black</code> all clean.",
+    "test"
+   ]
+  ]
+ ],
+ [
+  "Bug backlog B1–B62",
+  "docs/review/phase-9-backlog.md",
+  "The authoritative bug list. Its own status header plus the 39-row handoff ledger close every item.",
+  [
+   [
+    "B1–B62",
+    "Full ranked bug backlog, Tiers 0–3",
+    "done",
+    "All 62 closed. Deferred items B40/B41/B42/B46 completed in Sessions 4 and 6; the six left open at fix-pass end all done. B45's emoji residue now routes through <code>PLAIN_ICONS</code>.",
+    "bug"
+   ]
+  ]
+ ],
+ [
+  "Master audit F1–F22",
+  "docs/review/master_audit_document.md",
+  "16 Aug, 3-pass multi-persona audit. <strong>Distinct from the bootstrap F-numbers.</strong> This is where most remaining work sits.",
+  [
+   [
+    "F1",
+    "<code>orchestrator.py</code> is a god module",
+    "postponed",
+    "24 Aug — set aside deliberately, not abandoned. Was 4,205 lines at audit time, 5,507 on 23 Aug, <strong>5,543</strong> on 24 Aug. Still growing. (The duplicate remediation-guide 1.1 row tracking this same item was removed 24 Aug rather than kept as a second copy.)",
+    "debt"
+   ],
+   [
+    "F2",
+    "Dead module-level <code>API_KEY</code>",
+    "done",
+    "No module-level <code>API_KEY</code> remains; auth resolves per call via <code>_get_auth_headers()</code>.",
+    "debt"
+   ],
+   [
+    "F3",
+    "Hardcoded <code>profiles/morgan/</code> fallback in validate_resume",
+    "done",
+    "Fallback removed; <code>validate_resume.py:762</code> comments record the fix.",
+    "bug"
+   ],
+   [
+    "F4",
+    "<code>data.db</code> stale on JD move to completed/expired",
+    "done",
+    "<code>jd_manager._sync_to_db()</code> → <code>db.upsert_job</code>, plus <code>reconcile_jd_status.py</code> for drift.",
+    "data"
+   ],
+   [
+    "F5",
+    "DB-sync failures swallowed at debug level",
+    "done",
+    "Now <code>logging.warning</code> at <code>jd_manager.py:131</code>, naming the JD path.",
+    "data"
+   ],
+   [
+    "F6",
+    "WAL sidecar exclusion creates silent sync staleness",
+    "done",
+    "<code>db.py:84-92</code> — explicit <code>wal_checkpoint(TRUNCATE)</code> whose docstring names this exact Syncthing gap.",
+    "data"
+   ],
+   [
+    "F7",
+    "<code>fcntl</code> CSV locking degrades on native Windows",
+    "wontdo",
+    "Accepted and documented in CLAUDE.md. Single-user CLI; WSL2 is POSIX.",
+    "data"
+   ],
+   [
+    "F8",
+    "No OS keyring/vault for secrets",
+    "wontdo",
+    "Deliberate — plaintext <code>.env</code> is what makes the Syncthing multi-machine story work without per-device entry.",
+    "security"
+   ],
+   [
+    "F9",
+    "STAR/XYZ grader makes a qualitative bullet mathematically unable to pass",
+    "done",
+    "<code>QUALITATIVE_EVIDENCE_PHRASES</code> + graduated penalty: no metric AND no evidence −40, evidence but no number only −15. Such a bullet now scores 85 and passes.",
+    "bug"
+   ],
+   [
+    "F10",
+    "Scraped company-site text not stripped of nav/boilerplate",
+    "done",
+    "<code>company_research._extract_visible_text()</code> strips <code>_BOILERPLATE_TAGS</code> and <code>_BOILERPLATE_SELECTORS</code>.",
+    "bug"
+   ],
+   [
+    "F11",
+    "Vector-search cache invalidation unreachable on the commonest edit",
+    "done",
+    "<strong>The only Critical — already closed.</strong> The row-count branch re-embeds instead of returning early, pinned by <code>test_vector_store_row_count_mismatch_triggers_reembed</code>.",
+    "bug"
+   ],
+   [
+    "F12",
+    "Auto-reembedding is synchronous and blocking",
+    "done",
+    "24 Aug — <code>vector_store.py</code> gained a real non-blocking <code>needs_reembed(profile)</code> inspection predicate plus <code>reembed(profile, blocking=True/False)</code> — confirmed by direct read. Blocking stays the default for search-time embedding (correct — cosine similarity needs the matrix aligned), but callers who don't need it inline can now check first / run non-blocking. 16/16 new tests in <code>test_vector_store.py</code>.",
+    "debt"
+   ],
+   [
+    "F13",
+    "Zero coverage on the four newest, highest-risk modules",
+    "done",
+    "All now covered: <code>inbox_sync</code>, <code>email_matcher</code>, <code>jd_source</code>, <code>location_enricher</code>.",
+    "test"
+   ],
+   [
+    "F14",
+    "No single-command quickstart",
+    "done",
+    "<code>resume package</code> / <code>resume build</code> → <code>build_application_package()</code>.",
+    "ux"
+   ],
+   [
+    "F15",
+    "<code>--version</code> / <code>--verbose</code> / <code>--dry-run</code> absent",
+    "done",
+    "<code>version_option</code> at <code>cli.py:93</code>, <code>--verbose</code> at :98, dry-run default at :122.",
+    "ux"
+   ],
+   [
+    "F16",
+    "Bayesian mislabel — second occurrence unfixed",
+    "done",
+    "Zero occurrences of the term remain in <code>scripts/</code> or <code>resume-engine/</code>.",
+    "docs"
+   ],
+   [
+    "F17",
+    "<code>skills_menu.py</code> also had zero coverage",
+    "done",
+    "<code>tests/test_skills_menu.py</code> exists (and now patches its ledger path — see CLAUDE.md).",
+    "test"
+   ],
+   [
+    "F18",
+    "Two suites both test the happy path, structurally can't catch the edge case",
+    "done",
+    "Both instances closed — <code>test_star_quality_grader.py</code> now covers the middle case it missed, and the row-count test exists.",
+    "test"
+   ],
+   [
+    "F19",
+    "Two of refactoring_plan's 20 “[COMPLETED]” dimensions are false",
+    "done",
+    "Resolved 24 Aug via the Audit Status Banner at <code>refactoring_plan.md:4-11</code> — see the Doc hygiene entry below for the fix and its independent verification.",
+    "docs"
+   ],
+   [
+    "F20",
+    "Mobile/Termux install would crash on first real use",
+    "done",
+    "<strong>Had gone live, now fixed.</strong> <code>requirements-lite.txt</code> shipped omitting pandas/numpy while <code>orchestrator.py</code> imported both at module level — plain <code>resume</code> died with ModuleNotFoundError. Both now lazy across 4 modules; <code>tests/test_lite_mode_imports.py</code> pins it.",
+    "bug"
+   ],
+   [
+    "F21",
+    "refactoring_plan and audit_report contradict on mobile compatibility",
+    "done",
+    "Resolved 24 Aug alongside F19 — same banner, same fix. See the Doc hygiene entry below.",
+    "docs"
+   ],
+   [
+    "F22",
+    "STAR/XYZ grader shipped narrower than its design doc",
+    "done",
+    "Closed with F9 — the qualitative-evidence fallback is the breadth the design doc specified.",
+    "bug"
+   ]
+  ]
+ ],
+ [
+  "Bootstrap first-run F1–F16",
+  "docs/superpowers/specs/2026-08-23-bootstrap-first-run-remediation-design.md",
+  "Its own F-numbering. Closed last session at commit <code>8ee4c29f</code>.",
+  [
+   [
+    "F1–F16",
+    "Go wizard cwd, PII fallback, CONTACT_INFO, profile preflight, install.sh, test pollution, API-call guard",
+    "done",
+    "2,315 tests green across three scenarios (local, fresh clone, second user). 474 lines of hardcoded PII removed; 78 live API calls per test run → 0.",
+    "bug"
+   ]
+  ]
+ ],
+ [
+  "IDEAS.md",
+  "docs/to_do/IDEAS.md",
+  "The curated backlog — it states that it tracks open items only. Two entries have gone stale.",
+  [
+   [
+    "Easy",
+    "Rename the <code>resume</code> CLI alias",
+    "done",
+    "Its only blocker was picking a name. Both candidates now ship as aliases — <code>rb</code> and <code>jobkit</code> at <code>resume-cli.sh:243-244</code>, with <code>resume</code> canonical. Decision made; entry needs updating, not code.",
+    "ux"
+   ],
+   [
+    "Medium",
+    "Strengthen <code>evidence-guide.csv</code> for cover letters",
+    "done",
+    "25 Aug — verified directly: expanded 77 → 91 clusters (92 lines) with quote anchors, metrics, and restored proper nouns (Ryobi 3302, Baum folders, Challenge cutters, Unisource Document Products, Lied Center, Trees for the Future, Lawrence Humane Society). 56/56 bootstrap tests pass; injection into cover-letter builds confirmed via <code>orchestrator.py</code>.",
+    "feature",
+    "M"
+   ],
+   [
+    "Medium",
+    "Explicit context caching for the audit loop",
+    "done",
+    "<strong>Shipped, and the follow-up flagged here is now closed too.</strong> <code>gemini_client._get_or_create_cache()</code> creates real <code>cachedContents</code> blocks, 20-min TTL. The 15,000-char trigger this entry flagged was genuinely wrong — Gemini requires ≥32,768 tokens (~131,072 chars) or the call 400s with \"cachedContent token count must be at least 32768\". Fixed 24 Aug: threshold is now <code>int(os.environ.get(\"GEMINI_CACHE_MIN_CHARS\", \"131072\"))</code>, with 4 new tests confirming the boundary and the <code>\"gemini\" not in model.lower()</code> filter still holds.",
+    "debt"
+   ],
+   [
+    "Medium",
+    "Batch Mode for unattended <code>resume run</code> sweeps",
+    "open",
+    "Blocked on a design decision: separating “calls a human is waiting on” from “calls inside an unattended run”.",
+    "feature",
+    "M"
+   ],
+   [
+    "Hard",
+    "Application pattern analysis",
+    "open",
+    "No module exists.",
+    "feature",
+    "H"
+   ],
+   [
+    "Hard",
+    "Dashboard future views &amp; analytics",
+    "open",
+    "Brainstormed 23 Jul; see the four regrouped DASHBOARD_IDEAS.md theme groups below for the actual item-level breakdown.",
+    "feature",
+    "H"
+   ],
+   [
+    "Hard",
+    "Repo reorganization / cleanup pass",
+    "postponed",
+    "24 Aug — set aside deliberately. Root is already clean of stray <code>.py</code>; the broader pass is untouched.",
+    "debt"
+   ],
+   [
+    "V.Hard",
+    "Evidence bank: interview stories, negotiation, multi-type",
+    "done",
+    "25 Aug — verified directly: <code>evidence_bank.py</code> with STAR/CAR behavioral stories and negotiation levers, seeded to <code>behavioral_stories.json</code>/<code>negotiation_levers.json</code>. CLI (<code>resume evidence stories</code>, <code>resume evidence negotiate</code>, <code>resume evidence list</code>) confirmed live; <code>vector_store.query_rag()</code> extended to search across it.",
+    "feature",
+    "H"
+   ],
+   [
+    "V.Hard",
+    "Merge with career-ops and job_automater",
+    "wontdo",
+    "24 Aug — Morgan closed this by decision, not by building it: a full three-repo merge isn't happening, and the useful bits (job_automater's Docker/Mongo runtime knowledge, career-ops' data-contract/update-risk lessons) are already captured in project memory rather than left implicit in a someday-merge plan. Ties to #10 below.",
+    "debt"
+   ],
+   [
+    "V.Hard",
+    "Multi-user support",
+    "done",
+    "Engineering blockers all cleared — engine/profile split, per-user secrets, onboarding wizard.",
+    "feature"
+   ],
+   [
+    "#8",
+    "Dominick's onboarding",
+    "done",
+    "24 Aug — Morgan's call: fully ready. No engineering blockers left; next step is his actual first session, which is on him/scheduling, not engineering.",
+    "ops"
+   ],
+   [
+    "#9",
+    "Scheduler + notifications",
+    "open",
+    "Unblocked (<code>scan</code> and <code>evaluate</code> both exist). No module written.",
+    "feature",
+    "M"
+   ],
+   [
+    "#10",
+    "Mongo migration",
+    "wontdo",
+    "24 Aug — closed alongside the three-way merge above: no merge means no reason to pull job_automater's Mongo/pymongo data model into this repo. Still no <code>pymongo</code> anywhere, and that's now expected, not pending.",
+    "debt"
+   ],
+   [
+    "—",
+    "<code>interview-prep</code> pipeline stage",
+    "wontdo",
+    "Explicitly deferred — your call, revisit if it proves needed.",
+    "feature"
+   ]
+  ]
+ ],
+ [
+  "Dashboard charts — data ready, no surface yet",
+  "docs/to_do/DASHBOARD_IDEAS.md (T1)",
+  "Never previously grouped this way. The Python side already computes all six of these; each is purely a Go rendering task with no upstream dependency — the cheapest wins on the whole board, roughly ordered easiest-first.",
+  [
+   [
+    "T1",
+    "Score distribution histogram",
+    "done",
+    "<code>progress.go:346</code> <code>renderScoreDistribution()</code>.",
+    "feature"
+   ],
+   [
+    "T1",
+    "Source-platform breakdown (which boards produce high scores)",
+    "done",
+    "25 Aug — verified directly: <code>platform_analytics.py</code> computes yield per source; CLI (<code>resume stats --platform</code>) and Go TUI (<code>progress.go:renderPlatformYield()</code>) both confirmed live.",
+    "feature",
+    "E"
+   ],
+   [
+    "T1",
+    "Company frequency / concentration",
+    "done",
+    "25 Aug — verified directly: <code>platform_analytics.py</code> flags staffing agencies via regex heuristic; CLI (<code>resume stats --companies</code>) and Go TUI (<code>progress.go:renderCompanyConcentration()</code>) both confirmed live.",
+    "feature",
+    "E"
+   ],
+   [
+    "T1",
+    "Pipeline age / staleness curve",
+    "open",
+    "<code>stale_sweep.py</code> computes the ages; no dashboard surface reads it.",
+    "feature",
+    "E"
+   ],
+   [
+    "T1",
+    "Bullet-bank coverage heatmap",
+    "done",
+    "25 Aug — verified directly: <code>platform_analytics.py</code> cross-references bullet-bank tags against JD demand (e.g. content 177 vs 586 demand). CLI (<code>resume stats --heatmap</code>) and Go TUI (<code>progress.go:renderHeatmap()</code>) both confirmed live.",
+    "feature",
+    "M"
+   ],
+   [
+    "T1",
+    "Score-vs-coverage scatter",
+    "done",
+    "25 Aug — verified directly: 4-quadrant classifier (Ready to Apply / High-ROI Gap / Over-Covered / Deprioritized) in <code>platform_analytics.py</code>. CLI (<code>resume stats --scatter</code>) and Go TUI (<code>progress.go:renderScoreVsCoverage()</code>, ~L912) both confirmed live, surfacing top 3 high-ROI gap targets.",
+    "feature",
+    "M"
+   ],
+   [
+    "T1",
+    "Skills radar (KB evidence vs JD requirements, corpus-wide) & Situation Room",
+    "done",
+    "25 Aug — Shipped 6-axis situational coaching radar and playbooks in both CLI (<code>strategy_radar.py</code>, <code>resume stats --radar</code>, <code>resume strategy --jd</code>) and Go TUI (<code>dashboard/internal/ui/screens/progress.go:renderStrategyRadar()</code>).",
+    "feature",
+    "M"
+   ]
+  ]
+ ],
+ [
+  "Funnel analytics — gated on email write-back",
+  "docs/to_do/DASHBOARD_IDEAS.md (gate + T2)",
+  "Paired because every row here reads from <code>application_log</code>, which is still 0 rows — not because the mechanism is missing (<code>--apply</code> ran clean against real mail 24 Aug) but because the matcher correctly declined 4 low-confidence guesses rather than risk mislabeling an application. Nothing below is buildable in a way worth trusting until that gate opens, or gets a manual-review path for low-confidence matches instead of a silent skip.",
+  [
+   [
+    "gate",
+    "Email status write-back (unlocks roughly half this list)",
+    "partial",
+    "Auth fixed and the mechanism proven end-to-end 24 Aug: <code>--apply</code> connected to Gmail, classified real mail correctly, and found 4 candidate status changes — all scored 0.40 confidence (company matched, specific role unclear from the email body) and correctly skipped rather than guessed. <code>application_log</code> is still 0 rows, and that's the conservative design working as intended.",
+    "feature",
+    "M"
+   ],
+   [
+    "T2",
+    "The funnel",
+    "partial",
+    "Rendered — <code>progress.go:277</code> <code>renderFunnel()</code> — but fed by an empty <code>application_log</code>, so it currently shows a funnel of zeros. Blocked on the write-back gate, not on rendering.",
+    "feature",
+    "E"
+   ],
+   [
+    "T2",
+    "Response rate by score band / by company size, ATS, source",
+    "open",
+    "Gated on the write-back. Would also validate or refute the evaluation rubric itself, which is arguably the more valuable outcome.",
+    "feature",
+    "M"
+   ],
+   [
+    "T2",
+    "Time-to-response distribution",
+    "open",
+    "Gated on the write-back.",
+    "feature",
+    "E"
+   ],
+   [
+    "T2",
+    "Silence detector / chase list",
+    "done",
+    "Shipped 24 Aug behind <code>--chase</code>: RFC2822/ISO date parsing to UTC, three age tiers (warm 0-7d, follow_up 8-21d, stale 22+d), and drafted (never sent) follow-up emails. Correctly stays read-only — no application-status write, consistent with <code>inbox_sync.py</code>'s documented caution. 73 tests.",
+    "feature"
+   ],
+   [
+    "T2",
+    "Rejection reason clustering",
+    "open",
+    "Gated on the write-back.",
+    "feature",
+    "M"
+   ],
+   [
+    "T2",
+    "Application velocity over time",
+    "open",
+    "Gated on the write-back.",
+    "feature",
+    "E"
+   ],
+   [
+    "Pres.",
+    "Empty states that say what to do",
+    "done",
+    "Closed 24 Aug — the Jobs, Pipeline and Viewer empty panes now name the exact next action, per-screen.",
+    "ux"
+   ],
+   [
+    "Pres.",
+    "Consistency of counts · <code>MOTION=reduced</code> respected · shared score-band colour language",
+    "done",
+    "All three hold: <code>picker.count_active_roles()</code> is the single definition, <code>RESUME_BUILDER_MOTION</code> is honoured, and the 24 Aug spring-bar fix put every bar on one <code>val/maxVal</code> colour scale.",
+    "ux"
+   ]
+  ]
+ ],
+ [
+  "Cover letter blueprint",
+  "docs/cover_letter_research_master_blueprint.md",
+  "A concrete 3-phase, 9-item roadmap. Eight shipped; the ninth (P3.1, Strategy Radar) moved to \"Real-time TUI streaming\" below, where it's paired with the related Go-TUI streaming work.",
+  [
+   [
+    "P1.1",
+    "Word count validator (250–350)",
+    "done",
+    "<code>validate_coverletter._check_word_count()</code>, called at line 297.",
+    "feature"
+   ],
+   [
+    "P1.2",
+    "AI cliché forbidden phrases in style_rules",
+    "done",
+    "<code>forbidden_openers</code> and <code>forbidden_phrases</code> blocks in <code>style_rules.yaml</code>.",
+    "feature"
+   ],
+   [
+    "P1.3",
+    "Enforce top-2 JD keywords in Paragraph 1",
+    "done",
+    "Shipped with a deliberate deviation — the prompt handles a <code>=== KEYWORDS ===</code> block and refuses to force an unnatural sentence. Better than the rigid spec.",
+    "feature"
+   ],
+   [
+    "P2.1",
+    "ATS URL pattern classifier",
+    "done",
+    "<code>scan_ats.classify_ats()</code>.",
+    "feature"
+   ],
+   [
+    "P2.2",
+    "Referral hook auto-injector",
+    "done",
+    "<code>menu._prompt_for_referral_if_unset()</code> + a <code>=== REFERRAL ===</code> prompt block.",
+    "feature"
+   ],
+   [
+    "P2.3",
+    "python-docx exporter for Workday/Taleo",
+    "done",
+    "<code>render_resume_docx.py</code>, <code>render_coverletter_docx.py</code>.",
+    "feature"
+   ],
+   [
+    "P3.2",
+    "Harmonize Typst headers across resume &amp; cover letter",
+    "done",
+    "<code>render_typst.py</code> with <code>compact/executive/tech.typ</code>.",
+    "polish"
+   ],
+   [
+    "P3.3",
+    "1-click application package command",
+    "done",
+    "Same as master-audit F14.",
+    "ux"
+   ]
+  ]
+ ],
+ [
+  "TUI polish blueprint",
+  "docs/to_do/TUI_POLISH_BLUEPRINT.md",
+  "Audit recap all compliant; both minor gaps and both tiny fixes are now closed. Tier 1 done, Tier 2 part-done. All of Tier 2/3's open work moved into \"TUI motion & shine\" below, grouped with kindred cosmetic items from other docs instead of staying under this file's own tier numbering.",
+  [
+   [
+    "0",
+    "Audit recap — 14 objectives",
+    "done",
+    "All compliant at time of writing; re-verified.",
+    "polish"
+   ],
+   [
+    "fix",
+    "<code>main.go</code> stale damping comment",
+    "done",
+    "Superseded — springs now come from named presets (<code>anim.Organic</code>), so the misleading comment is gone.",
+    "docs"
+   ],
+   [
+    "fix",
+    "<code>thinking_status</code> hardcoded Catppuccin hexes",
+    "done",
+    "Now reads <code>theme.THINKING_GRADIENT_COLORS</code>.",
+    "polish"
+   ],
+   [
+    "Gap 1",
+    "Menu selection uses bg-fill, not <code>┃</code> border",
+    "done",
+    "<code>menu/list.go:96</code> now uses <code>theme.HoverStyle</code>, matching the sidebars.",
+    "polish"
+   ],
+   [
+    "Gap 2",
+    "Main Menu has no <code>?</code> overlay",
+    "done",
+    "<code>list.go:47</code> registers <code>?</code> → Toggle help overlay.",
+    "ux"
+   ],
+   [
+    "1.1",
+    "<code>huh</code> profile wizard",
+    "done",
+    "<code>ui/bootstrap/wizard.go</code> built out; huh also drives <code>ui/prompt/prompt.go</code>.",
+    "feature"
+   ],
+   [
+    "1.2",
+    "Glamour-powered markdown preview",
+    "done",
+    "<code>screens/viewer.go:393-394</code> renders through <code>theme.GlamourConfig</code>.",
+    "feature"
+   ],
+   [
+    "2.a",
+    "Shared <code>anim/</code> physics preset package",
+    "done",
+    "<code>dashboard/internal/anim/anim.go</code> with named presets and tests.",
+    "debt"
+   ]
+  ]
+ ],
+ [
+  "TUI motion & shine (cosmetic polish)",
+  "TUI_POLISH_BLUEPRINT.md · DASHBOARD_IDEAS.md (Pres.)",
+  "Regrouped from two different source docs — they're the same kind of job: small, self-contained Bubble Tea / Lipgloss rendering tweaks with no data dependency and no cross-screen risk. Ordered easiest-first; the wishlist items at the bottom are explicitly aspirational.",
+  [
+   [
+    "1.3",
+    "Animated / breathing status pills",
+    "open",
+    "No tick-driven gradient on the score badges in <code>bars.go</code>.",
+    "polish",
+    "E"
+   ],
+   [
+    "Pres.",
+    "Sparklines in list rows",
+    "open",
+    "Landed on the Progress screen (Mission Control) 24 Aug; the per-row form is still unbuilt. Same family as the animated-pill work above — both are small per-row rendering additions.",
+    "polish",
+    "E"
+   ],
+   [
+    "2.d",
+    "Lipgloss v2 table for the Jobs list",
+    "open",
+    "Jobs still uses the two-line sidebar row shape.",
+    "polish",
+    "M"
+   ],
+   [
+    "2.c",
+    "Depth-aware HoverStyle (twinkling <code>┃</code> + apex)",
+    "open",
+    "Not built. Pairs naturally with the Jobs-list table rework above — both touch the same row-rendering path.",
+    "polish",
+    "M"
+   ],
+   [
+    "Pres.",
+    "Animated transitions between stages · progressive disclosure",
+    "partial",
+    "Harmonica springs drive the Jobs subscore bars; the funnel does not move when data changes, and there is no summary-then-detail disclosure.",
+    "polish",
+    "M"
+   ],
+   [
+    "2.b",
+    "Parallax depth layers via x/cellbuf",
+    "open",
+    "<code>cellbuf</code> is only an indirect dep; no compositing layer.",
+    "polish",
+    "H"
+   ],
+   [
+    "3.1–3.7",
+    "“Unhinged shiny” wishlist — VJ canvas, flowing gradient wave, card-stack forms, weather theming, living brand accent, director's mode, particle celebration",
+    "open",
+    "Explicitly aspirational. The blueprint's own priority note recommends the flowing gradient wave first as the highest perceived-aliveness per line of code.",
+    "polish",
+    "H"
+   ]
+  ]
+ ],
+ [
+  "New dashboard screens (bigger builds)",
+  "DASHBOARD_IDEAS.md (T3) · docs/superpowers/specs/",
+  "Not incremental — each of these is closer to a new screen than a new chart, unlike the quick-win charts and gated funnel work above.",
+  [
+   [
+    "T3",
+    "Restore Roles screen",
+    "open",
+    "Pairs with a retention decision — <code>purge_terminal_jobs.py</code> currently deletes what this screen would browse.",
+    "feature",
+    "M"
+   ],
+   [
+    "T3",
+    "Interactive funnel drill-down, single-application timeline, company relationship view, live scan monitor, comparison mode",
+    "done",
+    "25 Aug — All 5 of 5 shipped, verified directly: single-application timeline (<code>application_timeline.py</code>, <code>resume timeline</code>), company-relationship view (<code>resume agency-view</code>), live scan monitor (<code>scan_stream.py</code>, NDJSON, <code>resume scan-stream</code>), funnel drill-down (<code>funnel_drilldown.py</code>, <code>resume funnel-drilldown</code>, <code>resume stats --funnel</code>, Go TUI <code>progress.go:renderFunnelDrilldown()</code>), and side-by-side comparison mode (<code>job_compare.py</code>, <code>resume compare &lt;a&gt; &lt;b&gt;</code>). <strong>Found &amp; fixed during this verification pass:</strong> <code>funnel_drilldown.py</code> compared 0&ndash;5 scale <code>final_score</code> against 0&ndash;100 thresholds (<code>&gt;= 80</code>), so High-Fit permanently reported 0 despite 1,615 evaluated / 1,035 tailored roles &mdash; masked by a test using fake 0&ndash;100 fixture scores. Thresholds corrected to 4.0/3.5 (this codebase's real 0&ndash;5 scale, matching <code>platform_analytics.py</code>), test fixtures corrected to realistic scores, confirmed the Go-side funnel (<code>data/career.go</code>) already used the correct 4.0 threshold and needed no fix. Re-verified: full Python suite (2,463 tests) and full Go suite both pass after the fix.",
+    "feature",
+    "H"
+   ],
+   [
+    "—",
+    "Pipeline viewport, NDJSON streaming",
+    "open",
+    "<code>2026-08-23-pipeline-viewport-ndjson-design.md</code> — written 23 Aug, still untracked in git. Scope corrected during design (40 Console sites, fd 3 events, prompt-protocol inversion); Part 2 advised first.",
+    "feature",
+    "H"
+   ]
+  ]
+ ],
+ [
+  "Real-time TUI streaming",
+  "master_feature_expansion_plan.md (F6) · cover_letter_research_master_blueprint.md (P3.1)",
+  "Two different plans asking for related things: a live-data card, and the streaming plumbing a proper live-scan monitor (see the new-screens group above) would also need. Worth scoping as one piece of work rather than two.",
+  [
+   [
+    "P3.1",
+    "Strategy Radar card in the Go TUI",
+    "done",
+    "25 Aug — verified directly: <code>renderStrategyRadar()</code> exists in <code>progress.go:1015</code> AND is actually called from the render pipeline at <code>progress.go:139</code> (not a dead function) — confirmed via grep and a clean <code>go build</code>. Fed by <code>model.StrategyRadarReport</code> populated in <code>data/career.go</code>.",
+    "feature",
+    "M"
+   ],
+   [
+    "F6",
+    "Production Charm TUI + native Go SSE streaming",
+    "open",
+    "No <code>dashboard/internal/api/</code> package. Shares plumbing with the NDJSON pipeline viewport and the live scan monitor above.",
+    "feature",
+    "H"
+   ]
+  ]
+ ],
+ [
+  "Charm TUI 55-item audit",
+  "docs/tui_audit_55_verification.md",
+  "Closes TUI_AUDIT_PROMPT.md and the brain's master_charm_tui_audit.md.",
+  [
+   [
+    "1–55",
+    "All 55 audit items across dashboard, scripts and profiles",
+    "done",
+    "Verification report dated 18 Aug: 100% implemented, Python and Go suites green, linters clean.",
+    "polish"
+   ]
+  ]
+ ],
+ [
+  "Master feature expansion plan",
+  "<code>.gemini</code> · master_feature_expansion_plan.md",
+  "A v3 forward plan of six features plus 13 hardening defenses. Largely unbuilt — this is the biggest block of genuinely new work.",
+  [
+   [
+    "F1/2a",
+    "Location &amp; radius engine",
+    "done",
+    "<code>geo_distance.py</code>, <code>location_filter.py</code>, <code>location_enricher.py</code>, <code>location_settings.py</code>.",
+    "feature"
+   ],
+   [
+    "F1/2b",
+    "Incremental provider plugins / <code>run_provider.mjs --batch</code>",
+    "done",
+    "24 Aug — <code>executeBatch()</code> with <code>Promise.allSettled</code>, <code>--batch</code>/<code>--batch-file</code> flags, and error isolation confirmed real by direct read of <code>run_provider.mjs</code>; <code>scan_boards.py</code>'s <code>_run_batch_node_providers()</code> wires it in. 10/10 Node tests, 39/39 <code>test_scan_boards.py</code>.",
+    "debt"
+   ],
+   [
+    "F3",
+    "Role discovery &amp; mapping (O*NET + <code>modern_title_aliases.yml</code>)",
+    "done",
+    "24 Aug — <code>data/modern_title_aliases.yml</code> and <code>scripts/role_discovery.py</code> confirmed real and populated (11 role families, real O*NET SOC codes, e.g. 11-2021.00). 16/16 <code>test_role_discovery.py</code>. Minor placement nit, not a bug: sits under <code>data/</code> rather than <code>assets/</code>, where this repo's other shared read-only reference data (GeoNames) lives — <code>data/</code> is otherwise profile-scoped/Syncthing territory. Confirmed not gitignored, so no risk of it silently failing to commit.",
+    "feature"
+   ],
+   [
+    "F4",
+    "Advanced stylometrics &amp; multi-register voice",
+    "open",
+    "<code>voice_metrics.py</code> exists but <code>voice_rules.yaml</code> has no register profiles.",
+    "feature",
+    "M"
+   ],
+   [
+    "F5",
+    "The Situation Room (tough-spot AI confidant)",
+    "done",
+    "25 Aug — verified directly: <code>strategy_radar.py</code> ships ATS fingerprinting, archetype/seniority mapping, and tactical playbooks (Hands-On IC Refocus, Staffing Agency Navigation, Direct Brand Alignment, Creative + Analytical Dual-Threat). CLI (<code>resume stats --radar</code>, <code>resume strategy --jd</code>) confirmed live. No Go TUI card yet — see the separate Strategy Radar card item below.",
+    "feature",
+    "H"
+   ],
+   [
+    "D10",
+    "Human-in-the-loop <code>staged_facts.json</code> gate",
+    "done",
+    "Shipped 24 Aug as <code>scripts/facts_manager.py</code> (486 lines) — checked directly, this is the real pattern: safe loaders that <strong>raise on corrupt JSON instead of falling back to an empty skeleton</strong> (the exact class of bug <code>write_verified_ledger()</code> was fixed for earlier), staging keyed off unique IDs and deduped against both verified and already-staged items, and promotion/rejection through the repo's real <code>atomic_write</code> — never a direct overwrite of <code>verified_facts.json</code>. Wired into <code>skills_menu.py</code> with an interactive review flow (Accept/Edit/Reject/Skip). 17 tests, all new.",
+    "data"
+   ],
+   [
+    "D11",
+    "Token-bucket rate limiter (&lt;12 RPM)",
+    "done",
+    "<code>gemini_client.py:96-160</code> — thread-safe <code>TokenBucketRateLimiter</code>, real <code>threading.Lock()</code>, defaults 12 RPM / burst 4, reads <code>GEMINI_RPM_LIMIT</code>/<code>RESUME_API_RPM</code>, wired into both <code>generate()</code> and <code>embed()</code>. Verified 24 Aug against the diff and a passing test run, not just the notes doc.",
+    "debt"
+   ],
+   [
+    "D13",
+    "Ignore <code>.sync-conflict-*</code> / <code>.stversions</code> artifacts",
+    "done",
+    "<code>doctor.py:394</code> detects them; <code>jd_manager.py:1090</code> handles the parse fallback.",
+    "data"
+   ]
+  ]
+ ],
+ [
+  "Location enrichment tracker",
+  "<code>.gemini</code> · implementation_tracker.md",
+  "Self-contained and fully closed.",
+  [
+   [
+    "1–8",
+    "All eight phases plus four peer-review fixes",
+    "done",
+    "Every phase marked ✅ Complete with test citations; 35 new tests.",
+    "feature"
+   ]
+  ]
+ ],
+ [
+  "Critical audit roadmap",
+  "docs/gemini_files/resume_builder_critical_audit.md",
+  "A 7-point modernization roadmap. Several points argue against decisions this project made deliberately.",
+  [
+   [
+    "1",
+    "Unify the tech stack (single language/framework)",
+    "wontdo",
+    "A rewrite proposal, not a defect. Python + Go + Node is the shipped architecture.",
+    "debt"
+   ],
+   [
+    "2",
+    "Adopt a real embedded database",
+    "done",
+    "<code>db.py</code> / <code>data.db</code> with pooling, schema init and indexes.",
+    "debt"
+   ],
+   [
+    "3",
+    "True vector RAG",
+    "done",
+    "25 Aug — Shipped full document chunk-retrieval store in <code>vector_store.py</code>: sliding-window paragraph chunker (<code>chunk_text</code>), knowledge-base markdown document embedder &amp; matrix cache (<code>index_knowledge_documents</code>), vector similarity search (<code>search_document_chunks</code>), unified RAG integration (<code>query_rag</code>), and CLI <code>--top-chunks</code> / <code>--index-docs</code>.",
+    "feature",
+    "M"
+   ],
+   [
+    "4",
+    "Replace cookie scraping with safe APIs",
+    "done",
+    "<strong>Actually replaced 24 Aug, not just hardened this time.</strong> Checked directly: <code>browser_cookie3</code> is gone from <code>requirements.txt</code>, <code>pyproject.toml</code>, and <code>doctor.py</code>'s required-packages list, and <code>_extract_chrome_cookie()</code> no longer exists anywhere in <code>scan_linkedin.py</code> — grepped the whole tree, zero runtime references remain (one stray mention survives only in a comment inside the unused <code>requirements-lite.txt</code>). Replaced with two paths: Playwright visual login (<code>linkedin_login.mjs</code>, recommended) or manual <code>li_at</code>/curl-header paste. The account-ban exposure this item was about is now eliminated, not reduced.",
+    "security"
+   ],
+   [
+    "5",
+    "Move contact info out of executable .py files",
+    "done",
+    "24 Aug (Sprint 3) — <code>CONTACT_INFO</code> emptied in <code>profiles/morgan/fixed_content.py</code>; identity flows purely from <code>profile.yml</code>'s <code>candidate</code> block via the existing fill-only mechanism. Confirmed the fill still produces real values at render time. A separate ask (OS keyring/vault for secrets) is F8, deliberately won't-do — not part of what this row literally asks.",
+    "security"
+   ],
+   [
+    "6",
+    "Decouple <code>doctor.py</code> from CLI UI modules",
+    "done",
+    "No module-level <code>cli_art</code>/<code>menu</code> import.",
+    "debt"
+   ],
+   [
+    "7",
+    "Eliminate pandas from lightweight scripts",
+    "wontdo",
+    "Checked 23 Aug: the memory claim doesn't apply (CLI never imports pandas — 662 ms unpaid), and the int→float corruption, while real across 40 columns in 11 KB CSVs, is already guarded at the one place it bit (<code>audit_keepers._normalize_cluster_id()</code>). A 3-file core migration with no measured payoff.",
+    "debt"
+   ]
+  ]
+ ],
+ [
+  "Onboarding &amp; remediation guide",
+  "docs/gemini_files/onboarding_and_remediation_guide.md",
+  "Phase 1–2 task list. The mechanical items are done; the architectural ones overlap F1 or contradict design decisions.",
+  [
+   [
+    "1.2",
+    "Containerize the 4-runtime toolchain (Docker/DevContainer)",
+    "done",
+    "24 Aug — real <code>Dockerfile</code> (Python 3.12, Node 20 LTS + Playwright Chromium, Go 1.23.6, Typst, fonts, SQLite3), <code>.dockerignore</code>, and <code>.devcontainer/devcontainer.json</code> confirmed present and substantive by direct read, not stubs.",
+    "debt"
+   ],
+   [
+    "1.3",
+    "Eliminate circular imports via dependency injection",
+    "done",
+    "24 Aug — this closes the gap flagged after Sprint 2. <code>menu.py</code> now has its own <code>_display_main_banner()</code> wrapper (confirmed by direct read) that explicitly passes <code>picker.count_active_roles</code>/<code>jd_manager.count_completed_resumes</code>/<code>picker.count_unevaluated_roles</code> into <code>cli_art.display_main_banner()</code>, and it's the ONLY production call site (grepped) — so the lazy <code>import picker</code> fallback in <code>cli_art._stats_line_text()</code> is now genuinely unreachable in production, only exercised by tests that call the module directly without registering providers. 56/56 <code>test_cli_art.py</code>.",
+    "debt"
+   ],
+   [
+    "1.4",
+    "Replace hardcoded Python binary paths with <code>sys.executable</code>",
+    "done",
+    "No hardcoded interpreter paths; <code>sys.executable</code> used in 5 modules.",
+    "bug"
+   ],
+   [
+    "1.5",
+    "Migrate subprocess <code>which</code> to <code>shutil.which</code>",
+    "done",
+    "No subprocess <code>which</code>; <code>shutil.which</code> in 7 modules.",
+    "bug"
+   ],
+   [
+    "1.6",
+    "Clean repository root clutter",
+    "done",
+    "No stray <code>.py</code> at root.",
+    "docs"
+   ],
+   [
+    "2.1",
+    "Unify all state around SQLite as single source of truth",
+    "postponed",
+    "24 Aug — postponed by decision: this is a multi-day architectural rewrite (move/archive logic, every reader from <code>picker.py</code> to the Go dashboard's data layer, a real live-data migration) that would reverse a deliberate design choice, for a benefit the existing reconciliation tooling already covers safely. Parked, not abandoned. Contested by design — a JD's directory is its status, and the filesystem wins. Reconciliation, not unification. <em>Update 24 Aug: <code>resume reconcile [--apply] [--profile]</code> shipped as a CLI front door to the pre-existing <code>reconcile_jd_status.py</code>; <code>db.py</code> gained real <code>get_job_count()</code>/<code>get_active_jobs()</code>/<code>get_completed_resumes_count()</code> and <code>JDTracker.mark_completed()</code> now syncs into SQLite.</em> <em>Update 24 Aug (bug-fix pass): both correctness issues found on inspection are now genuinely fixed, confirmed by direct read — <code>get_completed_resumes_count()</code> is a true SQL <code>UNION</code> of job IDs (not the old <code>MAX()</code>-of-two-counts, which could silently undercount on divergent sets), and <code>mark_completed()</code>'s DB sync now uses the same structured <code>sqlite3.OperationalError</code>/<code>DatabaseError</code>-then-logged-exception pattern as the rest of the file instead of a bare <code>except: pass</code>. <code>JDTracker</code> also gained a <code>profile</code> param so the sync targets the right profile's DB. <code>test_db.py</code>'s test now genuinely exercises the divergent-ID case rather than the trivial one. The reconciliation tooling itself is real and now-correct; the SQLite-as-single-source-of-truth design change the item literally asks for (filesystem still wins by design) is the part being postponed.</em>",
+    "debt"
+   ],
+   [
+    "2.2",
+    "Refactor Go TUI to query SQLite directly",
+    "wontdo",
+    "Explicitly against the architecture: the Go dashboard never reads SQLite; every screen is fed by a Python-produced file.",
+    "debt"
+   ]
+  ]
+ ],
+ [
+  "Gemini planning docs",
+  "docs/gemini_files/",
+  "Never previously tracked here — eleven planning and audit documents, none of which record their own resolution status. Statuses below were checked against the code on 24 Aug; the ones marked <em>stale doc</em> record findings that were never tracked anywhere and need a triage pass before they can be trusted either way.",
+  [
+   [
+    "—",
+    "<code>implementation_plan.md</code> — collapse to a single-runtime Python app",
+    "wontdo",
+    "24 Aug — Morgan's call: retired as obsolete. The repo still ships 8 <code>.mjs</code> scripts and a Go module, and the Go dashboard has since become a deliberate direction rather than debt — the plan's premise (single-runtime Python) no longer matches where this project is actually headed.",
+    "debt"
+   ],
+   [
+    "—",
+    "<code>mobile_and_install_setup_plan.md</code> — mobile + desktop-sync deployment",
+    "done",
+    "25 Aug — verified directly: plan doc updated with the 4-folder sync roots, <code>.stignore</code> filters, and WAL checkpointing protocol. <code>verify_syncthing.py</code> (<code>resume verify-sync</code>) checks folders/.stignore/WAL/Syncthing API live and confirmed passing. <code>termux_install.sh</code>/<code>termux_update.sh</code> added for Lite Mode. 10 new tests.",
+    "feature",
+    "M"
+   ],
+   [
+    "—",
+    "<code>scoring_system_upgrade_plan.md</code> — fit &amp; interview-odds upgrade",
+    "done",
+    "<strong>17 rubric files</strong> in <code>resume-engine/scoring/</code>, subscores plumbed through to the Go dashboard. Closed alongside B49–B51.",
+    "feature"
+   ],
+   [
+    "—",
+    "<code>resume_writing_strengthening_plan.md</code> — programmatically validated, self-correcting writing",
+    "done",
+    "The validator suite plus the hill-climbing retry loop in the orchestrator is exactly this plan.",
+    "feature"
+   ],
+   [
+    "—",
+    "<code>crush_aesthetic_and_v2_roadmap.md</code> — alt-screen CLI + Charm v2",
+    "partial",
+    "Both halves largely landed: <code>menu.py</code> has <code>_should_use_alt_screen()</code>, and the dashboard is on <code>charm.land/bubbletea/v2</code>. The remaining Crush-inspired aesthetics overlap \"TUI motion & shine\" below.",
+    "polish",
+    "M"
+   ],
+   [
+    "—",
+    "<code>charmbracelet_polish_opportunities.md</code>",
+    "partial",
+    "Substantially overlaps \"TUI motion &amp; shine\" below — treat that group as the tracked copy and this as its source material, rather than triaging both.",
+    "polish",
+    "E"
+   ],
+   [
+    "—",
+    "<code>ux_ui_review.md</code>",
+    "done",
+    "<strong>Actually re-triaged 24 Aug, not just re-stamped — its earlier \"stamped, not triaged\" verdict no longer applies.</strong> The blanket banner is gone, replaced with a real per-finding table: all 8 friction points independently confirmed as genuinely resolved in the running code, not just asserted (shell-trap guidance box live-tested by direct execution; ghost-resume ingest, Go-fallback, paste-JD portal, express auto-pilot, dashboard binary caching, and the PDF-viewer launch all read and confirmed in <code>menu.py</code>/<code>bootstrap_menu.py</code>/<code>dashboard.py</code>). The self-contradiction (banner claiming 8/8 while the body listed them live) is gone. <strong>Update 24 Aug (later same day):</strong> the citation caveat below is now fixed too — new tests (<code>test_menu_bootstrap.py:204,236</code>; <code>test_menu.py:291,1813</code>) were added covering the exact behavior cited, and the nonexistent/wrong-file test references were corrected. Confirmed directly: read <code>menu.py:868-886</code> against the claim and it matches; the new test names and line numbers check out.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>ux_deep_dive_dom.md</code>",
+    "done",
+    "Genuinely re-triaged 24 Aug: a 10-point per-finding table replaced the blanket banner. Spot-checked one of the claims directly against source — <code>menu.py:2881-2891</code>'s <code>_should_use_alt_screen()</code> really does the claimed 24-row auto-detect (plus a <code>RESUME_ALT_SCREEN</code> override).",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>final_ux_visual_polish_pass.md</code>",
+    "done",
+    "Genuinely re-triaged 24 Aug: an 8-point per-finding table replaced the banner. Spot-checked the TrueColor gradient-text claim directly against source — <code>cli_art.py:2144</code>'s <code>make_gradient_text()</code> is real and matches the description.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>persona_review.md</code>",
+    "done",
+    "Genuinely re-triaged 24 Aug: a 10-point per-finding table across all four personas replaced the banner. Not individually spot-checked line-by-line, but consistent with the other two files' confirmed real triage in the same batch, and the full suite (2,369 tests) ran clean.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>tui_design_critique_and_audit.md</code>",
+    "done",
+    "<strong>Genuinely re-triaged 24 Aug — this closes the stale-UX-audit thread entirely, 0 remain.</strong> A real 15-row per-finding table replaced the blanket banner, covering 10 usability heuristics and 5 technical dimensions. Spot-checked: the keystroke-collision claim (row 5, Go's <code>jobs.go</code>) is functionally real — <code>searchInput</code> genuinely gates every keystroke to the search box before the main key switch — but the cited line range (<code>L140-220</code>) is wrong; the real logic is at <code>jobs.go:975-990</code>. Same pattern as <code>ux_ui_review.md</code>'s first pass: resolutions are real, some citations aren't. Not exhaustively checked row-by-row.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>future_comprehensive_audit_prompt.md</code>",
+    "wontdo",
+    "A re-runnable audit prompt, not a backlog. Same category as <code>TUI_AUDIT_PROMPT.md</code>.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>refactoring_plan.md</code> / <code>audit_report.md</code>",
+    "done",
+    "F19 and F21 resolved 24 Aug: an explicit Audit Status Banner at <code>refactoring_plan.md:4-11</code> reconciles the historical <code>[COMPLETED]</code> markers against <code>CORRECTIONS.md</code> and <code>master_audit_document.md</code>, which now shows both findings Closed.",
+    "docs"
+   ]
+  ]
+ ],
+ [
+  "Review programme",
+  "docs/review/",
+  "The 13-phase review contract and its two companion plans. All three are effectively closed; listed so nobody re-triages them.",
+  [
+   [
+    "—",
+    "<code>PLAN.md</code> — phases 0 through 12",
+    "done",
+    "Every phase has a written outcome doc, phase-0 through phase-12.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>fix-pass-plan.md</code> — sequencing for the B-items",
+    "done",
+    "Companion to phase-9, which closed all 62.",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>plan-gaps.md</code> — 4 coverage gaps in PLAN.md itself",
+    "done",
+    "Answered by the phases added afterwards: bullet-bank (6), discovery (7/7b) and trust-secrets (8) close gaps 1 and 3; the KB data-integrity question (gap 4) is covered by <code>atomic_write</code> plus the ledger and DB write guards.",
+    "docs"
+   ]
+  ]
+ ],
+ [
+  "Research inputs (not a backlog)",
+  "docs/morgan_research/ · docs/to_do/FeatureResearch/",
+  "Roughly 30 deep-research reports. Recorded here <em>as not being work items</em>, because they read like plans and have twice been mistaken for backlog.",
+  [
+   [
+    "—",
+    "FeatureResearch domains 1–5, closure rounds 2 and 3",
+    "done",
+    "Inputs to feature-expansion F3, F4 and F5 rather than items of their own — domain 5 backs The Situation Room, domain 4 backs the stylometrics work. They stay open only in the sense that the features they support are unbuilt. <em>Update 24 Aug: the classification itself is now real — <code>docs/to_do/FeatureResearch/README.md</code> exists and indexes all 5 domains to their feature targets, and it's genuinely recorded in <code>master_audit_document.md</code> as DOC-4 this time (confirmed by direct read — the prior batch's citation to this file was checked and found false). Marking <code>done</code> for the classification/indexing task itself; the underlying features stay unbuilt, which was never what this row asked for.</em>",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>morgan_research/</code> — Charm integration, competitor repos, cover letters, resume writing, scoring",
+    "done",
+    "Reference material, all of it already consumed. The bubblezone implementation guide in <code>CharmIntegration/</code> is what the 24 Aug mouse work was built from.",
+    "docs"
+   ]
+  ]
+ ],
+ [
+  "Open design work",
+  "docs/superpowers/specs/",
+  "Designed but unbuilt. The one open item (pipeline viewport / NDJSON streaming) moved to \"Real-time TUI streaming\" below, next to the related Go-TUI streaming work.",
+  [
+   [
+    "—",
+    "Record resolution status in master_audit_document.md",
+    "done",
+    "A verified status table now heads that file — it had already caused two rounds of duplicated re-triage because nothing recorded what was closed.",
+    "docs"
+   ],
+  ]
+ ],
+ [
+  "Doc hygiene",
+  "various",
+  "Small, cheap, prevents the next false backlog.",
+  [
+   [
+    "—",
+    "Retire the three <code>*unimplemented_plans.md</code> scrapes",
+    "done",
+    "All three carry the same 1,525 boxes (~1 MB in <code>~/.gemini/antigravity-cli/brain/43cb017b…/</code>, confirmed 24 Aug to be OUTSIDE this git repo entirely, not workspace files). <em>Update 24 Aug: formally recorded as DOC-5 in <code>master_audit_document.md</code> (confirmed by direct read this time) and correctly left in place on disk — nothing was deleted, since it's another tool's global session state, not this repo's to manage. \"Retirement\" here means removed from backlog tracking, which is now genuinely done.</em>",
+    "docs"
+   ],
+   [
+    "—",
+    "Reconcile the two stale IDEAS.md entries",
+    "done",
+    "Both rewritten in place with the evidence. The one open follow-up this left (verify the 15k-char cache trigger against Gemini's 32,768-token minimum) is now closed too — see \"Explicit context caching for the audit loop\" above.",
+    "docs"
+   ],
+   [
+    "—",
+    "Duplicate ligature CSS from the 23 Aug Gemini session",
+    "done",
+    "Reverted — both templates already had the real fix in the same <code>body</code> rule, comment ending “Never remove.”",
+    "docs"
+   ],
+   [
+    "—",
+    "<code>scratch/</code> not gitignored",
+    "done",
+    "Added <code>scratch/*</code>; the tracked <code>scratch/rewrite.py</code> is unaffected.",
+    "docs"
+   ]
+  ]
+ ]
+];
+
+const LBL={done:"Done",open:"Open",partial:"Partial",wontdo:"Won't do",stale:"Stale doc",postponed:"Postponed"};
+const DLBL={E:"Easy",M:"Medium",H:"Hard"};
+const KLBL={bug:"Bug",data:"Data loss",security:"Security",feature:"Feature",ux:"UX",
+  polish:"Cosmetic",debt:"Tech debt",test:"Tests",ops:"Ops run",docs:"Docs"};
+const ORDER=["open","partial","stale","done","wontdo"];
+const groupsEl=document.getElementById("groups");
+
+let flat=[];
+D.forEach((g,gi)=>{
+  const[title,src,note,rows]=g;
+  const sec=document.createElement("section");
+  sec.className="grp";sec.dataset.gi=gi;
+  sec.innerHTML=`<div class="grphead"><h2>${title}</h2><span class="src">${src}</span></div>
+    <p class="grpnote">${note}</p>
+    <div class="scroll"><table><thead><tr><th>Ref</th><th>Item</th><th>Kind</th><th>Status</th><th>Difficulty</th><th>Evidence / note</th></tr></thead><tbody></tbody></table></div>`;
+  const tb=sec.querySelector("tbody");
+  rows.forEach(([id,item,st,ev,kind,diff])=>{
+    const tr=document.createElement("tr");
+    tr.dataset.st=st;
+    tr.dataset.kind=kind||"";
+    const stripTags=(s)=>{const d=document.createElement("div");d.innerHTML=s;return d.textContent||"";};
+    tr.dataset.txt=(id+" "+stripTags(item)+" "+stripTags(ev)+" "+title+" "+src+" "+(KLBL[kind]||"")+" "+(DLBL[diff]||"")).toLowerCase();
+    tr.innerHTML=`<td class="idc">${id}</td><td class="item">${item}</td>
+      <td><span class="pill k-${kind}">${KLBL[kind]||"—"}</span></td>
+      <td><span class="pill s-${st}">${LBL[st]}</span></td>
+      <td>${diff?`<span class="pill d-${diff}">${DLBL[diff]}</span>`:""}</td>
+      <td class="eviq">${ev}</td>`;
+    tb.appendChild(tr);flat.push(tr);
+  });
+  groupsEl.appendChild(sec);
+});
+
+// tally
+const counts={};ORDER.forEach(s=>counts[s]=0);
+flat.forEach(r=>counts[r.dataset.st]++);
+const BAR={open:"--open",partial:"--warn",stale:"--stale",done:"--ok",wontdo:"--off"};
+document.getElementById("tally").innerHTML=ORDER.map(s=>
+  `<div class="tallycard" style="--bar:var(${BAR[s]})"><span class="tallynum">${counts[s]}</span><span class="tallylab">${LBL[s]}</span></div>`).join("");
+const liveKinds={};
+flat.filter(r=>r.dataset.st!=="done"&&r.dataset.st!=="wontdo")
+  .forEach(r=>{liveKinds[r.dataset.kind]=(liveKinds[r.dataset.kind]||0)+1});
+const kindOrder=["bug","data","security","feature","ux","polish","debt","test","ops","docs"];
+document.getElementById("scope").textContent=
+  `${flat.length} tracked items across ${D.length} sources · `+
+  `${counts.open+counts.partial+counts.stale} need a decision or a commit — `+
+  kindOrder.filter(k=>liveKinds[k]).map(k=>`${liveKinds[k]} ${KLBL[k].toLowerCase()}`).join(", ");
+
+// filtering
+let mode="all",kmode="all",term="";
+const showing=document.getElementById("showing"),empty=document.getElementById("empty");
+function apply(){
+  let n=0;
+  flat.forEach(r=>{
+    const ok=(mode==="all"||r.dataset.st===mode)
+      &&(kmode==="all"||r.dataset.kind===kmode)
+      &&(!term||r.dataset.txt.includes(term));
+    r.hidden=!ok;if(ok)n++;
+  });
+  document.querySelectorAll(".grp").forEach(g=>{
+    g.hidden=!g.querySelector("tbody tr:not([hidden])");
+  });
+  empty.style.display=n?"none":"block";
+  showing.textContent=(mode==="all"&&kmode==="all"&&!term)?"":`Showing ${n} of ${flat.length}`;
+  try{
+    localStorage.setItem("rb-backlog-filter",mode);
+    localStorage.setItem("rb-backlog-kind",kmode);
+  }catch(e){}
+}
+document.querySelectorAll(".kfilt").forEach(b=>b.addEventListener("click",()=>{
+  kmode=b.dataset.k;
+  document.querySelectorAll(".kfilt").forEach(o=>o.setAttribute("aria-pressed",String(o===b)));
+  apply();
+}));
+document.querySelectorAll(".filt").forEach(b=>b.addEventListener("click",()=>{
+  mode=b.dataset.f;
+  document.querySelectorAll(".filt").forEach(o=>o.setAttribute("aria-pressed",String(o===b)));
+  apply();
+}));
+document.getElementById("q").addEventListener("input",e=>{term=e.target.value.toLowerCase().trim();apply();});
+try{
+  const saved=localStorage.getItem("rb-backlog-filter");
+  if(saved&&saved!=="all"){
+    const b=document.querySelector(`.filt[data-f="${saved}"]`);
+    if(b)b.click();
+  }
+  const savedK=localStorage.getItem("rb-backlog-kind");
+  if(savedK&&savedK!=="all"){
+    const b=document.querySelector(`.kfilt[data-k="${savedK}"]`);
+    if(b)b.click();
+  }
+}catch(e){}
+apply();
+</script>
+
+
+</body></html>

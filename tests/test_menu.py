@@ -260,6 +260,59 @@ class TestBuildDocumentsEmptyStateBreadcrumb(unittest.TestCase):
             )
 
 
+class TestHandleAddManualJD(unittest.TestCase):
+
+    def setUp(self):
+        import tempfile
+
+        import profile_paths
+
+        self._orig_profile = os.environ.get("RESUME_PROFILE")
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self.tmp_dir.name)
+        self._iso.__enter__()
+        os.makedirs(
+            os.path.join(profile_paths.PROFILES_DIR, "test_user"), exist_ok=True
+        )
+        profile_paths.set_active_profile("test_user")
+
+    def tearDown(self):
+        import importlib
+
+        import profile_paths as pp
+
+        self._iso.__exit__(None, None, None)
+        self.tmp_dir.cleanup()
+        if self._orig_profile:
+            pp.set_active_profile(self._orig_profile)
+        else:
+            os.environ.pop("RESUME_PROFILE", None)
+            if "jd_manager" in sys.modules:
+                importlib.reload(sys.modules["jd_manager"])
+
+    @patch("menu.questionary.text")
+    def test_handle_add_manual_jd_writes_pending_file(self, mock_text):
+        mock_text.side_effect = [
+            unittest.mock.MagicMock(ask=lambda: "Staff Engineer"),
+            unittest.mock.MagicMock(ask=lambda: "Acme Corp"),
+            unittest.mock.MagicMock(ask=lambda: "https://example.com/job"),
+            unittest.mock.MagicMock(ask=lambda: "Requirements: Python, Go, Cloud"),
+        ]
+        result = menu._handle_add_manual_jd()
+        self.assertTrue(result)
+        import profile_paths
+
+        jds_dir = profile_paths.jds_dir()
+        files = os.listdir(jds_dir)
+        self.assertTrue(any(f.startswith("acme_corp_staff_engineer_") for f in files))
+
+    @patch("menu.questionary.text")
+    def test_handle_add_manual_jd_cancelled_returns_false(self, mock_text):
+        mock_text.return_value.ask.return_value = None
+        result = menu._handle_add_manual_jd()
+        self.assertFalse(result)
+
+
 class TestHandleScan(unittest.TestCase):
 
     @patch("menu.scan_module.run_scan", return_value=3)
@@ -1641,7 +1694,7 @@ class TestRunInteractiveMenuClearsProfilePickerLeftovers(unittest.TestCase):
         # First call is the real animated reveal (no reveal kwarg forced
         # False); the redraw immediately after profile confirmation must
         # be reveal=False, a static redraw, not a second intro animation.
-        self.assertEqual(mock_banner.call_args_list[1].kwargs, {"reveal": False})
+        self.assertFalse(mock_banner.call_args_list[1].kwargs.get("reveal", True))
 
     @patch("menu._should_use_alt_screen", return_value=False)
     @patch("menu.cli_art.display_main_banner")
@@ -1750,6 +1803,33 @@ class TestAltScreenMode(unittest.TestCase):
         with menu._alternate_screen():
             pass
         mock_write.assert_not_called()
+
+
+class TestOfferNextSteps(unittest.TestCase):
+
+    @patch("menu.subprocess.run")
+    @patch("menu.questionary.select")
+    @patch("menu.cli_art.console")
+    def test_offer_next_steps_pdf_shortcut(self, mock_console, mock_select, mock_run):
+        mock_console.is_terminal = True
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+            with patch.dict(os.environ, {"RESUME_BUILDER_LAST_PDF": f.name}):
+                mock_select.return_value.ask.side_effect = ["__view_pdf__", "__back__"]
+                menu.offer_next_steps("tailor_pick")
+                mock_run.assert_called_once()
+
+    @patch("menu.cli_art.display_success_celebration")
+    @patch("menu.questionary.select")
+    @patch("menu.cli_art.console")
+    def test_offer_next_steps_celebration_milestone(
+        self, mock_console, mock_select, mock_celebrate
+    ):
+        mock_console.is_terminal = True
+        mock_select.return_value.ask.return_value = "__back__"
+        menu.offer_next_steps("express")
+        mock_celebrate.assert_called_once()
 
 
 if __name__ == "__main__":

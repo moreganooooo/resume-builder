@@ -72,7 +72,11 @@ async function runJsonMode(candidatesPath) {
     // whatever's in `results` so far even on a throw (previously, a
     // failure on candidate 89 of 90 discarded all 88 already-checked
     // results instead of returning them) (B21).
-    await browser.close();
+    try {
+      await browser.close();
+    } catch {
+      // Ignore browser close error (e.g. already disconnected) so results are always printed
+    }
     console.log(JSON.stringify(results));
   }
 }
