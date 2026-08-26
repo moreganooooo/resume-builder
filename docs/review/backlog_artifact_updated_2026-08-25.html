@@ -1641,7 +1641,8 @@ D.forEach((g,gi)=>{
     const tr=document.createElement("tr");
     tr.dataset.st=st;
     tr.dataset.kind=kind||"";
-    tr.dataset.txt=(id+" "+item+" "+ev+" "+title+" "+src+" "+(KLBL[kind]||"")+" "+(DLBL[diff]||"")).toLowerCase().replace(/<[^>]+>/g,"");
+    const stripTags=(s)=>{const d=document.createElement("div");d.innerHTML=s;return d.textContent||"";};
+    tr.dataset.txt=(id+" "+stripTags(item)+" "+stripTags(ev)+" "+title+" "+src+" "+(KLBL[kind]||"")+" "+(DLBL[diff]||"")).toLowerCase();
     tr.innerHTML=`<td class="idc">${id}</td><td class="item">${item}</td>
       <td><span class="pill k-${kind}">${KLBL[kind]||"—"}</span></td>
       <td><span class="pill s-${st}">${LBL[st]}</span></td>

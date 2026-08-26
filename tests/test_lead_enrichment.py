@@ -2,8 +2,15 @@
 
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
+
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
 
 import db
 from lead_enrichment import create_lead_placeholder, generate_outreach_dorks

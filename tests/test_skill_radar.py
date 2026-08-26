@@ -3,10 +3,17 @@
 import json
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 
-from scripts import skill_radar
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+import skill_radar
 
 
 class TestSkillRadar(unittest.TestCase):
@@ -15,16 +22,14 @@ class TestSkillRadar(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir.name, "radar_test.db")
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute(
-            """
+        self.conn.execute("""
             CREATE TABLE jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT,
                 company TEXT,
                 raw_json TEXT
             )
-        """
-        )
+        """)
 
         job1_json = json.dumps(
             {"_evaluation": {"missing_skills": ["Kubernetes", "Rust", "Go"]}}

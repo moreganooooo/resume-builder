@@ -77,7 +77,7 @@ def load_job_target(target: str, profile: str = None) -> dict[str, Any] | None:
         conn.close()
 
     # Fallback to picker JSON scan
-    evaluated = picker.list_all_evaluated_jds(profile=profile)
+    evaluated = picker.list_all_evaluated_jds()
     for j in evaluated:
         if (
             str(j.get("id")) == str(target)

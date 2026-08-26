@@ -1,10 +1,15 @@
-"""Unit tests for eval_audit.py."""
-
 import os
+import sys
 import tempfile
 import unittest
 
-from scripts import eval_audit
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+import eval_audit
 
 
 class TestEvalAudit(unittest.TestCase):

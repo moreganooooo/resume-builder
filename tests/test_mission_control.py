@@ -1,6 +1,14 @@
 """Unit tests for mission_control.py."""
 
+import os
+import sys
 import unittest
+
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
 
 from mission_control import get_mission_control_summary, render_mission_control_ascii
 

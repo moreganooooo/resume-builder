@@ -27,7 +27,8 @@ if SCRIPTS_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from scripts import profile_paths, vector_store
+import profile_paths
+import vector_store
 
 
 class TestCosineSimilarityMatrix(unittest.TestCase):
@@ -61,9 +62,7 @@ class TestCosineSimilarityMatrix(unittest.TestCase):
 class TestSearchBulletBankEarlyReturns(unittest.TestCase):
     def test_missing_csv_or_npy_returns_empty_list(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 self.assertEqual(vector_store.search_bullet_bank("query"), [])
 
     def test_corrupt_csv_returns_empty_list_not_a_raise(self):
@@ -75,9 +74,7 @@ class TestSearchBulletBankEarlyReturns(unittest.TestCase):
                 f.write('Bullet Point\n"unterminated quote\n')
             np.save(npy_path, np.zeros((1, 768)))
 
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 self.assertEqual(vector_store.search_bullet_bank("query"), [])
 
     def test_missing_bullet_point_column_returns_empty_list(self):
@@ -88,9 +85,7 @@ class TestSearchBulletBankEarlyReturns(unittest.TestCase):
                 f.write("Some Other Column\nvalue\n")
             np.save(npy_path, np.zeros((1, 768)))
 
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 self.assertEqual(vector_store.search_bullet_bank("query"), [])
 
     def test_none_embedding_returns_empty_list(self):
@@ -105,8 +100,8 @@ class TestSearchBulletBankEarlyReturns(unittest.TestCase):
                 json.dump({"bullets_sha": vector_store.bullets_sha(["Bullet One"])}, f)
 
             with (
-                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
-                patch("scripts.vector_store.GeminiClient.embed", return_value=None),
+                patch("vector_store.profile_paths.kb_dir", return_value=tmpdir),
+                patch("vector_store.GeminiClient.embed", return_value=None),
             ):
                 self.assertEqual(vector_store.search_bullet_bank("query"), [])
 
@@ -150,9 +145,9 @@ class TestSearchBulletBankHappyPath(unittest.TestCase):
             fake_embed[0] = 1.0
 
             with (
-                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
+                patch("vector_store.profile_paths.kb_dir", return_value=tmpdir),
                 patch(
-                    "scripts.vector_store.GeminiClient.embed",
+                    "vector_store.GeminiClient.embed",
                     return_value=fake_embed,
                 ),
             ):
@@ -179,9 +174,9 @@ class TestSearchBulletBankHappyPath(unittest.TestCase):
             fake_embed = [1.0, 0.0, 0.0, 0.0]
 
             with (
-                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
+                patch("vector_store.profile_paths.kb_dir", return_value=tmpdir),
                 patch(
-                    "scripts.vector_store.GeminiClient.embed",
+                    "vector_store.GeminiClient.embed",
                     return_value=fake_embed,
                 ),
             ):
@@ -196,9 +191,9 @@ class TestSearchBulletBankHappyPath(unittest.TestCase):
             fake_embed = [1.0, 0.0, 0.0, 0.0]
 
             with (
-                patch("scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir),
+                patch("vector_store.profile_paths.kb_dir", return_value=tmpdir),
                 patch(
-                    "scripts.vector_store.GeminiClient.embed",
+                    "vector_store.GeminiClient.embed",
                     return_value=fake_embed,
                 ),
             ):
@@ -214,9 +209,7 @@ class TestSearchBulletBankHappyPath(unittest.TestCase):
 class TestNeedsReembedAndReembed(unittest.TestCase):
     def test_needs_reembed_when_no_csv(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 stale, reason = vector_store.needs_reembed()
                 self.assertFalse(stale)
                 self.assertIn("No bullet bank CSV found", reason)
@@ -226,9 +219,7 @@ class TestNeedsReembedAndReembed(unittest.TestCase):
             csv_path = os.path.join(tmpdir, "bullet-bank-keepers-audited.csv")
             with open(csv_path, "w", encoding="utf-8") as f:
                 f.write("Bullet Point\nBullet 1\n")
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 stale, reason = vector_store.needs_reembed()
                 self.assertTrue(stale)
                 self.assertIn("missing", reason)
@@ -240,9 +231,7 @@ class TestNeedsReembedAndReembed(unittest.TestCase):
             with open(csv_path, "w", encoding="utf-8") as f:
                 f.write("Bullet Point\nBullet 1\nBullet 2\n")
             np.save(npy_path, np.zeros((1, 4)))
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 stale, reason = vector_store.needs_reembed()
                 self.assertTrue(stale)
                 self.assertIn("Row count mismatch", reason)
@@ -257,9 +246,7 @@ class TestNeedsReembedAndReembed(unittest.TestCase):
             np.save(npy_path, np.zeros((1, 4)))
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"bullets_sha": vector_store.bullets_sha(["Bullet 1"])}, f)
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 stale, reason = vector_store.needs_reembed()
                 self.assertFalse(stale)
                 self.assertIn("up to date", reason)
@@ -275,9 +262,7 @@ class TestNeedsReembedAndReembed(unittest.TestCase):
 class TestSearchEvidenceGuideAndRAG(unittest.TestCase):
     def test_search_evidence_guide_missing_file_returns_empty(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 self.assertEqual(vector_store.search_evidence_guide("test query"), [])
 
     def test_search_evidence_guide_lexical_fallback(self):
@@ -288,12 +273,8 @@ class TestSearchEvidenceGuideAndRAG(unittest.TestCase):
                     "Evidence Cluster,Finding,Source File(s),Best Detail / Quote,Best Metric,What This Proves About Morgan,Where to Use It,Confidence,Source URL / Notes\n"
                     'Lifecycle Marketing,Built multi-touch email sequences,notes.txt,"Scaled Outreach to 50k+ contacts",95% open rate,Email marketing systems,Cover letters,High,TR-001\n'
                 )
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
-                with patch(
-                    "scripts.vector_store.GeminiClient.embed", return_value=None
-                ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
+                with patch("vector_store.GeminiClient.embed", return_value=None):
                     results = vector_store.search_evidence_guide(
                         "lifecycle email marketing", top_k=5
                     )
@@ -303,15 +284,13 @@ class TestSearchEvidenceGuideAndRAG(unittest.TestCase):
 
     def test_query_rag_returns_unified_payload(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "scripts.vector_store.profile_paths.kb_dir", return_value=tmpdir
-            ):
+            with patch("vector_store.profile_paths.kb_dir", return_value=tmpdir):
                 with patch(
-                    "scripts.vector_store.search_bullet_bank",
+                    "vector_store.search_bullet_bank",
                     return_value=[("Bullet 1", "Acme", "[tag]", 0.85)],
                 ):
                     with patch(
-                        "scripts.vector_store.search_evidence_guide",
+                        "vector_store.search_evidence_guide",
                         return_value=[{"cluster": "Cluster 1", "score": 0.9}],
                     ):
                         res = vector_store.query_rag("query")
@@ -347,9 +326,7 @@ class TestDocumentChunkingAndRAG(unittest.TestCase):
                     "Increased search discovery by 42% through structured taxonomy and metadata tags."
                 )
 
-            with patch(
-                "scripts.vector_store.GeminiClient.embed", return_value=[0.1] * 768
-            ):
+            with patch("vector_store.GeminiClient.embed", return_value=[0.1] * 768):
                 indexed_count = vector_store.index_knowledge_documents()
                 self.assertGreater(indexed_count, 0)
 
