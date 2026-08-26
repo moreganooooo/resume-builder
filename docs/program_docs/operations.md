@@ -173,10 +173,71 @@ Our tailoring engine treats your professional resume and cover letter as a unifi
 
 We implemented an advanced, multi-dimensional technical upgrade to guarantee that every tailored resume meets an elite professional writing standard:
 
-1. **Embedded ACID SQLite Storage (`data.db`):** Replaced legacy flat-file syncing with embedded SQLite database storage at `profiles/<profile>/data.db` managed by `scripts/db.py`. Stores job descriptions, application funnel states, and bullet bank achievements with ACID transaction safety and indexed query speed.
+1. **Embedded ACID SQLite Storage (`data.db`):** Replaced legacy flat-file syncing with embedded SQLite database storage at `profiles/<profile>/data.db` managed by `scripts/db.py`. Stores job descriptions, application funnel states, and bullet bank achievements with ACID transaction safety, strict test-write isolation, and indexed query speed.
 2. **Typst Vector PDF Compilation (`scripts/render_typst.py`):** Integrated Typst vector document compilation for sub-second, 100% ATS-compliant PDF generation without headless browser dependencies.
 3. **STAR/XYZ Syntactic Quality Grader:** Programmatic parser in `scripts/validate_resume.py` that evaluates every experience achievement bullet against Google's XYZ formula (*Accomplished [X], as measured by [Y], by doing [Z]*). Deducts points for missing active verbs, numerical metrics, or causal outcome connectors, feeding weak bullets back into the validator's repair loop.
 4. **Authenticity & Voice Calibration Metric:** Linter that scans for generic AI clichés (*proven track record, results-driven professional, passion for innovation*) and cross-references stylistic tone against `voice-anchors.md` to ensure a bold, systems-driven, authentic human voice.
 5. **Proud Career Break Calibrator:** Automated timeline gap engine in `scripts/normalize_resume.py` that detects employment gaps >3 months and programmatically constructs a proud, active **Career Break — Professional Development & Retraining** entry using standard `MM/YYYY` dating to eliminate ATS timeline continuity flags.
 6. **Transferable Skills Translation Matrix:** Direct reframing matrix embedded in `tailor_resume.md` that guides the LLM to translate raw historical tasks (e.g. blog posts, classroom tutoring, administrative tracking) into sophisticated archetype vocabulary without ever fabricating or exaggerating raw metrics.
 7. **Single-Column Layout & ATS Ligature Safeguards:** Enforces clean, semantic single-column rendering with static DM Sans fonts and explicit zero-ligature flags (`font-variant-ligatures: none`), guaranteeing 100% text extraction accuracy across Workday, Greenhouse, and Lever parsers.
+
+---
+
+## ⚡ 8. Modern Role Discovery & Batch Provider Fan-Out
+
+### 🌐 High-Performance Batch Provider Scanner:
+Instead of launching separate Node.js runtime processes sequentially for each board provider, `resume-builder` features single-process concurrent batch execution:
+```bash
+# Query multiple job boards concurrently in a single Node invocation
+node board-scanners/run_provider.mjs --batch '[{"provider":"remoteok","query":"Marketing"},{"provider":"himalayas","query":"Marketing"}]'
+```
+* Built on `Promise.allSettled()` with strict error isolation — transient failures or quota exhaustion on one board will never abort or block healthy sources.
+* Standardized error envelopes categorize failures into `auth`, `quota`, `network`, and `config` for deterministic logging in `scripts/scan_boards.py`.
+
+### 🧭 Role Discovery & O*NET SOC Title Taxonomy:
+Located at [`data/modern_title_aliases.yml`](file:///Users/morganescott/resume-builder/data/modern_title_aliases.yml) and powered by [`scripts/role_discovery.py`](file:///Users/morganescott/resume-builder/scripts/role_discovery.py):
+* **Title Normalization (`normalize_job_title`):** Strips seniority noise (`Senior`, `Lead`, `Principal`, `Staff`, `Head of`, `Director of`) and location tags (`(Remote - US)`, `[Hybrid]`).
+* **Taxonomy Classification (`match_role_family`):** Categorizes roles into 11 canonical families (Lifecycle Marketing, Growth Marketing, Product Marketing, RevOps, Product Management, Frontend/Backend/Fullstack Engineering, Data Analytics, UX Design).
+* **O*NET SOC Mapping (`get_onet_classification`):** Connects modern job titles to formal Department of Labor Standard Occupational Classification codes (e.g. `11-2021.00`, `15-1252.00`).
+* **Query Expansion (`expand_title_aliases`):** Generates search aliases and synonyms to maximize board sweep recall.
+
+---
+
+## 📬 9. Application Tracking, Email Write-Back & Silence Detector
+
+### 📥 Automated Email Sync & Live Write-Back (`--apply`):
+```bash
+# Preview status updates detected from inbox recruiter responses
+python scripts/inbox_sync.py
+
+# Write confirmed status transitions to SQLite data.db (application_log)
+python scripts/inbox_sync.py --apply
+```
+* Connects via IMAP to classify recruiter responses (*Interview*, *Rejection*, *Acknowledgment*, *Recruiter Outreach*).
+* High-confidence exact matches ($>0.70$) automatically transition application state in `data.db` and update the job record JSON file.
+
+### ⏳ Silence Detector & Follow-Up Chase List (`--chase`):
+```bash
+# Evaluate waiting applications and draft polite follow-ups
+python scripts/inbox_sync.py --chase
+```
+* Categorizes silent submissions into 3 distinct aging tiers:
+  * **Warm (0–7 days):** Standard review window, no follow-up needed.
+  * **Follow-Up Window (8–21 days):** Prime opportunity for proactive follow-up (highest priority ranking).
+  * **Stale (22+ days):** Likely closed or silent rejection.
+* Automatically drafts tailored, polite follow-up emails referencing specific roles and companies without mutating application state.
+
+---
+
+## ⚙️ 10. Operational Environment Configuration Flags
+
+| Environment Variable | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | *(Required)* | Google Gemini API key used for scoring, research, and resume tailoring. |
+| `GEMINI_CACHE_MIN_CHARS` | `131072` | Minimum character floor (~32,768 tokens) before enabling Gemini Context Caching to prevent HTTP 400 errors. |
+| `GMAIL_APP_PASSWORD` | *(Optional)* | Dedicated 16-character Google App Password for IMAP recruiter sync (`inbox_sync.py --apply`). |
+| `JOBRIGHT_COOKIE_STRING` | *(Optional)* | Session cookie for scraping JobRight feeds. |
+| `RESUME_BUILDER_THEME` | `auto` | Override TUI theme palette (`dark`, `light`, `catppuccin`). |
+| `RESUME_BUILDER_ICONS` | `unicode` | Override icon glyph set (`unicode`, `nerdfont`). |
+| `RESUME_BUILDER_MOTION` | `full` | Accessibility motion setting (`reduced` disables spring physics animations). |
+| `RESUME_ALLOW_TEST_NETWORK` | `0` | Guardrail flag: set to `1` to allow live network requests in integration test environments. |

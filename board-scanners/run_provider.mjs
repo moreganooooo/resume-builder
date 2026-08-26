@@ -24,6 +24,7 @@
 
 import { pathToFileURL } from 'url';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { makeHttpCtx } from './providers/_http.mjs';
 
@@ -54,6 +55,83 @@ export function classifyError(err) {
   return 'config';
 }
 
+/**
+ * Executes a single provider's fetch logic.
+ * @param {string} providerId
+ * @param {object} entry
+ * @returns {Promise<Array<object>>}
+ */
+export async function executeSingle(providerId, entry = {}) {
+  const modPath = path.join(PROVIDERS_DIR, `${providerId}.mjs`);
+  let mod;
+  try {
+    mod = await import(pathToFileURL(modPath).href);
+  } catch (err) {
+    throw new Error(`failed to load provider -- ${err.message}`);
+  }
+
+  const provider = mod.default;
+  if (!provider || typeof provider.fetch !== 'function') {
+    throw new Error('module has no default export with a fetch() function');
+  }
+
+  const jobs = await provider.fetch(entry, makeHttpCtx(providerId));
+  if (!Array.isArray(jobs)) {
+    throw new Error('fetch() did not return an array');
+  }
+  return jobs;
+}
+
+/**
+ * Executes a batch of providers concurrently using Promise.allSettled.
+ * @param {Array<{provider_id?: string, provider?: string, entry?: object}>} items
+ * @returns {Promise<Array<{provider_id: string, status: "fulfilled"|"rejected", jobs?: Array<object>, error?: {kind: string, message: string}}>>}
+ */
+export async function executeBatch(items) {
+  if (!Array.isArray(items)) {
+    throw new Error('batch input must be an array of provider entries');
+  }
+
+  const tasks = items.map(async (item) => {
+    const providerId = item.provider_id || item.provider || item.id;
+    if (!providerId) {
+      return {
+        provider_id: 'unknown',
+        status: 'rejected',
+        error: { kind: 'config', message: 'missing provider_id in batch entry' },
+      };
+    }
+    const entry = item.entry || {};
+    try {
+      const jobs = await executeSingle(providerId, entry);
+      return {
+        provider_id: providerId,
+        status: 'fulfilled',
+        jobs,
+      };
+    } catch (err) {
+      return {
+        provider_id: providerId,
+        status: 'rejected',
+        error: { kind: classifyError(err), message: String((err && err.message) || err) },
+      };
+    }
+  });
+
+  const settled = await Promise.allSettled(tasks);
+  return settled.map((res, i) => {
+    if (res.status === 'fulfilled') {
+      return res.value;
+    }
+    const providerId = items[i] && (items[i].provider_id || items[i].provider || items[i].id) || 'unknown';
+    return {
+      provider_id: providerId,
+      status: 'rejected',
+      error: { kind: classifyError(res.reason), message: String((res.reason && res.reason.message) || res.reason) },
+    };
+  });
+}
+
 function failWith(providerId, err) {
   console.error(`${providerId}: ${err.message || err}`);
   process.stdout.write(JSON.stringify({ error: { kind: classifyError(err), message: String((err && err.message) || err) } }));
@@ -61,27 +139,45 @@ function failWith(providerId, err) {
 }
 
 async function main() {
-  const [providerId, entryJson] = process.argv.slice(2);
-  if (!providerId) {
-    console.error('Usage: node run_provider.mjs <provider_id> <entry_json>');
+  const args = process.argv.slice(2);
+  if (args.length === 0) {
+    console.error('Usage: node run_provider.mjs <provider_id> <entry_json> OR node run_provider.mjs --batch <batch_json>');
     process.exit(1);
   }
 
-  const modPath = path.join(PROVIDERS_DIR, `${providerId}.mjs`);
-  let mod;
-  try {
-    mod = await import(pathToFileURL(modPath).href);
-  } catch (err) {
-    failWith(providerId, new Error(`failed to load provider -- ${err.message}`));
-    return;
+  if (args[0] === '--batch' || args[0] === '-b' || args[0] === '--batch-file') {
+    let raw = '';
+    if (args[0] === '--batch-file' || (args[1] && args[1].startsWith('@'))) {
+      const filePath = args[0] === '--batch-file' ? args[1] : args[1].slice(1);
+      try {
+        raw = fs.readFileSync(filePath, 'utf-8');
+      } catch (err) {
+        process.stdout.write(JSON.stringify([{ provider_id: 'batch', status: 'rejected', error: { kind: 'config', message: `failed to read batch file: ${err.message}` } }]));
+        process.exit(1);
+      }
+    } else {
+      raw = args[1] || '[]';
+    }
+
+    let items;
+    try {
+      items = JSON.parse(raw);
+    } catch (err) {
+      process.stdout.write(JSON.stringify([{ provider_id: 'batch', status: 'rejected', error: { kind: 'config', message: `batch input is not valid JSON: ${err.message}` } }]));
+      process.exit(1);
+    }
+
+    try {
+      const results = await executeBatch(items);
+      process.stdout.write(JSON.stringify(results));
+      process.exit(0);
+    } catch (err) {
+      process.stdout.write(JSON.stringify([{ provider_id: 'batch', status: 'rejected', error: { kind: classifyError(err), message: String(err.message || err) } }]));
+      process.exit(1);
+    }
   }
 
-  const provider = mod.default;
-  if (!provider || typeof provider.fetch !== 'function') {
-    failWith(providerId, new Error('module has no default export with a fetch() function'));
-    return;
-  }
-
+  const [providerId, entryJson] = args;
   let entry = {};
   if (entryJson) {
     try {
@@ -93,10 +189,7 @@ async function main() {
   }
 
   try {
-    const jobs = await provider.fetch(entry, makeHttpCtx(providerId));
-    if (!Array.isArray(jobs)) {
-      throw new Error('fetch() did not return an array');
-    }
+    const jobs = await executeSingle(providerId, entry);
     process.stdout.write(JSON.stringify(jobs));
   } catch (err) {
     failWith(providerId, err);
@@ -104,10 +197,7 @@ async function main() {
 }
 
 // Guarded so this file can be imported (e.g. run_provider.test.mjs
-// importing classifyError) without also running the CLI -- unguarded,
-// import() would parse process.argv as if it were this script's own argv
-// and likely process.exit(1) on "Usage: ...", killing the importing
-// process too.
+// importing classifyError or executeBatch) without running the CLI.
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   main();
