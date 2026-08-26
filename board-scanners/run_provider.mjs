@@ -62,6 +62,9 @@ export function classifyError(err) {
  * @returns {Promise<Array<object>>}
  */
 export async function executeSingle(providerId, entry = {}) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(providerId)) {
+    throw new Error(`invalid provider_id -- ${providerId}`);
+  }
   const modPath = path.join(PROVIDERS_DIR, `${providerId}.mjs`);
   let mod;
   try {
