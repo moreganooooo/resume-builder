@@ -1,0 +1,266 @@
+# Modern Title Aliases & Role Discovery Taxonomy
+# Bridges modern tech/startup job titles with O*NET Standard Occupational Classifications (SOC),
+# core competencies, and search query expansion synonyms.
+
+role_families:
+  lifecycle_marketing:
+    canonical_title: "Lifecycle & Retention Marketing"
+    onet_code: "11-2021.00"
+    onet_title: "Marketing Managers"
+    aliases:
+      - "Lifecycle Marketing Manager"
+      - "Retention Marketing Manager"
+      - "CRM Marketing Manager"
+      - "Email Marketing Manager"
+      - "Customer Marketing Manager"
+      - "Engagement Marketing Manager"
+      - "Lifecycle Marketing Specialist"
+      - "CRM & Lifecycle Lead"
+      - "Growth & Lifecycle Manager"
+    core_competencies:
+      - "Customer Lifecycle Strategy"
+      - "Email Marketing & Automation"
+      - "CRM & ESP Administration (Braze, Klaviyo, HubSpot, Iterable)"
+      - "Segmentation & Personalization"
+      - "A/B & Multivariate Testing"
+      - "Retention & Churn Mitigation"
+      - "Cohort Analysis & LTV Optimization"
+      - "Omnichannel Orchestration (Push, SMS, In-App)"
+    search_query_variations:
+      - "Lifecycle Marketing Manager"
+      - "CRM Marketing Manager"
+      - "Retention Marketing"
+      - "Email Marketing Manager"
+
+  growth_marketing:
+    canonical_title: "Growth Marketing"
+    onet_code: "11-2021.00"
+    onet_title: "Marketing Managers"
+    aliases:
+      - "Growth Marketing Manager"
+      - "Performance Marketing Manager"
+      - "Growth Lead"
+      - "Head of Growth"
+      - "Demand Generation & Growth Manager"
+      - "User Acquisition Manager"
+      - "Paid Media & Growth Manager"
+    core_competencies:
+      - "Full-Funnel Growth Strategy"
+      - "Paid Acquisition (SEM, Paid Social, Display)"
+      - "Conversion Rate Optimization (CRO)"
+      - "Experimentation Frameworks & Growth Loops"
+      - "Attribution Modeling & CAC/LTV Efficiency"
+      - "Landing Page Optimization"
+      - "Data Analytics & SQL"
+    search_query_variations:
+      - "Growth Marketing Manager"
+      - "Performance Marketing Manager"
+      - "Growth Lead"
+      - "Demand Generation Manager"
+
+  product_marketing:
+    canonical_title: "Product Marketing (PMM)"
+    onet_code: "11-2021.00"
+    onet_title: "Marketing Managers"
+    aliases:
+      - "Product Marketing Manager"
+      - "Senior Product Marketing Manager"
+      - "PMM"
+      - "Lead Product Marketer"
+      - "Director of Product Marketing"
+      - "Technical Product Marketing Manager"
+    core_competencies:
+      - "Go-To-Market (GTM) Strategy"
+      - "Positioning & Messaging Frameworks"
+      - "Competitive Intelligence & Battlecards"
+      - "Customer Persona & Buyer Journey Mapping"
+      - "Sales Enablement & Collateral Creation"
+      - "Product Launch Orchestration"
+      - "Pricing & Packaging Strategy"
+    search_query_variations:
+      - "Product Marketing Manager"
+      - "Senior PMM"
+      - "Technical Product Marketing Manager"
+
+  content_marketing:
+    canonical_title: "Content & Brand Marketing"
+    onet_code: "27-3042.00"
+    onet_title: "Technical Writers / Authors"
+    aliases:
+      - "Content Marketing Manager"
+      - "Head of Content"
+      - "Senior Content Strategist"
+      - "Brand & Content Lead"
+      - "Editorial Director"
+      - "Content Operations Manager"
+    core_competencies:
+      - "Editorial Strategy & Content Calendars"
+      - "SEO & Keyword Research"
+      - "Thought Leadership & Whitepapers"
+      - "Storytelling & Brand Voice Architecture"
+      - "Content Distribution & Syndication"
+      - "Copywriting & Editing"
+      - "Multi-Format Production (Video, Audio, Written)"
+    search_query_variations:
+      - "Content Marketing Manager"
+      - "Content Strategist"
+      - "Head of Content"
+
+  marketing_operations_revops:
+    canonical_title: "Marketing Operations & RevOps"
+    onet_code: "11-2021.00"
+    onet_title: "Marketing Managers"
+    aliases:
+      - "Marketing Operations Manager"
+      - "RevOps Manager"
+      - "Marketing Technology (MarTech) Lead"
+      - "Revenue Operations Specialist"
+      - "Marketing Automation Manager"
+    core_competencies:
+      - "Marketing Automation (Marketo, HubSpot, Pardot)"
+      - "CRM Architecture (Salesforce, HubSpot)"
+      - "Lead Scoring & Routing Workflow Automation"
+      - "MarTech Stack Integration & Governance"
+      - "Data Hygiene & Pipeline Reporting"
+      - "Attribution & Revenue Analytics"
+    search_query_variations:
+      - "Marketing Operations Manager"
+      - "RevOps Manager"
+      - "Marketing Automation Manager"
+
+  product_management:
+    canonical_title: "Product Management"
+    onet_code: "11-1021.00"
+    onet_title: "General and Operations Managers"
+    aliases:
+      - "Product Manager"
+      - "Senior Product Manager"
+      - "Technical Product Manager"
+      - "Lead Product Manager"
+      - "Group Product Manager"
+      - "Principal Product Manager"
+    core_competencies:
+      - "Product Vision & Roadmap Execution"
+      - "User Research & Discovery"
+      - "Agile / Scrum Sprint Leadership"
+      - "Data-Informed Decision Making"
+      - "PRDs & Feature Specifications"
+      - "Cross-Functional Stakeholder Alignment"
+      - "KPI Definition & Outcome Tracking"
+    search_query_variations:
+      - "Product Manager"
+      - "Senior Product Manager"
+      - "Technical Product Manager"
+
+  software_engineering_frontend:
+    canonical_title: "Frontend Software Engineering"
+    onet_code: "15-1252.00"
+    onet_title: "Software Developers"
+    aliases:
+      - "Frontend Engineer"
+      - "Senior Frontend Developer"
+      - "UI Engineer"
+      - "Web Application Developer"
+      - "React Developer"
+      - "Staff Frontend Engineer"
+    core_competencies:
+      - "TypeScript / JavaScript (ES6+)"
+      - "React, Next.js, Vue, or Svelte"
+      - "CSS Architecture (Tailwind, CSS Modules, styled-components)"
+      - "Web Performance & Core Web Vitals"
+      - "State Management & Client-Side Caching"
+      - "Accessibility (WCAG & ARIA)"
+      - "Component Design Systems"
+    search_query_variations:
+      - "Frontend Engineer"
+      - "Senior Frontend Developer"
+      - "React Developer"
+
+  software_engineering_backend:
+    canonical_title: "Backend Software Engineering"
+    onet_code: "15-1252.00"
+    onet_title: "Software Developers"
+    aliases:
+      - "Backend Engineer"
+      - "Senior Backend Developer"
+      - "Python Engineer"
+      - "Go Developer"
+      - "API & Distributed Systems Engineer"
+      - "Staff Backend Engineer"
+    core_competencies:
+      - "Python, Go, Node.js, Java, or Rust"
+      - "RESTful APIs & GraphQL & gRPC"
+      - "Relational & NoSQL Databases (PostgreSQL, SQLite, Redis)"
+      - "Microservices Architecture & Concurrency"
+      - "Data Modeling & Query Optimization"
+      - "Cloud Infrastructure (AWS, GCP, Docker)"
+      - "Security, Authentication & Rate Limiting"
+    search_query_variations:
+      - "Backend Engineer"
+      - "Senior Backend Developer"
+      - "Software Engineer Python Go"
+
+  software_engineering_fullstack:
+    canonical_title: "Full-Stack Software Engineering"
+    onet_code: "15-1252.00"
+    onet_title: "Software Developers"
+    aliases:
+      - "Full Stack Engineer"
+      - "Senior Full Stack Developer"
+      - "Software Engineer"
+      - "Lead Software Developer"
+    core_competencies:
+      - "End-to-End Web Architecture"
+      - "Frontend Frameworks & Modern JavaScript"
+      - "Backend Services & REST APIs"
+      - "Database Design & Migrations"
+      - "CI/CD & DevOps Foundations"
+      - "System Design & Scalability"
+    search_query_variations:
+      - "Full Stack Engineer"
+      - "Senior Software Engineer"
+
+  data_analytics_bi:
+    canonical_title: "Data Analytics & Business Intelligence"
+    onet_code: "15-2051.01"
+    onet_title: "Business Intelligence Analysts"
+    aliases:
+      - "Data Analyst"
+      - "Senior Data Analyst"
+      - "BI Analyst"
+      - "Analytics Engineer"
+      - "Marketing Data Analyst"
+      - "Product Data Analyst"
+    core_competencies:
+      - "Advanced SQL & Data Modeling"
+      - "BI Dashboarding (Tableau, Looker, PowerBI)"
+      - "Statistical Analysis & Hypothesis Testing"
+      - "Python / R Data Manipulation (Pandas, NumPy)"
+      - "dbt & Data Warehouse Architectures (Snowflake, BigQuery)"
+      - "Executive Reporting & Insights Storytelling"
+    search_query_variations:
+      - "Data Analyst"
+      - "Analytics Engineer"
+      - "BI Analyst"
+
+  ux_product_design:
+    canonical_title: "Product & UX Design"
+    onet_code: "27-1024.00"
+    onet_title: "Graphic Designers / Special Effects Artists"
+    aliases:
+      - "Product Designer"
+      - "Senior UX Designer"
+      - "UI/UX Designer"
+      - "Lead Product Designer"
+      - "User Experience Researcher"
+    core_competencies:
+      - "Figma & Interactive Prototyping"
+      - "Design Systems & Component Libraries"
+      - "User Research, Usability Testing & Interviews"
+      - "Information Architecture & Wireframing"
+      - "Interaction Design & Micro-interactions"
+      - "Responsive & Mobile-First Design"
+    search_query_variations:
+      - "Product Designer"
+      - "Senior UX Designer"
+      - "UI UX Designer"

@@ -184,7 +184,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--screen",
-        choices=["menu", "pipeline", "jobs", "kb_view", "mobile", "all"],
+        choices=["menu", "pipeline", "jobs", "kb_view", "mobile", "progress", "all"],
         default="all",
         help="Screen tape to capture",
     )
@@ -200,7 +200,7 @@ def main() -> None:
 
     if args.vhs or shutil.which("vhs"):
         screens = (
-            ["menu", "pipeline", "jobs", "kb_view", "mobile"]
+            ["menu", "pipeline", "jobs", "kb_view", "mobile", "progress"]
             if args.screen == "all"
             else [args.screen]
         )

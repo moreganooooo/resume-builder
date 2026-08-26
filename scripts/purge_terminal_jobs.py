@@ -101,7 +101,7 @@ def main() -> int:
     args = parser.parse_args()
 
     profile = args.profile or profile_paths.active_profile()
-    db_path = os.path.join(profile_paths.PROFILES_DIR, profile, "data.db")
+    db_path = os.path.join(profile_paths.profile_root(profile), "data.db")
     jds_dir = profile_paths.jds_dir(profile)
 
     if not os.path.exists(db_path):

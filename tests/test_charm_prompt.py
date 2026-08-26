@@ -412,6 +412,10 @@ class TestRunPromptDirectly(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform != "win32", "pty is POSIX-only")
 @unittest.skipUnless(charm_prompt._go_available(), "requires the go toolchain")
+@unittest.skipIf(
+    os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"),
+    "PTY real-binary test skipped in headless CI",
+)
 class TestRealBinaryOverAPty(unittest.TestCase):
     """Every test above mocks subprocess.run -- proves the JSON *contract*
     (given this stdout/stderr, _run_prompt returns that), never that the
@@ -429,6 +433,8 @@ class TestRealBinaryOverAPty(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
+            raise unittest.SkipTest("PTY real-binary test skipped in headless CI")
         cls.bin_path = charm_prompt._compile_prompt_if_needed()
         if not cls.bin_path or not os.path.exists(cls.bin_path):
             raise unittest.SkipTest("could not compile dashboard/cmd/prompt")

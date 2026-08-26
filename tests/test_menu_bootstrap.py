@@ -133,7 +133,7 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
         menu._handle_bootstrap()
 
-        mock_subprocess_run.assert_called_once()
+        self.assertTrue(mock_subprocess_run.called)
         self.assertEqual(os.environ.get("RESUME_PROFILE"), self.test_profile_name)
         import profile_paths
 
@@ -167,6 +167,102 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
         mock_subprocess_run.assert_not_called()
         mock_create_profile.assert_not_called()
+
+
+class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
+
+    def setUp(self):
+        import tempfile
+
+        import profile_paths
+
+        self._orig_profile = os.environ.get("RESUME_PROFILE")
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self._iso = profile_paths.isolate_for_tests(self.tmp_dir.name)
+        self._iso.__enter__()
+        self.sample_pdf = os.path.join(self.tmp_dir.name, "sample_resume.pdf")
+        with open(self.sample_pdf, "w", encoding="utf-8") as f:
+            f.write("test pdf content")
+
+    def tearDown(self):
+        import importlib
+        import sys
+
+        import profile_paths as pp
+
+        self._iso.__exit__(None, None, None)
+        self.tmp_dir.cleanup()
+        if self._orig_profile:
+            pp.set_active_profile(self._orig_profile)
+        else:
+            os.environ.pop("RESUME_PROFILE", None)
+            if "jd_manager" in sys.modules:
+                importlib.reload(sys.modules["jd_manager"])
+
+    @patch("menu.bootstrap_menu._run_express_setup", return_value=True)
+    @patch("menu._run_go_bootstrap_wizard")
+    @patch("menu._profile_is_set_up", return_value=False)
+    def test_handle_bootstrap_copies_ingest_path_and_runs_express_setup(
+        self, mock_is_set_up, mock_go_wizard, mock_express_setup
+    ):
+        mock_go_wizard.return_value = (
+            True,
+            {
+                "profile_name": "test_ingest_prof",
+                "source_choice": "pdf",
+                "ingest_path": self.sample_pdf,
+                "create_bullet": True,
+            },
+        )
+        result = menu._handle_bootstrap()
+        self.assertTrue(result)
+        mock_express_setup.assert_called_once_with(interactive=False)
+        import profile_paths
+
+        dest_dir = os.path.join(
+            profile_paths.PROFILES_DIR,
+            "test_ingest_prof",
+            "knowledge_base",
+            "bootstrap",
+            "source_documents",
+        )
+        self.assertTrue(os.path.isfile(os.path.join(dest_dir, "sample_resume.pdf")))
+
+    @patch("menu.bootstrap_menu._run_express_setup", return_value=True)
+    @patch("menu.picker.interactive_file_picker")
+    @patch("menu.questionary.confirm")
+    @patch("menu.questionary.select")
+    @patch("menu.questionary.text")
+    @patch("menu._run_go_bootstrap_wizard", return_value=(False, None))
+    @patch("menu._profile_is_set_up", return_value=False)
+    def test_handle_bootstrap_python_fallback_when_go_fails(
+        self,
+        mock_is_set_up,
+        mock_go_wizard,
+        mock_text,
+        mock_select,
+        mock_confirm,
+        mock_picker,
+        mock_express_setup,
+    ):
+        mock_text.return_value.ask.return_value = "py_fallback_prof"
+        mock_select.return_value.ask.return_value = "Resume PDF"
+        mock_picker.return_value = self.sample_pdf
+        mock_confirm.return_value.ask.return_value = True
+
+        result = menu._handle_bootstrap()
+        self.assertTrue(result)
+        mock_express_setup.assert_called_once_with(interactive=False)
+        import profile_paths
+
+        dest_dir = os.path.join(
+            profile_paths.PROFILES_DIR,
+            "py_fallback_prof",
+            "knowledge_base",
+            "bootstrap",
+            "source_documents",
+        )
+        self.assertTrue(os.path.isfile(os.path.join(dest_dir, "sample_resume.pdf")))
 
 
 if __name__ == "__main__":

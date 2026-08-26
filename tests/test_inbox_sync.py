@@ -692,5 +692,179 @@ class TestRejectionBeatsInterview(unittest.TestCase):
         self.assertEqual(intent, "rejection")
 
 
+class TestRenderMatches(unittest.TestCase):
+
+    @patch("email_matcher.apply_updates")
+    @patch("email_matcher.plan_updates")
+    @patch("picker.list_all_evaluated_jds")
+    def test_render_matches_dry_run(self, mock_roles, mock_plan, mock_apply):
+        mock_roles.return_value = [{"path": "1.json", "title": "PM", "company": "Co"}]
+        mock_plan.return_value = [
+            {
+                "job_id": "1",
+                "action": "auto",
+                "confidence": 0.95,
+                "company": "Co",
+                "job_title": "PM",
+                "current_status": "Applied",
+                "new_status": "Interview",
+                "reasons": ["exact match"],
+            }
+        ]
+        inbox_sync._render_matches([{"intent": "interview"}], apply_changes=False)
+        mock_plan.assert_called_once()
+        mock_apply.assert_not_called()
+
+    @patch("email_matcher.apply_updates", return_value=1)
+    @patch("email_matcher.plan_updates")
+    @patch("picker.list_all_evaluated_jds")
+    def test_render_matches_applies_changes(self, mock_roles, mock_plan, mock_apply):
+        mock_roles.return_value = [{"path": "1.json", "title": "PM", "company": "Co"}]
+        mock_plan.return_value = [
+            {
+                "job_id": "1",
+                "action": "auto",
+                "confidence": 0.95,
+                "company": "Co",
+                "job_title": "PM",
+                "current_status": "Applied",
+                "new_status": "Interview",
+                "reasons": ["exact match"],
+            }
+        ]
+        inbox_sync._render_matches([{"intent": "interview"}], apply_changes=True)
+        mock_plan.assert_called_once()
+        mock_apply.assert_called_once()
+
+
+class TestSilenceDetectorAgingAndRanking(unittest.TestCase):
+
+    def test_parse_message_date_rfc2822_and_iso(self):
+        # RFC 2822 format
+        dt1 = inbox_sync._parse_message_date("Mon, 10 Aug 2026 12:00:00 +0000")
+        self.assertIsNotNone(dt1)
+        self.assertEqual(dt1.year, 2026)
+        self.assertEqual(dt1.month, 8)
+        self.assertEqual(dt1.day, 10)
+
+        # ISO format
+        dt2 = inbox_sync._parse_message_date("2026-08-15T10:30:00Z")
+        self.assertIsNotNone(dt2)
+        self.assertEqual(dt2.day, 15)
+
+        # Invalid/empty format returns None
+        self.assertIsNone(inbox_sync._parse_message_date(""))
+        self.assertIsNone(inbox_sync._parse_message_date("not-a-date"))
+
+    def test_rank_silent_applications_tiers(self):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
+
+        silent = [
+            {
+                "to": "jobs@warm.com",
+                "domain": "warm.com",
+                "subject": "Application for Product Lead",
+                "date": "Wed, 19 Aug 2026 12:00:00 +0000",  # 5 days ago -> warm
+                "intent": "application",
+            },
+            {
+                "to": "jobs@urgent.com",
+                "domain": "urgent.com",
+                "subject": "Application for Senior PM",
+                "date": "Mon, 10 Aug 2026 12:00:00 +0000",  # 14 days ago -> follow_up
+                "intent": "application",
+            },
+            {
+                "to": "jobs@stale.com",
+                "domain": "stale.com",
+                "subject": "Application for Dir of Product",
+                "date": "Wed, 15 Jul 2026 12:00:00 +0000",  # 40 days ago -> stale
+                "intent": "application",
+            },
+        ]
+
+        ranked = inbox_sync.rank_silent_applications(silent, now=now)
+        self.assertEqual(len(ranked), 3)
+
+        # Priority 1: follow_up (urgent.com)
+        self.assertEqual(ranked[0]["domain"], "urgent.com")
+        self.assertEqual(ranked[0]["tier"], "follow_up")
+        self.assertEqual(ranked[0]["days_waiting"], 14)
+
+        # Priority 2: warm (warm.com)
+        self.assertEqual(ranked[1]["domain"], "warm.com")
+        self.assertEqual(ranked[1]["tier"], "warm")
+        self.assertEqual(ranked[1]["days_waiting"], 5)
+
+        # Priority 3: stale (stale.com)
+        self.assertEqual(ranked[2]["domain"], "stale.com")
+        self.assertEqual(ranked[2]["tier"], "stale")
+        self.assertEqual(ranked[2]["days_waiting"], 40)
+
+    def test_generate_follow_up_draft(self):
+        item = {
+            "to": "recruiter@anthropic.com",
+            "domain": "anthropic.com",
+            "subject": "Application for Senior Product Manager - AI Systems",
+        }
+        draft = inbox_sync.generate_follow_up_draft(item, candidate_name="Morgan Scott")
+        self.assertEqual(draft["to"], "recruiter@anthropic.com")
+        self.assertIn(
+            "Following up: Application for Senior Product Manager", draft["subject"]
+        )
+        self.assertIn("Hi Team,", draft["body"])
+        self.assertIn("Morgan Scott", draft["body"])
+        self.assertIn("remain very enthusiastic", draft["body"])
+
+    def test_render_chase_list_execution(self):
+        silent = [
+            {
+                "to": "recruiter@acme.com",
+                "domain": "acme.com",
+                "subject": "Application for PM",
+                "date": "Mon, 10 Aug 2026 12:00:00 +0000",
+                "intent": "application",
+            }
+        ]
+        # Test that _render_chase_list executes without raising exceptions
+        inbox_sync._render_chase_list(silent, candidate_name="Morgan Scott")
+
+    @patch("inbox_sync.sync_inbox")
+    @patch("email_matcher.plan_updates")
+    @patch("email_matcher.apply_updates")
+    def test_main_apply_flag_executes_writeback(self, mock_apply, mock_plan, mock_sync):
+        mock_sync.return_value = [
+            {
+                "subject": "Update on your application for Staff Engineer",
+                "from": "recruiter@stripe.com",
+                "company": "Stripe",
+                "intent": "interview",
+                "date": "Mon, 24 Aug 2026 12:00:00 +0000",
+                "matched_jobs": [],
+            }
+        ]
+        mock_plan.return_value = [
+            {
+                "job_id": "stripe_staff_eng",
+                "action": "auto",
+                "new_status": "Interview",
+                "company": "Stripe",
+                "job_title": "Staff Engineer",
+                "current_status": "Applied",
+                "confidence": 0.98,
+                "reasons": ["exact match"],
+                "email_subject": "Update on your application for Staff Engineer",
+            }
+        ]
+        mock_apply.return_value = 1
+
+        exit_code = inbox_sync.main(["--apply"])
+        self.assertEqual(exit_code, 0)
+        mock_plan.assert_called_once()
+        mock_apply.assert_called_once_with(mock_plan.return_value)
+
+
 if __name__ == "__main__":
     unittest.main()
