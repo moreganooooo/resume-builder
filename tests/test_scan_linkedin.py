@@ -369,24 +369,52 @@ class TestScanLinkedinCookieAndQueries(unittest.TestCase):
 
     @patch("scan_linkedin.check_li_cookie_live", return_value=True)
     @patch("scan_linkedin.profile_paths.profile_root")
-    @patch("scan_linkedin.browser_cookie3.chrome")
+    @patch("subprocess.run")
     @patch("questionary.select")
-    def test_get_li_at_cookie_chrome_extraction(
-        self, mock_select, mock_chrome, mock_root, mock_check_live
+    def test_get_li_at_cookie_visual_browser_login_success(
+        self, mock_select, mock_subproc, mock_root, mock_check_live
     ):
-        """Test Chrome cookie jar extraction."""
+        """Test Playwright visual browser window login helper."""
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_root.return_value = tmpdir
-            mock_select.return_value.ask.return_value = "Extract automatically from Google Chrome (triggers macOS Keychain prompt)"
-            cookie_obj = MagicMock()
-            cookie_obj.name = "li_at"
-            cookie_obj.value = "chrome-extracted-cookie"
-            mock_chrome.return_value = [cookie_obj]
+            mock_select.return_value.ask.return_value = "(Recommended) Log in securely via a visual browser window (automatic capture)"
+            mock_subproc.return_value = MagicMock(
+                returncode=0,
+                stdout='{"success": true, "cookie": "playwright-captured-token"}',
+            )
 
             cookie = scan_linkedin.get_li_at_cookie()
-            self.assertEqual(cookie, "chrome-extracted-cookie")
+            self.assertEqual(cookie, "playwright-captured-token")
+            # Verify cached to disk
+            cookie_path = os.path.join(tmpdir, ".linkedin_cookie")
+            self.assertTrue(os.path.isfile(cookie_path))
+            with open(cookie_path, "r") as f:
+                self.assertEqual(f.read().strip(), "playwright-captured-token")
+
+    @patch("scan_linkedin.check_li_cookie_live", return_value=True)
+    @patch("scan_linkedin.profile_paths.profile_root")
+    @patch("questionary.text")
+    @patch("questionary.select")
+    def test_get_li_at_cookie_manual_paste_with_curl(
+        self, mock_select, mock_text, mock_root, mock_check_live
+    ):
+        """Test manual paste flow extracting li_at from pasted curl command."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_root.return_value = tmpdir
+            mock_select.return_value.ask.return_value = "Paste 'li_at' cookie value (or a Chrome DevTools curl command) manually"
+            mock_text.return_value.ask.return_value = "curl 'https://www.linkedin.com/feed/' -H 'Cookie: bcookie=1; li_at=manual-token-123; JSESSIONID=456'"
+
+            cookie = scan_linkedin.get_li_at_cookie()
+            self.assertEqual(cookie, "manual-token-123")
+
+    def test_browser_cookie3_not_in_runtime(self):
+        """Verify browser_cookie3 is completely decoupled and not referenced in scan_linkedin."""
+        self.assertFalse(hasattr(scan_linkedin, "_extract_chrome_cookie"))
+        self.assertNotIn("browser_cookie3", dir(scan_linkedin))
 
 
 if __name__ == "__main__":

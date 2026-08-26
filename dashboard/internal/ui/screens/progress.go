@@ -133,17 +133,32 @@ func (m ProgressModel) handleKeyString(k string) (ProgressModel, tea.Cmd) {
 // gets rendered, instead of two separate computations that could drift.
 func (m ProgressModel) renderBody() string {
 	funnel := m.renderFunnel()
+	funnelDrilldown := m.renderFunnelDrilldown()
 	scores := m.renderScoreDistribution()
 	rates := m.renderRates()
+	radar := m.renderStrategyRadar()
+	platforms := m.renderPlatformYield()
+	companies := m.renderCompanyConcentration()
+	scatter := m.renderScoreVsCoverage()
 	weekly := m.renderWeeklyActivity()
 	missionControl := m.renderMissionControl()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		funnel,
 		"",
+		funnelDrilldown,
+		"",
 		scores,
 		"",
 		rates,
+		"",
+		radar,
+		"",
+		platforms,
+		"",
+		companies,
+		"",
+		scatter,
 		"",
 		weekly,
 		"",
@@ -800,4 +815,254 @@ func RenderBlockBar(width int, fraction float64) string {
 		used++
 	}
 	return sb.String()
+}
+
+func (m ProgressModel) renderPlatformYield() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render("Source-Platform Yield & Quality")))
+
+	if len(m.metrics.PlatformStats) == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("No platform data")))
+		return strings.Join(lines, "\n")
+	}
+
+	maxRoles := 0
+	for _, p := range m.metrics.PlatformStats {
+		if p.TotalRoles > maxRoles {
+			maxRoles = p.TotalRoles
+		}
+	}
+
+	labelW := 15
+	barMaxW := m.width - labelW - 35
+	if barMaxW < 10 {
+		barMaxW = 10
+	}
+	if barMaxW > 30 {
+		barMaxW = 30
+	}
+
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(labelW)
+	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(8).Align(lipgloss.Right)
+	scoreStyle := lipgloss.NewStyle().Bold(true)
+
+	for _, p := range m.metrics.PlatformStats {
+		barW := 0
+		if maxRoles > 0 {
+			barW = p.TotalRoles * barMaxW / maxRoles
+		}
+		if barW < 1 && p.TotalRoles > 0 {
+			barW = 1
+		}
+
+		scoreColor := m.theme.Subtext
+		if p.AvgScore >= 4.0 {
+			scoreColor = m.theme.Green
+		} else if p.AvgScore >= 3.5 {
+			scoreColor = m.theme.Yellow
+		}
+
+		bar := lipgloss.NewStyle().Foreground(m.theme.Mauve).Render(strings.Repeat("■", barW))
+		cnt := fmt.Sprintf("%d jobs", p.TotalRoles)
+		sc := "-"
+		if p.AvgScore > 0 {
+			sc = fmt.Sprintf("%.2f avg", p.AvgScore)
+		}
+
+		row := labelStyle.Render(p.Platform) + " " + bar + " " + countStyle.Render(cnt) + "  " + scoreStyle.Foreground(scoreColor).Render(sc)
+		lines = append(lines, padStyle.Render(m.truncateRow(row)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderCompanyConcentration() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render("Top Employers & Staffing Detection")))
+
+	if len(m.metrics.CompanyStats) == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("No company data")))
+		return strings.Join(lines, "\n")
+	}
+
+	nameStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(24)
+	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(8).Align(lipgloss.Right)
+	scoreStyle := lipgloss.NewStyle().Bold(true)
+	agencyBadge := lipgloss.NewStyle().Foreground(m.theme.Yellow).Render("[AGENCY]")
+	directBadge := lipgloss.NewStyle().Foreground(m.theme.Blue).Render("[DIRECT]")
+
+	for _, c := range m.metrics.CompanyStats {
+		badge := directBadge
+		if c.IsAgency {
+			badge = agencyBadge
+		}
+
+		scoreColor := m.theme.Subtext
+		if c.AvgScore >= 4.0 {
+			scoreColor = m.theme.Green
+		} else if c.AvgScore >= 3.5 {
+			scoreColor = m.theme.Yellow
+		}
+
+		cnt := fmt.Sprintf("%d roles", c.TotalRoles)
+		sc := "-"
+		if c.AvgScore > 0 {
+			sc = fmt.Sprintf("%.2f avg", c.AvgScore)
+		}
+
+		compName := c.Company
+		if len(compName) > 22 {
+			compName = compName[:21] + "…"
+		}
+
+		row := badge + " " + nameStyle.Render(compName) + " " + countStyle.Render(cnt) + "  " + scoreStyle.Foreground(scoreColor).Render(sc)
+		lines = append(lines, padStyle.Render(m.truncateRow(row)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderScoreVsCoverage() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render("Score vs. Bullet Coverage (High-ROI Gap Radar)")))
+
+	q := m.metrics.Quadrants
+	total := q.ReadyToApply + q.HighFitLowCoverage + q.OverCoveredLowerFit + q.Deprioritized
+	if total == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("No scored & covered roles yet")))
+		return strings.Join(lines, "\n")
+	}
+
+	readyStyle := lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true)
+	gapStyle := lipgloss.NewStyle().Foreground(m.theme.Yellow).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+
+	row1 := fmt.Sprintf("• Ready to Apply (Score ≥ 4.0, Cov ≥ 70%%): %s", readyStyle.Render(fmt.Sprintf("%d roles", q.ReadyToApply)))
+	row2 := fmt.Sprintf("• High-ROI Bullet Gaps (Score ≥ 4.0, Cov < 70%%): %s", gapStyle.Render(fmt.Sprintf("%d roles (Write bullets next!)", q.HighFitLowCoverage)))
+	row3 := fmt.Sprintf("• Over-Covered / Lower Fit (Score < 4.0, Cov ≥ 70%%): %s", dimStyle.Render(fmt.Sprintf("%d roles", q.OverCoveredLowerFit)))
+	row4 := fmt.Sprintf("• Deprioritized (Score < 4.0, Cov < 70%%): %s", dimStyle.Render(fmt.Sprintf("%d roles", q.Deprioritized)))
+
+	lines = append(lines, padStyle.Render(m.truncateRow(row1)))
+	lines = append(lines, padStyle.Render(m.truncateRow(row2)))
+	lines = append(lines, padStyle.Render(m.truncateRow(row3)))
+	lines = append(lines, padStyle.Render(m.truncateRow(row4)))
+
+	if len(m.metrics.HighFitLowCoverageRoles) > 0 {
+		lines = append(lines, "")
+		subtitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Render("  Write Bullets For (High Fit, Low Coverage):")
+		lines = append(lines, padStyle.Render(m.truncateRow(subtitle)))
+
+		for i, r := range m.metrics.HighFitLowCoverageRoles {
+			if i >= 4 {
+				break
+			}
+			item := fmt.Sprintf("  ↳ %s @ %s (Score: %.1f, Cov: %.0f%%)", r.Title, r.Company, r.Score, r.Coverage)
+			lines = append(lines, padStyle.Render(m.truncateRow(item)))
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderFunnelDrilldown() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render("Funnel Drill-Down & Drop-Off Diagnostics")))
+
+	if len(m.metrics.FunnelDrilldown) == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("No funnel data available")))
+		return strings.Join(lines, "\n")
+	}
+
+	stageStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(20)
+	volStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Width(8).Align(lipgloss.Right)
+	convStyle := lipgloss.NewStyle().Bold(true).Width(10).Align(lipgloss.Right)
+	frictStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+
+	for _, s := range m.metrics.FunnelDrilldown {
+		cColor := m.theme.Green
+		if s.Conversion < 30.0 {
+			cColor = m.theme.Yellow
+		}
+		if s.Conversion < 10.0 {
+			cColor = m.theme.Subtext
+		}
+
+		convStr := fmt.Sprintf("%.1f%%", s.Conversion)
+		volStr := fmt.Sprintf("%d", s.Volume)
+		row := stageStyle.Render(s.Stage) + " " + volStyle.Render(volStr) + " " + convStyle.Foreground(cColor).Render(convStr) + "  " + frictStyle.Render("• "+s.Friction)
+		lines = append(lines, padStyle.Render(m.truncateRow(row)))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m ProgressModel) renderStrategyRadar() string {
+	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue)
+
+	var lines []string
+	lines = append(lines, padStyle.Render(sectionTitle.Render(fmt.Sprintf("Application Strategy Radar & Situation Room (Score: %d/100)", m.metrics.StrategyRadar.Overall))))
+
+	radar := m.metrics.StrategyRadar
+	if len(radar.Axes) == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("No strategy radar data available")))
+		return strings.Join(lines, "\n")
+	}
+
+	nameStyle := lipgloss.NewStyle().Foreground(m.theme.Text).Width(22)
+	scoreStyle := lipgloss.NewStyle().Bold(true).Width(10)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+
+	for _, axis := range radar.Axes {
+		// Render mini progress bar
+		barWidth := 10
+		filled := int(math.Round(float64(axis.Score) / 100.0 * float64(barWidth)))
+		if filled > barWidth {
+			filled = barWidth
+		}
+		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+
+		bColor := m.theme.Green
+		if axis.Score < 75 {
+			bColor = m.theme.Yellow
+		}
+		if axis.Score < 60 {
+			bColor = m.theme.Peach
+		}
+
+		barStr := lipgloss.NewStyle().Foreground(bColor).Render("[" + bar + "]")
+		scStr := fmt.Sprintf("%d%% (%s)", axis.Score, axis.Grade)
+
+		row := nameStyle.Render(axis.Name) + " " + barStr + " " + scoreStyle.Foreground(bColor).Render(scStr) + " " + descStyle.Render(axis.Description)
+		lines = append(lines, padStyle.Render(m.truncateRow(row)))
+	}
+
+	if len(radar.Playbooks) > 0 {
+		lines = append(lines, "")
+		pbTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky).Render("  Tactical Playbooks & Action Levers:")
+		lines = append(lines, padStyle.Render(m.truncateRow(pbTitle)))
+		for _, pb := range radar.Playbooks {
+			pbRowClean := fmt.Sprintf("  • %s (%s): %s", pb.Name, pb.Focus, pb.Action)
+			lines = append(lines, padStyle.Render(m.truncateRow(pbRowClean)))
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }

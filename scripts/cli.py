@@ -12,10 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # MUST run before any import below: cli_art -> jd_manager resolves
 # JDS_DIR = profile_paths.jds_dir() at module level, so an unresolvable
 # RESUME_PROFILE would otherwise abort this process with a raw traceback
-# before Click, the profile gate, or `resume doctor` ever get to run.
-import profile_paths as _profile_paths_preflight  # noqa: E402
+import profile_paths  # noqa: E402
 
-if __name__ == "__main__" and not _profile_paths_preflight.preflight_profile():
+if __name__ == "__main__" and not profile_paths.preflight_profile():
     sys.exit(2)
 
 import batch_evaluate
@@ -36,7 +35,6 @@ import menu
 import orchestrator
 import picker
 import polish as polish_module
-import profile_paths
 import scan as scan_module
 import theme
 
@@ -659,6 +657,68 @@ def location_enrich(all_statuses, allow_search_backup, limit):
     )
 
 
+@cli.command(name="reconcile")
+@click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    help="Apply corrections to data.db (defaults to dry-run).",
+)
+@click.option(
+    "--profile",
+    default=None,
+    help="Profile name (defaults to active profile).",
+)
+def reconcile_cmd(apply: bool, profile: str | None):
+    """Reconciles SQLite database job statuses with actual filesystem locations.
+
+    The filesystem is the primary source of truth for job status. This command
+    detects drift and syncs data.db to match directory structure.
+    """
+    import shutil
+    from datetime import datetime
+
+    import reconcile_jd_status
+
+    target_profile = profile or profile_paths.active_profile()
+    db_path = os.path.join(profile_paths.PROFILES_DIR, target_profile, "data.db")
+    jds_dir = profile_paths.jds_dir(target_profile)
+
+    if not os.path.exists(db_path):
+        cli_art.display_error(f"No database found at {db_path}")
+        raise SystemExit(1)
+
+    if apply:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup = f"{db_path}.backup-{stamp}"
+        shutil.copy2(db_path, backup)
+        cli_art.console.print(f"✓ Database backed up to {backup}")
+
+    stats = reconcile_jd_status.reconcile(db_path, jds_dir, apply_changes=apply)
+    verb = "Corrected" if apply else "Would correct"
+
+    cli_art.display_banner("Job Status Reconciliation")
+    cli_art.console.print(f"  Database rows:      {stats['scanned']}")
+    cli_art.console.print(f"  Files on disk:      {stats['files_on_disk']}")
+    cli_art.console.print(
+        f"  No matching file:   {stats['no_file']} (scan-sourced rows left untouched)"
+    )
+    cli_art.console.print(f"  {verb}:          {stats['updates']}")
+
+    for transition, count in stats["transitions"].most_common():
+        cli_art.console.print(f"      {transition:<28} {count}")
+
+    if apply:
+        cli_art.display_success(
+            "Reconciliation complete: "
+            + ", ".join(f"{s}={n}" for s, n in stats["status_after"].most_common())
+        )
+    else:
+        cli_art.console.print(
+            "\n[yellow]Dry run only. Pass --apply to write corrections to database.[/yellow]"
+        )
+
+
 @cli.command(name="sample")
 def sample_cmd():
     """Builds a resume + cover letter against the permanent fixtures/sample_jd.txt
@@ -701,6 +761,380 @@ def doctor_cmd(skip_tests):
             test_result = doctor.run_test_suite()
     cli_art.render_doctor_report(checks, test_result)
     maintenance.record_run("doctor")
+
+
+@cli.command(name="stats")
+@click.option(
+    "--platform",
+    is_flag=True,
+    default=False,
+    help="Show only source-platform yield breakdown.",
+)
+@click.option(
+    "--companies",
+    is_flag=True,
+    default=False,
+    help="Show only company concentration & agency detector.",
+)
+@click.option(
+    "--scatter",
+    is_flag=True,
+    default=False,
+    help="Show only bullet bank score vs. coverage scatter.",
+)
+@click.option(
+    "--heatmap",
+    is_flag=True,
+    default=False,
+    help="Show only bullet bank vs. market demand heatmap.",
+)
+@click.option(
+    "--radar",
+    is_flag=True,
+    default=False,
+    help="Show application strategy radar for top pending/evaluated jobs.",
+)
+@click.option(
+    "--funnel",
+    is_flag=True,
+    default=False,
+    help="Show recruitment funnel drill-down and bottleneck diagnostics.",
+)
+def stats_cmd(platform, companies, scatter, heatmap, radar, funnel):
+    """Surfaces pipeline intelligence: source-platform yield, company concentration,
+
+    score-vs-coverage scatter, bullet-bank market demand, strategy radar, and funnel drill-down.
+    """
+    import platform_analytics
+
+    if funnel:
+        import funnel_drilldown
+
+        m = funnel_drilldown.compute_funnel_metrics()
+        funnel_drilldown.render_funnel_drilldown(m)
+        return
+
+    if radar:
+        import picker
+        import strategy_radar
+
+        evaluated = picker.list_all_evaluated_jds()
+        if evaluated:
+            top_job = evaluated[0]
+            report = strategy_radar.analyze_job_strategy(top_job)
+            strategy_radar.render_strategy_radar_hud(report)
+        else:
+            cli_art.console.print(
+                "[dim]No evaluated jobs available for Strategy Radar.[/]"
+            )
+        return
+
+    show_all = not (platform or companies or scatter or heatmap)
+
+    plat_data = (
+        platform_analytics.compute_source_platform_breakdown()
+        if (show_all or platform)
+        else None
+    )
+    comp_data = (
+        platform_analytics.compute_company_concentration()
+        if (show_all or companies)
+        else None
+    )
+    scat_data = (
+        platform_analytics.compute_score_vs_coverage_scatter()
+        if (show_all or scatter)
+        else None
+    )
+    heat_data = (
+        platform_analytics.compute_bullet_bank_heatmap()
+        if (show_all or heatmap)
+        else None
+    )
+
+    cli_art.render_analytics_report(
+        platform_stats=plat_data,
+        company_stats=comp_data,
+        scatter_stats=scat_data,
+        heatmap_stats=heat_data,
+    )
+
+
+@cli.command(name="rag")
+@click.argument("query", required=True)
+@click.option("--top-bullets", default=5, help="Number of top bullets to retrieve.")
+@click.option(
+    "--top-evidence", default=3, help="Number of top evidence clusters to retrieve."
+)
+@click.option(
+    "--top-chunks", default=3, help="Number of top document chunks to retrieve."
+)
+@click.option(
+    "--index-docs",
+    is_flag=True,
+    help="Force re-indexing of knowledge base markdown documents.",
+)
+def rag_cmd(query, top_bullets, top_evidence, top_chunks, index_docs):
+    """Semantic Vector RAG search across bullet bank, evidence guide, and knowledge docs."""
+    import vector_store
+    from rich.panel import Panel
+
+    if index_docs:
+        count = vector_store.index_knowledge_documents()
+        cli_art.console.print(
+            f"[{theme.SUCCESS}]✓ Indexed {count} knowledge document chunks.[/{theme.SUCCESS}]"
+        )
+
+    res = vector_store.query_rag(
+        query,
+        top_k_bullets=top_bullets,
+        top_k_evidence=top_evidence,
+        top_k_chunks=top_chunks,
+    )
+
+    cli_art.console.print()
+    cli_art.console.print(
+        Panel(
+            f"[bold {theme.BRAND}]VECTOR RAG KNOWLEDGE RETRIEVAL[/]\n"
+            f"[dim]Query:[/] [bold]{query}[/]",
+            border_style=theme.BRAND,
+            padding=(0, 2),
+        )
+    )
+
+    # Document chunks
+    if res.get("doc_chunks"):
+        cli_art.console.print(
+            f"[bold {theme.BRAND}]📑 Matched Document Chunks ({len(res['doc_chunks'])})[/]"
+        )
+        for ch in res["doc_chunks"]:
+            source = ch.get("source_file", "Doc")
+            score = ch.get("score", 0.0)
+            text = ch.get("text", "")
+            cli_art.console.print(
+                f"  • [bold]{source}[/] [dim](chunk #{ch.get('chunk_id')}, relevance: {score:.2f})[/]\n"
+                f'    [dim italic]"{text[:220]}..."[/]\n'
+            )
+
+    # Evidence clusters
+    if res.get("evidence"):
+        cli_art.console.print(
+            f"[bold {theme.BRAND_ACCENT}]📖 Matched Evidence Clusters ({len(res['evidence'])})[/]"
+        )
+        for ev in res["evidence"]:
+            name = ev.get("cluster", "Cluster")
+            score = ev.get("score", 0.0)
+            metric = ev.get("metric", "N/A")
+            quote = ev.get("quote", "")
+            cli_art.console.print(
+                f"  • [bold]{name}[/] [dim](relevance: {score:.2f})[/]\n"
+                f"    [green]Key Metric:[/] {metric}\n"
+                f'    [dim italic]"{quote[:180]}..."[/]\n'
+            )
+
+    # Bullets
+    if res.get("bullets"):
+        cli_art.console.print(
+            f"[bold {theme.BRAND}]🎯 Matched Bullet Bank Achievements ({len(res['bullets'])})[/]"
+        )
+        for b in res["bullets"]:
+            bullet_text, role, tags, score = b
+            cli_art.console.print(
+                f"  • [dim][{role}][/] {bullet_text} [cyan]({score:.2f})[/]"
+            )
+    cli_art.console.print()
+
+
+@cli.command(name="strategy")
+@click.option(
+    "--jd", "jd_file", default=None, help="Specific JD file path or ID to analyze."
+)
+def strategy_cmd(jd_file):
+    """Application Strategy Radar & Situation Room tactical coaching HUD."""
+    import json
+
+    import picker
+    import strategy_radar
+
+    job_data = None
+    if jd_file:
+        if os.path.exists(jd_file):
+            with open(jd_file, "r", encoding="utf-8") as f:
+                try:
+                    job_data = json.load(f)
+                except Exception:
+                    job_data = {
+                        "raw_text": open(jd_file, "r", encoding="utf-8").read(),
+                        "title": os.path.basename(jd_file),
+                    }
+        else:
+            evaluated = picker.list_all_evaluated_jds()
+            for j in evaluated:
+                if str(j.get("id")) == str(jd_file) or str(
+                    j.get("source_job_id")
+                ) == str(jd_file):
+                    job_data = j
+                    break
+            if not job_data:
+                cli_art.display_error(f"Could not find JD matching: {jd_file}")
+                return
+    else:
+        evaluated = picker.list_all_evaluated_jds()
+        if evaluated:
+            job_data = evaluated[0]
+        else:
+            job_data = {
+                "title": "Senior Lifecycle Marketing Specialist",
+                "company": "Target Enterprise",
+                "url": "https://boards.greenhouse.io/target/jobs/123",
+                "description": "Lifecycle email campaigns, Salesforce CRM segmentation, and VOC feedback loops.",
+            }
+
+    report = strategy_radar.analyze_job_strategy(job_data)
+    strategy_radar.render_strategy_radar_hud(report)
+
+
+@cli.command(name="verify-sync")
+@click.option("--profile", default=None, help="Profile to verify sync environment for.")
+def verify_sync_cmd(profile: str = None):
+    """Verifies Syncthing directories, .stignore rules, and SQLite WAL status."""
+    import verify_syncthing
+
+    success = verify_syncthing.render_syncthing_report(profile)
+    if not success:
+        sys.exit(1)
+
+
+@cli.group(name="evidence")
+def evidence_group():
+    """Multi-Type Evidence Bank commands (STAR behavioral stories & negotiation levers)."""
+    pass
+
+
+@evidence_group.command(name="stories")
+@click.option(
+    "--archetype",
+    default=None,
+    help="Filter by archetype (e.g., ProblemSolving, Leadership, Innovation, UnderPressure).",
+)
+@click.option(
+    "--tag",
+    default=None,
+    help="Filter by tag (e.g., marketing, operations, automation).",
+)
+@click.option("--query", "-q", default=None, help="Lexical search query.")
+@click.option("--profile", default=None, help="Profile name.")
+def evidence_stories_cmd(
+    archetype: str = None, tag: str = None, query: str = None, profile: str = None
+):
+    """Browses and searches STAR/CAR behavioral stories."""
+    import evidence_bank
+
+    stories = evidence_bank.load_behavioral_stories(profile)
+    filtered = evidence_bank.filter_stories(
+        stories, archetype=archetype, tag=tag, query=query
+    )
+    evidence_bank.render_stories_terminal(filtered)
+
+
+@evidence_group.command(name="negotiate")
+@click.option(
+    "--category",
+    default=None,
+    help="Filter by category (e.g., Compensation, RemoteFlexibility, ScopeLeadership).",
+)
+@click.option("--query", "-q", default=None, help="Lexical search query.")
+@click.option("--profile", default=None, help="Profile name.")
+def evidence_negotiate_cmd(
+    category: str = None, query: str = None, profile: str = None
+):
+    """Browses and searches negotiation levers and talking points."""
+    import evidence_bank
+
+    levers = evidence_bank.load_negotiation_levers(profile)
+    filtered = evidence_bank.filter_negotiation_levers(
+        levers, category=category, query=query
+    )
+    evidence_bank.render_negotiation_terminal(filtered)
+
+
+@evidence_group.command(name="list")
+@click.option("--profile", default=None, help="Profile name.")
+def evidence_list_cmd(profile: str = None):
+    """Displays all behavioral stories and negotiation levers in the evidence bank."""
+    import evidence_bank
+
+    stories = evidence_bank.load_behavioral_stories(profile)
+    levers = evidence_bank.load_negotiation_levers(profile)
+    evidence_bank.render_stories_terminal(stories)
+    evidence_bank.render_negotiation_terminal(levers)
+
+
+@cli.command(name="timeline")
+@click.argument("job_id_or_query")
+@click.option("--profile", default=None, help="Profile name.")
+def timeline_cmd(job_id_or_query: str, profile: str = None):
+    """Displays full lifecycle milestone timeline for a specific job application."""
+    import application_timeline
+
+    res = application_timeline.get_single_application_timeline(job_id_or_query, profile)
+    if not res:
+        cli_art.display_error(f"No job found matching '{job_id_or_query}'.")
+        return
+    application_timeline.render_application_timeline_terminal(res)
+
+
+@cli.command(name="agency-view")
+@click.option(
+    "--filter", "agency_filter", default=None, help="Filter by staffing agency name."
+)
+@click.option("--profile", default=None, help="Profile name.")
+def agency_view_cmd(agency_filter: str = None, profile: str = None):
+    """Aggregates multi-role agency relationships and ghost rates."""
+    import application_timeline
+
+    agencies = application_timeline.get_agency_relationships(
+        profile, agency_filter=agency_filter
+    )
+    application_timeline.render_agency_view_terminal(agencies)
+
+
+@cli.command(name="scan-stream")
+def scan_stream_cmd():
+    """Starts interactive terminal viewport monitor reading NDJSON scan events from stdin."""
+    import scan_stream
+
+    scan_stream.run_live_monitor(sys.stdin)
+
+
+@cli.command(name="funnel-drilldown")
+@click.option("--profile", default=None, help="Profile to compute funnel metrics for.")
+def funnel_drilldown_cmd(profile: str = None):
+    """Recruitment funnel conversion drill-down and bottleneck diagnostics."""
+    import funnel_drilldown
+
+    m = funnel_drilldown.compute_funnel_metrics(profile)
+    funnel_drilldown.render_funnel_drilldown(m)
+
+
+@cli.command(name="compare")
+@click.argument("target_a", required=True)
+@click.argument("target_b", required=True)
+@click.option("--profile", default=None, help="Profile name.")
+def compare_cmd(target_a: str, target_b: str, profile: str = None):
+    """Side-by-side comparison of two job postings / packages."""
+    import job_compare
+
+    ja = job_compare.load_job_target(target_a, profile=profile)
+    jb = job_compare.load_job_target(target_b, profile=profile)
+    if not ja or not jb:
+        cli_art.console.print(
+            f"[{theme.ERROR}]✗ Could not find both target jobs to compare. Check IDs or file paths.[/{theme.ERROR}]"
+        )
+        sys.exit(1)
+
+    comp = job_compare.compare_jobs(ja, jb, profile=profile)
+    job_compare.render_job_comparison(comp)
 
 
 @cli.command(name="dashboard")

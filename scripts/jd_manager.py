@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import shutil
+import sqlite3
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -127,8 +128,14 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
             **data,
         }
         db.upsert_job(job_record, profile=profile)
+    except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+        logging.warning(
+            f"SQLite lock or operational issue during sync for {jd_path}: {e}"
+        )
     except Exception as e:
-        logging.warning(f"SQLite db sync skipped/failed for {jd_path}: {e}")
+        logging.error(
+            f"SQLite db sync failed unexpectedly for {jd_path}: {e}", exc_info=True
+        )
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
@@ -354,9 +361,8 @@ def move_jd_to(jd_path: str, dest_dir: str) -> str:
             data = json.load(f)
         if isinstance(data, dict):
             _sync_jd_to_db(dest, data)
-    except Exception:
-        pass  # best-effort, same posture as _sync_jd_to_db's own callers;
-        # not every JD file is JSON (plain-text drop-ins exist too)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        pass  # best-effort, plain-text drop-ins exist too
 
     return dest
 
@@ -598,7 +604,11 @@ APPLICATION_STATUSES = [
 
 
 def save_application_status(
-    jd_path: str, status: str, log_followup: bool = False
+    jd_path: str,
+    status: str,
+    log_followup: bool = False,
+    notes: str | None = None,
+    profile: str | None = None,
 ) -> None:
     """Persists real-world application progress into the JD's own JSON
     under an _application key -- the prerequisite the follow-up cadence
@@ -609,8 +619,10 @@ def save_application_status(
     status change, so cadence math always has a stable anchor date.
     log_followup=True additionally increments follow_up_count and stamps
     last_followup_at -- pass it alongside a status update, or on its own
-    call to log a follow-up without changing status. No-ops silently for
-    non-JSON-dict JDs, matching save_evaluation()/save_liveness()."""
+    call to log a follow-up without changing status. Also syncs the record
+    and logs the status change into the SQLite application_log table.
+    No-ops silently for non-JSON-dict JDs, matching save_evaluation()/save_liveness().
+    """
     try:
         with open(jd_path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -641,7 +653,33 @@ def save_application_status(
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-    _sync_jd_to_db(jd_path, data)
+    _sync_jd_to_db(jd_path, data, profile=profile)
+
+    try:
+        import db
+
+        job_id = data.get("source_job_id") or data.get("id") or compute_job_key(jd_path)
+        company = data.get("company_name") or data.get("company") or "Unknown Company"
+        role = data.get("job_title") or data.get("title") or "Untitled Role"
+        responded_at = (
+            now if status in ("Responded", "Interview", "Offer", "Rejected") else None
+        )
+        db.log_application_status(
+            job_id=job_id,
+            company=company,
+            role=role,
+            status=status,
+            applied_at=applied_at,
+            responded_at=responded_at,
+            notes=notes,
+            profile=profile,
+        )
+    except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+        logging.warning(
+            f"SQLite lock or operational issue logging application status: {e}"
+        )
+    except Exception as e:
+        logging.error(f"Failed to log application status to SQLite: {e}", exc_info=True)
 
 
 def read_application_status(jd_path: str) -> dict | None:
@@ -746,7 +784,7 @@ TRACKER_FIELDNAMES = [
 class JDTracker:
     """Thin CSV-backed completion log, keyed by job_key."""
 
-    def __init__(self, csv_path: str = None):
+    def __init__(self, csv_path: str = None, profile: str | None = None):
         # Resolved per instance, NOT from the module-level TRACKER_CSV
         # constant. That constant is computed once at import, so it keeps
         # pointing at whichever profile was active then -- it survived a
@@ -754,7 +792,8 @@ class JDTracker:
         # profile_paths.PROFILES_DIR, which is how the test suite came to
         # append two "completed" rows to a real tracker log on every run
         # and inflate the "Resumes Customized All-Time" banner.
-        self.csv_path = csv_path or profile_paths.tracker_csv_path()
+        self.profile = profile
+        self.csv_path = csv_path or profile_paths.tracker_csv_path(profile)
 
     def _read_rows(self) -> list:
         if not os.path.exists(self.csv_path):
@@ -819,6 +858,19 @@ class JDTracker:
                 "error_message": "",
             }
         )
+        try:
+            import db
+
+            db.update_job_status(job_key, "completed", profile=self.profile)
+        except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+            logging.warning(
+                f"SQLite lock or operational issue during mark_completed for {job_key}: {e}"
+            )
+        except Exception as e:
+            logging.error(
+                f"Failed to update job status in SQLite for {job_key}: {e}",
+                exc_info=True,
+            )
 
     def mark_failed(
         self, job_key, job_title="", company_name="", source_file="", error_message=""
@@ -1219,7 +1271,7 @@ def archive_jd(jd_path: str) -> str:
             data = json.load(f)
         if isinstance(data, dict):
             _sync_jd_to_db(dest, data)
-    except Exception:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         pass
 
     return dest

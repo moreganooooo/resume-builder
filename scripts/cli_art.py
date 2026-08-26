@@ -217,10 +217,37 @@ def _reveal_banner(lines: list, grid: list, render_frame) -> None:
         for frame in range(frame_count + 1):
             threshold = round(max_threshold * frame / frame_count)
             live.update(render_frame(threshold))
-            time.sleep(total_seconds / frame_count)
 
 
-def _stats_line_text() -> str:
+_STATS_PROVIDERS = {
+    "active_roles": None,
+    "completed_resumes": None,
+    "unevaluated_roles": None,
+}
+
+
+def register_stats_providers(
+    active_roles_fn=None,
+    completed_resumes_fn=None,
+    unevaluated_roles_fn=None,
+) -> None:
+    """Registers functions for active, completed, and unevaluated role statistics.
+    Decouples cli_art.py from picker.py / jd_manager.py at runtime and eliminates
+    circular imports in production.
+    """
+    if active_roles_fn is not None:
+        _STATS_PROVIDERS["active_roles"] = active_roles_fn
+    if completed_resumes_fn is not None:
+        _STATS_PROVIDERS["completed_resumes"] = completed_resumes_fn
+    if unevaluated_roles_fn is not None:
+        _STATS_PROVIDERS["unevaluated_roles"] = unevaluated_roles_fn
+
+
+def _stats_line_text(
+    active_roles_fn=None,
+    completed_resumes_fn=None,
+    unevaluated_roles_fn=None,
+) -> str:
     """Real, live data -- no new persistence. pending count comes from
     picker.count_active_roles() -- the SAME definition the dashboard's
     Jobs and Pipeline screens use, so the banner cannot disagree with
@@ -229,25 +256,38 @@ def _stats_line_text() -> str:
     roles). Tailored count comes from the append-only
     tracker CSV, NOT from jds/completed/'s file count -- archive_jd() moves
     files out of that directory, which would make an "All-Time" total go
-    down. This walks the whole JD corpus, so it is expensive: call it once
-    and reuse the string, never once per animation frame."""
-    # Imported here, not at module scope: picker imports cli_art, so a
-    # top-level import would be circular.
-    import picker
+    down. Supports dependency injection via active_roles_fn,
+    completed_resumes_fn, and unevaluated_roles_fn to decouple callers and tests."""
+    active_fn = active_roles_fn or _STATS_PROVIDERS["active_roles"]
+    completed_fn = completed_resumes_fn or _STATS_PROVIDERS["completed_resumes"]
+    unevaluated_fn = unevaluated_roles_fn or _STATS_PROVIDERS["unevaluated_roles"]
 
-    pending = picker.count_active_roles()
-    tailored = jd_manager.count_completed_resumes()
+    if active_fn is None or unevaluated_fn is None:
+        import picker
+
+        if active_fn is None:
+            active_fn = picker.count_active_roles
+        if unevaluated_fn is None:
+            unevaluated_fn = picker.count_unevaluated_roles
+
+    if completed_fn is None:
+        completed_fn = jd_manager.count_completed_resumes
+
+    pending = active_fn()
+    tailored = completed_fn()
     line = f"{pending} Roles Currently Awaiting Resume Creation · {tailored} Resumes Customized All-Time"
-    # Second line only when there IS a backlog: reporting "0 Awaiting
-    # Evaluation" is noise, while staying silent about 1,351 unevaluated
-    # roles is what made the evaluated count look wrong.
-    backlog = picker.count_unevaluated_roles()
+    backlog = unevaluated_fn()
     if backlog:
         line += f"\n{backlog} Roles Awaiting Evaluation"
     return line
 
 
-def display_main_banner(reveal: bool = True) -> None:
+def display_main_banner(
+    reveal: bool = True,
+    active_roles_fn=None,
+    completed_resumes_fn=None,
+    unevaluated_roles_fn=None,
+) -> None:
     # Sparkles ride the same diagonal gradient/reveal as the letters
     # themselves (composed onto each line before the grid is built, not
     # rendered separately) so they wipe in together as one coherent piece
@@ -270,7 +310,11 @@ def display_main_banner(reveal: bool = True) -> None:
     # length of the animation, but calling this per-frame walked the entire JD
     # corpus 31 times and turned a 1.6s reveal into ~27s -- the first thing
     # every user ever experiences. Compute once, close over the string.
-    stats_line = _stats_line_text()
+    stats_line = _stats_line_text(
+        active_roles_fn=active_roles_fn,
+        completed_resumes_fn=completed_resumes_fn,
+        unevaluated_roles_fn=unevaluated_roles_fn,
+    )
 
     def render_frame(threshold):
         body = _render_grid(decorated_lines, grid, threshold=threshold)
@@ -289,15 +333,26 @@ def display_main_banner(reveal: bool = True) -> None:
     _reveal_banner(decorated_lines, grid, render_frame)
 
 
-def display_stats_line() -> None:
-    console.print(_stats_line_text(), style=theme.INFO)
+def display_stats_line(
+    active_roles_fn=None,
+    completed_resumes_fn=None,
+    unevaluated_roles_fn=None,
+) -> None:
+    console.print(
+        _stats_line_text(
+            active_roles_fn=active_roles_fn,
+            completed_resumes_fn=completed_resumes_fn,
+            unevaluated_roles_fn=unevaluated_roles_fn,
+        ),
+        style=theme.INFO,
+    )
 
 
 TIPS = [
     "Want the AI to sound like you? Drop past cover letters, personal bios, or emails into source_documents/ — our engine extracts and clones your unique tone and style automatically!",
     "What is a 'Bullet Bank'? It is your living achievement inventory. Curate your accomplishments there, and the AI will auto-select and adapt the best matches for each job description!",
     "To target your job search, customize your active search keywords inside your profile's search_queries.json file directly in-app or in your editor.",
-    "Logging into LinkedIn or JobRight in Google Chrome lets our scanner fetch session cookies automatically on macOS — no manual copy-pasting required!",
+    "Launch the visual Playwright login for LinkedIn or configure JobRight cookies to scan jobs across multiple networks effortlessly!",
     "Running low on time? Try 'Express Setup (Auto-pilot)' — it ingests your source files, constructs your bullet bank, and builds a customized resume in a single click!",
     "Have a specific edit in mind? Use 'Polish Resume or Cover Letter' to conversationally ask the AI for exact visual, wording, or structure tweaks.",
     "Landed an interview? Update your status in the Applications Tracker to unlock achievements and watch your funnel conversion rate rise!",
@@ -2366,4 +2421,188 @@ def render_sparkle_celebration(
     )
     console.print()
     console.print(panel)
+    console.print()
+
+
+def render_analytics_report(
+    platform_stats: list[dict] = None,
+    company_stats: list[dict] = None,
+    scatter_stats: dict = None,
+    heatmap_stats: dict = None,
+) -> None:
+    """Renders comprehensive pipeline analytics covering source platforms,
+
+    company concentration, score-vs-coverage scatter, and bullet heatmap.
+    """
+    display_banner("Pipeline Intelligence & Market Analytics")
+
+    # 1. Source Platform Breakdown
+    if platform_stats:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Source-Platform Yield & Quality[/bold {theme.BRAND}]"
+        )
+        plat_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        plat_table.add_column("Platform", style="bold", ratio=2)
+        plat_table.add_column("Total Roles", justify="right", ratio=1)
+        plat_table.add_column("Evaluated", justify="right", ratio=1)
+        plat_table.add_column("Avg Score", justify="right", ratio=1)
+        plat_table.add_column(
+            "Bands (4.5+ / 4.0+ / 3.5+ / <3.5)", justify="center", ratio=3
+        )
+        plat_table.add_column("Top Role Match", ratio=4)
+
+        for p in platform_stats:
+            score_color = (
+                theme.SUCCESS
+                if p["avg_score"] >= 4.0
+                else theme.WARNING if p["avg_score"] >= 3.5 else theme.MUTED
+            )
+            bands = p["bands"]
+            band_str = (
+                f"[{theme.SUCCESS}]{bands['tier_4_5_plus']}[/{theme.SUCCESS}] · "
+                f"[{theme.INFO}]{bands['tier_4_0_to_4_4']}[/{theme.INFO}] · "
+                f"[{theme.WARNING}]{bands['tier_3_5_to_3_9']}[/{theme.WARNING}] · "
+                f"[{theme.MUTED}]{bands['tier_sub_3_5']}[/{theme.MUTED}]"
+            )
+            top = "-"
+            if p.get("top_role"):
+                top = f"{p['top_role']['title']} @ {p['top_role']['company']} ({p['top_role']['score']:.1f})"
+
+            plat_table.add_row(
+                p["platform"],
+                str(p["total_roles"]),
+                str(p["evaluated_roles"]),
+                (
+                    f"[{score_color}]{p['avg_score']:.2f}[/{score_color}]"
+                    if p["avg_score"] > 0
+                    else "[dim]-[/dim]"
+                ),
+                band_str,
+                _escape_markup(top),
+            )
+        console.print(plat_table)
+
+    # 2. Company Concentration & Agency Detector
+    if company_stats:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Company Concentration & Agency Intelligence[/bold {theme.BRAND}]"
+        )
+        comp_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        comp_table.add_column("Employer / Organization", style="bold", ratio=3)
+        comp_table.add_column("Type", justify="center", ratio=2)
+        comp_table.add_column("Roles", justify="right", ratio=1)
+        comp_table.add_column("Evaluated", justify="right", ratio=1)
+        comp_table.add_column("Avg Score", justify="right", ratio=1)
+        comp_table.add_column("Sample Roles", ratio=4)
+
+        for c in company_stats:
+            score_color = (
+                theme.SUCCESS
+                if c["avg_score"] >= 4.0
+                else theme.WARNING if c["avg_score"] >= 3.5 else theme.MUTED
+            )
+            type_badge = (
+                f"[{theme.WARNING}]Agency / Staffing[/{theme.WARNING}]"
+                if c["is_agency"]
+                else f"[{theme.INFO}]Direct Employer[/{theme.INFO}]"
+            )
+            roles_sample = ", ".join(c.get("roles", [])[:3])
+            if len(c.get("roles", [])) > 3:
+                roles_sample += f" (+{len(c['roles']) - 3} more)"
+
+            comp_table.add_row(
+                _escape_markup(c["company"]),
+                type_badge,
+                str(c["total_roles"]),
+                str(c["evaluated_roles"]),
+                (
+                    f"[{score_color}]{c['avg_score']:.2f}[/{score_color}]"
+                    if c["avg_score"] > 0
+                    else "[dim]-[/dim]"
+                ),
+                _escape_markup(roles_sample),
+            )
+        console.print(comp_table)
+
+    # 3. Score vs Coverage Scatter (High-ROI Bullet Gaps)
+    if scatter_stats and scatter_stats.get("total_points", 0) > 0:
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Score vs. Bullet Coverage (High-ROI Gap Radar)[/bold {theme.BRAND}]"
+        )
+        quads = scatter_stats.get("quadrants", {})
+        q1 = quads.get("high_score_low_coverage", [])
+        q2 = quads.get("high_score_high_coverage", [])
+        q3 = quads.get("low_score_high_coverage", [])
+        q4 = quads.get("low_score_low_coverage", [])
+
+        summary_text = Text()
+        summary_text.append(
+            f"• Ready to Apply (Fit ≥ 4.0, Coverage ≥ 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q2)} roles\n", style=theme.SUCCESS)
+        summary_text.append(
+            f"• High-ROI Bullet Gaps (Fit ≥ 4.0, Coverage < 70%): ", style="bold"
+        )
+        summary_text.append(
+            f"{len(q1)} roles (Write bullets for these!)\n", style=theme.WARNING
+        )
+        summary_text.append(
+            f"• Over-Covered / Lower Fit (Fit < 4.0, Coverage ≥ 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q3)} roles\n", style=theme.MUTED)
+        summary_text.append(
+            f"• Deprioritized (Fit < 4.0, Coverage < 70%): ", style="bold"
+        )
+        summary_text.append(f"{len(q4)} roles\n", style=theme.MUTED)
+
+        console.print(
+            Panel(
+                summary_text,
+                title=f"[{theme.BRAND}]Quadrant Distribution ({scatter_stats['total_points']} Scored Roles)[/{theme.BRAND}]",
+                border_style=theme.BRAND,
+                box=box.ROUNDED,
+                padding=(0, 2),
+            )
+        )
+
+        if q1:
+            console.print(
+                f"\n  [bold {theme.WARNING}]Top Roles to Write Bullets For (High Fit, Low Coverage):[/bold {theme.WARNING}]"
+            )
+            for item in q1[:8]:
+                console.print(
+                    f"    • [bold]{_escape_markup(item['title'])}[/bold] @ {_escape_markup(item['company'])} "
+                    f"([green]Score: {item['score']:.1f}[/green], [yellow]Coverage: {item['coverage']:.0f}%[/yellow])"
+                )
+
+    # 4. Bullet Bank Heatmap
+    if heatmap_stats and heatmap_stats.get("categories"):
+        console.print(
+            f"\n[bold {theme.BRAND}]✦ Bullet Bank Coverage vs. Market Demand[/bold {theme.BRAND}]"
+        )
+        heat_table = Table(
+            box=box.ROUNDED, header_style=TABLE_HEADER_STYLE, expand=True
+        )
+        heat_table.add_column("Category / Skill Domain", style="bold", ratio=4)
+        heat_table.add_column("Bullets in Bank", justify="right", ratio=2)
+        heat_table.add_column("Demand in Jobs", justify="right", ratio=2)
+        heat_table.add_column("Coverage Balance", justify="center", ratio=2)
+
+        for cat in heatmap_stats["categories"][:15]:
+            status_badge = (
+                f"[{theme.SUCCESS}]✓ Surplus[/{theme.SUCCESS}]"
+                if cat["status"] == "surplus"
+                else f"[{theme.WARNING}]⚠ Deficit[/{theme.WARNING}]"
+            )
+            heat_table.add_row(
+                _escape_markup(cat["name"]),
+                str(cat["bullets_in_bank"]),
+                str(cat["job_demand_count"]),
+                status_badge,
+            )
+        console.print(heat_table)
     console.print()

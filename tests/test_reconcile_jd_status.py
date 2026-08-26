@@ -12,6 +12,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from collections import Counter
 
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
@@ -116,6 +117,78 @@ class TestReconcile(unittest.TestCase):
         second = rjs.reconcile(self.db_path, self.jds, apply_changes=True)
 
         self.assertEqual(second["updates"], 0)
+
+
+class TestCliReconcileCommand(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.profile_dir = os.path.join(self.tmp, "test_prof")
+        os.makedirs(self.profile_dir, exist_ok=True)
+        self.db_path = os.path.join(self.profile_dir, "data.db")
+        conn = sqlite3.connect(self.db_path)
+        db.init_db(conn)
+        conn.close()
+
+    def test_cli_reconcile_dry_run_invokes_cleanly(self):
+        from unittest.mock import patch
+
+        import cli
+        from click.testing import CliRunner
+
+        fake_stats = {
+            "scanned": 10,
+            "files_on_disk": 10,
+            "no_file": 0,
+            "updates": 2,
+            "transitions": Counter({"pending -> archived": 2}),
+            "status_after": Counter({"archived": 2, "pending": 8}),
+        }
+        runner = CliRunner()
+        with (
+            patch("reconcile_jd_status.reconcile", return_value=fake_stats) as mock_rec,
+            patch("profile_paths.PROFILES_DIR", self.tmp),
+            patch("profile_paths.active_profile", return_value="test_prof"),
+            patch(
+                "profile_paths.jds_dir",
+                return_value=os.path.join(self.profile_dir, "jds"),
+            ),
+        ):
+            result = runner.invoke(cli.cli, ["reconcile"])
+            self.assertEqual(result.exit_code, 0, f"Error: {result.output}")
+            mock_rec.assert_called_once()
+            self.assertIn("Job Status Reconciliation", result.output)
+            self.assertIn("Dry run only", result.output)
+
+    def test_cli_reconcile_apply_invokes_with_apply_true(self):
+        from unittest.mock import patch
+
+        import cli
+        from click.testing import CliRunner
+
+        fake_stats = {
+            "scanned": 10,
+            "files_on_disk": 10,
+            "no_file": 0,
+            "updates": 2,
+            "transitions": Counter({"pending -> archived": 2}),
+            "status_after": Counter({"archived": 2, "pending": 8}),
+        }
+        runner = CliRunner()
+        with (
+            patch("reconcile_jd_status.reconcile", return_value=fake_stats) as mock_rec,
+            patch("profile_paths.PROFILES_DIR", self.tmp),
+            patch("profile_paths.active_profile", return_value="test_prof"),
+            patch(
+                "profile_paths.jds_dir",
+                return_value=os.path.join(self.profile_dir, "jds"),
+            ),
+            patch("shutil.copy2"),
+        ):
+            result = runner.invoke(cli.cli, ["reconcile", "--apply"])
+            self.assertEqual(result.exit_code, 0, f"Error: {result.output}")
+            mock_rec.assert_called_once()
+            self.assertTrue(mock_rec.call_args[1].get("apply_changes"))
+            self.assertIn("Reconciliation complete", result.output)
 
 
 if __name__ == "__main__":

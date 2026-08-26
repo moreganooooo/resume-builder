@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyError } from './run_provider.mjs';
+import { classifyError, executeBatch } from './run_provider.mjs';
 
 test('classifyError: HTTP status takes priority over message text', () => {
   const err = new Error('some generic message');
@@ -50,4 +50,24 @@ test('classifyError: DNS/connection error codes are network', () => {
 test('classifyError: anything unrecognized falls back to config, not a guessed transient reason', () => {
   const err = new Error('cannot derive API URL for Acme');
   assert.equal(classifyError(err), 'config');
+});
+
+test('executeBatch: handles empty array', async () => {
+  const results = await executeBatch([]);
+  assert.deepEqual(results, []);
+});
+
+test('executeBatch: isolates errors across multiple items', async () => {
+  const items = [
+    { provider_id: 'nonexistent_provider_123', entry: {} },
+    { provider_id: '', entry: {} },
+  ];
+  const results = await executeBatch(items);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].status, 'rejected');
+  assert.equal(results[0].provider_id, 'nonexistent_provider_123');
+  assert.equal(results[0].error.kind, 'config');
+  assert.equal(results[1].status, 'rejected');
+  assert.equal(results[1].provider_id, 'unknown');
+  assert.equal(results[1].error.kind, 'config');
 });

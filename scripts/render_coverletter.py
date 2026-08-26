@@ -62,7 +62,7 @@ def build_signature_block_html() -> str:
     file:// bug fix for font loading, see that file's own comment), so a
     relative "./signature.png" would resolve against the temp dir and
     never find the real file -- exactly the bug that made the old
-    hardcoded "./docs/MorganEscottSignature2025.png" reference silently
+    hardcoded "./docs/Signature2025.png" reference silently
     broken from the day the temp-file fix shipped, regardless of whether
     that file ever existed. Absolute file:// paths already work for fonts
     (see generate-pdf.mjs's own fontsDir rewrite) -- same fix, applied

@@ -404,8 +404,14 @@ def apply_updates(
         if not job_id:
             continue
         try:
+            notes = (
+                f"Matched from email: '{proposal.get('email_subject', '')}' "
+                f"(confidence: {proposal.get('confidence', '')})"
+            )
             with jd_source.resolved_jd(job_id) as (path, _is_db):
-                jd_manager.save_application_status(path, proposal["new_status"])
+                jd_manager.save_application_status(
+                    path, proposal["new_status"], notes=notes
+                )
             applied += 1
         except (LookupError, OSError):
             continue

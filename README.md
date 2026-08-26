@@ -2,7 +2,7 @@
 ### The job-search pipeline that actually reads the room. ✨
 
 [![CI Multi-Version Matrix](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml/badge.svg)](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml)
-[![Tests](https://img.shields.io/badge/tests-1%2C910%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
+[![Tests](https://img.shields.io/badge/tests-2%2C418%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8.svg)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -31,7 +31,8 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 ## 🏛️ The 7 Core Architectural Pillars
 
 ### 1. 🌐 Multi-Board Ingestion & Anti-Bot Infrastructure
-* **Comprehensive Provider Ecosystem:** Native ingestion for Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, Workday, LinkedIn, JobRight, Wellfound, Otta, Y Combinator (Work at a Startup), Levels.fyi, and curated remote indexes.
+* **Comprehensive Provider Ecosystem & Batch Scanner:** Native ingestion for Greenhouse, Lever, Workable, SmartRecruiters, Recruitee, Workday, LinkedIn, JobRight, Wellfound, Otta, Y Combinator (Work at a Startup), Levels.fyi, and curated remote indexes with high-performance concurrent single-process batch execution (`board-scanners/run_provider.mjs --batch`).
+* **Role Discovery & O*NET SOC Taxonomy:** Built-in title normalization and query alias expansion (`data/modern_title_aliases.yml` and `scripts/role_discovery.py`) mapping modern roles to formal O*NET Standard Occupational Classification codes.
 * **Commercial Anti-Bot Fallbacks:** Automatic Scrape.do proxy gateway routing on Cloudflare / 403 blocks with per-site token-bucket rate limiting and millisecond randomized jitter.
 * **Deduplication Hashing & Blacklists:** SHA-256 canonical posting deduplication and crowdsourced employer blacklists.
 * **Local & Commute-Aware Search:** Offline geocoding (bundled GeoNames centroids, no API key, no network) scores every posting's real distance from your configured origin, with a 5–25 mile radius and a remote / hybrid / on-site filter you can combine. Handles the location strings postings actually use — exclusion fencing ("US Remote, excluding CA"), multi-hub roles scored by their *nearest* office, metro shorthand, and international rejection.
@@ -61,8 +62,9 @@ Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Term
 * **Plain ASCII & JSONResume Exporters:** Clean text-box formatters and standard JSON Resume schema exports.
 
 ### 6. 💾 Career Operations CRM & Telemetry
-* **Embedded ACID SQLite Database (`data.db`):** High-performance indexed storage for jobs, contacts, stages, and metrics.
-* **Automated IMAP / Email Sync Daemon:** Scans incoming recruiter messages, classifies intent (interview, offer, rejection), and updates stage transitions.
+* **Embedded ACID SQLite Database (`data.db`):** High-performance indexed storage for jobs, contacts, stages, and metrics with strict test-write isolation.
+* **Automated IMAP / Email Sync Daemon & Write-Back:** Scans incoming recruiter messages, classifies intent (interview, offer, rejection), and updates stage transitions in `data.db` (`application_log`) via `--apply`.
+* **Silence Detector & Chase List:** Evaluates application aging tiers (0–7d, 8–21d, 22+d) and drafts polite, tailored follow-up emails via `--chase`.
 * **Recruiter & Hiring Manager Lead Enrichment:** Generates search dorks and CRM contact entries for direct outreach.
 * **Bullet-Tag-to-Outcome Correlation:** Mathematical tracking correlating specific bullet categories and tags with real interview offers.
 

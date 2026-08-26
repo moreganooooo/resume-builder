@@ -157,3 +157,23 @@ A: Set the following environment variables in your shell profile:
 * `RESUME_BUILDER_MOTION=reduced`: Disables Harmonica spring animations and replaces animated spinners with static indicators.
 * `RESUME_BUILDER_ICONS=unicode`: Replaces Nerd Font glyphs with standard Unicode symbols across all screens.
 * `RESUME_BUILDER_THEME=dark` or `light`: Explicitly selects the Catppuccin theme variant.
+
+### Q: How does Gemini Context Caching work and why is `GEMINI_CACHE_MIN_CHARS` required?
+A: Google's Gemini Context Caching API enforces a hard minimum threshold of 32,768 tokens per cached prompt payload. If an application attempts to create a cache handle below this floor, the API returns `HTTP 400 (Invalid argument)`. `resume-builder` automatically checks prompt lengths against `GEMINI_CACHE_MIN_CHARS` (defaulting to 131,072 characters, ~32,768 tokens at 4 characters/token) before requesting context caching. Prompts under this threshold execute safely as standard prompt requests without triggering API errors.
+
+### Q: How do I set up Gmail IMAP sync and generate a Google App Password for `--apply`?
+A: Google Accounts with 2-Step Verification require dedicated 16-character **App Passwords** rather than your regular account password:
+1. Navigate to your Google Account security settings at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+2. Create an App Password labeled `resume-builder`.
+3. Set `GMAIL_APP_PASSWORD=your16charactercode` in your profile's `.env` or system environment.
+4. Run `python scripts/inbox_sync.py --apply` to automatically sync recruiter email responses into your SQLite `application_log` table.
+
+### Q: How does the Silence Detector and Follow-Up Chase List (`--chase`) work?
+A: Running `python scripts/inbox_sync.py --chase` scans your active applications and organizes them into 3 aging tiers:
+* **Warm (0–7 days):** Standard recruiter review period; no action required.
+* **Follow-Up Opportunity (8–21 days):** Prime window for polite recruiter follow-up (sorted nearest-window first).
+* **Stale (22+ days):** Unresponsive or closed postings.
+The tool automatically generates clean, personalized follow-up email drafts referencing the exact company and target role.
+
+### Q: How do I run fast multi-board batch scans?
+A: The Node-based board scanner runner (`board-scanners/run_provider.mjs`) supports single-process batch execution via `--batch` and `--batch-file`. It executes multiple provider requests concurrently using `Promise.allSettled()`, ensuring isolated failure boundaries so a single board timeout or auth error does not interrupt other active scrapers.

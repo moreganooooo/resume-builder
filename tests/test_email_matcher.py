@@ -233,7 +233,10 @@ class TestApplyUpdates(unittest.TestCase):
 
         @contextlib.contextmanager
         def fake_resolved(job_id, profile=None):
-            yield ("/tmp/fake.json", True)
+            yield (
+                "/tmp/fake.json",
+                True,
+            )  # nosec B108 -- mock path, never touches disk
 
         with (
             patch("jd_source.resolved_jd", fake_resolved),
@@ -243,6 +246,41 @@ class TestApplyUpdates(unittest.TestCase):
 
         self.assertEqual(applied, 1)
         save.assert_called_once()
+        self.assertEqual(
+            save.call_args[0][0], "/tmp/fake.json"
+        )  # nosec B108 -- mock path, never touches disk
+        self.assertEqual(save.call_args[0][1], "Rejected")
+        self.assertIn("notes", save.call_args[1])
+
+    def test_auto_proposals_include_notes_from_email_subject(self):
+        proposals = [
+            {
+                "job_id": "job_xyz",
+                "action": "auto",
+                "new_status": "Interview",
+                "email_subject": "Invitation to interview for Lead Engineer",
+                "confidence": 0.95,
+            }
+        ]
+        import contextlib
+
+        @contextlib.contextmanager
+        def fake_resolved(job_id, profile=None):
+            yield ("/path/to/job_xyz.json", True)
+
+        with (
+            patch("jd_source.resolved_jd", fake_resolved),
+            patch("jd_manager.save_application_status") as save,
+        ):
+            applied = em.apply_updates(proposals)
+
+        self.assertEqual(applied, 1)
+        save.assert_called_once()
+        args, kwargs = save.call_args
+        self.assertEqual(args[0], "/path/to/job_xyz.json")
+        self.assertEqual(args[1], "Interview")
+        self.assertIn("Invitation to interview", kwargs.get("notes", ""))
+        self.assertIn("0.95", kwargs.get("notes", ""))
 
 
 if __name__ == "__main__":

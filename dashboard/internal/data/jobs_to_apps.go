@@ -46,13 +46,17 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 		}
 
 		app := model.CareerApplication{
-			Number:  len(apps) + 1,
-			Company: row.Company,
-			Role:    row.Title,
-			Status:  normalizeStatus(row),
-			Score:   row.Evaluation.CompositeScore,
-			JobURL:  row.SourceURL,
-			Notes:   row.Description,
+			Number:         len(apps) + 1,
+			Company:        row.Company,
+			Role:           row.Title,
+			Status:         normalizeStatus(row),
+			Score:          row.Evaluation.CompositeScore,
+			JobURL:         row.SourceURL,
+			Notes:          row.Description,
+			SourcePlatform: row.SourcePlatform,
+		}
+		if row.Coverage != nil {
+			app.Coverage = row.Coverage.Score
 		}
 
 		// ScoreRaw is what the row actually renders. Leaving it empty for

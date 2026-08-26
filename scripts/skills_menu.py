@@ -213,20 +213,33 @@ def _edit_skill(data: dict, tool_id: str):
     evidence_count_str = questionary.text(
         "Evidence Count:", default=str(tool.get("evidence_count", 1))
     ).ask()
+    if evidence_count_str is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
+        )
+        return
     try:
         evidence_count = int(evidence_count_str)
     except ValueError:
         evidence_count = tool.get("evidence_count", 1)
 
     use_notes = questionary.text("Use Notes:", default=tool.get("use_notes", "")).ask()
+    if use_notes is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
+        )
+        return
 
     refs_default = ", ".join(tool.get("tr_references", []))
     tr_references_str = questionary.text(
         "Evidence/Project References (comma-separated):", default=refs_default
     ).ask()
-    tr_references = [
-        r.strip() for r in (tr_references_str or "").split(",") if r.strip()
-    ]
+    if tr_references_str is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
+        )
+        return
+    tr_references = [r.strip() for r in tr_references_str.split(",") if r.strip()]
 
     tool["name"] = name.strip()
     tool["category"] = category.strip()
@@ -340,6 +353,14 @@ def run_skills_menu():
                     "◉  Select a Skill to View/Edit/Delete", "select_skill"
                 )
             )
+        choices.append(
+            questionary.Choice(
+                "★  Review Staged Career Facts (D10 Gate)", "review_staged_facts"
+            )
+        )
+        choices.append(
+            questionary.Choice("📜  View Verified Facts Ledger", "view_facts_ledger")
+        )
         choices.append(questionary.Choice("⬅  Back to Settings & Upkeep", "back"))
 
         action = cli_art.select("Skills Actions", choices=choices)
@@ -348,6 +369,22 @@ def run_skills_menu():
 
         if action == "add_skill":
             _add_skill(data)
+            continue
+
+        if action == "review_staged_facts":
+            import facts_manager
+
+            facts_manager.review_staged_facts_interactive()
+            continue
+
+        if action == "view_facts_ledger":
+            import facts_manager
+
+            facts_manager.display_facts_inventory()
+            questionary.text(
+                "Press Enter to return to Skills & Facts menu...",
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
             continue
 
         if action == "select_skill":
