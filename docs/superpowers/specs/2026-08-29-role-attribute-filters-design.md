@@ -2,7 +2,7 @@
 
 Date: 2026-08-29
 Status: Design — not yet implemented
-Revision: 2 (v1 was written before the corpus was measured; §"What the
+Revision: 3 (v1 was written before the corpus was measured; §"What the
 corpus says" invalidated its central design choice. See "What changed
 and why" at the end.)
 
@@ -140,7 +140,62 @@ The negative instruction in `role_track`'s description is written
 directly from finding (a) — the model has the same title bias the regex
 did, and must be told.
 
-### Stage 3 — UI: filter and sort on the stored attributes
+### Stage 3 — Rescore: turn criteria into a preference gradient
+
+Filtering alone only prevents wrong roles from appearing. It does
+nothing to make a *right* role rank first — and ranking is what the user
+actually experiences.
+
+Today the only attribute lever is binary: `hard_blockers` forces
+`composite_score = 0.00`, and otherwise attributes are invisible to
+scoring. There is no way to express "this is exactly what I want."
+
+**The precedent already exists.** `rescore_evaluation_with_location()`
+(orchestrator.py:1758) takes the model's guessed `remote_quality` and
+**replaces it with a deterministic calibration from the measured
+distance** via `calibrate_commute_quality()` — 5.0 at walking distance,
+grading to 3.0 at the radius edge. A measured fact overrides a guess,
+and the result is graded rather than binary. That is precisely the
+pattern these attributes need, and it is already written.
+
+`compensation_viability` carries weight **0.15** and its schema
+description is "vs. stated target/floor, or likely range if unstated" —
+the model guessing against a floor it was never given. Once a real range
+is parsed and a real floor is configured, that guess is replaceable with
+arithmetic.
+
+Add `rescore_evaluation_with_attributes()`, a sibling of the location
+rescore, and calibrate **existing** subscores:
+
+| Subscore | Deterministic input |
+| --- | --- |
+| `compensation_viability` | parsed range vs. configured floor — well above → 5.0, at floor → ~3.0, below → blocker |
+| `time_to_offer` | contract/temp typically resolve faster than FTE |
+| `remote_quality` | *(already calibrated from distance)* |
+
+**Calibrate existing subscores; do not add new ones.**
+`PRACTICAL_PURSUE_WEIGHTS` sums to exactly 1.00. A new subscore forces
+redistributing all seven weights, which silently re-ranks all 2,130
+existing evaluations for a reason unrelated to any of them.
+Recalibrating an existing subscore leaves the weights — and therefore
+comparability — intact.
+
+Compare against the range **max**, consistent with the filter rule and
+with `prefilter.py`'s existing `max_val` comparison.
+
+#### Score drift is a real cost, and it is currently unmanaged
+
+Any recalibration makes recalibrated and legacy evaluations
+non-comparable while they sit in one ranked list. **The location rescore
+already has this problem silently** — there is no `scoring_version`
+anywhere in `scripts/`.
+
+Introduce `_evaluation["scoring_version"]`, bump it when weights or
+calibrations change, and make the UI able to say a row was scored under
+an older version. Then either backfill or display the mixture honestly.
+Do not ship a second drift source on top of an unlabeled first one.
+
+### Stage 4 — UI: filter and sort on the stored attributes
 
 Display and selection only. No new API calls, no reclassification.
 
@@ -231,22 +286,92 @@ Unchanged and all still binding:
 ## Provider field recovery (do this first — it is free)
 
 Widen each provider's normalized shape to carry through what it already
-receives. Verify each against a live response; the adzuna lesson is that
-an unparsed field defeats a filter *quietly*.
+receives. **Measured live 2026-08-29**, not assumed — the adzuna lesson
+is that an unparsed field defeats a filter *quietly*:
 
-| Provider | Fields to stop discarding |
+| Provider | Employment type | Salary | Sample |
+| --- | --- | --- | --- |
+| **ashby** | `employmentType` **100%** | `compensation` **49%** | 410 postings, 4 boards |
+| **lever** | `categories.commitment` **96%** | `salaryRange` **61%** | 70 postings |
+| **greenhouse** | **NONE** | **NONE structured** | 909 postings, 3 boards |
+| jobright | `employment_type` 100% | — | already captured, 433 rows |
+| workable | listing `type`, `salary` | — | not yet measured |
+| indeed (JobSpy) | `job_type` | `min_amount`/`max_amount`/`interval` | not yet measured |
+
+**Correction to v2 of this spec:** it claimed greenhouse exposes
+`metadata` and `pay_input_ranges`. It does not. The public boards-api
+returns **no** `pay_input_ranges` field on any of 909 postings, and
+`metadata` is employer-defined free-form (Airbnb's is "Is this job part
+of ACC?"). Greenhouse is the **largest ATS source in the corpus (453
+rows)** and has zero structured coverage for both attributes. It depends
+entirely on Stage 2.
+
+Ashby's URL **already contains `includeCompensation=true`** and the
+response is discarded at normalization — free data already paid for over
+the wire.
+
+### Provider value nuances
+
+- **Normalization differs per provider.** Ashby is PascalCase with no
+  separator (`FullTime`, `Intern`, `Contract`, `Temporary`); lever is
+  hyphenated title case (`Full-time`, `Contract`, **`Fixed Term`** — a
+  type this spec did not enumerate); jobright is comma-joined multi-value
+  (`"Full-time, Contract"`). Normalize at the provider boundary, never
+  downstream, so one vocabulary reaches the filter.
+- **`shouldDisplayCompensationOnJobPostings`** (ashby) is a boolean the
+  employer sets. Compensation data can be present while the employer has
+  chosen not to display it. Honoring it or not is a deliberate call to
+  make once and write down — not something to decide by accident.
+- **10% of ashby postings carry multiple `compensationTiers`** — the
+  range varies by geographic tier. "The salary" is not one number; it is
+  a function of location, which interacts directly with the location
+  filter. Pick the tier matching the user's resolved location where one
+  matches, else the widest range, and record which.
+- `salary_is_estimated`: Indeed publishes *estimated* ranges beside
+  employer-stated ones. An estimate must never hard-reject — mark it,
+  show it, let the user judge. Only employer-stated compensation gates.
+
+## Coverage is uneven BY EMPLOYER, and that biases enforcement
+
+The most consequential limitation, and it is not fixable by better
+parsing.
+
+Greenhouse salary-in-prose coverage, measured per board:
+
+| Board | Postings with a $ range |
 | --- | --- |
-| ashby | `employmentType`, `compensation` |
-| greenhouse | `metadata`, `pay_input_ranges` |
-| lever | `categories.commitment` |
-| workable | listing `type`, `salary` |
-| indeed (JobSpy) | `job_type`, `min_amount`, `max_amount`, `interval`, `currency` |
-| jobright | `employment_type`, `seniority_level` (**already captured** — 433 rows) |
+| Stripe | 16 / 575 (**2.8%**) |
+| Figma | 96 / 163 (**58.9%**) |
+| Airbnb | 115 / 171 (**67.3%**) |
 
-`salary_is_estimated` matters: Indeed publishes *estimated* ranges
-beside employer-stated ones. An estimate must never hard-reject — mark
-it, show it, let the user judge. Only employer-stated compensation
-gates.
+Coverage is determined by **employer pay-transparency practice**, not by
+provider or by parser quality. A twenty-fold spread inside one provider.
+
+The consequence is systemic. With `require_stated: false` — the safe
+default, required by the unknown-is-kept rule — an unstated salary always
+passes. So enforcing a floor does not filter neutrally: it judges only
+the postings that **disclose**. Ashby and lever roles get evaluated;
+greenhouse and Stripe roles pass unexamined. Turning on a $65K floor does
+not yield "roles above $65K." It yields *"roles above $65K, plus every
+role from employers who do not disclose."* The visible corpus quietly
+re-weights toward non-disclosing employers, and nothing in the UI says so.
+
+**The reframe: unknown is not a coverage gap to be closed. It is a
+routing decision.** Treating it as a gap leads to over-trusting weak
+parsers to shrink it. Treating it as routing means:
+
+- Unknown-attribute roles are a **named bucket**, not silent passers.
+- The UI reports the split — "38 of 170 roles state no pay" — so the
+  user knows what the filter did and did not see.
+- A filter's status line shows coverage alongside the filter:
+  `$65K+ · 112 judged · 38 unstated`. A filter that cannot say how much
+  it examined is asserting more than it knows.
+- Sorting keeps them separate rather than interleaving unknowns into a
+  ranked list as though they had passed a test they were never given.
+
+This also gives the shadow-mode review something concrete to check: if
+the rejected set skews to one provider, that is provider bias, not
+selectivity.
 
 ## Persistence, export, model
 
@@ -351,19 +476,36 @@ and the unstated-sorts-last rule.
 
 Ordered by value per unit of risk, not by module:
 
-1. **Provider field recovery** — free, no new concepts, immediately
-   raises structured coverage above today's 17%.
-2. **Schema + evaluation fields** — the unlock. Near-total coverage at
-   zero marginal API cost.
-3. **jobright metadata backfill** — 433 rows, no API calls.
-4. **Employment type**: config, scan gate, shadow mode, UI.
-5. **Compensation**, folding `prefilter.py`'s salary branch into one
-   parser so the two cannot drift. Keep prefilter as the downstream
+1. **Provider field recovery (ashby + lever only)** — free, no new
+   concepts. Ashby already fetches compensation and discards it.
+   Greenhouse is measured to have nothing to recover; do not spend time
+   there.
+2. **`scoring_version` on evaluations** — before any rescoring lands.
+   Cheap now, and it retroactively labels the location rescore's
+   existing unmanaged drift.
+3. **Schema + evaluation fields** — the unlock. Near-total coverage at
+   zero marginal API cost, and the only path for greenhouse's 453 rows.
+4. **jobright metadata backfill** — 433 rows, no API calls.
+5. **Employment type**: config, scan gate, shadow mode, UI. Highest
+   structured coverage, lowest ambiguity.
+6. **Coverage reporting in the UI** — the "112 judged · 38 unstated"
+   status line. Ships **before** any enforcement, because it is what
+   makes enforcement's blind spot visible.
+7. **Compensation** filter, folding `prefilter.py`'s salary branch into
+   one parser so the two cannot drift. Keep prefilter as the downstream
    prose safety net, the same relation it has to the location gate.
-6. **Holdout labeling and the accuracy gate.** Before any `enforce:
+8. **Compensation rescore** — `compensation_viability` calibration. The
+   preference gradient, and the first point at which an on-target role
+   actually ranks higher rather than merely surviving.
+9. **Holdout labeling and the accuracy gate.** Before any `enforce:
    true`.
-7. **Role track** — display and sort only. Promote to a hard filter only
-   if it clears the bar, and accept that it may not.
+10. **Role track** — display and sort only. Promote to a hard filter
+    only if it clears the bar, and accept that it may not.
+
+Note the ordering principle: **every observability step precedes the
+enforcement step it makes safe.** `scoring_version` before rescoring,
+coverage reporting before filtering, shadow mode before enforcement,
+holdout before hard exclusion.
 
 ## What changed and why (v1 → v2)
 
@@ -384,3 +526,26 @@ Recorded so the reasoning is not lost:
   a filter's false negatives are invisible unless deliberately logged.
 - v1 said "measure the corpus first" as step 1. That measurement is now
   done and is recorded above rather than deferred.
+
+### v2 → v3
+
+- **v2's greenhouse provider row was wrong**, and it was wrong about the
+  largest ATS source in the corpus. Live testing showed no
+  `pay_input_ranges` on 909 postings and free-form employer `metadata`.
+  Corrected with measured per-provider coverage.
+- v2 had **no scoring story at all** — it filtered without ever making an
+  on-target role rank higher. Added Stage 3, built on the existing
+  `rescore_evaluation_with_location()` precedent, calibrating existing
+  subscores rather than adding one (the weights sum to 1.00; adding one
+  silently re-ranks the whole corpus).
+- Surfaced that **score drift is already unmanaged** — the location
+  rescore has no `scoring_version`. Fixing that is now a prerequisite
+  rather than a consequence.
+- Added the **per-employer coverage bias** finding (2.8% → 67% within
+  greenhouse alone) and reframed unknown from a coverage gap to a
+  routing decision, with coverage reporting as a shipped UI element
+  rather than an implementation detail.
+- Added provider value-normalization nuances (PascalCase vs. hyphenated
+  vs. comma-joined; lever's unenumerated `Fixed Term`; ashby's
+  multi-tier geographic compensation and its
+  `shouldDisplayCompensationOnJobPostings` flag).
