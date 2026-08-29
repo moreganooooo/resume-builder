@@ -42,9 +42,10 @@ def _make_fallback_situational_roles() -> dict:
                 "bank_tag": "Unisource Document Products",
                 "trigger_keywords": [
                     "print production",
-                    "document management",
                     "print services",
+                    "commercial printing",
                     "document solutions",
+                    "print management",
                 ],
             },
             "Kansas Colloquies": {
@@ -53,9 +54,12 @@ def _make_fallback_situational_roles() -> dict:
                 "trigger_keywords": [
                     "journalism",
                     "newspaper",
-                    "editorial",
+                    "newsroom",
+                    "investigative reporting",
                     r"\breporter\b",
                     "news writing",
+                    "student newspaper",
+                    "investigative journalism",
                 ],
             },
             "KU Payroll Office": {
@@ -74,8 +78,10 @@ def _make_fallback_situational_roles() -> dict:
                     "tax preparation",
                     "tax compliance",
                     "bookkeeping",
-                    r"\baudit\b",
+                    "tax audit",
+                    "financial audit",
                     "accounting clerk",
+                    "audit readiness",
                 ],
             },
             "USitek": {
