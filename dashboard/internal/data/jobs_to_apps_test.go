@@ -87,7 +87,7 @@ func TestJobRowsToApplications_PrefersApplicationStatus(t *testing.T) {
 
 func TestJobRowsToApplications_DatesAreTrimmedToDayPrecision(t *testing.T) {
 	rows := []model.JobRow{{
-		Title: "X", Company: "A", Status: "applied",
+		Title: "X", Company: "A", Status: "applied", PostedDate: "2026-08-10",
 		Application: &model.Application{
 			Status:          "Applied",
 			AppliedAt:       ptr("2026-08-16T16:16:14"),
@@ -97,8 +97,9 @@ func TestJobRowsToApplications_DatesAreTrimmedToDayPrecision(t *testing.T) {
 
 	app := JobRowsToApplications(rows)[0]
 
-	if app.Date != "2026-08-16" {
-		t.Errorf("Date = %q, want 2026-08-16", app.Date)
+	// Date is "Date Scanned/Posted" (PostedDate), not when the user applied.
+	if app.Date != "2026-08-10" {
+		t.Errorf("Date = %q, want 2026-08-10", app.Date)
 	}
 	if app.LastContact != "2026-08-18" {
 		t.Errorf("LastContact = %q, want 2026-08-18", app.LastContact)

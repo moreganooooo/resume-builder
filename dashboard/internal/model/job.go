@@ -23,6 +23,11 @@ type JobRow struct {
 	Application    *Application `json:"application"`
 	Coverage       *Coverage    `json:"coverage"`
 
+	// PostedDate is scripts/jd_manager.py's compute_posting_date() --
+	// a real posted-date field, else _discovered_at, else the _liveness
+	// "confirmed to exist by scan" timestamp, else "" when none exist.
+	PostedDate string `json:"posted_date"`
+
 	// Location is the posting's stated location, verbatim. Workplace is
 	// "remote"/"hybrid"/"onsite"/"unknown" as classified by Python's
 	// location_filter.
@@ -133,9 +138,9 @@ type Evaluation struct {
 	PostingLegitimacy        string          `json:"posting_legitimacy"`
 	PostingLegitimacyNotes   string          `json:"posting_legitimacy_notes"`
 	Archetype                string          `json:"archetype"`
-	FitSubscores             map[string]int  `json:"fit_subscores"`
-	InterviewOddsSubscores   map[string]int  `json:"interview_odds_subscores"`
-	PracticalPursueSubscores map[string]int  `json:"practical_pursue_subscores"`
+	FitSubscores             map[string]float64 `json:"fit_subscores"`
+	InterviewOddsSubscores   map[string]float64 `json:"interview_odds_subscores"`
+	PracticalPursueSubscores map[string]float64 `json:"practical_pursue_subscores"`
 	SkillMatrix              []SkillCoverage `json:"skill_matrix"`
 	PostingAgeDays           int             `json:"posting_age_days"`
 	ApplicantCount           int             `json:"applicant_count"`

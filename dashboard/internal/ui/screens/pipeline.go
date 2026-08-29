@@ -356,11 +356,15 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 		// sidebar selection.
 		leftWidth := int(float64(m.width) * pipelineSidebarRatio)
 		if msg.X >= leftWidth {
-			if msg.Y < 0 {
+			// msg.Y is the row the cursor is over on screen (always >= 0),
+			// not a scroll delta -- direction comes from msg.Button. See
+			// jobs.go's identical fix for the same bug: msg.Y < 0 was always
+			// false, so every wheel-up event fell into the scroll-down branch.
+			if msg.Button == tea.MouseWheelUp {
 				if m.detailScrollOffset > 0 {
 					m.detailScrollOffset--
 				}
-			} else {
+			} else if msg.Button == tea.MouseWheelDown {
 				m.detailScrollOffset++
 				m.clampDetailScroll()
 			}
@@ -368,12 +372,12 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 		}
 		if len(m.filtered) > 0 {
 			oldCursor := m.cursor
-			if msg.Y < 0 {
+			if msg.Button == tea.MouseWheelUp {
 				m.cursor--
 				if m.cursor < 0 {
 					m.cursor = 0
 				}
-			} else {
+			} else if msg.Button == tea.MouseWheelDown {
 				m.cursor++
 				if m.cursor >= len(m.filtered) {
 					m.cursor = len(m.filtered) - 1
