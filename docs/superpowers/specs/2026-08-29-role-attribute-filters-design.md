@@ -373,73 +373,127 @@ This also gives the shadow-mode review something concrete to check: if
 the rejected set skews to one provider, that is provider bias, not
 selectivity.
 
-## Provider survey: what is still unmeasured
+## Provider survey: all 34, measured
 
-31 providers exist in `board-scanners/providers/` plus 3 Python sources
-(`jobright`, `linkedin`, `indeed`). **Six have been measured.** The rest
-are assumptions until probed, and this spec should not pretend otherwise.
+`scripts/probe_provider_fields.py` measures this and is committed
+alongside the spec — it is re-runnable, seeded for reproducibility, and
+samples ATS boards using REAL slugs from `tracked_companies.yml` (a
+guessed slug 404s, or on SmartRecruiters returns 200 with an empty list,
+and reads identically to "provider publishes nothing").
 
-Measured live 2026-08-29:
+### The central finding: employment type is a provider property, salary is an employer property
+
+Measured across 24 boards per provider (575 greenhouse / 390 ashby /
+79 lever postings), reported as min / median / max **across boards**:
 
 | Provider | Employment type | Salary |
 | --- | --- | --- |
-| ashby | `employmentType` **100%** | `compensation` **49%** |
-| lever | `commitment` **96%** | `salaryRange` **61%** |
-| greenhouse | **none** | **none** |
-| jobright | 100% (of its rows) | — |
-| **himalayas** | `employmentType` **100%** | `minSalary`/`maxSalary` **30%**, with `currency` |
-| **remotive** | `job_type` **100%** | `salary` (free text) **58%** |
+| greenhouse | **0 / 0 / 0%** | 0 / 80 / 100% (pooled 63%) |
+| lever | **94 / 100 / 100%** | 0 / 0 / 100% (pooled 29%) |
+| ashby | **100 / 100 / 100%** | 0 / 68 / 100% (pooled 41%) |
 
-**Unmeasured and worth probing before sizing the work**, roughly by
-expected value:
+Employment type has **near-zero variance across boards**. It is a
+property of the provider's schema, a provider-level number means
+something, and Stage 1 can gate on it with confidence.
 
-- **workday** (71 rows) and **indeed/JobSpy** (41) — JobSpy is documented
-  to expose `job_type`, `min_amount`, `max_amount`, `interval`,
-  `currency`; unverified here.
-- **linkedin** (154 rows) — has a `work_model` field already captured in
-  metadata; its employment/seniority fields are visible in the LinkedIn
-  UI but the scraper's coverage is untested.
-- **smartrecruiters**, **recruitee**, **workable** — full ATS APIs, all
-  three likely to carry `typeOfEmployment`-style fields. My probes hit
-  404/empty on guessed company slugs; re-probe using real slugs from
-  `tracked_companies.yml` rather than guesses.
-- **Remote boards** (`weworkremotely` 58, `nodesk` 55,
-  `realworkfromanywhere` 114, `jobicy` 77, `remoteok`, `workingnomads`,
-  `jobspresso`, `himalayas`) — several are RSS-backed via `_rss.mjs`,
-  which structurally caps what can be carried. Where they do publish
-  fields, coverage looks good (himalayas, remotive above).
-- **Aggregators** (`adzuna`, `jooble`, `websearch`) — already known to be
-  discovery sources with teaser text (adzuna exactly 500 chars,
-  jooble ~275). Expect little, and do not spend effort here; they are
-  covered by Stage 2 once the JD is fetched.
-- **Niche** (`usajobs`, `ycombinator`, `wellfound`, `otta`, `levelsfyi`,
-  `fourdayweek`, `hackernews`, `authenticjobs`, `crunchboard`,
-  `powertofly`, `themuse`, `remote_curated`) — low volume in this corpus.
-  `usajobs` is a government API and almost certainly has excellent
-  structured pay data (GS grades); `levelsfyi` and `fourdayweek` are
-  compensation- and schedule-oriented by their nature, so both are
-  plausibly high-signal for this feature specifically.
+Salary spans **the full 0–100% range on every single provider**.
+It is a property of the *employer's* disclosure practice. Therefore:
 
-### Five vocabularies, and counting
+> **No provider-level salary coverage number is meaningful.** Any such
+> figure is sampling noise presented as a fact.
 
-Every measured provider spells employment type differently:
+This retroactively invalidates the salary column in v2/v3/v4's provider
+tables ("ashby 49%", "lever 61%"). Those came from four randomly drawn
+boards; consecutive runs of the same probe produced greenhouse 37% then
+70%, ashby 68% then 100%, lever 53% then 18%. Nothing changed but the
+sample.
 
-| Provider | Format | Example |
-| --- | --- | --- |
-| ashby | PascalCase, no separator | `FullTime`, `Intern` |
-| lever | Hyphenated title case | `Full-time`, **`Fixed Term`** |
-| jobright | Comma-joined multi-value | `Full-time, Contract` |
-| himalayas | Space-separated title case | `Full Time` |
-| remotive | snake_case | `full_time`, **`freelance`** |
+**The design consequence is concrete:** Stage 1 may gate on employment
+type per provider. Stage 1 must **never** gate on salary using a
+provider-level expectation, and the UI must report salary coverage from
+what a given scan actually observed — the `112 judged · 38 unstated`
+line — rather than from any predicted rate.
 
-Two types neither this spec nor v2 enumerated surfaced from real data:
-lever's **`Fixed Term`** and remotive's **`freelance`**. Expect more.
+### Full results
 
-This settles the normalization question: **one `normalize_employment_type()`
-mapping applied at the provider boundary**, with an explicit
-`UNKNOWN` for unrecognized input and a logged warning naming the
-provider and the unmapped value — so a sixth vocabulary announces itself
-instead of silently becoming `unknown` and passing the filter.
+**Structured, reliable (Stage 1 can gate on employment type):**
+
+| Provider | Employment field | Coverage | Salary field |
+| --- | --- | --- | --- |
+| ashby | `employmentType` | 100% | `compensation` |
+| lever | `categories.commitment` | 98% | `salaryRange` |
+| jobicy | `jobType` | 100% | `annualSalaryMin` |
+| himalayas | `employmentType` | 100% | `minSalary`/`maxSalary` |
+| remotive | `job_type` | 100% | `salary` (free text) |
+| smartrecruiters | `typeOfEmployment.label` | 84% | none observed |
+| workable | markdown `Type` column | 69% | `Salary` column |
+| jobright | `employment_type` | 100% | none |
+
+**No structured employment field — depends entirely on Stage 2:**
+greenhouse (**0% on every board**, the largest ATS source at 453 rows),
+remoteok, workingnomads, fourdayweek, themuse.
+
+**RSS-backed** (`_rss.mjs`) — no structured fields are possible by
+construction; only prose mentions: weworkremotely (100% prose mention),
+authenticjobs (100%), jobspresso (30%), realworkfromanywhere (12%),
+nodesk (0%).
+
+**Needs attention — returned zero items:** `crunchboard` and
+`powertofly` both parsed **0 postings**. Either the feed format changed
+or the boards are dead. Worth checking independently of this feature;
+a provider silently contributing nothing is the quiet failure mode this
+whole spec is about.
+
+**Not measurable by this script** (recorded explicitly so "unmeasured"
+never reads as "measured and empty"): adzuna, jooble, usajobs
+(API keys); otta, wellfound (authenticated sessions); levelsfyi (blocks
+non-browser clients); ycombinator (Algolia endpoint needs POST, probe
+uses GET); workday (per-tenant POST API — probe separately); hackernews
+and remote_curated (free text and a link list, no fields by
+construction); linkedin and indeed (Python sources).
+
+### Vocabulary: not an enum, and unbounded
+
+Observed values across providers:
+
+| Provider | Observed |
+| --- | --- |
+| ashby | `FullTime`, `Intern`, `Contract`, `Temporary` |
+| lever | `Full-time`, `Full-Time`, `Full Time / On Site`, `Full Time - Union`, `Full Time - Non-Union`, `Internship`, `Fixed Term` |
+| jobright | `Full-time, Contract` (comma-joined multi-value) |
+| jobicy | `['Full-Time']` (list-wrapped) |
+| himalayas | `Full Time` |
+| remotive | `full_time`, `freelance` |
+| workable | `Full-time`, `Contract` |
+
+**Lever's `commitment` is employer-authored free text, not an enum** —
+`Full Time - Union`, `Full Time - Non-Union`, and `Full Time / On Site`
+are things employers typed. Two consequences:
+
+1. The value set is **unbounded**; no fixed mapping can be complete.
+   `normalize_employment_type()` must match on substrings against a
+   normalized form, not on equality, and must **log the provider and the
+   unmapped value** so a new variant announces itself rather than
+   silently becoming `unknown` and passing the filter.
+2. `Full Time / On Site` **carries workplace mode inside the employment
+   field**. Parsing it as employment type alone discards a location
+   signal; worse, feeding the whole string to a workplace classifier
+   could mis-set it. Split on separators and route each token to the
+   right classifier.
+
+### Two bugs the probe found in existing code
+
+- **`workable.mjs` indexes its markdown table from the left.** A real
+  posting on `panorama-education` has a pipe inside the title
+  (`AI Solutions Consultant, Special Education | 1099 Consultant`),
+  which shifts every column: `Type` reads the location, `Salary` reads
+  the type. The probe hit this and now parses **from the right**
+  (`Details` is always last). The provider should do the same.
+- **`themuse`'s `type` field is not an employment type.** It reports
+  `"external"` — the posting kind. An unvalidated probe recorded it as
+  100% employment coverage. A field that is present and irrelevant is
+  more dangerous than a missing one, because coverage metrics look
+  healthy while the filter reads garbage.
 
 ## Persistence, export, model
 
@@ -726,3 +780,31 @@ Recorded so the reasoning is not lost:
 - Collected the theme/icon constraints that have caused real bugs
   (dual icon maps, Go mirror, lipgloss v1 vs. v2, DECSTBM, reduced
   motion).
+
+### v4 → v5
+
+Everything here comes from running `scripts/probe_provider_fields.py`
+against live providers, not from reading their docs.
+
+- **Split the two fields.** Employment type is a provider property
+  (near-zero cross-board variance); salary is an employer property
+  (0–100% on every provider). Stage 1 may gate on the first and must
+  never carry a provider-level expectation for the second. The
+  per-provider salary column from v2–v4 was sampling noise — consecutive
+  runs of the same probe moved greenhouse from 37% to 70%.
+- **greenhouse publishes no employment type at all**, on every board
+  measured, and it is the largest ATS source (453 corpus rows). The
+  feature's value therefore rests on Stage 2, not Stage 1. v2 claimed
+  the opposite from reasoning; that was wrong for three revisions.
+- **The vocabulary is unbounded, not an enum.** Lever's `commitment` is
+  employer-authored free text; `Full Time / On Site` puts workplace mode
+  inside the employment field. Normalization must be substring-based and
+  must log unmapped values with their provider.
+- **Two defects found in existing code**: `workable.mjs` indexes its
+  markdown table from the left and breaks on a pipe in a title;
+  `themuse`'s `type` is a posting kind, not an employment type.
+- **Named the unmeasurable.** Thirteen providers cannot be probed
+  without keys, sessions, or a different transport, and are listed as
+  such so a future reader does not mistake "unmeasured" for "empty".
+  Open: ycombinator needs POST, workday is per-tenant POST,
+  crunchboard/powertofly returned zero items and may be dead.
