@@ -244,9 +244,13 @@ def run_location_settings() -> None:
             "\n  [bold cyan]Enriching company addresses and facility locations...[/bold cyan]\n",
             soft_wrap=True,
         )
-        results = location_enricher.enrich_profile_locations()
+        results = location_enricher.enrich_profile_locations(allow_search_backup=True)
         cli_art.console.print(
-            f"\n{cli_art.SUCCESS} Processed {results['total_processed']} jobs: {results['resolved']} resolved facility addresses.",
+            f"\n{cli_art.SUCCESS} Processed {results['total_processed']} jobs: "
+            f"{results['resolved']} resolved, {results['bypassed_remote']} remote "
+            f"(skipped for good), {results['unresolved']} still unresolved "
+            f"({results['search_calls_used']} search call(s) used this run -- "
+            "still-unresolved companies get another shot next time you run this).",
             soft_wrap=True,
         )
         return

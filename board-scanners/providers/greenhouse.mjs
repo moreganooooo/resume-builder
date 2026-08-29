@@ -39,6 +39,19 @@ function resolveApiUrl(entry) {
   return null;
 }
 
+// A remote-eligible posting can be tied to several `offices`, each named
+// for a country/region ("US", "Remote - Poland") -- distinct from the
+// single `location.name` string, which is often just "Remote" and gives
+// the location filter's international-country check nothing to catch a
+// non-US-restricted posting on (the same gap found and fixed in
+// ashby.mjs's secondaryLocations, 2026-08-27).
+function resolveLocation(job) {
+  const primary = job.location?.name || '';
+  const officeNames = (job.offices || []).map(o => o?.name).filter(Boolean);
+  const parts = [primary, ...officeNames].filter(Boolean);
+  return [...new Set(parts)].join('; ');
+}
+
 function isTooOld(updatedAt) {
   if (!updatedAt) return false; // missing field — let it through, Playwright will catch it
   const ts = Date.parse(updatedAt);
@@ -77,7 +90,7 @@ export default {
         url: j.absolute_url,
         company: entry.name,
         description: j.content || '',
-        location: j.location?.name || '',
+        location: resolveLocation(j),
         posted_at: j.updated_at || '',
       }));
   },

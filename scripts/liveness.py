@@ -190,7 +190,7 @@ def _save_liveness_to_db(job_id: str, outcome: str, reason: str) -> None:
         return
 
 
-def _gather_db_candidates() -> list:
+def _gather_db_candidates(refresh: bool = False) -> list:
     """Liveness candidates for evaluated roles that exist only in data.db.
 
     Most pending roles have no JD file, so a file-only sweep checked 157
@@ -261,9 +261,10 @@ def _gather_db_candidates() -> list:
         if not url:
             continue
 
-        # Same 24-hour skip the filesystem path gets. Without it every run
-        # would re-check hundreds of URLs through Playwright.
-        if _liveness_is_recent(data.get("_liveness")):
+        # Same 24-hour skip the filesystem path gets, unless the caller
+        # asked to bypass it. Without this check every run would re-check
+        # hundreds of URLs through Playwright.
+        if not refresh and _liveness_is_recent(data.get("_liveness")):
             continue
 
         # Title and company ride along because there is no file to read
@@ -776,7 +777,7 @@ def run_liveness_check(refresh: bool = False) -> dict:
     # Include roles that live only in the database. Without these the
     # sweep covered 157 of 812 pending roles while every other screen
     # counted all 812.
-    candidates.extend(_gather_db_candidates())
+    candidates.extend(_gather_db_candidates(refresh=refresh))
 
     if recently_checked:
         cli_art.print_literal(

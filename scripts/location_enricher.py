@@ -22,6 +22,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import geo_distance
@@ -213,6 +214,36 @@ def lookup_osm_nominatim(
     except Exception as exc:
         logger.debug("OSM Nominatim lookup error for %s: %s", company, exc)
 
+    return None
+
+
+def lookup_website_via_search(company: str) -> Optional[str]:
+    """Step 1c: Free fallback for a missing company_website, using the same
+    no-key DuckDuckGo backend the board-scan sweeps already rely on
+    (websearch_ddg.py) rather than spending a Gemini call just to find a
+    homepage URL. Tried between OSM and the paid Gemini search backup so
+    scrape_company_locations() has something to scrape on far more jobs
+    without touching the search-call quota.
+
+    Reuses company_research._REJECTED_DOMAINS so a job board or review site
+    ranking above the real homepage (a real, observed DDG result shape) is
+    never handed to the scraper as if it were the company's own site.
+    Returns None on no query, no results, or an unresolved/rejected match --
+    never raises, matching every other lookup_* in this module."""
+    if not company or company.lower() in {"confidential", "unknown company", "stealth"}:
+        return None
+
+    import websearch_ddg
+    from company_research import _REJECTED_DOMAINS
+
+    results = websearch_ddg.search(f'"{company}" official website', max_results=5)
+    for result in results:
+        url = (result.get("url") or "").strip()
+        if not url:
+            continue
+        if any(domain in url.lower() for domain in _REJECTED_DOMAINS):
+            continue
+        return url
     return None
 
 
@@ -430,6 +461,33 @@ def lookup_gemini_search_backup(
     return None
 
 
+# Statuses that will never change on a re-run and so should never be
+# re-queued: a remote job stays remote and a real address was found. Everything
+# else ("unresolved", "unresolved_agency") is retried on future runs, since
+# discovery sources that were down or rate-limited today may succeed later.
+_TERMINAL_ENRICHMENT_STATUSES = {"resolved", "bypassed_remote"}
+
+
+# A failed discovery is re-tried after this many days rather than never --
+# a real, permanently-unfindable company should stop costing repeat OSM/DDG
+# calls, but a transient failure (DDG timeout, OSM briefly down) must not
+# get stuck reporting "unresolved" forever just because it landed in the
+# cache on a bad day.
+_NEGATIVE_CACHE_COOLDOWN_DAYS = 14
+
+
+def _negative_cache_expired(entry: Dict[str, Any]) -> bool:
+    checked_at = entry.get("checked_at")
+    if not checked_at:
+        return True
+    try:
+        checked = datetime.strptime(checked_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return True
+    age_days = (datetime.utcnow() - checked).total_seconds() / 86400
+    return age_days >= _NEGATIVE_CACHE_COOLDOWN_DAYS
+
+
 def load_locations_cache(profile: str = None) -> Dict[str, Any]:
     """Loads cached company locations from profiles/<profile>/company_locations.json."""
     path = profile_paths.company_locations_cache_path(profile)
@@ -508,16 +566,31 @@ def enrich_job_location(
     # Step 1: Discovery (Cache -> OSM -> Website)
     discovery_result = None
     if not agency and company:
-        if clean_company_key in cache:
-            discovery_result = dict(cache[clean_company_key])
+        cached_entry = cache.get(clean_company_key)
+        cached_failure = bool(cached_entry) and cached_entry.get("failed") is True
+        if cached_entry and not cached_failure:
+            discovery_result = dict(cached_entry)
+        elif cached_failure and not _negative_cache_expired(cached_entry):
+            # A prior run already spent an OSM + free-search + scrape
+            # attempt on this exact company and came up empty -- retrying
+            # it on every subsequent job posting for the same employer
+            # (batches routinely carry several) was the actual source of
+            # the repeated "No results found" DDG errors: one real
+            # unresolvable company, retried dozens of times per run.
+            discovery_result = None
         else:
             # Try OSM
             discovery_result = lookup_osm_nominatim(company, target_city, target_state)
-            if not discovery_result and website:
-                # Try Website Scraping
-                branches = scrape_company_locations(website, target_state)
-                if branches:
-                    discovery_result = select_closest_branch(branches, origin)
+            if not discovery_result:
+                if not website:
+                    # Free fallback -- finds a homepage to scrape without
+                    # spending a Gemini call (see lookup_website_via_search).
+                    website = lookup_website_via_search(company) or ""
+                if website:
+                    # Try Website Scraping
+                    branches = scrape_company_locations(website, target_state)
+                    if branches:
+                        discovery_result = select_closest_branch(branches, origin)
 
             if discovery_result:
                 cache[clean_company_key] = {
@@ -527,7 +600,12 @@ def enrich_job_location(
                     "lon": discovery_result.get("lon"),
                     "source": discovery_result.get("source"),
                 }
-                save_locations_cache(cache, profile)
+            else:
+                cache[clean_company_key] = {
+                    "failed": True,
+                    "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+            save_locations_cache(cache, profile)
 
     # Step 2: JD Text Extraction & Precedence
     jd_result = extract_jd_address(raw_text, target_state)
@@ -535,9 +613,25 @@ def enrich_job_location(
         discovery_result, jd_result, is_agency=agency
     )
 
-    # Step 3: Ultra-Backup via Gemini Search if needed
+    # Step 3: Ultra-Backup via Gemini Search if needed. Skipped when a prior
+    # run already spent a search call on this exact company and it came up
+    # empty within the cooldown window -- otherwise the small per-run quota
+    # (max_search_calls) gets re-spent on the same unfindable companies every
+    # run instead of ever reaching new ones further down the queue.
+    company_cache_entry = cache.get(clean_company_key) or {}
+    gemini_previously_failed = company_cache_entry.get(
+        "gemini_failed"
+    ) is True and not _negative_cache_expired(
+        {"checked_at": company_cache_entry.get("gemini_checked_at")}
+    )
     search_call_attempted = False
-    if not winning and allow_search_backup and not agency and company:
+    if (
+        not winning
+        and allow_search_backup
+        and not agency
+        and company
+        and not gemini_previously_failed
+    ):
         search_call_attempted = True
         gemini_result = lookup_gemini_search_backup(
             company, target_city, target_state, client=gemini_client
@@ -554,7 +648,13 @@ def enrich_job_location(
                 "lon": gemini_result.get("lon"),
                 "source": "gemini_search",
             }
-            save_locations_cache(cache, profile)
+        else:
+            cache[clean_company_key] = {
+                **company_cache_entry,
+                "gemini_failed": True,
+                "gemini_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        save_locations_cache(cache, profile)
 
     # Step 4: Dynamic Distance Math
     distance_miles = None
@@ -632,6 +732,8 @@ def enrich_profile_locations(
 
     enriched_count = 0
     resolved_count = 0
+    bypassed_count = 0
+    unresolved_count = 0
     search_calls_made = 0
 
     gemini_client = None
@@ -653,7 +755,10 @@ def enrich_profile_locations(
                 data = json.load(f)
             if not isinstance(data, dict):
                 continue
-            if data.get("_location_enrichment", {}).get("status") == "resolved":
+            if (
+                data.get("_location_enrichment", {}).get("status")
+                in _TERMINAL_ENRICHMENT_STATUSES
+            ):
                 continue
             tasks.append(
                 {
@@ -686,7 +791,8 @@ def enrich_profile_locations(
             continue
         if (
             meta.get("_location_enrichment")
-            and meta["_location_enrichment"].get("status") == "resolved"
+            and meta["_location_enrichment"].get("status")
+            in _TERMINAL_ENRICHMENT_STATUSES
         ):
             continue
         tasks.append(
@@ -758,10 +864,12 @@ def enrich_profile_locations(
                     f"  [{idx}/{total_to_process}] ✓ {company_display}: resolved via {source}{loc_display_str}"
                 )
             elif status.startswith("bypassed"):
+                bypassed_count += 1
                 print(
                     f"  [{idx}/{total_to_process}] ✦ {company_display}: bypassed ({enrichment.get('reason', 'remote')})"
                 )
             else:
+                unresolved_count += 1
                 print(
                     f"  [{idx}/{total_to_process}] ▤ {company_display}: unresolved ({status})"
                 )
@@ -783,5 +891,7 @@ def enrich_profile_locations(
         "profile": profile,
         "total_processed": enriched_count,
         "resolved": resolved_count,
+        "bypassed_remote": bypassed_count,
+        "unresolved": unresolved_count,
         "search_calls_used": search_calls_made,
     }
