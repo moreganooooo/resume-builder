@@ -2,7 +2,7 @@
 
 Date: 2026-08-29
 Status: Design — not yet implemented
-Revision: 3 (v1 was written before the corpus was measured; §"What the
+Revision: 4 (v1 was written before the corpus was measured; §"What the
 corpus says" invalidated its central design choice. See "What changed
 and why" at the end.)
 
@@ -373,6 +373,74 @@ This also gives the shadow-mode review something concrete to check: if
 the rejected set skews to one provider, that is provider bias, not
 selectivity.
 
+## Provider survey: what is still unmeasured
+
+31 providers exist in `board-scanners/providers/` plus 3 Python sources
+(`jobright`, `linkedin`, `indeed`). **Six have been measured.** The rest
+are assumptions until probed, and this spec should not pretend otherwise.
+
+Measured live 2026-08-29:
+
+| Provider | Employment type | Salary |
+| --- | --- | --- |
+| ashby | `employmentType` **100%** | `compensation` **49%** |
+| lever | `commitment` **96%** | `salaryRange` **61%** |
+| greenhouse | **none** | **none** |
+| jobright | 100% (of its rows) | — |
+| **himalayas** | `employmentType` **100%** | `minSalary`/`maxSalary` **30%**, with `currency` |
+| **remotive** | `job_type` **100%** | `salary` (free text) **58%** |
+
+**Unmeasured and worth probing before sizing the work**, roughly by
+expected value:
+
+- **workday** (71 rows) and **indeed/JobSpy** (41) — JobSpy is documented
+  to expose `job_type`, `min_amount`, `max_amount`, `interval`,
+  `currency`; unverified here.
+- **linkedin** (154 rows) — has a `work_model` field already captured in
+  metadata; its employment/seniority fields are visible in the LinkedIn
+  UI but the scraper's coverage is untested.
+- **smartrecruiters**, **recruitee**, **workable** — full ATS APIs, all
+  three likely to carry `typeOfEmployment`-style fields. My probes hit
+  404/empty on guessed company slugs; re-probe using real slugs from
+  `tracked_companies.yml` rather than guesses.
+- **Remote boards** (`weworkremotely` 58, `nodesk` 55,
+  `realworkfromanywhere` 114, `jobicy` 77, `remoteok`, `workingnomads`,
+  `jobspresso`, `himalayas`) — several are RSS-backed via `_rss.mjs`,
+  which structurally caps what can be carried. Where they do publish
+  fields, coverage looks good (himalayas, remotive above).
+- **Aggregators** (`adzuna`, `jooble`, `websearch`) — already known to be
+  discovery sources with teaser text (adzuna exactly 500 chars,
+  jooble ~275). Expect little, and do not spend effort here; they are
+  covered by Stage 2 once the JD is fetched.
+- **Niche** (`usajobs`, `ycombinator`, `wellfound`, `otta`, `levelsfyi`,
+  `fourdayweek`, `hackernews`, `authenticjobs`, `crunchboard`,
+  `powertofly`, `themuse`, `remote_curated`) — low volume in this corpus.
+  `usajobs` is a government API and almost certainly has excellent
+  structured pay data (GS grades); `levelsfyi` and `fourdayweek` are
+  compensation- and schedule-oriented by their nature, so both are
+  plausibly high-signal for this feature specifically.
+
+### Five vocabularies, and counting
+
+Every measured provider spells employment type differently:
+
+| Provider | Format | Example |
+| --- | --- | --- |
+| ashby | PascalCase, no separator | `FullTime`, `Intern` |
+| lever | Hyphenated title case | `Full-time`, **`Fixed Term`** |
+| jobright | Comma-joined multi-value | `Full-time, Contract` |
+| himalayas | Space-separated title case | `Full Time` |
+| remotive | snake_case | `full_time`, **`freelance`** |
+
+Two types neither this spec nor v2 enumerated surfaced from real data:
+lever's **`Fixed Term`** and remotive's **`freelance`**. Expect more.
+
+This settles the normalization question: **one `normalize_employment_type()`
+mapping applied at the provider boundary**, with an explicit
+`UNKNOWN` for unrecognized input and a logged warning naming the
+provider and the unmapped value — so a sixth vocabulary announces itself
+instead of silently becoming `unknown` and passing the filter.
+
 ## Persistence, export, model
 
 Follows the JD-JSON metadata convention: a new `_attributes` key on the
@@ -421,30 +489,117 @@ Plus value constants mirroring Python (as `WorkplaceRemote` does) and
 
 ## UI
 
-**Browse & Manage Jobs** (`screens/jobs.go`) — follow the `[w]`
-workplace filter exactly (`workplaceFilter` field, `nextWorkplaceFilter`
-cycle, `workplaceFilterLabel` status chip): `[e]` employment type, `[t]`
-role track, `[$]` salary floor. New sort "Salary (high→low)" with
-unstated **last**, which the `*float64` makes enforceable. Render
-nothing for an unknown rather than a misleading placeholder; show a
-low-confidence role track dimmed or parenthesized, never as fact.
+### Settings menu: group, do not append
+
+Settings & Upkeep already holds **eight** entries. Appending three more
+("Employment Type", "Pay Floor", "Role Track") turns a menu into a list
+and buries Location, which belongs with them.
+
+Instead, **replace** the existing `manage_location` entry with one
+grouped submenu — one entry out, one entry in, no net growth:
+
+```
+⚙ Settings & Upkeep
+  ⌂ ↳ Role Criteria & Filters (14068 · 5mi · hybrid+remote · FT · $65K+)
+      ⌂ ↳ Location & Commute Radius   (14068 -- 5 mi, hybrid+remote)
+      ▤ ↳ Employment Type              (full-time, contract)
+      ▤ ↳ Pay Floor                    ($65K/yr · reporting only)
+      ▤ ↳ Role Track (IC vs. Manager)  (IC preferred · sort only)
+```
+
+These four answer one question — *what kind of role do I want?* — and
+grouping them makes the whole criteria set legible at a glance, which
+three flat siblings never would.
+
+### Live-state labels are the existing pattern — keep it
+
+`_location_filter_label()` (menu.py:230) calls
+`location_settings.describe()` and renders the current config **inline in
+the menu label**: `Location & Commute Radius (14068 -- 5 mi,
+hybrid+remote)`. That is why the user can see their configuration
+without opening anything.
+
+Every new settings module must export `describe()` with the same
+contract: one line, current state, and an explicit
+`"not configured (keyword filtering only)"` when unset. The parent
+"Role Criteria & Filters" label composes the children's summaries.
+
+**Show enforcement state in the label.** During shadow mode the label
+must say `reporting only` (as sketched above). A filter the user
+believes is active but is not is a worse failure than no filter, and the
+menu label is the cheapest possible place to prevent it.
+
+### Dashboard key bindings — `[t]` is already taken
+
+Measured against `screens/jobs.go`: bound keys are
+`/ ? G J K L b d f g l m q s t u v w`. **`[t]` collides** (v2 proposed it
+for role track).
+
+Proposed, all verified free: **`[e]`** employment type, **`[c]`** career
+track, **`[$]`** pay floor. Each follows the `[w]` workplace pattern
+exactly — a `xFilter` string field, a `nextXFilter()` cycle, an
+`xFilterLabel()` status chip — so the fourth filter reads like the three
+before it and `?` help needs no new concepts.
+
+New sort "Salary (high→low)", unstated **last**, which the `*float64`
+makes enforceable rather than merely intended.
+
+### Visual and theme constraints (each of these has bitten before)
+
+- **New icons go in BOTH maps.** `scripts/theme.py` carries a Nerd Font
+  set *and* a Unicode fallback (`RESUME_BUILDER_ICONS=unicode`). An icon
+  added to one renders as a missing glyph for anyone on the other.
+  Prefer reusing existing names — `location`, `evaluate`, `discovery`,
+  `utility` — which sidesteps the problem entirely.
+- **Mirror into Go.** `dashboard/internal/theme/icons.go` mirrors
+  theme.py by name (`Location string // nf-fa-map_marker (theme.py's
+  "location")`). Both sides or the dashboard diverges from the CLI.
+- **Colors from `theme.go`'s own `c()` helper**, never
+  `github.com/charmbracelet/lipgloss` v1. Both satisfy the interface at
+  compile time; huh v2 silently renders a v1 color as `rgb(0,0,0)`.
+  `resumebuilder.go` is **generated** by
+  `scripts/sync_dashboard_theme.py` — fix the generator or `resume
+  doctor` regenerates the bug. Extend `theme_test.go`'s
+  `TestHuhThemeTitleIsNotBlack` list for any new theme variant.
+- **Every prompt through `cli_art.confirm/select/checkbox/text()`** —
+  never raw `questionary`, which renders nothing under
+  `menu._run_with_chain()`'s DECSTBM scroll region and produces the
+  "menu just hangs" bug.
+- **Honor `RESUME_BUILDER_MOTION=reduced`** for any new chip transition
+  or filter animation, and verify chips in both `dark` and `light`
+  theme modes.
+- **Chips must degrade to text.** A salary or track chip has to stay
+  legible with Unicode fallback icons, no color, and a narrow terminal.
+  Verify with `visual-tui` / `audit-tui` (see `dashboard/CLAUDE.md`)
+  rather than by eye at one width.
+
+### Rendering rules
+
+- Render **nothing** for an unknown attribute — never a placeholder that
+  reads as a measurement. This is the display half of the
+  unknown-is-`None`-never-`0` rule.
+- A **low-confidence** role track renders dimmed or parenthesized, never
+  as fact. `role_track_confidence` exists precisely so the UI can be
+  honest about how much it knows.
+- The **coverage line** ships with the filter, not after:
+  `$65K+ · 112 judged · 38 unstated`. Per the routing reframe above, a
+  filter that cannot say how much it examined is asserting more than it
+  knows.
 
 **Pipeline** — `data.JobRowsToApplications` carries the fields through;
 Pipeline and Jobs share one source and `reloadPipelineDataCmd` must read
 that same source or a mid-session refresh silently reverts the screen.
 
-**Elsewhere** — `picker.py`'s interactive picker shows chips in choice
-labels. The CLI banner stays on `picker.count_active_roles()`: these are
+**Elsewhere** — `picker.py`'s interactive picker shows the same chips in
+its choice labels, so a role reads identically wherever it appears. The
+CLI banner stays on `picker.count_active_roles()`: these are
 display/selection concerns and must not introduce a fifth definition of
 "how many roles do I have."
 
-**Settings** — `scripts/role_filter_settings.py`, same shape as
+**Settings modules** — `scripts/role_filter_settings.py`, same shape as
 `location_settings.py` (`read_settings`, `render_block`,
 `write_settings`, `clear_settings`, `describe`, `run_*`), writing the
-same `scan_filters.yml`. Every prompt through
-`cli_art.confirm/select/checkbox/text()` — never raw `questionary`,
-which renders nothing under `menu._run_with_chain()`'s DECSTBM scroll
-region.
+same `scan_filters.yml`.
 
 ## Backfill
 
@@ -549,3 +704,25 @@ Recorded so the reasoning is not lost:
   vs. comma-joined; lever's unenumerated `Fixed Term`; ashby's
   multi-tier geographic compensation and its
   `shouldDisplayCompensationOnJobPostings` flag).
+
+### v3 → v4
+
+- Surveyed the remaining providers: **6 of 34 measured**, the other 28
+  named with an expected-value ordering instead of silently assumed.
+  himalayas and remotive measured as high-signal; `usajobs`,
+  `levelsfyi`, and `fourdayweek` flagged as plausibly high-signal for
+  this feature specifically.
+- Found a **fifth** employment-type vocabulary and two unenumerated
+  types (`Fixed Term`, `freelance`), which settles normalization as a
+  provider-boundary concern with a logged warning on unmapped values.
+- **`[t]` was already bound** in `screens/jobs.go`; v3 proposed it for
+  role track. Rebound to `[e]`/`[c]`/`[$]`, all verified free.
+- Reworked the menu from three appended siblings into one grouped
+  "Role Criteria & Filters" submenu replacing the existing Location
+  entry — net zero growth on an already-eight-item menu.
+- Made enforcement state visible **in the menu label** (`reporting
+  only`), since a filter the user believes is active but is not is
+  worse than no filter.
+- Collected the theme/icon constraints that have caused real bugs
+  (dual icon maps, Go mirror, lipgloss v1 vs. v2, DECSTBM, reduced
+  motion).
