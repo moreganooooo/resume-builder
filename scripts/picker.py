@@ -431,7 +431,11 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     if "Pending" in statuses:
         for path in jd_manager.get_pending_jds():
             evaluation = jd_manager.read_evaluation(path)
-            if not evaluation:
+            if (
+                evaluation is None
+                or not isinstance(evaluation, dict)
+                or evaluation.get("recommendation") == "Skip"
+            ):
                 continue
             title, company = jd_manager.extract_job_meta(path)
             try:
@@ -458,13 +462,18 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
                     "location_enrichment": jd_manager.read_location_enrichment(path),
+                    "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
                 }
             )
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
             evaluation = jd_manager.read_evaluation(path)
-            if not evaluation:
+            if (
+                evaluation is None
+                or not isinstance(evaluation, dict)
+                or evaluation.get("recommendation") == "Skip"
+            ):
                 continue
             title, company = jd_manager.extract_job_meta(path)
             try:
@@ -491,6 +500,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "research": jd_manager.read_research(path),
                     "coverage": jd_manager.read_coverage(path),
                     "location_enrichment": jd_manager.read_location_enrichment(path),
+                    "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
                 }
             )
@@ -501,7 +511,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     return rows
 
 
-def _database_only_rows(file_rows: list, settings: dict = None) -> list:
+def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
     """Evaluated jobs that live only in data.db, in the same dict shape.
 
     Most pending jobs have no JD file -- the filesystem-to-database
@@ -513,6 +523,8 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
     jd_source.resolved_jd() consumes, so every dashboard action keeps
     working on them without a file ever being written.
     """
+    if settings is None:
+        settings = {}
     try:
         import db
     except ImportError:
@@ -556,7 +568,11 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
             continue
 
         evaluation = data.get("_evaluation")
-        if not evaluation:
+        if (
+            not evaluation
+            or evaluation.get("recommendation") == "Skip"
+            or evaluation.get("composite_score") == 0.0
+        ):
             continue
 
         if record["location"] and not data.get("location"):
@@ -581,6 +597,7 @@ def _database_only_rows(file_rows: list, settings: dict = None) -> list:
                 "research": data.get("_research"),
                 "coverage": data.get("_coverage"),
                 "location_enrichment": data.get("_location_enrichment"),
+                "posted_date": jd_manager.compute_posting_date(job_id),
                 **_location_fields(data, settings or {}),
             }
         )
@@ -780,7 +797,7 @@ def browse_and_select_jds(
 
 
 def interactive_file_picker(
-    prompt: str, start_dir: str = None, allowed_extensions: list = None
+    prompt: str, start_dir: str | None = None, allowed_extensions: list | None = None
 ) -> str:
     """A gorgeous, interactive TUI file picker that lets users navigate folders
     and pick files without tedious path-typing.

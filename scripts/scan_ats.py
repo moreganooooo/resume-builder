@@ -44,12 +44,14 @@ scan_boards.py takes.
 import html
 import logging
 import os
+import re
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cli_art
 import profile_paths
+import requests
 import scan_boards
 import websearch_ddg
 import yaml
@@ -195,6 +197,63 @@ def _load_search_queries() -> list:
         return yaml.safe_load(f).get("search_queries", [])
 
 
+_ASHBY_URL_RE = re.compile(r"jobs\.ashbyhq\.com/([^/]+)/([0-9a-f-]{36})", re.IGNORECASE)
+_ASHBY_API_TIMEOUT_SECONDS = 10
+
+
+def _fetch_ashby_structured_posting(url: str) -> dict | None:
+    """Recovers a job's real location/description straight from Ashby's
+    public job-board API, keyed off the slug+id already in the URL.
+
+    Ashby's own posting pages are a JS SPA, so scan_boards._fetch_posting_text()
+    (plain HTTP GET) sees a near-empty shell -- confirmed live: 163 chars for
+    a posting whose real body describes a dozen non-US locations. That gap
+    let a Poland/Serbia/Croatia/etc.-only "Remote" role read as location:
+    "Remote" with nothing to reject on. The board endpoint returns
+    `location`/`secondaryLocations` with structured `addressCountry` fields,
+    which is both more complete AND more reliable than parsing prose.
+    """
+    match = _ASHBY_URL_RE.search(url or "")
+    if not match:
+        return None
+    slug, job_id = match.group(1), match.group(2)
+    try:
+        resp = requests.get(
+            f"https://api.ashbyhq.com/posting-api/job-board/{slug}",
+            timeout=_ASHBY_API_TIMEOUT_SECONDS,
+        )
+        resp.raise_for_status()
+        jobs = resp.json().get("jobs", [])
+    except Exception as exc:
+        logging.debug("Ashby structured fetch failed for %s: %s", url, exc)
+        return None
+
+    job = next((j for j in jobs if j.get("id") == job_id), None)
+    if not job:
+        return None
+
+    countries = []
+    primary = (job.get("address") or {}).get("postalAddress", {}).get("addressCountry")
+    if primary:
+        countries.append(primary)
+    for secondary in job.get("secondaryLocations") or []:
+        country = (
+            (secondary.get("address") or {})
+            .get("postalAddress", {})
+            .get("addressCountry")
+        )
+        if country and country not in countries:
+            countries.append(country)
+
+    location_parts = [job.get("location") or ""] + [c for c in countries if c]
+    location = "; ".join(dict.fromkeys(p for p in location_parts if p))
+
+    return {
+        "location": location or job.get("location") or "",
+        "description": scan_boards._html_to_text(job.get("descriptionHtml") or ""),
+    }
+
+
 def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     """Same normalization scan_boards.py's fetch_board_jobs() does
     (title/company cleanup, HTML-entity decoding, title/location
@@ -213,11 +272,28 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
 
     raw_description = raw.get("description") or ""
-    description = (
-        scan_boards._html_to_text(raw_description)
-        if raw_description
-        else scan_boards._fetch_posting_text(url, provider_id)
-    )
+    location = raw.get("location") or ""
+
+    # Ashby's own posting pages are a JS SPA that a plain HTTP fetch can't
+    # render, so its structured job-board API is tried first for any Ashby
+    # URL missing a description -- it's both more complete and the only way
+    # to see multi-country remote restrictions the raw location string omits.
+    structured = None
+    if not raw_description and provider_id == "ashby":
+        structured = _fetch_ashby_structured_posting(url)
+
+    if structured:
+        description = structured["description"]
+        location = structured["location"] or location
+    else:
+        description = (
+            scan_boards._html_to_text(raw_description)
+            if raw_description
+            else scan_boards._fetch_posting_text(url, provider_id)
+        )
+
+    if not scan_boards._passes_location_filter(location):
+        return None
 
     job = {
         "job_title": title,
@@ -227,7 +303,7 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         "source_platform": provider_id,
         "source_job_id": None,
         "source_url": url,
-        "location": raw.get("location") or "",
+        "location": location,
         "posted_at": raw.get("posted_at") or "",
         "description": description,
     }

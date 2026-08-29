@@ -5,8 +5,6 @@ import os
 import re
 import sqlite3
 import sys
-from collections import Counter
-from datetime import datetime
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPTS_DIR not in sys.path:
@@ -14,7 +12,6 @@ if SCRIPTS_DIR not in sys.path:
 
 import db
 import jd_manager
-import picker
 
 
 def normalize_text(text: str) -> str:
@@ -45,7 +42,7 @@ def get_job_url(meta: dict) -> str:
     return u.rstrip("/")
 
 
-def run_deduplication(profile: str = None) -> dict:
+def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
     conn = db.get_db(profile)
     conn.row_factory = sqlite3.Row
 
@@ -130,13 +127,20 @@ def run_deduplication(profile: str = None) -> dict:
         for o in ids[1:]:
             union(ids[0], o)
 
-    # 2. Union by specific source URL
+    # 2. Union by (source URL, normalized company). URL alone is not safe:
+    # some ATS platforms (observed: ADP Workforce Now) route every posting
+    # through the exact same generic recruitment-shell URL regardless of
+    # employer or role, so keying on URL alone unioned four unrelated jobs
+    # from four different companies into a single "duplicate" cluster.
+    # Pairing with company matches job_key_known()'s existing convention
+    # for the same reason (see its docstring).
     by_url = {}
     for i, it in items.items():
         u = it["url"]
-        if u and len(u) > 15:
-            by_url.setdefault(u, []).append(i)
-    for u, ids in by_url.items():
+        c_norm = it["norm_tc"][0]
+        if u and len(u) > 15 and c_norm:
+            by_url.setdefault((u, c_norm), []).append(i)
+    for key, ids in by_url.items():
         for o in ids[1:]:
             union(ids[0], o)
 
@@ -146,7 +150,7 @@ def run_deduplication(profile: str = None) -> dict:
         c, t = it["norm_tc"]
         if c and t:
             by_tc.setdefault((c, t), []).append(i)
-    for k, ids in by_tc.items():
+    for ids in by_tc.values():
         for o in ids[1:]:
             union(ids[0], o)
 
@@ -160,10 +164,11 @@ def run_deduplication(profile: str = None) -> dict:
 
     archived_count = 0
     updated_winners = 0
+    sample_clusters = []
 
     cursor = conn.cursor()
 
-    for root_id, member_ids in multi_clusters.items():
+    for member_ids in multi_clusters.values():
         # Rank candidates:
         # 1. is_file (True first)
         # 2. score (highest first)
@@ -184,6 +189,19 @@ def run_deduplication(profile: str = None) -> dict:
         losers = sorted_members[1:]
         winner_item = items[winner_id]
         winner_meta = dict(winner_item["meta"])
+
+        sample_clusters.append(
+            {
+                "winner": f"{winner_item['company']} -- {winner_item['title']}",
+                "losers": [
+                    f"{items[lid]['company']} -- {items[lid]['title']}"
+                    for lid in losers
+                ],
+            }
+        )
+
+        if dry_run:
+            continue
 
         # Merge metadata from losers into winner
         for loser_id in losers:
@@ -246,18 +264,29 @@ def run_deduplication(profile: str = None) -> dict:
                             f"Warning: could not archive file {loser_item['file_path']}: {e}"
                         )
 
-    conn.commit()
-    conn.close()
-
-    db.checkpoint(profile)
+    if dry_run:
+        conn.close()
+    else:
+        conn.commit()
+        conn.close()
+        db.checkpoint(profile)
 
     return {
         "total_clusters": len(multi_clusters),
         "total_archived_duplicates": archived_count,
         "updated_winners": updated_winners,
+        "dry_run": dry_run,
+        "sample_clusters": sample_clusters,
     }
 
 
 if __name__ == "__main__":
-    result = run_deduplication()
-    print(f"Deduplication complete: {result}")
+    result = run_deduplication(dry_run=True)
+    print(f"Dry run: {result['total_clusters']} duplicate clusters found.")
+    for cluster in result["sample_clusters"][:10]:
+        print(f"  KEEP: {cluster['winner']}")
+        for loser in cluster["losers"]:
+            print(f"    ARCHIVE: {loser}")
+    print(
+        "\nPass dry_run=False (or `resume dedupe --apply`) to actually archive these."
+    )

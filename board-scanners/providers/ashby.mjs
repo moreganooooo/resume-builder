@@ -24,6 +24,28 @@ function resolveLocation(loc) {
   return loc.locationName || '';
 }
 
+// A remote-eligible posting often lists a dozen countries under
+// `secondaryLocations`, each carrying a structured `address.postalAddress.
+// addressCountry` -- the ONLY place that shows a "Remote" posting is
+// actually restricted to specific non-US countries. Dropping this (as the
+// old single-string `resolveLocation` did) let an international-only role
+// report location: "Warsaw" -- a bare city name the location filter's
+// international-country check can't recognize -- instead of naming any of
+// the 13 other countries it was equally open to. Folding country names in
+// gives the same filter something concrete to reject on.
+function resolveLocationWithCountries(job) {
+  const primary = resolveLocation(job.location);
+  const countries = [];
+  const primaryCountry = job.address?.postalAddress?.addressCountry;
+  if (primaryCountry) countries.push(primaryCountry);
+  for (const secondary of job.secondaryLocations || []) {
+    const country = secondary?.address?.postalAddress?.addressCountry;
+    if (country && !countries.includes(country)) countries.push(country);
+  }
+  const parts = [primary, ...countries].filter(Boolean);
+  return [...new Set(parts)].join('; ');
+}
+
 /** @type {Provider} */
 export default {
   id: 'ashby',
@@ -44,7 +66,7 @@ export default {
       title: j.title || '',
       url: j.jobUrl || '',
       company: entry.name,
-      location: resolveLocation(j.location),
+      location: resolveLocationWithCountries(j),
       posted_at: j.publishedDate || '',
       description: j.descriptionPlain || j.descriptionHtml || '',
     }));
