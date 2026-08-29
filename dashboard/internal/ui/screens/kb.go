@@ -104,11 +104,13 @@ func (m KBModel) Update(msg tea.Msg) (KBModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		vis := m.visibleItems()
 		if len(vis) > 0 {
-			if msg.Y < 0 {
+			// Button, not Y (always >= 0, the screen row -- not a delta),
+			// determines wheel direction. See jobs.go's identical fix.
+			if msg.Button == tea.MouseWheelUp {
 				if m.cursor > 0 {
 					m.cursor--
 				}
-			} else {
+			} else if msg.Button == tea.MouseWheelDown {
 				if m.cursor < len(vis)-1 {
 					m.cursor++
 				}
