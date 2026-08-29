@@ -410,6 +410,44 @@ class TestRunPromptDirectly(unittest.TestCase):
         self.assertEqual(mock_run.call_args[0][0][0], "/custom/bin/prompt")
 
 
+class TestFlushStdin(unittest.TestCase):
+    """_flush_stdin() discards any stray keystroke already buffered on
+    stdin before a raw-mode subprocess starts reading it -- otherwise a
+    second prompt fired right after a first one in the same screen (e.g.
+    stale_sweep's backfill offer -> archive confirm) can consume a
+    leftover Enter as its own first keystroke and submit on the default
+    answer before the user ever sees the question."""
+
+    @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
+    @patch("subprocess.run")
+    @patch("termios.tcflush")
+    def test_run_prompt_flushes_stdin_before_every_call(
+        self, mock_flush, mock_run, mock_compile
+    ):
+        manager = MagicMock()
+        manager.attach_mock(mock_flush, "flush")
+        manager.attach_mock(mock_run, "run")
+        mock_run.return_value = MagicMock(returncode=0, stdout='{"ok": true}')
+
+        charm_prompt._run_prompt({"test": 1})
+
+        mock_flush.assert_called_once()
+        # Flushed BEFORE the subprocess starts, not after -- a flush that
+        # races the subprocess's own read defeats the point.
+        self.assertEqual([c[0] for c in manager.mock_calls], ["flush", "run"])
+
+    def test_flush_stdin_degrades_silently_when_not_a_real_tty(self):
+        # termios.tcflush raises on a non-tty stdin (e.g. piped input, a
+        # test harness) -- must never propagate and break the prompt.
+        with patch("termios.tcflush", side_effect=OSError("not a tty")):
+            charm_prompt._flush_stdin()  # must not raise
+
+    def test_flush_stdin_degrades_silently_without_termios(self):
+        # Windows has no termios module at all.
+        with patch.dict(sys.modules, {"termios": None}):
+            charm_prompt._flush_stdin()  # must not raise
+
+
 @unittest.skipUnless(sys.platform != "win32", "pty is POSIX-only")
 @unittest.skipUnless(charm_prompt._go_available(), "requires the go toolchain")
 @unittest.skipIf(
