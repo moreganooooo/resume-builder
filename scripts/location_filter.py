@@ -145,6 +145,41 @@ _INTERNATIONAL_TOKENS = {
     "emea",
     "apac",
     "latam",
+    "croatia",
+    "serbia",
+    "hungary",
+    "bulgaria",
+    "slovakia",
+    "slovenia",
+    "estonia",
+    "latvia",
+    "lithuania",
+    "georgia",
+    "armenia",
+    "morocco",
+    "tunisia",
+    "peru",
+    "ecuador",
+    "uruguay",
+    "paraguay",
+    "bolivia",
+    "panama",
+    "costa rica",
+    "guatemala",
+    "dominican republic",
+    "south korea",
+    "korea",
+    "taiwan",
+    "hong kong",
+    "sri lanka",
+    "bangladesh",
+    "nepal",
+    "saudi arabia",
+    "qatar",
+    "jordan",
+    "lebanon",
+    "cyprus",
+    "malta",
 }
 
 # Canadian province codes look exactly like US state codes, so without
@@ -183,6 +218,47 @@ def strip_workplace_tokens(location: str) -> str:
     cleaned = re.sub(r"\s*[-–—:]\s*", " ", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip(" ,-")
+
+
+_LOCATION_TEXT_INTRO_RE = re.compile(
+    r"\b(?:location|locations|eligible\s+countr\w+|open\s+to\s+candidates?\s+(?:in|from)|"
+    r"available\s+(?:to|in))\s*[:\-]\s*",
+    re.IGNORECASE,
+)
+_US_MENTION_RE = re.compile(r"\b(?:united states|u\.s\.a?\.?|usa)\b", re.IGNORECASE)
+_SEGMENT_STOP_RE = re.compile(r"[.\n]")
+_TEXT_SEGMENT_MAX_CHARS = 400
+
+
+def looks_international_in_text(text: str) -> bool:
+    """Fallback for a remote posting whose structured location field is
+    just "Remote": scans the JD body itself for an explicit
+    location/eligibility phrase naming international countries with no US
+    mention. Structured provider fields are always tried first (see
+    scan_ats._fetch_ashby_structured_posting and the ashby/greenhouse/lever
+    board-scanner providers) -- this exists for sources with no such field
+    at all (aggregator boards, Indeed, JobRight, LinkedIn), which still
+    carry the original ad's prose verbatim in their description text.
+
+    Deliberately conservative: only trips on an explicit intro phrase
+    ("Location:", "Eligible countries:", "Open to candidates from:") to
+    avoid matching incidental uses of the word "location" elsewhere in a
+    JD, and still requires a recognized country/region token from
+    `looks_international` within that phrase's own segment -- same "not a
+    world atlas" limit as that function (a city-only list with no country
+    name, e.g. "Warsaw; Kraków", will not trip this).
+    """
+    if not text:
+        return False
+    for match in _LOCATION_TEXT_INTRO_RE.finditer(text):
+        rest = text[match.end() : match.end() + _TEXT_SEGMENT_MAX_CHARS]
+        stop = _SEGMENT_STOP_RE.search(rest)
+        segment = rest[: stop.start()] if stop else rest
+        if _US_MENTION_RE.search(segment):
+            continue
+        if looks_international(segment):
+            return True
+    return False
 
 
 def looks_international(location: str) -> bool:
@@ -418,13 +494,17 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
             False, workplace, None, f"workplace is {workplace}, wanted {wanted}"
         )
 
-    if workplace == REMOTE:
-        return LocationVerdict(True, REMOTE, None, "remote")
-
-    # A named foreign country is a definite no for an on-site or hybrid
-    # role, unlike a merely unparseable string.
+    # A named foreign country is a definite no, remote included -- a
+    # "Remote" posting whose location string also names a country/region
+    # (e.g. "Remote - Poland", "Remote (EMEA)") is remote FOR THAT
+    # COUNTRY, not remote-anywhere. This must run before the REMOTE
+    # short-circuit below, or every such posting slips through as if
+    # "remote" meant "remote, unrestricted."
     if looks_international(location):
         return LocationVerdict(False, workplace, None, "international location")
+
+    if workplace == REMOTE:
+        return LocationVerdict(True, REMOTE, None, "remote")
 
     # On-site and hybrid roles are worth seeing only within commuting
     # range, which is the whole point of configuring an origin.

@@ -69,11 +69,12 @@ repos:
         # failure message, quoted in CLAUDE.md); "ist" is German, from
         # liveness-core.mjs's expired-posting patterns; "ehr" is Electronic
         # Health Records in domain research; "bu" is Business Unit; "hims"
-        # is the company Hims & Hers Health.
+        # is the company Hims & Hers Health. "countr" is a regex stem
+        # (eligible countr\w+); "alllocations" is lever.mjs's allLocations.
         args:
           [
             "--skip=*.json,*.csv,*.db,*.pyc,*.rtf,*.html",
-            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims",
+            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations",
           ]
 
   # General linting

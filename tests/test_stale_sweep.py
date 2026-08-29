@@ -1,8 +1,9 @@
+import json
 import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
@@ -211,6 +212,119 @@ class TestRunSweep(unittest.TestCase):
         with open(os.path.join(self.expired_dir, "dup.json"), encoding="utf-8") as f:
             self.assertIn("pre-existing", f.read())
         self.assertTrue(os.path.exists(os.path.join(self.expired_dir, "dup_1.json")))
+
+
+class TestBackfillDiscoveryDates(unittest.TestCase):
+    """backfill_discovery_dates() -- both the file-backed path (real mtime)
+    and the database-only path (no file, id-shaped "path"; see
+    picker._database_only_rows()'s docstring)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _make_jd(self, name):
+        path = os.path.join(self._tmp.name, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("{}")
+        return path
+
+    def test_dry_run_reports_candidates_and_writes_nothing(self):
+        path = self._make_jd("undated.json")
+        rows = [_row(path)]
+        with (
+            patch("stale_sweep.picker.list_all_evaluated_jds", return_value=rows),
+            patch("stale_sweep.jd_manager.compute_posting_age_days", return_value=None),
+            patch("stale_sweep.jd_manager.save_discovered_at") as mock_save,
+        ):
+            result = stale_sweep.backfill_discovery_dates(dry_run=True)
+
+        self.assertEqual(result["candidate_count"], 1)
+        self.assertEqual(result["stamped_count"], 0)
+        mock_save.assert_not_called()
+
+    def test_file_backed_row_is_stamped_from_mtime(self):
+        path = self._make_jd("undated.json")
+        rows = [_row(path)]
+        with (
+            patch("stale_sweep.picker.list_all_evaluated_jds", return_value=rows),
+            patch("stale_sweep.jd_manager.compute_posting_age_days", return_value=None),
+        ):
+            result = stale_sweep.backfill_discovery_dates(dry_run=False)
+
+        self.assertEqual(result["stamped_count"], 1)
+        self.assertEqual(result["errors"], [])
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["_discovered_at"]["source"], "backfill-mtime")
+
+    def test_database_only_row_is_stamped_from_created_at_not_mtime(self):
+        # Path is a bare job id (no file exists at it) -- exactly the
+        # shape picker._database_only_rows() hands back. A fresh temp
+        # file's mtime would misdate this as "just now"; created_at is
+        # the correct DB-side equivalent of file mtime.
+        job_id = "db_job_abc123"
+        rows = [_row(job_id)]
+
+        fake_temp_path = self._make_jd("materialized_temp.json")
+        mock_resolved_ctx = MagicMock()
+        mock_resolved_ctx.__enter__.return_value = (fake_temp_path, True)
+        mock_resolved_ctx.__exit__.return_value = False
+
+        with (
+            patch("stale_sweep.picker.list_all_evaluated_jds", return_value=rows),
+            patch("stale_sweep.jd_manager.compute_posting_age_days", return_value=None),
+            patch(
+                "stale_sweep.jd_source.lookup_job",
+                return_value={"id": job_id, "created_at": "2024-01-01 12:00:00"},
+            ),
+            patch(
+                "stale_sweep.jd_source.resolved_jd", return_value=mock_resolved_ctx
+            ) as mock_resolved,
+        ):
+            result = stale_sweep.backfill_discovery_dates(dry_run=False)
+
+        self.assertEqual(result["stamped_count"], 1)
+        self.assertEqual(result["errors"], [])
+        mock_resolved.assert_called_once_with(job_id)
+        with open(fake_temp_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["_discovered_at"]["source"], "backfill-db-created")
+        self.assertEqual(data["_discovered_at"]["date"], "2024-01-01T12:00:00+00:00")
+
+    def test_database_only_row_missing_created_at_reports_error_not_crash(self):
+        job_id = "db_job_no_created_at"
+        rows = [_row(job_id)]
+        with (
+            patch("stale_sweep.picker.list_all_evaluated_jds", return_value=rows),
+            patch("stale_sweep.jd_manager.compute_posting_age_days", return_value=None),
+            patch(
+                "stale_sweep.jd_source.lookup_job",
+                return_value={"id": job_id, "created_at": None},
+            ),
+            patch("stale_sweep.cli_art.friendly_warning") as mock_warning,
+        ):
+            result = stale_sweep.backfill_discovery_dates(dry_run=False)
+
+        self.assertEqual(result["stamped_count"], 0)
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertEqual(result["errors"][0]["path"], job_id)
+        mock_warning.assert_called_once()
+
+    def test_database_only_row_with_no_matching_db_row_reports_error(self):
+        job_id = "db_job_vanished"
+        rows = [_row(job_id)]
+        with (
+            patch("stale_sweep.picker.list_all_evaluated_jds", return_value=rows),
+            patch("stale_sweep.jd_manager.compute_posting_age_days", return_value=None),
+            patch("stale_sweep.jd_source.lookup_job", return_value=None),
+            patch("stale_sweep.cli_art.friendly_warning") as mock_warning,
+        ):
+            result = stale_sweep.backfill_discovery_dates(dry_run=False)
+
+        self.assertEqual(result["stamped_count"], 0)
+        self.assertEqual(len(result["errors"]), 1)
+        mock_warning.assert_called_once()
 
 
 if __name__ == "__main__":

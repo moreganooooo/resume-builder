@@ -43,6 +43,20 @@ const BLOCKED_PATTERNS = [
   /please complete (the|this) (captcha|security)/i,
   /sign in to continue/i,
   /join linkedin to (view|see)/i,
+  // Cloudflare's Turnstile interstitial -- distinct wording from "just a
+  // moment"/"checking your browser" above, and short enough (~260 chars)
+  // to fall through to `insufficient_content` before this list was
+  // extended. Confirmed live (2026-08-27) on weworkremotely.com,
+  // himalayas.app, and jobs.ama.org, all served through Cloudflare.
+  /performing security verification/i,
+  /verifies? you (are|.re) not a bot/i,
+  // Indeed's own block page (403, "Request Blocked... You have been
+  // blocked", ~409 chars): above MIN_CONTENT_CHARS, so distinct from the
+  // short-interstitial case above -- it was landing in `no_apply_control`
+  // rather than `insufficient_content`, but still an unambiguous
+  // withheld page, not an ambiguous one. Confirmed live (2026-08-27).
+  /request blocked/i,
+  /you have been blocked/i,
 ];
 
 const BLOCKED_URL_PATTERNS = [

@@ -19,6 +19,17 @@ function resolveApiUrl(entry) {
   return `https://api.lever.co/v0/postings/${match[1]}`;
 }
 
+// `categories.allLocations` carries every eligible location for a
+// multi-country remote posting; `categories.location` alone is often just
+// "Remote" (same gap found and fixed in ashby.mjs/greenhouse.mjs,
+// 2026-08-27).
+function resolveLocation(categories) {
+  const primary = categories?.location || '';
+  const all = Array.isArray(categories?.allLocations) ? categories.allLocations : [];
+  const parts = [primary, ...all].filter(Boolean);
+  return [...new Set(parts)].join('; ');
+}
+
 function isTooOld(createdAt) {
   if (!createdAt) return false; // missing field — let it through, Playwright will catch it
   // Lever returns Unix ms timestamps
@@ -47,7 +58,7 @@ export default {
         title: j.text || '',
         url: j.hostedUrl || '',
         company: entry.name,
-        location: j.categories?.location || '',
+        location: resolveLocation(j.categories),
         posted_at: j.createdAt ? new Date(j.createdAt).toISOString().slice(0, 10) : '',
         // descriptionPlain already includes openingPlain as its prefix;
         // additionalPlain (closing/EEO section) is genuinely separate
