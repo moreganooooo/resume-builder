@@ -613,19 +613,19 @@ func TestPipelineModel_MouseInteractions(t *testing.T) {
 	}
 
 	// Mouse wheel down advances cursor
-	pm, _ = pm.Update(tea.MouseWheelMsg{Y: 1})
+	pm, _ = pm.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if pm.cursor != 1 {
 		t.Errorf("expected cursor 1 after wheel down, got %d", pm.cursor)
 	}
 
 	// Mouse wheel up retreats cursor
-	pm, _ = pm.Update(tea.MouseWheelMsg{Y: -1})
+	pm, _ = pm.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if pm.cursor != 0 {
 		t.Errorf("expected cursor 0 after wheel up, got %d", pm.cursor)
 	}
 
 	// Mouse wheel in detail pane scrolls detailScrollOffset without changing cursor
-	pm, _ = pm.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+	pm, _ = pm.Update(tea.MouseWheelMsg{X: 100, Button: tea.MouseWheelDown})
 	if pm.cursor != 0 {
 		t.Errorf("expected cursor to remain 0 when scrolling detail pane, got %d", pm.cursor)
 	}
@@ -649,12 +649,12 @@ func TestPipelineModel_MouseInteractions(t *testing.T) {
 		14,
 	)
 	short.applyFilterAndSort()
-	short, _ = short.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+	short, _ = short.Update(tea.MouseWheelMsg{X: 100, Button: tea.MouseWheelDown})
 	if short.detailScrollOffset != 1 {
 		t.Errorf("expected detailScrollOffset 1 in a short pane, got %d", short.detailScrollOffset)
 	}
 	for i := 0; i < 200; i++ {
-		short, _ = short.Update(tea.MouseWheelMsg{X: 100, Y: 1})
+		short, _ = short.Update(tea.MouseWheelMsg{X: 100, Button: tea.MouseWheelDown})
 	}
 	app, _ := short.CurrentApp()
 	height := short.height - short.chromeRowsFixed()

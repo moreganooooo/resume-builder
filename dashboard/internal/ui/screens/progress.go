@@ -71,14 +71,16 @@ func (m *ProgressModel) Resize(width, height int) {
 func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseWheelMsg:
-		if msg.Y < 0 {
+		// Button, not Y (always >= 0, the screen row -- not a delta),
+		// determines wheel direction. See jobs.go's identical fix.
+		if msg.Button == tea.MouseWheelUp {
 			if m.scrollOffset > 0 {
 				m.scrollOffset -= 2
 				if m.scrollOffset < 0 {
 					m.scrollOffset = 0
 				}
 			}
-		} else {
+		} else if msg.Button == tea.MouseWheelDown {
 			m.scrollOffset += 2
 			m.clampScrollOffset()
 		}

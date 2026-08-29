@@ -27,7 +27,7 @@ func main() {
 	}, "/tmp/career", 120, 40)
 
 	jobRows := []model.JobRow{
-		{Path: "a.json", Status: "Pending", Company: "Acme", Title: "Role A", Evaluation: model.Evaluation{CompositeScore: 4.5, FitScore: 4.0, InterviewOddsScore: 3.8, Why: "Strong fit", RecruiterRead: "Matches well", Recommendation: "Strong pursue", FitSubscores: map[string]int{"functional_alignment": 5, "evidence_match": 4}}},
+		{Path: "a.json", Status: "Pending", Company: "Acme", Title: "Role A", Evaluation: model.Evaluation{CompositeScore: 4.5, FitScore: 4.0, InterviewOddsScore: 3.8, Why: "Strong fit", RecruiterRead: "Matches well", Recommendation: "Strong pursue", FitSubscores: map[string]float64{"functional_alignment": 5, "evidence_match": 4}}},
 		{Path: "b.json", Status: "Completed", Company: "Beta", Title: "Role B", Evaluation: model.Evaluation{CompositeScore: 3.0, Recommendation: "Maybe consider"}},
 	}
 	jm := screens.NewJobsModel(t, jobRows, 120, 40)

@@ -155,9 +155,11 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 			}
 		}
 	case tea.MouseWheelMsg:
-		if msg.Y < 0 {
+		// Button, not Y (always >= 0, the screen row -- not a delta),
+		// determines wheel direction. See screens/jobs.go's identical fix.
+		if msg.Button == tea.MouseWheelUp {
 			m.list.CursorUp()
-		} else {
+		} else if msg.Button == tea.MouseWheelDown {
 			m.list.CursorDown()
 		}
 		return m, nil

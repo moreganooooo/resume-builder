@@ -19,6 +19,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/muesli/termenv"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
@@ -788,7 +789,7 @@ func (m *JobsModel) syncSprings(cmd *tea.Cmd) {
 	for _, group := range jobsFitGroups {
 		scores := group.get(eval)
 		for k, v := range scores {
-			target := float64(v)
+			target := v
 			if s, exists := m.subscoreSprings[k]; exists {
 				if s.Target() != target {
 					s.SetTarget(target)
@@ -884,24 +885,29 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 		}
 		leftWidth := int(float64(m.width) * jobsSidebarRatio)
 		if msg.X >= leftWidth {
-			// Detail pane scrolling
-			if msg.Y < 0 {
+			// Detail pane scrolling. msg.Y is the row the cursor is over on
+			// screen (always >= 0), not a scroll delta -- direction comes
+			// from msg.Button, which is what msg.Y < 0 was mistakenly
+			// standing in for. That bug made every wheel-up event fall into
+			// the "else" (scroll down) branch, making it look like scrolling
+			// up was "impossible" from wherever the mouse happened to be.
+			if msg.Button == tea.MouseWheelUp {
 				if m.detailScrollOffset > 0 {
 					m.detailScrollOffset--
 				}
-			} else {
+			} else if msg.Button == tea.MouseWheelDown {
 				m.detailScrollOffset++
 				m.clampDetailScroll()
 			}
 			return m, nil
 		}
 		if len(m.filtered) > 0 {
-			if msg.Y < 0 {
+			if msg.Button == tea.MouseWheelUp {
 				if m.cursor > 0 {
 					m.cursor--
 					m.adjustScroll()
 				}
-			} else {
+			} else if msg.Button == tea.MouseWheelDown {
 				if m.cursor < len(m.filtered)-1 {
 					m.cursor++
 					m.adjustScroll()
@@ -1159,11 +1165,11 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 
 var jobsFitGroups = []struct {
 	label string
-	get   func(model.Evaluation) map[string]int
+	get   func(model.Evaluation) map[string]float64
 }{
-	{"Fit", func(e model.Evaluation) map[string]int { return e.FitSubscores }},
-	{"Interview odds", func(e model.Evaluation) map[string]int { return e.InterviewOddsSubscores }},
-	{"Practical pursue", func(e model.Evaluation) map[string]int { return e.PracticalPursueSubscores }},
+	{"Fit", func(e model.Evaluation) map[string]float64 { return e.FitSubscores }},
+	{"Interview odds", func(e model.Evaluation) map[string]float64 { return e.InterviewOddsSubscores }},
+	{"Practical pursue", func(e model.Evaluation) map[string]float64 { return e.PracticalPursueSubscores }},
 }
 
 // chromeAvailHeight budgets room for the header and help bars, plus
@@ -1723,7 +1729,7 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 			if !ok {
 				label = k
 			}
-			val := float64(scores[k])
+			val := scores[k]
 			if s, exists := m.subscoreSprings[k]; exists {
 				val = s.Pos()
 			}
@@ -1884,7 +1890,15 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	if job.SourceURL != "" {
 		content = append(content, "")
 		content = append(content, accent.Render("Apply"))
-		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).Render(job.SourceURL))
+		// Wrapped in a single OSC8 hyperlink span (not plain text) so a
+		// terminal's own URL auto-detection can't split it at the visual
+		// line-wrap point -- a plain long URL wraps to two lines under this
+		// pane's fixed Width, and terminals that auto-linkify plain text
+		// treat each wrapped line as its own separate, truncated URL. An
+		// OSC8 span stays one link across the wrap in terminals that
+		// support it (iTerm2, kitty, WezTerm); it silently degrades to the
+		// plain URL text in ones that don't.
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).Render(termenv.Hyperlink(job.SourceURL, job.SourceURL)))
 	}
 
 	// -- Research highlights --

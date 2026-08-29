@@ -229,13 +229,13 @@ func TestMenuModel_MouseInteraction(t *testing.T) {
 
 	// Mouse wheel down moves cursor
 	origIdx := m.list.Index()
-	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if m.list.Index() != origIdx+1 {
 		t.Errorf("expected cursor index %d after wheel down, got %d", origIdx+1, m.list.Index())
 	}
 
 	// Mouse wheel up moves cursor back
-	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if m.list.Index() != origIdx {
 		t.Errorf("expected cursor index %d after wheel up, got %d", origIdx, m.list.Index())
 	}
