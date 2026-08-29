@@ -458,6 +458,22 @@ def education_achievement_slots(profile: str = None) -> list:
     ]
 
 
+def has_design_only_credentials(profile: str = None) -> bool:
+    """True if profile.yml's fixed_credentials (certifications or
+    education) has at least one entry marked design_only: true -- those
+    are gated behind INCLUDE_DESIGN_CREDENTIALS (see tailor_resume.md)
+    rather than always rendered, since they only read as credible when the
+    JD has actual graphic-design responsibilities. Mirrors
+    education_achievement_slots()'s pattern of returning an empty/false
+    result for a profile with no such entries, so the schema field is
+    only injected when there's something for it to gate."""
+    credentials = (profile_yaml(profile).get("fixed_credentials")) or {}
+    entries = (credentials.get("certifications") or []) + (
+        credentials.get("education") or []
+    )
+    return any(entry.get("design_only") for entry in entries)
+
+
 def tags(profile: str = None) -> list:
     """Returns profile.yml's tags: list -- each a dict with name/
     persona_description/keywords, generated once during bootstrap
