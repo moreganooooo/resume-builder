@@ -44,7 +44,17 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
     result.pop("PORTFOLIO_URL", None)
     result.pop("PORTFOLIO_DISPLAY", None)
 
-    result["CERTIFICATIONS"] = list(fixed_content.CERTIFICATIONS)
+    # design_only entries (see profile_paths.has_design_only_credentials())
+    # only belong on the page when the builder decided the JD has real
+    # graphic-design responsibilities -- default False when the field was
+    # never asked (a profile with no design_only entries at all).
+    include_design_credentials = bool(result.get("INCLUDE_DESIGN_CREDENTIALS"))
+
+    result["CERTIFICATIONS"] = [
+        cert
+        for cert in fixed_content.CERTIFICATIONS
+        if include_design_credentials or not cert.get("design_only")
+    ]
     # EDU_ACHIEVEMENT_KEY_<n> fields are numbered by profile_paths.
     # education_achievement_slots()'s order (see orchestrator.py's
     # build_education_achievement_schema_fields(), which built the schema
@@ -56,7 +66,11 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
             profile_paths.education_achievement_slots(), 1
         )
     }
-    result["EDUCATION"] = fixed_content.build_education(achievement_keys)
+    result["EDUCATION"] = [
+        edu
+        for edu in fixed_content.build_education(achievement_keys)
+        if include_design_credentials or not edu.get("design_only")
+    ]
 
     if result.get("EXPERIENCE"):
         new_experience = []

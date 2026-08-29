@@ -129,8 +129,7 @@ def _check_keyword_coverage_pdf(
     for kw in matched_in_json:
         if not kw:
             continue
-        normalized_kw = _normalize(kw)
-        if normalized_kw not in extracted:
+        if not validate_resume._keyword_matches_haystack(kw, extracted):
             warnings.append(
                 f"ATS Keyword corrupted in PDF text layer: {kw!r} "
                 f"(present in resume JSON but missing/unparseable in PDF)"
