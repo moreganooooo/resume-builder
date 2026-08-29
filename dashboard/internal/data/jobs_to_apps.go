@@ -59,6 +59,14 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 			app.Coverage = row.Coverage.Score
 		}
 
+		// Date is labeled "Date Scanned/Posted" by Pipeline, so it should
+		// reflect PostedDate (jd_manager.compute_posting_date's real-posted
+		// -> discovered -> scan-confirmed chain), not when the user applied
+		// -- AppliedAt below only overrides LastContact, a separate field.
+		if row.PostedDate != "" {
+			app.Date = row.PostedDate
+		}
+
 		// ScoreRaw is what the row actually renders. Leaving it empty for
 		// an unevaluated job is deliberate: showing "0.00" for "not scored
 		// yet" is exactly the red-zero confusion this screen had before.
@@ -68,8 +76,7 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 
 		if row.Application != nil {
 			if row.Application.AppliedAt != nil && *row.Application.AppliedAt != "" {
-				app.Date = datePart(*row.Application.AppliedAt)
-				app.LastContact = app.Date
+				app.LastContact = datePart(*row.Application.AppliedAt)
 			}
 			if row.Application.StatusChangedAt != "" {
 				app.LastContact = datePart(row.Application.StatusChangedAt)

@@ -154,13 +154,13 @@ func TestKBModel_MouseInteractions(t *testing.T) {
 	}
 
 	// Mouse wheel down moves cursor
-	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if m.cursor != 1 {
 		t.Errorf("expected cursor 1 after wheel down, got %d", m.cursor)
 	}
 
 	// Mouse wheel up moves cursor back
-	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if m.cursor != 0 {
 		t.Errorf("expected cursor 0 after wheel up, got %d", m.cursor)
 	}

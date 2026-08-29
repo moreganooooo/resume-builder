@@ -166,7 +166,7 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 			Why:            "Great fit for the role.",
 			RecruiterRead:  "Recruiter will see a match.",
 			HardBlockers:   []string{},
-			FitSubscores:   map[string]int{"functional_alignment": 5},
+			FitSubscores:   map[string]float64{"functional_alignment": 5},
 		},
 	}
 
@@ -1027,19 +1027,19 @@ func TestJobsModel_MouseInteractions(t *testing.T) {
 	}
 
 	// Mouse wheel down moves cursor
-	m, _ = m.Update(tea.MouseWheelMsg{Y: 1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	if m.cursor != 1 {
 		t.Errorf("expected cursor 1 after wheel down, got %d", m.cursor)
 	}
 
 	// Mouse wheel up moves cursor back
-	m, _ = m.Update(tea.MouseWheelMsg{Y: -1})
+	m, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if m.cursor != 0 {
 		t.Errorf("expected cursor 0 after wheel up, got %d", m.cursor)
 	}
 
 	// Mouse wheel over the detail pane must not retarget the sidebar.
-	m, _ = m.Update(tea.MouseWheelMsg{X: 80, Y: 1})
+	m, _ = m.Update(tea.MouseWheelMsg{X: 80, Button: tea.MouseWheelDown})
 	if m.cursor != 0 {
 		t.Errorf("expected cursor to remain 0 when scrolling detail pane, got %d", m.cursor)
 	}
@@ -1055,7 +1055,7 @@ func TestJobsModel_MouseInteractions(t *testing.T) {
 	rows := testJobRows()
 	rows[0].Description = strings.Repeat("a long line of job description text\n", 200)
 	tall := NewJobsModel(theme.NewTheme("catppuccin-mocha"), rows, 100, 30)
-	tall, _ = tall.Update(tea.MouseWheelMsg{X: 80, Y: 1})
+	tall, _ = tall.Update(tea.MouseWheelMsg{X: 80, Button: tea.MouseWheelDown})
 	if tall.detailScrollOffset != 1 {
 		t.Errorf("expected detailScrollOffset 1 for scrollable content, got %d", tall.detailScrollOffset)
 	}
