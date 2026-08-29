@@ -42,7 +42,7 @@ def lookup_job(job_id: str, profile: Optional[str] = None) -> Optional[dict]:
     try:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT id, title, company, status, metadata_json, raw_text"
+            "SELECT id, title, company, status, metadata_json, raw_text, created_at"
             " FROM jobs WHERE id = ?",
             (job_id,),
         ).fetchone()

@@ -18,6 +18,7 @@ import os
 import cli_art
 import jd_manager
 import liveness
+import location_filter
 import scan_ats
 import scan_boards
 import scan_indeed
@@ -145,7 +146,7 @@ def _write_jd_file(job: dict) -> str:
     return dest
 
 
-def run_scan(sources: list = None, verify: bool = True) -> int:
+def run_scan(sources: list | None = None, verify: bool = True) -> int:
     """Runs each requested source's fetcher, writes new jobs into jds/
     (skipping anything already known), then -- unless verify=False --
     runs a real Playwright liveness check on exactly the postings just
@@ -244,6 +245,33 @@ def run_scan(sources: list = None, verify: bool = True) -> int:
                             title,
                             company,
                             job.get("source_platform") or "?",
+                        )
+                        continue
+
+                    # A last, cross-source safety net for a remote posting
+                    # whose structured location field is a bare "Remote"
+                    # (no country info) but whose own body text names
+                    # international-only eligibility -- catches sources
+                    # with no structured multi-location field to fold in
+                    # (aggregator boards, Indeed, JobRight, LinkedIn all
+                    # land here with description text already present, as
+                    # do the ATS providers as a backstop). This runs after
+                    # _passes_location_filter (checked per-source, location
+                    # field only) specifically because it needs the full
+                    # description text, which per-source location gates run
+                    # before fetching.
+                    location_str = job.get("location") or ""
+                    if location_filter.classify_workplace(
+                        location_str
+                    ) == location_filter.REMOTE and location_filter.looks_international_in_text(
+                        job.get("description") or ""
+                    ):
+                        result["skipped"] += 1
+                        logging.info(
+                            "scan: skipping %s @ %s -- description names "
+                            "international-only eligibility for a remote role",
+                            title,
+                            company,
                         )
                         continue
 

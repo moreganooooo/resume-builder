@@ -10,11 +10,13 @@ and backfill_discovery_dates() both assume the caller already confirmed
 with the user; menu._handle_stale_sweep() is that caller.
 """
 
+import datetime
 import os
 import shutil
 
 import cli_art
 import jd_manager
+import jd_source
 import picker
 
 DEFAULT_STALE_ARCHIVE_DAYS = 30
@@ -107,8 +109,28 @@ def _move_to_expired(jd_path: str) -> str:
     original collision-avoidance loop now lives -- liveness.py writes into
     the same directory and had the clobbering bug this loop was written to
     avoid, so the safe version belongs in one shared place rather than
-    being correct here and wrong there."""
-    return jd_manager.move_jd_to(jd_path, jd_manager.EXPIRED_DIR)
+    being correct here and wrong there.
+
+    jd_path may also be a database-only job id (no file on disk -- see
+    picker.list_all_evaluated_jds()'s "path" for those rows, and
+    jd_manager.compute_posting_age_days()'s own DB fallback, which is what
+    made these rows eligible for "archive" at all). There is nothing to
+    move for one of these, so this updates the row's status directly via
+    jd_source.set_status() instead -- the same reasoning documented on
+    that function: routing a temp file through jd_manager.archive_jd()
+    would deposit a stray JD in jds/expired/ purely so this had a path to
+    hand back."""
+    if os.path.exists(jd_path):
+        return jd_manager.move_jd_to(jd_path, jd_manager.EXPIRED_DIR)
+    if jd_source.lookup_job(jd_path) is None:
+        # Neither a real file nor a known database id -- a file that
+        # vanished out from under the sweep between preview and run, not
+        # a database-only job. set_status() would silently update zero
+        # rows and look like success; raise instead so the caller's
+        # existing OSError handling reports it like any other failed move.
+        raise FileNotFoundError(f"No JD file or database job found for {jd_path!r}")
+    jd_source.set_status(jd_path, "expired")
+    return jd_path
 
 
 def run_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
@@ -144,6 +166,15 @@ def run_sweep(threshold_days: int = DEFAULT_STALE_ARCHIVE_DAYS) -> dict:
     return result
 
 
+def _parse_db_timestamp(raw: str) -> datetime.datetime:
+    """Parses jobs.created_at (sqlite's CURRENT_TIMESTAMP default: a UTC
+    'YYYY-MM-DD HH:MM:SS' string, no timezone suffix) into an aware UTC
+    datetime, so it compares correctly against the timezone-aware "now"
+    jd_manager.compute_posting_age_days() computes."""
+    naive = datetime.datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+    return naive.replace(tzinfo=datetime.timezone.utc)
+
+
 def backfill_discovery_dates(dry_run: bool = True) -> dict:
     """Stamps _discovered_at on pending postings that have no age signal
     at all, using the JD file's own modification time as the first-seen
@@ -165,12 +196,20 @@ def backfill_discovery_dates(dry_run: bool = True) -> dict:
     The stamp records source="backfill-mtime" so an inferred date stays
     distinguishable from one a scan actually observed.
 
+    Most Pending rows have no JD file at all -- picker.list_all_evaluated_jds()
+    unions in database-only rows (see its own docstring) whose "path" is
+    really a content-hash job id. There is no file mtime for those, so a
+    fresh temp file materialized by jd_source.resolved_jd() would misdate
+    them as "just now" -- the row's own jobs.created_at (set once, at
+    INSERT, never touched by upsert_job()'s ON CONFLICT clause) is the
+    genuine DB-side equivalent of file mtime, so that's the signal used
+    for these instead, recorded under source="backfill-db-created".
+
     dry_run=True (the default) reports what would be stamped and writes
     nothing -- same preview-before-you-act shape as preview_sweep(), and
-    the default is the safe one because this rewrites JD files in place.
+    the default is the safe one because this rewrites JD files (or
+    database rows) in place.
     """
-    import datetime
-
     candidates = []
     errors = []
     stamped = 0
@@ -194,15 +233,32 @@ def backfill_discovery_dates(dry_run: bool = True) -> dict:
         if dry_run:
             continue
 
+        is_file = os.path.exists(path)
         try:
-            mtime = os.path.getmtime(path)
-            when = datetime.datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
-            jd_manager.save_discovered_at(path, when=when, source="backfill-mtime")
+            if is_file:
+                mtime = os.path.getmtime(path)
+                when = datetime.datetime.fromtimestamp(mtime).isoformat(
+                    timespec="seconds"
+                )
+                jd_manager.save_discovered_at(path, when=when, source="backfill-mtime")
+            else:
+                db_row = jd_source.lookup_job(path)
+                if db_row is None or not db_row.get("created_at"):
+                    raise LookupError(
+                        f"no database row (or created_at) for job id {path!r}"
+                    )
+                when = _parse_db_timestamp(db_row["created_at"]).isoformat(
+                    timespec="seconds"
+                )
+                with jd_source.resolved_jd(path) as (temp_path, _is_db):
+                    jd_manager.save_discovered_at(
+                        temp_path, when=when, source="backfill-db-created"
+                    )
             stamped += 1
-        except OSError as e:
+        except (OSError, LookupError, ValueError) as e:
             cli_art.friendly_warning(
                 e,
-                f"dating {os.path.basename(path)}",
+                f"dating {row.get('company') or os.path.basename(path)}",
                 "leaving it undated, so it stays in the queue",
             )
             errors.append({"path": path, "error": str(e)})

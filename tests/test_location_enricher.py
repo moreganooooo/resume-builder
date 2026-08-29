@@ -395,6 +395,9 @@ class TestLocationEnricher(unittest.TestCase):
 
                 with (
                     patch("location_enricher.lookup_osm_nominatim", return_value=None),
+                    patch(
+                        "location_enricher.lookup_website_via_search", return_value=None
+                    ),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
@@ -451,6 +454,9 @@ class TestLocationEnricher(unittest.TestCase):
 
                 with (
                     patch("location_enricher.lookup_osm_nominatim", return_value=None),
+                    patch(
+                        "location_enricher.lookup_website_via_search", return_value=None
+                    ),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),

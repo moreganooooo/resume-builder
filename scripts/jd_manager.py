@@ -541,22 +541,24 @@ def _parse_flexible_date(raw) -> datetime.datetime | None:
     return None
 
 
-def compute_posting_age_days(jd_path: str) -> int | None:
-    """Best-effort days-since-posted for a JD, checked in priority order:
-    a real posted-date field (_POSTED_DATE_FIELDS, however the source
-    encoded it), else the _liveness "confirmed to exist by scan"
-    timestamp (the date this JD was actually discovered by a scan in
-    this program -- the fallback Morgan asked for when a real posted
-    date isn't available), else None (no age signal at all -- callers
-    should treat that as "don't penalize," not "assume old"). Reads the
-    raw JD file directly (not read_jd_text(), which strips underscore-
-    prefixed keys including _liveness -- exactly the fallback this
-    needs)."""
+def _resolve_posted_datetime(jd_path: str) -> datetime.datetime | None:
+    """The shared priority-order lookup behind compute_posting_age_days()
+    and compute_posting_date(): a real posted-date field
+    (_POSTED_DATE_FIELDS, however the source encoded it), else the
+    explicit _discovered_at stamp, else the _liveness "confirmed to exist
+    by scan" timestamp, else None. See compute_posting_age_days() for why
+    each fallback exists and why a database-only job id (no file on disk)
+    is resolved through jd_source instead of raising."""
     try:
         with open(jd_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-        return None
+        import jd_source
+
+        row = jd_source.lookup_job(jd_path)
+        if row is None:
+            return None
+        data = jd_source.job_payload(row)
     if not isinstance(data, dict):
         return None
 
@@ -586,11 +588,44 @@ def compute_posting_age_days(jd_path: str) -> int | None:
         ):
             posted = _parse_flexible_date(liveness["checked_at"])
 
+    return posted
+
+
+def compute_posting_age_days(jd_path: str) -> int | None:
+    """Best-effort days-since-posted for a JD, checked in priority order:
+    a real posted-date field (_POSTED_DATE_FIELDS, however the source
+    encoded it), else the _liveness "confirmed to exist by scan"
+    timestamp (the date this JD was actually discovered by a scan in
+    this program -- the fallback Morgan asked for when a real posted
+    date isn't available), else None (no age signal at all -- callers
+    should treat that as "don't penalize," not "assume old"). Reads the
+    raw JD file directly (not read_jd_text(), which strips underscore-
+    prefixed keys including _liveness -- exactly the fallback this
+    needs).
+
+    jd_path may also be a database-only job id (no file on disk -- see
+    picker.list_all_evaluated_jds()'s "path" for those rows). open()
+    raising OSError for a bare id used to be read as "no age signal at
+    all", which was permanently true: a stamp written via
+    jd_source.resolved_jd() lands in the DB row's metadata_json, never
+    on disk, so a database-only job could never show an age even right
+    after stale_sweep.backfill_discovery_dates() stamped it -- it kept
+    re-offering the same "undated" jobs on every run. Falling back to
+    the DB row's own payload here is what makes that stamp visible."""
+    posted = _resolve_posted_datetime(jd_path)
     if not posted:
         return None
 
     now = datetime.datetime.now(posted.tzinfo)
     return max((now - posted).days, 0)
+
+
+def compute_posting_date(jd_path: str) -> str | None:
+    """Same resolution as compute_posting_age_days(), returned as a
+    YYYY-MM-DD string for display (dashboard's "Date Scanned/Posted")
+    rather than an age -- or None when no date signal exists at all."""
+    posted = _resolve_posted_datetime(jd_path)
+    return posted.date().isoformat() if posted else None
 
 
 APPLICATION_STATUSES = [
@@ -892,11 +927,37 @@ class JDTracker:
 
 APPLICATIONS_MD = profile_paths.applications_md_path()
 
+# Captured at import time, before any test redirects profile_paths.DATA_ROOT
+# to a temp dir -- the same trick db._is_unisolated_test_write uses, so a
+# redirect is what marks a test as properly isolated.
+_REAL_DATA_ROOT = os.path.abspath(profile_paths.DATA_ROOT)
+
 _APPLICATIONS_HEADER = (
     "# Applications Tracker\n\n"
     "| # | Date | Company | Role | Score | Status | PDF | Link | Report | Notes |\n"
     "|---|------|---------|------|-------|--------|-----|------|--------|-------|\n"
 )
+
+
+def _is_unisolated_test_write(path: str) -> bool:
+    """True when a test is about to append a row to the developer's own
+    data/<profile>/applications.md.
+
+    Dozens of tests reach append_application_row incidentally through
+    run_pipeline/build_tailored_resume without ever asserting on the row,
+    which is how the real file ended up with 1,762 "unknown"/"unknown"
+    placeholder rows (one per un-mocked successful build across every
+    test run). Dropping the write here is the same fix already applied to
+    db.upsert_job, for the same reason: purging the rows is pointless
+    while the next run recreates them.
+    """
+    if "unittest" not in sys.modules:
+        return False
+    try:
+        target = os.path.abspath(path)
+    except (OSError, ValueError):
+        return False
+    return target.lower().startswith(_REAL_DATA_ROOT.lower() + os.sep)
 
 
 def _next_application_row_number(path: str) -> int:
@@ -938,7 +999,9 @@ def append_application_row(
     No dedup/merge logic (career-ops's merge-tracker.mjs/dedup-tracker.mjs) --
     resume-builder is the only writer to this file today.
     """
-    path = path or APPLICATIONS_MD
+    path = path or profile_paths.applications_md_path()
+    if _is_unisolated_test_write(path):
+        return
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if not os.path.exists(path):
         with open(path, "w", encoding="utf-8") as f:

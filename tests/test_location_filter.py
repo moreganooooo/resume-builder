@@ -196,6 +196,31 @@ class TestEvaluateLocation(unittest.TestCase):
         self.assertIsNone(verdict.distance_miles)
 
 
+class TestInternationalInText(unittest.TestCase):
+    def test_explicit_international_location_line_trips(self):
+        text = "Great remote role.\nLocation: Poland, Romania, Serbia\nApply now."
+        self.assertTrue(lf.looks_international_in_text(text))
+
+    def test_explicit_us_location_line_does_not_trip(self):
+        text = "Great remote role.\nLocation: United States (any state)\nApply now."
+        self.assertFalse(lf.looks_international_in_text(text))
+
+    def test_no_location_intro_phrase_does_not_trip(self):
+        text = "We have offices in Warsaw and Kraków but this is not a location line."
+        self.assertFalse(lf.looks_international_in_text(text))
+
+    def test_us_mention_suppresses_even_with_other_countries_in_segment(self):
+        text = "Eligible countries: United States, Canada, Poland"
+        self.assertFalse(lf.looks_international_in_text(text))
+
+    def test_empty_text_does_not_trip(self):
+        self.assertFalse(lf.looks_international_in_text(""))
+
+    def test_open_to_candidates_from_phrase_trips(self):
+        text = "Open to candidates from: Brazil, Argentina"
+        self.assertTrue(lf.looks_international_in_text(text))
+
+
 class TestOriginFromConfig(unittest.TestCase):
     def test_zip_preferred(self):
         self.assertEqual(lf.origin_from_config(cfg()), "64111")
