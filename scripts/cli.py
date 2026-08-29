@@ -638,7 +638,15 @@ def location_group():
     default=None,
     help="Maximum number of job postings to process",
 )
-def location_enrich(all_statuses, allow_search_backup, limit):
+@click.option(
+    "--max-search-calls",
+    type=int,
+    default=10,
+    help="Cap on Gemini Search Grounding calls spent this run (a company already "
+    "attempted recently is skipped instead of re-spending a call, so this "
+    "budget goes toward companies that haven't been tried yet)",
+)
+def location_enrich(all_statuses, allow_search_backup, limit, max_search_calls):
     """Enrich company work facility addresses for precise commute filtering."""
     import location_enricher
 
@@ -649,12 +657,83 @@ def location_enrich(all_statuses, allow_search_backup, limit):
         else ["pending"]
     )
     results = location_enricher.enrich_profile_locations(
-        statuses=statuses, allow_search_backup=allow_search_backup, limit=limit
+        statuses=statuses,
+        allow_search_backup=allow_search_backup,
+        limit=limit,
+        max_search_calls=max_search_calls,
     )
     cli_art.display_success(
-        f"Enriched {results['total_processed']} jobs: {results['resolved']} resolved facility addresses "
+        f"Enriched {results['total_processed']} jobs: {results['resolved']} resolved, "
+        f"{results['bypassed_remote']} remote (skipped for good), "
+        f"{results['unresolved']} still unresolved "
         f"({results['search_calls_used']} search calls used)."
     )
+
+
+@cli.command(name="dedupe")
+@click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    help="Archive detected duplicates (defaults to dry-run).",
+)
+@click.option(
+    "--profile",
+    default=None,
+    help="Profile name (defaults to active profile).",
+)
+def dedupe_cmd(apply: bool, profile: str | None):
+    """Find and archive duplicate pending jobs found via multiple scan sources.
+
+    Clusters pending jobs by dedup_hash, (source URL, company), and normalized
+    (company, title), keeping the richest/highest-scoring copy of each and
+    archiving the rest.
+    """
+    import shutil
+    from datetime import datetime
+
+    import dedup_pending_roles
+
+    target_profile = profile or profile_paths.active_profile()
+    db_path = os.path.join(profile_paths.PROFILES_DIR, target_profile, "data.db")
+
+    if not os.path.exists(db_path):
+        cli_art.display_error(f"No database found at {db_path}")
+        raise SystemExit(1)
+
+    if apply:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup = f"{db_path}.backup-{stamp}"
+        shutil.copy2(db_path, backup)
+        cli_art.console.print(f"✓ Database backed up to {backup}")
+
+    result = dedup_pending_roles.run_deduplication(
+        profile=target_profile, dry_run=not apply
+    )
+
+    cli_art.display_banner("Duplicate Job Cleanup")
+    verb = "Archived" if apply else "Would archive"
+    cli_art.console.print(f"  Duplicate clusters found: {result['total_clusters']}")
+    cli_art.console.print(
+        f"  {verb}: {result['total_archived_duplicates']} duplicate(s)"
+    )
+    if not apply:
+        cli_art.console.print(
+            f"  Metadata would be merged into: {result['updated_winners']} keeper(s)"
+        )
+        cli_art.console.print("\n  Sample (first 10 clusters):")
+        for cluster in result["sample_clusters"][:10]:
+            cli_art.console.print(f"    KEEP:    {cluster['winner']}")
+            for loser in cluster["losers"]:
+                cli_art.console.print(f"    ARCHIVE: {loser}")
+        cli_art.console.print(
+            "\n[yellow]Dry run only. Pass --apply to actually archive duplicates.[/yellow]"
+        )
+    else:
+        cli_art.display_success(
+            f"Deduplication complete: {result['total_archived_duplicates']} duplicate(s) "
+            f"archived, {result['updated_winners']} keeper(s) enriched with merged metadata."
+        )
 
 
 @cli.command(name="reconcile")

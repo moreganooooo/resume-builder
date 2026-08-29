@@ -99,7 +99,7 @@ def _prompt_binary_is_stale() -> bool:
     return False
 
 
-def _compile_prompt_if_needed() -> str:
+def _compile_prompt_if_needed() -> str | None:
     """Compiles the Go prompt binary if missing or stale (see
     _prompt_binary_is_stale), returning the path to the compiled binary.
     If compilation fails or Go is missing, returns None."""
@@ -122,7 +122,34 @@ def _compile_prompt_if_needed() -> str:
         return None
 
 
+def _flush_stdin() -> None:
+    """Discards any keystrokes already buffered on stdin before a raw-mode
+    subprocess starts reading it.
+
+    Matters whenever two prompts fire back-to-back in one screen (e.g.
+    stale_sweep's backfill offer immediately followed by its archive
+    confirm) -- Bubbletea reads raw input the instant it takes over the
+    tty, so an Enter the user pressed a beat too early (while the first
+    subprocess was still tearing down, or during the plain print() lines
+    between the two prompts) gets consumed as this form's first
+    keystroke instead of theirs, submitting on the default answer before
+    they see the question. Single-prompt screens never hit this, which
+    is why it went unnoticed until backfill started actually succeeding
+    (see stale_sweep.backfill_discovery_dates()) and its confirm+confirm
+    sequence started running for real instead of erroring out first."""
+    try:
+        import sys
+        import termios
+
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)
+    except Exception:
+        # Not a POSIX tty (Windows, piped stdin, a test harness) -- nothing
+        # to flush, and this must never be the reason a prompt fails.
+        pass
+
+
 def _run_prompt(spec: dict):
+    _flush_stdin()
     # Run from _DASHBOARD_DIR where go.mod is located
     bin_path = _compile_prompt_if_needed()
     if bin_path and os.path.exists(bin_path):
@@ -181,7 +208,7 @@ def confirm(message: str, default: bool = True) -> bool | None:
     return data["confirmed"]
 
 
-def select(message: str, choices: list, default: str | None = None) -> str | None:
+def select(message: str, choices: list, default: str | None = None):
     if not _go_available():
         return questionary.select(
             message, choices=choices, default=default, style=cli_art.QUESTIONARY_STYLE

@@ -29,6 +29,7 @@ KB_DIR = profile_paths.kb_dir()
 
 PROFILE_YML_PATH = os.path.join(KB_DIR, "profile.yml")
 PORTALS_YML_PATH = os.path.join(KB_DIR, "portals.yml")
+SITUATIONAL_ROLES_PATH = profile_paths.situational_roles_path()
 CV_MD_PATH = os.path.join(KB_DIR, "cv.md")
 BACKGROUND_GUIDE_PATH = os.path.join(KB_DIR, "user-background-guide.md")
 VOICE_ANCHORS_PATH = os.path.join(KB_DIR, "voice-anchors.md")
@@ -1397,6 +1398,148 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     return queries
 
 
+def collect_situational_roles(dry_run: bool = False) -> list:
+    """Confirms/collects "situational" roles -- past jobs specific enough
+    that they should only show up on a tailored resume when the JD
+    actually calls for them (e.g. animal-welfare work for an
+    animal-welfare posting, journalism experience for a communications
+    role), rather than on every resume regardless of relevance.
+
+    Backed by situational_roles.py's keyword-triggered inclusion gate:
+    each selection here becomes one entry in situational_roles.yaml, and
+    bank_tag is set to the company string verbatim so it matches that
+    profile's bullet-bank "Role / Company" column exactly (see that
+    module's docstring). An empty answer is fully supported -- the file
+    stays empty and every past role shows on every resume, same as
+    before this step existed."""
+    if dry_run:
+        cli_art.cli_info("[DRY RUN] would confirm situational roles.")
+        return []
+
+    cli_art.cli_info("")
+    cli_art.console.rule("Situational roles", style="dim")
+    cli_art.console.print()
+    cli_art.cli_info(
+        "Some past roles are worth including only for certain kinds of jobs -- "
+        "niche enough to look out of place on every resume, but genuinely "
+        "strong for the right one (e.g. animal-welfare work for an "
+        "animal-welfare posting, or journalism experience for a "
+        "communications role)."
+    )
+    cli_art.console.print()
+
+    companies = [row["company"] for row in _build_cv_draft_rows() if row["company"]]
+    if not companies:
+        cli_art.cli_info(
+            "No employers found yet to choose from -- you can still set this "
+            f"up later by editing {SITUATIONAL_ROLES_PATH}."
+        )
+        return []
+
+    selected = questionary.checkbox(
+        "Any of these past roles you'd only want to show up for specific kinds "
+        "of jobs? (space to select, enter to confirm; leave blank for none)",
+        choices=[questionary.Choice(title=c, value=c) for c in companies],
+        style=cli_art.QUESTIONARY_STYLE,
+    ).ask()
+    if not selected:
+        cli_art.cli_info("None selected -- every past role will show on every resume.")
+        return []
+
+    roles = []
+    for company in selected:
+        cli_art.console.print()
+        display_name = (
+            questionary.text(
+                f'Display name for "{company}" (blank to keep as-is):',
+                default=company,
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
+            or company
+        )
+        kw_raw = (
+            questionary.text(
+                f'Trigger keywords for "{company}" -- comma-separated words/phrases '
+                "a job description would need to mention for this role to be "
+                'considered (e.g. "animal welfare, animal shelter, veterinary"):',
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
+            or ""
+        )
+        trigger_keywords = [kw.strip() for kw in kw_raw.split(",") if kw.strip()]
+        if not trigger_keywords:
+            cli_art.cli_info(
+                f'No keywords entered for "{company}" -- skipping it (it will '
+                "show on every resume, same as if you hadn't selected it)."
+            )
+            continue
+        roles.append(
+            {
+                "display_name": display_name,
+                "bank_tag": company,
+                "trigger_keywords": trigger_keywords,
+            }
+        )
+    return roles
+
+
+def _yaml_situational_roles(roles: list) -> str:
+    if not roles:
+        return "[]"
+    lines = []
+    for role in roles:
+        lines.append(f'  - display_name: "{role["display_name"]}"')
+        lines.append(f'    bank_tag: "{role["bank_tag"]}"')
+        keywords_yaml = ", ".join(f'"{kw}"' for kw in role["trigger_keywords"])
+        lines.append(f"    trigger_keywords: [{keywords_yaml}]")
+    return "\n".join(lines)
+
+
+def write_situational_roles(roles: list, dry_run: bool = False) -> None:
+    """Writes situational_roles.yaml. bootstrap_bullet_bank.create_new_profile()
+    already scaffolds an empty-but-valid version of this file, so an
+    onboarding run with no selections is a same-shape no-op overwrite, not
+    a missing file. A re-run (Update My Knowledge) that would clobber
+    roles a user already has configured gets a confirm gate first, same
+    reasoning as write_profile_yml()'s overwrite guard."""
+    if dry_run:
+        cli_art.cli_info(
+            f"[DRY RUN] would write {len(roles)} situational role(s) to "
+            f"{SITUATIONAL_ROLES_PATH}."
+        )
+        return
+
+    path = SITUATIONAL_ROLES_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                existing = yaml.safe_load(f) or {}
+        except (yaml.YAMLError, OSError):
+            existing = {}
+        if existing.get("roles"):
+            overwrite = questionary.confirm(
+                f"{path} already has situational roles configured -- overwrite "
+                "with what you just entered? (Any existing entries not "
+                "re-entered here will be lost.)",
+                default=False,
+                style=cli_art.QUESTIONARY_STYLE,
+            ).ask()
+            if not overwrite:
+                cli_art.cli_info(
+                    "Keeping the existing situational_roles.yaml unchanged."
+                )
+                return
+
+    content = (
+        f"situational_min_bullets: 2\nroles:\n{_yaml_situational_roles(roles)}\n"
+        if roles
+        else "situational_min_bullets: 2\nroles: []\n"
+    )
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with atomic_write(path, encoding="utf-8") as f:
+        f.write(content)
+
+
 def run_profile_setup(dry_run: bool = False) -> dict:
     checkpoint = _load_checkpoint()
     identity = collect_identity(dry_run=dry_run)
@@ -1411,8 +1554,10 @@ def run_profile_setup(dry_run: bool = False) -> dict:
         achievements_text,
         dry_run=dry_run,
     )
+    situational_roles = collect_situational_roles(dry_run=dry_run)
     write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
     write_portals_yml(identity)
+    write_situational_roles(situational_roles, dry_run=dry_run)
     seed_scan_filters_from_target_roles(identity)
     write_verified_ledger(dry_run=dry_run)
     # background guide + voice anchors before cv.md, not after:
@@ -1433,4 +1578,5 @@ def run_profile_setup(dry_run: bool = False) -> dict:
         "recommendations_found": len(recommendations),
         "tags_generated": len(taxonomy.tags),
         "linkedin_search_queries": len(linkedin_search_queries),
+        "situational_roles": len(situational_roles),
     }

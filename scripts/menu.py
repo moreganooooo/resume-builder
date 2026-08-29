@@ -682,7 +682,7 @@ def _print_source_docs_instructions(source_docs_dir: str) -> None:
     cli_art.console.print()
 
 
-def _profile_is_set_up(profile: str = None) -> bool:
+def _profile_is_set_up(profile: str | None = None) -> bool:
     """Whether the active (or named) profile has a real knowledge base.
 
     Deliberately asks *whether* a profile exists, not *how* it came to
@@ -791,7 +791,7 @@ def _handle_bootstrap() -> bool:
         go_ok, go_data = _run_go_bootstrap_wizard()
         if go_ok and go_data is None:
             return False  # user cancelled the wizard
-        if go_ok:
+        if go_ok and go_data is not None:
             data = go_data
         else:
             cli_art.console.print()
@@ -1407,6 +1407,7 @@ def _browse_single_action(row: dict) -> bool:
             jd_manager.archive_jd(row["path"])
             cli_art.console.print(f"Archived {target}.")
             return True
+        return False
 
 
 def _browse_bulk_action(rows: list) -> bool:
@@ -1469,6 +1470,7 @@ def _browse_bulk_action(rows: list) -> bool:
             jd_manager.archive_jd(r["path"])
         cli_art.console.print(f"Archived {len(rows)} JD(s).")
         return True
+    return False
 
 
 def _handle_browse_jobs() -> bool:
@@ -1815,7 +1817,7 @@ def _handle_manage_scraping():
     filters_path = os.path.join(
         profile_paths.board_scanner_dir(profile), "scan_filters.yml"
     )
-    profile_path = os.path.join(profile_paths.profile_root(profile), "profile.yml")
+    profile_path = os.path.join(profile_paths.kb_dir(profile), "profile.yml")
 
     while True:
         if use_alt:
@@ -2004,14 +2006,8 @@ def _handle_edit_linkedin_queries(profile_path):
             break
 
         if act == "add":
-            new_q = questionary.text(
-                "Enter your new Boolean Query:",
-                style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: (
-                    True if text.strip() != "" else "Query cannot be empty."
-                ),
-            ).ask()
-            if new_q:
+            new_q = cli_art.text("Enter your new Boolean Query:")
+            if new_q and new_q.strip():
                 queries.append(new_q.strip())
                 profile_data["linkedin_search_queries"] = queries
                 with open(profile_path, "w", encoding="utf-8") as f:
@@ -2038,6 +2034,44 @@ def _handle_edit_linkedin_queries(profile_path):
                     )
                 cli_art.cli_info("Boolean query removed successfully!")
                 time.sleep(1)
+
+
+def _summarize_keywords(keywords: list, max_shown: int = 12) -> str:
+    """Caps a keyword list's inline preview to max_shown entries plus a
+    "+N more" tail -- this is only the on-screen preview line, never the
+    only way to see the list. The menu's alt-screen buffer has no real
+    scrollback (see _run_with_chain's docstring), so an unbounded
+    ', '.join() of a long keyword list used to push earlier lines off the
+    top of the screen with no way to see them again. The full list is
+    always reachable via _browse_keywords(), which scrolls internally
+    (see its own docstring) rather than dumping everything to the
+    terminal at once."""
+    if len(keywords) <= max_shown:
+        return ", ".join(keywords)
+    shown = ", ".join(keywords[:max_shown])
+    return f"{shown}, ... (+{len(keywords) - max_shown} more)"
+
+
+def _browse_keywords(keywords: list, label: str) -> None:
+    """Read-only, scrollable view of every keyword in the list.
+
+    Uses cli_art.select() as the viewport: huh/Bubbletea's select scrolls
+    internally rather than printing every choice to the terminal at once,
+    so this stays usable even for a list of hundreds (this profile has
+    328 negative title keywords) without overflowing the alt-screen's
+    scrollback-less buffer. Picking an entry does nothing but close the
+    view -- this exists purely so a user can see everything before
+    deciding what to add/remove, which the inline "+N more" summary
+    can't do."""
+    if not keywords:
+        return
+    choices = [questionary.Choice(k, value=k) for k in sorted(keywords)] + [
+        questionary.Choice("Close", value="__close__")
+    ]
+    cli_art.select(
+        f"{label} ({len(keywords)} total) -- scroll to view, Enter to close:",
+        choices=choices,
+    )
 
 
 def _handle_edit_title_filters(filters_path):
@@ -2068,7 +2102,7 @@ def _handle_edit_title_filters(filters_path):
         if not pos:
             cli_art.console.print("  (Empty -- all titles pass)")
         else:
-            cli_art.console.print(f"  {', '.join(pos)}")
+            cli_art.console.print(f"  {_summarize_keywords(pos)}")
 
         cli_art.console.print(
             f"\n[red]✘ NEGATIVE KEYWORDS[/red] (if present, job is skipped):"
@@ -2076,7 +2110,7 @@ def _handle_edit_title_filters(filters_path):
         if not neg:
             cli_art.console.print("  (None configured)")
         else:
-            cli_art.console.print(f"  {', '.join(neg)}")
+            cli_art.console.print(f"  {_summarize_keywords(neg)}")
         cli_art.console.print()
 
         choices = [
@@ -2084,6 +2118,8 @@ def _handle_edit_title_filters(filters_path):
             questionary.Choice("➕ Add Negative Keyword", value="add_neg"),
             questionary.Choice("➖ Delete Positive Keyword", value="del_pos"),
             questionary.Choice("➖ Delete Negative Keyword", value="del_neg"),
+            questionary.Choice("👁 View All Positive Keywords", value="view_pos"),
+            questionary.Choice("👁 View All Negative Keywords", value="view_neg"),
             questionary.Choice("Back", value="back"),
         ]
 
@@ -2092,10 +2128,8 @@ def _handle_edit_title_filters(filters_path):
             break
 
         if act == "add_pos":
-            k = questionary.text(
-                "Enter positive title keyword:", style=cli_art.QUESTIONARY_STYLE
-            ).ask()
-            if k:
+            k = cli_art.text("Enter positive title keyword:")
+            if k and k.strip():
                 pos.append(k.strip())
                 title_filter["positive"] = sorted(list(set(pos)))
                 filters["title_filter"] = title_filter
@@ -2106,10 +2140,8 @@ def _handle_edit_title_filters(filters_path):
                 cli_art.cli_info("Positive filter updated!")
                 time.sleep(1)
         elif act == "add_neg":
-            k = questionary.text(
-                "Enter negative title keyword:", style=cli_art.QUESTIONARY_STYLE
-            ).ask()
-            if k:
+            k = cli_art.text("Enter negative title keyword:")
+            if k and k.strip():
                 neg.append(k.strip())
                 title_filter["negative"] = sorted(list(set(neg)))
                 filters["title_filter"] = title_filter
@@ -2153,6 +2185,10 @@ def _handle_edit_title_filters(filters_path):
                     )
                 cli_art.cli_info("Negative keyword removed!")
                 time.sleep(1)
+        elif act == "view_pos":
+            _browse_keywords(pos, "POSITIVE KEYWORDS")
+        elif act == "view_neg":
+            _browse_keywords(neg, "NEGATIVE KEYWORDS")
 
 
 def _handle_manage_profiles():
@@ -2499,6 +2535,7 @@ def _handle_check_updates() -> bool:
             sys.stdout.write("\x1b[r")
             sys.stdout.flush()
     _pause_and_return()
+    return False
 
 
 _HANDLERS = {

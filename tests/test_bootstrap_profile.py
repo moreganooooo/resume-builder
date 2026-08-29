@@ -15,6 +15,8 @@ sys.path.insert(0, SCRIPTS_DIR)
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import bootstrap_profile  # noqa: E402
+import situational_roles  # noqa: E402
+import yaml  # noqa: E402
 
 
 class BootstrapProfileTestCase(unittest.TestCase):
@@ -40,6 +42,9 @@ class BootstrapProfileTestCase(unittest.TestCase):
 
         bootstrap_profile.PROFILE_YML_PATH = os.path.join(self.tmp_dir, "profile.yml")
         bootstrap_profile.PORTALS_YML_PATH = os.path.join(self.tmp_dir, "portals.yml")
+        bootstrap_profile.SITUATIONAL_ROLES_PATH = os.path.join(
+            self.tmp_dir, "situational_roles.yaml"
+        )
         bootstrap_profile.CV_MD_PATH = os.path.join(self.tmp_dir, "cv.md")
         bootstrap_profile.BACKGROUND_GUIDE_PATH = os.path.join(
             self.tmp_dir, "user-background-guide.md"
@@ -1263,6 +1268,185 @@ class TestCollectLinkedinSearchQueries(unittest.TestCase):
                 ["Marketing Manager"]
             )
         self.assertEqual(result, ["Email OR Campaign", "Lifecycle"])
+
+
+class TestCollectSituationalRoles(BootstrapProfileTestCase):
+    """
+    Regression tests: situational_roles.yaml was scaffolded empty by
+    bootstrap_bullet_bank.create_new_profile() and never surfaced during
+    onboarding at all, so a new profile with real niche/optional past
+    roles (e.g. animal-welfare work for animal-welfare postings) got no
+    chance to configure them without already knowing the feature existed
+    and hand-editing the YAML.
+    """
+
+    def test_dry_run_returns_empty_without_prompting(self):
+        with patch("bootstrap_profile.questionary.checkbox") as mock_checkbox:
+            result = bootstrap_profile.collect_situational_roles(dry_run=True)
+            mock_checkbox.assert_not_called()
+        self.assertEqual(result, [])
+
+    def test_no_employers_yet_returns_empty_without_prompting(self):
+        with patch("bootstrap_profile.questionary.checkbox") as mock_checkbox:
+            result = bootstrap_profile.collect_situational_roles()
+            mock_checkbox.assert_not_called()
+        self.assertEqual(result, [])
+
+    def test_selecting_none_returns_empty_list(self):
+        self._write_timeline(
+            [{"company": "Humane Society", "title": "Volunteer Coordinator"}]
+        )
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", encoding="utf-8") as f:
+            f.write("Role / Company,Bullet Point\nHumane Society,Did a thing\n")
+
+        with patch("bootstrap_profile.questionary.checkbox") as mock_checkbox:
+            mock_checkbox.return_value.ask.return_value = []
+            result = bootstrap_profile.collect_situational_roles()
+        self.assertEqual(result, [])
+
+    def test_selected_company_with_keywords_becomes_a_role(self):
+        self._write_timeline(
+            [{"company": "Humane Society", "title": "Volunteer Coordinator"}]
+        )
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", encoding="utf-8") as f:
+            f.write("Role / Company,Bullet Point\nHumane Society,Did a thing\n")
+
+        with (
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
+            patch("bootstrap_profile.questionary.text") as mock_text,
+        ):
+            mock_checkbox.return_value.ask.return_value = ["Humane Society"]
+            mock_text.return_value.ask.side_effect = [
+                "Humane Society of Greater KC",  # display name
+                "animal welfare, animal shelter",  # keywords
+            ]
+            result = bootstrap_profile.collect_situational_roles()
+
+        self.assertEqual(
+            result,
+            [
+                {
+                    "display_name": "Humane Society of Greater KC",
+                    "bank_tag": "Humane Society",
+                    "trigger_keywords": ["animal welfare", "animal shelter"],
+                }
+            ],
+        )
+
+    def test_selected_company_with_no_keywords_is_dropped(self):
+        self._write_timeline(
+            [{"company": "Humane Society", "title": "Volunteer Coordinator"}]
+        )
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", encoding="utf-8") as f:
+            f.write("Role / Company,Bullet Point\nHumane Society,Did a thing\n")
+
+        with (
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
+            patch("bootstrap_profile.questionary.text") as mock_text,
+        ):
+            mock_checkbox.return_value.ask.return_value = ["Humane Society"]
+            mock_text.return_value.ask.side_effect = ["Humane Society", ""]
+            result = bootstrap_profile.collect_situational_roles()
+
+        self.assertEqual(result, [])
+
+
+class TestWriteSituationalRoles(BootstrapProfileTestCase):
+
+    def test_dry_run_writes_nothing(self):
+        bootstrap_profile.write_situational_roles(
+            [{"display_name": "X", "bank_tag": "X", "trigger_keywords": ["x"]}],
+            dry_run=True,
+        )
+        self.assertFalse(os.path.exists(bootstrap_profile.SITUATIONAL_ROLES_PATH))
+
+    def test_empty_roles_writes_valid_empty_scaffold(self):
+        bootstrap_profile.write_situational_roles([])
+        with open(bootstrap_profile.SITUATIONAL_ROLES_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertEqual(data["roles"], [])
+        self.assertEqual(data["situational_min_bullets"], 2)
+
+    def test_writes_roles_readable_by_situational_roles_module(self):
+        roles = [
+            {
+                "display_name": "Humane Society of Greater KC",
+                "bank_tag": "Humane Society",
+                "trigger_keywords": ["animal welfare", "animal shelter"],
+            }
+        ]
+        bootstrap_profile.write_situational_roles(roles)
+
+        with patch(
+            "profile_paths.situational_roles_path",
+            return_value=bootstrap_profile.SITUATIONAL_ROLES_PATH,
+        ):
+            loaded = situational_roles.load_situational_roles()
+        self.assertIn("Humane Society of Greater KC", loaded["roles"])
+        entry = loaded["roles"]["Humane Society of Greater KC"]
+        self.assertEqual(entry["bank_tag"], "Humane Society")
+        self.assertEqual(
+            entry["trigger_keywords"], ["animal welfare", "animal shelter"]
+        )
+
+    def test_no_confirm_prompt_when_no_existing_file(self):
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            bootstrap_profile.write_situational_roles(
+                [{"display_name": "X", "bank_tag": "X", "trigger_keywords": ["x"]}]
+            )
+            mock_confirm.assert_not_called()
+
+    def test_declining_overwrite_leaves_existing_roles_untouched(self):
+        bootstrap_profile.write_situational_roles(
+            [
+                {
+                    "display_name": "Original",
+                    "bank_tag": "Original",
+                    "trigger_keywords": ["orig"],
+                }
+            ]
+        )
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = False
+            bootstrap_profile.write_situational_roles(
+                [
+                    {
+                        "display_name": "New",
+                        "bank_tag": "New",
+                        "trigger_keywords": ["new"],
+                    }
+                ]
+            )
+        with open(bootstrap_profile.SITUATIONAL_ROLES_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Original", content)
+        self.assertNotIn("New", content)
+
+    def test_accepting_overwrite_replaces_existing_roles(self):
+        bootstrap_profile.write_situational_roles(
+            [
+                {
+                    "display_name": "Original",
+                    "bank_tag": "Original",
+                    "trigger_keywords": ["orig"],
+                }
+            ]
+        )
+        with patch("bootstrap_profile.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.ask.return_value = True
+            bootstrap_profile.write_situational_roles(
+                [
+                    {
+                        "display_name": "New",
+                        "bank_tag": "New",
+                        "trigger_keywords": ["new"],
+                    }
+                ]
+            )
+        with open(bootstrap_profile.SITUATIONAL_ROLES_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("New", content)
+        self.assertNotIn("Original", content)
 
 
 class TestWriteBackgroundGuide(BootstrapProfileTestCase):
