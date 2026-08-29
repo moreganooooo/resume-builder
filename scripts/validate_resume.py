@@ -653,20 +653,30 @@ def _check_role_order(resume_data: dict, role_roster: list[str]) -> list[str]:
     return []
 
 
-def _check_bullet_counts(resume_data: dict, role_bullet_minimums: dict) -> list[str]:
-    """Each EXPERIENCE entry must meet its role's min_bullets floor from
-    profile.yml -- the same floor build_role_rules_block()'s "Per-Role
+def _check_bullet_counts(
+    resume_data: dict,
+    role_bullet_minimums: dict,
+    role_bullet_maximums: dict = None,
+) -> list[str]:
+    """Each EXPERIENCE entry must meet its role's min_bullets floor, and --
+    for roles that declare one -- stay at or under its max_bullets ceiling,
+    both from profile.yml. Same floor build_role_rules_block()'s "Per-Role
     Bullet Count Targets" table already tells the model, with nothing
     checking it was followed. Observed live: Element 8 / Strategy LLC,
     VML, and Callahan Creek each shipped with 2 achievement bullets
     against a declared min_bullets of 3.
 
+    max_bullets is opt-in (most roles have no ceiling, since a role can
+    legitimately grow past its target when space allows) -- used for roles
+    pinned to an exact count, e.g. Mercor at exactly 2 bullets.
+
     Loose matching mirrors _check_role_roster() (title parentheticals like
-    "(Now Alleyoop)"). A company with no declared minimum (absent from
-    the roster, or the roster wasn't supplied) is skipped -- this check
-    enforces a floor, not presence.
+    "(Now Alleyoop)"). A company with no declared minimum/maximum (absent
+    from the roster, or the roster wasn't supplied) is skipped for that
+    check -- this enforces a floor/ceiling, not presence.
     """
-    if not role_bullet_minimums:
+    role_bullet_maximums = role_bullet_maximums or {}
+    if not role_bullet_minimums and not role_bullet_maximums:
         return []
 
     violations = []
@@ -674,17 +684,89 @@ def _check_bullet_counts(resume_data: dict, role_bullet_minimums: dict) -> list[
         entry = _normalize_company(job.get("company", ""))
         if not entry:
             continue
+        count = len(job.get("achievements") or [])
         for company, minimum in role_bullet_minimums.items():
             needle = _normalize_company(company)
             if needle and (needle in entry or entry in needle):
-                count = len(job.get("achievements") or [])
                 if count < minimum:
                     violations.append(
                         f"Bullet count: {job.get('company')!r} has {count} achievement "
                         f"bullet(s), below its required minimum of {minimum}"
                     )
                 break
+        for company, maximum in role_bullet_maximums.items():
+            needle = _normalize_company(company)
+            if needle and (needle in entry or entry in needle):
+                if count > maximum:
+                    violations.append(
+                        f"Bullet count: {job.get('company')!r} has {count} achievement "
+                        f"bullet(s), above its required maximum of {maximum}"
+                    )
+                break
     return violations
+
+
+def _stem_word(word: str) -> str:
+    """Simple deterministic stemmer for inflection matching."""
+    w = word.lower().strip()
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    if w.endswith("tion") and len(w) > 5:
+        return w[:-4]
+    if w.endswith("sion") and len(w) > 5:
+        return w[:-4]
+    if w.endswith("ment") and len(w) > 5:
+        return w[:-4]
+    if w.endswith("ing") and len(w) > 4:
+        return w[:-3]
+    if w.endswith("ed") and len(w) > 3:
+        return w[:-2]
+    if w.endswith("es") and len(w) > 3:
+        return w[:-2]
+    if w.endswith("s") and not w.endswith("ss") and len(w) > 2:
+        return w[:-1]
+    return w
+
+
+def _keyword_matches_haystack(kw: str, haystack: str) -> bool:
+    """Checks if a keyword appears in the haystack verbatim, with slash/hyphen normalization,
+    plural/singular inflection, or multi-word stem matches."""
+    if not kw:
+        return False
+    kw_raw = kw.lower().strip()
+    # 1. Exact word-bounded regex
+    if re.search(rf"\b{re.escape(kw_raw)}\b", haystack):
+        return True
+
+    # 2. Slash / Hyphen normalization (e.g. B2B/SaaS -> B2B SaaS)
+    kw_norm = re.sub(r"[\/\-_]+", " ", kw_raw).strip()
+    haystack_norm = re.sub(r"[\/\-_]+", " ", haystack)
+    if re.search(rf"\b{re.escape(kw_norm)}\b", haystack_norm):
+        return True
+
+    # 3. Word-level stemming and inflection for multi-word or single-word phrases
+    kw_words = [w for w in re.split(r"[\s\/\-_]+", kw_raw) if w]
+    if not kw_words:
+        return False
+
+    if len(kw_words) == 1:
+        w = kw_words[0]
+        stem = _stem_word(w)
+        pattern = (
+            rf"\b{re.escape(stem)}[a-z]*\b"
+            if len(stem) >= 3
+            else rf"\b{re.escape(stem)}\b"
+        )
+        if re.search(pattern, haystack):
+            return True
+    else:
+        stems = [_stem_word(w) for w in kw_words if len(w) >= 3]
+        if stems and all(
+            re.search(rf"\b{re.escape(s)}[a-z]*\b", haystack) for s in stems
+        ):
+            return True
+
+    return False
 
 
 def check_keyword_coverage(
@@ -698,10 +780,8 @@ def check_keyword_coverage(
     against the finished document. This is the matching logic, using
     ats_match.yaml's own threshold bands to report the result.
 
-    Exact-match only: a keyword's phrase found verbatim (case-insensitive,
-    word-bounded) anywhere in the resume text. No semantic/partial
-    matching is attempted -- that would need its own LLM call, and is an
-    honest limitation, not an oversight.
+    Exact & stemmed match: matches keywords verbatim, with slash/hyphen
+    normalization, plural/singular inflections, and multi-word stem equivalence.
 
     Returns a report dict, never a pass/fail violation. A missing keyword
     the candidate genuinely doesn't have is not something the pipeline
@@ -726,7 +806,7 @@ def check_keyword_coverage(
     for kw in all_keywords:
         if not kw:
             continue
-        if re.search(rf"\b{re.escape(kw.lower())}\b", haystack):
+        if _keyword_matches_haystack(kw, haystack):
             matched.append(kw)
         else:
             missing.append(kw)
@@ -2036,11 +2116,12 @@ def validate(
     role_roster: list[str] = None,
     role_bullet_minimums: dict = None,
     enforce_star: bool = False,
+    role_bullet_maximums: dict = None,
 ) -> list[str]:
-    """role_roster and role_bullet_minimums are optional so callers that
-    legitimately validate a partial document (polish.py's single-section
-    edits) aren't forced to supply them; omitting either skips its checks
-    rather than failing them."""
+    """role_roster and role_bullet_minimums/role_bullet_maximums are optional
+    so callers that legitimately validate a partial document (polish.py's
+    single-section edits) aren't forced to supply them; omitting any of them
+    skips its checks rather than failing them."""
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
@@ -2056,7 +2137,11 @@ def validate(
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))
-    violations.extend(_check_bullet_counts(resume_data, role_bullet_minimums or {}))
+    violations.extend(
+        _check_bullet_counts(
+            resume_data, role_bullet_minimums or {}, role_bullet_maximums or {}
+        )
+    )
     violations.extend(_check_demographic_and_age_bias(resume_data))
     violations.extend(_check_keyword_density_ceiling(resume_data))
     violations.extend(_check_cross_section_redundancy(resume_data))

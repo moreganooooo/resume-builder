@@ -65,17 +65,38 @@ key -- pick the option whose framing best matches the archetype you detected abo
 zero, one, or several such entries; the ROLE RULES block is the only source of truth for which
 ones apply and what their real option keys are, never any specific school name.
 
+# Design-Only Credentials
+
+If the ROLE RULES context block lists Design-Only Credentials, set `INCLUDE_DESIGN_CREDENTIALS`
+to `true` only when the JD has explicit graphic/visual design responsibilities as an actual job
+requirement — producing layouts, brand assets, or UI/UX work; naming tools like Illustrator,
+Photoshop, InDesign, or Figma. A JD that merely says "creative," "visual communication," or
+"eye for design" as a soft nice-to-have does not qualify — set it `false`. This candidate's own
+profile explicitly treats a full graphic-design role as a poor fit, so this field should read
+`true` rarely, only for roles that genuinely blend design production into the day-to-day. Never
+draft the gated credentials into your own Certifications/Education text regardless of what you set
+this field to — normalize_resume.py adds or omits them after generation based on your answer.
+
 # Tagline Rules
 
+**Zero-gap rule, overrides everything below:** a recruiter must be able to read only the tagline
+and immediately see this resume was built for the exact role they posted — never a lateral archetype
+label instead of it. Part 1 is non-negotiable: it must literally be the JD's own role title (cleaned),
+not a rephrasing, not the archetype descriptor, not a "close enough" adjacent title. If Part 1 doesn't
+contain the JD's actual title, the tagline has failed regardless of how good it otherwise reads.
+
 - Format: [JD Role Title, cleaned] | [Archetype Descriptor]
-- Archetype descriptors: Email Lifecycle → "Campaign CRM Strategist" | Sales Enablement → "Content Systems & Training Designer" | B2B Content → "Brand Voice & Campaign Copywriter" | Marketing Ops → "CRM Campaign Systems Specialist" | Generalist → "Campaign Strategy & Lifecycle Marketing"
+- Part 1 = the JD's own role title, lightly cleaned (see below). Part 2 = the archetype descriptor
+  that frames HOW this candidate does that job, drawn from the CRM/lifecycle/content background —
+  it is supporting context, never a replacement for Part 1.
+- Archetype descriptors (Part 2 only): Email Lifecycle → "Campaign CRM Strategist" | Sales Enablement → "Content Systems & Training Designer" | B2B Content → "Brand Voice & Campaign Copywriter" | Marketing Ops → "CRM Campaign Systems Specialist" | Generalist → "Campaign Strategy & Lifecycle Marketing"
 - Remove "Sr.", "Junior", "Remote", parentheses from the role title; keep the essence
-- Must fit one printed line, max 60 characters total (empirically measured -- a 65-char tagline
-  ("CAMPAIGN CRM STRATEGIST | CAMPAIGN STRATEGY & LIFECYCLE MARKETING") already wraps to a 2nd line
-  at 14pt). If your first draft runs long, condense by removing repeated words between the two
-  halves rather than shortening either half awkwardly -- e.g. "CAMPAIGN CRM STRATEGIST | CAMPAIGN
-  STRATEGY & LIFECYCLE MARKETING" (65 chars, wraps) became "CAMPAIGN & CRM STRATEGIST | LIFECYCLE
-  MARKETING" (48 chars, fits) by merging the repeated "Campaign"/"Strategy"/"Strategist" language
+- Must fit one printed line, max 60 characters total (empirically measured — a tagline that runs
+  long wraps to a 2nd line at 14pt). If your first draft runs long, condense Part 2 (or trim filler
+  words shared between both halves) before ever dropping or rewording the JD title in Part 1 — e.g.
+  for a "Content Strategist" JD, "CONTENT STRATEGIST | CAMPAIGN, CRM & LIFECYCLE MARKETING" (too
+  long) condenses to "CONTENT STRATEGIST | CAMPAIGN & LIFECYCLE MARKETING", not to something that
+  drops "CONTENT STRATEGIST" entirely
 - Use "&" (not "and") in tagline and category names
 - Tagline must be HARD-CODED UPPERCASE in the string value — do NOT rely on CSS text-transform
 
@@ -83,7 +104,7 @@ ones apply and what their real option keys are, never any specific school name.
 
 - Maximum 5 lines of text
 - First sentence MUST be wrapped in `<strong>` tags
-- First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Campaign & CRM Strategist with 10+ years..." not "[Candidate's name] is a..." or "She is a...")
+- First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Content Strategist with 10+ years..." not "[Candidate's name] is a..." or "She is a..."). The role/identity phrase MUST open with (or clearly contain) the same JD role title used in the Tagline's Part 1 — Tagline and Summary are read together, and if they name two different jobs the resume reads as applied to the wrong role
 - Remaining sentences: narrative bridge / exit story + at least one concrete, checkable specific — a real metric, a named tool/platform, or a named scope drawn from this candidate's verified profile data, not a generic capability claim — keep the same pronoun-free, name-free voice throughout. Vary your own sentence openers per resume; do not default to a stock verb like "Specializes in..." or "Transforms..." every time — that pattern is exactly what makes a Summary read as interchangeable with any other candidate's
 - Draw tone and register from `voice-anchors.md` (in your knowledge base context) — its `>` blockquoted lines are real verbatim quotes from this candidate. Let them inform word choice and rhythm; don't copy them verbatim into a pronoun-free Summary
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
