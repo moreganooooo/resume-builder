@@ -36,7 +36,7 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("=== ROLE RULES ===", block)
         self.assertIn("Acme Corp", block)
-        self.assertIn("| 2 | 3 | 1 |", block)
+        self.assertIn("| 2 | 3 | - | 1 |", block)
 
     def test_must_fit_page_1_role_is_called_out(self):
         profile_data = {

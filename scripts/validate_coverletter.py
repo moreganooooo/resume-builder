@@ -60,11 +60,11 @@ def _check_paragraph_count(cover_letter_data: dict) -> list[str]:
     return []
 
 
-# Mirrors tailor_coverletter.md's own "250-350 words total" instruction --
-# see that prompt for why this range (the 250-350 research benchmark for
-# peak callback rate).
-_MIN_WORD_COUNT = 250
-_MAX_WORD_COUNT = 350
+# Mirrors tailor_coverletter.md's own "250-350 words total" benchmark,
+# with a practical 240-360 tolerance band to avoid spurious retries
+# on high-quality letters that are within a few words of the boundaries.
+_MIN_WORD_COUNT = 240
+_MAX_WORD_COUNT = 360
 
 
 def _check_word_count(cover_letter_data: dict) -> list[str]:

@@ -460,8 +460,12 @@ class TemplateSchema(BaseModel):
     SECTION_WHY: str = Field(
         default="",
         description=(
-            "'Why [Real Company Name]?' -- ONLY set if space allows on a 2-page "
-            "resume; leave blank ('') to omit the section entirely."
+            "'Why [Real Company Name]?' -- include by default whenever company "
+            "research is available. Do not leave this blank pre-emptively over "
+            "a page-count guess: a separate automated pass measures the real "
+            "rendered PDF afterward and removes this section first if the "
+            "resume genuinely doesn't fit in 2 pages, and backfills it "
+            "afterward if it was left blank but there turned out to be room."
         ),
     )
     WHY_TEXT: str = Field(
@@ -472,9 +476,34 @@ class TemplateSchema(BaseModel):
             "Only the first sentence of the first paragraph and the last "
             "sentence of the last paragraph are wrapped in <em> tags. Must "
             "reference specific company research connected to verified facts. "
-            "Leave blank ('') to omit the section entirely if it would push "
-            "the resume to 3 pages."
+            "Include by default whenever company research is available -- see "
+            "SECTION_WHY's description for why leaving it blank over a "
+            "page-count guess is unnecessary."
         ),
+    )
+
+
+class WhyBackfillSchema(BaseModel):
+    """
+    Dedicated schema for the post-render Why-section backfill step
+    (scripts/orchestrator.py's build_tailored_resume trim loop): used only
+    when the main builder call left WHY_TEXT blank but the rendered PDF
+    turned out to have room for it after all. Both fields are required
+    here (unlike TemplateSchema's optional/blank-default versions) since
+    this call exists specifically to produce them.
+    """
+
+    SECTION_WHY: str = Field(
+        description="'Why [Real Company Name]?' -- the section header."
+    )
+    WHY_TEXT: str = Field(
+        description=(
+            "Two short paragraphs (as HTML <p> tags), max 8 lines total, "
+            "first-person voice -- the only section where pronouns are allowed. "
+            "Only the first sentence of the first paragraph and the last "
+            "sentence of the last paragraph are wrapped in <em> tags. Must "
+            "reference specific company research connected to verified facts."
+        )
     )
 
 

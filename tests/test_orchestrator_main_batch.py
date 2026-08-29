@@ -35,11 +35,18 @@ class TestMainBatchMode(unittest.TestCase):
         # Without this, a successful build's real append_application_row()
         # call (never mocked below) writes a real row into the actual
         # data/applications.md on every test run -- this file was the
-        # undetected source of dozens of stray "unknown/unknown" rows.
-        self._real_applications_md = orchestrator.jd_manager.APPLICATIONS_MD
-        orchestrator.jd_manager.APPLICATIONS_MD = os.path.join(
-            self.tmp_dir, "applications.md"
+        # source of 1,762 stray "unknown"/"unknown" placeholder rows.
+        # append_application_row resolves its default path per-call via
+        # profile_paths.applications_md_path(), not a module constant, so
+        # isolation patches that function rather than an attribute --
+        # jd_manager._is_unisolated_test_write() would otherwise drop this
+        # write outright, since it fails closed for any unpatched test.
+        self.applications_md = os.path.join(self.tmp_dir, "applications.md")
+        self._applications_md_patcher = patch(
+            "orchestrator.jd_manager.profile_paths.applications_md_path",
+            return_value=self.applications_md,
         )
+        self._applications_md_patcher.start()
 
         # run_pipeline() now takes a pre-run KB snapshot (B13); without this,
         # every test below (main() -> run_pipeline(), never mocked) would
@@ -51,7 +58,7 @@ class TestMainBatchMode(unittest.TestCase):
     def tearDown(self):
         self._snapshot_patcher.stop()
         orchestrator.jd_manager.COMPLETED_DIR = self._real_completed_dir
-        orchestrator.jd_manager.APPLICATIONS_MD = self._real_applications_md
+        self._applications_md_patcher.stop()
         for root, dirs, files in os.walk(self.tmp_dir, topdown=False):
             for name in files:
                 os.remove(os.path.join(root, name))
@@ -124,7 +131,7 @@ class TestMainBatchMode(unittest.TestCase):
         with patch.object(sys, "argv", ["orchestrator.py"]):
             orchestrator.main()
 
-        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+        with open(self.applications_md, "r", encoding="utf-8") as f:
             data_row = [line for line in f if line.startswith("| 1 |")][0]
         self.assertIn("| 4.80/5 |", data_row)
         self.assertIn("| Strong pursue |", data_row)
@@ -148,7 +155,7 @@ class TestMainBatchMode(unittest.TestCase):
         with patch.object(sys, "argv", ["orchestrator.py"]):
             orchestrator.main()
 
-        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+        with open(self.applications_md, "r", encoding="utf-8") as f:
             data_row = [line for line in f if line.startswith("| 1 |")][0]
         self.assertIn("| — |", data_row)
 
@@ -172,7 +179,7 @@ class TestMainBatchMode(unittest.TestCase):
         with patch.object(sys, "argv", ["orchestrator.py"]):
             orchestrator.main()
 
-        with open(orchestrator.jd_manager.APPLICATIONS_MD, "r", encoding="utf-8") as f:
+        with open(self.applications_md, "r", encoding="utf-8") as f:
             data_row = [line for line in f if line.startswith("| 1 |")][0]
         self.assertIn("| ✓ |", data_row)
 

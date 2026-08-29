@@ -88,7 +88,7 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
         # Dynamic high-variance prose on attempt 2 (passes all voice & word count checks, ~340 words total)
         good_p1 = (
             "I love building systems that work quietly in the background — so people do not have to. "
-            "Over the past six years at Treering, I spearheaded our outbound communication engine, connecting with thousands of school coordinators and driving an unexpected 17% revenue surge through deeply personalized messaging. "
+            "Over the past six years at Treering, I spearheaded our outbound communication engine, connecting with thousands of school coordinators and driving a substantial revenue surge through deeply personalized messaging. "
             "Clarity and empathy win every time. "
             "When scaling new platforms, communication operations must balance operational rigor with genuine human connection to prevent audience churn and fatigue. "
             "Every campaign touchpoint deserves meticulous measurement and narrative intentionality."
@@ -99,10 +99,11 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
             "I partner closely with engineering teams to instrument accurate tracking for every user touchpoint, then use that behavioral data to prioritize messaging sequences most likely to convert cold leads. "
             "I look forward to bringing that same disciplined energy to the Content Strategist role at Acme Corp."
         )
-        # Add another supporting paragraph to reach 300-450 word target
+        # Add another supporting paragraph to reach 240-360 word target
         good_p3 = (
-            "Beyond tactical execution, I champion collaborative workflows across product and sales teams. "
-            "I thrive in fast-paced environments where priorities shift quickly and cross-functional clarity is paramount. "
+            "Beyond tactical execution, I champion collaborative workflows across product, marketing, and sales teams to align overall strategy with daily execution. "
+            "I thrive in fast-paced environments where priorities shift quickly and cross-functional clarity is paramount to driving customer engagement and long-term retention. "
+            "By establishing clear communication frameworks and data-backed performance tracking, teams achieve sustainable growth without compromising on narrative craft. "
             "Thank you for considering my application, and I look forward to the opportunity to discuss how my background aligns with your vision."
         )
         good_letter = {

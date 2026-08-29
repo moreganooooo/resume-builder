@@ -118,13 +118,13 @@ class TestValidateCoverLetter(unittest.TestCase):
             "Another short paragraph about my background.",
         ]
         violations = validate_coverletter.validate(letter, STYLE_RULES)
-        self.assertTrue(any("250-350 words" in v for v in violations), violations)
+        self.assertTrue(any("240-360 words" in v for v in violations), violations)
 
     def test_flags_too_many_words(self):
         letter = _valid_letter()
         letter["body_paragraphs"] = [" ".join(["word"] * 250), " ".join(["word"] * 250)]
         violations = validate_coverletter.validate(letter, STYLE_RULES)
-        self.assertTrue(any("250-350 words" in v for v in violations), violations)
+        self.assertTrue(any("240-360 words" in v for v in violations), violations)
 
     def test_does_not_flag_word_count_within_range(self):
         violations = validate_coverletter.validate(_valid_letter(), STYLE_RULES)

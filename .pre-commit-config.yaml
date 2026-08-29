@@ -74,7 +74,7 @@ repos:
         args:
           [
             "--skip=*.json,*.csv,*.db,*.pyc,*.rtf,*.html",
-            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations",
+            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment",
           ]
 
   # General linting

@@ -340,7 +340,13 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch.object(self.engine, "mine_bullet_bank"):
+        with (
+            patch.object(self.engine, "mine_bullet_bank"),
+            patch(
+                "orchestrator.auto_fix_duplicate_opening_verbs",
+                side_effect=lambda data, rules: (data, False),
+            ),
+        ):
             self.engine.build_tailored_resume(
                 jd_path=self.jd_path,
                 master_resume={},
@@ -415,7 +421,13 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_generate.side_effect = generate_side_effect
         mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch.object(self.engine, "mine_bullet_bank"):
+        with (
+            patch.object(self.engine, "mine_bullet_bank"),
+            patch(
+                "orchestrator.repair_violations_surgically",
+                side_effect=lambda data, violations, *a, **kw: (data, violations),
+            ),
+        ):
             self.engine.build_tailored_resume(
                 jd_path=self.jd_path,
                 master_resume={},
@@ -966,7 +978,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         def validate_side_effect(
-            resume_data, rules, role_roster=None, role_bullet_minimums=None
+            resume_data, rules, role_roster=None, role_bullet_minimums=None, **kwargs
         ):
             validation_call_count["n"] += 1
             # First validation call: return a violation
@@ -1062,7 +1074,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
         counts = iter([3, 1, 9, 9, 9, 9])
 
         def validate_side_effect(
-            resume_data, rules, role_roster=None, role_bullet_minimums=None
+            resume_data, rules, role_roster=None, role_bullet_minimums=None, **kwargs
         ):
             return [f"v{i}" for i in range(next(counts))]
 
@@ -1127,7 +1139,7 @@ class TestBuildCheckpointResume(unittest.TestCase):
             raise AssertionError(f"Unexpected response_schema in test: {schema}")
 
         def validate_side_effect(
-            resume_data, rules, role_roster=None, role_bullet_minimums=None
+            resume_data, rules, role_roster=None, role_bullet_minimums=None, **kwargs
         ):
             # Always return a violation
             return ["SUMMARY_TEXT contains forbidden keyword: 'results-driven'"]
