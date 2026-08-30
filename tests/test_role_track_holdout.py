@@ -128,6 +128,26 @@ class TestSampling(unittest.TestCase):
         self.assertGreater(runs, 10)
 
 
+class TestLabelNormalization(unittest.TestCase):
+    """Real labeling produced "IC", "ic", and "unclear, likely IC"."""
+
+    def test_case_is_ignored(self):
+        self.assertEqual(holdout.normalize_label("IC"), "ic")
+        self.assertEqual(holdout.normalize_label("  Manager "), "manager")
+
+    def test_qualified_label_resolves_to_its_leading_term(self):
+        """A hedge is uncertainty, not a second verdict.
+
+        Scoring "unclear, likely IC" as "ic" would silently promote the
+        labeler's doubt into a confident answer.
+        """
+        self.assertEqual(holdout.normalize_label("unclear, likely IC"), "unclear")
+
+    def test_genuinely_unrecognized_is_empty(self):
+        self.assertEqual(holdout.normalize_label("boss"), "")
+        self.assertEqual(holdout.normalize_label(""), "")
+
+
 class TestHoldoutFile(unittest.TestCase):
     def test_written_file_is_blind(self):
         """No prediction column: a labeler shown a guess agrees with it."""
