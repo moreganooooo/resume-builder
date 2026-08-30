@@ -280,6 +280,63 @@ def _flag_thin_description(job: dict, provider_id: str, source_url: str) -> None
     )
 
 
+# Per-provider yield for the current scan, keyed by provider_id ->
+# {"runs": n, "jobs": n}. A provider that exits 0 and returns [] emits no
+# warning of any kind, so a board that has silently died is
+# indistinguishable from one having a quiet week. That is not
+# hypothetical: crunchboard's feed had 301-redirected to a marketing
+# homepage and ycombinator's Algolia app had been decommissioned, and
+# both stayed enabled, contributing zero, unnoticed -- found only by
+# probing every provider by hand. Counting yield is what turns that into
+# something the scan reports on its own.
+_PROVIDER_YIELD: dict[str, dict[str, int]] = {}
+
+
+def reset_provider_yield() -> None:
+    """Clear the ledger. Called at the start of each scan."""
+    _PROVIDER_YIELD.clear()
+
+
+def _record_provider_yield(provider_id: str, count: int) -> None:
+    slot = _PROVIDER_YIELD.setdefault(provider_id, {"runs": 0, "jobs": 0})
+    slot["runs"] += 1
+    slot["jobs"] += count
+
+
+def zero_yield_providers() -> list[str]:
+    """Providers that ran at least once and returned nothing, every time.
+
+    Deliberately whole-provider rather than per-entry: a single tracked
+    entry whose search_term matches nothing this week is ordinary, and
+    warning on it would bury the real signal in noise. A provider that
+    returned zero across ALL of its entries is the shape that a dead
+    upstream actually takes.
+
+    A provider whose runs all FAILED is excluded -- those already warn
+    for themselves, and reporting them twice would imply two problems.
+    """
+    return sorted(
+        pid
+        for pid, slot in _PROVIDER_YIELD.items()
+        if slot["runs"] > 0 and slot["jobs"] == 0
+    )
+
+
+def warn_on_zero_yield() -> None:
+    """Emit one warning per provider that produced nothing all scan."""
+    for provider_id in zero_yield_providers():
+        runs = _PROVIDER_YIELD[provider_id]["runs"]
+        _scan_warning(
+            f"scan_boards: {provider_id} returned 0 postings across "
+            f"{runs} run(s) this scan -- the board may be dead. Verify it "
+            f"with: python scripts/probe_provider_fields.py --only "
+            f"{provider_id}",
+            kind="zero_yield",
+            provider_id=provider_id,
+            reason=f"0 postings from {runs} run(s)",
+        )
+
+
 def _run_node_provider(provider_id: str, entry: dict) -> list:
     try:
         result = subprocess.run(
@@ -318,7 +375,9 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
         return []
 
     try:
-        return json.loads(result.stdout)
+        jobs = json.loads(result.stdout)
+        _record_provider_yield(provider_id, len(jobs))
+        return jobs
     except json.JSONDecodeError as e:
         _scan_warning(
             f"scan_boards: {provider_id} returned invalid JSON -- {e}",
@@ -385,6 +444,7 @@ def _run_batch_node_providers(items: list, timeout: int | None = None) -> dict:
             pid = res.get("provider_id") or "unknown"
             if res.get("status") == "fulfilled":
                 out[pid] = res.get("jobs") or []
+                _record_provider_yield(pid, len(out[pid]))
             else:
                 err = res.get("error") or {}
                 kind = err.get("kind", "provider_failed")
@@ -474,6 +534,8 @@ def fetch_board_jobs(
             sources = [b for b in BOARD_PROVIDERS if b in enabled_boards]
         else:
             sources = BOARD_PROVIDERS
+
+    reset_provider_yield()
 
     jobs = []
     if activity is not None:
@@ -652,5 +714,7 @@ def fetch_board_jobs(
                     jobs.extend(future.result())
                 except Exception as e:
                     logging.error(f"scan_boards: Failed custom feed future task: {e}")
+
+    warn_on_zero_yield()
 
     return jobs

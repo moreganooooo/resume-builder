@@ -652,14 +652,18 @@ tracked_companies:
   provider: powertofly
   search_term: enablement
   enabled: true
+# Disabled 2026-08-29: crunchboard.com/jobs.rss 301-redirects to the
+# jobboard.io marketing homepage. The feed is gone, not quiet.
 - name: Crunchboard — Marketing
   provider: crunchboard
   search_term: marketing
-  enabled: true
+  enabled: false
+# Disabled 2026-08-29: crunchboard.com/jobs.rss 301-redirects to the
+# jobboard.io marketing homepage. The feed is gone, not quiet.
 - name: Crunchboard — Enablement
   provider: crunchboard
   search_term: enablement
-  enabled: true
+  enabled: false
 - name: Jobspresso — Marketing
   provider: jobspresso
   search_term: marketing
