@@ -808,3 +808,82 @@ against live providers, not from reading their docs.
   such so a future reader does not mistake "unmeasured" for "empty".
   Open: ycombinator needs POST, workday is per-tenant POST,
   crunchboard/powertofly returned zero items and may be dead.
+
+### v5 → v6: the unresolved gaps, closed
+
+Every provider left open in v5 has been chased to a cause. A zero is
+never self-explanatory — of the four providers reporting no postings,
+two were dead upstream and two were bugs in the probe itself.
+
+**Workday is recoverable, and it matters most.** Its listing endpoint
+returns five fields and no employment type, which is why v5 wrote it
+off. The per-posting **detail** endpoint carries
+`jobPostingInfo.timeType` at **100%** (n=24 across three tracked
+tenants) with values `Full time` / `Part time`. `scan_boards` already
+fetches that detail page for its description text, so capturing the
+field costs **no additional request**. One tracked tenant was **25%
+part-time** — the largest concentration of the exact population this
+filter exists to separate, on a provider the spec had classified as
+unmeasurable. `payRange` was 0% on every tenant, consistent with salary
+being an employer property.
+
+**Two providers are dead upstream.** Recorded in
+`probe_provider_fields.DEAD_PROVIDERS` rather than deleted, because a
+scanner contributing zero postings is indistinguishable from one having
+a quiet week:
+
+- **crunchboard** — `jobs.rss` 301-redirects to the jobboard.io
+  marketing homepage. The feed no longer exists.
+- **ycombinator** — Algolia app id `45bwydsgqq` has no DNS records,
+  while `latency-dsn.algolia.net` resolves normally. A decommissioned
+  app, not a network fault. Every scan fails at DNS and yields zero.
+
+Note what ycombinator was doing while broken: its payload hardcodes
+`facetFilters: [['job_type:full_time']]`. A **non-configurable
+employment-type filter already exists in this codebase** — it is
+precisely the setting this spec proposes to expose, frozen to one value
+and invisible to the user. Whatever replaces this provider must route
+that facet through the new config, not re-hardcode it.
+
+**powertofly was a probe bug, and hides a provider bug.** It serves
+**JSON from a `/rss` path behind a 308 redirect**; the probe parsed it
+as XML, found no `<item>` elements, and reported zero. Two real defects
+in `powertofly.mjs` follow:
+
+- Its comment claims "PowerToFly items don't expose a company field" and
+  falls back to `entry.name`. **The `description` field IS the company
+  name** (`"Morgan Stanley"`, `"Expedia Group"`). So company is wrong on
+  every row, and `description` is a ~13-character string that the
+  `MIN_DESCRIPTION_CHARS = 600` thin-description check will flag.
+- Its `type` field is `"Onsite"` / `"Remote"` — **workplace mode, not
+  employment type**. The third instance of this trap (after `themuse`
+  and lever's `Full Time / On Site`).
+
+The feed also carries only **3 items**, so it is a sample, not a board.
+
+**recruitee cannot be measured, and contributes nothing today.** The
+active profile tracks **zero** recruitee boards, so there is no coverage
+figure to report and no honest way to invent one. Left as an explicit
+error rather than a `0%`.
+
+### Employment-type vocabulary, final
+
+Adding Workday brings the count to **seven mutually incompatible
+spellings of "full time"** across providers: `FullTime` (ashby),
+`Full-time` (lever, workable), `Full Time` (himalayas), `full_time`
+(remotive, and ycombinator's dead facet), `Full-time, Contract`
+(jobright, comma-joined), `['Full-Time']` (jobicy, list-wrapped), and
+now `Full time` (workday). This settles the earlier open question:
+`normalize_employment_type()` must normalize case, separators, and
+container shape before matching, and must log provider + raw value on
+any miss.
+
+### The recurring trap, named
+
+Three providers expose a field called `type` that is **not** an
+employment type: `themuse` (posting kind, `"external"`), `powertofly`
+(workplace mode), and lever's `Full Time / On Site` (both at once). A
+field that is present and wrong is more dangerous than one that is
+missing, because coverage metrics look healthy while the filter reads
+garbage. Every field mapping added under this spec must be validated
+against **observed values**, not against the field's name.

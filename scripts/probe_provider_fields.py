@@ -21,6 +21,18 @@ any pipeline -- run it deliberately:
     python scripts/probe_provider_fields.py --only ashby lever
     python scripts/probe_provider_fields.py --json out.json
 
+WORKDAY: the listing endpoint returns five fields and no employment
+type, which is why it was written off as unmeasurable. The per-posting
+DETAIL endpoint carries `timeType` at 100% ("Full time" / "Part time"),
+and scan_boards already fetches that page for its description text --
+so the field is free. Measured 25% part-time on one tracked tenant,
+which is exactly the population a part-time filter exists to separate.
+
+DEAD vs. QUIET: four providers reported zero postings. Two are dead
+upstream (see DEAD_PROVIDERS) and two were probe bugs -- powertofly is
+JSON served from a /rss path behind a 308, and was parsed as XML. A
+zero is never self-explanatory; it has to be chased to a cause.
+
 PER-BOARD VARIANCE -- the central methodological finding. Measured over
 24 boards per provider (575 greenhouse / 390 ashby / 79 lever postings):
 
@@ -49,6 +61,7 @@ import json
 import random
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable
@@ -77,6 +90,15 @@ def _request(url: str, headers: dict | None = None) -> urllib.request.Request:
 def _get(url: str, headers: dict | None = None) -> Any:
     req = _request(url, {"Accept": "application/json", **(headers or {})})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosec B310
+        return json.load(resp)
+
+
+def _post(url: str, payload: dict) -> Any:
+    req = _request(
+        url, {"Content-Type": "application/json", "Accept": "application/json"}
+    )
+    data = json.dumps(payload).encode()
+    with urllib.request.urlopen(req, data=data, timeout=TIMEOUT) as resp:  # nosec B310
         return json.load(resp)
 
 
@@ -440,16 +462,113 @@ def probe_public_apis() -> list[Result]:
     )
     out.append(
         _simple_api(
-            "ycombinator",
-            "https://45bwydsgqq-dsn.algolia.net/1/indexes/waas_jobs/query",
-            lambda p: p.get("hits", []),
-            lambda j: j.get("job_type"),
-            lambda j: j.get("salary_range") or j.get("salary"),
-            "job_type",
-            "salary_range",
+            "powertofly",
+            # Trailing slash matters: the bare path 308-redirects, and this
+            # is a JSON endpoint despite the /rss name. It was probed as RSS
+            # for its whole existence, found no <item> elements, and reported
+            # zero postings -- indistinguishable from a dead feed.
+            "https://powertofly.com/jobs/rss/",
+            lambda p: p.get("items", []),
+            # "type" here is workplace mode ("Onsite"/"Remote"), NOT an
+            # employment type. Same trap as themuse's "type".
+            lambda j: None,
+            lambda j: None,
+            "none (type= is workplace mode)",
+            "none",
         )
     )
     return out
+
+
+# Providers whose upstream no longer exists. Kept as an explicit registry
+# rather than deleted, because a scanner that silently contributes zero
+# postings is indistinguishable from one that is merely having a quiet
+# week -- naming the corpse is the whole point.
+DEAD_PROVIDERS = {
+    "crunchboard": (
+        "https://www.crunchboard.com/jobs.rss 301-redirects to the "
+        "jobboard.io marketing homepage (HTML, no feed). CrunchBoard is "
+        "gone; the provider can never return a posting."
+    ),
+    "ycombinator": (
+        "Algolia app id 45bwydsgqq no longer has DNS records "
+        "(45bwydsgqq-dsn.algolia.net does not resolve, while "
+        "latency-dsn.algolia.net does -- so this is a decommissioned app, "
+        "not a network problem). Every scan fails at DNS and yields zero."
+    ),
+}
+
+
+def _workday_tenants(boards: int, seed: int) -> list[tuple[str, str, str]]:
+    """(base_url, tenant, board) triples from real careers_url values.
+
+    Workday needs three parts, not a slug: the host carries the tenant
+    AND its datacenter (wd1/wd5/...), and the board name is a path
+    segment. Nothing about them is guessable.
+    """
+    import yaml
+
+    sys.path.insert(0, "scripts")
+    import profile_paths
+
+    path = f"{profile_paths.profile_root()}/board_scanner/tracked_companies.yml"
+    with open(path) as fh:
+        raw = yaml.safe_load(fh)
+    entries = raw.get("tracked_companies", raw) if isinstance(raw, dict) else raw
+    out: list[tuple[str, str, str]] = []
+    pattern = r"https://([\w-]+)\.(wd\d+\.)?myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)"
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("enabled") is False:
+            continue
+        blob = f"{entry.get('api') or ''} {entry.get('careers_url') or ''}"
+        m = re.search(pattern, blob)
+        if m:
+            base = f"https://{m.group(1)}.{m.group(2) or ''}myworkdayjobs.com"
+            triple = (base, m.group(1), m.group(3))
+            if triple not in out:
+                out.append(triple)
+    random.Random(seed).shuffle(out)
+    return out[:boards]
+
+
+def probe_workday(boards: int, seed: int) -> Result:
+    """Workday: listing is barren, DETAIL carries timeType at 100%.
+
+    The listing endpoint returns exactly five fields and no employment
+    type, which is why workday was written off as unmeasurable. The
+    per-posting detail endpoint carries `timeType` ("Full time" /
+    "Part time"). scan_boards already fetches that detail page for its
+    description text, so this field costs no extra request.
+    """
+    r = Result("workday", "ats")
+    tenants = _workday_tenants(boards, seed)
+    if not tenants:
+        r.error = "no myworkdayjobs careers_url in tracked_companies.yml"
+        return r
+    for base, tenant, board in tenants:
+        api = f"{base}/wday/cxs/{tenant}/{board}"
+        try:
+            listing = _post(
+                f"{api}/jobs",
+                {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""},
+            )
+        except Exception as exc:  # noqa: BLE001
+            r.notes.append(f"{tenant}: {type(exc).__name__}")
+            continue
+        for jp in (listing.get("jobPostings") or [])[:12]:
+            path = str(jp.get("externalPath") or "")
+            if "/job" not in path:
+                continue
+            try:
+                info = _get(api + "/job" + path.split("/job", 1)[1])
+            except Exception:  # noqa: BLE001
+                continue
+            info = info.get("jobPostingInfo") or {}
+            r.n += 1
+            r.observe_employment(info.get("timeType"), "jobPostingInfo.timeType")
+            r.observe_salary(bool(info.get("payRange")), "jobPostingInfo.payRange")
+            time.sleep(0.3)  # politeness; workday is a per-tenant server
+    return r
 
 
 def probe_rss() -> list[Result]:
@@ -458,8 +577,6 @@ def probe_rss() -> list[Result]:
         "weworkremotely": "https://weworkremotely.com/remote-jobs.rss",
         "nodesk": "https://nodesk.co/remote-jobs/index.xml",
         "jobspresso": "https://jobspresso.co/jobs/feed/",
-        "powertofly": "https://powertofly.com/jobs/rss",
-        "crunchboard": "https://www.crunchboard.com/jobs.rss",
         "authenticjobs": "https://authenticjobs.com/?feed=job_feed",
         "realworkfromanywhere": "https://www.realworkfromanywhere.com/rss.xml",
     }
@@ -512,7 +629,6 @@ UNMEASURED = {
     "wellfound": "requires authenticated session",
     "hackernews": "HN 'who is hiring' free-text comments; no fields by construction",
     "remote_curated": "a curated README of links, not postings",
-    "workday": "per-tenant POST API; probe separately, see scan_boards timeouts",
     "linkedin": "python source (scan_linkedin.py); has work_model in metadata",
     "indeed": "python source via JobSpy; exposes job_type/min_amount/interval",
     "jobright": "python source; employment_type measured at 100% in corpus",
@@ -561,6 +677,15 @@ def main() -> int:
             r.error = f"{type(exc).__name__}: {exc}"
             results.append(r)
 
+    if not wanted or "workday" in wanted:
+        print("probing workday tenants ...", file=sys.stderr)
+        try:
+            results.append(probe_workday(args.boards, args.seed))
+        except Exception as exc:  # noqa: BLE001
+            r = Result("workday", "ats")
+            r.error = f"{type(exc).__name__}: {exc}"
+            results.append(r)
+
     if not wanted or wanted & {"api", "public"}:
         print("probing public APIs ...", file=sys.stderr)
         results.extend(probe_public_apis())
@@ -579,6 +704,10 @@ def main() -> int:
                 for k, v in sorted(r.values.items(), key=lambda kv: -kv[1])[:5]
             )
             print(f"{'':<31}values: {top}")
+
+    print("\nDEAD UPSTREAM (verified, not a transient failure):")
+    for name, why in sorted(DEAD_PROVIDERS.items()):
+        print(f"  {name:<20} {why}")
 
     print("\nNOT MEASURED BY THIS SCRIPT (absence of data, not absence of fields):")
     for name, why in sorted(UNMEASURED.items()):
