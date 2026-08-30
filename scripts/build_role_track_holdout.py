@@ -213,28 +213,71 @@ def read_labels(path: str) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
+def normalize_label(raw: str) -> str:
+    """Accept what a human actually types, or "" if it is unrecognized.
+
+    Real labeling produced "IC", "ic", and "unclear, likely IC". Rejecting
+    those as typos would be pedantry -- the intent is unambiguous. A
+    qualified label resolves to its LEADING term ("unclear, likely IC" is
+    unclear), because the qualifier is the labeler's uncertainty, not a
+    second verdict, and scoring it as "ic" would silently promote a
+    hedge into a confident answer.
+    """
+    text = (raw or "").strip().lower()
+    if not text:
+        return ""
+    head = re.split(r"[,;(/]", text)[0].strip()
+    return head if head in LABEL_VALUES else ""
+
+
 def status(path: str) -> int:
+    """Progress, plus the cross-tab that shows whether strata predict label."""
     rows = read_labels(path)
     done = [r for r in rows if (r.get("label") or "").strip()]
     bad = sorted(
         {
             (r.get("label") or "").strip()
             for r in done
-            if (r.get("label") or "").strip().lower() not in LABEL_VALUES
+            if not normalize_label(r.get("label", ""))
         }
     )
     print(f"labeled {len(done)}/{len(rows)}")
+
     counts: dict[str, int] = {}
     for r in done:
-        key = (r.get("label") or "").strip().lower()
-        counts[key] = counts.get(key, 0) + 1
+        counts[normalize_label(r["label"]) or "?"] = (
+            counts.get(normalize_label(r["label"]) or "?", 0) + 1
+        )
     for label, n in sorted(counts.items()):
         print(f"  {label:<10} {n}")
-    per_stratum: dict[str, int] = {}
+
+    # The cross-tab is the point. Pooled accuracy hides the only thing
+    # that matters: whether a cheap stratum already separates the
+    # classes, and which band the classifier actually has to earn.
+    grid: dict[str, dict[str, int]] = {}
+    for r in done:
+        label = normalize_label(r["label"]) or "?"
+        grid.setdefault(r["stratum"], {})[label] = (
+            grid.setdefault(r["stratum"], {}).get(label, 0) + 1
+        )
+    if grid:
+        cols = list(LABEL_VALUES)
+        print(
+            f"\n{'stratum':<12} " + " ".join(f"{c:>8}" for c in cols) + f"{'total':>8}"
+        )
+        for stratum in sorted(grid):
+            cells = grid[stratum]
+            total = sum(cells.values())
+            row = " ".join(f"{cells.get(c, 0):>8}" for c in cols)
+            print(f"{stratum:<12} {row}{total:>8}")
+
+    remaining: dict[str, int] = {}
     for r in rows:
-        if (r.get("label") or "").strip():
-            per_stratum[r["stratum"]] = per_stratum.get(r["stratum"], 0) + 1
-    print("labeled per stratum:", dict(sorted(per_stratum.items())))
+        if not (r.get("label") or "").strip():
+            remaining[r["stratum"]] = remaining.get(r["stratum"], 0) + 1
+    if remaining:
+        print("\nunlabeled per stratum:", dict(sorted(remaining.items())))
+
     if bad:
         print(f"\nUNRECOGNIZED LABELS: {bad}  (allowed: {', '.join(LABEL_VALUES)})")
         return 1
