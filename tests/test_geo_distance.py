@@ -112,6 +112,48 @@ class TestResolveLocation(unittest.TestCase):
             geo_distance.get_city_centroid("Austin", "TX"),
         )
 
+    def test_office_suffix_after_the_state(self):
+        """Workday emits "New York, NY - 8th Avenue" -- the office, not the city.
+
+        Any suffix after "City, ST" used to make the whole string
+        unresolvable, which lands the posting in the permissive
+        "kept for review" bucket and silently defeats the radius. Same
+        failure mode as adzuna's "Buffalo, Erie County".
+        """
+        expected = geo_distance.get_city_centroid("New York", "NY")
+        for value in (
+            "New York, NY - 8th Avenue",
+            "New York, NY (Hybrid)",
+            "New York, NY - Manhattan",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(geo_distance.resolve_location(value), expected)
+
+    def test_state_token_recovers_when_the_dash_is_already_gone(self):
+        """location_filter.strip_workplace_tokens() removes the dash first.
+
+        By the time the radius path calls here the string reads
+        "New York, NY 8th Avenue", so punctuation stripping alone would
+        not have been enough.
+        """
+        self.assertEqual(
+            geo_distance.resolve_location("New York, NY 8th Avenue"),
+            geo_distance.get_city_centroid("New York", "NY"),
+        )
+        self.assertEqual(
+            geo_distance.resolve_location("New York, New York 8th Avenue"),
+            geo_distance.get_city_centroid("New York", "NY"),
+        )
+
+    def test_hyphenated_place_names_are_untouched(self):
+        """Only a SPACED dash is a qualifier separator."""
+        for city, state in (("Winston-Salem", "NC"), ("Wilkes-Barre", "PA")):
+            with self.subTest(city=city):
+                self.assertEqual(
+                    geo_distance.resolve_location(f"{city}, {state}"),
+                    geo_distance.get_city_centroid(city, state),
+                )
+
     def test_international_is_none(self):
         for value in ("London, UK", "Toronto, ON", "Berlin, Germany"):
             with self.subTest(value=value):
