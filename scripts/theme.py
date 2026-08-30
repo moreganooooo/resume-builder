@@ -98,6 +98,8 @@ _NERD_ICONS = {
     "next": "",  # nf-fa-chevron_right
     "back": "",  # nf-fa-chevron_left
     "exit": "",  # nf-fa-power_off
+    "location": "",  # nf-fa-map_marker -- place/commute
+    "filter": "",  # nf-fa-filter -- exclusion gates (language, travel)
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -132,6 +134,7 @@ _UNICODE_ICONS = {
     "complete": "✓",  # U+2713 check mark, consistent with success
     "gem": "✦",  # U+2726 four-pointed star
     "location": "⌂",  # U+2302 house -- place/commute (never the pin emoji)
+    "filter": "▽",  # U+25BD white down triangle -- a funnel, i.e. exclusion
     "prev": "❮",  # U+276E angle quote left
     "next": "❯",  # U+276F angle quote right
     "back": "❮",  # U+276E angle quote left, same as prev
@@ -205,6 +208,8 @@ _ICON_COLORS = {
     "resume": BRAND_ACCENT,  # purple
     "complete": SUCCESS,  # green
     "gem": WARNING,  # gold
+    "location": INFO,  # light blue
+    "filter": INFO,  # light blue -- same family as location, a sibling gate
     "prev": BRAND_ACCENT,  # purple, matches existing pagination style
     "next": BRAND_ACCENT,  # purple, matches existing pagination style
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
