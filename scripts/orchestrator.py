@@ -272,6 +272,15 @@ AUDIT_PROFILE_KEEP = [
     "superpowers:",
     "background_context:",
     "deal_breakers:",
+    # evaluate_recruiter.md asks the model to flag "a required degree the
+    # candidate doesn't hold" as a hard_blocker -- but the candidate's
+    # degrees and certifications live here, and this list is the only
+    # thing that puts them in front of the model. Without it the prompt
+    # was asking a question it had no data to answer, so a posting
+    # demanding a credential Morgan does not hold scored like any other.
+    # Same shape as the bug this whole trim exists to describe: an
+    # evaluation running against the JD alone.
+    "fixed_credentials:",
 ]
 AUDIT_PROFILE_STOP = [
     "industries_of_genuine_fit:",
@@ -282,6 +291,10 @@ AUDIT_PROFILE_STOP = [
     "proof_points:",
     "key_recommendations:",
     "management_evidence:",
+    # Bounds fixed_credentials above; it is the last top-level key, so
+    # without a stop the trim would run to end of file and quietly grow
+    # what every evaluation sends.
+    "voice_calibration_example:",
 ]
 
 
