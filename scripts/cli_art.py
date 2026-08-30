@@ -1091,6 +1091,10 @@ _WARNING_KIND_LABELS = {
     "config": "misconfigured",
     # From scan_boards.py's own description-quality check (B36).
     "thin_description": "thin description",
+    # From scan_boards.warn_on_zero_yield(). Distinct from the failure
+    # kinds above on purpose: nothing errored, the provider simply
+    # produced nothing, which is how a dead board actually presents.
+    "zero_yield": "no postings (board may be dead)",
 }
 
 
