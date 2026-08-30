@@ -243,7 +243,11 @@ _TRAVEL_PCT_RE = re.compile(
 _NOT_A_TRAVEL_PCT = re.compile(
     r"^\s*(medical|dental|vision|health|coverage|covered|paid|match(?:ing)?|"
     r"remote|onsite|on-site|employer|401|premium|salary|equity|bonus|"
-    r"of\s+(?:our|the)\s+)",
+    # "of our/the ..." catches benefits language ("100% of our medical
+    # premium"), but must NOT catch "60% of the time" -- which is the
+    # single most common way a posting states travel in plain English.
+    # Found by the settings round-trip test, not by reading.
+    r"of\s+(?:our|the)\s+(?!time\b))",
     re.I,
 )
 

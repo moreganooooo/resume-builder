@@ -170,5 +170,27 @@ class TestUnicodeIconsAreTextNotEmoji(unittest.TestCase):
         )
 
 
+class TestIconSetsAgree(unittest.TestCase):
+    """Every icon name must exist in BOTH sets.
+
+    questionary_icon_tuple() falls back to returning the NAME as the
+    label when a key is missing, so a unicode-only key renders the
+    literal word "location" in the menu for anyone on the default Nerd
+    Font set -- visible only to them, and never in a test run, which
+    resolves to the unicode set. That is exactly how "location" shipped
+    that way.
+    """
+
+    def test_nerd_and_unicode_cover_the_same_names(self):
+        self.assertEqual(
+            set(theme._NERD_ICONS),
+            set(theme._UNICODE_ICONS),
+            "an icon defined in only one set renders as its own name",
+        )
+
+    def test_every_icon_has_a_color(self):
+        self.assertEqual(set(theme._UNICODE_ICONS), set(theme._ICON_COLORS))
+
+
 if __name__ == "__main__":
     unittest.main()

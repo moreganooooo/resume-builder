@@ -101,6 +101,17 @@ class TestStatedTravelPercent(unittest.TestCase):
             cf.stated_travel_percent("Occasional travel, up to 40% at peak"), 40
         )
 
+    def test_of_the_time_is_a_travel_figure(self):
+        """The benefits veto used to swallow the commonest phrasing there is."""
+        self.assertEqual(cf.stated_travel_percent("Travel up to 60% of the time"), 60)
+
+    def test_the_benefits_veto_still_holds_for_of_our(self):
+        self.assertIsNone(
+            cf.stated_travel_percent(
+                "Some travel. We cover 100% of our medical premium"
+            )
+        )
+
     def test_silence_is_none_not_zero(self):
         """None means unstated; 0 means the posting said "no travel"."""
         self.assertIsNone(cf.stated_travel_percent("Great team, remote first."))
