@@ -887,3 +887,96 @@ field that is present and wrong is more dangerous than one that is
 missing, because coverage metrics look healthy while the filter reads
 garbage. Every field mapping added under this spec must be validated
 against **observed values**, not against the field's name.
+
+### v6 → v7: re-sequenced against the corpus, not the providers
+
+Every measurement to this point was about **provider field
+availability**. None of it asked the prior question: how many of the
+user's own roles would any of these filters actually catch? Measured
+over 2,510 jobs (descriptions extracted from the JSON blob in
+`jobs.raw_text`, HTML stripped — reading that column directly mixes
+`_evaluation` scores into the text):
+
+| Signal | Count | Share |
+| --- | --- | --- |
+| title says part-time | 12 | 0.5% |
+| body mentions part-time | 35 | 1.4% |
+| title says contract/freelance/temporary | 52 | 2.1% |
+| **title has manager/director/lead/VP signal** | **1,241** | **49%** |
+| body has a salary figure | 694 | 32% |
+
+**This inverts the build order.** Employment type is the one attribute
+Stage 1 can gate on reliably — and it is the least valuable of the
+three, because this corpus is essentially all full-time. Role track
+splits the corpus nearly in half, and it is the only one with no
+deterministic path. The provider investigation built the most confidence
+in the filter with the smallest payoff.
+
+Revised order: **role track → salary → employment type.** Employment
+type stays in scope; it is simply no longer first.
+
+Note also that only **78** of the 1,241 manager-signal titles carry
+corroborating body evidence of direct reports. 94% of manager-sounding
+titles say nothing about reports anywhere in the posting — which is the
+quantitative form of "every sampled Manager was an IC marketing role".
+
+### The Stage-1 employment gate biases the corpus, it does not merely under-filter
+
+Greenhouse publishes employment type on **0%** of postings and is the
+largest source (453 rows); ashby, lever, and workday publish it at
+~100%. A scan-time gate therefore passes everything from greenhouse
+untouched while filtering everything from the others. The surviving
+corpus tilts toward one provider for reasons unrelated to the user's
+criteria. Exclusion-only semantics reduce the damage but do not remove
+it — this must be stated in the UI wherever the gate is enabled, not
+just in code.
+
+### The holdout comes before the classifier
+
+`scripts/build_role_track_holdout.py` draws a blind, stratified sample
+for hand-labeling. It exists because the ≥90%-precision bar was
+unresourced: nothing in v1–v6 said who produces the labels.
+
+Four strata, so precision is reported per band rather than pooled into
+one flattering number: `title+body` (78 in corpus), `title-only` (983 —
+the ambiguous band where errors will cluster), `body-only` (14 — an
+IC-sounding title with real reports described, the case a title
+heuristic misses entirely), and `neither` (1,060). Default draw is 40
+per stratum, 134 rows.
+
+Three properties are load-bearing and are enforced by tests:
+
+- **Blind.** No model prediction appears in the file. A labeler shown a
+  guess agrees with it, and a holdout that agrees with the model by
+  construction measures nothing.
+- **Order-shuffled across strata**, so position cannot be pattern-matched
+  in place of reading.
+- **Refuses to overwrite existing labels** without `--force`. The
+  expensive artifact is the human judgement in the file, not the file —
+  the same reasoning as `write_verified_ledger()`'s bail-out.
+
+`unclear` is an allowed label on purpose. If the posting genuinely does
+not say, the model cannot know either, and forcing those rows into a
+binary would score the classifier against noise.
+
+The holdout lives at `profiles/<name>/role_track_holdout.csv` — inside
+the profile, so it is gitignored and syncs with the rest of that
+profile's data rather than landing in the repo.
+
+**Gate:** if the classifier cannot clear the precision bar on the
+`title-only` band, the rest of this design does not matter, so that
+measurement happens before any UI or config work begins.
+
+### Operational fixes shipped alongside
+
+- **crunchboard disabled** in `scan_filters.yml` and its two tracked
+  entries, with the reason recorded inline. It was still being scanned
+  every run against a feed that redirects to a marketing homepage.
+- **Zero-yield alarm** (`scan_boards.warn_on_zero_yield()`). A provider
+  that exits 0 and returns `[]` emitted no warning of any kind, which is
+  the only reason crunchboard and ycombinator stayed dead and enabled
+  and unnoticed. The alarm is deliberately whole-provider, not per-entry:
+  one tracked entry whose `search_term` matches nothing this week is
+  ordinary, while zero across every entry is the shape a dead upstream
+  actually takes. The warning names the provider and the exact
+  `probe_provider_fields.py` command to confirm it.
