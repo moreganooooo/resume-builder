@@ -238,6 +238,26 @@ def _location_filter_label() -> str:
         return ""
 
 
+def _content_filter_label() -> str:
+    """Current language/travel settings, shown inline for the same reason
+    the radius is: a filter you cannot see is one you forget you set."""
+    try:
+        import content_settings
+
+        return f"({content_settings.describe(content_settings.read_settings())})"
+    except Exception:
+        return ""
+
+
+def _handle_manage_content_filters() -> bool:
+    """Settings & Upkeep -> Language & Travel Limits."""
+    import content_settings
+
+    content_settings.run_content_settings()
+    _pause_and_return()
+    return True
+
+
 def _handle_discover_employers() -> bool:
     """Settings & Upkeep -> Discover Local Employers with ATS Boards.
 
@@ -317,6 +337,12 @@ def _build_settings_upkeep_choices() -> list:
                 "location", f"↳ Location & Commute Radius {_location_filter_label()}"
             ),
             value="manage_location",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "filter", f"↳ Language & Travel Limits {_content_filter_label()}"
+            ),
+            value="manage_content_filters",
         ),
         questionary.Choice(
             title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
@@ -1792,6 +1818,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_location":
             _handle_manage_location()
+            continue
+        if choice == "manage_content_filters":
+            _handle_manage_content_filters()
             continue
         if choice == "discover_employers":
             _handle_discover_employers()
