@@ -400,3 +400,34 @@ class TestMultiSelectWorkplaceModes(unittest.TestCase):
         )
         self.assertTrue(verdict.passes)
         self.assertEqual(verdict.workplace, lf.HYBRID)
+
+
+class TestOfficeSuffixLocations(unittest.TestCase):
+    """A workday-style office suffix must not defeat the radius.
+
+    Measured on this profile's own corpus: "New York, NY - 8th Avenue"
+    (and 24 other rows in that shape) resolved to nothing, so the radius
+    could not judge them and every one was kept as "not resolvable".
+    That is the right default for a genuinely unknown location and the
+    wrong outcome for one that names its city plainly.
+    """
+
+    def test_office_suffix_is_measured_not_waved_through(self):
+        verdict = lf.evaluate_location("New York, NY - 8th Avenue", cfg())
+        self.assertFalse(verdict.passes)
+        self.assertIsNotNone(verdict.distance_miles)
+
+    def test_a_commutable_office_suffix_still_passes(self):
+        verdict = lf.evaluate_location("Kansas City, MO - Crown Center", cfg())
+        self.assertTrue(verdict.passes)
+        self.assertLess(verdict.distance_miles, 25)
+
+    def test_remote_parenthetical_short_circuits_before_the_radius(self):
+        """Resolving the city must not start excluding remote roles.
+
+        "San Francisco, CA (Remote)" now resolves to a point 1,500 miles
+        away; it passes because workplace is decided first.
+        """
+        verdict = lf.evaluate_location("San Francisco, CA (Remote)", cfg())
+        self.assertTrue(verdict.passes)
+        self.assertEqual(verdict.workplace, lf.REMOTE)

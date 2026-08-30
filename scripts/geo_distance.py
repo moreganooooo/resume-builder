@@ -195,6 +195,42 @@ def get_city_centroid(city: str, state: str) -> list | None:
     return _city_index().get(f"{city.strip().lower()},{state_key}")
 
 
+def _strip_state_qualifier(state: str) -> str:
+    """Drop a trailing qualifier appended after the state code.
+
+    Workday emits its locationsText as "New York, NY - 8th Avenue" (the
+    office, not the city), and other providers append a parenthetical:
+    "New York, NY (Hybrid)". Both left the state token unrecognizable, so
+    the whole string resolved to None and landed in the permissive
+    "unresolvable, keep for review" bucket -- silently defeating the
+    radius on postings whose city was stated plainly. Same failure mode
+    as adzuna's "Buffalo, Erie County".
+
+    Deliberately narrow: only a SPACED dash or a parenthetical is
+    stripped, so hyphenated place names ("Winston-Salem", "Wilkes-Barre")
+    are untouched. The result still has to survive get_city_centroid, so
+    a wrong strip yields None rather than a wrong point.
+
+    The punctuation strip alone is not enough, because callers reach here
+    through location_filter.strip_workplace_tokens(), which has already
+    removed the dash -- leaving "NY 8th Avenue". So an unrecognized state
+    token falls back to its LEADING state name or code, longest match
+    first ("New York 8th Avenue" -> "New York", not "New").
+    """
+    state = re.sub(r"\s*\([^)]*\)\s*$", "", state)
+    state = re.sub(r"\s+[-–—]\s+.*$", "", state).strip()
+
+    key = state.lower()
+    if key in _STATE_NAMES or key in _STATE_CODES:
+        return state
+    words = state.split()
+    for size in (3, 2, 1):
+        head = " ".join(words[:size]).lower().strip(".,")
+        if len(words) > size and (head in _STATE_NAMES or head in _STATE_CODES):
+            return head
+    return state
+
+
 def resolve_location(text: str) -> list | None:
     """Best-effort single-point resolution of one location string.
 
@@ -236,6 +272,7 @@ def resolve_location(text: str) -> list | None:
                 return None
         # A state field can carry a trailing ZIP: "Austin, TX 78701".
         state = re.sub(r"\s*\d{5}(?:-\d{4})?$", "", state).strip()
+        state = _strip_state_qualifier(state)
         return get_city_centroid(city, state)
 
     return None
