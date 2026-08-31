@@ -117,10 +117,19 @@ class RoleAttributes(BaseModel):
                     "['unknown'] when the posting does not say")
     role_track: Literal["ic","manager","player_coach","unknown"] = Field(
         description="IC vs. people-manager. 'player_coach' when the role "
-                    "both manages people and does the work. Judge by stated "
-                    "responsibilities and direct reports, NEVER by the word "
-                    "'Manager' in the title -- in marketing and operations "
-                    "that word denotes scope, not reports.")
+                    "both manages people and does the work. Judge ONLY by "
+                    "stated responsibilities and direct reports, NEVER by "
+                    "the word 'Manager' in the title -- in marketing and "
+                    "operations that word denotes scope, not reports. "
+                    "Measured on this corpus: of 49 postings whose only "
+                    "manager signal was the title, ZERO were people "
+                    "managers. "
+                    "Return 'unknown' whenever the body does not say who "
+                    "reports to whom -- that is the correct answer for "
+                    "about 40% of postings, not a failure to try. "
+                    "A role that says direct reports will come LATER "
+                    "('no reports initially', 'you will build the team') "
+                    "is 'manager', not 'ic'.")
     role_track_confidence: Literal["high","medium","low"]
     role_track_evidence: str = Field(
         description="The phrase from the posting that decided it; "
@@ -139,6 +148,66 @@ cheaply.
 The negative instruction in `role_track`'s description is written
 directly from finding (a) — the model has the same title bias the regex
 did, and must be told.
+
+#### What the labeled holdout changed: `role_track` is a SORT, not a GATE
+
+81 of 134 holdout rows are now labeled by hand. The result is not the
+one this section was originally written for:
+
+| Stratum | ic | manager | unclear | total |
+| --- | --- | --- | --- | --- |
+| title + body signal | 2 | 18 | 2 | 22 |
+| body signal only | 5 | 2 | 3 | 10 |
+| title signal only | 8 | **0** | 17 | 25 |
+| neither | 12 | **0** | 11 | 24 |
+
+Three findings, each of which changes a decision:
+
+**(1) 41% of labeled rows are `unclear` — to a human reading the whole
+posting.** That is not classifier error to be tuned away; it is the
+corpus. A posting that never says who reports to whom cannot be
+resolved by anything, and a model asked to produce a verdict there will
+produce a confident one anyway. So `unknown` in the schema is not a
+degenerate case to be minimized: **it is the expected answer for roughly
+two of every five postings**, and the prompt must say so explicitly, or
+the model will fill the gap with a title-derived guess — the exact bias
+the field exists to avoid.
+
+**(2) Title carries no signal whatsoever.** 49 rows fell in the
+title-only and neither strata; **zero** are people managers. Every one
+of the 20 managers found so far had body evidence. Rule of three gives a
+95% upper bound near 6% on a manager hiding in a title-only row. The
+existing negative instruction was a reasonable guess; it is now a
+measured fact and should be stated in the prompt as one.
+
+**(3) "No direct reports initially" was labeled `manager`, twice,
+consistently.** A role that will build a team is a management role that
+has not started yet. A naive classifier reads that phrase as the
+strongest possible IC evidence and gets it exactly backwards. This goes
+in the field description verbatim.
+
+The consequence for the whole feature: **`role_track` must not become an
+exclusion gate at parity with location or travel.** Those gates act on
+facts a posting states plainly; this one acts on a fact 41% of postings
+withhold. Enforcement is therefore restricted to a narrow band —
+
+* `manager` **and** `role_track_confidence == "high"` **and**
+  `role_track_evidence` non-empty → excludable, if the user opts in.
+* everything else, `unknown` included, is **kept** and used only to
+  sort, exactly as an unresolvable location is kept for review.
+
+That asymmetry is the same one the rest of this document is built on,
+and here it is doing more work than anywhere else: excluding on
+`unknown` would silently drop ~40% of the corpus on no evidence.
+
+**Holdout labeling: the remaining rows are not worth the same.** 31 of
+the 53 unlabeled rows sit in the two strata that produced zero managers
+in 49 tries. The 22 rows in `title+body` and `body-only` are where the
+disagreements will be, and are the ones to finish first. The label
+vocabulary also needs `n/a` accepted by the validator — one row (an
+in-person retail role) is genuinely neither, and forcing it into `ic` or
+`manager` would put a wrong label in the ground truth to satisfy a
+schema.
 
 ### Stage 3 — Rescore: turn criteria into a preference gradient
 
@@ -980,3 +1049,52 @@ measurement happens before any UI or config work begins.
   ordinary, while zero across every entry is the shape a dead upstream
   actually takes. The warning names the provider and the exact
   `probe_provider_fields.py` command to confirm it.
+
+### v7 → v8: the classifier answers to labeled data now, not to a hypothesis
+
+Everything before this revision reasoned about `role_track` from corpus
+*statistics* — how many titles carry a manager word, how many bodies
+corroborate. v8 is the first version informed by rows a human actually
+read and labeled (81 of 134), and it moved one decision that the
+statistics alone would have gotten wrong.
+
+**`role_track` is demoted from a gate to a sort**, enforceable only on
+`manager` + `high` confidence + non-empty evidence. The reason is in the
+new Stage 2 subsection: **41% of labeled rows are `unclear to a human
+reading the entire posting`.** A statistic about title words cannot
+surface that, because it counts what postings say, and the finding is
+about what they leave out. Filtering on a field that is legitimately
+unknowable four times in ten would have quietly removed a large share of
+the corpus while reporting a healthy precision number on the small share
+it could resolve.
+
+Two smaller corrections, both from rows rather than counts:
+
+* The negative title instruction graduated from a reasonable prior to a
+  measurement: **0 managers in 49 title-only and no-signal rows.**
+* "No direct reports initially" means **manager**. Labeled that way
+  twice, consistently. A classifier left to itself reads that phrase as
+  the strongest IC evidence in the posting and inverts the answer.
+
+Also: the holdout validator must accept `n/a`. One row is an in-person
+retail role that is neither track, and a schema that will not represent
+it buys its own tidiness with a wrong label in the ground truth.
+
+The remaining unlabeled rows are explicitly **not** of equal value: 31
+of 53 sit in strata that produced zero managers in 49 tries. Finish the
+22 rows with body signal first.
+
+### Shipped since v7 (not part of the attribute work, same sequence)
+
+The two filters that were cheapest and most certain are done and live,
+which is why they appear here rather than in the plan:
+
+- **Language and travel gates** (`scripts/content_filters.py`), wired
+  into `scan_boards._passes_content_filters()` and reached by both
+  scanners. Deliberately NOT added to `prefilter.py`, which is reached
+  only from `batch_sweeper.py` — itself called by nothing but its own
+  test, so a filter placed there would have passed its tests and never
+  run once.
+- **A Settings editor for both** (`scripts/content_settings.py`),
+  modeled on `location_settings.py`, so a personal constraint is not
+  configured by hand-editing YAML.
