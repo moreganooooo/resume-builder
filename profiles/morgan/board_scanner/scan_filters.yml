@@ -24,6 +24,16 @@ location:
   - hybrid
   - remote
   zip: '14068'
+# Body-text gates (scripts/content_filters.py). Both are exclusion-only
+# and both keep anything they cannot classify.
+# languages: ISO codes you can actually work in. Postings detected as
+#   another language are dropped; 3 of 2,135 in the current corpus.
+# max_travel_percent: ceiling on a STATED travel requirement. Postings
+#   that state no figure are always kept, so this acts on ~3.5% of the
+#   corpus at 10%. Remove the key to disable.
+languages:
+- en
+max_travel_percent: 10
 location_filter:
   always_allow:
   - Remote

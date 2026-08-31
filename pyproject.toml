@@ -59,6 +59,23 @@ warn_unused_configs = true
 ignore_missing_imports = true
 exclude = ["dashboard"]
 
+[tool.pyright]
+# Pyright is not part of this project's checks -- mypy above is, and the
+# pre-commit hooks are black/isort/bandit/yamllint/codespell. It runs only
+# because an editor turns it on, and against this codebase it reports
+# almost entirely false positives: scripts/ is imported via a sys.path
+# insert rather than as a package (so every `import profile_paths` reads
+# as unresolved), and pandas/questionary/rich stubs disagree with real
+# runtime behaviour.
+#
+# Left at "off" rather than deleted so the setting is visible and
+# reversible: turn it to "basic" if you ever want to work through the
+# backlog deliberately, instead of having it narrate on every edit.
+typeCheckingMode = "off"
+reportMissingImports = "none"
+extraPaths = ["scripts"]
+exclude = ["dashboard", ".venv", "node_modules"]
+
 [tool.pydocstyle]
 match_dir = "scripts"
 ignore = ["D100", "D104"]
@@ -77,5 +94,10 @@ version = "0.1.0"
 tag_format = "$version"
 
 [tool.codespell]
-skip = "*.json,*.csv,*.db,*.pyc,*.pycache,node_modules"
+# content_filters.py is skipped because it carries German, Spanish,
+# French and Portuguese function words as DATA, several of which
+# codespell reads as misspelled English. Skipping the one file is
+# narrower than adding them to ignore-words-list, where they would also
+# mask real typos in English prose everywhere else.
+skip = "*.json,*.csv,*.db,*.pyc,*.pycache,node_modules,scripts/content_filters.py"
 ignore-words-list = "datas,nd,sav"
