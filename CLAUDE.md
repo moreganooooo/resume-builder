@@ -768,3 +768,47 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   it. Widening the retry-time metric inventory to fire on widow
   violations was tried and reverted on 2026-08-12 — the model started
   deleting bullets to dodge collisions, breaking per-role minimums.
+- **A posting's body is full of money that is not the salary
+  (`scripts/compensation.py`).** Taking the first dollar figure in a body
+  was measured against the real 1,761-body corpus at a $40,000 floor and
+  rejected 99 postings — essentially all of them benefits ($50 monthly
+  internet stipend, $2,000 professional-development stipend, $4,000
+  travel allowance). Same inverted signal that ruled out
+  keyword-detecting unpaid work (241 hits for "unpaid"/"volunteer"/
+  "stipend" in that corpus, **zero** true positives — "volunteer" is the
+  company's volunteering program, and the one "unpaid" is "paid and
+  unpaid time away from work"). A figure now counts only when
+  `_PAY_ANCHOR` matches its ±60-char window and `_BENEFIT_NEAR` does
+  not. Two traps: the period-word scan must take the NEAREST cue, not
+  the first in list order (a salary near "20-25 hours per week"
+  annualized $95,000 to $4.9M); and a provider's salary FIELD needs
+  `require_anchor=False`, since ashby's "$100K – $130K" tier summary
+  carries no sentence to anchor against. Compare against the MAX, never
+  the min — a $30-95K band clears a $40K floor. Pay is an EMPLOYER
+  property (0–100% coverage within a single provider), unlike employment
+  type, so there is no provider-level salary expectation and
+  `require_stated` defaults off: a floor narrows the ~27% that disclose,
+  not the list. `describe_bias()` exists so the UI says that out loud.
+- **Weekly hours refine part-time; they do not filter the corpus
+  (`scripts/work_hours.py`).** Only 2.3% of postings state hours, but
+  **27% of part-time ones do**, and the values cluster exactly on the
+  distinction that matters (10-20 vs 24-30 vs 40). The dominant false
+  positive is duration, not schedule — "respond within 24 hours", "48
+  hours notice", "40 hours of PTO" — so a match REQUIRES an explicit
+  weekly unit; that is what makes a number a schedule. Comparison is
+  OVERLAP, not containment: a 10-30 hour posting satisfies a 20-40 want,
+  and requiring containment would reject every flexible role. An
+  open-ended bound stays open — "up to 25 hours" says nothing about the
+  floor, and filling one in invents a fact the posting never stated.
+- **`jd_manager.save_evaluation` is an ALLOWLIST, not a copy.** A key the
+  model produces and `orchestrator` assembles is silently discarded
+  unless it is named there. That is what happened to `capability_gaps`
+  for its entire existence: `CapabilityEvaluationSchema` required it,
+  orchestrator injected it, and **0 of 1,138** evaluated JDs on disk
+  carried it. Anything added to an evaluation schema needs a line in that
+  dict too — `tests/test_compensation.py` asserts every
+  `CapabilityEvaluationSchema` field appears in the writer. Existing
+  evaluations cannot be backfilled for a field that was never saved.
+  Experience gaps render BELOW and separate from hard blockers in the
+  Jobs detail pane: a gap is something to address in an application, a
+  blocker is a reason not to apply, and one merged list conflates them.
