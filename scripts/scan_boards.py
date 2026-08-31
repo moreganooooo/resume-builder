@@ -48,6 +48,7 @@ import re
 import subprocess
 
 import cli_art
+import content_filters
 import location_filter
 import profile_paths
 import requests
@@ -162,6 +163,25 @@ def _passes_title_filter(title: str) -> bool:
     if any(k in lower for k in negative):
         return False
     return True
+
+
+def _passes_content_filters(description: str) -> bool:
+    """The single BODY-text gate for both scanners, beside the location one.
+
+    Runs after the description has been resolved, which is the earliest
+    point it exists -- the title/location gates deliberately run before
+    that, so a posting rejected on title never pays for a detail fetch.
+
+    Inert unless scan_filters.yml configures `languages:` or
+    `max_travel_percent:`, matching how `location:` works: adopting a
+    body filter is a deliberate act, not a default that quietly reshapes
+    the corpus.
+    """
+    filters = _load_filters()
+    passes, reason = content_filters.evaluate_content(description, filters)
+    if not passes:
+        logging.info(f"scan_boards: rejected on content -- {reason}")
+    return passes
 
 
 def _passes_location_filter(location: str, **posting) -> bool:
@@ -595,6 +615,8 @@ def fetch_board_jobs(
                 if raw_description
                 else _fetch_posting_text(url, provider_id)
             )
+            if not _passes_content_filters(description):
+                continue
 
             job = {
                 "job_title": title,
