@@ -1169,3 +1169,83 @@ third filter from the labeling notes -- experience prerequisites the
 candidate does not hold -- is unspecced; the raw material is
 `evaluate_capability`'s `capability_gaps`, which is computed and then
 surfaced nowhere.
+
+## v9 -> v10: pay, weekly hours, and experience gaps -- SHIPPED
+
+All three of the "still open" items above landed on 2026-08-31. The
+salary gate did NOT need `scoring_version` after all: that dependency
+came from an assumption it would rescore existing evaluations, and it
+does not. It filters at scan time and displays what was already there.
+
+### Pay: an anchor requirement, discovered by measurement
+
+The naive parser -- first dollar figure in the body -- was built, run
+against the real 1,761-body corpus at a $40,000 floor, and REJECTED. It
+dropped 99 postings and essentially every rejection was a benefit: a $50
+monthly internet stipend, a $2,000 professional-development stipend, a
+$4,000 travel allowance. It would have discarded real jobs for
+advertising their perks.
+
+This is the same inverted signal that killed keyword-detecting unpaid
+work (v8), and it is worth naming as a pattern: **a job posting's body
+is full of money that is not the salary.** A figure now counts only when
+pay language sits near it and benefit language does not. After the fix,
+472 of 1,761 bodies (26.8%) state pay and 14 (0.8%) are rejected -- and
+all 14 are genuine low-wage roles ($14-$19/hr retail and reception).
+
+Two further bugs the corpus exposed, both invisible in unit tests:
+
+- **List order beat proximity in period detection.** The +/-60 char
+  window reaches a neighbouring sentence, so a posting stating "$80,000
+  - $95,000 per year" near "20-25 hours per week" had both cues in
+  range. `_PERIOD_WORDS` order picked weekly and annualized $95,000 to
+  $4.9M. The nearest cue now wins.
+- **A provider's salary FIELD needs no anchor.** Ashby's tier summary is
+  "$100K - $130K" with no sentence at all, so the anchor rule -- correct
+  for prose -- rejected every structured free-text field.
+  `parse_compensation(require_anchor=False)` is the field path.
+
+### Hours: a refinement, not a filter
+
+Only 2.3% of all postings state weekly hours, but **27% of part-time
+ones do**, and the observed values (10-20, 19, 20, 20-25, 24, 24-30, 25,
+30, 35-40, 40) land exactly on the distinction that motivated this: a
+5-10 hour role and a 30-hour role are both "part_time" to every provider
+schema.
+
+The dominant false positive is duration, not schedule -- "respond within
+24 hours", "48 hours notice", "40 hours of PTO". A match therefore
+REQUIRES an explicit weekly unit; that is what makes a number a schedule.
+
+Because 2% is too thin to filter on, this ships detected and displayed
+but with no bound configured for this profile. Seeing the hours is the
+feature; filtering on them is available and opt-in.
+
+### Experience prerequisites: the field existed and was being thrown away
+
+`capability_gaps` was required by `CapabilityEvaluationSchema` and
+assembled by orchestrator, yet 0 of 1,138 evaluated JDs on disk carried
+it. `jd_manager.save_evaluation` copies an explicit ALLOWLIST of keys,
+and it was never named there -- produced on every evaluation, discarded
+on every save. Now persisted, and rendered in the Jobs detail pane as
+"Experience gaps", deliberately BELOW and separate from "Hard blockers":
+a gap is something to address in an application, a blocker is a reason
+not to apply, and one merged list would make the first look like the
+second.
+
+`tests/test_compensation.py` asserts every field of that schema appears
+in the writer, since the allowlist is the trap.
+
+**Existing evaluations do not gain the field retroactively** -- it was
+never saved, so there is nothing to backfill. Gaps appear on JDs
+evaluated from now on.
+
+### Still open
+
+- Pay is exported and filterable by DISCLOSURE (`[$]` in Browse & Manage
+  Jobs), but there is no sort-by-pay; `PayAnnualMax` exists to support
+  one.
+- The evaluation scoring does not reward a role for clearing the pay
+  floor or matching an hours preference. Both are gates, not signals.
+- `workable.mjs`'s left-indexing assumption and `powertofly.mjs`'s
+  company/description mapping are still unfixed from the v7 audit.

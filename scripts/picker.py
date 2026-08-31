@@ -11,11 +11,13 @@ import sys
 
 import batch_evaluate
 import cli_art
+import compensation
 import employment_type
 import jd_manager
 import location_filter
 import questionary
 import theme
+import work_hours
 
 # Sourced from theme.py so picker.py's checkbox list and cli_art.py's fit
 # table are provably one palette -- see theme.RECOMMENDATION_STYLES for
@@ -400,6 +402,35 @@ def _employment_fields(data: dict) -> dict:
     }
 
 
+def _compensation_fields(data: dict) -> dict:
+    """The posting's pay and weekly hours, for display and filtering.
+
+    Both are recovered the same way the scan-time gates recover them:
+    the provider's structured field when it published one, otherwise the
+    body prose. Doing it here rather than storing it at scan time means
+    postings collected before this existed get the fields too, without a
+    backfill.
+
+    Amounts are annualized so the UI can sort one column. `pay_text` keeps
+    the posting's own phrasing ("$25/hr"), because an annualized $52,000
+    is a number the posting never said and showing only that would look
+    like the app inventing a salary.
+    """
+    parsed = compensation.normalize_structured(
+        data.get("compensation")
+    ) or compensation.parse_compensation(data.get("description") or "")
+    hours = work_hours.parse_hours(data.get("description") or "")
+    return {
+        # None, never 0 -- same rule as distance_miles. A zero would sort
+        # as the lowest-paying job rather than as an unknown.
+        "pay_annual_max": parsed.get("annualized_max") if parsed else None,
+        "pay_text": parsed.get("text") if parsed else "",
+        "hours_min": hours.get("min") if hours else None,
+        "hours_max": hours.get("max") if hours else None,
+        "hours_text": hours.get("text") if hours else "",
+    }
+
+
 def _location_fields(data: dict, settings: dict) -> dict:
     """Location, workplace mode, and distance for one JD's export row.
 
@@ -485,6 +516,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
                     **_employment_fields(jd_data),
+                    **_compensation_fields(jd_data),
                 }
             )
     if "Completed" in statuses:
@@ -524,6 +556,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
                     **_employment_fields(jd_data),
+                    **_compensation_fields(jd_data),
                 }
             )
     if "Pending" in statuses:
@@ -622,6 +655,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 "posted_date": jd_manager.compute_posting_date(job_id),
                 **_location_fields(data, settings or {}),
                 **_employment_fields(data),
+                **_compensation_fields(data),
             }
         )
     return extra

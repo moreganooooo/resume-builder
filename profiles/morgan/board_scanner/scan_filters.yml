@@ -640,3 +640,18 @@ title_filter:
   - Sales Operation
   - RevOps
   - Revenue Operations
+# Casting a wide net while ruling out unpaid work. The two floors are one
+# bar written two ways; the LOWER of them applies ($40,000, just under
+# $20 x 2080). Only about 27% of postings state pay at all, and the rest
+# are always kept -- so this trims the disclosing minority rather than
+# the whole list.
+#
+# No min/max_hours_per_week is set on purpose: only ~2% of postings state
+# weekly hours, so a bound here would mostly do nothing while risking
+# dropping a good role that simply didn't say. The hours are DETECTED and
+# shown either way ([$] and the detail pane in Browse & Manage Jobs), so
+# a 10-hour part-time role is now distinguishable from a 30-hour one by
+# eye before committing to a filter.
+compensation:
+  annual_floor: 40000
+  hourly_floor: 20

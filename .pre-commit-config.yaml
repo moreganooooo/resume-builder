@@ -71,10 +71,12 @@ repos:
         # Health Records in domain research; "bu" is Business Unit; "hims"
         # is the company Hims & Hers Health. "countr" is a regex stem
         # (eligible countr\w+); "alllocations" is lever.mjs's allLocations.
+        # "hsa" is the US Health Savings Account, in compensation.py's
+        # list of benefit words that must NOT be read as salary.
         args:
           [
             "--skip=*.json,*.csv,*.db,*.pyc,*.rtf,*.html",
-            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment",
+            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa",
           ]
 
   # General linting

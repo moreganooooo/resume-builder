@@ -54,6 +54,15 @@ type JobsModel struct {
 	// that one is separate from `filter`: "part-time AND on-site" is a
 	// real question, and a single combined cycle could not ask it.
 	employmentFilter string
+
+	// payFilter narrows by whether pay was DISCLOSED, not by amount.
+	// Amount is already enforced at scan time by the configured floor, so
+	// a second amount filter here would only re-ask a question already
+	// answered. What the list cannot otherwise show is which rows the
+	// floor could act on at all: roughly three quarters state no pay and
+	// are kept unconditionally, so "cleared your floor" and "never said"
+	// look identical in a row. "" means no restriction.
+	payFilter string
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort  bool
@@ -272,6 +281,16 @@ func (m *JobsModel) applyFilter() {
 			continue
 		}
 
+		// Narrow by pay disclosure. Note the asymmetry with the filters
+		// above: "unstated" is a legitimate thing to ask FOR here, since
+		// those rows are exactly the ones a pay floor could not judge.
+		if m.payFilter == "stated" && !r.HasStatedPay() {
+			continue
+		}
+		if m.payFilter == "unstated" && r.HasStatedPay() {
+			continue
+		}
+
 		// Apply search query within the active filter
 		if !matchesJobSearch(r, m.searchQuery) {
 			continue
@@ -481,6 +500,31 @@ var employmentFilterCycle = []string{
 	"contract_to_hire",
 	"temporary",
 	"internship",
+}
+
+// nextPayFilter cycles the [$] pay-disclosure modes, same convention as
+// [w] and [e]: "" is in the cycle, so pressing it repeatedly always
+// returns to showing everything.
+func nextPayFilter(current string) string {
+	for i, value := range payFilterCycle {
+		if value == current {
+			return payFilterCycle[(i+1)%len(payFilterCycle)]
+		}
+	}
+	return ""
+}
+
+var payFilterCycle = []string{"", "stated", "unstated"}
+
+// payFilterLabel names the active [$] mode for the status bar.
+func payFilterLabel(current string) string {
+	switch current {
+	case "stated":
+		return "pay stated"
+	case "unstated":
+		return "pay not stated"
+	}
+	return ""
 }
 
 // employmentFilterLabel names the active [e] mode for the status bar.
@@ -1107,6 +1151,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.employmentFilter = nextEmploymentFilter(m.employmentFilter)
 			m.cursor = 0
 			m.applyFilter()
+		case "$":
+			m.payFilter = nextPayFilter(m.payFilter)
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1503,6 +1551,9 @@ func (m JobsModel) renderHeader() string {
 	if m.employmentFilter != "" {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " " + employmentFilterLabel(m.employmentFilter))
 	}
+	if m.payFilter != "" {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " " + payFilterLabel(m.payFilter))
+	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
 	}
@@ -1755,6 +1806,19 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, styles.Subtext.Render(
 			m.theme.Icons.Filter+" "+truncateRunes(label, wrapWidth-2)))
 	}
+	// The posting's own wording, not the annualized number -- see
+	// JobRow.PayText. Blank when unstated, which is most postings.
+	if label := job.PayLabel(); label != "" {
+		content = append(content, styles.Subtext.Render(
+			"$ "+truncateRunes(label, wrapWidth-2)))
+	}
+	// Shown for the few postings that state a schedule. This is what
+	// separates a 10-hour part-time role from a 30-hour one, which the
+	// employment type above cannot express.
+	if label := job.HoursLabel(); label != "" {
+		content = append(content, styles.Subtext.Render(
+			m.theme.Icons.Clock+" "+truncateRunes(label, wrapWidth-2)))
+	}
 	content = append(content, "")
 
 	// -- Scores --
@@ -1870,6 +1934,17 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, accent.Render("Hard blockers"))
 		for _, b := range eval.HardBlockers {
 			content = append(content, "  • "+b)
+		}
+	}
+	// Rendered separately from and below hard blockers, never merged
+	// with them: a gap is something to address in an application, a
+	// blocker is a reason not to apply, and showing them in one list
+	// would make an addressable gap look disqualifying.
+	if len(eval.CapabilityGaps) > 0 {
+		content = append(content, "")
+		content = append(content, accent.Render("Experience gaps"))
+		for _, g := range eval.CapabilityGaps {
+			content = append(content, "  • "+g)
 		}
 	}
 
