@@ -270,6 +270,12 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
     if not scan_boards._passes_location_filter(raw.get("location")):
         return None
+    # Before the description work below, which for ashby can mean a whole
+    # extra structured-posting fetch -- the type is already in hand.
+    if not scan_boards._passes_employment_filter(
+        raw.get("employment_type"), provider_id
+    ):
+        return None
 
     raw_description = raw.get("description") or ""
     location = raw.get("location") or ""
@@ -309,6 +315,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         "posted_at": raw.get("posted_at") or "",
         "description": description,
     }
+    if raw.get("employment_type"):
+        job["employment_type"] = raw["employment_type"]
     # Same carry as scan_boards.fetch_board_jobs -- a provider that
     # declares its text a teaser must not lose that across the rebuild.
     if raw.get("description_is_teaser"):

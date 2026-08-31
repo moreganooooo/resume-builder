@@ -239,7 +239,7 @@ def _location_filter_label() -> str:
 
 
 def _content_filter_label() -> str:
-    """Current language/travel settings, shown inline for the same reason
+    """Current employment/language/travel settings, shown inline for the same reason
     the radius is: a filter you cannot see is one you forget you set."""
     try:
         import content_settings
@@ -250,7 +250,7 @@ def _content_filter_label() -> str:
 
 
 def _handle_manage_content_filters() -> bool:
-    """Settings & Upkeep -> Language & Travel Limits."""
+    """Settings & Upkeep -> Role & Travel Limits."""
     import content_settings
 
     content_settings.run_content_settings()
@@ -340,7 +340,7 @@ def _build_settings_upkeep_choices() -> list:
         ),
         questionary.Choice(
             title=_icon_title(
-                "filter", f"↳ Language & Travel Limits {_content_filter_label()}"
+                "filter", f"↳ Role, Language & Travel Limits {_content_filter_label()}"
             ),
             value="manage_content_filters",
         ),

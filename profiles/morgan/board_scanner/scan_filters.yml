@@ -40,6 +40,18 @@ location:
 languages:
 - en
 max_travel_percent: 10
+# employment_type (scripts/employment_type.py): the kinds of work to
+#   accept. Unlike the two gates above this reads a STRUCTURED field the
+#   provider published rather than inferring from body text, so it runs
+#   before the description is even fetched. Exclusion-only and unknown is
+#   kept: Greenhouse never publishes the field, so anything from there
+#   passes regardless. Currently this only excludes internships.
+employment_type:
+- full_time
+- part_time
+- contract
+- contract_to_hire
+- temporary
 location_filter:
   always_allow:
   - Remote

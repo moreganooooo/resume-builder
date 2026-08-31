@@ -1098,3 +1098,74 @@ which is why they appear here rather than in the plan:
 - **A Settings editor for both** (`scripts/content_settings.py`),
   modeled on `location_settings.py`, so a personal constraint is not
   configured by hand-editing YAML.
+
+---
+
+## v8 -> v9: employment-type filtering, SHIPPED
+
+Built 2026-08-31, in full, on an explicit decision to build it despite
+the measured yield. The measurement said this profile accepts every type
+but internships, so the gate changes almost nothing about her current
+results; the decision was that a search tool should be able to express
+"part-time only" whether or not this user needs it today. Recorded here
+so the yield number is not later mistaken for a reason the feature was a
+mistake.
+
+### What shipped
+
+- **`scripts/employment_type.py`** -- the vocabulary and the gate. Kept
+  OUT of `content_filters.py` deliberately: that module infers from body
+  prose, this one reads a field the provider published. Different input,
+  different confidence, different stage.
+- **Provider mapping** in the seven sources the survey measured as
+  reliable -- ashby (`employmentType`), lever (`categories.commitment`),
+  jobicy (`jobType`), himalayas (`employmentType`), remotive
+  (`job_type`), smartrecruiters (`typeOfEmployment.label`), workable
+  (the markdown `Type` column). Each passes the value through in the
+  SOURCE'S OWN SPELLING; `_types.js` documents that as the contract.
+  Normalizing in 42 provider files would produce 42 slightly different
+  mappings, and would hide new spellings from the one place that logs
+  them.
+- **`scan_boards._passes_employment_filter()`**, with `scan_ats` routing
+  through it -- one chokepoint, as with location and content. It runs
+  BEFORE the description is fetched, unlike the content gate, which is
+  the practical payoff of gating on a published field: a rejected
+  posting never pays for a detail fetch (for ashby, a whole extra
+  structured-posting request).
+- **Settings editor**, folded into `content_settings.py`. The two kinds
+  of gate stay separate in code and share one screen, because they are
+  one question to the person answering them.
+- **Dashboard**: `employment_type` (canonical list) and
+  `employment_type_raw` on the export and on `model.JobRow`, an `[e]`
+  filter cycle on the Jobs screen beside `[w]`, and the type in the
+  detail pane.
+
+### Three decisions worth keeping
+
+**Multi-valued, not single.** `Full-time, Contract` is a posting offered
+as either, and it passes a `[contract]` filter. Collapsing it to one
+value would misrepresent the posting to the filter.
+
+**Unmapped values are LOGGED, not silently swallowed.** The vocabulary is
+unbounded free text -- lever's field is literally whatever the employer
+typed. A miss becomes an "unknown", and unknown is kept, so a silent miss
+means the filter quietly stops filtering as a provider's vocabulary
+drifts, with nothing looking broken. The log fires once per distinct
+value per process, and recognized non-type tokens ("On Site") are
+excluded from it so it does not cry wolf on every scan.
+
+**Employment type is a PROVIDER property; salary is an EMPLOYER
+property.** Coverage per provider has near-zero variance across boards
+(greenhouse 0/0/0%, lever 94/100/100%, ashby 100/100/100%) because it is
+in the schema. Salary spans 0-100% on every provider because it is in the
+employer's disclosure habit. That is why this gate can run at scan time
+and the salary work still cannot -- no provider-level salary expectation
+means anything.
+
+### Still open
+
+Salary remains Stage-3 work and still blocks on `scoring_version`. The
+third filter from the labeling notes -- experience prerequisites the
+candidate does not hold -- is unspecced; the raw material is
+`evaluate_capability`'s `capability_gaps`, which is computed and then
+surfaced nowhere.

@@ -65,6 +65,10 @@ export default {
         // content, not included in descriptionPlain -- confirmed live
         // against a real posting (2026-07-26).
         description: [j.descriptionPlain, j.additionalPlain].filter(Boolean).join('\n\n'),
+        // Employer-authored free text, not an enum: real values include
+        // "Full Time - Union" and "Full Time / On Site". Passed through
+        // verbatim for the same reason.
+        employment_type: j.categories?.commitment || '',
       }));
   },
 };

@@ -159,7 +159,11 @@ export function parseWorkableMarkdown(text, companyName) {
       continue;
     }
 
-    jobs.push({ title, url, location, company: companyName, _detailUrl: detailUrl });
+    // cols[4] is the "Type" column in the header comment above. Absent on
+    // shorter rows, which is fine -- the gate keeps an unstated type.
+    const employmentType = cols[4] || '';
+
+    jobs.push({ title, url, location, company: companyName, employment_type: employmentType, _detailUrl: detailUrl });
   }
   return jobs;
 }

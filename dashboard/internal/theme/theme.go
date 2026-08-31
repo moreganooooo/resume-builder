@@ -61,6 +61,7 @@ type Theme struct {
 		Clock    string
 		Graph    string
 		Location string
+		Filter   string
 
 		// Score* -- see icons.go's MenuIcons for the doc comment; field
 		// order/names must mirror that struct exactly for
