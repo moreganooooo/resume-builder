@@ -147,6 +147,33 @@ class TestLabelNormalization(unittest.TestCase):
         self.assertEqual(holdout.normalize_label("boss"), "")
         self.assertEqual(holdout.normalize_label(""), "")
 
+    def test_not_applicable_is_a_verdict(self):
+        """Some sampled roles have no IC/manager axis at all.
+
+        The sample is drawn from the whole corpus, so it catches things
+        like an in-person retail associate. Forcing one into "ic" to
+        satisfy a three-value vocabulary puts a WRONG label in the ground
+        truth the classifier is later measured against.
+        """
+        for spelling in ("n/a", "N/A", "na", "Not Applicable", "none"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(holdout.normalize_label(spelling), "n/a")
+
+    def test_slash_labels_survive_the_qualifier_split(self):
+        """The trap: "/" separates a qualifier AND lives inside "n/a".
+
+        Splitting before checking the whole string silently yields "n",
+        which is unrecognized, which reads as an unlabeled row -- so the
+        label would vanish rather than fail loudly.
+        """
+        self.assertEqual(holdout.normalize_label("n/a"), "n/a")
+        self.assertEqual(holdout.normalize_label("unclear/maybe ic"), "unclear")
+
+    def test_spelled_out_labels_are_accepted(self):
+        self.assertEqual(holdout.normalize_label("individual contributor"), "ic")
+        self.assertEqual(holdout.normalize_label("people manager"), "manager")
+        self.assertEqual(holdout.normalize_label("unsure"), "unclear")
+
 
 class TestHoldoutFile(unittest.TestCase):
     def test_written_file_is_blind(self):
