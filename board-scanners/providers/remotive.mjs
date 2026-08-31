@@ -25,6 +25,7 @@ export default {
         location: j.candidate_required_location || '',
         posted_at: j.publication_date || '',
         description: j.description || '',
+        employment_type: j.job_type || '',
       }));
   },
 };

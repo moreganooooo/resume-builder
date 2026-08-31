@@ -39,6 +39,63 @@ type JobRow struct {
 	// "zero miles away" -- a float64 would collapse the two and sort
 	// every unresolvable posting to the top of a distance sort.
 	DistanceMiles *float64 `json:"distance_miles"`
+
+	// EmploymentType is the canonical list from scripts/employment_type.py
+	// ("full_time", "part_time", "contract", ...). A posting can honestly
+	// be more than one -- "Full-time, Contract" is offered as either --
+	// so this is a list, not a string. Empty means the source did not
+	// state a type, which is common: Greenhouse never publishes the field.
+	//
+	// EmploymentTypeRaw is what the provider literally said. Kept because
+	// the vocabulary is unbounded free text, so a value that normalized to
+	// nothing still has something to show, and an empty normalized list
+	// with a non-empty raw string is exactly how a new provider spelling
+	// makes itself visible.
+	EmploymentType    []string `json:"employment_type"`
+	EmploymentTypeRaw string   `json:"employment_type_raw"`
+}
+
+// EmploymentLabel renders the employment type for a list cell, preferring
+// the canonical form and falling back to whatever the provider said.
+// Returns "" when the posting stated nothing -- callers should render that
+// as blank, not as "Unknown", since not stating a type is the norm.
+func (j JobRow) EmploymentLabel() string {
+	if len(j.EmploymentType) > 0 {
+		parts := make([]string, 0, len(j.EmploymentType))
+		for _, t := range j.EmploymentType {
+			// A canonical value added in Python before it is added here
+			// must show as itself, not as an empty cell.
+			if label, ok := EmploymentLabels[t]; ok {
+				parts = append(parts, label)
+			} else {
+				parts = append(parts, t)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	return strings.TrimSpace(j.EmploymentTypeRaw)
+}
+
+// HasEmploymentType reports whether this posting is offered as the given
+// canonical type. A posting that stated nothing matches nothing -- absence
+// is not evidence that it qualifies.
+func (j JobRow) HasEmploymentType(want string) bool {
+	for _, t := range j.EmploymentType {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
+// EmploymentLabels keys match scripts/employment_type.py's CANONICAL tuple.
+var EmploymentLabels = map[string]string{
+	"full_time":        "Full-time",
+	"part_time":        "Part-time",
+	"contract":         "Contract",
+	"contract_to_hire": "Contract-to-hire",
+	"temporary":        "Temporary",
+	"internship":       "Internship",
 }
 
 // Workplace values, matching scripts/location_filter.py.
