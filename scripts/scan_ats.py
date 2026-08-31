@@ -294,6 +294,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
 
     if not scan_boards._passes_location_filter(location):
         return None
+    if not scan_boards._passes_content_filters(description):
+        return None
 
     job = {
         "job_title": title,
