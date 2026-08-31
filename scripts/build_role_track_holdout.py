@@ -68,7 +68,26 @@ REPORTS_EVIDENCE = re.compile(
     re.I,
 )
 
-LABEL_VALUES = ("ic", "manager", "unclear")
+# "n/a" is a real verdict, not a skipped row. The sample is drawn from
+# the whole corpus, so it catches roles that have no IC/manager axis at
+# all -- an in-person retail associate, for one. Forcing that into "ic"
+# to satisfy a three-value vocabulary would put a wrong label in the
+# ground truth the classifier is measured against, which is a worse
+# outcome than admitting the question does not apply. Excluded from
+# accuracy scoring rather than counted as either class.
+LABEL_VALUES = ("ic", "manager", "unclear", "n/a")
+
+# Spellings a human actually types for the same verdicts.
+LABEL_ALIASES = {
+    "na": "n/a",
+    "n\\a": "n/a",
+    "not applicable": "n/a",
+    "none": "n/a",
+    "individual contributor": "ic",
+    "people manager": "manager",
+    "unsure": "unclear",
+    "unknown": "unclear",
+}
 
 DEFAULT_PER_STRATUM = 40
 EXCERPT_CHARS = 900
@@ -201,7 +220,7 @@ def write_holdout(path: str, rows: list[dict]) -> None:
                     row["title"],
                     row["company"],
                     row["stratum"],
-                    "",  # you fill this in: ic | manager | unclear
+                    "",  # you fill this in: ic | manager | unclear | n/a
                     "",
                     row["excerpt"],
                 ]
@@ -226,8 +245,16 @@ def normalize_label(raw: str) -> str:
     text = (raw or "").strip().lower()
     if not text:
         return ""
+    # Checked BEFORE the split, because "/" is both a qualifier separator
+    # and a character inside "n/a" -- splitting first silently yields "n".
+    if text in LABEL_VALUES or text in LABEL_ALIASES:
+        return LABEL_ALIASES.get(text, text)
     head = re.split(r"[,;(/]", text)[0].strip()
-    return head if head in LABEL_VALUES else ""
+    return (
+        LABEL_ALIASES.get(head, head)
+        if head in LABEL_VALUES or head in LABEL_ALIASES
+        else ""
+    )
 
 
 def status(path: str) -> int:
