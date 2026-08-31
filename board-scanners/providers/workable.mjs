@@ -162,8 +162,12 @@ export function parseWorkableMarkdown(text, companyName) {
     // cols[4] is the "Type" column in the header comment above. Absent on
     // shorter rows, which is fine -- the gate keeps an unstated type.
     const employmentType = cols[4] || '';
+    // cols[5] is the "Salary" column. Usually blank -- Workable renders the
+    // column whether or not the employer filled it in -- and free text when
+    // present, which compensation.py's prose parser handles.
+    const salary = cols[5] || '';
 
-    jobs.push({ title, url, location, company: companyName, employment_type: employmentType, _detailUrl: detailUrl });
+    jobs.push({ title, url, location, company: companyName, employment_type: employmentType, compensation: salary, _detailUrl: detailUrl });
   }
   return jobs;
 }

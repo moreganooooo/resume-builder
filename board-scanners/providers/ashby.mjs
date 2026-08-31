@@ -70,6 +70,10 @@ export default {
       posted_at: j.publishedDate || '',
       description: j.descriptionPlain || j.descriptionHtml || '',
       employment_type: j.employmentType || '',
+      // The feed URL sets includeCompensation=true, so this is present
+      // when the employer filled it in. The tier summary is free text
+      // ("$100K - $130K"); compensation.py parses that shape.
+      compensation: j.compensation?.compensationTierSummary || '',
     }));
   },
 };

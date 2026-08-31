@@ -63,6 +63,11 @@ export default {
         // body text for this provider (2026-07-26).
         description: j.description || j.excerpt || '',
         employment_type: j.employmentType || '',
+        // Same two-key shape as jobicy, different names, also annual.
+        compensation:
+          j.minSalary || j.maxSalary
+            ? { min: j.minSalary, max: j.maxSalary, interval: 'year' }
+            : null,
       }));
   },
 };

@@ -26,6 +26,11 @@ export default {
         posted_at: j.publication_date || '',
         description: j.description || '',
         employment_type: j.job_type || '',
+        // Free text, and often empty or vague ("competitive"). Passed
+        // through anyway -- compensation.py falls back to the prose
+        // parser for strings, which either finds a figure or returns
+        // None, and None is kept.
+        compensation: j.salary || '',
       }));
   },
 };
