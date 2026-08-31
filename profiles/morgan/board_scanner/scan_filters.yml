@@ -20,8 +20,14 @@ location:
   city: Getzville
   radius_miles: 5
   state: NY
+  # On-site is accepted on the same terms as hybrid: inside the radius.
+  # Note this changes nothing in the current corpus -- zero postings
+  # declare an onsite mode in their location string (711 are 'unknown',
+  # 348 remote, 6 hybrid) -- but an 'unknown' that later resolves to
+  # onsite is now judged on distance rather than mode.
   workplace_mode:
   - hybrid
+  - onsite
   - remote
   zip: '14068'
 # Body-text gates (scripts/content_filters.py). Both are exclusion-only
@@ -283,7 +289,6 @@ title_filter:
   - SEO Manager
   - 'Head of '
   - SVP
-  - Hybrid
   - Bilingual
   - Travel Based
   - Travel-Based
@@ -515,7 +520,6 @@ title_filter:
   - CX
   - SEO
   - Intern
-  - Freelance
   - Data Labeling
   - 'Travel '
   - Field Enablement
