@@ -33,6 +33,13 @@ export default {
         // jobicy list-wraps this (`['Full-Time']`); employment_type.py
         // unwraps containers, so it is passed through as-is.
         employment_type: j.jobType || '',
+        // Two separate keys rather than a range object. Assembled here
+        // into the shape normalize_structured expects; the interval is
+        // implied by the key names and has to be stated explicitly.
+        compensation:
+          j.annualSalaryMin || j.annualSalaryMax
+            ? { min: j.annualSalaryMin, max: j.annualSalaryMax, interval: 'year' }
+            : null,
       }));
   },
 };

@@ -302,6 +302,12 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
     if not scan_boards._passes_content_filters(description):
         return None
+    if not scan_boards._passes_compensation_filter(
+        description, raw.get("compensation")
+    ):
+        return None
+    if not scan_boards._passes_hours_filter(description):
+        return None
 
     job = {
         "job_title": title,
@@ -317,6 +323,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     }
     if raw.get("employment_type"):
         job["employment_type"] = raw["employment_type"]
+    if raw.get("compensation"):
+        job["compensation"] = raw["compensation"]
     # Same carry as scan_boards.fetch_board_jobs -- a provider that
     # declares its text a teaser must not lose that across the rebuild.
     if raw.get("description_is_teaser"):

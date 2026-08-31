@@ -69,6 +69,10 @@ export default {
         // "Full Time - Union" and "Full Time / On Site". Passed through
         // verbatim for the same reason.
         employment_type: j.categories?.commitment || '',
+        // {min, max, currency, interval} -- normalize_structured reads
+        // the interval, so a lever posting quoted hourly is not misread
+        // as an annual salary.
+        compensation: j.salaryRange || null,
       }));
   },
 };

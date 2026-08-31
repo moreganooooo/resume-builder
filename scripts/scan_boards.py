@@ -48,11 +48,13 @@ import re
 import subprocess
 
 import cli_art
+import compensation
 import content_filters
 import employment_type
 import location_filter
 import profile_paths
 import requests
+import work_hours
 import yaml
 from bs4 import BeautifulSoup
 
@@ -208,6 +210,45 @@ def _passes_employment_filter(raw_value, provider_id: str = "") -> bool:
     )
     if not passes:
         logging.info(f"scan_boards: rejected on employment type -- {reason}")
+    return passes
+
+
+def _passes_compensation_filter(description: str, structured=None) -> bool:
+    """The single pay gate for both scanners.
+
+    Runs with the content gate, after the description exists, because
+    most postings state pay in prose rather than in a field -- only a
+    minority of providers publish a structured range, and the ones that
+    do publish it inconsistently (salary is an employer's disclosure
+    habit, not a provider property; see compensation.py).
+
+    Exclusion-only in the same sense as the others: a posting that states
+    no pay is KEPT. Roughly three quarters of them state none, so
+    rejecting on absence would discard most of the corpus to enforce a
+    floor on the rest.
+    """
+    filters = _load_filters()
+    passes, reason = compensation.evaluate_compensation(
+        description, filters.get("compensation") or {}, structured
+    )
+    if not passes:
+        logging.info(f"scan_boards: rejected on pay -- {reason}")
+    return passes
+
+
+def _passes_hours_filter(description: str) -> bool:
+    """The single hours-per-week gate for both scanners.
+
+    Only ~2% of postings state a weekly hour count, so this is a
+    refinement of the part-time roles that do (about a quarter of them),
+    not a filter on the whole list -- see work_hours.py. Unstated is kept.
+    """
+    filters = _load_filters()
+    passes, reason = work_hours.evaluate_hours(
+        description, filters.get("compensation") or {}
+    )
+    if not passes:
+        logging.info(f"scan_boards: rejected on hours -- {reason}")
     return passes
 
 
@@ -646,6 +687,10 @@ def fetch_board_jobs(
             )
             if not _passes_content_filters(description):
                 continue
+            if not _passes_compensation_filter(description, raw.get("compensation")):
+                continue
+            if not _passes_hours_filter(description):
+                continue
 
             job = {
                 "job_title": title,
@@ -664,6 +709,12 @@ def fetch_board_jobs(
             # Absent when the provider doesn't publish the field.
             if raw.get("employment_type"):
                 job["employment_type"] = raw["employment_type"]
+            # Same rule for pay: keep the provider's structured field
+            # verbatim when it published one. Consumers normalize it
+            # through compensation.normalize_structured(), which is the
+            # only place that has to know the shapes providers use.
+            if raw.get("compensation"):
+                job["compensation"] = raw["compensation"]
             # Carried from the raw listing so the flag survives this
             # rebuild -- _flag_thin_description reads it off `job`.
             if raw.get("description_is_teaser"):
