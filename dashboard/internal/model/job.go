@@ -53,6 +53,47 @@ type JobRow struct {
 	// makes itself visible.
 	EmploymentType    []string `json:"employment_type"`
 	EmploymentTypeRaw string   `json:"employment_type_raw"`
+
+	// PayAnnualMax is the top of the stated range, annualized so one
+	// column can sort postings quoted hourly against ones quoted yearly.
+	// A POINTER for the same reason as DistanceMiles: most postings state
+	// no pay at all, and a zero would sort as the worst-paying job rather
+	// than as an unknown.
+	//
+	// PayText is the posting's OWN phrasing ("$25/hr", "$80,000 -
+	// $95,000"). Shown in preference to the annualized number, because
+	// $52,000 is a figure the posting never printed and displaying only
+	// that reads as the app inventing a salary.
+	PayAnnualMax *float64 `json:"pay_annual_max"`
+	PayText      string   `json:"pay_text"`
+
+	// HoursMin/HoursMax are weekly hours, and are usually nil -- only
+	// about 2% of postings state them (about a quarter of part-time
+	// ones). Either bound alone can be set: "up to 25 hours a week"
+	// states a ceiling and nothing about the floor.
+	HoursMin  *float64 `json:"hours_min"`
+	HoursMax  *float64 `json:"hours_max"`
+	HoursText string   `json:"hours_text"`
+}
+
+// PayLabel renders stated pay for a list cell, or "" when none was stated.
+// Blank rather than "Unknown" because saying nothing about pay is the
+// normal case, not a data problem worth flagging on three quarters of rows.
+func (j JobRow) PayLabel() string {
+	return strings.TrimSpace(j.PayText)
+}
+
+// HoursLabel renders stated weekly hours, or "" when none were stated.
+func (j JobRow) HoursLabel() string {
+	return strings.TrimSpace(j.HoursText)
+}
+
+// HasStatedPay reports whether the posting disclosed pay at all. This is
+// the distinction that matters most when reading a filtered list: a pay
+// floor can only act on postings that disclose, so "no pay stated" and
+// "pay clears your floor" are very different reasons for a row to appear.
+func (j JobRow) HasStatedPay() bool {
+	return j.PayAnnualMax != nil
 }
 
 // EmploymentLabel renders the employment type for a list cell, preferring
@@ -184,24 +225,33 @@ type Research struct {
 // Evaluation mirrors the _evaluation key persisted by
 // scripts/jd_manager.py's save_evaluation().
 type Evaluation struct {
-	CompositeScore           float64         `json:"composite_score"`
-	FitScore                 float64         `json:"fit_score"`
-	InterviewOddsScore       float64         `json:"interview_odds_score"`
-	PracticalPursueScore     float64         `json:"practical_pursue_score"`
-	Recommendation           string          `json:"recommendation"`
-	Why                      string          `json:"why"`
-	RecruiterRead            string          `json:"recruiter_read"`
-	HardBlockers             []string        `json:"hard_blockers"`
-	PostingLegitimacy        string          `json:"posting_legitimacy"`
-	PostingLegitimacyNotes   string          `json:"posting_legitimacy_notes"`
-	Archetype                string          `json:"archetype"`
+	CompositeScore       float64  `json:"composite_score"`
+	FitScore             float64  `json:"fit_score"`
+	InterviewOddsScore   float64  `json:"interview_odds_score"`
+	PracticalPursueScore float64  `json:"practical_pursue_score"`
+	Recommendation       string   `json:"recommendation"`
+	Why                  string   `json:"why"`
+	RecruiterRead        string   `json:"recruiter_read"`
+	HardBlockers         []string `json:"hard_blockers"`
+
+	// CapabilityGaps is the softer counterpart to HardBlockers, and the
+	// two must not be conflated. A hard blocker disqualifies (a licence
+	// you don't hold); a capability gap is an experience prerequisite the
+	// posting asks for that the resume does not yet evidence -- which is
+	// usually addressable, and is exactly what to write about in the
+	// cover letter. Produced by CapabilityEvaluationSchema in
+	// scripts/schemas.py and carried through orchestrator's evaluation.
+	CapabilityGaps           []string           `json:"capability_gaps"`
+	PostingLegitimacy        string             `json:"posting_legitimacy"`
+	PostingLegitimacyNotes   string             `json:"posting_legitimacy_notes"`
+	Archetype                string             `json:"archetype"`
 	FitSubscores             map[string]float64 `json:"fit_subscores"`
 	InterviewOddsSubscores   map[string]float64 `json:"interview_odds_subscores"`
 	PracticalPursueSubscores map[string]float64 `json:"practical_pursue_subscores"`
-	SkillMatrix              []SkillCoverage `json:"skill_matrix"`
-	PostingAgeDays           int             `json:"posting_age_days"`
-	ApplicantCount           int             `json:"applicant_count"`
-	EvaluatedAt              string          `json:"evaluated_at"`
+	SkillMatrix              []SkillCoverage    `json:"skill_matrix"`
+	PostingAgeDays           int                `json:"posting_age_days"`
+	ApplicantCount           int                `json:"applicant_count"`
+	EvaluatedAt              string             `json:"evaluated_at"`
 }
 
 // Liveness mirrors the _liveness key persisted by

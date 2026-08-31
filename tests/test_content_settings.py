@@ -75,7 +75,9 @@ class TestReadSettings(_TempYaml):
 
 class TestDescribe(unittest.TestCase):
     def test_unset_filters_read_as_any(self):
-        self.assertEqual(cs.describe({}), "languages: any; travel: any; types: any")
+        self.assertEqual(
+            cs.describe({}), "languages: any; travel: any; types: any; pay: any"
+        )
 
     def test_names_the_language_rather_than_the_code(self):
         text = cs.describe({"languages": ["en", "es"], "max_travel_percent": 25})

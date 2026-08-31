@@ -42,6 +42,18 @@
  *                                the source actually said. Leave unset when the
  *                                source doesn't publish the field — absent means
  *                                "not stated", and the gate KEEPS those.
+ * @property {string|number|object} [compensation] Optional. The source's own
+ *                                structured pay field, passed through verbatim
+ *                                for the same reason as employment_type above.
+ *                                Shapes differ per provider — a {min,max,interval}
+ *                                object, two separate numbers, or free text —
+ *                                and scripts/compensation.py's
+ *                                normalize_structured() is the one place that
+ *                                knows them all. Leave unset when the source
+ *                                doesn't publish pay; absent means "not stated",
+ *                                and the gate KEEPS those. Most postings are in
+ *                                that bucket: pay disclosure is an employer's
+ *                                habit, not a provider feature.
  * @property {boolean} [description_is_teaser] Set by a provider that knows its
  *                                `description` is a truncated blurb rather than the
  *                                real posting -- e.g. an aggregator returning a

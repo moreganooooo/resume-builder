@@ -29,7 +29,9 @@ import os
 import re
 
 import cli_art
+import compensation
 import profile_paths
+import work_hours
 import yaml
 
 # Each key is rewritten in place, so surrounding comments survive an edit.
@@ -40,6 +42,28 @@ _TRAVEL_RE = re.compile(r"^max_travel_percent:[^\n]*\n", re.MULTILINE)
 _EMPLOYMENT_RE = re.compile(
     r"^employment_type:[ \t]*\n(?:[ \t]*-[^\n]*\n)*|^employment_type:[^\n]*\n",
     re.MULTILINE,
+)
+
+# A nested mapping rather than a scalar or a list, so this consumes the
+# indented lines under the key. Pay and hours share one block because
+# they answer one question -- "what does this role have to be worth?" --
+# and splitting them would put the two halves of a part-time decision in
+# separate menus.
+_COMPENSATION_RE = re.compile(
+    r"^compensation:[ \t]*\n(?:[ \t]+[^\n]*\n|[ \t]*\n(?=[ \t]+\S))*",
+    re.MULTILINE,
+)
+
+# Ordered so the written block reads top to bottom the way someone would
+# describe the constraint. Keys are the ones compensation.py and
+# work_hours.py read; a key here that neither reads is a setting that
+# silently does nothing, which is what the test asserts against.
+_COMPENSATION_KEYS = (
+    "annual_floor",
+    "hourly_floor",
+    "require_stated",
+    "min_hours_per_week",
+    "max_hours_per_week",
 )
 
 # Offered in the picker. Deliberately the languages content_filters can
@@ -100,6 +124,13 @@ def read_settings(path: str | None = None) -> dict:
         settings["employment_type"] = [
             str(value).strip().lower() for value in employment
         ]
+    pay = data.get("compensation")
+    if isinstance(pay, dict):
+        # Only the keys the gates actually read, so a stray key in the
+        # file cannot round-trip through the editor and look supported.
+        kept = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
+        if kept:
+            settings["compensation"] = kept
     return settings
 
 
@@ -124,7 +155,35 @@ def describe(settings: dict) -> str:
         )
     else:
         parts.append("types: any")
+    parts.append("pay: " + (describe_pay(settings.get("compensation")) or "any"))
+    hours = work_hours.describe_range(settings.get("compensation") or {})
+    if hours:
+        parts.append(f"hours: {hours}")
     return "; ".join(parts)
+
+
+def describe_pay(pay: dict | None) -> str:
+    """The floor as a phrase, or '' when no floor is set.
+
+    Both floors are shown when both are set, because they are two
+    expressions of one bar and hiding either would make the effective
+    threshold (the LOWER of them -- see compensation.floor_to_annual)
+    impossible to predict from the UI.
+    """
+    pay = pay or {}
+    bits = []
+    annual = pay.get("annual_floor")
+    hourly = pay.get("hourly_floor")
+    if isinstance(annual, (int, float)) and annual > 0:
+        bits.append(f"${annual:,.0f}/yr")
+    if isinstance(hourly, (int, float)) and hourly > 0:
+        bits.append(f"${hourly:g}/hr")
+    if not bits:
+        return ""
+    phrase = " or ".join(bits) + " minimum"
+    if pay.get("require_stated"):
+        phrase += " (must be stated)"
+    return phrase
 
 
 def _replace_or_append(original: str, pattern: re.Pattern, block: str) -> str:
@@ -136,6 +195,42 @@ def _replace_or_append(original: str, pattern: re.Pattern, block: str) -> str:
     if pattern.search(original):
         return pattern.sub(block, original, count=1)
     return original.rstrip("\n") + "\n" + block
+
+
+def _scalar_default(value) -> str:
+    """Prefill a text prompt without showing a float's trailing '.0'."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _parse_money(raw: str) -> float | None:
+    """Read '$40,000', '40000', '40k' or '20' as a number.
+
+    People type the dollar sign and the comma because that is how the
+    amount is written everywhere else in the app; refusing those would
+    make the prompt feel broken. Returns None when there is no number,
+    which the caller distinguishes from a deliberately blank answer.
+    """
+    cleaned = re.sub(r"[\s$,]", "", raw or "")
+    if not cleaned:
+        return None
+    multiplier = 1000.0 if cleaned[-1:].lower() == "k" else 1.0
+    if multiplier != 1.0:
+        cleaned = cleaned[:-1]
+    try:
+        return float(cleaned) * multiplier
+    except ValueError:
+        return None
+
+
+def _yaml_scalar(value) -> str:
+    """Booleans must render as YAML's `true`, not Python's `True`."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
 
 
 def write_settings(settings: dict, path: str | None = None) -> None:
@@ -165,6 +260,18 @@ def write_settings(settings: dict, path: str | None = None) -> None:
         updated = _replace_or_append(updated, _EMPLOYMENT_RE, block)
     else:
         updated = _EMPLOYMENT_RE.sub("", updated, count=1)
+
+    pay = settings.get("compensation") or {}
+    pay = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
+    if pay:
+        block = "compensation:\n" + "".join(
+            f"  {key}: {_yaml_scalar(pay[key])}\n"
+            for key in _COMPENSATION_KEYS
+            if key in pay
+        )
+        updated = _replace_or_append(updated, _COMPENSATION_RE, block)
+    else:
+        updated = _COMPENSATION_RE.sub("", updated, count=1)
 
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
@@ -196,11 +303,15 @@ def run_content_settings() -> None:
             questionary.Choice(
                 "Set the employment types I'll accept", value="employment"
             ),
+            questionary.Choice("Set my minimum pay", value="pay"),
+            questionary.Choice("Set my weekly hours range", value="hours"),
             questionary.Choice("Turn off language filtering", value="clear_languages"),
             questionary.Choice("Turn off travel filtering", value="clear_travel"),
             questionary.Choice(
                 "Turn off employment-type filtering", value="clear_employment"
             ),
+            questionary.Choice("Turn off pay filtering", value="clear_pay"),
+            questionary.Choice("Turn off hours filtering", value="clear_hours"),
             questionary.Choice("Back", value="back"),
         ],
     )
@@ -260,6 +371,86 @@ def run_content_settings() -> None:
             return
         current["employment_type"] = list(picked)
 
+    elif action == "pay":
+        pay = dict(current.get("compensation") or {})
+        annual = cli_art.text(
+            "Minimum yearly salary (blank for none):",
+            default=_scalar_default(pay.get("annual_floor")),
+        )
+        if annual is None:
+            return
+        hourly = cli_art.text(
+            "Minimum hourly rate (blank for none):",
+            default=_scalar_default(pay.get("hourly_floor")),
+        )
+        if hourly is None:
+            return
+        parsed_annual = _parse_money(annual)
+        parsed_hourly = _parse_money(hourly)
+        if annual.strip() and parsed_annual is None:
+            cli_art.console.print(
+                f"{cli_art.WARNING} Couldn't read {annual!r} as an amount.",
+                soft_wrap=True,
+            )
+            return
+        if hourly.strip() and parsed_hourly is None:
+            cli_art.console.print(
+                f"{cli_art.WARNING} Couldn't read {hourly!r} as an amount.",
+                soft_wrap=True,
+            )
+            return
+        pay.pop("annual_floor", None)
+        pay.pop("hourly_floor", None)
+        if parsed_annual:
+            pay["annual_floor"] = parsed_annual
+        if parsed_hourly:
+            pay["hourly_floor"] = parsed_hourly
+        current["compensation"] = pay
+
+    elif action == "hours":
+        pay = dict(current.get("compensation") or {})
+        low = cli_art.text(
+            "Fewest hours per week you'd accept (blank for none):",
+            default=_scalar_default(pay.get("min_hours_per_week")),
+        )
+        if low is None:
+            return
+        high = cli_art.text(
+            "Most hours per week you'd accept (blank for none):",
+            default=_scalar_default(pay.get("max_hours_per_week")),
+        )
+        if high is None:
+            return
+        parsed_low = _parse_money(low)
+        parsed_high = _parse_money(high)
+        if parsed_low and parsed_high and parsed_low > parsed_high:
+            cli_art.console.print(
+                f"{cli_art.WARNING} {parsed_low:g} is more than {parsed_high:g} -- "
+                "the fewest hours has to be the smaller number.",
+                soft_wrap=True,
+            )
+            return
+        pay.pop("min_hours_per_week", None)
+        pay.pop("max_hours_per_week", None)
+        if parsed_low:
+            pay["min_hours_per_week"] = parsed_low
+        if parsed_high:
+            pay["max_hours_per_week"] = parsed_high
+        current["compensation"] = pay
+
+    elif action == "clear_pay":
+        pay = dict(current.get("compensation") or {})
+        pay.pop("annual_floor", None)
+        pay.pop("hourly_floor", None)
+        pay.pop("require_stated", None)
+        current["compensation"] = pay
+
+    elif action == "clear_hours":
+        pay = dict(current.get("compensation") or {})
+        pay.pop("min_hours_per_week", None)
+        pay.pop("max_hours_per_week", None)
+        current["compensation"] = pay
+
     elif action == "clear_languages":
         current.pop("languages", None)
 
@@ -288,6 +479,26 @@ def run_content_settings() -> None:
             soft_wrap=True,
         )
 
+    pay = current.get("compensation") or {}
+    if pay.get("annual_floor") or pay.get("hourly_floor"):
+        # The most important note of the three, because this filter's
+        # name overpromises hardest -- see compensation.describe_bias.
+        # A floor narrows the disclosing minority, not the whole list.
+        cli_art.console.print(
+            f"  [dim]Note: {compensation.describe_bias(0.27)}[/dim]",
+            soft_wrap=True,
+        )
+
+    if pay.get("min_hours_per_week") or pay.get("max_hours_per_week"):
+        # Stated even more plainly than the pay note: 2% is low enough
+        # that someone could reasonably think the setting is broken.
+        cli_art.console.print(
+            "  [dim]Note: only about 2% of postings state weekly hours -- but "
+            "about a quarter of PART-TIME ones do, which is where this "
+            "actually earns its keep. Postings that state none are kept.[/dim]",
+            soft_wrap=True,
+        )
+
     ceiling = current.get("max_travel_percent")
     if ceiling is not None:
         # State the limit of the thing they just turned on. Only ~5% of
@@ -303,6 +514,7 @@ def run_content_settings() -> None:
 
 __all__ = [
     "EMPLOYMENT_LABELS",
+    "describe_pay",
     "LANGUAGE_LABELS",
     "TRAVEL_CHOICES",
     "describe",

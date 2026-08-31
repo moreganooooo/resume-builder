@@ -169,6 +169,15 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "practical_pursue_subscores": evaluation.get("practical_pursue_subscores")
         or {},
         "skill_matrix": evaluation.get("skill_matrix") or [],
+        # The experience prerequisites the posting asks for that the
+        # resume does not yet evidence. This dict is an explicit
+        # ALLOWLIST, not a copy, so a key the model produces and the
+        # orchestrator assembles is silently discarded unless it is named
+        # here -- which is what happened to capability_gaps for its whole
+        # existence: CapabilityEvaluationSchema required it, orchestrator
+        # put it in `evaluation`, and 0 of 1,138 evaluated JDs on disk
+        # carried it. Anything added to that schema needs a line here too.
+        "capability_gaps": evaluation.get("capability_gaps") or [],
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }

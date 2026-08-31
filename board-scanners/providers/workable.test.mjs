@@ -83,3 +83,20 @@ test('parseWorkableMarkdown: a row with no Type column yields an empty employmen
   ].join('\n');
   assert.equal(parseWorkableMarkdown(feed, 'Acme')[0].employment_type, '');
 });
+
+test('parseWorkableMarkdown: maps the Salary column through as compensation', () => {
+  // Free text, and passed through verbatim for the same reason as the
+  // Type column -- scripts/compensation.py owns the parsing.
+  const feed = [
+    '| Title | Department | Location | Type | Salary | Posted | Details |',
+    '|---|---|---|---|---|---|---|',
+    '| Copywriter | Marketing | Remote | Full-time | $80,000 - $95,000 | 2026-08-01 | [View](https://apply.workable.com/acme/jobs/view/1.md) |',
+  ].join('\n');
+  assert.equal(parseWorkableMarkdown(feed, 'Acme')[0].compensation, '$80,000 - $95,000');
+});
+
+test('parseWorkableMarkdown: a blank Salary column yields an empty compensation', () => {
+  // Workable renders the column whether or not the employer filled it
+  // in, so blank is the common case and must not become "undefined".
+  assert.equal(parseWorkableMarkdown(FEED, 'Acme')[0].compensation, '');
+});
