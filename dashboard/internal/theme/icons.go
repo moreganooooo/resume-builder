@@ -43,6 +43,7 @@ type MenuIcons struct {
 	Clock    string // nf-fa-clock_o
 	Graph    string // nf-fa-line_chart
 	Location string // nf-fa-map_marker (theme.py's "location")
+	Filter   string // nf-fa-filter (theme.py's "filter")
 
 	// Score* give a composite/interview-probability score's color tier
 	// (see screens/bars.go's scoreStyle) a redundant shape cue too, so a
@@ -105,6 +106,9 @@ func NewMenuIcons() MenuIcons {
 		Clock:    "◷",
 		Graph:    "▨",
 		Location: "⌂",
+		// U+25BD white down triangle -- a funnel, i.e. exclusion.
+		// Matches scripts/theme.py's "filter" unicode fallback.
+		Filter: "▽",
 
 		ScoreStrong: "✓",
 		ScoreGood:   "✦",

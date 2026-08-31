@@ -69,6 +69,7 @@ export default {
       location: resolveLocationWithCountries(j),
       posted_at: j.publishedDate || '',
       description: j.descriptionPlain || j.descriptionHtml || '',
+      employment_type: j.employmentType || '',
     }));
   },
 };

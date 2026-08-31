@@ -30,6 +30,18 @@
  *                                work at all against a JS-rendered posting
  *                                page (see B36, docs/review/phase-9-backlog.md).
  * @property {string} [posted_at] Optional. ISO 8601 when available.
+ * @property {string} [employment_type] Optional. The source's OWN spelling,
+ *                                passed through verbatim — do NOT normalize
+ *                                here. Providers disagree wildly ("FullTime",
+ *                                "Full-time", "full_time", "['Full-Time']",
+ *                                "Full Time / On Site"), and normalizing in 42
+ *                                separate files would produce 42 slightly
+ *                                different mappings. scripts/employment_type.py
+ *                                owns the vocabulary and logs any value it
+ *                                cannot map, which only works if it sees what
+ *                                the source actually said. Leave unset when the
+ *                                source doesn't publish the field — absent means
+ *                                "not stated", and the gate KEEPS those.
  * @property {boolean} [description_is_teaser] Set by a provider that knows its
  *                                `description` is a truncated blurb rather than the
  *                                real posting -- e.g. an aggregator returning a

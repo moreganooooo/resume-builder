@@ -48,6 +48,12 @@ type JobsModel struct {
 	// its cycle so the two compose: "high_fit" AND "onsite" is a
 	// question worth asking, and one combined cycle could not express it.
 	workplaceFilter string
+
+	// employmentFilter narrows by employment type -- "" means no
+	// restriction. Separate from workplaceFilter for the same reason
+	// that one is separate from `filter`: "part-time AND on-site" is a
+	// real question, and a single combined cycle could not ask it.
+	employmentFilter string
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort  bool
@@ -257,6 +263,15 @@ func (m *JobsModel) applyFilter() {
 			continue
 		}
 
+		// Narrow by employment type. Unlike workplace, a row can hold
+		// several -- a posting offered as full-time OR contract matches
+		// either filter, because it genuinely is both. A row that stated
+		// no type is excluded here for the same reason "unknown" is
+		// excluded above: absence is not evidence it qualifies.
+		if m.employmentFilter != "" && !r.HasEmploymentType(m.employmentFilter) {
+			continue
+		}
+
 		// Apply search query within the active filter
 		if !matchesJobSearch(r, m.searchQuery) {
 			continue
@@ -437,6 +452,43 @@ func nextWorkplaceFilter(current string) string {
 	default:
 		return ""
 	}
+}
+
+// nextEmploymentFilter cycles the [e] employment types. Like [w], the
+// empty string is "no restriction" and is part of the cycle, so [e]
+// always returns to showing everything.
+//
+// This is a VIEW filter, independent of the scan-time gate in
+// scripts/employment_type.py. The gate decides what gets saved at all;
+// this decides what is shown of what was saved. A type excluded at scan
+// time simply yields no rows here, which is correct rather than broken.
+func nextEmploymentFilter(current string) string {
+	for i, value := range employmentFilterCycle {
+		if value == current {
+			return employmentFilterCycle[(i+1)%len(employmentFilterCycle)]
+		}
+	}
+	return ""
+}
+
+// Order matches scripts/employment_type.py's CANONICAL, prefixed with ""
+// for "no restriction".
+var employmentFilterCycle = []string{
+	"",
+	"full_time",
+	"part_time",
+	"contract",
+	"contract_to_hire",
+	"temporary",
+	"internship",
+}
+
+// employmentFilterLabel names the active [e] mode for the status bar.
+func employmentFilterLabel(current string) string {
+	if label, ok := model.EmploymentLabels[current]; ok {
+		return label
+	}
+	return "All"
 }
 
 // workplaceFilterLabel names the active [w] mode for the status bar.
@@ -1051,6 +1103,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.workplaceFilter = nextWorkplaceFilter(m.workplaceFilter)
 			m.cursor = 0
 			m.applyFilter()
+		case "e":
+			m.employmentFilter = nextEmploymentFilter(m.employmentFilter)
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1444,6 +1500,9 @@ func (m JobsModel) renderHeader() string {
 	if m.workplaceFilter != "" {
 		info += modeStyle.Render("  " + m.theme.Icons.Location + " " + workplaceFilterLabel(m.workplaceFilter))
 	}
+	if m.employmentFilter != "" {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " " + employmentFilterLabel(m.employmentFilter))
+	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
 	}
@@ -1688,6 +1747,13 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, line)
 	} else if job.Location != "" {
 		content = append(content, styles.Subtext.Render(truncateRunes(job.Location, wrapWidth)))
+	}
+	// Blank when the posting stated no type, which is the common case --
+	// rendering "Unknown" here would imply the source was asked and
+	// declined, when most sources never publish the field at all.
+	if label := job.EmploymentLabel(); label != "" {
+		content = append(content, styles.Subtext.Render(
+			m.theme.Icons.Filter+" "+truncateRunes(label, wrapWidth-2)))
 	}
 	content = append(content, "")
 
@@ -2049,6 +2115,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("/") + descStyle.Render(" search  ") +
 			keyStyle.Render("f") + descStyle.Render(" filter  ") +
 			keyStyle.Render("w") + descStyle.Render(" workplace  ") +
+			keyStyle.Render("e") + descStyle.Render(" emp type  ") +
 			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("m") + descStyle.Render(" matrix  ") +

@@ -62,3 +62,24 @@ test('fetch: a failing detail fetch degrades to an empty description, not a thro
   assert.equal(jobs.length, 1);
   assert.equal(jobs[0].description, '');
 });
+
+test('parseWorkableMarkdown: maps the Type column through as employment_type', () => {
+  // Passed through in workable's own spelling ("Full-time"), not
+  // normalized here -- scripts/employment_type.py owns the vocabulary and
+  // logs values it cannot map, which only works if it sees what the
+  // source actually said.
+  const jobs = parseWorkableMarkdown(FEED, 'Acme');
+  assert.equal(jobs[0].employment_type, 'Full-time');
+});
+
+test('parseWorkableMarkdown: a row with no Type column yields an empty employment_type', () => {
+  // Absent means "not stated", and the gate keeps those -- so this must
+  // not become the string "undefined", which would be logged as an
+  // unmappable value on every scan.
+  const feed = [
+    '| Title | Department | Location | Type | Salary | Posted | Details |',
+    '|---|---|---|---|---|---|---|',
+    '| Copywriter | Marketing | Remote |  |  | 2026-08-01 | [View](https://apply.workable.com/acme/jobs/view/1.md) |',
+  ].join('\n');
+  assert.equal(parseWorkableMarkdown(feed, 'Acme')[0].employment_type, '');
+});

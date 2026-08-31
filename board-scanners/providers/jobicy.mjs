@@ -30,6 +30,9 @@ export default {
         location: j.jobGeo || '',
         posted_at: j.pubDate || '',
         description: j.jobDescription || j.jobExcerpt || '',
+        // jobicy list-wraps this (`['Full-Time']`); employment_type.py
+        // unwraps containers, so it is passed through as-is.
+        employment_type: j.jobType || '',
       }));
   },
 };

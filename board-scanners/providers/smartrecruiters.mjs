@@ -180,6 +180,14 @@ export function parseSmartRecruitersResponse(json, companyName) {
     // _postingId is not part of the Job contract (see _types.js) -- carries
     // the id through to fetch()'s detail-fetch loop above, which deletes it
     // before returning.
-    return { title: j.name || '', url, location, company: companyName, _postingId: j.id || null };
+    return {
+      title: j.name || '',
+      url,
+      location,
+      company: companyName,
+      // Nested under a label object; employment_type.py unwraps that shape.
+      employment_type: j.typeOfEmployment?.label || '',
+      _postingId: j.id || null,
+    };
   });
 }

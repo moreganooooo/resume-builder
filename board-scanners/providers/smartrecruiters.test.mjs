@@ -96,3 +96,21 @@ test('fetch: a failing detail fetch degrades to an empty description, not a thro
   assert.equal(jobs.length, 1);
   assert.equal(jobs[0].description, '');
 });
+
+test('parseSmartRecruitersResponse: unwraps typeOfEmployment.label', () => {
+  // SmartRecruiters nests the value under a label object. Passed through
+  // in its own spelling; employment_type.py understands the shape.
+  const jobs = parseSmartRecruitersResponse(
+    { content: [{ id: '1', name: 'Job One', location: {}, typeOfEmployment: { label: 'Part-time' } }] },
+    'Acme',
+  );
+  assert.equal(jobs[0].employment_type, 'Part-time');
+});
+
+test('parseSmartRecruitersResponse: a posting with no typeOfEmployment is empty, not undefined', () => {
+  const jobs = parseSmartRecruitersResponse(
+    { content: [{ id: '1', name: 'Job One', location: {} }] },
+    'Acme',
+  );
+  assert.equal(jobs[0].employment_type, '');
+});

@@ -1,4 +1,4 @@
-"""Tests for the Settings editor behind the language and travel filters.
+"""Tests for the Settings editor behind the language, travel and employment filters.
 
 The property under test is not "does it write YAML" -- it is that a
 round trip through the editor cannot change anything the user did not
@@ -27,6 +27,9 @@ location:
 languages:
 - en
 max_travel_percent: 10
+employment_type:
+- full_time
+- part_time
 location_filter:
   block:
   - Hybrid
@@ -72,7 +75,7 @@ class TestReadSettings(_TempYaml):
 
 class TestDescribe(unittest.TestCase):
     def test_unset_filters_read_as_any(self):
-        self.assertEqual(cs.describe({}), "languages: any; travel: any")
+        self.assertEqual(cs.describe({}), "languages: any; travel: any; types: any")
 
     def test_names_the_language_rather_than_the_code(self):
         text = cs.describe({"languages": ["en", "es"], "max_travel_percent": 25})
@@ -157,6 +160,70 @@ class TestFiltersActuallyConsumeThis(_TempYaml):
             "Travel up to 5% of the time", config
         )
         self.assertTrue(passes)
+
+
+class TestEmploymentTypeSettings(_TempYaml):
+    """The structured gate shares this editor with the two body-text ones.
+
+    Same round-trip property: touching one key must not disturb another,
+    and clearing one must return only that gate to inert.
+    """
+
+    def test_reads_the_list(self):
+        path = self._write(BASE)
+        self.assertEqual(
+            cs.read_settings(path)["employment_type"], ["full_time", "part_time"]
+        )
+
+    def test_round_trip(self):
+        path = self._write(BASE)
+        cs.write_settings({"employment_type": ["contract", "temporary"]}, path)
+        self.assertEqual(
+            cs.read_settings(path)["employment_type"], ["contract", "temporary"]
+        )
+
+    def test_clearing_it_leaves_the_other_two_gates_alone(self):
+        path = self._write(BASE)
+        cs.write_settings({"languages": ["en"], "max_travel_percent": 10}, path)
+        settings = cs.read_settings(path)
+        self.assertNotIn("employment_type", settings)
+        self.assertEqual(settings["languages"], ["en"])
+        self.assertEqual(settings["max_travel_percent"], 10)
+
+    def test_adding_it_to_a_file_that_had_none(self):
+        path = self._write(NO_FILTERS)
+        cs.write_settings({"employment_type": ["full_time"]}, path)
+        self.assertEqual(cs.read_settings(path)["employment_type"], ["full_time"])
+        self.assertEqual(
+            yaml.safe_load(self._read(path))["enabled_boards"], ["remoteok"]
+        )
+
+    def test_written_settings_drive_the_scan_gate(self):
+        """The point of the editor: what it writes is what the gate reads.
+
+        Asserted end to end rather than against the dict, because the
+        gate consumes the PARSED yaml -- a key written in a shape
+        read_settings happens to tolerate but yaml nests differently
+        would pass a dict-level test and still filter nothing.
+        """
+        import employment_type
+
+        path = self._write(BASE)
+        cs.write_settings({"employment_type": ["contract"]}, path)
+        accepted = yaml.safe_load(self._read(path))["employment_type"]
+        self.assertFalse(
+            employment_type.passes_employment_filter("Full-time", accepted)[0]
+        )
+        self.assertTrue(
+            employment_type.passes_employment_filter("Contract", accepted)[0]
+        )
+        self.assertTrue(employment_type.passes_employment_filter(None, accepted)[0])
+
+    def test_describe_names_the_types(self):
+        self.assertIn(
+            "Part-time", cs.describe({"employment_type": ["full_time", "part_time"]})
+        )
+        self.assertIn("types: any", cs.describe({}))
 
 
 class TestMenuWiring(unittest.TestCase):

@@ -1,18 +1,26 @@
-"""content_settings.py -- the Settings editor for the body-text filters.
+"""content_settings.py -- the Settings editor for the non-location filters.
 
-The counterpart to location_settings.py, for the two gates in
-content_filters.py: the languages the candidate can work in, and the
-ceiling on a posting's stated travel requirement.
+The counterpart to location_settings.py, for the three gates that are
+neither title nor location: the languages the candidate can work in and
+the ceiling on a posting's stated travel requirement (both in
+content_filters.py, both inferred from body text), plus the accepted
+employment types (employment_type.py, read from a structured field the
+provider published).
+
+Those two kinds of gate are implemented separately and on purpose -- see
+employment_type.py's own docstring -- but they are ONE question to the
+person answering it, so they share an editor rather than making someone
+hunt through Settings for which menu holds which constraint.
 
 These are personal constraints -- a travel ceiling exists because of
 someone's back, not because of a tuning experiment -- so they belong in
 Settings where the person they describe can change them, not in a
 constant somebody has to open an editor to find.
 
-Both keys live at the TOP LEVEL of scan_filters.yml rather than inside
-the `location:` block. Travel is not a location question: a fully remote
-role can still require three weeks a month on the road, which is exactly
-the case the ceiling exists to catch.
+All three keys live at the TOP LEVEL of scan_filters.yml rather than
+inside the `location:` block. Travel is not a location question: a fully
+remote role can still require three weeks a month on the road, which is
+exactly the case the ceiling exists to catch. Neither is employment type.
 """
 
 from __future__ import annotations
@@ -29,6 +37,10 @@ _LANGUAGES_RE = re.compile(
     r"^languages:[ \t]*\n(?:[ \t]*-[^\n]*\n)*|^languages:[^\n]*\n", re.MULTILINE
 )
 _TRAVEL_RE = re.compile(r"^max_travel_percent:[^\n]*\n", re.MULTILINE)
+_EMPLOYMENT_RE = re.compile(
+    r"^employment_type:[ \t]*\n(?:[ \t]*-[^\n]*\n)*|^employment_type:[^\n]*\n",
+    re.MULTILINE,
+)
 
 # Offered in the picker. Deliberately the languages content_filters can
 # actually DETECT -- offering a language the detector cannot recognize
@@ -39,6 +51,20 @@ LANGUAGE_LABELS = {
     "fr": "French",
     "de": "German",
     "pt": "Portuguese",
+}
+
+# The canonical vocabulary, with labels a person recognizes. Keys must
+# match employment_type.CANONICAL exactly -- a type present there but
+# missing here is a type the gate can reject and the editor cannot offer,
+# which is unfixable from the UI. test_content_settings asserts the two
+# agree rather than trusting anyone to remember.
+EMPLOYMENT_LABELS = {
+    "full_time": "Full-time",
+    "part_time": "Part-time",
+    "contract": "Contract / freelance",
+    "contract_to_hire": "Contract-to-hire",
+    "temporary": "Temporary / seasonal",
+    "internship": "Internship / apprenticeship",
 }
 
 TRAVEL_CHOICES = [
@@ -69,6 +95,11 @@ def read_settings(path: str | None = None) -> dict:
     ceiling = data.get("max_travel_percent")
     if isinstance(ceiling, int):
         settings["max_travel_percent"] = ceiling
+    employment = data.get("employment_type")
+    if isinstance(employment, list) and employment:
+        settings["employment_type"] = [
+            str(value).strip().lower() for value in employment
+        ]
     return settings
 
 
@@ -85,6 +116,14 @@ def describe(settings: dict) -> str:
         parts.append("languages: any")
     ceiling = settings.get("max_travel_percent")
     parts.append(f"travel: up to {ceiling}%" if ceiling is not None else "travel: any")
+    employment = settings.get("employment_type")
+    if employment:
+        parts.append(
+            "types: "
+            + ", ".join(EMPLOYMENT_LABELS.get(value) or value for value in employment)
+        )
+    else:
+        parts.append("types: any")
     return "; ".join(parts)
 
 
@@ -100,7 +139,7 @@ def _replace_or_append(original: str, pattern: re.Pattern, block: str) -> str:
 
 
 def write_settings(settings: dict, path: str | None = None) -> None:
-    """Writes both keys, removing either one whose value is None."""
+    """Writes all three keys, removing any whose value is absent or empty."""
     path = path or scan_filters_path()
     with open(path, "r", encoding="utf-8") as handle:
         updated = handle.read()
@@ -119,6 +158,13 @@ def write_settings(settings: dict, path: str | None = None) -> None:
         )
     else:
         updated = _TRAVEL_RE.sub("", updated, count=1)
+
+    employment = settings.get("employment_type")
+    if employment:
+        block = "employment_type:\n" + "".join(f"- {value}\n" for value in employment)
+        updated = _replace_or_append(updated, _EMPLOYMENT_RE, block)
+    else:
+        updated = _EMPLOYMENT_RE.sub("", updated, count=1)
 
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
@@ -147,8 +193,14 @@ def run_content_settings() -> None:
         choices=[
             questionary.Choice("Set the languages I can work in", value="languages"),
             questionary.Choice("Set my maximum travel percentage", value="travel"),
+            questionary.Choice(
+                "Set the employment types I'll accept", value="employment"
+            ),
             questionary.Choice("Turn off language filtering", value="clear_languages"),
             questionary.Choice("Turn off travel filtering", value="clear_travel"),
+            questionary.Choice(
+                "Turn off employment-type filtering", value="clear_employment"
+            ),
             questionary.Choice("Back", value="back"),
         ],
     )
@@ -187,17 +239,54 @@ def run_content_settings() -> None:
             return
         current["max_travel_percent"] = picked
 
+    elif action == "employment":
+        selected = current.get("employment_type") or list(EMPLOYMENT_LABELS)
+        picked = cli_art.checkbox(
+            "Which kinds of work will you accept?",
+            choices=[
+                questionary.Choice(label, value=value, checked=value in selected)
+                for value, label in EMPLOYMENT_LABELS.items()
+            ],
+        )
+        if not picked:
+            # Same reasoning as languages: an empty list reads as "no
+            # types accepted", which would reject every posting that
+            # states one.
+            cli_art.console.print(
+                f"{cli_art.WARNING} Pick at least one type, or use "
+                "'Turn off employment-type filtering'.",
+                soft_wrap=True,
+            )
+            return
+        current["employment_type"] = list(picked)
+
     elif action == "clear_languages":
         current.pop("languages", None)
 
     elif action == "clear_travel":
         current.pop("max_travel_percent", None)
 
+    elif action == "clear_employment":
+        current.pop("employment_type", None)
+
     write_settings(current, path)
     cli_art.console.print(
         f"{cli_art.SUCCESS} Content filters: {describe(read_settings(path))}",
         soft_wrap=True,
     )
+
+    if current.get("employment_type"):
+        # The same honesty as the travel note below. Greenhouse -- the
+        # largest ATS source in this corpus -- publishes no employment
+        # field at all, so this gate is silent on those postings by
+        # design rather than by accident.
+        cli_art.console.print(
+            "  [dim]Note: postings that don't state an employment type are "
+            "always kept. Some sources (Greenhouse especially) never publish "
+            "one, so this only drops postings that name a type you excluded."
+            "[/dim]",
+            soft_wrap=True,
+        )
 
     ceiling = current.get("max_travel_percent")
     if ceiling is not None:
@@ -213,6 +302,7 @@ def run_content_settings() -> None:
 
 
 __all__ = [
+    "EMPLOYMENT_LABELS",
     "LANGUAGE_LABELS",
     "TRAVEL_CHOICES",
     "describe",

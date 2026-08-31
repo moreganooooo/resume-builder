@@ -11,6 +11,7 @@ import sys
 
 import batch_evaluate
 import cli_art
+import employment_type
 import jd_manager
 import location_filter
 import questionary
@@ -380,6 +381,25 @@ def _read_location_settings() -> dict:
         return {}
 
 
+def _employment_fields(data: dict) -> dict:
+    """The posting's employment type, normalized for display and filtering.
+
+    Both shapes are exported: `employment_type_raw` is what the provider
+    literally said, `employment_type` is the canonical list. The raw form
+    is kept because the vocabulary is unbounded free text -- when a value
+    maps to nothing, seeing "Fixed Term Contract - Union" in the UI is
+    how anyone finds out, and the normalized list alone would show an
+    empty cell indistinguishable from a posting that stated nothing.
+    """
+    raw = data.get("employment_type")
+    return {
+        "employment_type": employment_type.normalize_employment_type(
+            raw, data.get("source_platform") or ""
+        ),
+        "employment_type_raw": raw if isinstance(raw, str) else "",
+    }
+
+
 def _location_fields(data: dict, settings: dict) -> dict:
     """Location, workplace mode, and distance for one JD's export row.
 
@@ -464,6 +484,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "location_enrichment": jd_manager.read_location_enrichment(path),
                     "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
+                    **_employment_fields(jd_data),
                 }
             )
     if "Completed" in statuses:
@@ -502,6 +523,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "location_enrichment": jd_manager.read_location_enrichment(path),
                     "posted_date": jd_manager.compute_posting_date(path),
                     **_location_fields(jd_data, location_settings_block),
+                    **_employment_fields(jd_data),
                 }
             )
     if "Pending" in statuses:
@@ -599,6 +621,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 "location_enrichment": data.get("_location_enrichment"),
                 "posted_date": jd_manager.compute_posting_date(job_id),
                 **_location_fields(data, settings or {}),
+                **_employment_fields(data),
             }
         )
     return extra
