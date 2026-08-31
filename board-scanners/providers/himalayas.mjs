@@ -62,6 +62,7 @@ export default {
         // blocks a plain HTTP fetch, so this is the only reliable source of
         // body text for this provider (2026-07-26).
         description: j.description || j.excerpt || '',
+        employment_type: j.employmentType || '',
       }));
   },
 };

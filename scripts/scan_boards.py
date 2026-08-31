@@ -49,6 +49,7 @@ import subprocess
 
 import cli_art
 import content_filters
+import employment_type
 import location_filter
 import profile_paths
 import requests
@@ -181,6 +182,32 @@ def _passes_content_filters(description: str) -> bool:
     passes, reason = content_filters.evaluate_content(description, filters)
     if not passes:
         logging.info(f"scan_boards: rejected on content -- {reason}")
+    return passes
+
+
+def _passes_employment_filter(raw_value, provider_id: str = "") -> bool:
+    """The single employment-type gate for both scanners.
+
+    Placed BEFORE the description is resolved, unlike the content gate:
+    this reads a structured field the provider already handed us, so a
+    posting rejected here never pays for a detail fetch. That ordering is
+    the whole practical benefit of gating on a published field rather
+    than inferring from the body.
+
+    Inert unless scan_filters.yml configures `employment_type:`, and
+    exclusion-only -- a posting that doesn't state its type is KEPT.
+    Greenhouse, the largest ATS source in this corpus, publishes the
+    field 0% of the time, so rejecting on absence would silently drop an
+    entire provider.
+    """
+    accepted = _load_filters().get("employment_type") or []
+    if not accepted:
+        return True
+    passes, reason = employment_type.passes_employment_filter(
+        raw_value, accepted, provider_id
+    )
+    if not passes:
+        logging.info(f"scan_boards: rejected on employment type -- {reason}")
     return passes
 
 
@@ -608,6 +635,8 @@ def fetch_board_jobs(
                 continue
             if not _passes_location_filter(raw.get("location")):
                 continue
+            if not _passes_employment_filter(raw.get("employment_type"), provider_id):
+                continue
 
             raw_description = raw.get("description") or ""
             description = (
@@ -630,6 +659,11 @@ def fetch_board_jobs(
                 "posted_at": raw.get("posted_at") or "",
                 "description": description,
             }
+            # The source's own spelling, kept unnormalized so a later
+            # consumer (or a bug report) can see what the provider said.
+            # Absent when the provider doesn't publish the field.
+            if raw.get("employment_type"):
+                job["employment_type"] = raw["employment_type"]
             # Carried from the raw listing so the flag survives this
             # rebuild -- _flag_thin_description reads it off `job`.
             if raw.get("description_is_teaser"):
