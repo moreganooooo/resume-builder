@@ -50,7 +50,7 @@ Read the job description and score it across three independent layers, each dime
 | Dimension | Criteria |
 |---|---|
 | remote_quality | 5 = fully remote and workable; 3 = hybrid but maybe manageable; 1 = onsite/incompatible |
-| compensation_viability | 5 = likely strong and viable; 3 = unclear or middling; 1 = likely too low |
+| compensation_viability | Use the `=== COMPENSATION ===` block above, which is parsed deterministically -- do not re-read the figures yourself. 5 = stated and comfortably above the candidate's floor; 4 = stated and at or just above it; 3 = **NOT STATED** (the normal case -- roughly 73% of postings -- and NOT a negative); 2 = stated and slightly below the floor; 1 = stated and far below it. Never infer a salary from job title, seniority, or industry, and never treat silence as a low offer. If no COMPENSATION block appears, score 3. |
 | growth_value | 5 = valuable next step, good signal, or strong skill-building even if not a forever role; 3 = decent but limited; 1 = likely dead end |
 | time_to_offer | 5 = likely quick, low-friction process; 3 = average; 1 = likely slow or bureaucratic |
 | company_reputation | 5 = positive reputation, no meaningful red flags; 3 = mixed or unclear; 1 = serious red flags |
