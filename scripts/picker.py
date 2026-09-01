@@ -676,18 +676,26 @@ def count_active_roles() -> int:
     return len(list_all_evaluated_jds(statuses=["Pending"]))
 
 
-# The date the current scoring system became trustworthy -- the day
-# "fix: send the candidate's credentials to the fit evaluator"
-# (a2939fe2) landed. A score produced before it was computed by a
-# materially different evaluator, so comparing it against a fresh one
-# ranks two different questions against each other. Two earlier commits
-# moved the same floor (032153ca rebuilt Fit/Interview Odds on 2026-08-16,
-# 27e6d6b9 added proximity-aware scoring on 2026-08-22); this constant
-# tracks only the most recent, since anything older is stale by
-# implication. Bump it whenever a commit changes what a score MEANS --
-# not for a new persisted field, which is a gap in the record rather than
-# an error in it.
-SCORING_EPOCH = "2026-08-30"
+# The date the current scoring system became trustworthy -- the day the
+# parsed pay figure and the candidate's configured floor started reaching
+# the fit evaluator. Before it, compensation_viability was 15% of the
+# Practical Pursue score computed against a floor the model was never
+# shown, with a rubric that invited it to guess a "likely range" for the
+# ~73% of postings that disclose nothing.
+#
+# A score produced before this was computed by a materially different
+# evaluator, so comparing it against a fresh one ranks two different
+# questions against each other. Three earlier commits moved the same
+# floor -- 032153ca rebuilt Fit/Interview Odds (2026-08-16), 27e6d6b9
+# added proximity-aware scoring (2026-08-22), a2939fe2 started sending
+# the candidate's credentials (2026-08-30). This constant tracks only the
+# most recent, since anything older is stale by implication.
+#
+# Bump it whenever a commit changes what a score MEANS -- not for a newly
+# persisted field, which is a gap in the record rather than an error in
+# it. Bumping costs one API call per pending role, so batch scoring
+# changes rather than shipping them one at a time.
+SCORING_EPOCH = "2026-08-31"
 
 
 def _evaluation_is_stale(evaluation, evaluated_before: str) -> bool:
