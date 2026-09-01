@@ -175,6 +175,10 @@ def _build_find_jobs_choices() -> list:
             value="evaluate_all",
         ),
         questionary.Choice(
+            title=_icon_title("build", "↳ Re-score Outdated Evaluations"),
+            value="rescore_stale",
+        ),
+        questionary.Choice(
             title=_icon_title("utility", "↳ Archive Stale Postings"),
             value="stale_sweep",
         ),
@@ -1121,6 +1125,40 @@ def _handle_evaluate_all() -> bool:
     if database_only:
         # Named explicitly because these have no JD file: seeing the count
         # exceed what is visible in jds/ would otherwise look wrong.
+        cli_art.console.print(
+            f"({len(file_paths)} with a JD file, {len(database_only)} from board scans.)"
+        )
+    if not picker.should_proceed(len(to_evaluate), skip_confirm=False):
+        cli_art.console.print("Aborted.")
+        return False
+    results = batch_evaluate.evaluate_all_pending(to_evaluate, skip_evaluated=False)
+    cli_art.render_fit_table(results)
+    return bool(results)
+
+
+def _handle_rescore_stale() -> bool:
+    """Re-evaluates roles whose score predates the current scoring system.
+
+    Separate from "Evaluate Pending Roles" because the two answer
+    different questions: that one fills a gap in the record, this one
+    corrects it. Merging them would make the ordinary backlog run
+    silently re-spend an API call on every role that already has a
+    perfectly good score.
+    """
+    file_paths, database_only = picker.stale_roles()
+    to_evaluate = file_paths + database_only
+    if not to_evaluate:
+        cli_art.console.print(
+            f"Nothing to re-score -- every pending role was evaluated "
+            f"on or after {picker.SCORING_EPOCH}."
+        )
+        return False
+    cli_art.console.print(
+        f"{len(to_evaluate)} role(s) carry a score from before "
+        f"{picker.SCORING_EPOCH}, when the fit evaluator changed. "
+        "Re-scoring overwrites them and costs one API call each."
+    )
+    if database_only:
         cli_art.console.print(
             f"({len(file_paths)} with a JD file, {len(database_only)} from board scans.)"
         )
@@ -2574,6 +2612,7 @@ _HANDLERS = {
     "add_manual_jd": _handle_add_manual_jd,
     "liveness": _handle_liveness,
     "evaluate_all": _handle_evaluate_all,
+    "rescore_stale": _handle_rescore_stale,
     "package_flow": _handle_package_flow,
     "tailor_all": _handle_tailor_all,
     "tailor_pick": _handle_tailor_pick,
@@ -2627,6 +2666,7 @@ _CHAIN = {
 _CHAIN_ICONS = {
     "liveness": "discovery",
     "evaluate_all": "evaluate",
+    "rescore_stale": "evaluate",
     "tailor_all": "build",
     "tailor_pick": "build",
     "coverletter_pick": "build",
@@ -2833,6 +2873,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "scan": "Job Search Scanner",
         "liveness": "Liveness Verification Check",
         "evaluate_all": "JD Evaluation & Fit Scoring",
+        "rescore_stale": "Re-scoring Outdated Evaluations",
         "tailor_all": "Resume & Cover Letter Customization",
         "tailor_pick": "Targeted Resume Customization",
         "coverletter_pick": "Targeted Cover Letter Customization",

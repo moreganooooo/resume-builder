@@ -676,23 +676,53 @@ def count_active_roles() -> int:
     return len(list_all_evaluated_jds(statuses=["Pending"]))
 
 
-def unevaluated_roles() -> tuple:
-    """The pending roles that have never been evaluated, as
-    (file_paths, database_only_job_ids).
+# The date the current scoring system became trustworthy -- the day
+# "fix: send the candidate's credentials to the fit evaluator"
+# (a2939fe2) landed. A score produced before it was computed by a
+# materially different evaluator, so comparing it against a fresh one
+# ranks two different questions against each other. Two earlier commits
+# moved the same floor (032153ca rebuilt Fit/Interview Odds on 2026-08-16,
+# 27e6d6b9 added proximity-aware scoring on 2026-08-22); this constant
+# tracks only the most recent, since anything older is stale by
+# implication. Bump it whenever a commit changes what a score MEANS --
+# not for a new persisted field, which is a gap in the record rather than
+# an error in it.
+SCORING_EPOCH = "2026-08-30"
 
-    One definition serving two callers: count_unevaluated_roles() reports
-    its size, and batch_evaluate.evaluate_all_pending() does the work.
-    Keeping the count and the work list on the same function is what
-    stops the banner from promising a backlog the evaluator cannot
-    actually reach -- "Evaluate ALL Pending Roles" used to walk JD FILES
-    only, so the ~627 database-only rows were counted, displayed, and
-    never evaluable.
+
+def _evaluation_is_stale(evaluation, evaluated_before: str) -> bool:
+    """Whether a persisted evaluation predates evaluated_before.
+
+    An evaluation with no evaluated_at is treated as stale: the field was
+    added later, so its absence dates the record rather than excusing it.
+    """
+    if not isinstance(evaluation, dict):
+        return True
+    return (evaluation.get("evaluated_at") or "")[:10] < evaluated_before
+
+
+def pending_roles(evaluated_before: str | None = None) -> tuple:
+    """Pending roles as (file_paths, database_only_job_ids).
+
+    With no argument, the roles that have never been evaluated -- the
+    backlog. With evaluated_before set, also includes roles whose
+    persisted evaluation predates that date, which is how a scoring
+    change is repaired: re-evaluating everything would spend an API call
+    per role to recompute scores that are already current.
 
     Deliberately lighter than list_all_evaluated_jds(): these are
     identifiers, not rows, so nothing reads liveness, research, or
     coverage. Database ids are deduped against file-backed twins exactly
     the way _database_only_rows() dedupes them.
     """
+
+    def wanted(evaluation) -> bool:
+        if not evaluation:
+            return True
+        if evaluated_before is None:
+            return False
+        return _evaluation_is_stale(evaluation, evaluated_before)
+
     seen = set()
     file_paths = []
     for path in jd_manager.get_pending_jds():
@@ -701,7 +731,7 @@ def unevaluated_roles() -> tuple:
             seen.add(jd_manager.compute_job_key(path))
         except (OSError, ValueError):
             pass
-        if not jd_manager.read_evaluation(path):
+        if wanted(jd_manager.read_evaluation(path)):
             file_paths.append(path)
 
     try:
@@ -741,9 +771,42 @@ def unevaluated_roles() -> tuple:
             data = json.loads(record["metadata_json"] or "{}")
         except (json.JSONDecodeError, TypeError):
             data = {}
-        if not isinstance(data, dict) or not data.get("_evaluation"):
+        if not isinstance(data, dict) or wanted(data.get("_evaluation")):
             job_ids.append(job_id)
     return file_paths, job_ids
+
+
+def unevaluated_roles() -> tuple:
+    """The pending roles that have never been evaluated.
+
+    One definition serving two callers: count_unevaluated_roles() reports
+    its size, and batch_evaluate.evaluate_all_pending() does the work.
+    Keeping the count and the work list on the same function is what
+    stops the banner from promising a backlog the evaluator cannot
+    actually reach -- "Evaluate ALL Pending Roles" used to walk JD FILES
+    only, so the ~627 database-only rows were counted, displayed, and
+    never evaluable.
+    """
+    return pending_roles()
+
+
+def stale_roles(evaluated_before: str = SCORING_EPOCH) -> tuple:
+    """The pending roles whose scores predate the current scoring system,
+    including those never evaluated at all.
+
+    The work list behind "re-evaluate what the scoring change invalidated".
+    Paired with count_stale_roles() for the same reason unevaluated_roles()
+    is paired with its count: a number the user is shown must be the exact
+    set the evaluator will walk.
+    """
+    return pending_roles(evaluated_before=evaluated_before)
+
+
+def count_stale_roles(evaluated_before: str = SCORING_EPOCH) -> int:
+    """How many pending roles carry a score older than the current
+    scoring system (or no score at all)."""
+    file_paths, job_ids = stale_roles(evaluated_before)
+    return len(file_paths) + len(job_ids)
 
 
 def count_unevaluated_roles() -> int:

@@ -156,7 +156,9 @@ def _evaluate_one(engine, identifier: str, on_label=None) -> dict:
 
 
 def evaluate_all_pending(
-    pending_paths: list = None, skip_evaluated: bool = True
+    pending_paths: list = None,
+    skip_evaluated: bool = True,
+    evaluated_before: str | None = None,
 ) -> list:
     """
     Runs ResumeEngine.evaluate_fit() over every entry in pending_paths --
@@ -170,7 +172,32 @@ def evaluate_all_pending(
     persisted _evaluation (jd_manager.save_evaluation() from a prior run)
     -- pass False to force re-evaluating everything, overwriting existing
     scores.
+
+    evaluated_before re-evaluates roles whose persisted score predates
+    that date, and is the reason skip_evaluated=False is no longer the
+    only way to redo work. The flag alone used to be DEAD on the default
+    path: the work list came from picker.unevaluated_roles(), which by
+    definition contains nothing evaluated, so "force re-evaluate
+    everything" walked the same never-evaluated backlog and silently
+    changed nothing. Defaulting to picker.SCORING_EPOCH would be worse
+    than dead -- it would spend an API call per role without being asked
+    -- so the caller names the date.
     """
+    if pending_paths is None:
+        import picker
+
+        if evaluated_before is not None:
+            file_paths, job_ids = picker.stale_roles(evaluated_before)
+            pending_paths = file_paths + job_ids
+            # Vintage already selected the set; a second filter on
+            # "has an evaluation" would discard every stale role.
+            skip_evaluated = False
+        elif not skip_evaluated:
+            # Asked to force, with no vintage: everything pending, so the
+            # flag reaches roles that already carry a score.
+            file_paths, job_ids = picker.pending_roles(evaluated_before="9999")
+            pending_paths = file_paths + job_ids
+
     if pending_paths is None:
         # Both halves of the backlog, not just the file-backed one.
         # get_pending_jds() lists FILES, and most pending jobs are
