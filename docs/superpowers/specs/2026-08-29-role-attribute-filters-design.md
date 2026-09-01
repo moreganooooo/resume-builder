@@ -1,7 +1,9 @@
 # Role Attribute Filters: Employment Type, Compensation, and IC vs. Manager
 
 Date: 2026-08-29
-Status: Design — not yet implemented
+Status: Employment type, location, compensation, and weekly hours are
+SHIPPED (see v9–v11 below). Role track (IC vs. manager) remains designed
+but unbuilt — the labeled holdout downgraded it from a gate to a sort.
 Revision: 4 (v1 was written before the corpus was measured; §"What the
 corpus says" invalidated its central design choice. See "What changed
 and why" at the end.)
