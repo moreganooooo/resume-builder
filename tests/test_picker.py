@@ -728,3 +728,101 @@ class TestLocationFields(unittest.TestCase):
             self.assertLess(row["distance_miles"], 3.0)
             self.assertIsNotNone(row.get("location_enrichment"))
             self.assertEqual(row["location_enrichment"]["source"], "jd_text_override")
+
+
+class TestStaleRoles(unittest.TestCase):
+    """Selecting roles by the vintage of their score, not just by whether
+    they have one. A scoring change invalidates existing scores silently:
+    nothing about the stored row says it was computed by a different
+    evaluator, so the only handle is evaluated_at."""
+
+    def _patched(self, evaluations):
+        """Runs picker against a fake pending set. evaluations maps a fake
+        JD path to its persisted _evaluation (None for never-evaluated)."""
+        paths = list(evaluations)
+        return patch.multiple(
+            picker.jd_manager,
+            get_pending_jds=MagicMock(return_value=paths),
+            read_evaluation=MagicMock(side_effect=lambda p: evaluations[p]),
+            compute_job_key=MagicMock(side_effect=lambda p: p),
+        )
+
+    def test_unevaluated_roles_ignores_vintage(self):
+        cases = {"/a.json": None, "/b.json": {"evaluated_at": "2026-01-01"}}
+        with self._patched(cases), patch.object(picker, "db", None, create=True):
+            files, _ = picker.pending_roles()
+        self.assertEqual(files, ["/a.json"])
+
+    def test_stale_roles_include_old_scores_and_unscored(self):
+        cases = {
+            "/old.json": {"evaluated_at": "2026-08-01T10:00:00"},
+            "/new.json": {"evaluated_at": "2026-08-31T10:00:00"},
+            "/never.json": None,
+        }
+        with self._patched(cases):
+            files, _ = picker.pending_roles(evaluated_before="2026-08-30")
+        self.assertEqual(sorted(files), ["/never.json", "/old.json"])
+
+    def test_missing_timestamp_counts_as_stale(self):
+        """evaluated_at was added later, so its absence dates the record
+        rather than excusing it -- 351 of this profile's rows have none."""
+        with self._patched({"/x.json": {"composite_score": 7.0}}):
+            files, _ = picker.pending_roles(evaluated_before="2026-08-30")
+        self.assertEqual(files, ["/x.json"])
+
+    def test_a_role_scored_on_the_epoch_is_not_stale(self):
+        """The boundary is inclusive on the current side: the epoch is the
+        day the fix landed, so that day's scores are already correct."""
+        with self._patched({"/x.json": {"evaluated_at": "2026-08-30T23:00:00"}}):
+            files, _ = picker.pending_roles(evaluated_before="2026-08-30")
+        self.assertEqual(files, [])
+
+    def test_scoring_epoch_is_a_date(self):
+        self.assertRegex(picker.SCORING_EPOCH, r"^\d{4}-\d{2}-\d{2}$")
+
+
+class TestForceReevaluateIsReachable(unittest.TestCase):
+    """skip_evaluated=False used to be DEAD on the default path: the work
+    list came from unevaluated_roles(), which by definition holds nothing
+    evaluated, so 'force re-evaluate everything' walked the never-evaluated
+    backlog and changed nothing."""
+
+    def test_force_without_paths_reaches_already_scored_roles(self):
+        import batch_evaluate
+
+        with (
+            patch.object(
+                picker, "pending_roles", return_value=(["/scored.json"], [])
+            ) as pending,
+            patch.object(batch_evaluate.orchestrator, "ResumeEngine", MagicMock()),
+            patch.object(
+                batch_evaluate,
+                "_evaluate_one",
+                MagicMock(return_value={"job_key": "k"}),
+            ) as one,
+        ):
+            batch_evaluate.evaluate_all_pending(skip_evaluated=False)
+
+        self.assertTrue(pending.called, "force path must build its own work list")
+        self.assertEqual(one.call_count, 1)
+
+    def test_evaluated_before_selects_by_vintage(self):
+        import batch_evaluate
+
+        with (
+            patch.object(
+                picker, "stale_roles", return_value=(["/old.json"], ["hash-id"])
+            ) as stale,
+            patch.object(batch_evaluate.orchestrator, "ResumeEngine", MagicMock()),
+            patch.object(
+                batch_evaluate,
+                "_evaluate_one",
+                MagicMock(return_value={"job_key": "k"}),
+            ) as one,
+        ):
+            batch_evaluate.evaluate_all_pending(evaluated_before="2026-08-30")
+
+        stale.assert_called_once_with("2026-08-30")
+        # Vintage already selected the set; split_evaluated() must not then
+        # discard every one of them for having a score.
+        self.assertEqual(one.call_count, 2)
