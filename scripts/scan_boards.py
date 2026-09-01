@@ -674,7 +674,15 @@ def fetch_board_jobs(
                 continue
             if not _passes_title_filter(title):
                 continue
-            if not _passes_location_filter(raw.get("location")):
+            # Forward the provider's own workplace hint. classify_workplace()
+            # has accepted `work_model` since the radius work landed, but no
+            # call site passed one, so a posting that SAID "Remote" was still
+            # classified by guessing at its place name.
+            if not _passes_location_filter(
+                raw.get("location"),
+                work_model=raw.get("work_model") or "",
+                is_remote=raw.get("is_remote"),
+            ):
                 continue
             if not _passes_employment_filter(raw.get("employment_type"), provider_id):
                 continue
