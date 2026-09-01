@@ -1162,13 +1162,18 @@ employer's disclosure habit. That is why this gate can run at scan time
 and the salary work still cannot -- no provider-level salary expectation
 means anything.
 
-### Still open
+### Still open (as of v9 -- superseded by v10 below)
 
 Salary remains Stage-3 work and still blocks on `scoring_version`. The
 third filter from the labeling notes -- experience prerequisites the
 candidate does not hold -- is unspecced; the raw material is
 `evaluate_capability`'s `capability_gaps`, which is computed and then
 surfaced nowhere.
+
+> Resolved in v10. Salary shipped WITHOUT `scoring_version`, which turned
+> out not to be a prerequisite: pay is a gate, not a scoring input, so it
+> changes which roles are listed rather than what a listed role scores.
+> `capability_gaps` is persisted and surfaced.
 
 ## v9 -> v10: pay, weekly hours, and experience gaps -- SHIPPED
 
@@ -1249,3 +1254,48 @@ evaluated from now on.
   floor or matching an hours preference. Both are gates, not signals.
 - `workable.mjs`'s left-indexing assumption and `powertofly.mjs`'s
   company/description mapping are still unfixed from the v7 audit.
+
+## v10 -> v11: re-scoring what a scoring change invalidated -- SHIPPED
+
+Auditing whether the pipeline reflected current parameters turned up a
+larger problem than the new filters: **0 of 2,130 evaluated rows carried
+a score from the current evaluator.** Measured by `evaluated_at` against
+the three commits that changed what a score MEANS -- 351 with no
+timestamp, 68 pre-`032153ca` (Fit/Interview Odds rebuilt), 445 pre-
+`27e6d6b9` (proximity scoring), and 1,266 pre-`a2939fe2`, which is the
+fix that started sending the candidate's credentials to the fit
+evaluator. Only 210 of those are PENDING, so the repair is bounded;
+the rest are archived or expired.
+
+`evaluate_all_pending(skip_evaluated=False)` -- the documented way to
+force a re-score -- was **DEAD**. Its default work list came from
+`picker.unevaluated_roles()`, which by definition holds nothing that has
+a score, so forcing walked the never-evaluated backlog and silently
+changed nothing. There was no way to re-score any role.
+
+`picker.pending_roles(evaluated_before=...)` is now the general walker;
+`unevaluated_roles()` and `stale_roles()` are both thin wrappers, so the
+count and the work list cannot drift the way they did before. Selection
+is by VINTAGE rather than all-or-nothing because re-evaluating
+everything spends an API call per role to recompute scores that are
+already current. A row with no `evaluated_at` counts as stale: the field
+was added later, so its absence dates the record rather than excusing
+it. `SCORING_EPOCH` should be bumped when a commit changes what a score
+means -- not for a newly persisted field, which is a gap in the record
+rather than an error in it.
+
+Kept as its own menu action ("Re-score Outdated Evaluations") rather
+than folded into "Evaluate Pending Roles": one fills a gap in the
+record, the other corrects it, and merging them would make the ordinary
+backlog run silently re-spend on every role that already scores fine.
+
+### Still open
+
+- No sort-by-pay; `PayAnnualMax` exists to support one.
+- Scoring does not reward clearing the pay floor or matching an hours
+  preference. Both are gates, not signals.
+- `workable.mjs`'s left-indexing assumption and `powertofly.mjs`'s
+  `company: entry.name` mapping are still unfixed from the v7 audit.
+- "Hybrid preferred" is parsed but surfaced nowhere.
+- The stale-score count is not on the CLI banner, deliberately: it is a
+  one-time repair, not a standing metric.
