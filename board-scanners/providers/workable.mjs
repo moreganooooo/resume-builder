@@ -112,6 +112,11 @@ async function fetchPostingDescription(ctx, detailUrl) {
   }
 }
 
+// Workable's current column layout, used when a feed carries no header
+// row. Keys are the header labels, lowercased; values are the index into
+// a row split on "|" (which yields a leading empty cell, so Title is 1).
+const COLUMN_DEFAULTS = { title: 1, location: 3, type: 4, salary: 5 };
+
 /**
  * Parse Workable's public markdown feed. Exported as a named export for unit
  * tests. The feed exposes a table:
@@ -133,15 +138,46 @@ async function fetchPostingDescription(ctx, detailUrl) {
  */
 export function parseWorkableMarkdown(text, companyName) {
   if (typeof text !== 'string') return [];
+  const lines = text.split('\n');
+  // Resolve columns BY NAME from the header row rather than by fixed
+  // position. The positions below are Workable's current layout, but a
+  // feed that drops "Department" or inserts a column shifts every index
+  // after it -- and the failure is SILENT and plausible: Location reads
+  // the Type column, so a posting lands with location "Full-time",
+  // which the radius filter cannot resolve and therefore KEEPS. A
+  // mismapped field is worse than a missing one, because nothing
+  // downstream can tell it is wrong.
+  // Copied, not aliased: this is mutated below, and COLUMN_DEFAULTS is
+  // module-level -- one feed without a Department column would otherwise
+  // reshape the defaults for every later company in the same run.
+  const header = { ...COLUMN_DEFAULTS };
+  const headerLine = lines.find(
+    (l) => l.startsWith('|') && !l.includes('[View]') && /\|\s*Title\s*\|/i.test(l),
+  );
+  if (headerLine) {
+    const names = headerLine.split('|').map((c) => c.trim().toLowerCase());
+    for (const key of Object.keys(COLUMN_DEFAULTS)) {
+      const at = names.indexOf(key);
+      // -1 means this feed omits the column entirely; leaving the
+      // default would read whatever now sits in that slot, so record
+      // the absence instead and let the field come back empty.
+      header[key] = at;
+    }
+  }
+
   const jobs = [];
-  for (const line of text.split('\n')) {
+  for (const line of lines) {
     if (!line.startsWith('|') || !line.includes('[View]')) continue;
     const cols = line.split('|').map(c => c.trim());
-    // Cols: ['', title, dept, location, type, salary, posted, '[View](url.md)', '']
-    if (cols.length < 8) continue;
-    const title = cols[1];
+    const col = (name) => (header[name] >= 0 ? cols[header[name]] || '' : '');
+    // No minimum column count: that guard was the same fixed-layout
+    // assumption in another form, and it silently discarded every row of
+    // any feed with fewer columns than Workable's current default. A row
+    // is usable when it has a title and a resolvable [View] link;
+    // everything else is optional by design.
+    const title = col('title');
     if (!title || title === 'Title') continue;
-    const location = cols[3] || '';
+    const location = col('location');
     const urlMatch = line.match(/\[View\]\(([^)]+)\)/);
     let detailUrl = urlMatch ? urlMatch[1] : '';
     if (!detailUrl) continue;  // skip rows with no resolvable URL (e.g., malformed [View] link)
@@ -159,13 +195,13 @@ export function parseWorkableMarkdown(text, companyName) {
       continue;
     }
 
-    // cols[4] is the "Type" column in the header comment above. Absent on
-    // shorter rows, which is fine -- the gate keeps an unstated type.
-    const employmentType = cols[4] || '';
-    // cols[5] is the "Salary" column. Usually blank -- Workable renders the
-    // column whether or not the employer filled it in -- and free text when
-    // present, which compensation.py's prose parser handles.
-    const salary = cols[5] || '';
+    // Absent on shorter rows, which is fine -- the gate keeps an
+    // unstated type.
+    const employmentType = col('type');
+    // Usually blank -- Workable renders the column whether or not the
+    // employer filled it in -- and free text when present, which
+    // compensation.py's prose parser handles.
+    const salary = col('salary');
 
     jobs.push({ title, url, location, company: companyName, employment_type: employmentType, compensation: salary, _detailUrl: detailUrl });
   }

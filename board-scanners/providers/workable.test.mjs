@@ -100,3 +100,50 @@ test('parseWorkableMarkdown: a blank Salary column yields an empty compensation'
   // in, so blank is the common case and must not become "undefined".
   assert.equal(parseWorkableMarkdown(FEED, 'Acme')[0].compensation, '');
 });
+
+test('columns are resolved by header name, not by fixed position', () => {
+  // Same feed with "Department" removed: every index after Title shifts
+  // left. Fixed positions would read Location out of the Type column.
+  const md = [
+    '| Title | Location | Type | Salary | Posted | Details |',
+    '| --- | --- | --- | --- | --- | --- |',
+    '| Editor | Austin, TX | Part-time | $30/hr | 2026-01-01 | [View](https://apply.workable.com/acme/jobs/view/1.md) |',
+  ].join('\n');
+  const jobs = parseWorkableMarkdown(md, 'Acme');
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].location, 'Austin, TX');
+  assert.equal(jobs[0].employment_type, 'Part-time');
+  assert.equal(jobs[0].compensation, '$30/hr');
+});
+
+test('a feed omitting a column yields an empty field, not a shifted one', () => {
+  const md = [
+    '| Title | Department | Location | Posted | Details |',
+    '| --- | --- | --- | --- | --- |',
+    '| Editor | Content | Austin, TX | 2026-01-01 | [View](https://apply.workable.com/acme/jobs/view/1.md) |',
+  ].join('\n');
+  const jobs = parseWorkableMarkdown(md, 'Acme');
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].location, 'Austin, TX');
+  // Salary is absent from this feed. Empty is correct; "2026-01-01" --
+  // what the old fixed index would have read -- is not.
+  assert.equal(jobs[0].compensation, '');
+  assert.equal(jobs[0].employment_type, '');
+});
+
+test('parsing one feed without a column does not reshape the next', () => {
+  const short = [
+    '| Title | Location | Posted | Details |',
+    '| --- | --- | --- | --- |',
+    '| A | Austin, TX | 2026-01-01 | [View](https://apply.workable.com/a/jobs/view/1.md) |',
+  ].join('\n');
+  parseWorkableMarkdown(short, 'A');
+  const normal = [
+    '| Title | Department | Location | Type | Salary | Posted | Details |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| B | Eng | Denver, CO | Full-time | $90k | 2026-01-01 | [View](https://apply.workable.com/b/jobs/view/2.md) |',
+  ].join('\n');
+  const jobs = parseWorkableMarkdown(normal, 'B');
+  assert.equal(jobs[0].location, 'Denver, CO');
+  assert.equal(jobs[0].compensation, '$90k');
+});

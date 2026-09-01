@@ -29,10 +29,30 @@ export default {
       .map((item) => ({
         title: item.title || '',
         url: item.link || item.guid,
-        company: entry.name, // PowerToFly items don't expose a company field
+        // `description` is the COMPANY NAME, not a description -- verified
+        // against the live feed 2026-08-31, which returns
+        // {"description":"Morgan Stanley", "title":"Wealth Management
+        // Associate"}. Reading it as prose wrote a company name into the
+        // description of every PowerToFly posting, and `company` fell back
+        // to the feed entry's own name, so BOTH fields were wrong. That
+        // breaks more than display: email_matcher.py selects the candidate
+        // set for an incoming rejection by company, so a wrong company
+        // attaches real status mail to the wrong application.
+        // `section` is the same company as a slug; preferred only as a
+        // fallback since it is hyphenated ("morgan-stanley").
+        company: item.description || (Array.isArray(item.section) ? item.section[0] : '') || entry.name,
         location: item.job_location || '',
         posted_at: item.published_on || '',
-        description: item.description || '',
+        // Deliberately EMPTY: this feed carries no posting body at all.
+        // scan_boards falls back to _fetch_posting_text() for an empty
+        // description, which is the only way to get real text here, and
+        // scan.run_scan() refuses to write a JD that still has none --
+        // writing an empty one makes the emptiness permanent, since
+        // job_key_known() then skips the posting on every later scan.
+        description: '',
+        // "Onsite" / "Remote" / "Hybrid". Free workplace signal the
+        // location gate can use instead of inferring from a place name.
+        work_model: item.type || '',
       }));
   },
 };
