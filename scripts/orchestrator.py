@@ -807,6 +807,70 @@ def _confirm_continue_without_keywords() -> bool:
     )
 
 
+def build_compensation_context(jd_text: str) -> str:
+    """The pay block for evaluate_fit()'s user content, or "" when there is
+    nothing useful to say.
+
+    `compensation_viability` is 15% of the Practical Pursue score, and its
+    schema field reads "vs. stated target/floor" -- but no floor was ever
+    passed, so the model scored 15% of that dimension against a threshold
+    it could not see, and its rubric ("5 = likely strong and viable")
+    invited it to guess. Meanwhile compensation.py parses real figures
+    deterministically and knows the configured floor exactly. This block
+    is the wire between them.
+
+    Three states, kept distinct on purpose. "Below your floor" and "not
+    stated" are opposite facts, and collapsing them is what the old
+    speculate-a-likely-range instruction did: about 73% of postings
+    disclose nothing, so a model that guesses is inventing most of this
+    subscore. An undisclosed salary is a real unknown and scores the
+    middle -- it is not evidence of a bad offer.
+    """
+    try:
+        import compensation
+        import content_settings
+    except ImportError:
+        return ""
+
+    try:
+        config = (content_settings.read_settings() or {}).get("compensation") or {}
+    except Exception:
+        config = {}
+
+    parsed = compensation.parse_compensation(jd_text or "")
+
+    lines = []
+    floor = compensation.floor_to_annual(config)
+    if floor:
+        lines.append(
+            f"The candidate's minimum acceptable pay is ${floor:,.0f}/year "
+            "(or the hourly equivalent)."
+        )
+
+    if parsed:
+        lines.append(f"The posting states: {parsed.get('text') or 'a pay figure'}.")
+        annual = parsed.get("annualized_max")
+        if annual:
+            lines.append(f"Annualized, the TOP of that range is ${annual:,.0f}/year.")
+            if floor:
+                verdict = "AT OR ABOVE" if annual >= floor else "BELOW"
+                lines.append(f"That is {verdict} the candidate's floor.")
+    else:
+        lines.append(
+            "The posting does NOT state pay. This is the normal case -- about "
+            "73% of postings disclose nothing -- and it is NOT evidence that "
+            "the pay is low. Score compensation_viability 3 (unknown) unless "
+            "the posting itself gives real evidence about pay level. Do not "
+            "infer a salary from the job title, seniority, or industry."
+        )
+
+    if not lines:
+        return ""
+    return "=== COMPENSATION (parsed deterministically, not by you) ===\n" + "\n".join(
+        lines
+    )
+
+
 def _trim_profile_yaml(raw: str) -> str:
     """Keeps only the AUDIT_PROFILE_KEEP sections of a raw profile.yml (the
     candidate-identity ones: target_roles, archetypes, narrative, superpowers,
@@ -3798,6 +3862,10 @@ class ResumeEngine:
                 "or archetype library found -- scoring the JD in isolation.",
                 soft_wrap=True,
             )
+
+        pay_block = build_compensation_context(jd_text)
+        if pay_block:
+            sections.append(pay_block)
 
         sections.append(
             f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ==="

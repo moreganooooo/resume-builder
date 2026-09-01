@@ -10,6 +10,7 @@ pins those specific failures rather than the happy path.
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
@@ -426,3 +427,75 @@ class TestCapabilityGapsArePersisted(unittest.TestCase):
         )
         for field in schemas.CapabilityEvaluationSchema.model_fields:
             self.assertIn(f'"{field}"', writer, field)
+
+
+class TestCompensationReachesTheFitEvaluator(unittest.TestCase):
+    """compensation_viability is 15% of the Practical Pursue score and its
+    schema field reads "vs. stated target/floor" -- but for its whole
+    existence no floor was passed and no parsed figure was either, so the
+    model scored it against a threshold it could not see."""
+
+    def setUp(self):
+        import orchestrator
+
+        self.orchestrator = orchestrator
+        self.config = {"annual_floor": 40000, "hourly_floor": 20}
+        patcher = patch(
+            "content_settings.read_settings",
+            return_value={"compensation": self.config},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _block(self, text):
+        return self.orchestrator.build_compensation_context(text)
+
+    def test_the_floor_is_stated_to_the_model(self):
+        self.assertIn("$40,000", self._block("Salary: $80,000 per year."))
+
+    def test_a_clearing_salary_is_labeled_at_or_above(self):
+        block = self._block("The salary range is $80,000 - $95,000 per year.")
+        self.assertIn("AT OR ABOVE", block)
+        self.assertNotIn("BELOW", block)
+
+    def test_a_low_wage_is_labeled_below(self):
+        block = self._block("This role pays $15 per hour.")
+        self.assertIn("BELOW", block)
+
+    def test_silence_is_not_scored_as_a_bad_offer(self):
+        """The opposite fact from 'below the floor', and collapsing the two
+        is what the old 'likely range if unstated' instruction did."""
+        block = self._block("Great team. Nothing about pay here.")
+        self.assertIn("does NOT state pay", block)
+        self.assertIn("NOT evidence", block)
+        self.assertNotIn("BELOW", block)
+
+    def test_the_block_reaches_the_fit_context(self):
+        engine = self.orchestrator.ResumeEngine.__new__(self.orchestrator.ResumeEngine)
+        engine.kb_dir = "/nonexistent"
+        engine.scoring_dir = "/nonexistent"
+        context = self.orchestrator.ResumeEngine.build_fit_evaluation_context(
+            engine, "Salary: $80,000 per year."
+        )
+        self.assertIn("=== COMPENSATION", context)
+        self.assertIn("$40,000", context)
+
+    def test_no_floor_configured_still_reports_the_posting(self):
+        with patch("content_settings.read_settings", return_value={}):
+            block = self._block("Salary: $80,000 per year.")
+        self.assertIn("$80,000", block)
+        self.assertNotIn("floor", block)
+
+    def test_the_rubric_names_the_unstated_case(self):
+        with open("resume-engine/prompts/evaluate_fit.md", encoding="utf-8") as f:
+            rubric = f.read()
+        line = [l for l in rubric.splitlines() if "compensation_viability" in l]
+        self.assertTrue(line, "compensation_viability row missing from the rubric")
+        self.assertIn("NOT STATED", line[0])
+
+    def test_scoring_epoch_moved_with_this_change(self):
+        """A scoring change the epoch does not track leaves every stale
+        score looking current."""
+        import picker
+
+        self.assertGreaterEqual(picker.SCORING_EPOCH, "2026-08-31")
