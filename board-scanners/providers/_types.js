@@ -54,6 +54,16 @@
  *                                and the gate KEEPS those. Most postings are in
  *                                that bucket: pay disclosure is an employer's
  *                                habit, not a provider feature.
+ * @property {string} [work_model] Optional. The source's own workplace wording
+ *                                ("Remote", "Hybrid", "Onsite"), passed through
+ *                                verbatim. location_filter.classify_workplace()
+ *                                prefers this over inferring the mode from a
+ *                                place name, which it can only do by guessing.
+ *                                Leave unset when the source doesn't publish it;
+ *                                a posting whose mode can't be determined is
+ *                                never dropped on mode alone.
+ * @property {boolean} [is_remote] Optional. A source's explicit boolean remote
+ *                                flag, where it has one. Same gate, same rule.
  * @property {boolean} [description_is_teaser] Set by a provider that knows its
  *                                `description` is a truncated blurb rather than the
  *                                real posting -- e.g. an aggregator returning a
