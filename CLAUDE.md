@@ -812,3 +812,42 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Experience gaps render BELOW and separate from hard blockers in the
   Jobs detail pane: a gap is something to address in an application, a
   blocker is a reason not to apply, and one merged list conflates them.
+- **A score has a VINTAGE, and nothing in the row says so
+  (`picker.SCORING_EPOCH`).** Three commits changed what a fit score
+  MEANS -- `032153ca` rebuilt Fit/Interview Odds (2026-08-16),
+  `27e6d6b9` added proximity scoring (2026-08-22), `a2939fe2` started
+  sending the candidate's credentials to the evaluator (2026-08-30) --
+  and a stored evaluation looks identical whichever it came from.
+  Measured 2026-08-31: **0 of 2,130** evaluated rows carried a
+  current-system score, and 351 had no `evaluated_at` at all (treated as
+  stale, since the field was added later -- its absence dates the record
+  rather than excusing it). Only the PENDING subset is worth repairing;
+  the rest is archived or expired. `pending_roles(evaluated_before=...)`
+  is the general walker and `unevaluated_roles()`/`stale_roles()` are
+  thin wrappers over it, so the count a surface shows and the set the
+  evaluator walks cannot drift. Bump `SCORING_EPOCH` when a commit
+  changes what a score means -- NOT for a newly persisted field, which is
+  a gap in the record rather than an error in it -- and batch scoring
+  changes, since a bump costs one API call per pending role.
+- **`evaluate_all_pending(skip_evaluated=False)` was DEAD, and the shape
+  of that bug recurs.** Its default work list came from
+  `unevaluated_roles()`, which by definition holds nothing that has a
+  score, so "force re-evaluate everything" walked the never-evaluated
+  backlog and silently changed nothing -- there was no way to re-score
+  any role at all. A flag that filters a set which already excludes its
+  targets is not a weak flag, it is a no-op that reads as a feature.
+- **A subscore the model cannot ground is invented, not estimated.**
+  `compensation_viability` is 15% of Practical Pursue and its schema
+  field reads "vs. stated target/floor" -- but no floor was ever passed
+  to the prompt, and the rubric ("5 = likely strong and viable") plus
+  "or likely range if unstated" actively invited a guess for the ~73% of
+  postings that disclose nothing. `orchestrator.build_compensation_context()`
+  now hands the evaluator `compensation.py`'s deterministic parse and the
+  configured floor, and the rubric separates **stated-and-below** (2)
+  from **NOT STATED** (3). Those are opposite facts and collapsing them
+  is the whole bug: silence is not evidence of a low offer. The rubric
+  also says "do not re-read the figures yourself", so the model cannot
+  re-derive the benefit figures (`$50` internet stipend) that
+  `_PAY_ANCHOR`/`_BENEFIT_NEAR` exist to exclude. Any future subscore
+  that references a user setting must actually be SENT that setting --
+  grep the prompt before trusting a schema description.
