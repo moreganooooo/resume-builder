@@ -264,6 +264,67 @@ class TestEvaluateAllPendingSkipsAlreadyEvaluated(unittest.TestCase):
         self.assertEqual(mock_engine_cls.return_value.evaluate_fit.call_count, 2)
 
 
+class TestEvaluateAllPendingGateFilter(unittest.TestCase):
+    """The gate pre-filter (find_retroactively_excluded_roles.filter_gate_passing)
+    only runs on an auto-derived work list (pending_paths=None) -- an
+    explicit caller-supplied pick should always evaluate, never be
+    silently dropped."""
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    @patch("picker.unevaluated_roles", return_value=(["jds/a.json", "jds/b.json"], []))
+    @patch("find_retroactively_excluded_roles.filter_gate_passing")
+    def test_default_work_list_excludes_gate_failures(
+        self,
+        mock_filter,
+        mock_unevaluated,
+        mock_engine_cls,
+        mock_key,
+        mock_meta,
+        mock_save,
+    ):
+        mock_filter.return_value = (
+            ["jds/a.json"],
+            [
+                {
+                    "identifier": "jds/b.json",
+                    "title": "Role",
+                    "company": "Beta",
+                    "gate_failures": ["employment_type"],
+                }
+            ],
+        )
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.0,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
+        }
+        results = batch_evaluate.evaluate_all_pending()
+        mock_filter.assert_called_once()
+        self.assertEqual(mock_filter.call_args[0][0], ["jds/a.json", "jds/b.json"])
+        self.assertEqual(len(results), 1)
+        mock_engine_cls.return_value.evaluate_fit.assert_called_once_with("jds/a.json")
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    @patch("find_retroactively_excluded_roles.filter_gate_passing")
+    def test_explicit_pending_paths_skips_gate_filter(
+        self, mock_filter, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
+        mock_engine_cls.return_value.evaluate_fit.return_value = {
+            "composite_score": 4.0,
+            "recommendation": "Strong pursue",
+            "hard_blockers": [],
+        }
+        results = batch_evaluate.evaluate_all_pending(["jds/a.json"])
+        mock_filter.assert_not_called()
+        self.assertEqual(len(results), 1)
+
+
 class TestSplitEvaluated(unittest.TestCase):
 
     @patch("batch_evaluate.jd_manager.read_evaluation")
