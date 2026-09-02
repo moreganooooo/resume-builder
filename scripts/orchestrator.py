@@ -3941,6 +3941,12 @@ class ResumeEngine:
             ),
             # Advanced Metadata injection
             "capability_gaps": capability_data.get("capability_gaps", []),
+            "role_track": capability_data.get("role_track", "unknown"),
+            "role_track_confidence": capability_data.get(
+                "role_track_confidence", "low"
+            ),
+            "role_track_evidence": capability_data.get("role_track_evidence", ""),
+            "stretch_evidence": capability_data.get("stretch_evidence", ""),
             "ghost_job_red_flags": recruiter_data.get("ghost_job_red_flags", []),
             "prestige_tier": recruiter_data.get("prestige_tier", "Tier-2"),
         }
