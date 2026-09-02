@@ -1786,6 +1786,11 @@ def fit_composite_score(
     radius_miles: float = None,
     stress_signal_count: int = None,
     capability_gap_count: int = None,
+    stress_signal_penalty_per_category: float = None,
+    stress_signal_max_penalty: float = None,
+    low_stress_bonus: float = None,
+    stretch_gap_penalty_per_item: float = None,
+    stretch_gap_max_penalty: float = None,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
     COMPOSITE_SCORE_WEIGHTS, plus a proximity boost for local commutable jobs
@@ -1796,13 +1801,47 @@ def fit_composite_score(
 
     stress_signal_count (scripts/stress_signals.py's deterministic phrase
     detector) is None when never computed -- no adjustment, not an assumed
-    clean posting. Zero categories detected earns LOW_STRESS_BONUS; each
-    detected category costs STRESS_SIGNAL_PENALTY_PER_CATEGORY, capped at
-    STRESS_SIGNAL_MAX_PENALTY.
+    clean posting. Zero categories detected earns low_stress_bonus; each
+    detected category costs stress_signal_penalty_per_category, capped at
+    stress_signal_max_penalty.
 
     capability_gap_count is len(capability_gaps) -- a deterministic count
     of stated mismatches, not the model's subjective level_plausibility
-    judgment which is already in fit_score. None/0 means no penalty."""
+    judgment which is already in fit_score. None/0 means no penalty.
+
+    The five stress_signal_*/stretch_gap_* keyword params default to None,
+    which falls back to the module-level STRESS_SIGNAL_*/LOW_STRESS_BONUS/
+    STRETCH_GAP_* constants below -- keeping this function pure and
+    deterministic for direct unit testing (test_orchestrator_fit_composite_score.py
+    calls it with no overrides and asserts against those same module
+    constants). The one real caller, rescore_evaluation_with_location(),
+    is where a profile's content_settings.read_scoring_weights() override
+    actually reaches this function -- see that function's own
+    scoring_weights param."""
+    stress_signal_penalty_per_category = (
+        STRESS_SIGNAL_PENALTY_PER_CATEGORY
+        if stress_signal_penalty_per_category is None
+        else stress_signal_penalty_per_category
+    )
+    stress_signal_max_penalty = (
+        STRESS_SIGNAL_MAX_PENALTY
+        if stress_signal_max_penalty is None
+        else stress_signal_max_penalty
+    )
+    low_stress_bonus = (
+        LOW_STRESS_BONUS if low_stress_bonus is None else low_stress_bonus
+    )
+    stretch_gap_penalty_per_item = (
+        STRETCH_GAP_PENALTY_PER_ITEM
+        if stretch_gap_penalty_per_item is None
+        else stretch_gap_penalty_per_item
+    )
+    stretch_gap_max_penalty = (
+        STRETCH_GAP_MAX_PENALTY
+        if stretch_gap_max_penalty is None
+        else stretch_gap_max_penalty
+    )
+
     base = (
         fit_score * COMPOSITE_SCORE_WEIGHTS["fit_score"]
         + interview_odds_score * COMPOSITE_SCORE_WEIGHTS["interview_odds_score"]
@@ -1827,18 +1866,18 @@ def fit_composite_score(
     stress_adjustment = 0.0
     if stress_signal_count is not None:
         if stress_signal_count == 0:
-            stress_adjustment = LOW_STRESS_BONUS
+            stress_adjustment = low_stress_bonus
         else:
             stress_adjustment = -min(
-                stress_signal_count * STRESS_SIGNAL_PENALTY_PER_CATEGORY,
-                STRESS_SIGNAL_MAX_PENALTY,
+                stress_signal_count * stress_signal_penalty_per_category,
+                stress_signal_max_penalty,
             )
 
     stretch_penalty = 0.0
     if capability_gap_count:
         stretch_penalty = min(
-            capability_gap_count * STRETCH_GAP_PENALTY_PER_ITEM,
-            STRETCH_GAP_MAX_PENALTY,
+            capability_gap_count * stretch_gap_penalty_per_item,
+            stretch_gap_max_penalty,
         )
 
     return round(
@@ -1926,6 +1965,7 @@ def rescore_evaluation_with_location(
     remote_required: bool = False,
     posting_age_days: int = None,
     description: str = None,
+    scoring_weights: dict = None,
 ) -> dict:
     """Recalculates an evaluation dict incorporating local commute distance:
     1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
@@ -1938,7 +1978,13 @@ def rescore_evaluation_with_location(
     stress_signals.categories() -- optional and separate from evaluation
     itself because the description isn't persisted on the evaluation dict.
     None means the count is never computed, so fit_composite_score applies
-    no stress adjustment rather than assuming a clean posting."""
+    no stress adjustment rather than assuming a clean posting.
+
+    scoring_weights is None by default so this function stays pure and
+    deterministic for direct unit testing -- see fit_composite_score()'s
+    own docstring. The real pipeline (evaluate_fit()) passes in
+    content_settings.read_scoring_weights(), a profile's override merged
+    with defaults."""
     if not evaluation:
         return evaluation
 
@@ -2015,6 +2061,7 @@ def rescore_evaluation_with_location(
 
             stress_signal_count = len(stress_signals.categories(description))
 
+        weights = scoring_weights or {}
         comp = fit_composite_score(
             fit_score,
             interview_odds_score,
@@ -2028,6 +2075,13 @@ def rescore_evaluation_with_location(
             radius_miles=radius_miles if is_commutable_local else None,
             stress_signal_count=stress_signal_count,
             capability_gap_count=len(ev.get("capability_gaps") or []),
+            stress_signal_penalty_per_category=weights.get(
+                "stress_signal_penalty_per_category"
+            ),
+            stress_signal_max_penalty=weights.get("stress_signal_max_penalty"),
+            low_stress_bonus=weights.get("low_stress_bonus"),
+            stretch_gap_penalty_per_item=weights.get("stretch_gap_penalty_per_item"),
+            stretch_gap_max_penalty=weights.get("stretch_gap_max_penalty"),
         )
         ev["composite_score"] = comp
 
@@ -4081,11 +4135,26 @@ class ResumeEngine:
         elif prestige_tier == "Tier-3":
             funnel_friction_score = min(funnel_friction_score + 1, 5)
 
+        # Read once, used by both the 5b nudge below and the composite-
+        # score rescoring at the end of this function -- same
+        # try/except-with-fallback pattern the location_settings read
+        # just below already uses, so a missing/broken scan_filters.yml
+        # degrades to today's hardcoded defaults rather than raising.
+        try:
+            import content_settings
+
+            scoring_weights = content_settings.read_scoring_weights()
+        except Exception:
+            scoring_weights = {}
+
         # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
         # competes against a national/global applicant pool; an onsite
         # posting is filtered down to whoever can commute to it. Same
         # magnitude and pattern as the prestige-tier nudge above, and
         # applied after it so both adjustments compound rather than race.
+        # Nudge magnitude is Settings-configurable (funnel_friction_nudge,
+        # default 1) via scripts/content_settings.py.
+        funnel_friction_nudge = scoring_weights.get("funnel_friction_nudge", 1)
         jd_data = _parse_jd_data(jd_text)
         workplace = location_filter.classify_workplace(
             jd_data.get("location", ""),
@@ -4093,9 +4162,13 @@ class ResumeEngine:
             jd_data.get("work_model", ""),
         )
         if workplace == location_filter.REMOTE:
-            funnel_friction_score = max(funnel_friction_score - 1, 1)
+            funnel_friction_score = max(
+                funnel_friction_score - funnel_friction_nudge, 1
+            )
         elif workplace == location_filter.ONSITE:
-            funnel_friction_score = min(funnel_friction_score + 1, 5)
+            funnel_friction_score = min(
+                funnel_friction_score + funnel_friction_nudge, 5
+            )
         evaluation["interview_odds_subscores"][
             "funnel_friction"
         ] = funnel_friction_score
@@ -4156,6 +4229,7 @@ class ResumeEngine:
             remote_required=remote_required,
             posting_age_days=posting_age_days,
             description=jd_data.get("description") or jd_text,
+            scoring_weights=scoring_weights,
         )
 
         # 8. Heuristic Ghost Job Probability Calculator
