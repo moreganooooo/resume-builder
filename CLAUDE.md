@@ -933,3 +933,19 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md
   for the caveat that this skipped the corpus-validation step `role_track`
   and `work_hours.py`/`compensation.py` all went through first).
+- **A remote posting competes against a bigger applicant pool than an
+  onsite one, and `funnel_friction` says so.** `orchestrator.evaluate_fit()`
+  step 5b (`scripts/orchestrator.py`) classifies the posting with the
+  same `location_filter.classify_workplace()` used everywhere else in
+  the location pipeline, then nudges the LLM's own `funnel_friction`
+  subscore by ±1 (capped to 1-5) -- REMOTE gets harder, ONSITE gets
+  easier, HYBRID/UNKNOWN are left alone since there's no deterministic
+  local-pool-size signal to anchor a nudge to. This runs immediately
+  after, and compounds with, the existing Tier-1/Tier-3 prestige-tier
+  calibration (step 5) rather than replacing it -- same reasoning as
+  that step: `funnel_friction` is exactly the kind of thing an LLM can
+  underweight without an explicit anchor, and workplace mode is already
+  a deterministic, structured field by the time evaluation runs, so
+  there's no reason to trust a free-floating LLM guess over it. Like the
+  prestige-tier nudge, this is a preference-weighted constant (±1), not
+  a corpus-measured precision number.

@@ -57,6 +57,7 @@ import cli_art
 import jd_manager
 import kb_snapshot
 import liveness
+import location_filter
 import normalize_resume
 import scan_ats
 import theme
@@ -4036,13 +4037,28 @@ class ResumeEngine:
             "funnel_friction", 3
         )
         if prestige_tier == "Tier-1":
-            evaluation["interview_odds_subscores"]["funnel_friction"] = min(
-                funnel_friction_score, 2
-            )
+            funnel_friction_score = min(funnel_friction_score, 2)
         elif prestige_tier == "Tier-3":
-            evaluation["interview_odds_subscores"]["funnel_friction"] = min(
-                funnel_friction_score + 1, 5
-            )
+            funnel_friction_score = min(funnel_friction_score + 1, 5)
+
+        # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
+        # competes against a national/global applicant pool; an onsite
+        # posting is filtered down to whoever can commute to it. Same
+        # magnitude and pattern as the prestige-tier nudge above, and
+        # applied after it so both adjustments compound rather than race.
+        jd_data = _parse_jd_data(jd_text)
+        workplace = location_filter.classify_workplace(
+            jd_data.get("location", ""),
+            jd_data.get("is_remote"),
+            jd_data.get("work_model", ""),
+        )
+        if workplace == location_filter.REMOTE:
+            funnel_friction_score = max(funnel_friction_score - 1, 1)
+        elif workplace == location_filter.ONSITE:
+            funnel_friction_score = min(funnel_friction_score + 1, 5)
+        evaluation["interview_odds_subscores"][
+            "funnel_friction"
+        ] = funnel_friction_score
 
         # 6. Resolve Commute / Location distance for local scoring
         loc_dist = None
@@ -4056,7 +4072,6 @@ class ResumeEngine:
         radius_miles = loc_settings.get("radius_miles")
         workplace_mode = loc_settings.get("workplace_mode", "any")
 
-        jd_data = _parse_jd_data(jd_text)
         enrichment = jd_data.get("_location_enrichment")
         if (
             isinstance(enrichment, dict)
