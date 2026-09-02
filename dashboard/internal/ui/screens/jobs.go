@@ -73,6 +73,16 @@ type JobsModel struct {
 	// that don't clear it stay in m.rows and reappear the moment this is
 	// toggled back off, same reversibility guarantee as every filter here.
 	roleTrackFilter bool
+	// experienceBlockerFilter narrows to postings that carry a
+	// years_experience/degree hard blocker (Evaluation.ExperienceBlockers
+	// non-empty) -- the years_experience/degree subset carved out of
+	// hard_blockers specifically because it has never been holdout-
+	// measured (see EXPERIENCE_BLOCKER_CATEGORIES in orchestrator.py).
+	// A plain presence check, not a confidence gate like roleTrackFilter:
+	// HardBlocker carries no confidence field. Purely a VIEW-time
+	// narrowing, same reversibility guarantee as roleTrackFilter -- this
+	// was the one Pipeline already had that Jobs itself was missing.
+	experienceBlockerFilter bool
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort bool
@@ -313,6 +323,11 @@ func (m *JobsModel) applyFilter() {
 		// the other filters above: absence of a confident signal is not
 		// evidence a posting qualifies.
 		if m.roleTrackFilter && !r.IsManagerTrack() {
+			continue
+		}
+
+		// Narrow to postings carrying a years_experience/degree blocker.
+		if m.experienceBlockerFilter && len(r.Evaluation.ExperienceBlockers) == 0 {
 			continue
 		}
 
@@ -1202,6 +1217,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.roleTrackFilter = !m.roleTrackFilter
 			m.cursor = 0
 			m.applyFilter()
+		case "c":
+			m.experienceBlockerFilter = !m.experienceBlockerFilter
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1374,6 +1393,8 @@ var jobsHelpCategories = []helpCategory{
 		{"d", "Toggle sort by distance (nearest first, unmeasured last)"},
 		{"p", "Toggle sort by pay (highest first, unstated last)"},
 		{"/", "Search company/title (narrows within active filter)"},
+		{"r", "Toggle manager-track roles only"},
+		{"c", "Toggle experience/degree blocker roles only"},
 	}},
 	{"Quick Reference", []helpBinding{
 		{"v", "View terminology definitions"},
@@ -1618,6 +1639,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.roleTrackFilter {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " manager roles")
+	}
+	if m.experienceBlockerFilter {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " experience blockers")
 	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
